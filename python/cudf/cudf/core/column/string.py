@@ -5829,14 +5829,12 @@ class StringColumn(column.ColumnBase):
         if fill_value is not None:
             if not is_scalar(fill_value):
                 fill_value = column.as_column(fill_value, dtype=self.dtype)
-            else:
-                fill_value = cudf.Scalar(fill_value, dtype="object")
-            if cudf._lib.scalar._is_null_host_scalar(fill_value):
+            elif cudf._lib.scalar._is_null_host_scalar(fill_value):
                 # Trying to fill <NA> with <NA> value? Return copy.
                 return self.copy(deep=True)
-            return super().fillna(fill_value)
-        else:
-            return super().fillna(method=method)
+            else:
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        return super().fillna(fill_value, method=method)
 
     def normalize_binop_value(
         self, other
