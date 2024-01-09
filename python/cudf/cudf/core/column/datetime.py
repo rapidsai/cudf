@@ -259,13 +259,17 @@ class DatetimeColumn(column.ColumnBase):
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            item_as_dt64 = np.datetime64(item, self.time_unit)
-        except ValueError:
-            # If item cannot be converted to datetime type
-            # np.datetime64 raises ValueError, hence `item`
-            # cannot exist in `self`.
+            # TODO(pandas2.0): Change _as_unit to as_unit
+            ts = pd.Timestamp(item)._as_unit(self.time_unit)
+        except Exception:
+            # pandas can raise a variety of errors
+            # item cannot exist in self.
             return False
-        return item_as_dt64.astype("int64") in self.as_numerical
+        if ts.tzinfo is None and isinstance(self.dtype, pd.DatetimeTZDtype):
+            return False
+        elif ts.tzinfo is not None:
+            ts = ts.tz_convert(None)
+        return ts.to_numpy().astype("int64") in self.as_numerical
 
     @functools.cached_property
     def time_unit(self) -> str:
