@@ -5464,7 +5464,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
-        data: Union[Buffer, None] = None,
+        data: Optional[Buffer] = None,
         mask: Optional[Buffer] = None,
         size: Optional[int] = None,  # TODO: make non-optional
         offset: int = 0,
@@ -5546,16 +5546,14 @@ class StringColumn(column.ColumnBase):
     @cached_property
     def memory_usage(self) -> int:
         n = 0
+        if self.data is not None:
+            n += self.data.size
         if len(self.base_children) == 1:
             child0_size = (self.size + 1) * self.base_children[
                 0
             ].dtype.itemsize
 
-            child1_size = (
-                self.end_offset - self.start_offset
-            ) * cudf.api.types.dtype("int8").itemsize
-
-            n += child0_size + child1_size
+            n += child0_size
         if self.nullable:
             n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
@@ -5566,6 +5564,24 @@ class StringColumn(column.ColumnBase):
             return 0
         else:
             return self.base_children[0].size - 1
+
+    # override for string column
+    @property
+    def data(self):
+        if self.base_data is None:
+            return None
+        if self._data is None:
+            if (
+                self.offset == 0
+                and len(self.base_children) > 0
+                and self.size == self.base_children[0].size - 1
+            ):
+                self._data = self.base_data
+            else:
+                self._data = self.base_data[
+                    self.start_offset : self.end_offset
+                ]
+        return self._data
 
     def data_array_view(
         self, *, mode="write"
@@ -5937,8 +5953,8 @@ class StringColumn(column.ColumnBase):
         ) * char_dtype_size
 
         to_view = column.build_column(
-            self.base_data,  # self.base_children[1].data,
-            dtype=cudf.api.types.dtype("int8"),  # self.base_children[1].dtype,
+            self.base_data,
+            dtype=cudf.api.types.dtype("int8"),
             offset=str_byte_offset,
             size=n_bytes_to_view,
         )

@@ -120,18 +120,6 @@ cdef class Column:
             start = self.offset * self.dtype.itemsize
             end = start + self.size * self.dtype.itemsize
             self._data = self.base_data[start:end]
-            # special case of string column
-            if self.dtype == cudf.api.types.dtype("object"):
-                if (
-                    self.offset == 0 and len(self.base_children) > 0 and
-                    self.size == self.base_children[0].size - 1
-                ):
-                    self._data = self.base_data
-                else:
-                    self._data = Column.from_unique_ptr(
-                        move(make_unique[column](self.view()))
-                    ).base_data
-                # could set self._children as well.
         return self._data
 
     @property
@@ -689,7 +677,7 @@ cdef class Column:
             else:
                 chars_size = get_element(
                     offset_child_column, offset_child_column.size()-1).value
-                base_nbytes = chars_size * 1
+                base_nbytes = chars_size
 
         if data_ptr:
             if data_owner is None:
