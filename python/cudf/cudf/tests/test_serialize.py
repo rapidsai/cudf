@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import pickle
 
@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq
 
@@ -302,12 +301,9 @@ def test_serialize_string():
     "frames",
     [
         (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
-        pytest.param(
-            (cudf.DataFrame([]), pd.DataFrame([])),
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_200, reason=".column returns Index[object]"
-            ),
-        ),
+        (cudf.DataFrame(), pd.DataFrame()),
+        (cudf.DataFrame([]), pd.DataFrame([])),
+        (cudf.DataFrame({}), pd.DataFrame({})),
         (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
         (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
         (
@@ -401,3 +397,19 @@ def test_serialize_sliced_string():
 
     recreated = cudf.Series.deserialize(*sliced.serialize())
     assert_eq(recreated.to_pandas(nullable=True), pd_series)
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        cudf.RangeIndex(2),
+        cudf.Index([1, 2], dtype="int8"),
+        cudf.MultiIndex(
+            levels=[["a", "b"], [1, 2]], codes=[[0, 1], [0, 1]], names=["a", 0]
+        ),
+    ],
+)
+def test_serialize_column_types_preserved(columns):
+    expected = cudf.DataFrame([[10, 11]], columns=columns)
+    result = cudf.DataFrame.deserialize(*expected.serialize())
+    assert_eq(result, expected)
