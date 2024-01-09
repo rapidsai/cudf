@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -35,6 +35,19 @@ function(find_and_configure_cccl)
 
   # Find or install CCCL with our custom set of patches
   rapids_cpm_cccl(BUILD_EXPORT_SET cudf-exports INSTALL_EXPORT_SET cudf-exports)
+
+  target_compile_definitions(CCCL::CCCL INTERFACE THRUST_DISABLE_ABI_NAMESPACE)
+  target_compile_definitions(CCCL::CCCL INTERFACE THRUST_IGNORE_ABI_NAMESPACE_ERROR)
+
+  set(post_find_code
+      [=[
+  target_compile_definitions(CCCL::CCCL INTERFACE THRUST_DISABLE_ABI_NAMESPACE)
+  target_compile_definitions(CCCL::CCCL INTERFACE THRUST_IGNORE_ABI_NAMESPACE_ERROR)
+  ]=]
+  )
+  include("${rapids-cmake-dir}/export/detail/post_find_package_code.cmake")
+  rapids_export_post_find_package_code(BUILD CCCL "${post_find_code}" EXPORT_SET cudf-exports)
+  rapids_export_post_find_package_code(INSTALL CCCL "${post_find_code}" EXPORT_SET cudf-exports)
 
 endfunction()
 
