@@ -18,7 +18,7 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
-from cudf.core.column import NumericalColumn, column
+from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
+        NumericalColumn,
         StringColumn,
         TimeDeltaColumn,
     )
@@ -995,17 +996,18 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if isinstance(col.categories.dtype, IntervalDtype):
+        cats = col.categories
+        if isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            categories = col.categories
-        elif isinstance(col.categories, NumericalColumn):
-            categories = col.categories.nans_to_nulls().dropna()
+            pass
+        elif cats.dtype.kind in "biuf":
+            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
         else:
-            categories = col.categories.dropna()
+            cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=categories.to_pandas(), ordered=col.ordered
+            codes, categories=cats.to_pandas(), ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
