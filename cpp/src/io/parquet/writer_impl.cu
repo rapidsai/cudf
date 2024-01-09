@@ -55,6 +55,10 @@
 #include <numeric>
 #include <utility>
 
+#ifndef CUDF_VERSION
+#error "CUDF_VERSION is not defined"
+#endif
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
@@ -98,10 +102,6 @@ struct aggregate_writer_metadata {
       this->files[i].num_rows += partitions[i].num_rows;
     }
   }
-
-#ifndef CUDF_VERSION
-#error "CUDF_VERSION is not defined"
-#endif
 
   FileMetaData get_metadata(size_t part)
   {
