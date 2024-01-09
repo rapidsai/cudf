@@ -460,7 +460,7 @@ void CompactProtocolReader::skip_struct_field(int t, int depth)
     case FieldType::I8: skip_bytes(1); break;
     case FieldType::DOUBLE: skip_bytes(8); break;
     case FieldType::BINARY: skip_bytes(get_u32()); break;
-    case FieldType::LIST: [[fallthrough]];
+    case FieldType::LIST:
     case FieldType::SET: {
       auto const [t, n] = get_listh();
       CUDF_EXPECTS(depth <= 10, "struct nesting too deep");
