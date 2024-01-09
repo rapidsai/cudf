@@ -242,6 +242,8 @@ class reader::impl {
   /**
    * @brief Converts the page data and outputs to columns.
    *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    * @param skip_rows Minimum number of rows from start
    * @param num_rows Number of rows to output
    */
