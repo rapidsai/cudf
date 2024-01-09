@@ -39,7 +39,7 @@ TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
 namespace {
 // Some silly kernel that will cause an error
-static void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
+CUDF_KERNEL void test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
 // In a release build and without explicit synchronization, CUDF_CHECK_CUDA may
