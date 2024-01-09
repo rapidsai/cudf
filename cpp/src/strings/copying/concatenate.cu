@@ -112,7 +112,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 }
 
 template <size_type block_size, bool Nullable>
-__global__ void fused_concatenate_string_offset_kernel(
+CUDF_KERNEL void fused_concatenate_string_offset_kernel(
   column_device_view const* input_views,
   size_t const* input_offsets,
   size_t const* partition_offsets,
@@ -171,11 +171,11 @@ __global__ void fused_concatenate_string_offset_kernel(
   }
 }
 
-__global__ void fused_concatenate_string_chars_kernel(column_device_view const* input_views,
-                                                      size_t const* partition_offsets,
-                                                      size_type const num_input_views,
-                                                      size_type const output_size,
-                                                      char* output_data)
+CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const* input_views,
+                                                       size_t const* partition_offsets,
+                                                       size_type const num_input_views,
+                                                       size_type const output_size,
+                                                       char* output_data)
 {
   cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
 

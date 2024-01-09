@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -197,8 +197,8 @@ __forceinline__ __device__ char escaped_sequence_to_byte(char const* const ptr)
  * @param[out] out_counts Number of characters in each decode URL.
  */
 template <size_type num_warps_per_threadblock, size_type char_block_size>
-__global__ void url_decode_char_counter(column_device_view const in_strings,
-                                        size_type* const out_counts)
+CUDF_KERNEL void url_decode_char_counter(column_device_view const in_strings,
+                                         size_type* const out_counts)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
@@ -280,9 +280,9 @@ __global__ void url_decode_char_counter(column_device_view const in_strings,
  * @param[in] out_offsets Offset value of each string associated with `out_chars`.
  */
 template <size_type num_warps_per_threadblock, size_type char_block_size>
-__global__ void url_decode_char_replacer(column_device_view const in_strings,
-                                         char* const out_chars,
-                                         size_type const* const out_offsets)
+CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
+                                          char* const out_chars,
+                                          size_type const* const out_offsets)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size * 2];

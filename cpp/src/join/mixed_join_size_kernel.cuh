@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ namespace detail {
 namespace cg = cooperative_groups;
 
 template <int block_size, bool has_nulls>
-__launch_bounds__(block_size) __global__ void compute_mixed_join_output_size(
+__launch_bounds__(block_size) CUDF_KERNEL void compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,

@@ -115,11 +115,11 @@ struct empty_target_fn {
  * @brief String per warp function for find/rfind
  */
 template <typename TargetIterator, bool forward = true>
-__global__ void finder_warp_parallel_fn(column_device_view const d_strings,
-                                        TargetIterator const d_targets,
-                                        size_type const start,
-                                        size_type const stop,
-                                        size_type* d_results)
+CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
+                                         TargetIterator const d_targets,
+                                         size_type const start,
+                                         size_type const stop,
+                                         size_type* d_results)
 {
   size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
 
@@ -346,9 +346,9 @@ namespace {
  * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
  */
-__global__ void contains_warp_parallel_fn(column_device_view const d_strings,
-                                          string_view const d_target,
-                                          bool* d_results)
+CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
+                                           string_view const d_target,
+                                           bool* d_results)
 {
   size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   using warp_reduce   = cub::WarpReduce<bool>;

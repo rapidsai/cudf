@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 
 #ifdef __CUDACC__
 #define CUDF_HOST_DEVICE __host__ __device__
+#define CUDF_KERNEL      __global__ static
 #else
 #define CUDF_HOST_DEVICE
+#define CUDF_KERNEL static
 #endif
 
 #include <cassert>
