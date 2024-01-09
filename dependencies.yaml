@@ -754,7 +754,12 @@ dependencies:
           - ipython
           - openpyxl
   notebook_cuda_version:
-    common:
-      - output_types: conda
-        packages:
-          - cuda-version=12.0
+    specific:
+       - output_types: conda
+         matrices:
+           - matrix: {cuda: "12.0"}
+             packages:
+               - cuda-version=12.0
+           - matrix: {cuda: "11.8"}
+             packages:
+               - cuda-version=11.8
