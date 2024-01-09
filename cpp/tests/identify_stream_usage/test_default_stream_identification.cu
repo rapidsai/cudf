@@ -16,7 +16,7 @@
 
 #include <stdexcept>
 
-CUDF_KERNEL void kernel() { printf("The kernel ran!\n"); }
+__global__ static void kernel() { printf("The kernel ran!\n"); }
 
 void test_cudaLaunchKernel()
 {
