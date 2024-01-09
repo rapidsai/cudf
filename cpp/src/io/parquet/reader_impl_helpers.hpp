@@ -150,9 +150,12 @@ class aggregate_reader_metadata {
   [[nodiscard]] size_type calc_num_row_groups() const;
 
   /**
-   * @brief Calculate column index info for given row_group_info
+   * @brief Calculate column index info for the given `row_group_info`
+   *
+   * @param rg_info Struct used to summarize metadata for a single row group
+   * @param chunk_start_row Global index of first row in the row group
    */
-  void column_info_for_row_group(row_group_info& rgi, size_type chunk_start_row) const;
+  void column_info_for_row_group(row_group_info& rg_info, size_type chunk_start_row) const;
 
  public:
   aggregate_reader_metadata(host_span<std::unique_ptr<datasource> const> sources);

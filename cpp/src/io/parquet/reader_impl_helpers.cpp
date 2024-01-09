@@ -347,11 +347,11 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
 }
 
 // Copies info from the column and offset indexes into the passed in row_group_info.
-void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
+void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
                                                           size_type chunk_start_row) const
 {
-  auto const& fmd = per_file_metadata[rgi.source_index];
-  auto const& rg  = fmd.row_groups[rgi.index];
+  auto const& fmd = per_file_metadata[rg_info.source_index];
+  auto const& rg  = fmd.row_groups[rg_info.index];
 
   std::vector<column_info> columns;
   columns.resize(rg.columns.size());
@@ -365,7 +365,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
     // If any columns lack the page indexes then just return without modifying the
     // row_group_info.
     if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
-      rgi.columns = std::nullopt;
+      rg_info.columns = std::nullopt;
       return;
     }
 
@@ -375,13 +375,18 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
     auto& chunk_info     = columns[col_idx];
     auto const num_pages = offset_index.page_locations.size();
 
-    // bug in parquet-mr does not write dictionary offsets, so check to
-    // see if data_page_offset differs from first entry in offsets index
+    // There is a bug in older versions of parquet-mr where the first data page offset
+    // really points to the dictionary page. The first possible offset in a file is 4 (after
+    // the "PAR1" header), so check to see if the dictionary_page_offset is > 0. If it is, then
+    // we haven't encountered the bug.
     if (col_chunk.meta_data.dictionary_page_offset > 0) {
       chunk_info.dictionary_offset = col_chunk.meta_data.dictionary_page_offset;
       chunk_info.dictionary_size =
         col_chunk.meta_data.data_page_offset - chunk_info.dictionary_offset.value();
     } else {
+      // dictionary_page_offset is 0, so check to see if the data_page_offset does not match
+      // the first offset in the offset index.  If they don't match, then data_page_offset points
+      // to the dictionary page.
       if (num_pages > 0 &&
           col_chunk.meta_data.data_page_offset < offset_index.page_locations[0].offset) {
         chunk_info.dictionary_offset = col_chunk.meta_data.data_page_offset;
@@ -425,7 +430,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
         pg_info.var_bytes_size = offset_index.unencoded_byte_array_data_bytes.value()[pg_idx];
       }
 
-      // if def histogram is present, then just use it
+      // if def histogram is present, then use it to calculate num_valid and num_nulls
       if (def_hist != nullptr) {
         auto const h      = &def_hist[pg_idx * (max_def_level + 1)];
         pg_info.num_valid = h[max_def_level];
@@ -436,7 +441,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
         }
       }
       // there is no def histogram.
-      // if there is no repetition, then num_values == num_rows, and num_nulls can be
+      // if there is no repetition (no lists), then num_values == num_rows, and num_nulls can be
       // obtained from the column index
       else if (max_rep_level == 0) {
         // if we already have num_nulls from column index
@@ -464,14 +469,14 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
       // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
       // info is missing or insufficient, then just return without modifying the row_group_info.
       if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) {
-        rgi.columns = std::nullopt;
+        rg_info.columns = std::nullopt;
         return;
       }
 
       // if using older page indexes that lack size info, don't use
       // TODO: might be ok if an empty page doesn't have var_byte_size set
       if (schema.type == BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) {
-        rgi.columns = std::nullopt;
+        rg_info.columns = std::nullopt;
         return;
       }
 
@@ -479,7 +484,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rgi,
     }
   }
 
-  rgi.columns = std::move(columns);
+  rg_info.columns = std::move(columns);
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
@@ -628,8 +633,7 @@ aggregate_reader_metadata::select_row_groups(
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
           row_group_info rgi(rg_idx, chunk_start_row, src_idx);
-          // if page-level indexes are present, then collect extra chunk and page
-          // info. if using custom bounds, then figure out which pages to read
+          // if page-level indexes are present, then collect extra chunk and page info.
           column_info_for_row_group(rgi, chunk_start_row);
           selection.emplace_back(std::move(rgi));
         }
