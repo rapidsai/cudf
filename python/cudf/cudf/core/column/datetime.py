@@ -604,6 +604,7 @@ class DatetimeColumn(column.ColumnBase):
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
             if is_scalar(fill_value):
+                # TODO: Add cast checking like TimedeltaColumn.fillna
                 if not isinstance(fill_value, cudf.Scalar):
                     fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
             else:

@@ -286,19 +286,17 @@ class TimeDeltaColumn(ColumnBase):
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
-            col: ColumnBase = self
             if is_scalar(fill_value):
-                if isinstance(fill_value, np.timedelta64):
-                    dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                    fill_value = fill_value.astype(dtype)
-                    col = col.astype(dtype)
-                if not isinstance(fill_value, cudf.Scalar):
-                    fill_value = cudf.Scalar(fill_value)
+                fill_value = cudf.Scalar(fill_value)
+                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                fill_value = fill_value.astype(dtype)
+                if self.dtype != dtype:
+                    return cast(
+                        Self, self.astype(dtype).fillna(fill_value, method)
+                    )
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-            return super().fillna(fill_value)
-        else:
-            return super().fillna(method=method)
+        return super().fillna(fill_value, method)
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
