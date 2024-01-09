@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import warnings
 
@@ -161,7 +161,7 @@ def to_numeric(arg, errors="raise", downcast=None):
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
-        return cudf.Series(col)
+        return cudf.Series(col, index=arg.index, name=arg.name)
     else:
         if col.has_nulls():
             # To match pandas, always return a floating type filled with nan.
