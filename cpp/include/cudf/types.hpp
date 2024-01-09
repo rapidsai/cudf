@@ -17,10 +17,22 @@
 #pragma once
 
 #ifdef __CUDACC__
+/**
+ * @brief Indicates that the function or method is usable on host and device
+ */
 #define CUDF_HOST_DEVICE __host__ __device__
-#define CUDF_KERNEL      __global__ static
+/**
+ * @brief Indicates that the function is a CUDA kernel
+ */
+#define CUDF_KERNEL __global__ static
 #else
+/**
+ * @brief Indicates that the function or method is usable on host and device
+ */
 #define CUDF_HOST_DEVICE
+/**
+ * @brief Indicates that the function is a CUDA kernel
+ */
 #define CUDF_KERNEL static
 #endif
 
