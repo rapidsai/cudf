@@ -1,0 +1,14 @@
+
+{
+  "packages" : {
+    "cuco" : {
+      "patches" : [
+        {
+          "file" : "${current_json_dir}/cuco_hide_kernels.diff",
+          "issue" : "Fix hide kernel visibility [https://github.com/NVIDIA/cuCollections/pull/422]",
+          "fixed_in" : ""
+        }
+      ]
+    }
+  }
+}

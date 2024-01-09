@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -15,6 +15,11 @@
 # This function finds cuCollections and performs any additional configuration.
 function(find_and_configure_cucollections)
   include(${rapids-cmake-dir}/cpm/cuco.cmake)
+  include(${rapids-cmake-dir}/cpm/package_override.cmake)
+
+  set(cudf_patch_dir "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches")
+  rapids_cpm_package_override("${cudf_patch_dir}/cuco_override.json")
+
   if(BUILD_SHARED_LIBS)
     rapids_cpm_cuco(BUILD_EXPORT_SET cudf-exports)
   else()

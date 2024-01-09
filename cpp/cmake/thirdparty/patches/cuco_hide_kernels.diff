@@ -1,0 +1,558 @@
+From 1ca31344345febc116c1eeaa553af8d2821d128c Mon Sep 17 00:00:00 2001
+From: Robert Maynard <rmaynard@nvidia.com>
+Date: Thu, 11 Jan 2024 12:11:45 -0500
+Subject: [PATCH] Mark all cuco kernels as static so they have hidden
+ visibility
+
+---
+ include/cuco/detail/dynamic_map_kernels.cuh   | 20 +++++++++++-------
+ .../cuco/detail/open_addressing/kernels.cuh   | 14 +++++++------
+ include/cuco/detail/static_map/kernels.cuh    |  6 ++++--
+ include/cuco/detail/static_map_kernels.cuh    | 21 ++++++++++---------
+ .../cuco/detail/static_multimap/kernels.cuh   | 18 +++++++++-------
+ include/cuco/detail/static_set/kernels.cuh    |  4 ++--
+ include/cuco/detail/storage/kernels.cuh       |  4 +++-
+ .../detail/trie/dynamic_bitset/kernels.cuh    | 19 +++++++++--------
+ include/cuco/detail/utility/cuda.cuh          | 19 +++++++++++++++++
+ 9 files changed, 79 insertions(+), 46 deletions(-)
+
+diff --git a/include/cuco/detail/dynamic_map_kernels.cuh b/include/cuco/detail/dynamic_map_kernels.cuh
+index 566576e..228aa2c 100644
+--- a/include/cuco/detail/dynamic_map_kernels.cuh
++++ b/include/cuco/detail/dynamic_map_kernels.cuh
+@@ -14,6 +14,7 @@
+  * limitations under the License.
+  */
+ #pragma once
++#include <cuco/detail/utility/cuda.cuh>
+
+ #include <cub/block/block_reduce.cuh>
+
+@@ -25,6 +26,8 @@ namespace cuco {
+ namespace detail {
+ namespace cg = cooperative_groups;
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
++
+ /**
+  * @brief Inserts all key/value pairs in the range `[first, last)`.
+  *
+@@ -62,7 +65,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void insert(InputIt first,
++CUCO_KERNEL void insert(InputIt first,
+                        InputIt last,
+                        viewT* submap_views,
+                        mutableViewT* submap_mutable_views,
+@@ -147,7 +150,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void insert(InputIt first,
++CUCO_KERNEL void insert(InputIt first,
+                        InputIt last,
+                        viewT* submap_views,
+                        mutableViewT* submap_mutable_views,
+@@ -225,7 +228,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void erase(InputIt first,
++CUCO_KERNEL void erase(InputIt first,
+                       InputIt last,
+                       mutableViewT* submap_mutable_views,
+                       atomicT** submap_num_successes,
+@@ -296,7 +299,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void erase(InputIt first,
++CUCO_KERNEL void erase(InputIt first,
+                       InputIt last,
+                       mutableViewT* submap_mutable_views,
+                       atomicT** submap_num_successes,
+@@ -368,7 +371,7 @@ template <uint32_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void find(InputIt first,
++CUCO_KERNEL void find(InputIt first,
+                      InputIt last,
+                      OutputIt output_begin,
+                      viewT* submap_views,
+@@ -443,7 +446,7 @@ template <uint32_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void find(InputIt first,
++CUCO_KERNEL void find(InputIt first,
+                      InputIt last,
+                      OutputIt output_begin,
+                      viewT* submap_views,
+@@ -514,7 +517,7 @@ template <uint32_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void contains(InputIt first,
++CUCO_KERNEL void contains(InputIt first,
+                          InputIt last,
+                          OutputIt output_begin,
+                          viewT* submap_views,
+@@ -582,7 +585,7 @@ template <uint32_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void contains(InputIt first,
++CUCO_KERNEL void contains(InputIt first,
+                          InputIt last,
+                          OutputIt output_begin,
+                          viewT* submap_views,
+@@ -618,5 +621,6 @@ __global__ void contains(InputIt first,
+     key_idx += (gridDim.x * blockDim.x) / tile_size;
+   }
+ }
++
+ }  // namespace detail
+ }  // namespace cuco
+diff --git a/include/cuco/detail/open_addressing/kernels.cuh b/include/cuco/detail/open_addressing/kernels.cuh
+index 51200b6..12463b9 100644
+--- a/include/cuco/detail/open_addressing/kernels.cuh
++++ b/include/cuco/detail/open_addressing/kernels.cuh
+@@ -29,6 +29,8 @@ namespace cuco {
+ namespace experimental {
+ namespace detail {
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
++
+ /**
+  * @brief Inserts all elements in the range `[first, first + n)` and returns the number of
+  * successful insertions if `pred` of the corresponding stencil returns true.
+@@ -62,7 +64,7 @@ template <int32_t CGSize,
+           typename Predicate,
+           typename AtomicT,
+           typename Ref>
+-__global__ void insert_if_n(InputIt first,
++CUCO_KERNEL void insert_if_n(InputIt first,
+                             cuco::detail::index_type n,
+                             StencilIt stencil,
+                             Predicate pred,
+@@ -128,7 +130,7 @@ template <int32_t CGSize,
+           typename StencilIt,
+           typename Predicate,
+           typename Ref>
+-__global__ void insert_if_n(
++CUCO_KERNEL void insert_if_n(
+   InputIt first, cuco::detail::index_type n, StencilIt stencil, Predicate pred, Ref ref)
+ {
+   auto const loop_stride = cuco::detail::grid_stride() / CGSize;
+@@ -163,7 +165,7 @@ __global__ void insert_if_n(
+  * @param ref Non-owning container device ref used to access the slot storage
+  */
+ template <int32_t CGSize, int32_t BlockSize, typename InputIt, typename Ref>
+-__global__ void erase(InputIt first, cuco::detail::index_type n, Ref ref)
++CUCO_KERNEL void erase(InputIt first, cuco::detail::index_type n, Ref ref)
+ {
+   auto const loop_stride = cuco::detail::grid_stride() / CGSize;
+   auto idx               = cuco::detail::global_thread_id() / CGSize;
+@@ -213,7 +215,7 @@ template <int32_t CGSize,
+           typename Predicate,
+           typename OutputIt,
+           typename Ref>
+-__global__ void contains_if_n(InputIt first,
++CUCO_KERNEL void contains_if_n(InputIt first,
+                               cuco::detail::index_type n,
+                               StencilIt stencil,
+                               Predicate pred,
+@@ -268,7 +270,7 @@ __global__ void contains_if_n(InputIt first,
+  * @param count Number of filled slots
+  */
+ template <int32_t BlockSize, typename StorageRef, typename Predicate, typename AtomicT>
+-__global__ void size(StorageRef storage, Predicate is_filled, AtomicT* count)
++CUCO_KERNEL void size(StorageRef storage, Predicate is_filled, AtomicT* count)
+ {
+   using size_type = typename StorageRef::size_type;
+
+@@ -294,7 +296,7 @@ __global__ void size(StorageRef storage, Predicate is_filled, AtomicT* count)
+ }
+
+ template <int32_t BlockSize, typename ContainerRef, typename Predicate>
+-__global__ void rehash(typename ContainerRef::storage_ref_type storage_ref,
++CUCO_KERNEL void rehash(typename ContainerRef::storage_ref_type storage_ref,
+                        ContainerRef container_ref,
+                        Predicate is_filled)
+ {
+diff --git a/include/cuco/detail/static_map/kernels.cuh b/include/cuco/detail/static_map/kernels.cuh
+index f9171ef..4e9bfe1 100644
+--- a/include/cuco/detail/static_map/kernels.cuh
++++ b/include/cuco/detail/static_map/kernels.cuh
+@@ -30,6 +30,8 @@ namespace experimental {
+ namespace static_map_ns {
+ namespace detail {
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
++
+ /**
+  * @brief For any key-value pair `{k, v}` in the range `[first, first + n)`, if a key equivalent to
+  * `k` already exists in the container, assigns `v` to the mapped_type corresponding to the key `k`.
+@@ -49,7 +51,7 @@ namespace detail {
+  * @param ref Non-owning container device ref used to access the slot storage
+  */
+ template <int32_t CGSize, int32_t BlockSize, typename InputIt, typename Ref>
+-__global__ void insert_or_assign(InputIt first, cuco::detail::index_type n, Ref ref)
++CUCO_KERNEL void insert_or_assign(InputIt first, cuco::detail::index_type n, Ref ref)
+ {
+   auto const loop_stride = cuco::detail::grid_stride() / CGSize;
+   auto idx               = cuco::detail::global_thread_id() / CGSize;
+@@ -88,7 +90,7 @@ __global__ void insert_or_assign(InputIt first, cuco::detail::index_type n, Ref
+  * @param ref Non-owning map device ref used to access the slot storage
+  */
+ template <int32_t CGSize, int32_t BlockSize, typename InputIt, typename OutputIt, typename Ref>
+-__global__ void find(InputIt first, cuco::detail::index_type n, OutputIt output_begin, Ref ref)
++CUCO_KERNEL void find(InputIt first, cuco::detail::index_type n, OutputIt output_begin, Ref ref)
+ {
+   namespace cg = cooperative_groups;
+
+diff --git a/include/cuco/detail/static_map_kernels.cuh b/include/cuco/detail/static_map_kernels.cuh
+index 73c2299..33bec4a 100644
+--- a/include/cuco/detail/static_map_kernels.cuh
++++ b/include/cuco/detail/static_map_kernels.cuh
+@@ -25,6 +25,7 @@ namespace cuco {
+ namespace detail {
+ namespace cg = cooperative_groups;
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
+ /**
+  * @brief Initializes each slot in the flat `slots` storage to contain `k` and `v`.
+  *
+@@ -48,7 +49,7 @@ template <std::size_t block_size,
+           typename Key,
+           typename Value,
+           typename pair_atomic_type>
+-__global__ void initialize(pair_atomic_type* const slots, Key k, Value v, int64_t size)
++CUCO_KERNEL void initialize(pair_atomic_type* const slots, Key k, Value v, int64_t size)
+ {
+   int64_t const loop_stride = gridDim.x * block_size;
+   int64_t idx               = block_size * blockIdx.x + threadIdx.x;
+@@ -86,7 +87,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void insert(
++CUCO_KERNEL void insert(
+   InputIt first, int64_t n, atomicT* num_successes, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   typedef cub::BlockReduce<std::size_t, block_size> BlockReduce;
+@@ -141,7 +142,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void insert(
++CUCO_KERNEL void insert(
+   InputIt first, int64_t n, atomicT* num_successes, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   typedef cub::BlockReduce<std::size_t, block_size> BlockReduce;
+@@ -195,7 +196,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void erase(
++CUCO_KERNEL void erase(
+   InputIt first, int64_t n, atomicT* num_successes, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   using BlockReduce = cub::BlockReduce<std::size_t, block_size>;
+@@ -248,7 +249,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void erase(
++CUCO_KERNEL void erase(
+   InputIt first, int64_t n, atomicT* num_successes, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   typedef cub::BlockReduce<std::size_t, block_size> BlockReduce;
+@@ -312,7 +313,7 @@ template <std::size_t block_size,
+           typename Predicate,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void insert_if_n(InputIt first,
++CUCO_KERNEL void insert_if_n(InputIt first,
+                             int64_t n,
+                             atomicT* num_successes,
+                             viewT view,
+@@ -376,7 +377,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void find(
++CUCO_KERNEL void find(
+   InputIt first, int64_t n, OutputIt output_begin, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   int64_t const loop_stride = gridDim.x * block_size;
+@@ -438,7 +439,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void find(
++CUCO_KERNEL void find(
+   InputIt first, int64_t n, OutputIt output_begin, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+@@ -495,7 +496,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void contains(
++CUCO_KERNEL void contains(
+   InputIt first, int64_t n, OutputIt output_begin, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   int64_t const loop_stride = gridDim.x * block_size;
+@@ -552,7 +553,7 @@ template <std::size_t block_size,
+           typename viewT,
+           typename Hash,
+           typename KeyEqual>
+-__global__ void contains(
++CUCO_KERNEL void contains(
+   InputIt first, int64_t n, OutputIt output_begin, viewT view, Hash hash, KeyEqual key_equal)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+diff --git a/include/cuco/detail/static_multimap/kernels.cuh b/include/cuco/detail/static_multimap/kernels.cuh
+index 67fb360..f21fbe9 100644
+--- a/include/cuco/detail/static_multimap/kernels.cuh
++++ b/include/cuco/detail/static_multimap/kernels.cuh
+@@ -15,6 +15,7 @@
+  */
+ #pragma once
+
++#include <cuco/detail/utility/cuda.cuh>
+ #include <cuco/pair.cuh>
+
+ #include <thrust/type_traits/is_contiguous_iterator.h>
+@@ -29,6 +30,7 @@ namespace cuco {
+ namespace detail {
+ namespace cg = cooperative_groups;
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
+ /**
+  * @brief Initializes each slot in the flat `slots` storage to contain `k` and `v`.
+  *
+@@ -51,7 +53,7 @@ template <typename atomic_key_type,
+           typename Key,
+           typename Value,
+           typename pair_atomic_type>
+-__global__ void initialize(pair_atomic_type* const slots, Key k, Value v, int64_t size)
++CUCO_KERNEL void initialize(pair_atomic_type* const slots, Key k, Value v, int64_t size)
+ {
+   int64_t const loop_stride = gridDim.x * blockDim.x;
+   int64_t idx               = threadIdx.x + blockIdx.x * blockDim.x;
+@@ -82,7 +84,7 @@ __global__ void initialize(pair_atomic_type* const slots, Key k, Value v, int64_
+  * @param view Mutable device view used to access the hash map's slot storage
+  */
+ template <uint32_t block_size, uint32_t tile_size, typename InputIt, typename viewT>
+-__global__ void insert(InputIt first, int64_t n, viewT view)
++CUCO_KERNEL void insert(InputIt first, int64_t n, viewT view)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+   int64_t const loop_stride = gridDim.x * block_size / tile_size;
+@@ -130,7 +132,7 @@ template <uint32_t block_size,
+           typename StencilIt,
+           typename viewT,
+           typename Predicate>
+-__global__ void insert_if_n(InputIt first, StencilIt s, int64_t n, viewT view, Predicate pred)
++CUCO_KERNEL void insert_if_n(InputIt first, StencilIt s, int64_t n, viewT view, Predicate pred)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+   int64_t const loop_stride = gridDim.x * block_size / tile_size;
+@@ -177,7 +179,7 @@ template <bool is_pair_contains,
+           typename OutputIt,
+           typename viewT,
+           typename Equal>
+-__global__ void contains(InputIt first, int64_t n, OutputIt output_begin, viewT view, Equal equal)
++CUCO_KERNEL void contains(InputIt first, int64_t n, OutputIt output_begin, viewT view, Equal equal)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+   int64_t const loop_stride = gridDim.x * block_size / tile_size;
+@@ -235,7 +237,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename viewT,
+           typename KeyEqual>
+-__global__ void count(
++CUCO_KERNEL void count(
+   InputIt first, int64_t n, atomicT* num_matches, viewT view, KeyEqual key_equal)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+@@ -294,7 +296,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename viewT,
+           typename PairEqual>
+-__global__ void pair_count(
++CUCO_KERNEL void pair_count(
+   InputIt first, int64_t n, atomicT* num_matches, viewT view, PairEqual pair_equal)
+ {
+   auto tile                 = cg::tiled_partition<tile_size>(cg::this_thread_block());
+@@ -363,7 +365,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename viewT,
+           typename KeyEqual>
+-__global__ void retrieve(InputIt first,
++CUCO_KERNEL void retrieve(InputIt first,
+                          int64_t n,
+                          OutputIt output_begin,
+                          atomicT* num_matches,
+@@ -476,7 +478,7 @@ template <uint32_t block_size,
+           typename atomicT,
+           typename viewT,
+           typename PairEqual>
+-__global__ void pair_retrieve(InputIt first,
++CUCO_KERNEL void pair_retrieve(InputIt first,
+                               int64_t n,
+                               OutputIt1 probe_output_begin,
+                               OutputIt2 contained_output_begin,
+diff --git a/include/cuco/detail/static_set/kernels.cuh b/include/cuco/detail/static_set/kernels.cuh
+index 15d725f..537b7ce 100644
+--- a/include/cuco/detail/static_set/kernels.cuh
++++ b/include/cuco/detail/static_set/kernels.cuh
+@@ -30,7 +30,7 @@ namespace cuco {
+ namespace experimental {
+ namespace static_set_ns {
+ namespace detail {
+-
++CUCO_SUPPRESS_KERNEL_WARNINGS
+ /**
+  * @brief Finds the equivalent set elements of all keys in the range `[first, last)`.
+  *
+@@ -51,7 +51,7 @@ namespace detail {
+  * @param ref Non-owning set device ref used to access the slot storage
+  */
+ template <int32_t CGSize, int32_t BlockSize, typename InputIt, typename OutputIt, typename Ref>
+-__global__ void find(InputIt first, cuco::detail::index_type n, OutputIt output_begin, Ref ref)
++CUCO_KERNEL void find(InputIt first, cuco::detail::index_type n, OutputIt output_begin, Ref ref)
+ {
+   namespace cg = cooperative_groups;
+
+diff --git a/include/cuco/detail/storage/kernels.cuh b/include/cuco/detail/storage/kernels.cuh
+index 2a5868f..56951a6 100644
+--- a/include/cuco/detail/storage/kernels.cuh
++++ b/include/cuco/detail/storage/kernels.cuh
+@@ -23,6 +23,8 @@ namespace cuco {
+ namespace experimental {
+ namespace detail {
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
++
+ /**
+  * @brief Initializes each slot in the window storage to contain `value`.
+  *
+@@ -33,7 +35,7 @@ namespace detail {
+  * @param value Value to which all values in `slots` are initialized
+  */
+ template <typename WindowT>
+-__global__ void initialize(WindowT* windows,
++CUCO_KERNEL void initialize(WindowT* windows,
+                            cuco::detail::index_type n,
+                            typename WindowT::value_type value)
+ {
+diff --git a/include/cuco/detail/trie/dynamic_bitset/kernels.cuh b/include/cuco/detail/trie/dynamic_bitset/kernels.cuh
+index c92ab60..1756015 100644
+--- a/include/cuco/detail/trie/dynamic_bitset/kernels.cuh
++++ b/include/cuco/detail/trie/dynamic_bitset/kernels.cuh
+@@ -26,6 +26,7 @@ namespace cuco {
+ namespace experimental {
+ namespace detail {
+
++CUCO_SUPPRESS_KERNEL_WARNINGS
+ /*
+  * @brief Test bits for a range of keys
+  *
+@@ -41,10 +42,10 @@ namespace detail {
+  * @param num_keys Number of input keys
+  */
+ template <typename BitsetRef, typename KeyIt, typename OutputIt>
+-__global__ void bitset_test_kernel(BitsetRef ref,
+-                                   KeyIt keys,
+-                                   OutputIt outputs,
+-                                   cuco::detail::index_type num_keys)
++CUCO_KERNEL void bitset_test_kernel(BitsetRef ref,
++                                    KeyIt keys,
++                                    OutputIt outputs,
++                                    cuco::detail::index_type num_keys)
+ {
+   auto key_id       = cuco::detail::global_thread_id();
+   auto const stride = cuco::detail::grid_stride();
+@@ -70,7 +71,7 @@ __global__ void bitset_test_kernel(BitsetRef ref,
+  * @param num_keys Number of input keys
+  */
+ template <typename BitsetRef, typename KeyIt, typename OutputIt>
+-__global__ void bitset_rank_kernel(BitsetRef ref,
++CUCO_KERNEL void bitset_rank_kernel(BitsetRef ref,
+                                    KeyIt keys,
+                                    OutputIt outputs,
+                                    cuco::detail::index_type num_keys)
+@@ -99,7 +100,7 @@ __global__ void bitset_rank_kernel(BitsetRef ref,
+  * @param num_keys Number of input keys
+  */
+ template <typename BitsetRef, typename KeyIt, typename OutputIt>
+-__global__ void bitset_select_kernel(BitsetRef ref,
++CUCO_KERNEL void bitset_select_kernel(BitsetRef ref,
+                                      KeyIt keys,
+                                      OutputIt outputs,
+                                      cuco::detail::index_type num_keys)
+@@ -125,7 +126,7 @@ __global__ void bitset_select_kernel(BitsetRef ref,
+  * @param flip_bits Boolean to request negation of words before counting bits
+  */
+ template <typename WordType, typename SizeType>
+-__global__ void bit_counts_kernel(WordType const* words,
++CUCO_KERNEL void bit_counts_kernel(WordType const* words,
+                                   SizeType* bit_counts,
+                                   cuco::detail::index_type num_words,
+                                   bool flip_bits)
+@@ -157,7 +158,7 @@ __global__ void bit_counts_kernel(WordType const* words,
+  * @param words_per_block Number of words in each block
+  */
+ template <typename SizeType>
+-__global__ void encode_ranks_from_prefix_bit_counts(const SizeType* prefix_bit_counts,
++CUCO_KERNEL void encode_ranks_from_prefix_bit_counts(const SizeType* prefix_bit_counts,
+                                                     rank* ranks,
+                                                     SizeType num_words,
+                                                     SizeType num_blocks,
+@@ -200,7 +201,7 @@ __global__ void encode_ranks_from_prefix_bit_counts(const SizeType* prefix_bit_c
+  * @param bits_per_block Number of bits in each block
+  */
+ template <typename SizeType>
+-__global__ void mark_blocks_with_select_entries(SizeType const* prefix_bit_counts,
++CUCO_KERNEL void mark_blocks_with_select_entries(SizeType const* prefix_bit_counts,
+                                                 SizeType* select_markers,
+                                                 SizeType num_blocks,
+                                                 SizeType words_per_block,
+diff --git a/include/cuco/detail/utility/cuda.cuh b/include/cuco/detail/utility/cuda.cuh
+index 6e5f13f..d251bdf 100644
+--- a/include/cuco/detail/utility/cuda.cuh
++++ b/include/cuco/detail/utility/cuda.cuh
+@@ -17,6 +17,25 @@
+
+ #include <cuco/detail/utility/cuda.hpp>
+
++#if defined(CUCO_DISABLE_KERNEL_VISIBILITY_WARNING_SUPPRESSION)
++# define CUCO_SUPPRESS_KERNEL_WARNINGS
++#elif defined(__NVCC__) && (defined(__GNUC__) || defined(__clang__))
++// handle when nvcc is the CUDA compiler and gcc or clang is host
++# define CUCO_SUPPRESS_KERNEL_WARNINGS \
++    _Pragma("nv_diag_suppress 1407")
++    _Pragma("GCC diagnostic ignored \"-Wattributes\"")
++#elif defined(__clang__)
++// handle when clang is the CUDA compiler
++# define CUCO_SUPPRESS_KERNEL_WARNINGS \
++    _Pragma("clang diagnostic ignored \"-Wattributes\"")
++#elif defined(__NVCOMPILER)
++# define CUCO_SUPPRESS_KERNEL_WARNINGS \
++#   pragma diag_suppress attribute_requires_external_linkage
++#endif
++
++#ifndef CUCO_KERNEL
++# define CUCO_KERNEL __attribute__ ((visibility ("hidden"))) __global__
++#endif
+ namespace cuco {
+ namespace detail {
+
+--
+2.43.0
