@@ -442,11 +442,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);         // 4B*2=8B, or 2B+
     rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);  // 4B*2=8B, or 2B+
     auto const push_pop_it = thrust::make_transform_iterator(
-      tokens.begin(), [] __device__(PdaTokenT const token) -> size_type {
+      tokens.begin(),
+      cuda::proclaim_return_type<cudf::size_type>([] __device__(PdaTokenT const token) {
         int const is_begin = token == token_t::StructBegin or token == token_t::ListBegin;
         int const is_end   = token == token_t::StructEnd or token == token_t::ListEnd;
         return is_begin - is_end;
-      });
+      }));
     // copy_if only struct/list, stable sort by level,
     // corresponding node indices?,
     // then scatter to node_range_end for struct/list end.

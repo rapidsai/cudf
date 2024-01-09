@@ -51,7 +51,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <vector>
 
 namespace cudf::io::json::detail {
 
@@ -394,44 +393,6 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   return to_host(d_column_names->view());
 }
 
-using variant_dtype = std::variant<std::vector<data_type>,
-               std::map<std::string, data_type>,
-               std::map<std::string, schema_element>>;
-
-// pass base column name 
-// children level. get thier col ids, then extract their names.
-// [1, 2]\n[1, 2]                  1
-// [[1, 2], [1, 2]]                2
-// {a: 1, b: 2}\n {a: 1, b: 2}     1
-// [{a: 1, b: 2}, {a: 1, b: 2}]    2
-void map_types_to_strings(variant_dtype const& var_dtype, std::vector<NodeIndexT> const& base_column_indices, std::vector<std::string> const& column_names) {
-  // Get level 0 or 1 names.
-  // create a map of schema always with name?
-      std::optional<schema_element> child_schema_element = std::visit(
-      cudf::detail::visitor_overload{
-        // TODO processing required here only. (extract base col names and construct schema)
-        [column_index](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
-          return (static_cast<std::size_t>(column_index) < user_dtypes.size())
-                   ? std::optional<schema_element>{{user_dtypes[column_index]}}
-                   : std::optional<schema_element>{};
-        },
-        // TODO just transform and return it.
-        [col_name](
-          std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
-          return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                   ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
-                   : std::optional<schema_element>{};
-        },
-        // TODO just return it.
-        [col_name](std::map<std::string, schema_element> const& user_dtypes)
-          -> std::optional<schema_element> {
-          return (user_dtypes.find(col_name) != std::end(user_dtypes))
-                   ? user_dtypes.find(col_name)->second
-                   : std::optional<schema_element>{};
-        }},
-      options.get_dtypes());
-}
-
 /**
  * @brief Holds member data pointers of `d_json_column`
  *
@@ -468,7 +429,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              bool is_array_of_arrays,
                              bool is_enabled_lines,
                              bool is_mixed_type_as_string_enabled,
-                             variant_dtype const& var_dtype,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
@@ -605,10 +565,6 @@ void make_device_json_column(device_span<SymbolT const> input,
   // TODO for map types support
   // TODO go through input schema, and force string columns to be string.
   // ignore their children too during below processing.
-
-  // get schema, find max depth, reserve that depth in the vector<std::string> path;
-  // construct path for each
-  // Find all struct nodes, and build its path, and check if it is present in schema as string.
 
   for (auto const this_col_id : unique_col_ids) {
     if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
@@ -1123,7 +1079,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                           is_array_of_arrays,
                           options.is_enabled_lines(),
                           options.is_enabled_mixed_types_as_string(),
-                          options.get_dtypes(),
                           stream,
                           mr);
 
