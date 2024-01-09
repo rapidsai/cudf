@@ -42,4 +42,5 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
                                         char const delimiter,
                                         rmm::cuda_stream_view stream);
 
+void normalize_quotes(const rmm::device_buffer &inbuf, std::unique_ptr<rmm::device_buffer> outbuf, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr);
 }  // namespace cudf::io::json::detail
