@@ -15,6 +15,7 @@
  */
 
 #include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -31,10 +32,14 @@
 #include <string>
 #include <unordered_map>
 
+// This file is compiled into a separate library that is dynamically loaded with LD_PRELOAD at
+// runtime to libcudf to override some stream-related symbols in libcudf. The goal of such a library
+// is to verify if the stream/stream pool is being correctly forwarded between API calls.
+//
 // We control whether to override cudf::test::get_default_stream or
-// cudf::get_default_stream with a compile-time flag. Thesee are the two valid
-// options:
-// 1. STREAM_MODE_TESTING=OFF: In this mode, cudf::get_default_stream will
+// cudf::get_default_stream with a compile-time flag. The behaviour of tests
+// depend on whether STREAM_MODE_TESTING is defined:
+// 1. If STREAM_MODE_TESTING is not defined, cudf::get_default_stream will
 //    return a custom stream and stream_is_invalid will return true if any CUDA
 //    API is called using any of CUDA's default stream constants
 //    (cudaStreamLegacy, cudaStreamDefault, or cudaStreamPerThread). This check
@@ -44,7 +49,7 @@
 //    is not sufficient to guarantee a stream-ordered API because it will not
 //    identify places in the code that use cudf::get_default_stream instead of
 //    properly forwarding along a user-provided stream.
-// 2. STREAM_MODE_TESTING=ON: In this mode, cudf::test::get_default_stream
+// 2. If STREAM_MODE_TESTING compiler option is defined, cudf::test::get_default_stream
 //    returns a custom stream and stream_is_invalid returns true if any CUDA
 //    API is called using any stream other than cudf::test::get_default_stream.
 //    This is a necessary and sufficient condition to ensure that libcudf is
@@ -64,6 +69,34 @@ rmm::cuda_stream_view const get_default_stream()
 
 #ifdef STREAM_MODE_TESTING
 }  // namespace test
+#endif
+
+#ifdef STREAM_MODE_TESTING
+namespace detail {
+
+/**
+ * @brief Implementation of `cuda_stream_pool` that always returns the
+ * `cudf::test::get_default_stream()`
+ */
+class test_cuda_stream_pool : public cuda_stream_pool {
+ public:
+  rmm::cuda_stream_view get_stream() override { return cudf::test::get_default_stream(); }
+  [[maybe_unused]] rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
+  {
+    return cudf::test::get_default_stream();
+  }
+
+  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
+  {
+    return std::vector<rmm::cuda_stream_view>(count, cudf::test::get_default_stream());
+  }
+
+  std::size_t get_stream_pool_size() const override { return 1UL; }
+};
+
+cuda_stream_pool* create_global_cuda_stream_pool() { return new test_cuda_stream_pool(); }
+
+}  // namespace detail
 #endif
 
 }  // namespace cudf
