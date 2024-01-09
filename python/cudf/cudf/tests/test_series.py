@@ -2722,3 +2722,10 @@ def test_series_dtype_astypes(data):
     result = cudf.Series(data, dtype="float64")
     expected = cudf.Series([1.0, 2.0, 3.0])
     assert_eq(result, expected)
+
+
+def test_from_float32_nan_scalar():
+    result = cudf.Series(np.float32("nan"))
+    expected = cudf.Series(np.array([np.nan], dtype=np.float32))
+    assert_eq(result, expected)
+    assert result.dtype == cudf.dtype(np.float32)

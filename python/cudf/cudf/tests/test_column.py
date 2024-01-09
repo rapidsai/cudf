@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -552,6 +552,12 @@ def test_astype_with_aliases(alias, expect_dtype, data):
     gd_data = cudf.Series.from_pandas(pd_data)
 
     assert_eq(pd_data.astype(expect_dtype), gd_data.astype(alias))
+
+
+@pytest.mark.parametrize("length", [-1, 0])
+def test_as_column_invalid_length(length):
+    with pytest.raises(ValueError):
+        as_column(1, length=length)
 
 
 def test_as_column_None_as_object_type():

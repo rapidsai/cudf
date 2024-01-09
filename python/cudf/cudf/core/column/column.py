@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -2160,7 +2160,10 @@ def as_column(
             data = data.astype(dtype)
 
     elif is_scalar(arbitrary) and not isinstance(arbitrary, memoryview):
-        length = length or 1
+        if length is None:
+            length = 1
+        elif length < 1:
+            raise ValueError(f"{length=} must be >=1.")
         if isinstance(arbitrary, pd.Interval):
             # No cudf.Scalar support yet
             return as_column(
@@ -2174,9 +2177,9 @@ def as_column(
             and isinstance(arbitrary, (np.floating, float))
             and np.isnan(arbitrary)
         ):
-            arbitrary = None
             if dtype is None:
-                dtype = cudf.dtype("float64")
+                dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
+            arbitrary = None
         elif arbitrary is None and dtype is None:
             dtype = cudf.dtype("object")
         arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
