@@ -2183,11 +2183,7 @@ def as_column(
         elif arbitrary is None and dtype is None:
             dtype = cudf.dtype("object")
         arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-        data = ColumnBase.from_scalar(arbitrary, length)
-
-        if dtype is not None:
-            data = data.astype(dtype)
-        return data
+        return ColumnBase.from_scalar(arbitrary, length)
 
     elif hasattr(arbitrary, "__array_interface__"):
         # CUDF assumes values are always contiguous
