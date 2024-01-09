@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -139,7 +139,7 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             return super().indices_of(value)
 
-    def has_nulls(self, include_nan=False):
+    def has_nulls(self, include_nan: bool = False) -> bool:
         return bool(self.null_count != 0) or (
             include_nan and bool(self.nan_count != 0)
         )
@@ -423,10 +423,6 @@ class NumericalColumn(NumericalBaseColumn):
     def dropna(self, drop_nan: bool = False) -> NumericalColumn:
         col = self.nans_to_nulls() if drop_nan else self
         return drop_nulls([col])[0]
-
-    @property
-    def contains_na_entries(self) -> bool:
-        return (self.nan_count != 0) or (self.null_count != 0)
 
     def _process_values_for_isin(
         self, values: Sequence

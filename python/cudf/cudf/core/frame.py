@@ -882,7 +882,7 @@ class Frame(BinaryOperand, Scannable):
                 replace_val = None
             should_fill = (
                 col_name in value
-                and col.contains_na_entries
+                and col.has_nulls(include_nan=True)
                 and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:

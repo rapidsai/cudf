@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1304,10 +1304,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if isinstance(preprocessed, ColumnBase):
             return libcudf.reduce.reduce(op, preprocessed, **kwargs)
         return preprocessed
-
-    @property
-    def contains_na_entries(self) -> bool:
-        return self.null_count != 0
 
     def _process_for_reduction(
         self, skipna: Optional[bool] = None, min_count: int = 0
