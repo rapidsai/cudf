@@ -31,7 +31,6 @@
 #include <vector>
 
 namespace cudf::io::orc::detail {
-using namespace cudf::io::detail;
 
 struct reader_column_meta;
 struct file_intermediate_data;
@@ -110,7 +109,7 @@ class reader::impl {
   column_hierarchy const _selected_columns;  // Need to be after _metadata
   std::unique_ptr<file_intermediate_data> _file_itm_data;
   std::unique_ptr<table_metadata> _output_metadata;
-  std::vector<std::vector<column_buffer>> _out_buffers;
+  std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 };
 
 }  // namespace cudf::io::orc::detail
