@@ -18,7 +18,7 @@ from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import NumericalColumn, column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
-        NumericalColumn,
         StringColumn,
         TimeDeltaColumn,
     )
