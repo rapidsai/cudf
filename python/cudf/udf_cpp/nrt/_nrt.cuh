@@ -31,6 +31,8 @@ struct NRT_MemSys {
 // TODO: add the rest of the declarations
 extern "C" __device__ void NRT_Free(void* ptr);
 
+extern "C" __device__ void NRT_decref(void* ptr);
+
 void setGlobalMemSys(NRT_MemSys* allocated_memsys);
 
 #endif

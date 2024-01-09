@@ -35,7 +35,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 typedef struct MemInfo NRT_MemInfo;
 
 /* The Memory System object */
-__device__ NRT_MemSys* TheMSys;
+__device__ NRT_MemSys TheMSysStruct = {0};
+__device__ NRT_MemSys* TheMSys = &TheMSysStruct;
 
 void setGlobalMemSys(NRT_MemSys* allocated_memsys) {
   TheMSys = allocated_memsys;

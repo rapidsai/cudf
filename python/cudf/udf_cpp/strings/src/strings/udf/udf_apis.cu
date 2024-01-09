@@ -145,7 +145,11 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
                      size,
                      [managed_strings] __device__(auto idx) {
                        managed_strings[idx].udf_str.clear();
-                       NRT_Free(managed_strings[idx]);
+                       //NRT_Free(managed_strings[idx].mi);
+                       //NRT_decref(managed_strings[idx].meminfo);
+                       int refct = reinterpret_cast<MemInfo*>(managed_strings[idx].meminfo)->refct;
+                       printf("%d\n", refct);
+                       free(managed_strings[idx].meminfo);
                      });
 }
 
