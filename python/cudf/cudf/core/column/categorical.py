@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1000,11 +1000,13 @@ class CategoricalColumn(column.ColumnBase):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            categories = col.categories.to_pandas()
+            categories = col.categories
+        elif isinstance(col.categories, NumericalColumn):
+            categories = col.categories.nans_to_nulls().dropna()
         else:
-            categories = col.categories.dropna(drop_nan=True).to_pandas()
+            categories = col.categories.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=col.ordered
+            codes, categories=categories.to_pandas(), ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
