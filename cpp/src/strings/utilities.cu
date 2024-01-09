@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/error.hpp>
@@ -126,6 +127,18 @@ special_case_mapping const* get_special_case_mapping_table()
     CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
     return table;
   });
+}
+
+int64_t get_offset_value(cudf::column_view const& offsets,
+                         size_type index,
+                         rmm::cuda_stream_view stream)
+{
+  auto const otid = offsets.type().id();
+  CUDF_EXPECTS(otid == type_id::INT64 || otid == type_id::INT32,
+               "Offsets must be of type INT32 or INT64",
+               std::invalid_argument);
+  return otid == type_id::INT64 ? cudf::detail::get_value<int64_t>(offsets, index, stream)
+                                : cudf::detail::get_value<int32_t>(offsets, index, stream);
 }
 
 }  // namespace detail
