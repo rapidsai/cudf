@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1836,7 +1836,7 @@ class BaseIndex(Serializable):
             return NotImplemented
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=no_default):
+    def from_pandas(cls, index: pd.Index, nan_as_null=no_default):
         """
         Convert from a Pandas Index.
 
