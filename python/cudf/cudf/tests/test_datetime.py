@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -1306,8 +1306,10 @@ def test_datetime_infer_format(data, timezone, dtype):
 
         assert_eq(expected, actual)
     else:
-        with pytest.raises(NotImplementedError):
-            sr.astype(dtype)
+        with cudf.option_context("mode.pandas_compatible", True):
+            with pytest.raises(NotImplementedError):
+                # pandas doesn't allow parsing "Z" to naive type
+                sr.astype(dtype)
 
 
 def test_dateoffset_instance_subclass_check():
@@ -2308,10 +2310,20 @@ def test_format_timezone_not_implemented(code):
         )
 
 
-@pytest.mark.parametrize("tz", ["Z", "UTC-3", "+01:00"])
-def test_no_format_timezone_not_implemented(tz):
+@pytest.mark.parametrize("tz", ["UTC-3", "+01:00"])
+def test_utc_offset_not_implemented(tz):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
+
+
+def test_Z_utc_offset():
+    with cudf.option_context("mode.pandas_compatible", True):
+        with pytest.raises(NotImplementedError):
+            cudf.to_datetime(["2020-01-01 00:00:00Z"])
+
+    result = cudf.to_datetime(["2020-01-01 00:00:00Z"])
+    expected = cudf.to_datetime(["2020-01-01 00:00:00"])
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize("arg", [True, False])
