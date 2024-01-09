@@ -18,6 +18,11 @@
 
 #include <cudf/io/parquet.hpp>
 
+// Global environment for temporary files
+cudf::test::TempDirTestEnvironment* const temp_env =
+  static_cast<cudf::test::TempDirTestEnvironment*>(
+    ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
+
 template <typename T, typename Elements>
 std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 cudf::size_type num_rows,

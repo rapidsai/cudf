@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "parquet_common.hpp"
-
+#include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 
-// Global environment for temporary files
-cudf::test::TempDirTestEnvironment* const temp_env =
-  static_cast<cudf::test::TempDirTestEnvironment*>(
-    ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
+// NOTE: this file exists to define the parquet test's `main()` function.
+// `main()` is kept in its own compilation unit to keep the compilation time for
+// PARQUET_TEST at a minimum.
+//
+// Do not add any test definitions to this file.
 
 CUDF_TEST_PROGRAM_MAIN()
