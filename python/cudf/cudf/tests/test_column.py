@@ -560,13 +560,6 @@ def test_as_column_invalid_length(length):
         as_column(1, length=length)
 
 
-def test_as_column_None_as_object_type():
-    result = as_column(None, length=1)
-    assert isinstance(result, cudf.core.column.string.StringColumn)
-    assert len(result) == 1
-    assert result.null_count == 1
-
-
 def test_arange_empty():
     result = arange(0)
     assert len(result) == 0

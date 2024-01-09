@@ -2180,8 +2180,6 @@ def as_column(
             if dtype is None:
                 dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
             arbitrary = None
-        elif arbitrary is None and dtype is None:
-            dtype = cudf.dtype("object")
         arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
         return ColumnBase.from_scalar(arbitrary, length)
 
