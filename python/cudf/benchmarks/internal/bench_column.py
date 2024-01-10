@@ -18,7 +18,7 @@ def bench_apply_boolean_mask(benchmark, column):
 
 
 @benchmark_with_object(cls="column", dtype="float")
-def bench_dropna(benchmark, column, dropnan):
+def bench_dropna(benchmark, column):
     benchmark(column.dropna)
 
 
