@@ -588,7 +588,7 @@ void aggregate_child_meta(std::size_t level,
                           cudf::io::orc::detail::column_hierarchy const& selected_columns,
                           cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                           cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
-                          host_span<orc_column_meta const> list_col,
+                          host_span<orc_column_meta const> nested_cols,
                           host_span<column_buffer> out_buffers,
                           reader_column_meta& col_meta)
 {
@@ -618,7 +618,7 @@ void aggregate_child_meta(std::size_t level,
   int index = 0;  // number of child column processed
 
   // For each parent column, update its child column meta for each stripe.
-  std::for_each(list_col.begin(), list_col.end(), [&](auto const p_col) {
+  std::for_each(nested_cols.begin(), nested_cols.end(), [&](auto const p_col) {
     auto const parent_col_idx = col_meta.orc_col_map[level][p_col.id];
     auto start_row            = 0;
     auto processed_row_groups = 0;
@@ -750,7 +750,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     auto& columns_level = _selected_columns.levels[level];
     // Association between each ORC column and its cudf::column
     col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
-    std::vector<orc_column_meta> nested_col;
+    std::vector<orc_column_meta> nested_cols;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -775,7 +775,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       // Map each ORC column to its column
       col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) {
-        nested_col.emplace_back(col);
+        nested_cols.emplace_back(col);
       }
     }
 
@@ -1022,13 +1022,13 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                        _stream,
                        _mr);
 
-    if (nested_col.size()) {
+    if (nested_cols.size()) {
       // Extract information to process nested child columns
       scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
 
       row_groups.device_to_host_sync(_stream);
       aggregate_child_meta(
-        level, _selected_columns, chunks, row_groups, nested_col, _out_buffers[level], col_meta);
+        level, _selected_columns, chunks, row_groups, nested_cols, _out_buffers[level], col_meta);
 
       // ORC stores number of elements at each row, so we need to generate offsets from that
       std::vector<list_buffer_data> buff_data;
