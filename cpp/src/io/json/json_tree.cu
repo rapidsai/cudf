@@ -60,37 +60,7 @@
 #include <limits>
 
 namespace cudf::io::json {
-// Debug print helpers
-[[maybe_unused]] auto to_token_str = [](PdaTokenT token) -> std::string {
-  switch (token) {
-    case token_t::StructBegin: return " {";
-    case token_t::StructEnd: return " }";
-    case token_t::ListBegin: return " [";
-    case token_t::ListEnd: return " ]";
-    case token_t::FieldNameBegin: return "FB";
-    case token_t::FieldNameEnd: return "FE";
-    case token_t::StringBegin: return "SB";
-    case token_t::StringEnd: return "SE";
-    case token_t::ErrorBegin: return "er";
-    case token_t::ValueBegin: return "VB";
-    case token_t::ValueEnd: return "VE";
-    case token_t::StructMemberBegin: return " <";
-    case token_t::StructMemberEnd: return " >";
-    case token_t::LineEnd: return ";";
-    default: return ".";
-  }
-};
-auto to_int    = [](auto v) { return std::to_string(static_cast<int>(v)); };
-auto print_vec = [](auto const& cpu, auto const name, auto converter) {
-  for (auto const& v : cpu)
-    printf("%3s,", converter(v).c_str());
-  std::cout << name << std::endl;
-};
 namespace detail {
-
-void print_tree(host_span<SymbolT const> input,
-                tree_meta_t const& d_gpu_tree,
-                rmm::cuda_stream_view stream);
 
 // The node that a token represents
 struct token_to_node {
@@ -464,19 +434,10 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                is_nested,
                                stream);
 
-    print_vec(cudf::detail::make_std_vector_async(token_levels, stream), "ntoken_levels", to_int);
-
     thrust::exclusive_scan(
       rmm::exec_policy(stream), token_levels.begin(), token_levels.end(), token_levels.begin());
 
-    print_vec(cudf::detail::make_std_vector_async(token_levels, stream), "ntoken_levels", to_int);
-
-    rmm::device_uvector<TreeDepthT> ntokens(num_nested, stream);
-    cudf::detail::copy_if_safe(
-      tokens.begin(), tokens.end(), tokens.begin(), ntokens.begin(), is_nested, stream);
-    print_vec(cudf::detail::make_std_vector_async(ntokens, stream), "ntokens", to_token_str);
-    print_vec(cudf::detail::make_std_vector_async(token_id, stream), "ntoken_id", to_int);
-    //
+    // Get parent of first child of struct/list begin.
     auto const first_childs_parent_token_id2 =
       [tokens_gpu = tokens.begin(), token_id = token_id.begin()] __device__(auto i) -> NodeIndexT {
       if (i <= 0) { return -1; }
@@ -509,15 +470,11 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         // parent_node_sentinel is -1, useful for segmented max operation below
       });
 
-    print_vec(
-      cudf::detail::make_std_vector_async(parent_node_ids, stream), "nparent_node_ids", to_int);
     // propagate to siblings.
     propagate_parent_to_siblings(
       cudf::device_span<TreeDepthT const>{token_levels.data(), token_levels.size()},
       parent_node_ids,
       stream);
-    print_vec(
-      cudf::detail::make_std_vector_async(parent_node_ids, stream), "nparent_node_ids", to_int);
 
     // scatter to node_range_end for all nested end tokens. (if it's end)
     auto token_indices_it =

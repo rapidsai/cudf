@@ -434,8 +434,6 @@ void make_device_json_column(device_span<SymbolT const> input,
 {
   CUDF_FUNC_RANGE();
   auto num_nodes = col_ids.size();
-  // TODO think about replacing all col_ids which are children of string column to ignore? (useful
-  // to reduce unique_col_id count for map types).
   rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
 
@@ -479,8 +477,6 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto max_row_offsets = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
   std::vector<std::string> column_names = copy_strings_to_host(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
-  // for(auto str: column_names) std::cout<<str<<"---\n";
-  // TODO preprocess input schema and try to avoid copying map type's field names by skipping them
   // array of arrays column names
   if (is_array_of_arrays) {
     TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
@@ -562,10 +558,6 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<NodeIndexT> remapped_col_id(num_columns, -1);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
-  // TODO for map types support
-  // TODO go through input schema, and force string columns to be string.
-  // ignore their children too during below processing.
-
   for (auto const this_col_id : unique_col_ids) {
     if (column_categories[this_col_id] == NC_ERR || column_categories[this_col_id] == NC_FN) {
       continue;
@@ -584,11 +576,9 @@ void make_device_json_column(device_span<SymbolT const> input,
       parent_col_id          = column_parent_ids[parent_col_id];
       name                   = column_names[field_name_col_id];
     } else {
-      std::cout << "col_id:" << this_col_id << ", pcid:" << parent_col_id << "\n\n\n";
       CUDF_FAIL("Unexpected parent column category");
     }
 
-    print_vec(is_mixed_string_column, "is_mixed_string_column", to_int);
     if (parent_col_id != parent_node_sentinel && is_mixed_string_column[parent_col_id] == 1) {
       // if parent is mixed string column, ignore this column.
       is_mixed_string_column[this_col_id] = 1;
@@ -599,8 +589,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     // replace if this column is a nested column and the existing was a value column
     // ignore this column if this column is a value column and the existing was a nested column
     auto it = columns.find(parent_col_id);
-    // if(it == columns.end())
-    //   std::cout<<"col_id:"<<this_col_id<<", pcid:"<<parent_col_id<<"\n\n\n";
     CUDF_EXPECTS(it != columns.end(), "Parent column not found");
     auto& parent_col = it->second.get();
     bool replaced    = false;
@@ -668,19 +656,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     columns.try_emplace(this_col_id, std::ref(parent_col.child_columns.at(name)));
     mapped_columns.try_emplace(std::make_pair(parent_col_id, name), this_col_id);
   }
-  // debug prints
-  for (auto i = 0ul; i < num_columns; i++)
-    printf("%3lu ", i);
-  printf(" col_id\n");
-  print_vec(column_categories, "column_categories", to_cat);
-  print_vec(ignore_vals, "ignore_vals", to_int);
-  print_vec(is_mixed_string_column, "is_mixed_string_column", to_int);
-  for (auto i = 0ul; i < num_columns; i++)
-    printf("%3lu ", columns.count(i));
-  printf(" columns\n");
-  for (auto const& [key, value] : mapped_columns) {
-    std::cout << key.first << "+" << key.second << ":" << value << "\n";
-  }
 
   if (is_mixed_type_as_string_enabled) {
     // ignore all children of mixed type columns
@@ -719,9 +694,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                                             static_cast<bitmask_type*>(col.validity.data())};
   }
 
-  // print_vec(column_categories, "column_categories", to_cat);
-  // print_vec(is_mixed_string_column, "is_mixed_string_column", to_int);
-  // print_vec(ignore_vals, "ignore_vals", to_int);
   auto d_ignore_vals = cudf::detail::make_device_uvector_async(
     ignore_vals, stream, rmm::mr::get_current_device_resource());
   auto d_columns_data = cudf::detail::make_device_uvector_async(
@@ -756,7 +728,6 @@ void make_device_json_column(device_span<SymbolT const> input,
         default: break;
       }
     });
-  std::cout << "after str for_each_n\n";
 
   // 4. scatter List offset
   // copy_if only node's whose parent is list, (node_id, parent_col_id)
@@ -793,7 +764,6 @@ void make_device_json_column(device_span<SymbolT const> input,
              (!d_ignore_vals[col_ids[parent_node_id]]);
       // node_categories[parent_node_id] == NC_LIST;
     });
-  std::cout << "after copy_if\n";
 
   auto const num_list_children =
     list_children_end - thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin());
@@ -801,8 +771,6 @@ void make_device_json_column(device_span<SymbolT const> input,
                              parent_col_ids.begin(),
                              parent_col_ids.begin() + num_list_children,
                              node_ids.begin());
-  std::cout << "after stable_sort_by_key\n";
-  std::cout << num_list_children << "\n";
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -826,7 +794,6 @@ void make_device_json_column(device_span<SymbolT const> input,
           row_offsets[node_id] + 1;
       }
     });
-  std::cout << "after list for_each_n\n";
 
   // 5. scan on offsets.
   for (auto& [id, col_ref] : columns) {
@@ -1032,7 +999,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                    stream,
                                    rmm::mr::get_current_device_resource());
   }();  // IILE used to free memory of token data.
-#define NJP_DEBUG_PRINT
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
   print_tree(h_input, gpu_tree, stream);
@@ -1059,9 +1025,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   stream,
                                   rmm::mr::get_current_device_resource());
 
-  print_vec(cudf::detail::make_std_vector_async(gpu_col_id, stream), "gpu_col_id", to_int);
-  print_vec(
-    cudf::detail::make_std_vector_async(gpu_row_offsets, stream), "gpu_row_offsets", to_int);
   device_json_column root_column(stream, mr);
   root_column.type = json_col_t::ListColumn;
   root_column.child_offsets.resize(2, stream);
