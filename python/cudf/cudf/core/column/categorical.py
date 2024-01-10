@@ -754,7 +754,7 @@ class CategoricalColumn(column.ColumnBase):
             self._encode(item)
         except ValueError:
             return False
-        return self._encode(item) in self.as_numerical
+        return self._encode(item) in self.codes
 
     def set_base_data(self, value):
         if value is not None:
@@ -798,15 +798,6 @@ class CategoricalColumn(column.ColumnBase):
             )
             self._children = (codes_column,)
         return self._children
-
-    @property
-    def as_numerical(self) -> NumericalColumn:
-        return cast(
-            cudf.core.column.NumericalColumn,
-            column.build_column(
-                data=self.codes.data, dtype=self.codes.dtype, mask=self.mask
-            ),
-        )
 
     @property
     def categories(self) -> ColumnBase:
@@ -925,7 +916,7 @@ class CategoricalColumn(column.ColumnBase):
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical._binaryop(other.as_numerical, op)
+        return self.codes._binaryop(other.codes, op)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):
@@ -950,7 +941,7 @@ class CategoricalColumn(column.ColumnBase):
     def sort_values(
         self, ascending: bool = True, na_position="last"
     ) -> CategoricalColumn:
-        codes = self.as_numerical.sort_values(ascending, na_position)
+        codes = self.codes.sort_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -961,7 +952,7 @@ class CategoricalColumn(column.ColumnBase):
         return col
 
     def element_indexing(self, index: int) -> ScalarLike:
-        val = self.as_numerical.element_indexing(index)
+        val = self.codes.element_indexing(index)
         return self._decode(int(val)) if val is not None else val
 
     @property
@@ -1053,7 +1044,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> CategoricalColumn:
-        codes = self.as_numerical.unique()
+        codes = self.codes.unique()
         return column.build_categorical_column(
             categories=self.categories,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -1280,15 +1271,15 @@ class CategoricalColumn(column.ColumnBase):
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
-        return self.as_numerical.indices_of(self._encode(value))
+        return self.codes.indices_of(self._encode(value))
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return bool(self.ordered) and self.as_numerical.is_monotonic_increasing
+        return bool(self.ordered) and self.codes.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
+        return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
     def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
