@@ -267,24 +267,44 @@ metadata::metadata(datasource* source)
   cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
 
-  // loop through the column chunks and read column and offset indexes
-  for (auto& rg : row_groups) {
-    for (auto& col : rg.columns) {
+  // FIXME: there's a more elegant way to do this, for now just trying to get it working.
+  // loop through the column chunks and read column and offset index offsets and sizes
+  // find the first offset and the total length (the indexes should be contiguous)
+  int64_t min_offset = std::numeric_limits<int>::max();
+  size_t length      = 0;
+  for (auto const& rg : row_groups) {
+    for (auto const& col : rg.columns) {
       if (col.column_index_length > 0 && col.column_index_offset > 0) {
-        auto const col_idx_buf =
-          source->host_read(col.column_index_offset, col.column_index_length);
-        cp.init(col_idx_buf->data(), col_idx_buf->size());
-        ColumnIndex ci;
-        cp.read(&ci);
-        col.column_index = std::move(ci);
+        min_offset = std::min(col.column_index_offset, min_offset);
+        length += col.column_index_length;
       }
       if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-        auto const off_idx_buf =
-          source->host_read(col.offset_index_offset, col.offset_index_length);
-        cp.init(off_idx_buf->data(), off_idx_buf->size());
-        OffsetIndex oi;
-        cp.read(&oi);
-        col.offset_index = std::move(oi);
+        min_offset = std::min(col.offset_index_offset, min_offset);
+        length += col.offset_index_length;
+      }
+    }
+  }
+
+  if (length > 0) {
+    auto const idx_buf = source->host_read(min_offset, length);
+
+    // now loop over row groups again
+    for (auto& rg : row_groups) {
+      for (auto& col : rg.columns) {
+        if (col.column_index_length > 0 && col.column_index_offset > 0) {
+          int64_t offset = col.column_index_offset - min_offset;
+          cp.init(idx_buf->data() + offset, col.column_index_length);
+          ColumnIndex ci;
+          cp.read(&ci);
+          col.column_index = std::move(ci);
+        }
+        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+          int64_t offset = col.offset_index_offset - min_offset;
+          cp.init(idx_buf->data() + offset, col.offset_index_length);
+          OffsetIndex oi;
+          cp.read(&oi);
+          col.offset_index = std::move(oi);
+        }
       }
     }
   }
