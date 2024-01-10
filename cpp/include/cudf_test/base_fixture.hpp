@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include <cudf_test/file_utilities.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
 
+#include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/binning_memory_resource.hpp>
@@ -264,9 +265,8 @@ inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_res
 
 inline auto make_pool()
 {
-  auto const [free, total] = rmm::detail::available_device_memory();
-  auto min_alloc =
-    rmm::detail::align_down(std::min(free, total / 10), rmm::detail::CUDA_ALLOCATION_ALIGNMENT);
+  auto const [free, total] = rmm::available_device_memory();
+  auto min_alloc = rmm::align_down(std::min(free, total / 10), rmm::CUDA_ALLOCATION_ALIGNMENT);
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda(), min_alloc);
 }
 
