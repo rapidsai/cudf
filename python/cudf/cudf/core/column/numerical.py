@@ -16,6 +16,7 @@ from typing import (
 import cupy as cp
 import numpy as np
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -290,7 +291,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
-    def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
+    def nans_to_nulls(self: Self) -> Self:
         # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
@@ -528,13 +529,11 @@ class NumericalColumn(NumericalBaseColumn):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-        fill_nan: bool = True,
-    ) -> NumericalColumn:
+    ) -> Self:
         """
         Fill null values with *fill_value*
         """
-        col = self.nans_to_nulls() if fill_nan else self
+        col = self.nans_to_nulls()
 
         if col.null_count == 0:
             return col
@@ -569,8 +568,8 @@ class NumericalColumn(NumericalBaseColumn):
                     if not (new_fill_value == fill_value).all():
                         raise TypeError(
                             f"Cannot safely cast non-equivalent "
-                            f"{col.dtype.type.__name__} to "
-                            f"{cudf.dtype(dtype).type.__name__}"
+                            f"{fill_value.dtype.type.__name__} to "
+                            f"{col.dtype.type.__name__}"
                         )
                     fill_value = new_fill_value
             else:
@@ -647,12 +646,14 @@ class NumericalColumn(NumericalBaseColumn):
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
+            if self.nan_count > 0:
+                return False
             iinfo = np.iinfo(to_dtype)
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
-                filled = self.fillna(0, fill_nan=False)
+                filled = self.fillna(0)
                 return (cudf.Series(filled) % 1 == 0).all()
             else:
                 return False

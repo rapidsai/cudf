@@ -1239,9 +1239,8 @@ class CategoricalColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Any = None,
-        dtype: Optional[Dtype] = None,
-    ) -> CategoricalColumn:
+        method: Optional[str] = None,
+    ) -> Self:
         """
         Fill null values with *fill_value*
         """
@@ -1279,7 +1278,7 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
-        return super().fillna(value=fill_value, method=method)
+        return super().fillna(fill_value, method=method)
 
     def indices_of(
         self, value: ScalarLike
