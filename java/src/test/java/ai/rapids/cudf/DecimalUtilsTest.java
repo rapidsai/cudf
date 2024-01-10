@@ -32,8 +32,8 @@ public class DecimalUtilsTest extends CudfTestBase {
                 new BigDecimal("9E+1"),
                 new BigDecimal("-9E+1"),
                 new BigDecimal("-91"));
-             ColumnView expected = ColumnVector.fromBooleans(true, true, false, false, true)) {
-            ColumnView result = DecimalUtils.outOfBounds(cv, 1, -1);
+             ColumnView expected = ColumnVector.fromBooleans(true, true, false, false, true);
+             ColumnView result = DecimalUtils.outOfBounds(cv, 1, -1)) {
             assertColumnsAreEqual(expected, result);
         }
     }
