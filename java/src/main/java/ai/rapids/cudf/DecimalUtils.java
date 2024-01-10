@@ -140,8 +140,8 @@ public class DecimalUtils {
     // For comparing the two values they should be the same scale, we round the value to negative infinity to maintain
     // the relation. Ex:
     // 10.3 > 10.29 = true, after rounding rhs to floor ===> 10.3 > 10.2 = true, relation is maintained
-    // 10.2 > 10.29 = false, after rounding rhs to floor ===> 10.2 < 10.2 = false, relation is maintained
-    // 10.1 > 10.10 = false, after rounding rhs to floor ===> 10.1 < 10.1 = false, relation is maintained
+    // 10.2 > 10.29 = false, after rounding rhs to floor ===> 10.2 > 10.2 = false, relation is maintained
+    // 10.1 > 10.10 = false, after rounding rhs to floor ===> 10.1 > 10.1 = false, relation is maintained
     BigDecimal roundedRhs = rhs.setScale(-cvScale, BigDecimal.ROUND_FLOOR);
 
     if (roundedRhs.precision() > maxPrecision) {
