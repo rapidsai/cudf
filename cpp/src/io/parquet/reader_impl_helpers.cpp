@@ -271,21 +271,23 @@ metadata::metadata(datasource* source)
   // loop through the column chunks and read column and offset index offsets and sizes
   // find the first offset and the total length (the indexes should be contiguous)
   int64_t min_offset = std::numeric_limits<int>::max();
-  size_t length      = 0;
+  int64_t max_offset = 0;
+
   for (auto const& rg : row_groups) {
     for (auto const& col : rg.columns) {
       if (col.column_index_length > 0 && col.column_index_offset > 0) {
         min_offset = std::min(col.column_index_offset, min_offset);
-        length += col.column_index_length;
+        max_offset = std::max(col.column_index_offset + col.column_index_length, max_offset);
       }
       if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
         min_offset = std::min(col.offset_index_offset, min_offset);
-        length += col.offset_index_length;
+        max_offset = std::max(col.offset_index_offset + col.offset_index_length, max_offset);
       }
     }
   }
 
-  if (length > 0) {
+  if (max_offset > 0) {
+    int64_t length     = max_offset - min_offset;
     auto const idx_buf = source->host_read(min_offset, length);
 
     // now loop over row groups again
