@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -282,7 +282,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint64 maximum = 2;
         //  optional sint64 sum = 3;
         // }
-        if (s->chunk.has_minmax || s->chunk.has_sum) {
+        {
           *cur = 2 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
           if (s->chunk.has_minmax) {
@@ -301,7 +301,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional double maximum = 2;
         //  optional double sum = 3;
         // }
-        if (s->chunk.has_minmax || s->chunk.has_sum) {
+        {
           *cur = 3 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
           if (s->chunk.has_minmax) {
@@ -319,14 +319,14 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional sint64 sum = 3; // sum will store the total length of all strings
         // }
-        if (s->chunk.has_minmax || s->chunk.has_sum) {
+        {
           uint32_t sz = 0;
           if (s->chunk.has_minmax) {
             sz += (pb_put_uint(cur, 1, s->chunk.min_value.str_val.length) - cur) +
                   (pb_put_uint(cur, 2, s->chunk.max_value.str_val.length) - cur) +
                   s->chunk.min_value.str_val.length + s->chunk.max_value.str_val.length;
           }
-          if (s->chunk.has_sum) { sz += pb_put_int(cur, 3, s->chunk.sum.i_val) - cur; }
+          sz += pb_put_int(cur, 3, s->chunk.sum.i_val) - cur;
 
           cur[0] = 4 * 8 + ProtofType::FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
@@ -337,7 +337,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             cur = pb_put_binary(
               cur, 2, s->chunk.max_value.str_val.ptr, s->chunk.max_value.str_val.length);
           }
-          if (s->chunk.has_sum) { cur = pb_put_int(cur, 3, s->chunk.sum.i_val); }
+          cur = pb_put_int(cur, 3, s->chunk.sum.i_val);
         }
         break;
       case dtype_bool:
@@ -345,7 +345,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         // message BucketStatistics {
         //  repeated uint64 count = 1 [packed=true];
         // }
-        if (s->chunk.has_sum) {
+        {
           cur[0] = 5 * 8 + ProtofType::FIXEDLEN;
           // count is equal to the number of 'true' values, despite what specs say
           cur          = pb_put_packed_uint(cur + 2, 1, s->chunk.sum.u_val);
@@ -360,7 +360,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional string maximum = 2;
         //  optional string sum = 3;
         // }
-        if (s->chunk.has_minmax or s->chunk.has_sum) {
+        {
           auto const scale = s->group.col_dtype.scale();
 
           uint32_t sz = 0;
@@ -373,9 +373,8 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             sz += (pb_put_uint(cur, 1, min_size) - cur) + min_size +
                   (pb_put_uint(cur, 1, max_size) - cur) + max_size;
           }
-          auto const sum_size =
-            s->chunk.has_sum ? fixed_point_string_size(s->chunk.sum.d128_val, scale) : 0;
-          if (s->chunk.has_sum) { sz += (pb_put_uint(cur, 1, sum_size) - cur) + sum_size; }
+          auto const sum_size = fixed_point_string_size(s->chunk.sum.d128_val, scale);
+          sz += (pb_put_uint(cur, 1, sum_size) - cur) + sum_size;
 
           cur[0] = 6 * 8 + ProtofType::FIXEDLEN;
           cur    = pb_encode_uint(cur + 1, sz);
@@ -384,9 +383,7 @@ __global__ void __launch_bounds__(encode_threads_per_block)
             cur = pb_put_decimal(cur, 1, s->chunk.min_value.d128_val, scale, min_size);  //  minimum
             cur = pb_put_decimal(cur, 2, s->chunk.max_value.d128_val, scale, max_size);  // maximum
           }
-          if (s->chunk.has_sum) {
-            cur = pb_put_decimal(cur, 3, s->chunk.sum.d128_val, scale, sum_size);  // sum
-          }
+          cur = pb_put_decimal(cur, 3, s->chunk.sum.d128_val, scale, sum_size);  // sum
         }
         break;
       case dtype_date32:
@@ -395,11 +392,13 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  optional sint32 minimum = 1;
         //  optional sint32 maximum = 2;
         // }
-        if (s->chunk.has_minmax) {
+        {
           cur[0] = 7 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
-          cur          = pb_put_int(cur, 1, s->chunk.min_value.i_val);
-          cur          = pb_put_int(cur, 2, s->chunk.max_value.i_val);
+          if (s->chunk.has_minmax) {
+            cur = pb_put_int(cur, 1, s->chunk.min_value.i_val);
+            cur = pb_put_int(cur, 2, s->chunk.max_value.i_val);
+          }
           fld_start[1] = cur - (fld_start + 2);
         }
         break;
@@ -414,31 +413,32 @@ __global__ void __launch_bounds__(encode_threads_per_block)
         //  precision
         // optional int32 maximumNanos = 6;
         // }
-        if (s->chunk.has_minmax) {
+        {
           cur[0] = 9 * 8 + ProtofType::FIXEDLEN;
           cur += 2;
-          auto const [min_ms, min_ns_remainder] =
-            split_nanosecond_timestamp(s->chunk.min_value.i_val);
-          auto const [max_ms, max_ns_remainder] =
-            split_nanosecond_timestamp(s->chunk.max_value.i_val);
+          if (s->chunk.has_minmax) {
+            auto const [min_ms, min_ns_remainder] =
+              split_nanosecond_timestamp(s->chunk.min_value.i_val);
+            auto const [max_ms, max_ns_remainder] =
+              split_nanosecond_timestamp(s->chunk.max_value.i_val);
 
-          // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
-          cur = pb_put_int(cur, 1, min_ms);  // minimum
-          cur = pb_put_int(cur, 2, max_ms);  // maximum
-          cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
-          cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
+            // minimum/maximum are the same as minimumUtc/maximumUtc as we always write files in UTC
+            cur = pb_put_int(cur, 1, min_ms);  // minimum
+            cur = pb_put_int(cur, 2, max_ms);  // maximum
+            cur = pb_put_int(cur, 3, min_ms);  // minimumUtc
+            cur = pb_put_int(cur, 4, max_ms);  // maximumUtc
 
-          if constexpr (enable_nanosecond_statistics) {
-            if (min_ns_remainder != DEFAULT_MIN_NANOS) {
-              // using uint because positive values are not zigzag encoded
-              cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
-            }
-            if (max_ns_remainder != DEFAULT_MAX_NANOS) {
-              // using uint because positive values are not zigzag encoded
-              cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+            if constexpr (enable_nanosecond_statistics) {
+              if (min_ns_remainder != DEFAULT_MIN_NANOS) {
+                // using uint because positive values are not zigzag encoded
+                cur = pb_put_uint(cur, 5, min_ns_remainder + 1);  // minimumNanos
+              }
+              if (max_ns_remainder != DEFAULT_MAX_NANOS) {
+                // using uint because positive values are not zigzag encoded
+                cur = pb_put_uint(cur, 6, max_ns_remainder + 1);  // maximumNanos
+              }
             }
           }
-
           fld_start[1] = cur - (fld_start + 2);
         }
         break;

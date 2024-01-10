@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from collections.abc import Iterator
 
@@ -239,7 +239,7 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
-    shuffle=None,
+    shuffle_method=None,
     sort_function=None,
     sort_function_kwargs=None,
 ):
@@ -295,7 +295,7 @@ def sort_values(
         "_partitions",
         max_branch=max_branch,
         npartitions=len(divisions) - 1,
-        shuffle=_get_shuffle_type(shuffle),
+        shuffle_method=_get_shuffle_method(shuffle_method),
         ignore_index=ignore_index,
     ).drop(columns=["_partitions"])
     df3.divisions = (None,) * (df3.npartitions + 1)
@@ -320,14 +320,14 @@ def get_default_shuffle_method():
     return default
 
 
-def _get_shuffle_type(shuffle):
-    # Utility to set the shuffle-kwarg default
+def _get_shuffle_method(shuffle_method):
+    # Utility to set the shuffle_method-kwarg default
     # and to validate user-specified options
-    shuffle = shuffle or get_default_shuffle_method()
-    if shuffle not in _SHUFFLE_SUPPORT:
+    shuffle_method = shuffle_method or get_default_shuffle_method()
+    if shuffle_method not in _SHUFFLE_SUPPORT:
         raise ValueError(
             "Dask-cudf only supports the following shuffle "
-            f"methods: {_SHUFFLE_SUPPORT}. Got shuffle={shuffle}"
+            f"methods: {_SHUFFLE_SUPPORT}. Got shuffle_method={shuffle_method}"
         )
 
-    return shuffle
+    return shuffle_method

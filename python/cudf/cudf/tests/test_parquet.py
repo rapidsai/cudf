@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import glob
@@ -6,6 +6,7 @@ import math
 import os
 import pathlib
 import random
+import string
 from contextlib import contextmanager
 from io import BytesIO
 from string import ascii_letters
@@ -432,13 +433,20 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
                 dg.ColumnParameters(
                     cardinality=40,
                     null_frequency=0.05,
-                    generator=lambda g: [g.address.city() for _ in range(40)],
+                    generator=lambda: [
+                        "".join(
+                            random.sample(
+                                string.ascii_letters, random.randint(4, 8)
+                            )
+                        )
+                        for _ in range(40)
+                    ],
                     is_sorted=False,
                 ),
                 dg.ColumnParameters(
                     40,
                     0.2,
-                    lambda g: [g.person.age() for _ in range(40)],
+                    lambda: np.random.default_rng().integers(0, 100, size=40),
                     True,
                 ),
             ],
