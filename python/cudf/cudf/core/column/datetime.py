@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import Any, Mapping, Optional, Sequence, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -102,6 +103,9 @@ def infer_format(element: str, **kwargs) -> str:
     """
     Infers datetime format from a string, also takes cares for `ms` and `ns`
     """
+    if not cudf.get_option("mode.pandas_compatible"):
+        # We allow "Z" but don't localize it to datetime64[ns, UTC] type (yet)
+        element = element.replace("Z", "")
     fmt = _guess_datetime_format(element, **kwargs)
 
     if fmt is not None:
@@ -595,12 +599,12 @@ class DatetimeColumn(column.ColumnBase):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> DatetimeColumn:
+    ) -> Self:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
             if is_scalar(fill_value):
+                # TODO: Add cast checking like TimedeltaColumn.fillna
                 if not isinstance(fill_value, cudf.Scalar):
                     fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
             else:

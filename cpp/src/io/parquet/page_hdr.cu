@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,28 +114,28 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       field_type = c & 0xf;
       if (!(c & 0xf0)) get_i32(bs);
     }
-    switch (field_type) {
-      case ST_FLD_TRUE:
-      case ST_FLD_FALSE: break;
-      case ST_FLD_I16:
-      case ST_FLD_I32:
-      case ST_FLD_I64: get_u32(bs); break;
-      case ST_FLD_BYTE: skip_bytes(bs, 1); break;
-      case ST_FLD_DOUBLE: skip_bytes(bs, 8); break;
-      case ST_FLD_BINARY: skip_bytes(bs, get_u32(bs)); break;
-      case ST_FLD_LIST:
-      case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
+    switch (static_cast<FieldType>(field_type)) {
+      case FieldType::BOOLEAN_TRUE:
+      case FieldType::BOOLEAN_FALSE: break;
+      case FieldType::I16:
+      case FieldType::I32:
+      case FieldType::I64: get_u32(bs); break;
+      case FieldType::I8: skip_bytes(bs, 1); break;
+      case FieldType::DOUBLE: skip_bytes(bs, 8); break;
+      case FieldType::BINARY: skip_bytes(bs, get_u32(bs)); break;
+      case FieldType::LIST:
+      case FieldType::SET: {  // NOTE: skipping a list of lists is not handled
         auto const c = getb(bs);
         int n        = c >> 4;
         if (n == 0xf) { n = get_u32(bs); }
         field_type = c & 0xf;
-        if (field_type == ST_FLD_STRUCT) {
+        if (static_cast<FieldType>(field_type) == FieldType::STRUCT) {
           struct_depth += n;
         } else {
           rep_cnt = n;
         }
       } break;
-      case ST_FLD_STRUCT: struct_depth++; break;
+      case FieldType::STRUCT: struct_depth++; break;
     }
   } while (rep_cnt || struct_depth);
 }
@@ -180,7 +180,7 @@ struct ParquetFieldInt32 {
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = get_i32(bs);
-    return (field_type != ST_FLD_I32);
+    return (static_cast<FieldType>(field_type) != FieldType::I32);
   }
 };
 
@@ -199,7 +199,7 @@ struct ParquetFieldEnum {
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = static_cast<Enum>(get_i32(bs));
-    return (field_type != ST_FLD_I32);
+    return (static_cast<FieldType>(field_type) != FieldType::I32);
   }
 };
 
@@ -218,7 +218,7 @@ struct ParquetFieldStruct {
 
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
-    return ((field_type != ST_FLD_STRUCT) || !op(bs));
+    return ((static_cast<FieldType>(field_type) != FieldType::STRUCT) || !op(bs));
   }
 };
 
