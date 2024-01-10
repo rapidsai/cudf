@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1382,7 +1382,7 @@ class CategoricalColumn(column.ColumnBase):
         # improved as the concatenation API is solidified.
 
         # Find the first non-null column:
-        head = next((obj for obj in objs if obj.valid_count), objs[0])
+        head = next((obj for obj in objs if not obj.has_nulls()), objs[0])
 
         # Combine and de-dupe the categories
         cats = column.concat_columns([o.categories for o in objs]).unique()

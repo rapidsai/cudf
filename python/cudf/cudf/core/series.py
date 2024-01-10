@@ -1710,7 +1710,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     @_cudf_nvtx_annotate
     def valid_count(self):
         """Number of non-null values"""
-        return self._column.valid_count
+        return len(self) - self._column.null_count
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
