@@ -269,6 +269,9 @@ metadata::metadata(datasource* source)
 
   // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
   // Currently the indexes are only used for the string size calculations.
+  // Could also just read indexes for string columns, but that would require changes elsewhere
+  // where we're trying to determine if we have the indexes or not. Since this is a short-term
+  // solution, it's probably not worth going down that rabbit hole just yet.
   // Note: This will have to be modified if there are other uses in the future (e.g. calculating
   // chunk/pass boundaries).
   auto const has_strings = std::any_of(
