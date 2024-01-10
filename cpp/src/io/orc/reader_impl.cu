@@ -76,11 +76,14 @@ table_metadata reader::impl::populate_metadata()
 
 table_with_metadata reader::impl::read_chunk_internal()
 {
-  // There are no columns in the table
-  if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
+  auto out_metadata = populate_metadata();
+
+  // There is no columns in the table.
+  if (_selected_columns.num_levels() == 0) {
+    return {std::make_unique<table>(), std::move(out_metadata)};
+  }
 
   std::vector<std::unique_ptr<column>> out_columns;
-  auto out_metadata = populate_metadata();
 
   // If no rows or stripes to read, return empty columns
   if (_file_itm_data->rows_to_read == 0 || _file_itm_data->selected_stripes.empty()) {
