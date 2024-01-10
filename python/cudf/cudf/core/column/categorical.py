@@ -988,14 +988,12 @@ class CategoricalColumn(column.ColumnBase):
             .values_host
         )
         cats = col.categories
-        if isinstance(cats.dtype, IntervalDtype):
+        if cats.dtype.kind in "biuf":
+            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
+        elif not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            pass
-        elif cats.dtype.kind in "biuf":
-            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
-        else:
             cats = cats.dropna()
         data = pd.Categorical.from_codes(
             codes, categories=cats.to_pandas(), ordered=col.ordered
