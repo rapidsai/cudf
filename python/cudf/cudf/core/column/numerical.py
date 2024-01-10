@@ -139,7 +139,7 @@ class NumericalColumn(NumericalBaseColumn):
         else:
             return super().indices_of(value)
 
-    def has_nulls(self, include_nan=False):
+    def has_nulls(self, include_nan: bool = False) -> bool:
         return bool(self.null_count != 0) or (
             include_nan and bool(self.nan_count != 0)
         )
@@ -419,10 +419,6 @@ class NumericalColumn(NumericalBaseColumn):
             nan_col = libcudf.unary.is_nan(self)
             self._nan_count = nan_col.sum()
         return self._nan_count
-
-    @property
-    def contains_na_entries(self) -> bool:
-        return (self.nan_count != 0) or (self.null_count != 0)
 
     def _process_values_for_isin(
         self, values: Sequence
