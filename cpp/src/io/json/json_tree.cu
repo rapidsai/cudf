@@ -389,14 +389,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     stream);
   CUDF_EXPECTS(node_range_out_end - node_range_out_it == num_nodes, "node range count mismatch");
 
-  // Extract Struct, List range_end
+  // Extract Struct, List range_end:
   // 1. Extract Struct, List - begin & end separately, their token ids
   // 2. push, pop to get levels
   // 3. copy first child's parent token_id, also translate to node_id
   // 4. propagate to siblings using levels, parent token id. (segmented scan)
-  // 5. scatter to node_range_end for all nested end tokens. (if it's end)
+  // 5. scatter to node_range_end for only nested end tokens.
   if (is_strict_nested_boundaries) {
-    // Whether the token pushes onto the parent node stack
+    // Whether the token is nested
     auto const is_nested = [] __device__(PdaTokenT const token) -> bool {
       switch (token) {
         case token_t::StructBegin:
@@ -409,8 +409,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     auto const num_nested =
       thrust::count_if(rmm::exec_policy(stream), tokens.begin(), tokens.end(), is_nested);
     rmm::device_uvector<TreeDepthT> token_levels(num_nested, stream);
-    rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);         // 4B*2=8B, or 2B+
-    rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);  // 4B*2=8B, or 2B+
+    rmm::device_uvector<NodeIndexT> token_id(num_nested, stream);
+    rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);
     auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(),
       cuda::proclaim_return_type<cudf::size_type>([] __device__(PdaTokenT const token) {
@@ -418,9 +418,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         int const is_end   = token == token_t::StructEnd or token == token_t::ListEnd;
         return is_begin - is_end;
       }));
-    // copy_if only struct/list, stable sort by level,
-    // corresponding node indices?,
-    // then scatter to node_range_end for struct/list end.
+    // copy_if only struct/list's token levels, token ids, tokens.
     cudf::detail::copy_if_safe(push_pop_it,
                                push_pop_it + num_tokens,
                                tokens.begin(),
@@ -450,10 +448,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     };
 
     // copied L+S tokens, and their token ids, their token levels.
-    // first child parent token ids
-    // propagate to siblings
-    // parent token id for all ends -> similar binary search here to find its node id.
-    // scatter to that location.
+    // initialize first child parent token ids
+    // translate token ids to node id using similar binary search.
     thrust::transform(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<NodeIndexT>(0),
@@ -476,12 +472,14 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       parent_node_ids,
       stream);
 
-    // scatter to node_range_end for all nested end tokens. (if it's end)
+    // scatter to node_range_end for only nested end tokens.
     auto token_indices_it =
       thrust::make_permutation_iterator(token_indices.begin(), token_id.begin());
-    // add +1 to include end symbol.
-    auto nested_node_range_end_it = thrust::make_transform_output_iterator(
-      node_range_end.begin(), [] __device__(auto i) { return i + 1; });
+    auto nested_node_range_end_it =
+      thrust::make_transform_output_iterator(node_range_end.begin(), [] __device__(auto i) {
+        // add +1 to include end symbol.
+        return i + 1;
+      });
     auto stencil = thrust::make_transform_iterator(token_id.begin(), is_nested_end{tokens.begin()});
     thrust::scatter_if(rmm::exec_policy(stream),
                        token_indices_it,
