@@ -66,11 +66,6 @@ class aggregate_orc_metadata {
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources,
                          rmm::cuda_stream_view stream);
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const
-  {
-    return per_file_metadata[0].ff.types[schema_idx];
-  }
-
   auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
