@@ -67,7 +67,7 @@ class reader::impl {
 
  private:
   /**
-   * @brief Perform the necessary data preprocessing for parsing file later on.
+   * @brief Perform all the necessary data preprocessing before creating an output table.
    *
    * @param skip_rows Number of rows to skip from the start
    * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
