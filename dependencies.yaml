@@ -46,6 +46,7 @@ files:
     output: none
     includes:
       - build_all
+      - cuda
       - cuda_version
       - libarrow_run
       - test_java
