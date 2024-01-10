@@ -478,7 +478,10 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view() = default;
+  ~mutable_column_view(){
+    // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
+    // from a host+device function marking the implicit version also as host+device
+  };
 
   mutable_column_view(mutable_column_view const&) = default;  ///< Copy constructor
   mutable_column_view(mutable_column_view&&)      = default;  ///< Move constructor

@@ -28,6 +28,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 
@@ -46,7 +48,8 @@ std::unique_ptr<table> gather(table_view const& source_table,
 
   if (neg_indices == negative_index_policy::ALLOWED) {
     cudf::size_type n_rows = source_table.num_rows();
-    auto idx_converter = [n_rows] __device__(size_type in) { return in < 0 ? in + n_rows : in; };
+    auto idx_converter     = cuda::proclaim_return_type<size_type>(
+      [n_rows] __device__(size_type in) { return in < 0 ? in + n_rows : in; });
     return gather(source_table,
                   thrust::make_transform_iterator(map_begin, idx_converter),
                   thrust::make_transform_iterator(map_end, idx_converter),

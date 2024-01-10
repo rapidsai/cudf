@@ -28,12 +28,7 @@ from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
-from cudf.api.types import (
-    is_integer,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
-)
+from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
@@ -126,7 +121,7 @@ class StringMethods(ColumnMethods):
     def __init__(self, parent):
         value_type = (
             parent.dtype.leaf_type
-            if is_list_dtype(parent.dtype)
+            if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
         if not is_string_dtype(value_type):
@@ -5495,7 +5490,7 @@ class StringColumn(column.ColumnBase):
             # all nulls-column:
             offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
-            chars = cudf.core.column.as_column([], dtype="int8")
+            chars = cudf.core.column.column_empty(0, dtype="int8")
             children = (offsets, chars)
 
         super().__init__(
@@ -5659,7 +5654,7 @@ class StringColumn(column.ColumnBase):
 
     def _as_datetime_or_timedelta_column(self, dtype, format):
         if len(self) == 0:
-            return cudf.core.column.as_column([], dtype=dtype)
+            return cudf.core.column.column_empty(0, dtype=dtype)
 
         # Check for None strings
         if (self == "None").any():
@@ -5756,15 +5751,15 @@ class StringColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
     ) -> pd.Series:
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)
         else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+            pd_series = self.to_arrow().to_pandas()
 
         if index is not None:
             pd_series.index = index

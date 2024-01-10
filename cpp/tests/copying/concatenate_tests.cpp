@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -193,26 +194,10 @@ TEST_F(StringColumnTest, ConcatenateColumnViewLarge)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringColumnTest, ConcatenateTooManyColumns)
+TEST_F(StringColumnTest, ConcatenateManyColumns)
 {
-  std::vector<char const*> h_strings{"aaa",
-                                     "bb",
-                                     "",
-                                     "cccc",
-                                     "d",
-                                     "ééé",
-                                     "ff",
-                                     "gggg",
-                                     "",
-                                     "h",
-                                     "iiii",
-                                     "jjj",
-                                     "k",
-                                     "lllllll",
-                                     "mmmmm",
-                                     "n",
-                                     "oo",
-                                     "ppp"};
+  std::vector<char const*> h_strings{
+    "aaa", "bb", "", "cccc", "d", "ééé", "ff", "gggg", "", "h", "iiii", "jjj"};
 
   std::vector<char const*> expected_strings;
   std::vector<cudf::test::strings_column_wrapper> wrappers;
@@ -226,6 +211,18 @@ TEST_F(StringColumnTest, ConcatenateTooManyColumns)
                                               expected_strings.data() + expected_strings.size());
   auto results = cudf::concatenate(strings_columns);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringColumnTest, ConcatenateTooLarge)
+{
+  std::string big_str(1000000, 'a');  // 1 million bytes x 5 = 5 million bytes
+  cudf::test::strings_column_wrapper input{big_str, big_str, big_str, big_str, big_str};
+  std::vector<cudf::column_view> input_cols;
+  // 5 millions bytes x 500 = 2.5GB > std::numeric_limits<size_type>::max()
+  for (int i = 0; i < 500; ++i) {
+    input_cols.push_back(input);
+  }
+  EXPECT_THROW(cudf::concatenate(input_cols), std::overflow_error);
 }
 
 struct TableTest : public cudf::test::BaseFixture {};

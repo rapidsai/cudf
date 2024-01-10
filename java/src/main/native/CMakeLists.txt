@@ -147,7 +147,6 @@ add_library(
   src/TableJni.cpp
   src/aggregation128_utils.cu
   src/maps_column_view.cu
-  src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )
 

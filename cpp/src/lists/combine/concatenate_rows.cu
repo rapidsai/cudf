@@ -33,6 +33,8 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -80,15 +82,17 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
   auto offsets = cudf::make_fixed_width_column(
     data_type{type_to_id<size_type>()}, input.num_rows() + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(size_t{0}),
-                                              [num_columns = input.num_columns()] __device__(
-                                                size_t i) -> size_type { return i / num_columns; });
+  auto keys = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(size_t{0}),
+    cuda::proclaim_return_type<size_type>([num_columns = input.num_columns()] __device__(
+                                            size_t i) -> size_type { return i / num_columns; }));
 
   // generate sizes for the regrouped rows
   auto values = thrust::make_transform_iterator(
     thrust::make_counting_iterator(size_t{0}),
-    [input, row_null_counts = row_null_counts.data(), null_policy] __device__(
-      size_t i) -> size_type {
+    cuda::proclaim_return_type<size_type>([input,
+                                           row_null_counts = row_null_counts.data(),
+                                           null_policy] __device__(size_t i) -> size_type {
       auto const col_index = i % input.num_columns();
       auto const row_index = i / input.num_columns();
 
@@ -105,7 +109,7 @@ generate_regrouped_offsets_and_null_mask(table_device_view const& input,
         input.column(col_index).child(lists_column_view::offsets_column_index).data<size_type>() +
         input.column(col_index).offset();
       return offsets[row_index + 1] - offsets[row_index];
-    });
+    }));
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
@@ -157,17 +161,19 @@ rmm::device_uvector<size_type> generate_null_counts(table_device_view const& inp
 {
   rmm::device_uvector<size_type> null_counts(input.num_rows(), stream);
 
-  auto keys = thrust::make_transform_iterator(thrust::make_counting_iterator(size_t{0}),
-                                              [num_columns = input.num_columns()] __device__(
-                                                size_t i) -> size_type { return i / num_columns; });
+  auto keys = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(size_t{0}),
+    cuda::proclaim_return_type<size_type>([num_columns = input.num_columns()] __device__(
+                                            size_t i) -> size_type { return i / num_columns; }));
 
   auto null_values = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(size_t{0}), [input] __device__(size_t i) -> size_type {
+    thrust::make_counting_iterator(size_t{0}),
+    cuda::proclaim_return_type<size_type>([input] __device__(size_t i) -> size_type {
       auto const col_index = i % input.num_columns();
       auto const row_index = i / input.num_columns();
       auto const& col      = input.column(col_index);
       return col.null_mask() ? (bit_is_set(col.null_mask(), row_index + col.offset()) ? 0 : 1) : 0;
-    });
+    }));
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         keys,
@@ -237,12 +243,13 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
         return cudf::detail::valid_if(
           iter,
           iter + (input.num_rows() * input.num_columns()),
-          [num_rows        = input.num_rows(),
-           num_columns     = input.num_columns(),
-           row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
-            auto const row_index = i % num_rows;
-            return row_null_counts[row_index] != num_columns;
-          },
+          cuda::proclaim_return_type<size_type>(
+            [num_rows        = input.num_rows(),
+             num_columns     = input.num_columns(),
+             row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
+              auto const row_index = i % num_rows;
+              return row_null_counts[row_index] != num_columns;
+            }),
           stream,
           rmm::mr::get_current_device_resource());
       }
@@ -250,11 +257,12 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
       return cudf::detail::valid_if(
         iter,
         iter + (input.num_rows() * input.num_columns()),
-        [num_rows        = input.num_rows(),
-         row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
-          auto const row_index = i % num_rows;
-          return row_null_counts[row_index] == 0;
-        },
+        cuda::proclaim_return_type<size_type>(
+          [num_rows        = input.num_rows(),
+           row_null_counts = row_null_counts.data()] __device__(size_t i) -> size_type {
+            auto const row_index = i % num_rows;
+            return row_null_counts[row_index] == 0;
+          }),
         stream,
         rmm::mr::get_current_device_resource());
     }();
@@ -267,13 +275,14 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
   // this we can simply swap in a new set of offsets that re-groups them.  bmo
   auto iter = thrust::make_transform_iterator(
     thrust::make_counting_iterator(size_t{0}),
-    [num_columns = input.num_columns(),
-     num_rows    = input.num_rows()] __device__(size_t i) -> size_type {
-      auto const src_col_index    = i % num_columns;
-      auto const src_row_index    = i / num_columns;
-      auto const concat_row_index = (src_col_index * num_rows) + src_row_index;
-      return concat_row_index;
-    });
+    cuda::proclaim_return_type<size_type>(
+      [num_columns = input.num_columns(),
+       num_rows    = input.num_rows()] __device__(size_t i) -> size_type {
+        auto const src_col_index    = i % num_columns;
+        auto const src_row_index    = i / num_columns;
+        auto const concat_row_index = (src_col_index * num_rows) + src_row_index;
+        return concat_row_index;
+      }));
   auto gathered = cudf::detail::gather(table_view({*concat}),
                                        iter,
                                        iter + (input.num_columns() * input.num_rows()),

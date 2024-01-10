@@ -80,7 +80,7 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the internal column of offsets
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The offsets column
    */
   [[nodiscard]] column_view offsets() const;
@@ -106,7 +106,7 @@ class strings_column_view : private column_view {
   /**
    * @brief Returns the internal column of chars
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The chars column
    */
   [[nodiscard]] column_view chars() const;

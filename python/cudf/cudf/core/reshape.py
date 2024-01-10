@@ -541,7 +541,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(cudf.api.types.is_categorical_dtype(t) for t in dtypes):
+    if any(isinstance(typ, cudf.CategoricalDtype) for typ in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
         )
