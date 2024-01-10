@@ -53,11 +53,6 @@ class aggregate_orc_metadata {
   [[nodiscard]] int64_t calc_num_rows() const;
 
   /**
-   * @brief Number of columns in a ORC file.
-   */
-  [[nodiscard]] size_type calc_num_cols() const;
-
-  /**
    * @brief Sums up the number of stripes of each source
    */
   [[nodiscard]] size_type calc_num_stripes() const;
