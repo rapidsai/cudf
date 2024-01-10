@@ -1503,9 +1503,7 @@ def column_empty(
             ),
         )
     elif dtype.kind in "OU" and not isinstance(dtype, DecimalDtype):
-        data = as_buffer(
-            rmm.DeviceBuffer(size=row_count * cudf.dtype("int8").itemsize)
-        )
+        data = as_buffer(rmm.DeviceBuffer(size=0))
         children = (
             full(row_count + 1, 0, dtype=libcudf.types.size_type_dtype),
         )
