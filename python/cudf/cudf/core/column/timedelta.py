@@ -9,6 +9,7 @@ from typing import Any, Optional, Sequence, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -268,24 +269,21 @@ class TimeDeltaColumn(ColumnBase):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> TimeDeltaColumn:
+    ) -> Self:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
-            col: ColumnBase = self
             if is_scalar(fill_value):
-                if isinstance(fill_value, np.timedelta64):
-                    dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                    fill_value = fill_value.astype(dtype)
-                    col = col.astype(dtype)
-                if not isinstance(fill_value, cudf.Scalar):
-                    fill_value = cudf.Scalar(fill_value, dtype=dtype)
+                fill_value = cudf.Scalar(fill_value)
+                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                fill_value = fill_value.astype(dtype)
+                if self.dtype != dtype:
+                    return cast(
+                        Self, self.astype(dtype).fillna(fill_value, method)
+                    )
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-            return cast(TimeDeltaColumn, ColumnBase.fillna(col, fill_value))
-        else:
-            return super().fillna(method=method)
+        return super().fillna(fill_value, method)
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs

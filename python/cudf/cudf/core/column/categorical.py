@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -1236,9 +1236,8 @@ class CategoricalColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Any = None,
-        dtype: Optional[Dtype] = None,
-    ) -> CategoricalColumn:
+        method: Optional[str] = None,
+    ) -> Self:
         """
         Fill null values with *fill_value*
         """
@@ -1276,7 +1275,7 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
-        return super().fillna(value=fill_value, method=method)
+        return super().fillna(fill_value, method=method)
 
     def indices_of(
         self, value: ScalarLike

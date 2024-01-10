@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -710,16 +710,15 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def fillna(
         self,
-        value: Any = None,
+        fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
     ) -> Self:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
         return libcudf.replace.replace_nulls(
-            input_col=self, replacement=value, method=method, dtype=dtype
+            input_col=self, replacement=fill_value, method=method
         )._with_type_metadata(self.dtype)
 
     def isnull(self) -> ColumnBase:
@@ -929,7 +928,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # https://github.com/rapidsai/cudf/issues/14515 by
             # providing a mode in which cudf::contains does not mask
             # the result.
-            result = result.fillna(rhs.null_count > 0, dtype=bool)
+            result = result.fillna(cudf.Scalar(rhs.null_count > 0))
         return result
 
     def as_mask(self) -> Buffer:
