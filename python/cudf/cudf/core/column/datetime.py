@@ -11,6 +11,7 @@ from typing import Any, Mapping, Optional, Sequence, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -267,7 +268,9 @@ class DatetimeColumn(column.ColumnBase):
             # np.datetime64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item_as_dt64.astype("int64") in self.as_numerical
+        return item_as_dt64.astype("int64") in self.as_numerical_column(
+            "int64"
+        )
 
     @property
     def time_unit(self) -> str:
@@ -397,19 +400,6 @@ class DatetimeColumn(column.ColumnBase):
         return NotImplemented
 
     @property
-    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn",
-            column.build_column(
-                data=self.base_data,
-                dtype=np.int64,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
-        )
-
-    @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
             "shape": (len(self),),
@@ -448,9 +438,14 @@ class DatetimeColumn(column.ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
+        col = column.build_column(
+            data=self.base_data,
+            dtype=np.int64,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
+        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
@@ -483,7 +478,7 @@ class DatetimeColumn(column.ColumnBase):
         self, skipna=None, min_count: int = 0, dtype=np.float64
     ) -> ScalarLike:
         return pd.Timestamp(
-            self.as_numerical.mean(
+            self.as_numerical_column("int64").mean(
                 skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
@@ -497,7 +492,7 @@ class DatetimeColumn(column.ColumnBase):
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(
+            self.as_numerical_column("int64").std(
                 skipna=skipna, min_count=min_count, dtype=dtype, ddof=ddof
             )
             * _unit_to_nanoseconds_conversion[self.time_unit],
@@ -505,7 +500,8 @@ class DatetimeColumn(column.ColumnBase):
 
     def median(self, skipna: Optional[bool] = None) -> pd.Timestamp:
         return pd.Timestamp(
-            self.as_numerical.median(skipna=skipna), unit=self.time_unit
+            self.as_numerical_column("int64").median(skipna=skipna),
+            unit=self.time_unit,
         )
 
     def quantile(
@@ -515,7 +511,7 @@ class DatetimeColumn(column.ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.as_numerical.quantile(
+        result = self.as_numerical_column("int64").quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
@@ -598,12 +594,12 @@ class DatetimeColumn(column.ColumnBase):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> DatetimeColumn:
+    ) -> Self:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
             if is_scalar(fill_value):
+                # TODO: Add cast checking like TimedeltaColumn.fillna
                 if not isinstance(fill_value, cudf.Scalar):
                     fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
             else:
@@ -616,12 +612,12 @@ class DatetimeColumn(column.ColumnBase):
     ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
             pd.to_datetime(value), dtype=self.dtype
-        ).as_numerical
-        return self.as_numerical.indices_of(value)
+        ).as_numerical_column("int64")
+        return self.as_numerical_column("int64").indices_of(value)
 
     @property
     def is_unique(self) -> bool:
-        return self.as_numerical.is_unique
+        return self.as_numerical_column("int64").is_unique
 
     def isin(self, values: Sequence) -> ColumnBase:
         return cudf.core.tools.datetimes._isin_datetimelike(self, values)
