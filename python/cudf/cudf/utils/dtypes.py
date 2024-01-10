@@ -401,7 +401,7 @@ def min_column_type(x, expected_type):
 
     if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
-    if not x.has_nulls():
+    if x.null_count == len(x):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):

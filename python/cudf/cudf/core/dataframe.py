@@ -8098,7 +8098,7 @@ def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
             # non-null Column with the same name is found.
             if idx not in dtypes:
                 dtypes[idx] = cols[idx].dtype
-            if cols[idx].has_nulls():
+            if cols[idx].null_count != len(cols[idx]):
                 if idx not in non_null_columns:
                     non_null_columns[idx] = [cols[idx]]
                 else:

@@ -2734,7 +2734,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.
     # Notice, we can always cast pure null columns
-    not_null_col_dtypes = [o.dtype for o in objs if not o.has_nulls()]
+    not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
         _is_non_decimal_numeric_dtype(dtyp)
         and np.issubdtype(dtyp, np.datetime64)
@@ -2746,7 +2746,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         objs = [obj.astype(common_dtype) for obj in objs]
 
     # Find the first non-null column:
-    head = next((obj for obj in objs if not obj.has_nulls()), objs[0])
+    head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])
 
     for i, obj in enumerate(objs):
         # Check that all columns are the same type:
