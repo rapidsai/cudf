@@ -78,11 +78,11 @@ class reader::impl {
                     std::vector<std::vector<size_type>> const& stripes);
 
   /**
-   * @brief Populate the output table metadata from the file metadata.
+   * @brief Create the output table metadata from file metadata.
    *
-   * @return Columns' metadata to output along with the table read from file
+   * @return Columns' metadata to output with the table read from file
    */
-  table_metadata populate_metadata();
+  table_metadata make_output_metadata();
 
   /**
    * @brief Read a chunk of data from the input source and return an output table with metadata.

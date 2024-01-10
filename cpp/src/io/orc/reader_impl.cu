@@ -45,7 +45,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
   return read_chunk_internal();
 }
 
-table_metadata reader::impl::populate_metadata()
+table_metadata reader::impl::make_output_metadata()
 {
   if (_output_metadata) { return table_metadata{*_output_metadata}; }
 
@@ -76,7 +76,7 @@ table_metadata reader::impl::populate_metadata()
 
 table_with_metadata reader::impl::read_chunk_internal()
 {
-  auto out_metadata = populate_metadata();
+  auto out_metadata = make_output_metadata();
 
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) {
