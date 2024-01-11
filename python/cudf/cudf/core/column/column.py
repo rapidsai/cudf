@@ -2234,9 +2234,7 @@ def as_column(
                 arbitrary = arbitrary.astype(new_type)
 
             is_nat = np.isnat(arbitrary)
-            if (nan_as_null is None or nan_as_null) and np.isnat(
-                arbitrary
-            ).any():
+            if (nan_as_null is None or nan_as_null) and is_nat.any():
                 return as_column(
                     pa.array(arbitrary),
                     dtype=dtype,
