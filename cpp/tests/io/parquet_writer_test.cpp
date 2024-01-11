@@ -185,7 +185,7 @@ TEST_F(ParquetWriterTest, BufferSource)
 TEST_F(ParquetWriterTest, ManyFragments)
 {
   srand(31337);
-  auto const expected = create_random_fixed_table<int>(10, 6'000'000, false);
+  auto const expected = create_random_fixed_table<int>(2, 2'000'000, false);
 
   auto const filepath = temp_env->get_temp_filepath("ManyFragments.parquet");
   cudf::io::parquet_writer_options const args =
@@ -342,11 +342,12 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
 
   // exercises multiple rowgroups
   srand(31337);
-  auto expected = create_random_fixed_table<int>(4, 4 * 1024 * 1024, false);
+  auto expected = create_random_fixed_table<int>(4, 1024 * 1024, false);
 
   // write out using the custom sink (which uses device writes)
   cudf::io::parquet_writer_options args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected)
+      .row_group_size_rows(128 * 1024);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options custom_args =
