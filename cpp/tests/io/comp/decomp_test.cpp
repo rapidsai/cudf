@@ -21,6 +21,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>

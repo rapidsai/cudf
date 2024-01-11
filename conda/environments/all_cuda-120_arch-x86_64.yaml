@@ -50,7 +50,6 @@ dependencies:
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.2.*
 - make
-- mimesis>=4.1.0
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
