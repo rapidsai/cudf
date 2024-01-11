@@ -74,11 +74,19 @@ cudf::table construct_table()
                                                                        col7_data + num_rows);
   }();
 
-  cudf::test::lists_column_wrapper<int64_t> col8{
-    {1, 1}, {1, 1, 1}, {}, {1}, {1, 1, 1, 1}, {1, 1, 1, 1, 1}, {}, {1, -1}, {}, {-1, -1}};
+  cudf::test::lists_column_wrapper<int64_t> col8 = [] {
+    auto col8_mask =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+    return cudf::test::lists_column_wrapper<int64_t>(
+      {{1, 1}, {1, 1, 1}, {}, {1}, {1, 1, 1, 1}, {1, 1, 1, 1, 1}, {}, {1, -1}, {}, {-1, -1}},
+      col8_mask);
+  }();
 
   cudf::test::structs_column_wrapper col9 = [&ones] {
-    cudf::test::fixed_width_column_wrapper<int32_t> child_col(ones.begin(), ones.end());
+    auto child_col_mask =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
+    cudf::test::fixed_width_column_wrapper<int32_t> child_col(
+      ones.begin(), ones.end(), child_col_mask);
     return cudf::test::structs_column_wrapper{child_col};
   }();
 
