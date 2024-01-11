@@ -57,21 +57,25 @@ TEST_F(JsonNormalizationTest, ValidOutput)
   /*
   for(size_t i = 0; i < device_fst_output_ptr->size(); i++)
     std::printf("%c", device_fst_output_ptr->element(i, cudf::get_default_stream()));
+  std::printf("\n");
   */
 
   // Initialize parsing options (reading json lines)
   auto device_fst_output_span = cudf::device_span<std::byte>(
     reinterpret_cast<std::byte*>(device_fst_output_ptr->data()), device_fst_output_ptr->size());
   cudf::io::json_reader_options input_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{device_fst_output_span});
+    cudf::io::json_reader_options::builder(cudf::io::source_info{device_fst_output_span})
+      .lines(true);
 
   cudf::io::table_with_metadata processed_table =
     cudf::io::read_json(input_options, cudf::get_default_stream(), rsc.get());
 
   // Expected table
-  std::string const expected_input                     = R"({"A":"TEST\""})";
-  cudf::io::json_reader_options expected_input_options = cudf::io::json_reader_options::builder(
-    cudf::io::source_info{expected_input.data(), expected_input.size()});
+  std::string const expected_input = R"({"A":"TEST\""})";
+  cudf::io::json_reader_options expected_input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{expected_input.data(), expected_input.size()})
+      .lines(true);
   cudf::io::table_with_metadata expected_table =
     cudf::io::read_json(expected_input_options, cudf::get_default_stream(), rsc.get());
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());

@@ -191,14 +191,16 @@ std::unique_ptr<rmm::device_uvector<char>> normalize_quotes(
 
   std::unique_ptr<rmm::device_uvector<char>> outbuf_ptr =
     std::make_unique<rmm::device_uvector<char>>(inbuf.size() * 2, stream, mr);
+  rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
   parser.Transduce(reinterpret_cast<char*>(inbuf.data()),
                    static_cast<SymbolOffsetT>(inbuf.size()),
                    outbuf_ptr->data(),
                    thrust::make_discard_iterator(),
-                   thrust::make_discard_iterator(),
+                   outbuf_size.data(),
                    cudf::io::json::normalize_quotes::start_state,
                    stream);
 
+  outbuf_ptr->resize(outbuf_size.value(stream), stream);
   return outbuf_ptr;
 }
 
