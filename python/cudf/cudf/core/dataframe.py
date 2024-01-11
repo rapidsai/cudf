@@ -324,7 +324,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     tmp_arg[1],
                 )
 
-                if is_bool_dtype(tmp_arg[0]):
+                if is_bool_dtype(tmp_arg[0].dtype):
                     df = columns_df._apply_boolean_mask(
                         BooleanMask(tmp_arg[0], len(columns_df))
                     )
@@ -6032,7 +6032,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             numeric_cols = (
                 name
                 for name in self._data.names
-                if is_numeric_dtype(self._data[name])
+                if is_numeric_dtype(self._data[name].dtype)
             )
             source = self._get_columns_by_label(numeric_cols)
             if source.empty:
@@ -6078,7 +6078,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     numeric_cols = (
                         name
                         for name in self._data.names
-                        if is_numeric_dtype(self._data[name])
+                        if is_numeric_dtype(self._data[name].dtype)
                     )
                     source = self._get_columns_by_label(numeric_cols)
                     if source.empty:

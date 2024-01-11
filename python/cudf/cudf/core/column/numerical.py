@@ -272,13 +272,13 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
-            if is_float_dtype(self.dtype) or is_float_dtype(other):
+            if is_float_dtype(self.dtype) or is_float_dtype(other.dtype):
                 raise TypeError(
                     f"Operation 'bitwise {op[2:-2]}' not supported between "
                     f"{self.dtype.type.__name__} and "
                     f"{other.dtype.type.__name__}"
                 )
-            if is_bool_dtype(self.dtype) or is_bool_dtype(other):
+            if is_bool_dtype(self.dtype) or is_bool_dtype(other.dtype):
                 out_dtype = "bool"
 
         if (
