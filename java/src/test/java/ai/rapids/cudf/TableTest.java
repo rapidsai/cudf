@@ -358,7 +358,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testReadMixedType2JSONFile() {
+  void testReadMixedType2JSONFile() throws IOException {
     Schema schema = Schema.builder()
             .column(DType.STRING, "a")
             .build();
@@ -369,7 +369,8 @@ public class TableTest extends CudfTestBase {
     try (Table expected = new Table.TestBuilder()
             .column("[1,2,3]", "{ \"b\": 1 }" )
             .build();
-         Table table = Table.readJSON(schema, opts, TEST_MIXED_TYPE_2_JSON)) {
+         MultiBufferDataSource source = sourceFrom(TEST_MIXED_TYPE_2_JSON);
+         Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }

@@ -1506,7 +1506,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
                                                      .dayfirst(static_cast<bool>(day_first))
                                                      .lines(static_cast<bool>(lines))
-                                                     .recovery_mode(recovery_mode);
+                                                     .recovery_mode(recovery_mode)
+                                                     .mixed_types_as_string(mixed_types_as_string);
 
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
