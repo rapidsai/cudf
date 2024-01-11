@@ -5,7 +5,7 @@ set -euo pipefail
 
 package_dir="python/cudf"
 
-export SKBUILD_CONFIGURE_OPTIONS="-DUSE_LIBARROW_FROM_PYARROW=ON"
+export SKBUILD_CMAKE_ARGS="-DUSE_LIBARROW_FROM_PYARROW=ON"
 
 ./ci/build_wheel.sh cudf ${package_dir}
 
