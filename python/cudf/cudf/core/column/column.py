@@ -12,6 +12,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     MutableSequence,
     Optional,
     Sequence,
@@ -24,6 +25,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 from numba import cuda
 from typing_extensions import Self
 
@@ -427,11 +429,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
 
     def shift(self, offset: int, fill_value: ScalarLike) -> ColumnBase:
         return libcudf.copying.shift(self, offset, fill_value)
-
-    @property
-    def valid_count(self) -> int:
-        """Number of non-null values"""
-        return len(self) - self.null_count
 
     @property
     def nullmask(self) -> Buffer:
@@ -1159,9 +1156,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ) -> Self:
         if not isinstance(value, ColumnBase) or value.dtype != self.dtype:
             raise ValueError(
@@ -1303,10 +1300,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         if isinstance(preprocessed, ColumnBase):
             return libcudf.reduce.reduce(op, preprocessed, **kwargs)
         return preprocessed
-
-    @property
-    def contains_na_entries(self) -> bool:
-        return self.null_count != 0
 
     def _process_for_reduction(
         self, skipna: Optional[bool] = None, min_count: int = 0
@@ -2003,11 +1996,19 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
-        if isinstance(arbitrary, pa.lib.HalfFloatArray):
+        if pa.types.is_float16(arbitrary.type):
             raise NotImplementedError(
                 "Type casting from `float16` to `float32` is not "
                 "yet supported in pyarrow, see: "
-                "https://issues.apache.org/jira/browse/ARROW-3802"
+                "https://github.com/apache/arrow/issues/20213"
+            )
+        elif (nan_as_null is None or nan_as_null) and pa.types.is_floating(
+            arbitrary.type
+        ):
+            arbitrary = pc.if_else(
+                pc.is_nan(arbitrary),
+                pa.nulls(len(arbitrary), type=arbitrary.type),
+                arbitrary,
             )
         col = ColumnBase.from_arrow(arbitrary)
 
@@ -2033,6 +2034,8 @@ def as_column(
                 new_dtype = "str"
 
             col = col.astype(new_dtype)
+        elif dtype is not None:
+            col = col.astype(dtype)
 
         return col
 
@@ -2109,6 +2112,15 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
+            if len(arbitrary) == 0:
+                # TODO: Can remove once empty constructor default becomes
+                # object instead of float.
+                return as_column(
+                    pa.array([], type=pa.string()),
+                    nan_as_null=nan_as_null,
+                    dtype=dtype,
+                    length=length,
+                )
             if isinstance(arbitrary, pd.arrays.PandasArray):
                 # infer_dtype does not handle PandasArray
                 arbitrary = np.array(arbitrary, dtype=object)
@@ -2137,15 +2149,9 @@ def as_column(
                 arbitrary,
                 from_pandas=True,
             )
-            if isinstance(pyarrow_array.type, pa.Decimal128Type):
-                pyarrow_type = cudf.Decimal128Dtype.from_arrow(
-                    pyarrow_array.type
-                )
-            else:
-                pyarrow_type = arbitrary.dtype
             data = as_column(
                 pyarrow_array,
-                dtype=pyarrow_type,
+                dtype=dtype,
                 nan_as_null=nan_as_null,
                 length=length,
             )
@@ -2277,7 +2283,7 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.array(arbitrary), dtype=arbitrary.dtype)
+            data = as_column(pa.array(arbitrary), dtype=dtype)
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
@@ -2740,7 +2746,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
     # If all columns are `NumericalColumn` with different dtypes,
     # we cast them to a common dtype.
     # Notice, we can always cast pure null columns
-    not_null_col_dtypes = [o.dtype for o in objs if o.valid_count]
+    not_null_col_dtypes = [o.dtype for o in objs if o.null_count != len(o)]
     if len(not_null_col_dtypes) and all(
         _is_non_decimal_numeric_dtype(dtyp)
         and np.issubdtype(dtyp, np.datetime64)
@@ -2752,13 +2758,13 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         objs = [obj.astype(common_dtype) for obj in objs]
 
     # Find the first non-null column:
-    head = next((obj for obj in objs if obj.valid_count), objs[0])
+    head = next((obj for obj in objs if obj.null_count != len(obj)), objs[0])
 
     for i, obj in enumerate(objs):
         # Check that all columns are the same type:
         if not is_dtype_equal(obj.dtype, head.dtype):
             # if all null, cast to appropriate dtype
-            if obj.valid_count == 0:
+            if obj.null_count == len(obj):
                 objs[i] = column_empty_like(
                     head, dtype=head.dtype, masked=True, newsize=len(obj)
                 )
