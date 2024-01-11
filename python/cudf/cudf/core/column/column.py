@@ -25,6 +25,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 from numba import cuda
 from typing_extensions import Self
 
@@ -1997,11 +1998,19 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
-        if isinstance(arbitrary, pa.lib.HalfFloatArray):
+        if pa.types.is_float16(arbitrary.type):
             raise NotImplementedError(
                 "Type casting from `float16` to `float32` is not "
                 "yet supported in pyarrow, see: "
-                "https://issues.apache.org/jira/browse/ARROW-3802"
+                "https://github.com/apache/arrow/issues/20213"
+            )
+        elif (nan_as_null is None or nan_as_null) and pa.types.is_floating(
+            arbitrary.type
+        ):
+            arbitrary = pc.if_else(
+                pc.is_nan(arbitrary),
+                pa.nulls(len(arbitrary), type=arbitrary.type),
+                arbitrary,
             )
         col = ColumnBase.from_arrow(arbitrary)
 

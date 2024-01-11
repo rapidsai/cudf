@@ -2572,6 +2572,16 @@ def test_series_arrow_list_types_roundtrip():
             cudf.from_pandas(pdf)
 
 
+@pytest.mark.parametrize("klass", [cudf.Index, cudf.Series])
+@pytest.mark.parametrize(
+    "data", [pa.array([float("nan")]), pa.chunked_array([[float("nan")]])]
+)
+def test_nan_as_null_from_arrow_objects(klass, data):
+    result = klass(data, nan_as_null=True)
+    expected = klass(pa.array([None], type=pa.float64()))
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("reso", ["M", "ps"])
 @pytest.mark.parametrize("typ", ["M", "m"])
 def test_series_invalid_reso_dtype(reso, typ):
