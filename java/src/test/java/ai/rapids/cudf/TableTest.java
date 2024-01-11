@@ -328,7 +328,18 @@ public class TableTest extends CudfTestBase {
       assertTablesAreEqual(expected, table);
     }
   }
-
+  @Test
+  void testReadMixedType2JSONFileFeatureDisabled() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(false)
+            .build();
+    assertThrows(CudfException.class, () ->
+      Table.readJSON(schema, opts, TEST_MIXED_TYPE_2_JSON));
+  }
   @Test
   void testReadMixedType1JSONFile() {
     Schema schema = Schema.builder()
