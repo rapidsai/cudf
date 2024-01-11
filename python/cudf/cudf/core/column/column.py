@@ -2235,6 +2235,7 @@ def as_column(
 
             is_nat = np.isnat(arbitrary)
             if (nan_as_null is None or nan_as_null) and is_nat.any():
+                # Convert NaT to NA, which pyarrow does by default
                 return as_column(
                     pa.array(arbitrary),
                     dtype=dtype,
@@ -2242,6 +2243,8 @@ def as_column(
                 )
             else:
                 buffer = as_buffer(arbitrary.view("|u1"))
+                # Consider NaT as NA in the mask
+                # but maintain NaT as a value
                 bool_mask = as_column(~is_nat)
                 mask = as_buffer(bools_to_mask(bool_mask))
                 col = build_column(
