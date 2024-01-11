@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,19 +140,20 @@ enum BoundaryOrder {
 /**
  * @brief Thrift compact protocol struct field types
  */
-enum FieldType {
-  ST_FLD_TRUE   = 1,
-  ST_FLD_FALSE  = 2,
-  ST_FLD_BYTE   = 3,
-  ST_FLD_I16    = 4,
-  ST_FLD_I32    = 5,
-  ST_FLD_I64    = 6,
-  ST_FLD_DOUBLE = 7,
-  ST_FLD_BINARY = 8,
-  ST_FLD_LIST   = 9,
-  ST_FLD_SET    = 10,
-  ST_FLD_MAP    = 11,
-  ST_FLD_STRUCT = 12,
+enum class FieldType : uint8_t {
+  BOOLEAN_TRUE  = 1,
+  BOOLEAN_FALSE = 2,
+  I8            = 3,
+  I16           = 4,
+  I32           = 5,
+  I64           = 6,
+  DOUBLE        = 7,
+  BINARY        = 8,
+  LIST          = 9,
+  SET           = 10,
+  MAP           = 11,
+  STRUCT        = 12,
+  UUID          = 13,
 };
 
 }  // namespace cudf::io::parquet::detail

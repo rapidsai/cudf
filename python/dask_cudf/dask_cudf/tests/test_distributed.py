@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numba.cuda
 import pytest
@@ -80,7 +80,7 @@ def test_str_series_roundtrip():
 
 
 def test_p2p_shuffle():
-    # Check that we can use `shuffle="p2p"`
+    # Check that we can use `shuffle_method="p2p"`
     with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
         with Client(cluster):
             ddf = (
@@ -93,7 +93,7 @@ def test_p2p_shuffle():
                 .to_backend("cudf")
             )
             dd.assert_eq(
-                ddf.sort_values("x", shuffle="p2p").compute(),
+                ddf.sort_values("x", shuffle_method="p2p").compute(),
                 ddf.compute().sort_values("x"),
                 check_index=False,
             )
