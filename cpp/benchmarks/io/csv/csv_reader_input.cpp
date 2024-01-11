@@ -47,14 +47,17 @@ void csv_read_common(DataType const& data_types,
 
   auto const mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();  // Drop L3 cache for accurate measurement
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();  // Drop L3 cache for accurate measurement
 
-               timer.start();
-               cudf::io::read_csv(read_options);
-               timer.stop();
-             });
+      timer.start();
+      auto const result = cudf::io::read_csv(read_options);
+      timer.stop();
+
+      CUDF_EXPECTS(result.tbl->num_columns() == view.num_columns(), "Unexpected number of columns");
+      CUDF_EXPECTS(result.tbl->num_rows() == view.num_rows(), "Unexpected number of rows");
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
