@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from functools import singledispatch
 
 from pandas.core.groupby.groupby import DataError
 
@@ -73,20 +74,42 @@ _DECIMAL_AGGS = {
 ctypedef const scalar constscalar
 
 
-cdef get_valid_aggregation(object dtype):
-    if isinstance(dtype, ListDtype):
-        return _LIST_AGGS
-    elif is_string_dtype(dtype):
+@singledispatch
+def get_valid_aggregation(dtype):
+    if is_string_dtype(dtype):
         return _STRING_AGGS
-    elif isinstance(dtype, CategoricalDtype):
-        return _CATEGORICAL_AGGS
-    elif isinstance(dtype, StructDtype):
-        return _STRUCT_AGGS
-    elif isinstance(dtype, IntervalDtype):
-        return _INTERVAL_AGGS
-    elif isinstance(dtype, DecimalDtype):
-        return _DECIMAL_AGGS
     return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: CategoricalDtype):
+    return _CATEGORICAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: StructDtype):
+    return _STRUCT_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: IntervalDtype):
+    return _INTERVAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: DecimalDtype):
+    return _DECIMAL_AGGS
+
 
 cdef _agg_result_from_columns(
     vector[libcudf_groupby.aggregation_result]& c_result_columns,
