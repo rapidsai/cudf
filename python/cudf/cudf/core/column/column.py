@@ -1931,8 +1931,6 @@ def as_column(
     * range objects
     """
     if isinstance(arbitrary, (range, pd.RangeIndex, cudf.RangeIndex)):
-        # Handle cudf.RangeIndex, before cudf.BaseIndex to avoid
-        # materializing RangeIndex column
         column = libcudf.filling.sequence(
             len(arbitrary),
             as_device_scalar(arbitrary.start, dtype=cudf.dtype("int64")),
