@@ -328,6 +328,7 @@ public class TableTest extends CudfTestBase {
       assertTablesAreEqual(expected, table);
     }
   }
+
   @Test
   void testReadMixedType2JSONFileFeatureDisabled() {
     Schema schema = Schema.builder()
@@ -340,6 +341,7 @@ public class TableTest extends CudfTestBase {
     assertThrows(CudfException.class, () ->
       Table.readJSON(schema, opts, TEST_MIXED_TYPE_2_JSON));
   }
+
   @Test
   void testReadMixedType1JSONFile() {
     Schema schema = Schema.builder()
