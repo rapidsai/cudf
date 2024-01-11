@@ -11,6 +11,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Sequence,
@@ -233,9 +234,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def searchsorted(
         self,
         value: int,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         assert (len(self) <= 1) or (
             ascending == (self._step > 0)
@@ -2203,9 +2204,9 @@ class DatetimeIndex(GenericIndex):
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         value = self.dtype.type(value)
         return super().searchsorted(

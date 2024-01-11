@@ -124,6 +124,14 @@ class writer {
    * @brief Finishes the chunked/streamed write process.
    */
   void close();
+
+  /**
+   * @brief Skip work done in `close()`; should be called if `write()` failed.
+   *
+   * Calling skip_close() prevents the writer from writing the (invalid) file footer and the
+   * postscript.
+   */
+  void skip_close();
 };
 }  // namespace orc::detail
 }  // namespace cudf::io

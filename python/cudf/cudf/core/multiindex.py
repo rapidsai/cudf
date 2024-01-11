@@ -1603,7 +1603,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, multiindex, nan_as_null=no_default):
+    def from_pandas(cls, multiindex: pd.MultiIndex, nan_as_null=no_default):
         """
         Convert from a Pandas MultiIndex
 
