@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2207,13 +2207,14 @@ inline __device__ uint8_t* cpw_put_int64(uint8_t* p, int64_t v)
   return cpw_put_uint64(p, (v ^ -s) * 2 + s);
 }
 
-inline __device__ uint8_t* cpw_put_fldh(uint8_t* p, int f, int cur, int t)
+inline __device__ uint8_t* cpw_put_fldh(uint8_t* p, int f, int cur, FieldType t)
 {
+  auto const t_num = static_cast<uint8_t>(t);
   if (f > cur && f <= cur + 15) {
-    *p++ = ((f - cur) << 4) | t;
+    *p++ = ((f - cur) << 4) | t_num;
     return p;
   } else {
-    *p++ = t;
+    *p++ = t_num;
     return cpw_put_int32(p, f);
   }
 }
@@ -2231,7 +2232,7 @@ class header_encoder {
   inline __device__ void field_struct_begin(int field)
   {
     current_header_ptr =
-      cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_STRUCT);
+      cpw_put_fldh(current_header_ptr, field, current_field_index, FieldType::STRUCT);
     current_field_index = 0;
   }
 
@@ -2241,11 +2242,13 @@ class header_encoder {
     current_field_index   = field;
   }
 
-  inline __device__ void field_list_begin(int field, size_t len, int type)
+  inline __device__ void field_list_begin(int field, size_t len, FieldType type)
   {
-    current_header_ptr = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_LIST);
+    current_header_ptr =
+      cpw_put_fldh(current_header_ptr, field, current_field_index, FieldType::LIST);
+    auto const t_num   = static_cast<uint8_t>(type);
     current_header_ptr = cpw_put_uint8(
-      current_header_ptr, static_cast<uint8_t>((std::min(len, size_t{0xfu}) << 4) | type));
+      current_header_ptr, static_cast<uint8_t>((std::min(len, size_t{0xfu}) << 4) | t_num));
     if (len >= 0xf) { current_header_ptr = cpw_put_uint32(current_header_ptr, len); }
     current_field_index = 0;
   }
@@ -2254,7 +2257,9 @@ class header_encoder {
 
   inline __device__ void put_bool(bool value)
   {
-    current_header_ptr = cpw_put_uint8(current_header_ptr, value ? ST_FLD_TRUE : ST_FLD_FALSE);
+    auto const type_byte =
+      static_cast<uint8_t>(value ? FieldType::BOOLEAN_TRUE : FieldType::BOOLEAN_FALSE);
+    current_header_ptr = cpw_put_uint8(current_header_ptr, type_byte);
   }
 
   inline __device__ void put_binary(void const* value, uint32_t length)
@@ -2272,15 +2277,18 @@ class header_encoder {
 
   inline __device__ void field_bool(int field, bool value)
   {
-    current_header_ptr = cpw_put_fldh(
-      current_header_ptr, field, current_field_index, value ? ST_FLD_TRUE : ST_FLD_FALSE);
+    current_header_ptr  = cpw_put_fldh(current_header_ptr,
+                                      field,
+                                      current_field_index,
+                                      value ? FieldType::BOOLEAN_TRUE : FieldType::BOOLEAN_FALSE);
     current_field_index = field;
   }
 
   template <typename T>
   inline __device__ void field_int32(int field, T value)
   {
-    current_header_ptr  = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_I32);
+    current_header_ptr =
+      cpw_put_fldh(current_header_ptr, field, current_field_index, FieldType::I32);
     current_header_ptr  = cpw_put_int32(current_header_ptr, static_cast<int32_t>(value));
     current_field_index = field;
   }
@@ -2288,7 +2296,8 @@ class header_encoder {
   template <typename T>
   inline __device__ void field_int64(int field, T value)
   {
-    current_header_ptr  = cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_I64);
+    current_header_ptr =
+      cpw_put_fldh(current_header_ptr, field, current_field_index, FieldType::I64);
     current_header_ptr  = cpw_put_int64(current_header_ptr, static_cast<int64_t>(value));
     current_field_index = field;
   }
@@ -2296,7 +2305,7 @@ class header_encoder {
   inline __device__ void field_binary(int field, void const* value, uint32_t length)
   {
     current_header_ptr =
-      cpw_put_fldh(current_header_ptr, field, current_field_index, ST_FLD_BINARY);
+      cpw_put_fldh(current_header_ptr, field, current_field_index, FieldType::BINARY);
     current_header_ptr = cpw_put_uint32(current_header_ptr, length);
     memcpy(current_header_ptr, value, length);
     current_header_ptr += length;
@@ -2868,13 +2877,13 @@ __global__ void __launch_bounds__(1)
       : align8(ck_g->column_index_blob + ck_g->column_index_size - column_index_truncate_length);
 
   // null_pages
-  encoder.field_list_begin(1, num_data_pages, ST_FLD_TRUE);
+  encoder.field_list_begin(1, num_data_pages, FieldType::BOOLEAN_TRUE);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     encoder.put_bool(column_stats[pageidx + page].non_nulls == 0);
   }
   encoder.field_list_end(1);
   // min_values
-  encoder.field_list_begin(2, num_data_pages, ST_FLD_BINARY);
+  encoder.field_list_begin(2, num_data_pages, FieldType::BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     auto const [min_ptr, min_size] = get_extremum(&column_stats[pageidx + page].min_value,
                                                   col_g.stats_dtype,
@@ -2885,7 +2894,7 @@ __global__ void __launch_bounds__(1)
   }
   encoder.field_list_end(2);
   // max_values
-  encoder.field_list_begin(3, num_data_pages, ST_FLD_BINARY);
+  encoder.field_list_begin(3, num_data_pages, FieldType::BINARY);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     auto const [max_ptr, max_size] = get_extremum(&column_stats[pageidx + page].max_value,
                                                   col_g.stats_dtype,
@@ -2902,7 +2911,7 @@ __global__ void __launch_bounds__(1)
                                                col_g.converted_type,
                                                num_pages - first_data_page));
   // null_counts
-  encoder.field_list_begin(5, num_data_pages, ST_FLD_I64);
+  encoder.field_list_begin(5, num_data_pages, FieldType::I64);
   for (uint32_t page = first_data_page; page < num_pages; page++) {
     encoder.put_int64(column_stats[pageidx + page].null_count);
   }
@@ -2918,7 +2927,7 @@ __global__ void __launch_bounds__(1)
 
   // optionally encode histograms and sum var_bytes.
   if (cd->max_rep_level > REP_LVL_HIST_CUTOFF) {
-    encoder.field_list_begin(6, num_data_pages * (cd->max_rep_level + 1), ST_FLD_I64);
+    encoder.field_list_begin(6, num_data_pages * (cd->max_rep_level + 1), FieldType::I64);
     thrust::for_each(thrust::seq, page_start, page_end, [&] __device__(auto const& page) {
       for (int i = 0; i < cd->max_rep_level + 1; i++) {
         encoder.put_int64(page.rep_histogram[i]);
@@ -2929,7 +2938,7 @@ __global__ void __launch_bounds__(1)
   }
 
   if (cd->max_def_level > DEF_LVL_HIST_CUTOFF) {
-    encoder.field_list_begin(7, num_data_pages * (cd->max_def_level + 1), ST_FLD_I64);
+    encoder.field_list_begin(7, num_data_pages * (cd->max_def_level + 1), FieldType::I64);
     thrust::for_each(thrust::seq, page_start, page_end, [&] __device__(auto const& page) {
       for (int i = 0; i < cd->max_def_level + 1; i++) {
         encoder.put_int64(page.def_histogram[i]);
