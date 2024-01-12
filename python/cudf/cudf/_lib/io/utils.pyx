@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
@@ -8,10 +8,10 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.io.data_sink cimport data_sink
+from cudf._lib.cpp.io.datasource cimport datasource
 from cudf._lib.cpp.io.types cimport (
     column_name_info,
-    data_sink,
-    datasource,
     host_buffer,
     sink_info,
     source_info,

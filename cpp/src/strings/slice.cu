@@ -248,20 +248,21 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       numeric_scalar<size_type> const& start,
                                       numeric_scalar<size_type> const& stop,
                                       numeric_scalar<size_type> const& step,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(strings, start, stop, step, cudf::get_default_stream(), mr);
+  return detail::slice_strings(strings, start, stop, step, stream, mr);
 }
 
 std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                                       column_view const& starts_column,
                                       column_view const& stops_column,
+                                      rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::slice_strings(
-    strings, starts_column, stops_column, cudf::get_default_stream(), mr);
+  return detail::slice_strings(strings, starts_column, stops_column, stream, mr);
 }
 
 }  // namespace strings

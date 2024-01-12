@@ -149,7 +149,7 @@ struct characters_tokenizer {
 struct strings_tokenizer {
   cudf::column_device_view const d_strings;  ///< strings to tokenize
   cudf::string_view const d_delimiter;       ///< delimiter characters to tokenize around
-  int32_t* d_offsets{};                      ///< offsets into the d_tokens vector for each string
+  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens vector for each string
   string_index_pair* d_tokens{};             ///< token positions in device memory
 
   /**
@@ -194,7 +194,7 @@ struct multi_delimiter_strings_tokenizer {
   cudf::column_device_view const d_strings;  ///< strings column to tokenize
   delimiterator delimiters_begin;            ///< first delimiter
   delimiterator delimiters_end;              ///< last delimiter
-  int32_t* d_offsets{};                      ///< offsets into the d_tokens output vector
+  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens output vector
   string_index_pair* d_tokens{};             ///< token positions found for each string
 
   /**
@@ -230,7 +230,7 @@ struct multi_delimiter_strings_tokenizer {
         });
       if (itr_find != delimiters_end) {  // found delimiter
         auto token_size = static_cast<cudf::size_type>((curr_ptr - data_ptr) - last_pos);
-        if (token_size > 0)              // we only care about non-zero sized tokens
+        if (token_size > 0)  // we only care about non-zero sized tokens
         {
           if (d_str_tokens)
             d_str_tokens[token_idx] = string_index_pair{data_ptr + last_pos, token_size};

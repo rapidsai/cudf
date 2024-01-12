@@ -79,7 +79,7 @@ struct in_place_fill_range_dispatch {
   {
     auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value(stream);
     using RepType = typename T::rep;
-    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid(stream));
+    auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid(stream), stream);
     in_place_fill<RepType>(destination, begin, end, s, stream);
   }
 
@@ -246,20 +246,22 @@ std::unique_ptr<column> fill(column_view const& input,
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
-                   scalar const& value)
+                   scalar const& value,
+                   rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill_in_place(destination, begin, end, value, cudf::get_default_stream());
+  return detail::fill_in_place(destination, begin, end, value, stream);
 }
 
 std::unique_ptr<column> fill(column_view const& input,
                              size_type begin,
                              size_type end,
                              scalar const& value,
+                             rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::fill(input, begin, end, value, cudf::get_default_stream(), mr);
+  return detail::fill(input, begin, end, value, stream, mr);
 }
 
 }  // namespace cudf

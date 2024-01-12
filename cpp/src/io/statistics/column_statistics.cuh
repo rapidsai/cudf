@@ -34,18 +34,18 @@ namespace io {
  * @brief shared state for statistics calculation kernel
  */
 struct stats_state_s {
-  stats_column_desc col;   ///< Column information
-  statistics_group group;  ///< Group description
-  statistics_chunk ck;     ///< Output statistics chunk
+  stats_column_desc col{};   ///< Column information
+  statistics_group group{};  ///< Group description
+  statistics_chunk ck{};     ///< Output statistics chunk
 };
 
 /**
  * @brief shared state for statistics merge kernel
  */
 struct merge_state_s {
-  stats_column_desc col;         ///< Column information
-  statistics_merge_group group;  ///< Group description
-  statistics_chunk ck;           ///< Resulting statistics chunk
+  stats_column_desc col{};         ///< Column information
+  statistics_merge_group group{};  ///< Group description
+  statistics_chunk ck{};           ///< Resulting statistics chunk
 };
 
 template <int dimension>

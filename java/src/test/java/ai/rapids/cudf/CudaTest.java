@@ -16,6 +16,7 @@
 
 package ai.rapids.cudf;
 
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -33,6 +34,7 @@ public class CudaTest {
     assertEquals(Cuda.getNativeComputeMode(), Cuda.getComputeMode().nativeId);
   }
 
+  @Tag("noSanitizer")
   @Test
   public void testCudaException() {
     assertThrows(CudaException.class, () -> {

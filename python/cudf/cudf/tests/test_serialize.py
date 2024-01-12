@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import pickle
 
@@ -301,7 +301,9 @@ def test_serialize_string():
     "frames",
     [
         (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
+        (cudf.DataFrame(), pd.DataFrame()),
         (cudf.DataFrame([]), pd.DataFrame([])),
+        (cudf.DataFrame({}), pd.DataFrame({})),
         (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
         (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
         (
@@ -347,6 +349,17 @@ def test_serialize_seriesgroupby():
     assert_eq(recreated.sum(), gb.sum())
 
 
+def test_serialize_seriesresampler():
+    index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+    sr = cudf.Series(range(10), index=index)
+    re_sampler = sr.resample("3T")
+    actual = re_sampler.sum()
+    recreated = re_sampler.__class__.deserialize(*re_sampler.serialize())
+    expected = recreated.sum()
+
+    assert_eq(actual, expected)
+
+
 def test_serialize_string_check_buffer_sizes():
     df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
     expect = df.memory_usage(deep=True).loc["a"]
@@ -384,3 +397,19 @@ def test_serialize_sliced_string():
 
     recreated = cudf.Series.deserialize(*sliced.serialize())
     assert_eq(recreated.to_pandas(nullable=True), pd_series)
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        cudf.RangeIndex(2),
+        cudf.Index([1, 2], dtype="int8"),
+        cudf.MultiIndex(
+            levels=[["a", "b"], [1, 2]], codes=[[0, 1], [0, 1]], names=["a", 0]
+        ),
+    ],
+)
+def test_serialize_column_types_preserved(columns):
+    expected = cudf.DataFrame([[10, 11]], columns=columns)
+    result = cudf.DataFrame.deserialize(*expected.serialize())
+    assert_eq(result, expected)

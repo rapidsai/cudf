@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -269,7 +270,7 @@ TYPED_TEST(ListsExtractColumnIndicesTypedTest, ExtractElement)
 {
   using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using FWCW    = cudf::test::fixed_width_column_wrapper<TypeParam, int32_t>;
-  using indices = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using indices = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto input_column = LCW({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}, LCW{}},
                           cudf::test::iterators::null_at(1));
@@ -329,7 +330,7 @@ TYPED_TEST(ListsExtractColumnIndicesTypedTest, ExtractElement)
 TYPED_TEST(ListsExtractColumnIndicesTypedTest, FailureCases)
 {
   using LCW     = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
-  using indices = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using indices = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   {
     // Non-empty input, with mismatched size of indices.
@@ -361,7 +362,7 @@ TEST_F(ListsExtractColumnIndicesTest, ExtractStrings)
 {
   using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
   using strings = cudf::test::strings_column_wrapper;
-  using indices = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using indices = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto input_column = LCW(
     {LCW{"3", "2", "1"}, LCW{}, LCW{"30", "20", "10", "50"}, LCW{"100", "120"}, LCW{"0"}, LCW{}},

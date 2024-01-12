@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -54,11 +55,13 @@ namespace cudf {
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
                    size_type end,
-                   scalar const& value);
+                   scalar const& value,
+                   rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Fills a range of elements in a column out-of-place with a scalar
@@ -79,6 +82,7 @@ void fill_in_place(mutable_column_view& destination,
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result output column
  */
@@ -87,6 +91,7 @@ std::unique_ptr<column> fill(
   size_type begin,
   size_type end,
   scalar const& value,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -113,12 +118,14 @@ std::unique_ptr<column> fill(
  *
  * @param input_table Input table
  * @param count Non-nullable column of an integral type
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   column_view const& count,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -136,12 +143,14 @@ std::unique_ptr<table> repeat(
  *
  * @param input_table Input table
  * @param count Number of repetitions
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The result table containing the repetitions
  */
 std::unique_ptr<table> repeat(
   table_view const& input_table,
   size_type count,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -164,6 +173,7 @@ std::unique_ptr<table> repeat(
  * @param size Size of the output column
  * @param init First value in the sequence
  * @param step Increment value
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result column containing the generated sequence
  */
@@ -171,6 +181,7 @@ std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
   scalar const& step,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -190,12 +201,14 @@ std::unique_ptr<column> sequence(
  *
  * @param size Size of the output column
  * @param init First value in the sequence
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The result column containing the generated sequence
  */
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -217,6 +230,7 @@ std::unique_ptr<column> sequence(
  * @param size Number of timestamps to generate
  * @param init The initial timestamp
  * @param months Months to increment
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @return Timestamps column with sequences of months
@@ -225,6 +239,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(
   size_type size,
   scalar const& init,
   size_type months,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

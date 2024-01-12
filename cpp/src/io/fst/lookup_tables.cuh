@@ -104,7 +104,7 @@ class SingleSymbolSmemLUT {
     SymbolGroupIdT no_match_id = symbol_strings.size();
 
     // The symbol with the largest value that is mapped to a symbol group id
-    SymbolGroupIdT max_base_match_val = 0;
+    SymbolGroupIdT max_lookup_index = 0;
 
     // Initialize all entries: by default we return the no-match-id
     std::fill(&init_data.sym_to_sgid[0], &init_data.sym_to_sgid[NUM_ENTRIES_PER_LUT], no_match_id);
@@ -115,17 +115,19 @@ class SingleSymbolSmemLUT {
     for (auto const& sg_symbols : symbol_strings) {
       // Iterate over all symbols that belong to the current symbol group
       for (auto const& sg_symbol : sg_symbols) {
-        max_base_match_val = std::max(max_base_match_val, static_cast<SymbolGroupIdT>(sg_symbol));
+        max_lookup_index = std::max(max_lookup_index, static_cast<SymbolGroupIdT>(sg_symbol));
         init_data.sym_to_sgid[static_cast<int32_t>(sg_symbol)] = sg_id;
       }
       sg_id++;
     }
 
-    // Initialize the out-of-bounds lookup: sym_to_sgid[max_base_match_val+1] -> no_match_id
-    init_data.sym_to_sgid[max_base_match_val + 1] = no_match_id;
+    // Initialize the out-of-bounds lookup: sym_to_sgid[max_lookup_index+1] -> no_match_id
+    auto const oob_match_index             = max_lookup_index + 1;
+    init_data.sym_to_sgid[oob_match_index] = no_match_id;
 
-    // Alias memory / return memory requirements
-    init_data.num_valid_entries = max_base_match_val + 1;
+    // The number of valid entries in the table (including the entry for the out-of-bounds symbol
+    // group id)
+    init_data.num_valid_entries = oob_match_index + 1;
     init_data.pre_map_op        = pre_map_op;
 
     return init_data;
@@ -178,6 +180,74 @@ class SingleSymbolSmemLUT {
       .sym_to_sgid[min(static_cast<SymbolGroupIdT>(symbol), num_valid_entries - 1U)];
   }
 };
+
+/**
+ * @brief A simple symbol group lookup wrapper that uses a simple function object to
+ * retrieve the symbol group id for a symbol.
+ *
+ * @tparam SymbolGroupLookupOpT The function object type to return the symbol group for a given
+ * symbol
+ */
+template <typename SymbolGroupLookupOpT>
+class SymbolGroupLookupOp {
+ private:
+  struct _TempStorage {};
+
+ public:
+  using TempStorage = cub::Uninitialized<_TempStorage>;
+
+  struct KernelParameter {
+    // Declare the member type that the DFA is going to instantiate
+    using LookupTableT = SymbolGroupLookupOp<SymbolGroupLookupOpT>;
+    SymbolGroupLookupOpT sgid_lookup_op;
+  };
+
+  static KernelParameter InitDeviceSymbolGroupIdLut(SymbolGroupLookupOpT sgid_lookup_op)
+  {
+    return KernelParameter{sgid_lookup_op};
+  }
+
+ private:
+  _TempStorage& temp_storage;
+  SymbolGroupLookupOpT sgid_lookup_op;
+
+  __device__ __forceinline__ _TempStorage& PrivateStorage()
+  {
+    __shared__ _TempStorage private_storage;
+    return private_storage;
+  }
+
+ public:
+  CUDF_HOST_DEVICE SymbolGroupLookupOp(KernelParameter const& kernel_param,
+                                       TempStorage& temp_storage)
+    : temp_storage(temp_storage.Alias()), sgid_lookup_op(kernel_param.sgid_lookup_op)
+  {
+  }
+
+  template <typename SymbolT_>
+  constexpr CUDF_HOST_DEVICE int32_t operator()(SymbolT_ const symbol) const
+  {
+    // Look up the symbol group for given symbol
+    return sgid_lookup_op(symbol);
+  }
+};
+
+/**
+ * @brief Prepares a simple symbol group lookup wrapper that uses a simple function object to
+ * retrieve the symbol group id for a symbol.
+ *
+ * @tparam FunctorT A function object type that must implement the signature `int32_t
+ * operator()(symbol)`, where `symbol` is a symbol from the input type.
+ * @param sgid_lookup_op A function object that must implement the signature `int32_t
+ * operator()(symbol)`, where `symbol` is a symbol from the input type.
+ * @return The kernel parameter of type SymbolGroupLookupOp::KernelParameter that is used to
+ * initialize a simple symbol group id lookup wrapper
+ */
+template <typename FunctorT>
+auto make_symbol_group_lookup_op(FunctorT sgid_lookup_op)
+{
+  return SymbolGroupLookupOp<FunctorT>::InitDeviceSymbolGroupIdLut(sgid_lookup_op);
+}
 
 /**
  * @brief Creates a symbol group lookup table of type `SingleSymbolSmemLUT` that uses a two-staged
@@ -685,7 +755,7 @@ class TranslationOp {
                                              RelativeOffsetT const relative_offset,
                                              SymbolT const read_symbol) const
   {
-    return translation_op(*this, state_id, match_id, relative_offset, read_symbol);
+    return translation_op(state_id, match_id, relative_offset, read_symbol);
   }
 
   template <typename StateIndexT, typename SymbolIndexT, typename SymbolT>
@@ -693,7 +763,7 @@ class TranslationOp {
                                              SymbolIndexT const match_id,
                                              SymbolT const read_symbol) const
   {
-    return translation_op(*this, state_id, match_id, read_symbol);
+    return translation_op(state_id, match_id, read_symbol);
   }
 };
 
@@ -830,7 +900,7 @@ class Dfa {
 };
 
 /**
- * @brief Creates a determninistic finite automaton (DFA) as specified by the triple of (symbol
+ * @brief Creates a deterministic finite automaton (DFA) as specified by the triple of (symbol
  * group, transition, translation)-lookup tables to be used with the finite-state transducer
  * algorithm.
  *

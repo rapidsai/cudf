@@ -66,8 +66,8 @@ cdef Column _gather_map_as_column(cpp_join.gather_map_type gather_map):
     # help to convert a gather map to a Column
     cdef device_buffer c_empty
     cdef size_type size = gather_map.get()[0].size()
-    cdef unique_ptr[column] c_col = make_unique[column](
+    cdef unique_ptr[column] c_col = move(make_unique[column](
         data_type(type_id.INT32),
         size,
-        gather_map.get()[0].release(), move(c_empty), 0)
+        gather_map.get()[0].release(), move(c_empty), 0))
     return Column.from_unique_ptr(move(c_col))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,12 +48,14 @@ namespace strings {
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT64 column converted from strings.
+ * @param input Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New INT64 column converted from strings
  */
 std::unique_ptr<column> ipv4_to_integers(
-  strings_column_view const& strings,
+  strings_column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -71,12 +73,14 @@ std::unique_ptr<column> ipv4_to_integers(
  *
  * @throw cudf::logic_error if the input column is not INT64 type.
  *
- * @param integers Integer (INT64) column to convert.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column.
+ * @param integers Integer (INT64) column to convert
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New strings column
  */
 std::unique_ptr<column> integers_to_ipv4(
   column_view const& integers,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -96,12 +100,14 @@ std::unique_ptr<column> integers_to_ipv4(
  *
  * Any null row results in a null entry for that row in the output column.
  *
- * @param strings Strings instance for this operation.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
+ * @param input Strings instance for this operation
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New column of boolean results for each string
  */
 std::unique_ptr<column> is_ipv4(
-  strings_column_view const& strings,
+  strings_column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

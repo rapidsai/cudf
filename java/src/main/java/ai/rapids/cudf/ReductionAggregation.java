@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -286,4 +286,22 @@ public final class ReductionAggregation {
     return new ReductionAggregation(Aggregation.mergeSets(nullEquality, nanEquality));
   }
 
+  /**
+   * Create HistogramAggregation, computing the frequencies for each unique row.
+   *
+   * @return A structs column in which the first child stores unique rows from the input and the
+   *         second child stores their corresponding frequencies.
+   */
+  public static ReductionAggregation histogram() {
+    return new ReductionAggregation(Aggregation.histogram());
+  }
+
+  /**
+   * Create MergeHistogramAggregation, to merge multiple histograms.
+   *
+   * @return A new histogram in which the frequencies of the unique rows are sum up.
+   */
+  public static ReductionAggregation mergeHistogram() {
+    return new ReductionAggregation(Aggregation.mergeHistogram());
+  }
 }

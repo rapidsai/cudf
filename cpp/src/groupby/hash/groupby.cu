@@ -54,11 +54,12 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <cuda/functional>
+#include <cuda/std/atomic>
+
 #include <memory>
 #include <unordered_set>
 #include <utility>
-
-#include <cuda/std/atomic>
 
 namespace cudf {
 namespace groupby {
@@ -410,7 +411,8 @@ void sparse_to_dense_results(table_view const& keys,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  auto row_bitmask = bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first;
+  auto row_bitmask =
+    cudf::detail::bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first;
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
   bitmask_type const* row_bitmask_ptr =
     skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
@@ -523,7 +525,8 @@ rmm::device_uvector<size_type> extract_populated_keys(map_type<ComparatorType> c
 {
   rmm::device_uvector<size_type> populated_keys(num_keys, stream);
 
-  auto const get_key = [] __device__(auto const& element) { return element.first; };  // first = key
+  auto const get_key = cuda::proclaim_return_type<typename map_type<ComparatorType>::key_type>(
+    [] __device__(auto const& element) { return element.first; });  // first = key
   auto const key_used = [unused = map.get_unused_key()] __device__(auto key) {
     return key != unused;
   };

@@ -43,6 +43,8 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -52,8 +54,8 @@ __global__ void marking_bitmask_kernel(mutable_column_device_view destination,
                                        MapIterator scatter_map,
                                        size_type num_scatter_rows)
 {
-  thread_index_type row          = threadIdx.x + blockIdx.x * blockDim.x;
-  thread_index_type const stride = blockDim.x * gridDim.x;
+  auto row          = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
 
   while (row < num_scatter_rows) {
     size_type const output_row = scatter_map[row];
@@ -268,8 +270,9 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     // Compute null mask
     rmm::device_buffer null_mask =
-      target.nullable() ? copy_bitmask(target, stream, mr)
-                        : create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
+      target.nullable()
+        ? detail::copy_bitmask(target, stream, mr)
+        : detail::create_null_mask(target.size(), mask_state::UNALLOCATED, stream, mr);
     column null_mask_stub(data_type{type_id::STRUCT},
                           target.size(),
                           rmm::device_buffer{},
@@ -355,9 +358,11 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
   // > (2^31)/2, but the end result after the final (% n_rows) will fit. so we'll do the computation
   // using a signed 64 bit value.
   auto scatter_iter = thrust::make_transform_iterator(
-    map_begin, [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
-      return ((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows;
-    });
+    map_begin,
+    cuda::proclaim_return_type<size_type>(
+      [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
+        return static_cast<size_type>(((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows);
+      }));
 
   // Dispatch over data type per column
   auto result          = std::vector<std::unique_ptr<column>>(target.num_columns());

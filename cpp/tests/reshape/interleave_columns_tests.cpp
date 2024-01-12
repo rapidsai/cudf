@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column_factories.hpp>
@@ -189,7 +190,7 @@ struct InterleaveStringsColumnsTest : public cudf::test::BaseFixture {};
 
 TEST_F(InterleaveStringsColumnsTest, ZeroSizedColumns)
 {
-  cudf::column_view col0(cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const col0 = cudf::make_empty_column(cudf::type_id::STRING)->view();
 
   auto results = cudf::interleave_columns(cudf::table_view{{col0}});
   cudf::test::expect_column_empty(results->view());
@@ -806,7 +807,7 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfListsWithNulls)
     ListsCol{ListsCol{{null, 11}, null_at(0)},
              ListsCol{{22, null, null}, nulls_at({1, 2})}},  // don't care
     ListsCol{ListsCol{{null, 11}, null_at(0)},
-             ListsCol{{22, null, null}, nulls_at({1, 2})}}   // don't care
+             ListsCol{{22, null, null}, nulls_at({1, 2})}}  // don't care
   };
 
   auto const col1 = cudf::slice(col1_original, {3, 6})[0];

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,9 @@
 
 #include "compact_protocol_writer.hpp"
 
-namespace cudf {
-namespace io {
-namespace parquet {
+#include <cudf/utilities/error.hpp>
+
+namespace cudf::io::parquet::detail {
 
 /**
  * @brief Parquet CompactProtocolWriter class
@@ -31,20 +31,9 @@ size_t CompactProtocolWriter::write(FileMetaData const& f)
   c.field_struct_list(2, f.schema);
   c.field_int(3, f.num_rows);
   c.field_struct_list(4, f.row_groups);
-  if (f.key_value_metadata.size() != 0) { c.field_struct_list(5, f.key_value_metadata); }
-  if (f.created_by.size() != 0) { c.field_string(6, f.created_by); }
-  if (f.column_order_listsize != 0) {
-    // Dummy list of struct containing an empty field1 struct
-    c.put_field_header(7, c.current_field(), ST_FLD_LIST);
-    c.put_byte((uint8_t)((std::min(f.column_order_listsize, 0xfu) << 4) | ST_FLD_STRUCT));
-    if (f.column_order_listsize >= 0xf) c.put_uint(f.column_order_listsize);
-    for (uint32_t i = 0; i < f.column_order_listsize; i++) {
-      c.put_field_header(1, 0, ST_FLD_STRUCT);
-      c.put_byte(0);  // ColumnOrder.field1 struct end
-      c.put_byte(0);  // ColumnOrder struct end
-    }
-    c.set_current_field(7);
-  }
+  if (not f.key_value_metadata.empty()) { c.field_struct_list(5, f.key_value_metadata); }
+  if (not f.created_by.empty()) { c.field_string(6, f.created_by); }
+  if (f.column_orders.has_value()) { c.field_struct_list(7, f.column_orders.value()); }
   return c.value();
 }
 
@@ -59,13 +48,11 @@ size_t CompactProtocolWriter::write(DecimalType const& decimal)
 size_t CompactProtocolWriter::write(TimeUnit const& time_unit)
 {
   CompactProtocolFieldWriter c(*this);
-  auto const isset = time_unit.isset;
-  if (isset.MILLIS) {
-    c.field_struct(1, time_unit.MILLIS);
-  } else if (isset.MICROS) {
-    c.field_struct(2, time_unit.MICROS);
-  } else if (isset.NANOS) {
-    c.field_struct(3, time_unit.NANOS);
+  switch (time_unit.type) {
+    case TimeUnit::MILLIS:
+    case TimeUnit::MICROS:
+    case TimeUnit::NANOS: c.field_empty_struct(time_unit.type); break;
+    default: CUDF_FAIL("Trying to write an invalid TimeUnit " + std::to_string(time_unit.type));
   }
   return c.value();
 }
@@ -97,31 +84,29 @@ size_t CompactProtocolWriter::write(IntType const& integer)
 size_t CompactProtocolWriter::write(LogicalType const& logical_type)
 {
   CompactProtocolFieldWriter c(*this);
-  auto const isset = logical_type.isset;
-  if (isset.STRING) {
-    c.field_struct(1, logical_type.STRING);
-  } else if (isset.MAP) {
-    c.field_struct(2, logical_type.MAP);
-  } else if (isset.LIST) {
-    c.field_struct(3, logical_type.LIST);
-  } else if (isset.ENUM) {
-    c.field_struct(4, logical_type.ENUM);
-  } else if (isset.DECIMAL) {
-    c.field_struct(5, logical_type.DECIMAL);
-  } else if (isset.DATE) {
-    c.field_struct(6, logical_type.DATE);
-  } else if (isset.TIME) {
-    c.field_struct(7, logical_type.TIME);
-  } else if (isset.TIMESTAMP) {
-    c.field_struct(8, logical_type.TIMESTAMP);
-  } else if (isset.INTEGER) {
-    c.field_struct(10, logical_type.INTEGER);
-  } else if (isset.UNKNOWN) {
-    c.field_struct(11, logical_type.UNKNOWN);
-  } else if (isset.JSON) {
-    c.field_struct(12, logical_type.JSON);
-  } else if (isset.BSON) {
-    c.field_struct(13, logical_type.BSON);
+  switch (logical_type.type) {
+    case LogicalType::STRING:
+    case LogicalType::MAP:
+    case LogicalType::LIST:
+    case LogicalType::ENUM:
+    case LogicalType::DATE:
+    case LogicalType::UNKNOWN:
+    case LogicalType::JSON:
+    case LogicalType::BSON: c.field_empty_struct(logical_type.type); break;
+    case LogicalType::DECIMAL:
+      c.field_struct(LogicalType::DECIMAL, logical_type.decimal_type.value());
+      break;
+    case LogicalType::TIME:
+      c.field_struct(LogicalType::TIME, logical_type.time_type.value());
+      break;
+    case LogicalType::TIMESTAMP:
+      c.field_struct(LogicalType::TIMESTAMP, logical_type.timestamp_type.value());
+      break;
+    case LogicalType::INTEGER:
+      c.field_struct(LogicalType::INTEGER, logical_type.int_type.value());
+      break;
+    default:
+      CUDF_FAIL("Trying to write an invalid LogicalType " + std::to_string(logical_type.type));
   }
   return c.value();
 }
@@ -137,20 +122,15 @@ size_t CompactProtocolWriter::write(SchemaElement const& s)
   c.field_string(4, s.name);
 
   if (s.type == UNDEFINED_TYPE) { c.field_int(5, s.num_children); }
-  if (s.converted_type != UNKNOWN) {
-    c.field_int(6, s.converted_type);
+  if (s.converted_type.has_value()) {
+    c.field_int(6, s.converted_type.value());
     if (s.converted_type == DECIMAL) {
       c.field_int(7, s.decimal_scale);
       c.field_int(8, s.decimal_precision);
     }
   }
-  if (s.field_id) { c.field_int(9, s.field_id.value()); }
-  auto const isset = s.logical_type.isset;
-  // TODO: add handling for all logical types
-  // if (isset.STRING or isset.MAP or isset.LIST or isset.ENUM or isset.DECIMAL or isset.DATE or
-  //    isset.TIME or isset.TIMESTAMP or isset.INTEGER or isset.UNKNOWN or isset.JSON or isset.BSON)
-  //    {
-  if (isset.TIMESTAMP or isset.TIME) { c.field_struct(10, s.logical_type); }
+  if (s.field_id.has_value()) { c.field_int(9, s.field_id.value()); }
+  if (s.logical_type.has_value()) { c.field_struct(10, s.logical_type.value()); }
   return c.value();
 }
 
@@ -167,14 +147,14 @@ size_t CompactProtocolWriter::write(KeyValue const& k)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_string(1, k.key);
-  if (k.value.size() != 0) { c.field_string(2, k.value); }
+  if (not k.value.empty()) { c.field_string(2, k.value); }
   return c.value();
 }
 
 size_t CompactProtocolWriter::write(ColumnChunk const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.file_path.size() != 0) { c.field_string(1, s.file_path); }
+  if (not s.file_path.empty()) { c.field_string(1, s.file_path); }
   c.field_int(2, s.file_offset);
   c.field_struct(3, s.meta_data);
   if (s.offset_index_length != 0) {
@@ -202,18 +182,19 @@ size_t CompactProtocolWriter::write(ColumnChunkMetaData const& s)
   if (s.index_page_offset != 0) { c.field_int(10, s.index_page_offset); }
   if (s.dictionary_page_offset != 0) { c.field_int(11, s.dictionary_page_offset); }
   c.field_struct(12, s.statistics);
+  if (s.size_statistics.has_value()) { c.field_struct(16, s.size_statistics.value()); }
   return c.value();
 }
 
 size_t CompactProtocolWriter::write(Statistics const& s)
 {
   CompactProtocolFieldWriter c(*this);
-  if (s.max.size() != 0) { c.field_binary(1, s.max); }
-  if (s.min.size() != 0) { c.field_binary(2, s.min); }
-  if (s.null_count != -1) { c.field_int(3, s.null_count); }
-  if (s.distinct_count != -1) { c.field_int(4, s.distinct_count); }
-  if (s.max_value.size() != 0) { c.field_binary(5, s.max_value); }
-  if (s.min_value.size() != 0) { c.field_binary(6, s.min_value); }
+  if (s.max.has_value()) { c.field_binary(1, s.max.value()); }
+  if (s.min.has_value()) { c.field_binary(2, s.min.value()); }
+  if (s.null_count.has_value()) { c.field_int(3, s.null_count.value()); }
+  if (s.distinct_count.has_value()) { c.field_int(4, s.distinct_count.value()); }
+  if (s.max_value.has_value()) { c.field_binary(5, s.max_value.value()); }
+  if (s.min_value.has_value()) { c.field_binary(6, s.min_value.value()); }
   return c.value();
 }
 
@@ -230,6 +211,34 @@ size_t CompactProtocolWriter::write(OffsetIndex const& s)
 {
   CompactProtocolFieldWriter c(*this);
   c.field_struct_list(1, s.page_locations);
+  if (s.unencoded_byte_array_data_bytes.has_value()) {
+    c.field_int_list(2, s.unencoded_byte_array_data_bytes.value());
+  }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(SizeStatistics const& s)
+{
+  CompactProtocolFieldWriter c(*this);
+  if (s.unencoded_byte_array_data_bytes.has_value()) {
+    c.field_int(1, s.unencoded_byte_array_data_bytes.value());
+  }
+  if (s.repetition_level_histogram.has_value()) {
+    c.field_int_list(2, s.repetition_level_histogram.value());
+  }
+  if (s.definition_level_histogram.has_value()) {
+    c.field_int_list(3, s.definition_level_histogram.value());
+  }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(ColumnOrder const& co)
+{
+  CompactProtocolFieldWriter c(*this);
+  switch (co.type) {
+    case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
+    default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
+  }
   return c.value();
 }
 
@@ -259,50 +268,64 @@ uint32_t CompactProtocolFieldWriter::put_int(int64_t v)
   return put_uint(((v ^ -s) << 1) + s);
 }
 
-void CompactProtocolFieldWriter::put_field_header(int f, int cur, int t)
+void CompactProtocolFieldWriter::put_field_header(int f, int cur, FieldType t)
 {
   if (f > cur && f <= cur + 15)
-    put_byte(((f - cur) << 4) | t);
+    put_packed_type_byte(f - cur, t);
   else {
-    put_byte(t);
+    put_byte(static_cast<uint8_t>(t));
     put_int(f);
   }
 }
 
 inline void CompactProtocolFieldWriter::field_bool(int field, bool b)
 {
-  put_field_header(field, current_field_value, b ? ST_FLD_TRUE : ST_FLD_FALSE);
+  put_field_header(
+    field, current_field_value, b ? FieldType::BOOLEAN_TRUE : FieldType::BOOLEAN_FALSE);
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_int8(int field, int8_t val)
 {
-  put_field_header(field, current_field_value, ST_FLD_BYTE);
+  put_field_header(field, current_field_value, FieldType::I8);
   put_byte(val);
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_int(int field, int32_t val)
 {
-  put_field_header(field, current_field_value, ST_FLD_I32);
+  put_field_header(field, current_field_value, FieldType::I32);
   put_int(val);
   current_field_value = field;
 }
 
 inline void CompactProtocolFieldWriter::field_int(int field, int64_t val)
 {
-  put_field_header(field, current_field_value, ST_FLD_I64);
+  put_field_header(field, current_field_value, FieldType::I64);
   put_int(val);
+  current_field_value = field;
+}
+
+template <>
+inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
+                                                                std::vector<int64_t> const& val)
+{
+  put_field_header(field, current_field_value, FieldType::LIST);
+  put_packed_type_byte(val.size(), FieldType::I64);
+  if (val.size() >= 0xfUL) { put_uint(val.size()); }
+  for (auto const v : val) {
+    put_int(v);
+  }
   current_field_value = field;
 }
 
 template <typename Enum>
 inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<Enum> const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_LIST);
-  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_I32));
-  if (val.size() >= 0xf) put_uint(val.size());
-  for (auto& v : val) {
+  put_field_header(field, current_field_value, FieldType::LIST);
+  put_packed_type_byte(val.size(), FieldType::I32);
+  if (val.size() >= 0xfUL) { put_uint(val.size()); }
+  for (auto const& v : val) {
     put_int(static_cast<int32_t>(v));
   }
   current_field_value = field;
@@ -311,20 +334,27 @@ inline void CompactProtocolFieldWriter::field_int_list(int field, std::vector<En
 template <typename T>
 inline void CompactProtocolFieldWriter::field_struct(int field, T const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_field_header(field, current_field_value, FieldType::STRUCT);
   if constexpr (not std::is_empty_v<T>) {
     writer.write(val);  // write the struct if it's not empty
   } else {
-    put_byte(0);        // otherwise, add a stop field
+    put_byte(0);  // otherwise, add a stop field
   }
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_empty_struct(int field)
+{
+  put_field_header(field, current_field_value, FieldType::STRUCT);
+  put_byte(0);  // add a stop field
   current_field_value = field;
 }
 
 template <typename T>
 inline void CompactProtocolFieldWriter::field_struct_list(int field, std::vector<T> const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_LIST);
-  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_STRUCT));
+  put_field_header(field, current_field_value, FieldType::LIST);
+  put_packed_type_byte(val.size(), FieldType::STRUCT);
   if (val.size() >= 0xf) put_uint(val.size());
   for (auto& v : val) {
     writer.write(v);
@@ -341,7 +371,7 @@ inline size_t CompactProtocolFieldWriter::value()
 inline void CompactProtocolFieldWriter::field_struct_blob(int field,
                                                           std::vector<uint8_t> const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_STRUCT);
+  put_field_header(field, current_field_value, FieldType::STRUCT);
   put_byte(val.data(), static_cast<uint32_t>(val.size()));
   put_byte(0);
   current_field_value = field;
@@ -349,7 +379,7 @@ inline void CompactProtocolFieldWriter::field_struct_blob(int field,
 
 inline void CompactProtocolFieldWriter::field_binary(int field, std::vector<uint8_t> const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_BINARY);
+  put_field_header(field, current_field_value, FieldType::BINARY);
   put_uint(val.size());
   put_byte(val.data(), static_cast<uint32_t>(val.size()));
   current_field_value = field;
@@ -357,7 +387,7 @@ inline void CompactProtocolFieldWriter::field_binary(int field, std::vector<uint
 
 inline void CompactProtocolFieldWriter::field_string(int field, std::string const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_BINARY);
+  put_field_header(field, current_field_value, FieldType::BINARY);
   put_uint(val.size());
   // FIXME : replace reinterpret_cast
   put_byte(reinterpret_cast<uint8_t const*>(val.data()), static_cast<uint32_t>(val.size()));
@@ -367,8 +397,8 @@ inline void CompactProtocolFieldWriter::field_string(int field, std::string cons
 inline void CompactProtocolFieldWriter::field_string_list(int field,
                                                           std::vector<std::string> const& val)
 {
-  put_field_header(field, current_field_value, ST_FLD_LIST);
-  put_byte((uint8_t)((std::min(val.size(), (size_t)0xfu) << 4) | ST_FLD_BINARY));
+  put_field_header(field, current_field_value, FieldType::LIST);
+  put_packed_type_byte(val.size(), FieldType::BINARY);
   if (val.size() >= 0xf) put_uint(val.size());
   for (auto& v : val) {
     put_uint(v.size());
@@ -385,6 +415,4 @@ inline void CompactProtocolFieldWriter::set_current_field(int const& field)
   current_field_value = field;
 }
 
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

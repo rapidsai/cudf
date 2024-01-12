@@ -12,10 +12,13 @@
 # the License.
 # =============================================================================
 
-set(cython_sources column.pyx copying.pyx gpumemoryview.pyx table.pyx types.pyx utils.pyx)
+set(cython_sources column.pyx copying.pyx gpumemoryview.pyx interop.pyx scalar.pyx table.pyx
+                   types.pyx utils.pyx
+)
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
   CXX
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
+link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")

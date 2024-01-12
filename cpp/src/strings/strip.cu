@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -86,10 +86,11 @@ std::unique_ptr<column> strip(strings_column_view const& input,
 std::unique_ptr<column> strip(strings_column_view const& input,
                               side_type side,
                               string_scalar const& to_strip,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::strip(input, side, to_strip, cudf::get_default_stream(), mr);
+  return detail::strip(input, side, to_strip, stream, mr);
 }
 
 }  // namespace strings

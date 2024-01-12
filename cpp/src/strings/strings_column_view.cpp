@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,7 @@ column_view strings_column_view::offsets() const
 
 strings_column_view::offset_iterator strings_column_view::offsets_begin() const
 {
-  return offsets().begin<offset_type>() + offset();
+  return offsets().begin<size_type>() + offset();
 }
 
 strings_column_view::offset_iterator strings_column_view::offsets_end() const

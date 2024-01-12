@@ -87,7 +87,7 @@ class structs_column_view : public column_view {
    * the child columns when recursing.  Most functions operating in a recursive manner
    * on struct columns should be using `get_sliced_child()` instead of `child()`.
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    *
    * @param index The index of the child column to return
    * @param stream The stream on which to perform the operation. Uses the default CUDF

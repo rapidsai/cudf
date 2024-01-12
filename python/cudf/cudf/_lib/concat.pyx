@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
@@ -30,7 +30,7 @@ cpdef concat_masks(object columns):
     cdef vector[column_view] c_views = make_column_views(columns)
     with nogil:
         c_result = move(libcudf_concatenate_masks(c_views))
-        c_unique_result = make_unique[device_buffer](move(c_result))
+        c_unique_result = move(make_unique[device_buffer](move(c_result)))
     return as_buffer(
         DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
     )

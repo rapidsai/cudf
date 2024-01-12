@@ -28,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 23.08.00
+  VERSION 24.02.00
   LANGUAGES C CXX CUDA
 )
 
@@ -135,6 +135,7 @@ add_library(
   src/ColumnViewJni.cu
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
+  src/DataSourceHelperJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
   src/NvcompJni.cpp
@@ -146,7 +147,6 @@ add_library(
   src/TableJni.cpp
   src/aggregation128_utils.cu
   src/maps_column_view.cu
-  src/row_conversion.cu
   src/check_nvcomp_output_sizes.cu
 )
 

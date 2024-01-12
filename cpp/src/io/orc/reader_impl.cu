@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,8 +52,8 @@
 #include <algorithm>
 #include <iterator>
 
-namespace cudf::io::detail::orc {
-using namespace cudf::io::orc;
+namespace cudf::io::orc::detail {
+using namespace cudf::io::detail;
 
 namespace {
 
@@ -149,7 +149,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
       // for each of its fields. There is only a PRESENT stream, which
       // needs to be included for the reader.
       auto const schema_type = types[column_id];
-      if (schema_type.subtypes.size() != 0) {
+      if (not schema_type.subtypes.empty()) {
         if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
           for (auto const& idx : schema_type.subtypes) {
             auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
@@ -249,7 +249,7 @@ rmm::device_buffer decompress_stripe_data(
   // Required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
-  if (decomp_data.size() == 0) { return decomp_data; }
+  if (decomp_data.is_empty()) { return decomp_data; }
 
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
@@ -622,7 +622,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
  * @brief Aggregate child metadata from parent column chunks.
  */
 void aggregate_child_meta(std::size_t level,
-                          cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                          column_hierarchy const& selected_columns,
                           cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                           cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
                           host_span<orc_column_meta const> list_col,
@@ -722,15 +722,14 @@ struct list_buffer_data {
 };
 
 // Generates offsets for list buffer from number of elements in a row.
-void generate_offsets_for_list(device_span<list_buffer_data const> buff_data,
-                               rmm::cuda_stream_view stream)
+void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_stream_view stream)
 {
-  auto const transformer = [] __device__(list_buffer_data const list_data) {
-    thrust::exclusive_scan(
-      thrust::seq, list_data.data, list_data.data + list_data.size, list_data.data);
-  };
-  thrust::for_each(rmm::exec_policy(stream), buff_data.begin(), buff_data.end(), transformer);
-  stream.synchronize();
+  for (auto& list_data : buff_data) {
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+                           list_data.data,
+                           list_data.data + list_data.size,
+                           list_data.data);
+  }
 }
 
 /**
@@ -776,7 +775,7 @@ constexpr type_id to_cudf_type(orc::TypeKind kind,
  * @brief Determines cuDF type of an ORC Decimal column.
  */
 type_id to_cudf_decimal_type(host_span<std::string const> decimal128_columns,
-                             cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
+                             aggregate_orc_metadata const& metadata,
                              int column_index)
 {
   if (metadata.get_col_type(column_index).kind != DECIMAL) { return type_id::EMPTY; }
@@ -799,14 +798,13 @@ std::string get_map_child_col_name(std::size_t const idx) { return (idx == 0) ? 
 /**
  * @brief Create empty columns and respective schema information from the buffer.
  */
-std::unique_ptr<column> create_empty_column(
-  size_type orc_col_id,
-  cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-  host_span<std::string const> decimal128_columns,
-  bool use_np_dtypes,
-  data_type timestamp_type,
-  column_name_info& schema_info,
-  rmm::cuda_stream_view stream)
+std::unique_ptr<column> create_empty_column(size_type orc_col_id,
+                                            aggregate_orc_metadata const& metadata,
+                                            host_span<std::string const> decimal128_columns,
+                                            bool use_np_dtypes,
+                                            data_type timestamp_type,
+                                            column_name_info& schema_info,
+                                            rmm::cuda_stream_view stream)
 {
   schema_info.name = metadata.column_name(0, orc_col_id);
   auto const kind  = metadata.get_col_type(orc_col_id).kind;
@@ -892,8 +890,8 @@ std::unique_ptr<column> create_empty_column(
 column_buffer assemble_buffer(size_type orc_col_id,
                               std::size_t level,
                               reader_column_meta const& col_meta,
-                              cudf::io::orc::detail::aggregate_orc_metadata const& metadata,
-                              cudf::io::orc::detail::column_hierarchy const& selected_columns,
+                              aggregate_orc_metadata const& metadata,
+                              column_hierarchy const& selected_columns,
                               std::vector<std::vector<column_buffer>>& col_buffers,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
@@ -1233,7 +1231,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
       CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
     }
 
-    if (stripe_data.size() == 0) { continue; }
+    if (stripe_data.empty()) { continue; }
 
     // Process dataset chunk pages into output columns
     auto row_groups =
@@ -1327,11 +1325,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
           }
         });
 
-      if (buff_data.size()) {
-        auto const dev_buff_data = cudf::detail::make_device_uvector_async(
-          buff_data, _stream, rmm::mr::get_current_device_resource());
-        generate_offsets_for_list(dev_buff_data, _stream);
-      }
+      if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
   }
 
@@ -1368,4 +1362,4 @@ table_with_metadata reader::read(orc_reader_options const& options)
   return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_stripes());
 }
 
-}  // namespace cudf::io::detail::orc
+}  // namespace cudf::io::orc::detail

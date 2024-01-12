@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ struct base_fn {
   column_device_view const d_column;
   size_type const width;
   size_type const fill_char_size;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   base_fn(column_device_view const& d_column, size_type width, size_type fill_char_size)
@@ -168,18 +168,20 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             size_type width,
                             side_type side,
                             std::string_view fill_char,
+                            rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::pad(input, width, side, fill_char, cudf::get_default_stream(), mr);
+  return detail::pad(input, width, side, fill_char, stream, mr);
 }
 
 std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
+                              rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::zfill(input, width, cudf::get_default_stream(), mr);
+  return detail::zfill(input, width, stream, mr);
 }
 
 }  // namespace strings

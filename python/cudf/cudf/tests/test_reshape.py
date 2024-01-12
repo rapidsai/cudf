@@ -151,6 +151,101 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
+@pytest.mark.parametrize(
+    "columns",
+    [
+        pd.MultiIndex.from_tuples(
+            [("A", "cat"), ("A", "dog"), ("B", "cat"), ("B", "dog")],
+            names=["letter", "animal"],
+        ),
+        pd.MultiIndex.from_tuples(
+            [("A", "cat"), ("B", "bird"), ("A", "dog"), ("B", "dog")],
+            names=["letter", "animal"],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "level",
+    [
+        -1,
+        0,
+        1,
+        "letter",
+        "animal",
+        [0, 1],
+        [1, 0],
+        ["letter", "animal"],
+        ["animal", "letter"],
+    ],
+)
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.RangeIndex(2, name="range"),
+        pd.Index([9, 8], name="myindex"),
+        pd.MultiIndex.from_arrays(
+            [
+                ["A", "B"],
+                [101, 102],
+            ],
+            names=["first", "second"],
+        ),
+    ],
+)
+@pytest.mark.parametrize("dropna", [True, False])
+def test_df_stack_multiindex_column_axis(columns, index, level, dropna):
+    if isinstance(level, list) and len(level) > 1 and not dropna:
+        pytest.skip(
+            "Stacking multiple levels with dropna==False is unsupported."
+        )
+
+    pdf = pd.DataFrame(
+        data=[[1, 2, 3, 4], [2, 4, 6, 8]], columns=columns, index=index
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.stack(level=level, dropna=dropna)
+    expect = pdf.stack(level=level, dropna=dropna)
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+def test_df_stack_mixed_dtypes():
+    pdf = pd.DataFrame(
+        {
+            "A": pd.Series([1, 2, 3], dtype="f4"),
+            "B": pd.Series([4, 5, 6], dtype="f8"),
+        }
+    )
+
+    gdf = cudf.from_pandas(pdf)
+
+    got = gdf.stack()
+    expect = pdf.stack()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
+def test_df_stack_multiindex_column_axis_pd_example(level):
+    columns = pd.MultiIndex.from_tuples(
+        [
+            ("A", "cat", "long"),
+            ("B", "cat", "long"),
+            ("A", "dog", "short"),
+            ("B", "dog", "short"),
+        ],
+        names=["exp", "animal", "hair_length"],
+    )
+
+    df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
+
+    expect = df.stack(level=level)
+    got = cudf.from_pandas(df).stack(level=level)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("num_rows", [1, 2, 10, 1000])
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize(

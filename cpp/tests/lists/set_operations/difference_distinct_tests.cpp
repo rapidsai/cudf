@@ -571,7 +571,7 @@ TEST_F(SetDifferenceTest, InputListsOfNestedStructsHaveNull)
                                        "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "Apple", "Banana",
                                        "Cherry",    "Kiwi",  // end list1
                                        "" /*NULL*/, "Bear",      "Cat",       "Dog",   "Duck",
-                                       "Panda",              // end list2
+                                       "Panda",  // end list2
                                        "ÁÁÁ",       "ÉÉÉÉÉ",     "ÁBC",       "ÁÁÁ",   "ÍÍÍÍÍ",
                                        "" /*NULL*/, "XYZ",
                                        "ÁBC"  // end list3

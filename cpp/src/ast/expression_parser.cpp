@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -191,6 +191,16 @@ cudf::size_type expression_parser::visit(operation const& expr)
                                   operand_data_ref_indices.cend());
   _operator_source_indices.push_back(index);
   return index;
+}
+
+// TODO: Eliminate column name references from expression_parser because
+// 2 code paths diverge in supporting column name references:
+// 1. column name references are specific to cuIO
+// 2. column name references are not supported in the libcudf table operations such as join,
+// transform.
+cudf::size_type expression_parser::visit(column_name_reference const& expr)
+{
+  CUDF_FAIL("Column name references are not supported in the AST expression parser.");
 }
 
 cudf::data_type expression_parser::output_type() const

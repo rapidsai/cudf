@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from typing_extensions import Self
 
 import cudf
 import cudf.api.types
@@ -28,12 +29,7 @@ from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
-from cudf.api.types import (
-    is_integer,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
-)
+from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
@@ -126,7 +122,7 @@ class StringMethods(ColumnMethods):
     def __init__(self, parent):
         value_type = (
             parent.dtype.leaf_type
-            if is_list_dtype(parent.dtype)
+            if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
         if not is_string_dtype(value_type):
@@ -5252,18 +5248,16 @@ class StringMethods(ColumnMethods):
         should not contain nulls.
 
         Edit distance is measured based on the `Levenshtein edit distance
-        algorithm
-        <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
-
+        algorithm <https://www.cuelogic.com/blog/the-levenshtein-algorithm>`_.
 
         Returns
         -------
         Series of ListDtype(int64)
-            Assume `N` is the length of this series. The return series contains
-            `N` lists of size `N`, where the `j`th number in the `i`th row of
-            the series tells the edit distance between the `i`th string and the
-            `j`th string of this series.
-            The matrix is symmetric. Diagonal elements are 0.
+            Assume ``N`` is the length of this series. The return series
+            contains ``N`` lists of size ``N``, where the ``j`` th number in
+            the ``i`` th row of the series tells the edit distance between the
+            ``i`` th string and the ``j`` th string of this series.  The matrix
+            is symmetric. Diagonal elements are 0.
 
         Examples
         --------
@@ -5289,26 +5283,20 @@ class StringMethods(ColumnMethods):
         )
 
     def minhash(
-        self,
-        seeds: Optional[cudf.Series] = None,
-        n: int = 4,
-        method: str = "murmur3",
+        self, seeds: Optional[ColumnLike] = None, width: int = 4
     ) -> SeriesOrIndex:
         """
         Compute the minhash of a strings column.
+        This uses the MurmurHash3_x86_32 algorithm for the hash function.
 
         Parameters
         ----------
-        seeds : Series
+        seeds : ColumnLike
             The seeds used for the hash algorithm.
             Must be of type uint32.
-        n : int
+        width : int
             The width of the substring to hash.
             Default is 4 characters.
-        method : str
-            Hash function to use.
-            Only 'murmur3' (MurmurHash3_32) is supported.
-            Default is 'murmur3'.
 
         Examples
         --------
@@ -5316,9 +5304,9 @@ class StringMethods(ColumnMethods):
         >>> str_series = cudf.Series(['this is my', 'favorite book'])
         >>> seeds = cudf.Series([0], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
-        0     21141582
-        1    962346254
-        dtype: uint32
+        0     [21141582]
+        1    [962346254]
+        dtype: list
         >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
         >>> str_series.str.minhash(seeds)
         0    [21141582, 403093213, 1258052021]
@@ -5327,14 +5315,54 @@ class StringMethods(ColumnMethods):
         """
         if seeds is None:
             seeds_column = column.as_column(0, dtype=np.uint32, length=1)
-        elif isinstance(seeds, cudf.Series) and seeds.dtype == np.uint32:
-            seeds_column = seeds._column
         else:
-            raise ValueError(
-                f"Expecting a Series with dtype uint32, got {type(seeds)}"
-            )
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint32:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint32, got {type(seeds)}"
+                )
         return self._return_or_inplace(
-            libstrings.minhash(self._column, seeds_column, n, method)
+            libstrings.minhash(self._column, seeds_column, width)
+        )
+
+    def minhash64(
+        self, seeds: Optional[ColumnLike] = None, width: int = 4
+    ) -> SeriesOrIndex:
+        """
+        Compute the minhash of a strings column.
+        This uses the MurmurHash3_x64_128 algorithm for the hash function.
+        This function generates 2 uint64 values but only the first
+        uint64 value is used.
+
+        Parameters
+        ----------
+        seeds : ColumnLike
+            The seeds used for the hash algorithm.
+            Must be of type uint64.
+        width : int
+            The width of the substring to hash.
+            Default is 4 characters.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> str_series = cudf.Series(['this is my', 'favorite book'])
+        >>> seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+        >>> str_series.str.minhash64(seeds)
+        0    [3232308021562742685, 4445611509348165860, 586435843695903598]
+        1    [23008204270530356, 1281229757012344693, 153762819128779913]
+        dtype: list
+        """
+        if seeds is None:
+            seeds_column = column.as_column(0, dtype=np.uint64, length=1)
+        else:
+            seeds_column = column.as_column(seeds)
+            if seeds_column.dtype != np.uint64:
+                raise ValueError(
+                    f"Expecting a Series with dtype uint64, got {type(seeds)}"
+                )
+        return self._return_or_inplace(
+            libstrings.minhash64(self._column, seeds_column, width)
         )
 
     def jaccard_index(self, input: cudf.Series, width: int) -> SeriesOrIndex:
@@ -5463,7 +5491,7 @@ class StringColumn(column.ColumnBase):
             # all nulls-column:
             offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
-            chars = cudf.core.column.as_column([], dtype="int8")
+            chars = cudf.core.column.column_empty(0, dtype="int8")
             children = (offsets, chars)
 
         super().__init__(
@@ -5605,7 +5633,7 @@ class StringColumn(column.ColumnBase):
             )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.api.types.dtype(dtype)
         string_col = self
@@ -5627,11 +5655,33 @@ class StringColumn(column.ColumnBase):
 
     def _as_datetime_or_timedelta_column(self, dtype, format):
         if len(self) == 0:
-            return cudf.core.column.as_column([], dtype=dtype)
+            return cudf.core.column.column_empty(0, dtype=dtype)
 
         # Check for None strings
         if (self == "None").any():
             raise ValueError("Could not convert `None` value to datetime")
+
+        is_nat = self == "NaT"
+        if dtype.kind == "M":
+            without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
+            all_same_length = (
+                libstrings.count_characters(without_nat).distinct_count(
+                    dropna=True
+                )
+                == 1
+            )
+            if not all_same_length:
+                # Unfortunately disables OK cases like:
+                # ["2020-01-01", "2020-01-01 00:00:00"]
+                # But currently incorrect for cases like (drops 10):
+                # ["2020-01-01", "2020-01-01 10:00:00"]
+                raise NotImplementedError(
+                    "Cannot parse date-like strings with different formats"
+                )
+            valid_ts = str_cast.istimestamp(self, format)
+            valid = valid_ts | is_nat
+            if not valid.all():
+                raise ValueError(f"Column contains invalid data for {format=}")
 
         casting_func = (
             str_cast.timestamp2int
@@ -5640,21 +5690,19 @@ class StringColumn(column.ColumnBase):
         )
         result_col = casting_func(self, dtype, format)
 
-        boolean_match = self == "NaT"
-        if (boolean_match).any():
-            result_col[boolean_match] = None
+        if is_nat.any():
+            result_col[is_nat] = None
 
         return result_col
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         out_dtype = cudf.api.types.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
         # are null in current column
-        format = kwargs.get("format", None)
         if format is None:
             if self.null_count == len(self):
                 return cast(
@@ -5671,19 +5719,20 @@ class StringColumn(column.ColumnBase):
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         out_dtype = cudf.api.types.dtype(dtype)
-        format = "%D days %H:%M:%S"
+        if format is None:
+            format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> StringColumn:
         return self
 
@@ -5703,15 +5752,15 @@ class StringColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
     ) -> pd.Series:
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)
         else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+            pd_series = self.to_arrow().to_pandas()
 
         if index is not None:
             pd_series.index = index
@@ -5776,17 +5825,16 @@ class StringColumn(column.ColumnBase):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> StringColumn:
+    ) -> Self:
         if fill_value is not None:
             if not is_scalar(fill_value):
                 fill_value = column.as_column(fill_value, dtype=self.dtype)
             elif cudf._lib.scalar._is_null_host_scalar(fill_value):
                 # Trying to fill <NA> with <NA> value? Return copy.
                 return self.copy(deep=True)
-            return super().fillna(value=fill_value, dtype="object")
-        else:
-            return super().fillna(method=method)
+            else:
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        return super().fillna(fill_value, method=method)
 
     def normalize_binop_value(
         self, other

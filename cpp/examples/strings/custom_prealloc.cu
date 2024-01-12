@@ -41,7 +41,7 @@ __global__ void redact_kernel(cudf::column_device_view const d_names,
                               cudf::column_device_view const d_visibilities,
                               cudf::string_view redaction,
                               char* working_memory,
-                              cudf::offset_type const* d_offsets,
+                              cudf::size_type const* d_offsets,
                               cudf::string_view* d_output)
 {
   // The row index is resolved from the CUDA thread/block objects

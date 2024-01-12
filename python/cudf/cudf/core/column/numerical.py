@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -16,10 +16,10 @@ from typing import (
 import cupy as cp
 import numpy as np
 import pandas as pd
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.stream_compaction import drop_nulls
 from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnBinaryOperand,
@@ -120,21 +120,28 @@ class NumericalColumn(NumericalBaseColumn):
         ).any()
 
     def indices_of(self, value: ScalarLike) -> NumericalColumn:
+        if isinstance(value, (bool, np.bool_)) and self.dtype.kind != "b":
+            raise ValueError(
+                f"Cannot use a {type(value).__name__} to find an index of "
+                f"a {self.dtype} Index."
+            )
         if (
             value is not None
             and self.dtype.kind in {"c", "f"}
             and np.isnan(value)
         ):
             return column.as_column(
-                cp.argwhere(cp.isnan(self.data_array_view(mode="read"))),
+                cp.argwhere(
+                    cp.isnan(self.data_array_view(mode="read"))
+                ).flatten(),
                 dtype=size_type_dtype,
             )
         else:
             return super().indices_of(value)
 
-    def has_nulls(self, include_nan=False):
-        return self.null_count != 0 or (
-            self.nan_count != 0 if include_nan else False
+    def has_nulls(self, include_nan: bool = False) -> bool:
+        return bool(self.null_count != 0) or (
+            include_nan and bool(self.nan_count != 0)
         )
 
     def __setitem__(self, key: Any, value: Any):
@@ -264,13 +271,13 @@ class NumericalColumn(NumericalBaseColumn):
             out_dtype = "bool"
 
         if op in {"__and__", "__or__", "__xor__"}:
-            if is_float_dtype(self.dtype) or is_float_dtype(other):
+            if is_float_dtype(self.dtype) or is_float_dtype(other.dtype):
                 raise TypeError(
                     f"Operation 'bitwise {op[2:-2]}' not supported between "
                     f"{self.dtype.type.__name__} and "
                     f"{other.dtype.type.__name__}"
                 )
-            if is_bool_dtype(self.dtype) or is_bool_dtype(other):
+            if is_bool_dtype(self.dtype) or is_bool_dtype(other.dtype):
                 out_dtype = "bool"
 
         if (
@@ -284,7 +291,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
 
-    def nans_to_nulls(self: NumericalColumn) -> NumericalColumn:
+    def nans_to_nulls(self: Self) -> Self:
         # Only floats can contain nan.
         if self.dtype.kind != "f" or self.nan_count == 0:
             return self
@@ -332,7 +339,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -340,11 +347,12 @@ class NumericalColumn(NumericalBaseColumn):
             ](self)
         else:
             return cast(
-                "cudf.core.column.StringColumn", as_column([], dtype="object")
+                cudf.core.column.StringColumn,
+                column.column_empty(0, dtype="object"),
             )
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         return cast(
             "cudf.core.column.DatetimeColumn",
@@ -358,7 +366,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         return cast(
             "cudf.core.column.TimeDeltaColumn",
@@ -372,11 +380,11 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libcudf.unary.cast(self, dtype)
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
@@ -411,14 +419,6 @@ class NumericalColumn(NumericalBaseColumn):
             nan_col = libcudf.unary.is_nan(self)
             self._nan_count = nan_col.sum()
         return self._nan_count
-
-    def dropna(self, drop_nan: bool = False) -> NumericalColumn:
-        col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
-
-    @property
-    def contains_na_entries(self) -> bool:
-        return (self.nan_count != 0) or (self.null_count != 0)
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -525,13 +525,11 @@ class NumericalColumn(NumericalBaseColumn):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-        fill_nan: bool = True,
-    ) -> NumericalColumn:
+    ) -> Self:
         """
         Fill null values with *fill_value*
         """
-        col = self.nans_to_nulls() if fill_nan else self
+        col = self.nans_to_nulls()
 
         if col.null_count == 0:
             return col
@@ -566,8 +564,8 @@ class NumericalColumn(NumericalBaseColumn):
                     if not (new_fill_value == fill_value).all():
                         raise TypeError(
                             f"Cannot safely cast non-equivalent "
-                            f"{col.dtype.type.__name__} to "
-                            f"{cudf.dtype(dtype).type.__name__}"
+                            f"{fill_value.dtype.type.__name__} to "
+                            f"{col.dtype.type.__name__}"
                         )
                     fill_value = new_fill_value
             else:
@@ -644,12 +642,14 @@ class NumericalColumn(NumericalBaseColumn):
 
         # want to cast float to int:
         elif self.dtype.kind == "f" and to_dtype.kind in {"i", "u"}:
+            if self.nan_count > 0:
+                return False
             iinfo = np.iinfo(to_dtype)
             min_, max_ = iinfo.min, iinfo.max
 
             # best we can do is hope to catch it here and avoid compare
             if (self.min() >= min_) and (self.max() <= max_):
-                filled = self.fillna(0, fill_nan=False)
+                filled = self.fillna(0)
                 return (cudf.Series(filled) % 1 == 0).all()
             else:
                 return False
@@ -672,9 +672,9 @@ class NumericalColumn(NumericalBaseColumn):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
     ) -> pd.Series:
         if nullable and self.dtype in np_dtypes_to_pandas_dtypes:
             pandas_nullable_dtype = np_dtypes_to_pandas_dtypes[self.dtype]
@@ -684,7 +684,7 @@ class NumericalColumn(NumericalBaseColumn):
         elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
             pd_series = pd.Series(self.values_host, copy=False)
         else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+            pd_series = self.to_arrow().to_pandas()
 
         if index is not None:
             pd_series.index = index

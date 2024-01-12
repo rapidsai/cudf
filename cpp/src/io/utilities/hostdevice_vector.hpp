@@ -94,6 +94,7 @@ class hostdevice_vector {
   [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
   [[nodiscard]] size_t size() const noexcept { return current_size; }
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
+  [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
   [[nodiscard]] T& operator[](size_t i) { return host_data[i]; }
   [[nodiscard]] T const& operator[](size_t i) const { return host_data[i]; }

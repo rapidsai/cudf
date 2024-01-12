@@ -31,6 +31,13 @@
 /// `fixed_point` and supporting types
 namespace numeric {
 
+/**
+ * @addtogroup fixed_point_classes
+ * @{
+ * @file
+ * @brief Class definition for fixed point data type
+ */
+
 /// The scale type for fixed_point
 enum scale_type : int32_t {};
 
@@ -70,6 +77,8 @@ constexpr inline auto is_supported_construction_value_type()
 {
   return cuda::std::is_integral<T>() || cuda::std::is_floating_point_v<T>;
 }
+
+/** @} */  // end of group
 
 // Helper functions for `fixed_point` type
 namespace detail {
@@ -829,5 +838,5 @@ using decimal32  = fixed_point<int32_t, Radix::BASE_10>;     ///<  32-bit decima
 using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decimal fixed point
 using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point
 
-/** @} */                                                    // end of group
+/** @} */  // end of group
 }  // namespace numeric

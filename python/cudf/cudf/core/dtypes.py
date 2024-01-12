@@ -62,6 +62,10 @@ def dtype(arbitrary):
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
+    if cudf.get_option(
+        "mode.pandas_compatible"
+    ) and cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
+        raise NotImplementedError("not supported")
     try:
         return dtype(pd_dtype.numpy_dtype)
     except AttributeError:
@@ -143,6 +147,16 @@ class CategoricalDtype(_BaseDtype):
         None can be used to maintain the ordered value of existing categoricals
         when used in operations that combine categoricals, e.g. astype, and
         will resolve to False if there is no existing ordered to maintain.
+
+    Attributes
+    ----------
+    categories
+    ordered
+
+    Methods
+    -------
+    from_pandas
+    to_pandas
 
     Examples
     --------
@@ -320,6 +334,16 @@ class ListDtype(_BaseDtype):
     element_type : object
         A dtype with which represents the element types in the list.
 
+    Attributes
+    ----------
+    element_type
+    leaf_type
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
+
     Examples
     --------
     >>> import cudf
@@ -373,7 +397,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
         else:
-            return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
+            return cudf.dtype(self._typ.value_type.to_pandas_dtype())
 
     @cached_property
     def leaf_type(self):
@@ -470,7 +494,9 @@ class ListDtype(_BaseDtype):
         if isinstance(self.element_type, _BaseDtype):
             header["element-type"], frames = self.element_type.serialize()
         else:
-            header["element-type"] = self.element_type
+            header["element-type"] = getattr(
+                self.element_type, "name", self.element_type
+            )
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -485,6 +511,10 @@ class ListDtype(_BaseDtype):
             element_type = header["element-type"]
         return klass(element_type=element_type)
 
+    @cached_property
+    def itemsize(self):
+        return self.element_type.itemsize
+
 
 class StructDtype(_BaseDtype):
     """
@@ -495,6 +525,16 @@ class StructDtype(_BaseDtype):
     fields : dict
         A mapping of field names to dtypes, the dtypes can themselves
         be of ``StructDtype`` too.
+
+    Attributes
+    ----------
+    fields
+    itemsize
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
 
     Examples
     --------
@@ -649,19 +689,32 @@ decimal_dtype_template = textwrap.dedent(
         scale : int, optional
             The scale of the dtype. See Notes below.
 
+        Attributes
+        ----------
+        precision
+        scale
+        itemsize
+
+        Methods
+        -------
+        to_arrow
+        from_arrow
+
         Notes
         -----
-            When the scale is positive:
-                - numbers with fractional parts (e.g., 0.0042) can be represented
-                - the scale is the total number of digits to the right of the
-                decimal point
-            When the scale is negative:
-                - only multiples of powers of 10 (including 10**0) can be
-                represented (e.g., 1729, 4200, 1000000)
-                - the scale represents the number of trailing zeros in the value.
-            For example, 42 is representable with precision=2 and scale=0.
-            13.0051 is representable with precision=6 and scale=4,
-            and *not* representable with precision<6 or scale<4.
+        When the scale is positive:
+            - numbers with fractional parts (e.g., 0.0042) can be represented
+            - the scale is the total number of digits to the right of the
+              decimal point
+
+        When the scale is negative:
+            - only multiples of powers of 10 (including 10**0) can be
+              represented (e.g., 1729, 4200, 1000000)
+            - the scale represents the number of trailing zeros in the value.
+
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
 
         Examples
         --------
@@ -862,8 +915,11 @@ class IntervalDtype(StructDtype):
     def subtype(self):
         return self.fields["left"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"interval[{self.subtype}, {self.closed}]"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
     @classmethod
     def from_arrow(cls, typ):
@@ -994,7 +1050,10 @@ def is_list_dtype(obj):
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
         or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.ListDtype)
+        )
     )
 
 
@@ -1020,7 +1079,10 @@ def is_struct_dtype(obj):
         isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.StructDtype)
+        )
     )
 
 
@@ -1072,7 +1134,12 @@ def is_interval_dtype(obj):
         or (
             isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
         )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+        or (
+            isinstance(
+                getattr(obj, "dtype", None),
+                (pd.IntervalDtype, cudf.core.dtypes.IntervalDtype),
+            )
+        )
     )
 
 
