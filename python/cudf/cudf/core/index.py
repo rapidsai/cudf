@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Sequence,
@@ -233,9 +234,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def searchsorted(
         self,
         value: int,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         assert (len(self) <= 1) or (
             ascending == (self._step > 0)
@@ -285,9 +286,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
-            return column.arange(
-                self._start, self._stop, self._step, dtype=self.dtype
-            )
+            return column.as_column(self._range, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -2205,9 +2204,9 @@ class DatetimeIndex(GenericIndex):
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         value = self.dtype.type(value)
         return super().searchsorted(

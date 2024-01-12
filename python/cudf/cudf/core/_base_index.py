@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set, Tuple
+from typing import Any, Literal, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -1702,6 +1701,8 @@ class BaseIndex(Serializable):
         start = loc.start
         stop = loc.stop
         step = 1 if loc.step is None else loc.step
+        start_side: Literal["left", "right"]
+        stop_side: Literal["left", "right"]
         if step < 0:
             start_side, stop_side = "right", "left"
         else:
@@ -1725,9 +1726,9 @@ class BaseIndex(Serializable):
     def searchsorted(
         self,
         value,
-        side: builtins.str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: builtins.str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         """Find index where elements should be inserted to maintain order
 
@@ -1754,7 +1755,12 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def get_slice_bound(self, label, side: builtins.str, kind=None) -> int:
+    def get_slice_bound(
+        self,
+        label,
+        side: Literal["left", "right"],
+        kind: Literal["ix", "loc", "getitem", None] = None,
+    ) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position

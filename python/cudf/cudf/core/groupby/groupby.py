@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 import itertools
@@ -23,7 +23,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
 from cudf.core.abc import Serializable
-from cudf.core.column.column import ColumnBase, arange, as_column
+from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
@@ -761,7 +761,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
             _, (ordering,), _ = self._groupby.groups(
-                [arange(0, len(self.obj))]
+                [as_column(range(0, len(self.obj)))]
             )
             # Invert permutation from original order to groups on the
             # subset of entries we want.
@@ -2543,7 +2543,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         # result coming back from libcudf has null_count few rows than
         # the input, so we must produce an ordering from the full
         # input range.
-        _, (ordering,), _ = self._groupby.groups([arange(0, len(self.obj))])
+        _, (ordering,), _ = self._groupby.groups(
+            [as_column(range(0, len(self.obj)))]
+        )
         if self._dropna and any(
             c.has_nulls(include_nan=True) > 0
             for c in self.grouping._key_columns

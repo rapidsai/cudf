@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ from typing import Any, Optional, Sequence, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -114,7 +115,7 @@ class TimeDeltaColumn(ColumnBase):
             # np.timedelta64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item.view("int64") in self.as_numerical
+        return item.view("int64") in self.as_numerical_column("int64")
 
     @property
     def values(self):
@@ -133,7 +134,9 @@ class TimeDeltaColumn(ColumnBase):
                 self.mask_array_view(mode="read").copy_to_host()
             )
         data = pa.py_buffer(
-            self.as_numerical.data_array_view(mode="read").copy_to_host()
+            self.as_numerical_column("int64")
+            .data_array_view(mode="read")
+            .copy_to_host()
         )
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
@@ -261,19 +264,6 @@ class TimeDeltaColumn(ColumnBase):
         return NotImplemented
 
     @property
-    def as_numerical(self) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn",
-            column.build_column(
-                data=self.base_data,
-                dtype=np.int64,
-                mask=self.base_mask,
-                offset=self.offset,
-                size=self.size,
-            ),
-        )
-
-    @property
     def time_unit(self) -> str:
         return self._time_unit
 
@@ -281,41 +271,43 @@ class TimeDeltaColumn(ColumnBase):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> TimeDeltaColumn:
+    ) -> Self:
         if fill_value is not None:
             if cudf.utils.utils._isnat(fill_value):
                 return self.copy(deep=True)
-            col: ColumnBase = self
             if is_scalar(fill_value):
-                if isinstance(fill_value, np.timedelta64):
-                    dtype = determine_out_dtype(self.dtype, fill_value.dtype)
-                    fill_value = fill_value.astype(dtype)
-                    col = col.astype(dtype)
-                if not isinstance(fill_value, cudf.Scalar):
-                    fill_value = cudf.Scalar(fill_value, dtype=dtype)
+                fill_value = cudf.Scalar(fill_value)
+                dtype = determine_out_dtype(self.dtype, fill_value.dtype)
+                fill_value = fill_value.astype(dtype)
+                if self.dtype != dtype:
+                    return cast(
+                        Self, self.astype(dtype).fillna(fill_value, method)
+                    )
             else:
                 fill_value = column.as_column(fill_value, nan_as_null=False)
-            return cast(TimeDeltaColumn, ColumnBase.fillna(col, fill_value))
-        else:
-            return super().fillna(method=method)
+        return super().fillna(fill_value, method)
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
-        return cast(
-            "cudf.core.column.NumericalColumn", self.as_numerical.astype(dtype)
+        col = column.build_column(
+            data=self.base_data,
+            dtype=np.int64,
+            mask=self.base_mask,
+            offset=self.offset,
+            size=self.size,
         )
+        return cast("cudf.core.column.NumericalColumn", col.astype(dtype))
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         raise TypeError(
             f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if format is None:
             format = _dtype_to_format_conversion.get(
@@ -331,7 +323,9 @@ class TimeDeltaColumn(ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def as_timedelta_column(self, dtype: Dtype, **kwargs) -> TimeDeltaColumn:
+    def as_timedelta_column(
+        self, dtype: Dtype, format: str | None = None
+    ) -> TimeDeltaColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
@@ -339,13 +333,14 @@ class TimeDeltaColumn(ColumnBase):
 
     def mean(self, skipna=None, dtype: Dtype = np.float64) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.mean(skipna=skipna, dtype=dtype),
+            self.as_numerical_column("int64").mean(skipna=skipna, dtype=dtype),
             unit=self.time_unit,
         )
 
     def median(self, skipna: Optional[bool] = None) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.median(skipna=skipna), unit=self.time_unit
+            self.as_numerical_column("int64").median(skipna=skipna),
+            unit=self.time_unit,
         )
 
     def isin(self, values: Sequence) -> ColumnBase:
@@ -358,7 +353,7 @@ class TimeDeltaColumn(ColumnBase):
         exact: bool,
         return_scalar: bool,
     ) -> ColumnBase:
-        result = self.as_numerical.quantile(
+        result = self.as_numerical_column("int64").quantile(
             q=q,
             interpolation=interpolation,
             exact=exact,
@@ -378,7 +373,7 @@ class TimeDeltaColumn(ColumnBase):
             # Since sum isn't overridden in Numerical[Base]Column, mypy only
             # sees the signature from Reducible (which doesn't have the extra
             # parameters from ColumnBase._reduce) so we have to ignore this.
-            self.as_numerical.sum(  # type: ignore
+            self.as_numerical_column("int64").sum(  # type: ignore
                 skipna=skipna, min_count=min_count, dtype=dtype
             ),
             unit=self.time_unit,
@@ -392,7 +387,7 @@ class TimeDeltaColumn(ColumnBase):
         ddof: int = 1,
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.std(
+            self.as_numerical_column("int64").std(
                 skipna=skipna, min_count=min_count, ddof=ddof, dtype=dtype
             ),
             unit=self.time_unit,
