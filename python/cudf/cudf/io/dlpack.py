@@ -35,12 +35,12 @@ def from_dlpack(pycapsule_obj):
     """
 
     columns = libdlpack.from_dlpack(pycapsule_obj)
-    column_names = range(len(columns))
+    data = dict(enumerate(columns))
 
     if len(columns) == 1:
-        return cudf.Series._from_columns(columns, column_names=column_names)
+        return cudf.Series._from_data(data)
     else:
-        return cudf.DataFrame._from_columns(columns, column_names=column_names)
+        return cudf.DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
