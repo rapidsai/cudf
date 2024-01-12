@@ -1380,7 +1380,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Find the first non-null column:
         head = next(
-            (obj for obj in objs if not obj.null_count != len(obj)), objs[0]
+            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
         )
 
         # Combine and de-dupe the categories
