@@ -377,7 +377,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         if obj is None:
             obj = self.obj
 
-        return obj.loc[self.groups[name]]
+        return obj.loc[self.groups[name].drop_duplicates()]
 
     @_cudf_nvtx_annotate
     def size(self):
