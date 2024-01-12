@@ -23,7 +23,7 @@ void reader::impl::compute_chunk_ranges()
   // Currently, file is always read as one chunk.
   // TODO: Implement variable chunking.
   _chunk_read_info.chunk_ranges = {
-    row_range{_file_itm_data->rows_to_skip, _file_itm_data->rows_to_read}};
+    row_range{_file_itm_data.rows_to_skip, _file_itm_data.rows_to_read}};
 }
 
 }  // namespace cudf::io::detail::orc

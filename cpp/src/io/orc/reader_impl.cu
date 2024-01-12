@@ -15,8 +15,6 @@
  */
 
 #include "reader_impl.hpp"
-#include "reader_impl_chunking.hpp"
-#include "reader_impl_helpers.hpp"
 
 namespace cudf::io::orc::detail {
 
@@ -30,7 +28,6 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _use_index{options.is_enabled_use_index()},
     _use_np_dtypes{options.is_enabled_use_np_dtypes()},
     _decimal128_columns{options.get_decimal128_columns()},
-    _col_meta{std::make_unique<reader_column_meta>()},
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
@@ -84,7 +81,7 @@ table_with_metadata reader::impl::read_chunk_internal()
   auto out_metadata = make_output_metadata();
 
   // If no rows or stripes to read, return empty columns
-  if (_file_itm_data->rows_to_read == 0 || _file_itm_data->selected_stripes.empty()) {
+  if (_file_itm_data.rows_to_read == 0 || _file_itm_data.selected_stripes.empty()) {
     std::transform(_selected_columns.levels[0].begin(),
                    _selected_columns.levels[0].end(),
                    std::back_inserter(out_columns),
@@ -109,7 +106,7 @@ table_with_metadata reader::impl::read_chunk_internal()
     [&](auto const& orc_col_meta) {
       out_metadata.schema_info.emplace_back("");
       auto col_buffer = assemble_buffer(
-        orc_col_meta.id, 0, *_col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
+        orc_col_meta.id, 0, _col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
       return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
     });
 
