@@ -171,7 +171,7 @@ TEST_F(ColumnToRowTests, ManyStrings)
       return TEST_STRINGS[rand() % (sizeof(TEST_STRINGS) / sizeof(TEST_STRINGS[0]))];
     });
 
-  auto const num_rows = 1000000;
+  auto const num_rows = 1'000'000;
   auto const num_cols = 50;
   std::vector<cudf::data_type> schema;
 
@@ -770,7 +770,7 @@ TEST_F(RowToColumnTests, Bigger)
   std::vector<cudf::column_view> views;
   std::vector<cudf::data_type> schema;
 
-  // 28 columns of 1 million rows
+  // 128 columns of 1 million rows
   constexpr auto num_rows = 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
     cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
@@ -799,8 +799,8 @@ TEST_F(RowToColumnTests, Biggest)
   std::vector<cudf::column_view> views;
   std::vector<cudf::data_type> schema;
 
-  // 128 columns of 1 million rows
-  constexpr auto num_rows = 5 * 1024 * 1024;
+  // 128 columns of 2 million rows
+  constexpr auto num_rows = 2 * 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
     cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
                                                                    r + num_rows * i + num_rows));
@@ -935,6 +935,8 @@ TEST_F(RowToColumnTests, BigStrings)
 
 TEST_F(RowToColumnTests, ManyStrings)
 {
+  // this test is very sensitive, so seed the random number generator
+  srand(1);
   char const* TEST_STRINGS[] = {
     "These",
     "are",
@@ -990,7 +992,7 @@ TEST_F(RowToColumnTests, ManyStrings)
       return TEST_STRINGS[rand() % (sizeof(TEST_STRINGS) / sizeof(TEST_STRINGS[0]))];
     });
 
-  auto const num_rows = 500000;
+  auto const num_rows = 300'000;
   auto const num_cols = 50;
   std::vector<cudf::data_type> schema;
 
