@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -95,6 +95,24 @@ class _PickleConstructor:
         return object.__new__(self._type)
 
 
+def __proxy_reduce__(self):
+    # Need a local import to avoid circular import issues
+    from .module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
+    return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
+
+
+def __proxy_setstate__(self, state):
+    # Need a local import to avoid circular import issues
+    from .module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickled_wrapped_obj = pickle.loads(state)
+    self._fsproxy_wrapped = unpickled_wrapped_obj
+
+
 _DELETE = object()
 
 
@@ -109,6 +127,7 @@ def make_final_proxy_type(
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
     bases: Tuple = (),
+    picklable: bool = True,
 ) -> Type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
@@ -139,7 +158,8 @@ def make_final_proxy_type(
         construct said unwrapped object. See also `_maybe_wrap_result`.
     bases
         Optional tuple of base classes to insert into the mro.
-
+    picklable: bool
+        Whether or not the proxy object should be picklable
     Notes
     -----
     As a side-effect, this function adds `fast_type` and `slow_type`
@@ -189,22 +209,6 @@ def make_final_proxy_type(
             else _State.SLOW
         )
 
-    def __reduce__(self):
-        # Need a local import to avoid circular import issues
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
-        return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
-
-    def __setstate__(self, state):
-        # Need a local import to avoid circular import issues
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            unpickled_wrapped_obj = pickle.loads(state)
-        self._fsproxy_wrapped = unpickled_wrapped_obj
-
     slow_dir = dir(slow_type)
     cls_dict = {
         "__init__": __init__,
@@ -215,9 +219,11 @@ def make_final_proxy_type(
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
-        "__reduce__": __reduce__,
-        "__setstate__": __setstate__,
     }
+    if picklable:
+        cls_dict["__reduce__"] = __proxy_reduce__
+        cls_dict["__setstate__"] = __proxy_setstate__
+
     if additional_attributes is None:
         additional_attributes = {}
     for method in _SPECIAL_METHODS:
@@ -257,6 +263,7 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: Optional[str] = None,
+    picklable: bool = True,
 ) -> Type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -273,6 +280,8 @@ def make_intermediate_proxy_type(
         The name of the class returned
     fast_type: type
     slow_type: type
+    picklable: bool
+        Whether or not the proxy object should be picklable
     """
 
     def __init__(self, *args, **kwargs):
@@ -322,6 +331,9 @@ def make_intermediate_proxy_type(
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
     }
+    if picklable:
+        cls_dict["__reduce__"] = __proxy_reduce__
+        cls_dict["__setstate__"] = __proxy_setstate__
 
     for method in _SPECIAL_METHODS:
         if getattr(slow_type, method, False):
