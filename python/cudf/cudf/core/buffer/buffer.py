@@ -18,30 +18,6 @@ from cudf.core.abc import Serializable
 from cudf.utils.string import format_bytes
 
 
-def get_buffer_owner(data: Any) -> Optional[BufferOwner]:
-    """Get the owner of `data`, if one exists
-
-    Search through the stack of data owners in order to find an
-    owner BufferOwner (incl. subclasses).
-
-    Parameters
-    ----------
-    data
-        The data object to search for a BufferOwner instance
-
-    Return
-    ------
-    BufferOwner or None
-        The owner of `data` if found otherwise None.
-    """
-
-    if isinstance(data, BufferOwner):
-        return data
-    if hasattr(data, "owner"):
-        return get_buffer_owner(data.owner)
-    return None
-
-
 def host_memory_allocation(nbytes: int) -> memoryview:
     """Allocate host memory using NumPy
 

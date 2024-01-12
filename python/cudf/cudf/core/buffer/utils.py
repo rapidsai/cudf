@@ -10,7 +10,6 @@ from cudf.core.buffer.buffer import (
     Buffer,
     BufferOwner,
     cuda_array_interface_wrapper,
-    get_buffer_owner,
     get_ptr_and_size,
 )
 from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
@@ -21,6 +20,30 @@ from cudf.core.buffer.spillable_buffer import (
     SpillLock,
 )
 from cudf.options import get_option
+
+
+def get_buffer_owner(data: Any) -> Optional[BufferOwner]:
+    """Get the owner of `data`, if one exists
+
+    Search through the stack of data owners in order to find an
+    owner BufferOwner (incl. subclasses).
+
+    Parameters
+    ----------
+    data
+        The data object to search for a BufferOwner instance
+
+    Return
+    ------
+    BufferOwner or None
+        The owner of `data` if found otherwise None.
+    """
+
+    if isinstance(data, BufferOwner):
+        return data
+    if hasattr(data, "owner"):
+        return get_buffer_owner(data.owner)
+    return None
 
 
 def as_buffer(
