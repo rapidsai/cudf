@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import itertools
 from contextlib import ExitStack as does_not_raise
@@ -63,7 +63,7 @@ def data_2d(request):
 
 
 def test_to_dlpack_dataframe(data_2d):
-    expectation = data_size_expectation_builder(data_2d, nan_null_param=True)
+    expectation = data_size_expectation_builder(data_2d)
 
     with expectation:
         gdf = cudf.DataFrame.from_records(data_2d)
@@ -122,7 +122,7 @@ def test_to_dlpack_cupy_1d(data_1d):
 
 
 def test_to_dlpack_cupy_2d(data_2d):
-    expectation = data_size_expectation_builder(data_2d, nan_null_param=True)
+    expectation = data_size_expectation_builder(data_2d)
 
     with expectation:
         gdf = cudf.DataFrame.from_records(data_2d)
