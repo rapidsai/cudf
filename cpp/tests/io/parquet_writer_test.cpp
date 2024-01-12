@@ -28,6 +28,8 @@
 
 #include <fstream>
 
+using cudf::test::iterators::no_nulls;
+
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op)
 {
@@ -100,13 +102,12 @@ TEST_F(ParquetWriterTest, MultiIndex)
   auto col2_data = random_values<int32_t>(num_rows);
   auto col3_data = random_values<float>(num_rows);
   auto col4_data = random_values<double>(num_rows);
-  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  column_wrapper<int8_t> col0{col0_data.begin(), col0_data.end(), validity};
-  column_wrapper<int16_t> col1{col1_data.begin(), col1_data.end(), validity};
-  column_wrapper<int32_t> col2{col2_data.begin(), col2_data.end(), validity};
-  column_wrapper<float> col3{col3_data.begin(), col3_data.end(), validity};
-  column_wrapper<double> col4{col4_data.begin(), col4_data.end(), validity};
+  column_wrapper<int8_t> col0{col0_data.begin(), col0_data.end(), no_nulls()};
+  column_wrapper<int16_t> col1{col1_data.begin(), col1_data.end(), no_nulls()};
+  column_wrapper<int32_t> col2{col2_data.begin(), col2_data.end(), no_nulls()};
+  column_wrapper<float> col3{col3_data.begin(), col3_data.end(), no_nulls()};
+  column_wrapper<double> col4{col4_data.begin(), col4_data.end(), no_nulls()};
 
   auto expected = table_view{{col0, col1, col2, col3, col4}};
 
@@ -139,9 +140,7 @@ TEST_F(ParquetWriterTest, BufferSource)
 {
   constexpr auto num_rows = 100 << 10;
   auto const seq_col      = random_values<int>(num_rows);
-  auto const validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
+  column_wrapper<int> col{seq_col.begin(), seq_col.end(), no_nulls()};
 
   auto const expected = table_view{{col}};
 
@@ -614,11 +613,10 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
 TEST_F(ParquetWriterTest, CheckPageRows)
 {
   auto sequence = thrust::make_counting_iterator(0);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto page_rows = 5000;
   constexpr auto num_rows  = 2 * page_rows;
-  column_wrapper<int> col(sequence, sequence + num_rows, validity);
+  column_wrapper<int> col(sequence, sequence + num_rows, no_nulls());
 
   auto expected = table_view{{col}};
 
@@ -1268,8 +1266,7 @@ TEST_F(ParquetWriterTest, CompStatsEmptyTable)
 
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  column_wrapper<int32_t> col{{1, 2, 3}, valids};
+  column_wrapper<int32_t> col{{1, 2, 3}, no_nulls()};
   table_view expected({col});
 
   cudf::io::table_input_metadata expected_metadata(expected);
@@ -1460,10 +1457,9 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
   auto sequence =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i % 400); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 800;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, no_nulls());
 
   auto expected = table_view{{col}};
 
@@ -1517,11 +1513,10 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
-    sequence, sequence + num_rows, validity);
+    sequence, sequence + num_rows, no_nulls());
 
   auto expected = table_view{{col}};
 
@@ -1568,11 +1563,10 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
 {
   constexpr int64_t max = std::numeric_limits<int64_t>::max();
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return max - i; });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
-    sequence, sequence + num_rows, validity);
+    sequence, sequence + num_rows, no_nulls());
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");

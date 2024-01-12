@@ -23,6 +23,8 @@
 
 #include <cudf/io/parquet.hpp>
 
+using cudf::test::iterators::no_nulls;
+
 // Base test fixture for V2 header tests
 class ParquetV2Test : public ::cudf::test::BaseFixtureWithParam<bool> {};
 
@@ -54,18 +56,16 @@ TEST_P(ParquetV2Test, MultiColumn)
   auto col8_data = cudf::detail::make_counting_transform_iterator(0, [&col8_vals](auto i) {
     return numeric::decimal128{col8_vals[i], numeric::scale_type{-6}};
   });
-  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  // column_wrapper<bool> col0{
-  //    col0_data.begin(), col0_data.end(), validity};
-  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
-  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
-  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
-  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
-  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
-  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, validity};
-  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, validity};
-  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, validity};
+  // column_wrapper<bool> col0{col0_data.begin(), col0_data.end(), no_nulls()};
+  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), no_nulls()};
+  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), no_nulls()};
+  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), no_nulls()};
+  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), no_nulls()};
+  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), no_nulls()};
+  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, no_nulls()};
+  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, no_nulls()};
+  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, no_nulls()};
 
   auto expected = table_view{{col1, col2, col3, col4, col5, col6, col7, col8}};
 
@@ -118,7 +118,7 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   //    0, [](auto i) { return (i % 2); });
   auto col1_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
-  auto col2_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto col2_mask = no_nulls();
   auto col3_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
   auto col4_mask =
@@ -181,11 +181,10 @@ TEST_P(ParquetV2Test, Strings)
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
+  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), no_nulls()};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
-  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
+  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), no_nulls()};
 
   auto expected = table_view{{col0, col1, col2}};
 
