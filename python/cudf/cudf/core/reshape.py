@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import itertools
 import warnings
@@ -770,7 +770,7 @@ def get_dummies(
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=df._index)
     else:
-        ser = cudf.Series(df)
+        ser = cudf.Series(df, nan_as_null=False)
         unique = _get_unique(column=ser._column, dummy_na=dummy_na)
         data = _one_hot_encode_column(
             column=ser._column,
