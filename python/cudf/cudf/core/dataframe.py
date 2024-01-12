@@ -24,6 +24,7 @@ from typing import (
     Set,
     Tuple,
     Union,
+    cast,
 )
 
 import cupy
@@ -1986,8 +1987,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-        *args,
-        **kwargs,
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
@@ -2338,7 +2337,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     @_cudf_nvtx_annotate
     def scatter_by_map(
-        self, map_index, map_size=None, keep_index=True, **kwargs
+        self, map_index, map_size=None, keep_index=True, debug: bool = False
     ):
         """Scatter to a list of dataframes.
 
@@ -2379,7 +2378,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Convert string or categorical to integer
         if isinstance(map_index, cudf.core.column.StringColumn):
-            map_index = map_index.as_categorical_column("category").codes
+            cat_index = cast(
+                cudf.core.column.CategoricalColumn,
+                map_index.as_categorical_column("category"),
+            )
+            map_index = cat_index.codes
             warnings.warn(
                 "Using StringColumn for map_index in scatter_by_map. "
                 "Use an integer array/column for better performance."
@@ -2391,7 +2394,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Use an integer array/column for better performance."
             )
 
-        if kwargs.get("debug", False) == 1 and map_size is not None:
+        if debug and map_size is not None:
             count = map_index.distinct_count()
             if map_size < count:
                 raise ValueError(
@@ -2406,7 +2409,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         partitioned = self._from_columns_like_self(
             partitioned_columns,
             column_names=self._column_names,
-            index_names=self._index_names if keep_index else None,
+            index_names=list(self._index_names) if keep_index else None,
         )
 
         # due to the split limitation mentioned
@@ -2537,7 +2540,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             yield (k, self[k])
 
     @_cudf_nvtx_annotate
-    def equals(self, other, **kwargs):
+    def equals(self, other):
         ret = super().equals(other)
         # If all other checks matched, validate names.
         if ret:
