@@ -42,7 +42,7 @@ def as_buffer(
 
     Raises ValueError if `data` isn't C-contiguous.
 
-    If copy-on-write is enabled, a ExposureTrackedBuffer is returned.
+    If copy-on-write is enabled, an ExposureTrackedBuffer is returned.
 
     If spilling is enabled, a SpillableBuffer that refers to a
     SpillableBufferOwner is returned. If `data` is owned by a spillable buffer,

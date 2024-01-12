@@ -128,7 +128,7 @@ class BufferOwner(Serializable):
     ability to detect external access to the underlying memory. We say that
     the buffer has been exposed if the device pointer (integer or void*) has
     been accessed outside of BufferOwner. In this case, we have no control
-    over knowing if the data is being modified by a third-party.
+    over knowing if the data is being modified by a third party.
 
     Use `_from_device_memory` and `_from_host_memory` to create
     a new instance from either device or host memory respectively.
