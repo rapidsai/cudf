@@ -33,7 +33,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _col_meta{std::make_unique<reader_column_meta>()},
     _sources(std::move(sources)),
     _metadata{_sources, stream},
-    _selected_columns{_metadata.select_columns(options.get_columns())}
+    _selected_columns{_metadata.select_columns(options.get_columns())},
+    _chunk_read_info{0}  // TODO: Initialize from `orc_reader_options.chunk_size_limit()`.
 {
 }
 

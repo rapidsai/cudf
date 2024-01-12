@@ -17,6 +17,7 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
+#include "reader_impl_chunking.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -78,6 +79,11 @@ class reader::impl {
                     std::vector<std::vector<size_type>> const& stripes);
 
   /**
+   * @brief Compute the ranges (begin and end rows) to read each chunk.
+   */
+  void compute_chunk_ranges();
+
+  /**
    * @brief Create the output table metadata from file metadata.
    *
    * @return Columns' metadata to output with the table read from file
@@ -108,6 +114,7 @@ class reader::impl {
   aggregate_orc_metadata _metadata;
   column_hierarchy const _selected_columns;  // Need to be after _metadata
   std::unique_ptr<file_intermediate_data> _file_itm_data;
+  chunk_read_info _chunk_read_info;  // Data for chunked reading.
   std::unique_ptr<table_metadata> _output_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 };
