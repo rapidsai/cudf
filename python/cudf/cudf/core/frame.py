@@ -13,6 +13,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -882,7 +883,7 @@ class Frame(BinaryOperand, Scannable):
                 replace_val = None
             should_fill = (
                 col_name in value
-                and col.contains_na_entries
+                and col.has_nulls(include_nan=True)
                 and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:
@@ -1354,7 +1355,11 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def searchsorted(
-        self, values, side="left", ascending=True, na_position="last"
+        self,
+        values,
+        side: Literal["left", "right"] = "left",
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
     ):
         """Find indices where elements should be inserted to maintain order
 

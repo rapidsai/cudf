@@ -501,9 +501,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # TODO: Update the following two arange calls to
             # a single arange call once arange has support for
             # a vector start/end points.
-            indices = column.arange(start=0, stop=n, step=1)
+            indices = column.as_column(range(n))
             indices = indices.append(
-                column.arange(start=len(self) - n, stop=len(self), step=1)
+                column.as_column(range(len(self) - n, len(self), 1))
             )
             preprocess = self.take(indices)
         else:
@@ -795,7 +795,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             [
                 frame,
                 cudf.DataFrame(
-                    {"idx": cudf.Series(column.arange(len(frame)))}
+                    {"idx": cudf.Series(column.as_column(range(len(frame))))}
                 ),
             ],
             axis=1,
@@ -807,7 +807,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # obtain deterministic ordering.
         if cudf.get_option("mode.pandas_compatible"):
             lookup_order = "_" + "_".join(map(str, lookup._data.names))
-            lookup[lookup_order] = column.arange(len(lookup))
+            lookup[lookup_order] = column.as_column(range(len(lookup)))
             postprocess = operator.methodcaller(
                 "sort_values", by=[lookup_order, "idx"]
             )
@@ -840,14 +840,16 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return column.arange(start, stop, step)
+                return column.as_column(range(start, stop, step))
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
                 index, row_tuple.stop, max_length
             )
-            return column.arange(start_values.min(), stop_values.max() + 1)
+            return column.as_column(
+                range(start_values.min(), stop_values.max() + 1)
+            )
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
         return self._compute_validity_mask(index, row_tuple, max_length)
@@ -1024,7 +1026,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             index = np.array(index)
         elif isinstance(index, slice):
             start, stop, step = index.indices(len(self))
-            index = column.arange(start, stop, step)
+            index = column.as_column(range(start, stop, step))
         result = MultiIndex.from_frame(
             self.to_frame(index=False, name=range(0, self.nlevels)).take(
                 index

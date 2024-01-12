@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 """Base class for Frame types that have an index."""
 
 from __future__ import annotations
@@ -182,12 +182,8 @@ def _indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame(
-        {"__": cudf.core.column.arange(len(labels))}, index=labels
-    )
-    rhs = cudf.DataFrame(
-        {"_": cudf.core.column.arange(len(obj))}, index=obj.index
-    )
+    lhs = cudf.DataFrame({"__": as_column(range(len(labels)))}, index=labels)
+    rhs = cudf.DataFrame({"_": as_column(range(len(obj)))}, index=obj.index)
     return lhs.join(rhs).sort_values(by=["__", "_"])["_"]
 
 
@@ -1897,10 +1893,8 @@ class IndexedFrame(Frame):
         if stride != 1:
             return self._gather(
                 GatherMap.from_column_unchecked(
-                    cudf.core.column.arange(
-                        start,
-                        stop=stop,
-                        step=stride,
+                    as_column(
+                        range(start, stop, stride),
                         dtype=libcudf.types.size_type_dtype,
                     ),
                     len(self),
@@ -2541,9 +2535,9 @@ class IndexedFrame(Frame):
         # to recover ordering after index alignment.
         sort_col_id = str(uuid4())
         if how == "left":
-            lhs[sort_col_id] = cudf.core.column.arange(len(lhs))
+            lhs[sort_col_id] = as_column(range(len(lhs)))
         elif how == "right":
-            rhs[sort_col_id] = cudf.core.column.arange(len(rhs))
+            rhs[sort_col_id] = as_column(range(len(rhs)))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
@@ -3612,8 +3606,6 @@ class IndexedFrame(Frame):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-        *args,
-        **kwargs,
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
