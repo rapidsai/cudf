@@ -55,7 +55,6 @@ from cudf.core.column import (
     DatetimeColumn,
     IntervalColumn,
     TimeDeltaColumn,
-    arange,
     as_column,
     full,
 )
@@ -1366,7 +1365,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 raise NotImplementedError(
                     "default values in dicts are currently not supported."
                 )
-            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            lhs = cudf.DataFrame(
+                {"x": self, "orig_order": as_column(range(len(self)))}
+            )
             rhs = cudf.DataFrame(
                 {
                     "x": arg.keys(),
@@ -1386,7 +1387,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "Reindexing only valid with"
                     " uniquely valued Index objects"
                 )
-            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            lhs = cudf.DataFrame(
+                {"x": self, "orig_order": as_column(range(len(self)))}
+            )
             rhs = cudf.DataFrame(
                 {
                     "x": arg.keys(),
