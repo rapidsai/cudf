@@ -65,6 +65,23 @@ cdef class Table:
             for i in range(c_columns.size())
         ])
 
+    @staticmethod
+    cdef Table from_table_view(const table_view& tv, Table owner):
+        """Create a Table from a libcudf table.
+
+        This method accepts shared ownership of the underlying data from the
+        owner and relies on the offset from the view.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef int i
+        return Table([
+            Column.from_column_view(tv.column(i), owner.columns()[i])
+            for i in range(tv.num_columns())
+        ])
+
     cpdef list columns(self):
         return self._columns
 

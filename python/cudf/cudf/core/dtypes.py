@@ -1050,7 +1050,10 @@ def is_list_dtype(obj):
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
         or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.ListDtype)
+        )
     )
 
 
@@ -1076,7 +1079,10 @@ def is_struct_dtype(obj):
         isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.StructDtype)
+        )
     )
 
 

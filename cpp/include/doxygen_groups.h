@@ -141,6 +141,7 @@
  * @}
  * @defgroup io_apis IO
  * @{
+ *   @defgroup io_types IO Types
  *   @defgroup io_readers Readers
  *   @defgroup io_writers Writers
  *   @defgroup io_datasources Data Sources
@@ -187,4 +188,5 @@
  *   @defgroup label_bins Bin Labeling
  * @}
  * @defgroup expressions Expression Evaluation
+ * @defgroup tdigest tdigest APIs
  */
