@@ -28,6 +28,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <rmm/exec_policy.hpp>
 #include <thrust/iterator/counting_iterator.h>
@@ -1020,3 +1021,5 @@ TEST_F(RowToColumnTests, ManyStrings)
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(in_view[0], *new_cols);
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()
