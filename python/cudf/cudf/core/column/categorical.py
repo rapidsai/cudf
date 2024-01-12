@@ -1310,22 +1310,28 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
+    def as_string_column(
+        self, dtype, format: str | None = None
+    ) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
 
-    def as_datetime_column(self, dtype, **kwargs) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype, format: str | None = None
+    ) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(
-            dtype, **kwargs
+            dtype, format
         )
 
-    def as_timedelta_column(self, dtype, **kwargs) -> TimeDeltaColumn:
+    def as_timedelta_column(
+        self, dtype, format: str | None = None
+    ) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(
-            dtype, **kwargs
+            dtype, format
         )
 
     def _get_decategorized_column(self) -> ColumnBase:

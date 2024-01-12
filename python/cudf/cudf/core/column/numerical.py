@@ -340,7 +340,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -353,7 +353,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         return cast(
             "cudf.core.column.DatetimeColumn",
@@ -367,7 +367,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         return cast(
             "cudf.core.column.TimeDeltaColumn",
@@ -381,11 +381,11 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libcudf.unary.cast(self, dtype)
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
