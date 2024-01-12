@@ -184,12 +184,13 @@ TEST_F(ParquetWriterTest, BufferSource)
 TEST_F(ParquetWriterTest, ManyFragments)
 {
   srand(31337);
-  auto const expected = create_random_fixed_table<int>(2, 2'000'000, false);
+  auto const expected = create_random_fixed_table<int>(1, 700'000, false);
 
   auto const filepath = temp_env->get_temp_filepath("ManyFragments.parquet");
   cudf::io::parquet_writer_options const args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
-      .max_page_size_bytes(8 * 1024);
+      .max_page_size_bytes(8 * 1024)
+      .max_page_fragment_size(10);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options const read_opts =
