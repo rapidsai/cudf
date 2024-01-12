@@ -1,5 +1,7 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
+from __future__ import annotations
+
 import warnings
 from decimal import Decimal
 from typing import Any, Optional, Sequence, Union, cast
@@ -37,7 +39,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self,
+        dtype: Dtype,
     ) -> Union["DecimalBaseColumn"]:
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
@@ -53,7 +56,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return cpp_from_decimal(self)
@@ -201,7 +204,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result._with_type_metadata(self.dtype)
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 

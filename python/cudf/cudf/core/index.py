@@ -286,9 +286,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
-            return column.arange(
-                self._start, self._stop, self._step, dtype=self.dtype
-            )
+            return column.as_column(self._range, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
