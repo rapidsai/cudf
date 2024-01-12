@@ -1918,20 +1918,17 @@ def as_column(
         if dtype is not None:
             column = column.astype(dtype)
         return column
-    elif isinstance(arbitrary, ColumnBase):
-        if dtype is not None:
-            return arbitrary.astype(dtype)
+    elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.BaseIndex)):
+        if isinstance(arbitrary, cudf.Series):
+            column = arbitrary._column
+        elif isinstance(arbitrary, cudf.BaseIndex):
+            column = arbitrary._values
         else:
-            return arbitrary
-    elif isinstance(arbitrary, cudf.Series):
-        data = arbitrary._column
+            column = arbitrary
+        # TODO: Should nan_as_null apply here?
         if dtype is not None:
-            data = data.astype(dtype)
-    elif isinstance(arbitrary, cudf.BaseIndex):
-        data = arbitrary._values
-        if dtype is not None:
-            data = data.astype(dtype)
-
+            column = column.astype(dtype)
+        return column
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         shape = desc["shape"]
