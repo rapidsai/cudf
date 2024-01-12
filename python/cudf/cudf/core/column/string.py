@@ -5946,11 +5946,8 @@ class StringColumn(column.ColumnBase):
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size
         )
-        char_dtype_size = cudf.api.types.dtype("int8").itemsize
 
-        n_bytes_to_view = (
-            str_end_byte_offset - str_byte_offset
-        ) * char_dtype_size
+        n_bytes_to_view = str_end_byte_offset - str_byte_offset
 
         to_view = column.build_column(
             self.base_data,
