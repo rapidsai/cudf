@@ -414,34 +414,27 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(),
       cuda::proclaim_return_type<cudf::size_type>([] __device__(PdaTokenT const token) {
-        int const is_begin = token == token_t::StructBegin or token == token_t::ListBegin;
-        int const is_end   = token == token_t::StructEnd or token == token_t::ListEnd;
+        size_type const is_begin = token == token_t::StructBegin or token == token_t::ListBegin;
+        size_type const is_end   = token == token_t::StructEnd or token == token_t::ListEnd;
         return is_begin - is_end;
       }));
     // copy_if only struct/list's token levels, token ids, tokens.
-    cudf::detail::copy_if_safe(push_pop_it,
-                               push_pop_it + num_tokens,
-                               tokens.begin(),
-                               token_levels.begin(),
-                               is_nested,
-                               stream);
-    cudf::detail::copy_if_safe(thrust::make_counting_iterator<NodeIndexT>(0),
-                               thrust::make_counting_iterator<NodeIndexT>(0) + num_tokens,
-                               tokens.begin(),
-                               token_id.begin(),
-                               is_nested,
-                               stream);
+    auto zipped_in_it =
+      thrust::make_zip_iterator(push_pop_it, thrust::make_counting_iterator<NodeIndexT>(0));
+    auto zipped_out_it = thrust::make_zip_iterator(token_levels.begin(), token_id.begin());
+    cudf::detail::copy_if_safe(
+      zipped_in_it, zipped_in_it + num_tokens, tokens.begin(), zipped_out_it, is_nested, stream);
 
     thrust::exclusive_scan(
       rmm::exec_policy(stream), token_levels.begin(), token_levels.end(), token_levels.begin());
 
     // Get parent of first child of struct/list begin.
-    auto const first_childs_parent_token_id2 =
+    auto const nested_first_childs_parent_token_id =
       [tokens_gpu = tokens.begin(), token_id = token_id.begin()] __device__(auto i) -> NodeIndexT {
       if (i <= 0) { return -1; }
-      auto id = token_id[i - 1];  // token indices.
+      auto id = token_id[i - 1];  // current token's predecessor
       if (tokens_gpu[id] == token_t::StructBegin or tokens_gpu[id] == token_t::ListBegin) {
-        return token_id[i - 1];
+        return id;
       } else {
         return -1;
       }
@@ -455,10 +448,12 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       thrust::make_counting_iterator<NodeIndexT>(0),
       thrust::make_counting_iterator<NodeIndexT>(0) + num_nested,
       parent_node_ids.begin(),
-      [node_ids_gpu = node_token_ids.begin(), num_nodes, first_childs_parent_token_id2] __device__(
-        NodeIndexT const tid) -> NodeIndexT {
-        auto const pid = first_childs_parent_token_id2(tid);
-        // return pid;
+      [node_ids_gpu = node_token_ids.begin(),
+       num_nodes,
+       nested_first_childs_parent_token_id] __device__(NodeIndexT const tid) -> NodeIndexT {
+        auto const pid = nested_first_childs_parent_token_id(tid);
+        // token_ids which are converted to nodes, are stored in node_ids_gpu in order
+        // so finding index of token_id in node_ids_gpu will return its node index.
         return pid < 0
                  ? parent_node_sentinel
                  : thrust::lower_bound(thrust::seq, node_ids_gpu, node_ids_gpu + num_nodes, pid) -
