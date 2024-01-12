@@ -1198,7 +1198,7 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 ## Strings columns
 
 Strings are represented as a column with a data device buffer and a child offsets column.
-The parent column's type is `STRING` and its data holds all the characters across all the strings packed together 
+The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
 but its size represents the number of strings in the column, and its null mask represents the
 validity of each string. To summarize, the strings column children are:
 
