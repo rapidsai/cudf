@@ -98,7 +98,7 @@ class json_reader_options {
 
   // Read the file as a json object per line
   bool _lines = false;
-  
+
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
   // Bytes to read; always reads complete rows
@@ -493,7 +493,7 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether the reader should normalize single quotes around string 
+   * @brief Set whether the reader should normalize single quotes around string
    *
    * @param val Boolean value to indicate whether the reader should normalize single quotes
    * of strings

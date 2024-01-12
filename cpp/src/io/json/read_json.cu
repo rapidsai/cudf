@@ -50,7 +50,7 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
                                            compression_type compression,
                                            size_t range_offset,
                                            size_t range_size,
-                                           bool normalize_single_quotes, 
+                                           bool normalize_single_quotes,
                                            rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -105,12 +105,13 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
     }
 
     stream.synchronize();
-    if(normalize_single_quotes) {
+    if (normalize_single_quotes) {
       auto d_buffer_span = cudf::device_span<std::byte>(
         reinterpret_cast<std::byte*>(d_buffer.data()), d_buffer.size());
-      return cudf::io::json::detail::normalize_single_quotes(d_buffer_span, stream, rmm::mr::get_current_device_resource());
-    }
-    else return d_buffer;
+      return cudf::io::json::detail::normalize_single_quotes(
+        d_buffer_span, stream, rmm::mr::get_current_device_resource());
+    } else
+      return d_buffer;
 
   } else {
     auto buffer = std::vector<uint8_t>(total_source_size);
@@ -118,16 +119,17 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
     // Reading to host because decompression of a single block is much faster on the CPU
     sources[0]->host_read(range_offset, total_source_size, buffer.data());
     auto const uncomp_data = decompress(compression, buffer);
-    auto d_buffer = cudf::detail::make_device_uvector_sync(
+    auto d_buffer          = cudf::detail::make_device_uvector_sync(
       host_span<char const>{reinterpret_cast<char const*>(uncomp_data.data()), uncomp_data.size()},
       stream,
       rmm::mr::get_current_device_resource());
-    if(normalize_single_quotes) {
+    if (normalize_single_quotes) {
       auto d_buffer_span = cudf::device_span<std::byte>(
         reinterpret_cast<std::byte*>(d_buffer.data()), d_buffer.size());
-      return cudf::io::json::detail::normalize_single_quotes(d_buffer_span, stream, rmm::mr::get_current_device_resource());
-    }
-    else return d_buffer;
+      return cudf::io::json::detail::normalize_single_quotes(
+        d_buffer_span, stream, rmm::mr::get_current_device_resource());
+    } else
+      return d_buffer;
   }
 }
 
