@@ -1237,7 +1237,7 @@ def test_func_namespace():
 
 def test_groupby_pickling(dataframe):
     pdf, df = dataframe
-    pgb = pdf.groupby('a')
-    gb = df.groupby('a')
+    pgb = pdf.groupby("a")
+    gb = df.groupby("a")
     gb = pickle.loads(pickle.dumps(gb))
     tm.assert_equal(pgb.sum(), gb.sum())
