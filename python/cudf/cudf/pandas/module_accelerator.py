@@ -551,6 +551,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # release the lock after reading this value)
             use_real = not loader._use_fast_lib
         if not use_real:
+            CUDF_PANDAS_PATH = __file__.rsplit("/", 1)[0]
             # Only need to check the denylist if we're not turned off.
             frame = sys._getframe()
             # We cannot possibly be at the top level.
@@ -559,6 +560,8 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             use_real = any(
                 calling_module.is_relative_to(path)
                 for path in loader._denylist
+            ) and not calling_module.is_relative_to(
+                CUDF_PANDAS_PATH
             )
         try:
             if use_real:
