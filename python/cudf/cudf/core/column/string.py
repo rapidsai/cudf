@@ -5633,7 +5633,7 @@ class StringColumn(column.ColumnBase):
             )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.api.types.dtype(dtype)
         string_col = self
@@ -5696,14 +5696,13 @@ class StringColumn(column.ColumnBase):
         return result_col
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         out_dtype = cudf.api.types.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
         # are null in current column
-        format = kwargs.get("format", None)
         if format is None:
             if self.null_count == len(self):
                 return cast(
@@ -5720,19 +5719,20 @@ class StringColumn(column.ColumnBase):
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         out_dtype = cudf.api.types.dtype(dtype)
-        format = "%D days %H:%M:%S"
+        if format is None:
+            format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> StringColumn:
         return self
 
