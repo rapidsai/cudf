@@ -371,11 +371,8 @@ class Buffer(Serializable):
     def get_ptr(self, *, mode: Literal["read", "write"]) -> int:
         return self._owner.get_ptr(mode=mode) + self._offset
 
-    def memoryview(
-        self, *, offset: int = 0, size: Optional[int] = None
-    ) -> memoryview:
-        size = self._size if size is None else size
-        return self._owner.memoryview(offset=self._offset + offset, size=size)
+    def memoryview(self) -> memoryview:
+        return self._owner.memoryview(offset=self._offset, size=self._size)
 
     def copy(self, deep: bool = True) -> Self:
         """Return a copy of Buffer.
