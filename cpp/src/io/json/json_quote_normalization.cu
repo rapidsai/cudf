@@ -177,6 +177,7 @@ struct TransduceToNormalizedQuotes {
 
 namespace detail {
 
+/*
 std::unique_ptr<rmm::device_uvector<char>> normalize_quotes(
   const cudf::device_span<std::byte>& inbuf,
   rmm::cuda_stream_view stream,
@@ -202,6 +203,32 @@ std::unique_ptr<rmm::device_uvector<char>> normalize_quotes(
 
   outbuf_ptr->resize(outbuf_size.value(stream), stream);
   return outbuf_ptr;
+}
+*/
+
+rmm::device_uvector<SymbolT> normalize_single_quotes(const cudf::device_span<std::byte>& inbuf,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
+{
+  auto parser = cudf::io::fst::detail::make_fst(
+    cudf::io::fst::detail::make_symbol_group_lut(cudf::io::json::normalize_quotes::qna_sgs),
+    cudf::io::fst::detail::make_transition_table(cudf::io::json::normalize_quotes::qna_state_tt),
+    cudf::io::fst::detail::make_translation_functor(
+      cudf::io::json::normalize_quotes::TransduceToNormalizedQuotes{}),
+    stream);
+
+  rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
+  rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
+  parser.Transduce(reinterpret_cast<SymbolT*>(inbuf.data()),
+                   static_cast<SymbolOffsetT>(inbuf.size()),
+                   outbuf.data(),
+                   thrust::make_discard_iterator(),
+                   outbuf_size.data(),
+                   cudf::io::json::normalize_quotes::start_state,
+                   stream);
+
+  outbuf.resize(outbuf_size.value(stream), stream);
+  return outbuf;
 }
 
 }  // namespace detail

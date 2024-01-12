@@ -52,8 +52,8 @@ void write_json(data_sink* sink,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<rmm::device_uvector<char>> normalize_quotes(
-  const cudf::device_span<std::byte>& inbuf,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+rmm::device_uvector<char> normalize_single_quotes(const cudf::device_span<std::byte>& inbuf,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
+
 }  // namespace cudf::io::json::detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,7 +98,7 @@ class json_reader_options {
 
   // Read the file as a json object per line
   bool _lines = false;
-
+  
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
   // Bytes to read; always reads complete rows
@@ -112,6 +112,9 @@ class json_reader_options {
 
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
+
+  // Normalize single quotes
+  bool _normalize_single_quotes = false;
 
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
@@ -247,6 +250,13 @@ class json_reader_options {
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
+   * @brief Whether the reader should normalize single quotes around strings
+   *
+   * @returns true if the reader should normalize single quotes, false otherwise
+   */
+  bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
+
+  /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
    *
    * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
@@ -323,6 +333,14 @@ class json_reader_options {
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should enable normalization of single  quotes around strings.
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes around
+   * string
+   */
+  void enable_normalize_single_quotes(bool val) { _normalize_single_quotes = val; }
 
   /**
    * @brief Specifies the JSON reader's behavior on invalid JSON lines.
@@ -471,6 +489,19 @@ class json_reader_options_builder {
   json_reader_options_builder& keep_quotes(bool val)
   {
     options._keep_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should normalize single quotes around string 
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes
+   * of strings
+   * @return this for chaining
+   */
+  json_reader_options_builder& normalize_single_quotes(bool val)
+  {
+    options._normalize_single_quotes = val;
     return *this;
   }
 
