@@ -1702,7 +1702,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if len(objs):
             col = col._with_type_metadata(objs[0].dtype)
 
-        return cls(data=col, index=index, name=name, nan_as_null=False)
+        return cls._from_data({name: col}, index=index)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
