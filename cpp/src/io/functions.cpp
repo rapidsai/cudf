@@ -488,13 +488,14 @@ using namespace cudf::io::parquet::detail;
 namespace detail_parquet = cudf::io::parquet::detail;
 
 table_with_metadata read_parquet(parquet_reader_options const& options,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_parquet::reader>(
-    std::move(datasources), options, cudf::get_default_stream(), mr);
+  auto reader =
+    std::make_unique<detail_parquet::reader>(std::move(datasources), options, stream, mr);
 
   return reader->read(options);
 }
@@ -554,7 +555,8 @@ table_input_metadata::table_input_metadata(table_metadata const& metadata)
 /**
  * @copydoc cudf::io::write_parquet
  */
-std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options)
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
+                                                    rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -562,7 +564,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::single_write_mode::YES, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::YES, stream);
 
   writer->write(options.get_table(), options.get_partitions());
 
@@ -574,13 +576,10 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
  */
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            0,
-                                                            make_datasources(options.get_source()),
-                                                            options,
-                                                            cudf::get_default_stream(),
-                                                            mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(
+      chunk_read_limit, 0, make_datasources(options.get_source()), options, stream, mr)}
 {
 }
 
@@ -590,12 +589,13 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
 chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                std::size_t pass_read_limit,
                                                parquet_reader_options const& options,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
   : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
                                                             pass_read_limit,
                                                             make_datasources(options.get_source()),
                                                             options,
-                                                            cudf::get_default_stream(),
+                                                            stream,
                                                             mr)}
 {
 }
@@ -628,14 +628,15 @@ table_with_metadata chunked_parquet_reader::read_chunk() const
 /**
  * @copydoc cudf::io::parquet_chunked_writer::parquet_chunked_writer
  */
-parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options)
+parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options const& options,
+                                               rmm::cuda_stream_view stream)
 {
   namespace io_detail = cudf::io::detail;
 
   auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sinks), options, io_detail::single_write_mode::NO, cudf::get_default_stream());
+    std::move(sinks), options, io_detail::single_write_mode::NO, stream);
 }
 
 /**

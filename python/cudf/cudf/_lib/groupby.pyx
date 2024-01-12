@@ -142,7 +142,7 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, list keys, bool dropna=True, *args, **kwargs):
+    def __cinit__(self, list keys, bool dropna=True):
         cdef libcudf_types.null_policy c_null_handling
         cdef table_view keys_view
 
