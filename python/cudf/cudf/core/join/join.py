@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -232,7 +232,11 @@ class Merge:
         key_order = list(
             itertools.chain.from_iterable(
                 libcudf.copying.gather(
-                    [cudf.core.column.arange(n, dtype=size_type_dtype)],
+                    [
+                        cudf.core.column.as_column(
+                            range(n), dtype=size_type_dtype
+                        )
+                    ],
                     map_,
                     nullify=null,
                 )
