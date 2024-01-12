@@ -975,7 +975,7 @@ TEST_F(RowToColumnTests, ManyStrings)
     "this string is the longest string because it is duplicated more than you can imagine "
     "this string is the longest string because it is duplicated more than you can imagine "
     "this string is the longest string because it is duplicated more than you can imagine "
-    "this string is the longest string because it is duplicated more than you can imagine "
+    "this string is the longest string because it is duplicated more than you can imagine ",
     "a",
     "good test",
     "is required to produce reasonable confidence that this is working",
