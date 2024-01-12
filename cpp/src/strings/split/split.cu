@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
@@ -123,7 +122,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
 
   // builds the offsets and the vector of all tokens
   auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
-  auto const d_offsets   = offsets->view().template data<size_type>();
+  auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   auto const d_tokens    = tokens.data();
 
   // compute the maximum number of tokens for any string
@@ -132,7 +131,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto idx) -> size_type {
-      return d_offsets[idx + 1] - d_offsets[idx];
+      return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
     thrust::maximum{});
