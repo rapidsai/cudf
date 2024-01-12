@@ -286,7 +286,15 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp
+  PARQUET_TEST
+  io/parquet_test.cpp
+  io/parquet_chunked_reader_test.cpp
+  io/parquet_chunked_writer_test.cpp
+  io/parquet_common.cpp
+  io/parquet_misc_test.cpp
+  io/parquet_reader_test.cpp
+  io/parquet_writer_test.cpp
+  io/parquet_v2_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -648,6 +656,7 @@ ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
