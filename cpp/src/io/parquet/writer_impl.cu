@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,10 @@
 #include <numeric>
 #include <utility>
 
+#ifndef CUDF_VERSION
+#error "CUDF_VERSION is not defined"
+#endif
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
@@ -108,7 +112,7 @@ struct aggregate_writer_metadata {
     meta.num_rows           = this->files[part].num_rows;
     meta.row_groups         = this->files[part].row_groups;
     meta.key_value_metadata = this->files[part].key_value_metadata;
-    meta.created_by         = this->created_by;
+    meta.created_by         = "cudf version " CUDF_STRINGIFY(CUDF_VERSION);
     meta.column_orders      = this->column_orders;
     return meta;
   }
@@ -171,7 +175,6 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by                                   = "";
   thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
