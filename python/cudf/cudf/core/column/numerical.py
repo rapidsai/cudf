@@ -20,7 +20,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.stream_compaction import drop_nulls
 from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnBinaryOperand,
@@ -420,10 +419,6 @@ class NumericalColumn(NumericalBaseColumn):
             nan_col = libcudf.unary.is_nan(self)
             self._nan_count = nan_col.sum()
         return self._nan_count
-
-    def dropna(self, drop_nan: bool = False) -> NumericalColumn:
-        col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
 
     def _process_values_for_isin(
         self, values: Sequence
