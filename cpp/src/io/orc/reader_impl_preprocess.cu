@@ -741,11 +741,10 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
-  auto& col_meta = _col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& columns_level = _selected_columns.levels[level];
     // Association between each ORC column and its cudf::column
-    col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
+    _col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
     std::vector<orc_column_meta> nested_cols;
 
     // Get a list of column data types
@@ -769,7 +768,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       }
 
       // Map each ORC column to its column
-      col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
+      _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) {
         nested_cols.emplace_back(col);
       }
@@ -831,7 +830,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         auto const total_data_size = gather_stream_info(stripe_idx,
                                                         stripe_info,
                                                         stripe_footer,
-                                                        col_meta.orc_col_map[level],
+                                                        _col_meta.orc_col_map[level],
                                                         _metadata.get_types(),
                                                         use_index,
                                                         level == 0,
@@ -893,17 +892,17 @@ void reader::impl::prepare_data(uint64_t skip_rows,
           // may change in lower levels of nesting
           chunk.start_row = (level == 0)
                               ? stripe_start_row
-                              : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
+                              : _col_meta.child_start_row[stripe_idx * num_columns + col_idx];
           chunk.num_rows =
             (level == 0) ? stripe_info->numberOfRows
-                         : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-          chunk.column_num_rows = (level == 0) ? rows_to_read : col_meta.num_child_rows[col_idx];
+                         : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+          chunk.column_num_rows = (level == 0) ? rows_to_read : _col_meta.num_child_rows[col_idx];
           chunk.parent_validity_info =
-            (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
+            (level == 0) ? column_validity_info{} : _col_meta.parent_column_data[col_idx];
           chunk.parent_null_count_prefix_sums =
             (level == 0)
               ? nullptr
-              : null_count_prefix_sums[level - 1][col_meta.parent_column_index[col_idx]].data();
+              : null_count_prefix_sums[level - 1][_col_meta.parent_column_index[col_idx]].data();
           chunk.encoding_kind = stripe_footer->columns[columns_level[col_idx].id].kind;
           chunk.type_kind     = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
                               .ff.types[columns_level[col_idx].id]
@@ -949,7 +948,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     if (level > 0 and row_groups.size().first) {
       cudf::host_span<gpu::RowGroup> row_groups_span(row_groups.base_host_ptr(),
                                                      num_rowgroups * num_columns);
-      auto& rw_grp_meta = col_meta.rwgrp_meta;
+      auto& rw_grp_meta = _col_meta.rwgrp_meta;
 
       // Update start row and num rows per row group
       std::transform(rw_grp_meta.begin(),
@@ -1001,7 +1000,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         }
       }
       auto is_list_type = (column_types[i].id() == type_id::LIST);
-      auto n_rows       = (level == 0) ? rows_to_read : col_meta.num_child_rows[i];
+      auto n_rows       = (level == 0) ? rows_to_read : _col_meta.num_child_rows[i];
       // For list column, offset column will be always size + 1
       if (is_list_type) n_rows++;
       _out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
@@ -1024,7 +1023,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
       row_groups.device_to_host_sync(_stream);
       aggregate_child_meta(
-        level, _selected_columns, chunks, row_groups, nested_cols, _out_buffers[level], col_meta);
+        level, _selected_columns, chunks, row_groups, nested_cols, _out_buffers[level], _col_meta);
 
       // ORC stores number of elements at each row, so we need to generate offsets from that
       std::vector<list_buffer_data> buff_data;
