@@ -3610,8 +3610,6 @@ class IndexedFrame(Frame):
         fill_value: Any = None,
         reflect: bool = False,
         can_reindex: bool = False,
-        *args,
-        **kwargs,
     ) -> Tuple[
         Union[
             Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
