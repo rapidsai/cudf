@@ -1884,7 +1884,7 @@ def as_memoryview(arbitrary: Any) -> Optional[memoryview]:
 
 def as_column(
     arbitrary: Any,
-    nan_as_null: Optional[bool] = None,
+    nan_as_null: Optional[bool] = False,
     dtype: Optional[Dtype] = None,
     length: Optional[int] = None,
 ):
