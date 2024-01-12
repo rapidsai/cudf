@@ -11,7 +11,8 @@ files:
       - build_wheels
       - build_python_common
       - build_python_cudf
-      - cudatoolkit
+      - cuda
+      - cuda_version
       - develop
       - docs
       - libarrow_build
@@ -29,31 +30,32 @@ files:
   test_cpp:
     output: none
     includes:
-      - cudatoolkit
-      - test_cpp
+      - cuda_version
       - libarrow_run
+      - test_cpp
   test_python:
     output: none
     includes:
-      - cudatoolkit
+      - cuda_version
       - py_version
+      - pyarrow_run
       - test_python_common
       - test_python_cudf
       - test_python_dask_cudf
-      - pyarrow_run
   test_java:
     output: none
     includes:
       - build_all
+      - cuda
+      - cuda_version
       - libarrow_run
-      - cudatoolkit
       - test_java
   test_notebooks:
     output: none
     includes:
+      - cuda_version
       - notebooks
       - py_version
-      - notebook_cuda_version
   checks:
     output: none
     includes:
@@ -62,7 +64,8 @@ files:
   docs:
     output: none
     includes:
-      - cudatoolkit
+      - cuda
+      - cuda_version
       - docs
       - libarrow_run
       - py_version
@@ -333,7 +336,31 @@ dependencies:
           # Allow runtime version to float up to minor version
           # Disallow pyarrow 14.0.0 due to a CVE
           - pyarrow>=14.0.1,<15.0.0a0
-  cudatoolkit:
+  cuda_version:
+    specific:
+      - output_types: conda
+        matrices:
+          - matrix:
+              cuda: "11.2"
+            packages:
+              - cuda-version=11.2
+          - matrix:
+              cuda: "11.4"
+            packages:
+              - cuda-version=11.4
+          - matrix:
+              cuda: "11.5"
+            packages:
+              - cuda-version=11.5
+          - matrix:
+              cuda: "11.8"
+            packages:
+              - cuda-version=11.8
+          - matrix:
+              cuda: "12.0"
+            packages:
+              - cuda-version=12.0
+  cuda:
     specific:
       - output_types: conda
         matrices:
@@ -344,26 +371,16 @@ dependencies:
               - cuda-nvrtc-dev
               - cuda-nvtx-dev
               - libcurand-dev
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
-              - cudatoolkit
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
           - matrix:
               cuda: "11.8"
             packages:
-              - cuda-version=11.8
+              - cudatoolkit
               - cuda-nvtx=11.8
               - libcurand-dev=10.3.0.86
               - libcurand=10.3.0.86
           - matrix:
               cuda: "11.5"
             packages:
-              - cuda-version=11.5
               - cudatoolkit
               - cuda-nvtx=11.5
                 # Can't hard pin the version since 11.x is missing many
@@ -373,7 +390,6 @@ dependencies:
           - matrix:
               cuda: "11.4"
             packages:
-              - cuda-version=11.4
               - cudatoolkit
               - &cudanvtx114 cuda-nvtx=11.4
               - &libcurand_dev114 libcurand-dev>=10.2.5.43,<=10.2.5.120
@@ -381,7 +397,6 @@ dependencies:
           - matrix:
               cuda: "11.2"
             packages:
-              - cuda-version=11.2
               - cudatoolkit
                 # The NVIDIA channel doesn't publish pkgs older than 11.4 for
                 # these libs, so 11.2 uses 11.4 packages (the oldest
@@ -753,13 +768,3 @@ dependencies:
         packages:
           - ipython
           - openpyxl
-  notebook_cuda_version:
-    specific:
-       - output_types: conda
-         matrices:
-           - matrix: {cuda: "12.0"}
-             packages:
-               - cuda-version=12.0
-           - matrix: {cuda: "11.8"}
-             packages:
-               - cuda-version=11.8
