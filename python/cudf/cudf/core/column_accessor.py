@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -243,13 +243,6 @@ class ColumnAccessor(abc.MutableMapping):
         else:
             return self._data
 
-    @cached_property
-    def _column_length(self):
-        try:
-            return len(self._data[next(iter(self._data))])
-        except StopIteration:
-            return 0
-
     def _clear_cache(self):
         cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
@@ -257,10 +250,6 @@ class ColumnAccessor(abc.MutableMapping):
                 self.__delattr__(attr)
             except AttributeError:
                 pass
-
-        # Column length should only be cleared if no data is present.
-        if len(self._data) == 0 and hasattr(self, "_column_length"):
-            del self._column_length
 
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
@@ -345,11 +334,8 @@ class ColumnAccessor(abc.MutableMapping):
         if loc == len(self._data):
             if validate:
                 value = column.as_column(value)
-                if len(self._data) > 0:
-                    if len(value) != self._column_length:
-                        raise ValueError("All columns must be of equal length")
-                else:
-                    self._column_length = len(value)
+                if len(self._data) > 0 and len(value) != self.nrows:
+                    raise ValueError("All columns must be of equal length")
             self._data[name] = value
         else:
             new_keys = self.names[:loc] + (name,) + self.names[loc:]
@@ -508,11 +494,8 @@ class ColumnAccessor(abc.MutableMapping):
         key = self._pad_key(key)
         if validate:
             value = column.as_column(value)
-            if len(self._data) > 0:
-                if len(value) != self._column_length:
-                    raise ValueError("All columns must be of equal length")
-            else:
-                self._column_length = len(value)
+            if len(self._data) > 0 and len(value) != self.nrows:
+                raise ValueError("All columns must be of equal length")
 
         self._data[key] = value
         self._clear_cache()
