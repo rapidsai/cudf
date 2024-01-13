@@ -624,6 +624,7 @@ class ColumnAccessor(abc.MutableMapping):
         to the given mapper and level.
 
         """
+        new_col_names: abc.Iterable
         if self.multiindex:
 
             def rename_column(x):
@@ -640,12 +641,7 @@ class ColumnAccessor(abc.MutableMapping):
                     "Renaming columns with a MultiIndex and level=None is"
                     "not supported"
                 )
-            new_names = map(rename_column, self.keys())
-            ca = ColumnAccessor(
-                dict(zip(new_names, self.values())),
-                level_names=self.level_names,
-                multiindex=self.multiindex,
-            )
+            new_col_names = (rename_column(k) for k in self.keys())
 
         else:
             if level is None:
@@ -665,13 +661,12 @@ class ColumnAccessor(abc.MutableMapping):
             if len(new_col_names) != len(set(new_col_names)):
                 raise ValueError("Duplicate column names are not allowed")
 
-            ca = ColumnAccessor(
-                dict(zip(new_col_names, self.values())),
-                level_names=self.level_names,
-                multiindex=self.multiindex,
-            )
-
-        return self.__class__(ca)
+        data = dict(zip(new_col_names, self.values()))
+        return self.__class__._create_unsafe(
+            data=data,
+            level_names=self.level_names,
+            multiindex=self.multiindex,
+        )
 
     def droplevel(self, level):
         # drop the nth level
