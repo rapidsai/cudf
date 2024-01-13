@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 from packaging.version import Version
 from pandas.api.types import is_bool
-from typing_extensions import Self
 
 import cudf
 from cudf.core import column
@@ -491,13 +490,6 @@ class ColumnAccessor(abc.MutableMapping):
 
         self._data[key] = value
         self._clear_cache()
-
-    def _select_by_names(self, names: abc.Sequence) -> Self:
-        return self.__class__(
-            {key: self[key] for key in names},
-            multiindex=self.multiindex,
-            level_names=self.level_names,
-        )
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         # Might be a generator
