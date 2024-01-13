@@ -1142,8 +1142,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()),
-        opts.isNormalizeSingleQuotes());
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+        opts.isNormalizeSingleQuotes()));
   }
 
   /**
