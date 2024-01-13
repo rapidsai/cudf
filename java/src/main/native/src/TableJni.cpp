@@ -1408,11 +1408,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
     auto const recovery_mode = recover_with_null ?
                                    cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
                                    cudf::io::json_recovery_mode_t::FAIL;
-    cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
-                                                     .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines))
-                                                     .recovery_mode(recovery_mode)
-                                                     .normalize_single_quotes(static_cast<bool>(normalize_single_quotes));
+    cudf::io::json_reader_options_builder opts =
+        cudf::io::json_reader_options::builder(source)
+            .dayfirst(static_cast<bool>(day_first))
+            .lines(static_cast<bool>(lines))
+            .recovery_mode(recovery_mode)
+            .normalize_single_quotes(static_cast<bool>(normalize_single_quotes));
 
     auto result =
         std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1470,8 +1471,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jboolean day_first, jboolean lines, jboolean recover_with_null, jboolean normalize_single_quotes,
-    jlong ds_handle) {
+    jboolean day_first, jboolean lines, jboolean recover_with_null,
+    jboolean normalize_single_quotes, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1503,11 +1504,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
     cudf::io::json_recovery_mode_t recovery_mode =
         recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
                             cudf::io::json_recovery_mode_t::FAIL;
-    cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
-                                                     .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines))
-                                                     .recovery_mode(recovery_mode)
-                                                     .normalize_single_quotes(static_cast<bool>(normalize_single_quotes));
+    cudf::io::json_reader_options_builder opts =
+        cudf::io::json_reader_options::builder(source)
+            .dayfirst(static_cast<bool>(day_first))
+            .lines(static_cast<bool>(lines))
+            .recovery_mode(recovery_mode)
+            .normalize_single_quotes(static_cast<bool>(normalize_single_quotes));
 
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
@@ -1586,11 +1588,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     cudf::io::json_recovery_mode_t recovery_mode =
         recover_with_null ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL :
                             cudf::io::json_recovery_mode_t::FAIL;
-    cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(source)
-                                                     .dayfirst(static_cast<bool>(day_first))
-                                                     .lines(static_cast<bool>(lines))
-                                                     .recovery_mode(recovery_mode)
-                                                     .normalize_single_quotes(static_cast<bool>(normalize_single_quotes));
+    cudf::io::json_reader_options_builder opts =
+        cudf::io::json_reader_options::builder(source)
+            .dayfirst(static_cast<bool>(day_first))
+            .lines(static_cast<bool>(lines))
+            .recovery_mode(recovery_mode)
+            .normalize_single_quotes(static_cast<bool>(normalize_single_quotes));
 
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
