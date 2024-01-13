@@ -94,6 +94,9 @@ class ColumnAccessor(abc.MutableMapping):
     label_dtype : Dtype, optional
         What dtype should be returned in `to_pandas_index`
         (default=None).
+    verify : bool, optional
+        For non ColumnAccessor inputs, whether to verify
+        column length and type
     """
 
     _data: "Dict[Any, ColumnBase]"
@@ -107,6 +110,7 @@ class ColumnAccessor(abc.MutableMapping):
         level_names=None,
         rangeindex: bool = False,
         label_dtype: Dtype | None = None,
+        verify: bool = True,
     ):
         self.rangeindex = rangeindex
         self.label_dtype = label_dtype
@@ -124,9 +128,9 @@ class ColumnAccessor(abc.MutableMapping):
         else:
             # This code path is performance-critical for copies and should be
             # modified with care.
-            self._data = {}
-            if data:
-                data = dict(data)
+            data = dict(data)
+            if data and verify:
+                result = {}
                 # Faster than next(iter(data.values()))
                 column_length = len(data[next(iter(data))])
                 for k, v in data.items():
@@ -137,29 +141,13 @@ class ColumnAccessor(abc.MutableMapping):
                         v = column.as_column(v)
                     if len(v) != column_length:
                         raise ValueError("All columns must be of equal length")
-                    self._data[k] = v
+                    result[k] = v
+                self._data = result
+            else:
+                self._data = data
 
             self.multiindex = multiindex
             self._level_names = level_names
-
-    @classmethod
-    def _create_unsafe(
-        cls,
-        data: Dict[Any, ColumnBase],
-        multiindex: bool = False,
-        level_names=None,
-        rangeindex: bool = False,
-        label_dtype: Dtype | None = None,
-    ) -> ColumnAccessor:
-        # create a ColumnAccessor without verifying column
-        # type or size
-        obj = cls()
-        obj._data = data
-        obj.multiindex = multiindex
-        obj._level_names = level_names
-        obj.rangeindex = rangeindex
-        obj.label_dtype = label_dtype
-        return obj
 
     def __iter__(self):
         return iter(self._data)
@@ -342,12 +330,13 @@ class ColumnAccessor(abc.MutableMapping):
             data = {k: v.copy(deep=deep) for k, v in self._data.items()}
         else:
             data = self._data.copy()
-        return self.__class__._create_unsafe(
+        return self.__class__(
             data=data,
             multiindex=self.multiindex,
             level_names=self.level_names,
             rangeindex=self.rangeindex,
             label_dtype=self.label_dtype,
+            verify=False,
         )
 
     def select_by_label(self, key: Any) -> ColumnAccessor:
@@ -519,9 +508,10 @@ class ColumnAccessor(abc.MutableMapping):
         result = self._grouped_data[key]
         if isinstance(result, column.ColumnBase):
             # self._grouped_data[key] = self._data[key] so skip validation
-            return self.__class__._create_unsafe(
+            return self.__class__(
                 data={key: result},
                 multiindex=self.multiindex,
+                verify=False,
             )
         else:
             if self.multiindex:
@@ -554,18 +544,20 @@ class ColumnAccessor(abc.MutableMapping):
                 stop_idx = len(self.names) - idx
                 break
         keys = self.names[start_idx:stop_idx]
-        return self.__class__._create_unsafe(
+        return self.__class__(
             {k: self._data[k] for k in keys},
             multiindex=self.multiindex,
             level_names=self.level_names,
+            verify=False,
         )
 
     def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
-        return self.__class__._create_unsafe(
+        return self.__class__(
             {k: self._data[k] for k in self._data if _keys_equal(k, key)},
             multiindex=self.multiindex,
             level_names=self.level_names,
+            verify=False,
         )
 
     def _pad_key(self, key: Any, pad_value="") -> Any:
@@ -648,10 +640,11 @@ class ColumnAccessor(abc.MutableMapping):
                 raise ValueError("Duplicate column names are not allowed")
 
         data = dict(zip(new_col_names, self.values()))
-        return self.__class__._create_unsafe(
+        return self.__class__(
             data=data,
             level_names=self.level_names,
             multiindex=self.multiindex,
+            verify=False,
         )
 
     def droplevel(self, level):

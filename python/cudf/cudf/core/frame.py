@@ -295,12 +295,13 @@ class Frame(BinaryOperand, Scannable):
             else:
                 result_data[col_name] = col.copy() if copy else col
 
-        return ColumnAccessor._create_unsafe(
+        return ColumnAccessor(
             data=result_data,
             multiindex=self._data.multiindex,
             level_names=self._data.level_names,
             rangeindex=self._data.rangeindex,
             label_dtype=self._data.label_dtype,
+            verify=False,
         )
 
     @_cudf_nvtx_annotate
@@ -893,12 +894,13 @@ class Frame(BinaryOperand, Scannable):
 
         return self._mimic_inplace(
             self._from_data(
-                data=ColumnAccessor._create_unsafe(
+                data=ColumnAccessor(
                     data=filled_data,
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
                     rangeindex=self._data.rangeindex,
                     label_dtype=self._data.label_dtype,
+                    verify=False,
                 )
             ),
             inplace=inplace,
