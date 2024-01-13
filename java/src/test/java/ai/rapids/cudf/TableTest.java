@@ -87,6 +87,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
   private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
+  private static final File TEST_JSON_SINGLE_QUOTES_FILE = TestUtils.getResourceAsFile("single_quotes.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -325,6 +326,24 @@ public class TableTest extends CudfTestBase {
         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
       assertTablesAreEqual(expected, table);
     }
+  }
+
+  @Test
+  void testReadSingleQuotesJSONFile() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "A")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withNormalizeSingleQuotes(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("TEST\"", "TESTER'")
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+            assertTablesAreEqual(expected, table);
+         }
   }
 
   @Test
