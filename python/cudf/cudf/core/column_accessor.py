@@ -525,8 +525,14 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_grouped(self, key: Any) -> ColumnAccessor:
         result = self._grouped_data[key]
-        if isinstance(result, cudf.core.column.ColumnBase):
-            return self.__class__({key: result}, multiindex=self.multiindex)
+        if isinstance(result, column.ColumnBase):
+            # self._grouped_data[key] = self._data[key] so skip validation
+            return self.__class__._create_unsafe(
+                data={key: result},
+                multiindex=self.multiindex,
+                rangeindex=self.rangeindex,
+                label_dtype=self.label_dtype,
+            )
         else:
             if self.multiindex:
                 result = dict(_to_flat_dict_inner(result))
