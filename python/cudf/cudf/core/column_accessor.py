@@ -340,15 +340,15 @@ class ColumnAccessor(abc.MutableMapping):
         Make a copy of this ColumnAccessor.
         """
         if deep or cudf.get_option("copy_on_write"):
-            return self.__class__(
-                {k: v.copy(deep=deep) for k, v in self._data.items()},
-                multiindex=self.multiindex,
-                level_names=self.level_names,
-            )
-        return self.__class__(
-            self._data.copy(),
+            data = {k: v.copy(deep=deep) for k, v in self._data.items()}
+        else:
+            data = self._data.copy()
+        return self.__class__._create_unsafe(
+            data=data,
             multiindex=self.multiindex,
             level_names=self.level_names,
+            rangeindex=self.rangeindex,
+            label_dtype=self.label_dtype,
         )
 
     def select_by_label(self, key: Any) -> ColumnAccessor:
