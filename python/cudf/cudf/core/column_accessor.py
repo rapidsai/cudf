@@ -66,7 +66,7 @@ class _NestedGetItemDict(dict):
         return super().__getitem__(key)
 
 
-def _to_flat_dict_inner(d, parents=()):
+def _to_flat_dict_inner(d: dict, parents: tuple = ()):
     for k, v in d.items():
         if not isinstance(v, d.__class__):
             if parents:
@@ -74,14 +74,6 @@ def _to_flat_dict_inner(d, parents=()):
             yield (k, v)
         else:
             yield from _to_flat_dict_inner(d=v, parents=parents + (k,))
-
-
-def _to_flat_dict(d):
-    """
-    Convert the given nested dictionary to a flat dictionary
-    with tuple keys.
-    """
-    return {k: v for k, v in _to_flat_dict_inner(d)}
 
 
 class ColumnAccessor(abc.MutableMapping):
@@ -524,7 +516,7 @@ class ColumnAccessor(abc.MutableMapping):
         else:
             data = {k: self._grouped_data[k] for k in key}
         if self.multiindex:
-            data = _to_flat_dict(data)
+            data = dict(_to_flat_dict_inner(data))
         return self.__class__(
             data,
             multiindex=self.multiindex,
@@ -537,7 +529,7 @@ class ColumnAccessor(abc.MutableMapping):
             return self.__class__({key: result}, multiindex=self.multiindex)
         else:
             if self.multiindex:
-                result = _to_flat_dict(result)
+                result = dict(_to_flat_dict_inner(result))
             if not isinstance(key, tuple):
                 key = (key,)
             return self.__class__(
