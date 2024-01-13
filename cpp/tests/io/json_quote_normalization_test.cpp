@@ -28,6 +28,7 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
