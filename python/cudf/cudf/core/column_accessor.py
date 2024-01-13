@@ -556,24 +556,26 @@ class ColumnAccessor(abc.MutableMapping):
         start = self._pad_key(start, slice(None))
         stop = self._pad_key(stop, slice(None))
         for idx, name in enumerate(self.names):
-            if _compare_keys(name, start):
+            if _keys_equal(name, start):
                 start_idx = idx
                 break
         for idx, name in enumerate(reversed(self.names)):
-            if _compare_keys(name, stop):
+            if _keys_equal(name, stop):
                 stop_idx = len(self.names) - idx
                 break
         keys = self.names[start_idx:stop_idx]
-        return self.__class__(
+        return self.__class__._create_unsafe(
             {k: self._data[k] for k in keys},
             multiindex=self.multiindex,
             level_names=self.level_names,
+            rangeindex=self.rangeindex,
+            label_dtype=self.label_dtype,
         )
 
     def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
         return self.__class__(
-            {k: self._data[k] for k in self._data if _compare_keys(k, key)},
+            {k: self._data[k] for k in self._data if _keys_equal(k, key)},
             multiindex=self.multiindex,
             level_names=self.level_names,
         )
@@ -689,7 +691,7 @@ class ColumnAccessor(abc.MutableMapping):
         self._clear_cache()
 
 
-def _compare_keys(target: Any, key: Any) -> bool:
+def _keys_equal(target: Any, key: Any) -> bool:
     """
     Compare `key` to `target`.
 
