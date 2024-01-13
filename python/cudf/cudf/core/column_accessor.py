@@ -574,10 +574,12 @@ class ColumnAccessor(abc.MutableMapping):
 
     def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
         key = self._pad_key(key, slice(None))
-        return self.__class__(
+        return self.__class__._create_unsafe(
             {k: self._data[k] for k in self._data if _keys_equal(k, key)},
             multiindex=self.multiindex,
             level_names=self.level_names,
+            rangeindex=self.rangeindex,
+            label_dtype=self.label_dtype,
         )
 
     def _pad_key(self, key: Any, pad_value="") -> Any:
