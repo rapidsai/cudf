@@ -987,15 +987,16 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if isinstance(col.categories.dtype, IntervalDtype):
+        cats = col.categories
+        if cats.dtype.kind in "biuf":
+            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
+        elif not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            categories = col.categories.to_pandas()
-        else:
-            categories = col.categories.dropna(drop_nan=True).to_pandas()
+            cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=col.ordered
+            codes, categories=cats.to_pandas(), ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
@@ -1158,7 +1159,7 @@ class CategoricalColumn(column.ColumnBase):
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
         new_cats = cudf.DataFrame._from_data(
             {
-                "index": cudf.core.column.arange(len(new_cats_col)),
+                "index": column.as_column(range(len(new_cats_col))),
                 "cats": new_cats_col,
             }
         )
@@ -1310,22 +1311,28 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
+    def as_string_column(
+        self, dtype, format: str | None = None
+    ) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
 
-    def as_datetime_column(self, dtype, **kwargs) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype, format: str | None = None
+    ) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(
-            dtype, **kwargs
+            dtype, format
         )
 
-    def as_timedelta_column(self, dtype, **kwargs) -> TimeDeltaColumn:
+    def as_timedelta_column(
+        self, dtype, format: str | None = None
+    ) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(
-            dtype, **kwargs
+            dtype, format
         )
 
     def _get_decategorized_column(self) -> ColumnBase:
@@ -1373,7 +1380,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Find the first non-null column:
         head = next(
-            (obj for obj in objs if not obj.null_count != len(obj)), objs[0]
+            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
         )
 
         # Combine and de-dupe the categories
@@ -1524,9 +1531,13 @@ class CategoricalColumn(column.ColumnBase):
         )
         out_code_dtype = min_unsigned_type(max_cat_size)
 
-        cur_order = column.arange(len(cur_codes))
-        old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
-        new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
+        cur_order = column.as_column(range(len(cur_codes)))
+        old_codes = column.as_column(
+            range(len(cur_cats)), dtype=out_code_dtype
+        )
+        new_codes = column.as_column(
+            range(len(new_cats)), dtype=out_code_dtype
+        )
 
         new_df = cudf.DataFrame._from_data(
             data={"new_codes": new_codes, "cats": new_cats}
