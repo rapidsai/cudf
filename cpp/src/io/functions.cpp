@@ -449,6 +449,43 @@ void write_orc(orc_writer_options const& options)
 }
 
 /**
+ * @copydoc cudf::io::chunked_orc_reader::chunked_parquet_reader
+ */
+chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(
+      chunk_read_limit, make_datasources(options.get_source()), options, stream, mr)}
+{
+}
+
+/**
+ * @copydoc cudf::io::chunked_orc_reader::~chunked_orc_reader
+ */
+chunked_orc_reader::~chunked_orc_reader() = default;
+
+/**
+ * @copydoc cudf::io::chunked_orc_reader::has_next
+ */
+bool chunked_orc_reader::has_next() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->has_next();
+}
+
+/**
+ * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+ */
+table_with_metadata chunked_orc_reader::read_chunk() const
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(reader != nullptr, "Reader has not been constructed properly.");
+  return reader->read_chunk();
+}
+
+/**
  * @copydoc cudf::io::orc_chunked_writer::orc_chunked_writer
  */
 orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options)

@@ -22,6 +22,19 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
+  : impl(0 /*chunk_read_limit*/,
+         std::forward<std::vector<std::unique_ptr<cudf::io::datasource>>>(sources),
+         options,
+         stream,
+         mr)
+{
+}
+
+reader::impl::impl(std::size_t chunk_read_limit,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
+                   orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
     _timestamp_type{options.get_timestamp_type()},
@@ -31,7 +44,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
-    _chunk_read_info{0}  // TODO: Initialize from `orc_reader_options.chunk_size_limit()`.
+    _chunk_read_info{chunk_read_limit}
+
 {
 }
 
@@ -113,22 +127,25 @@ table_with_metadata reader::impl::read_chunk_internal()
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
-// Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-               orc_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl{std::make_unique<impl>(std::move(sources), options, stream, mr)}
+table_with_metadata reader::impl::read_chunk()
 {
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
+  if (_chunk_read_info.chunk_size_limit > 0) {
+    //    _output_buffers.resize(0);
+    //    for (auto const& buff : _output_buffers_template) {
+    //      _output_buffers.emplace_back(column_buffer::empty_like(buff));
+    //    }
+  }
+
+  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `-1` means unlimited*/, {});
+  return read_chunk_internal();
 }
 
-// Destructor within this translation unit
-reader::~reader() = default;
-
-// Forward to implementation
-table_with_metadata reader::read(orc_reader_options const& options)
+bool reader::impl::has_next()
 {
-  return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_stripes());
+  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `-1` means unlimited*/, {});
+  return _chunk_read_info.current_chunk_idx < _chunk_read_info.chunk_ranges.size();
 }
 
 }  // namespace cudf::io::orc::detail

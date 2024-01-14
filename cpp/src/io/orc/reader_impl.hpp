@@ -42,6 +42,9 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
+   * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
+   * entire given file.
+   *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -51,6 +54,46 @@ class reader::impl {
                 orc_reader_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
+
+  /**
+   * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
+   *
+   * By using this constructor, the reader will support iterative (chunked) reading through
+   * `has_next() ` and `read_chunk()`. For example:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * ```
+   *
+   * Reading the whole given file at once through `read()` function is still supported if
+   * `chunk_read_limit == 0` (i.e., no reading limit).
+   * In such case, `read_chunk()` will also return rows of the entire file.
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param sources Dataset sources
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit impl(std::size_t chunk_read_limit,
+                std::vector<std::unique_ptr<datasource>>&& sources,
+                orc_reader_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::has_next
+   */
+  bool has_next();
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::read_chunk
+   */
+  table_with_metadata read_chunk();
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
