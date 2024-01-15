@@ -232,10 +232,10 @@ def assert_column_equal(
     elif not (
         (
             not dtype_can_compare_equal_to_other(left.dtype)
-            and is_numeric_dtype(right)
+            and is_numeric_dtype(right.dtype)
         )
         or (
-            is_numeric_dtype(left)
+            is_numeric_dtype(left.dtype)
             and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
@@ -245,7 +245,11 @@ def assert_column_equal(
                 left.isnull().values == right.isnull().values
             )
 
-            if columns_equal and not check_exact and is_numeric_dtype(left):
+            if (
+                columns_equal
+                and not check_exact
+                and is_numeric_dtype(left.dtype)
+            ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
                     left.apply_boolean_mask(

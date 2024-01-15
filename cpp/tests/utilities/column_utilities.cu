@@ -244,23 +244,6 @@ struct column_property_comparator {
     return is_fixed_point(lhs) ? lhs.id() == rhs.id() : lhs == rhs;
   }
 
-  size_type count_nulls(cudf::column_view const& c, cudf::column_view const& row_indices)
-  {
-    auto validity_iter = cudf::detail::make_counting_transform_iterator(
-      0,
-      cuda::proclaim_return_type<size_type>([row_indices = row_indices.begin<size_type>(),
-                                             validity    = c.null_mask(),
-                                             offset      = c.offset()] __device__(int index) {
-        // both null mask and offsets data are not pre-sliced. so we need to add the column offset
-        // to every incoming index.
-        auto const true_index = row_indices[index] + offset;
-        return !validity || cudf::bit_is_set(validity, true_index) ? 0 : 1;
-      }));
-    return thrust::reduce(rmm::exec_policy(cudf::test::get_default_stream()),
-                          validity_iter,
-                          validity_iter + row_indices.size());
-  }
-
   bool compare_common(cudf::column_view const& lhs,
                       cudf::column_view const& rhs,
                       cudf::column_view const& lhs_row_indices,
@@ -281,12 +264,7 @@ struct column_property_comparator {
 
     if (lhs_size > 0 && check_exact_equality) { PROP_EXPECT_EQ(lhs.nullable(), rhs.nullable()); }
 
-    // DISCUSSION: does this make sense, semantically?
-    auto const lhs_null_count =
-      check_exact_equality ? lhs.null_count() : count_nulls(lhs, lhs_row_indices);
-    auto const rhs_null_count =
-      check_exact_equality ? rhs.null_count() : count_nulls(rhs, rhs_row_indices);
-    PROP_EXPECT_EQ(lhs_null_count, rhs_null_count);
+    PROP_EXPECT_EQ(lhs.null_count(), rhs.null_count());
 
     // equivalent, but not exactly equal columns can have a different number of children if their
     // sizes are both 0. Specifically, empty string columns may or may not have children.

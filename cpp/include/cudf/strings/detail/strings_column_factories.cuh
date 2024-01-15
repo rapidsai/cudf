@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,9 +103,8 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
       auto const avg_bytes_per_row = bytes / std::max(strings_count - null_count, 1);
       // use a character-parallel kernel for long string lengths
       if (avg_bytes_per_row > FACTORY_BYTES_PER_ROW_THRESHOLD) {
-        auto const d_data = offsets_view.template data<size_type>();
         auto const d_offsets =
-          device_span<size_type const>{d_data, static_cast<std::size_t>(offsets_view.size())};
+          cudf::detail::offsetalator_factory::make_input_iterator(offsets_view);
         auto const str_begin = thrust::make_transform_iterator(
           begin, cuda::proclaim_return_type<string_view>([] __device__(auto ip) {
             return string_view{ip.first, ip.second};
