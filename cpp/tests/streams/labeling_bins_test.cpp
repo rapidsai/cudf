@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,5 +28,10 @@ TEST_F(LabelingBinsStreamTest, SimpleStringsTest)
   cudf::test::strings_column_wrapper right_edges{"b", "c", "d", "e", "f"};
   cudf::test::strings_column_wrapper input{"abc", "bcd", "cde", "def", "efg"};
 
-  cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO, cudf::test::get_default_stream());
+  cudf::label_bins(input,
+                   left_edges,
+                   cudf::inclusive::YES,
+                   right_edges,
+                   cudf::inclusive::NO,
+                   cudf::test::get_default_stream());
 }
