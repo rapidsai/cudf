@@ -45,7 +45,8 @@ inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_res
 inline auto make_pool()
 {
   auto const [free, total] = rmm::available_device_memory();
-  auto min_alloc = rmm::align_down(std::min(free, total / 10), rmm::CUDA_ALLOCATION_ALIGNMENT);
+  auto const min_alloc =
+    rmm::align_down(std::min(free, total / 10), rmm::CUDA_ALLOCATION_ALIGNMENT);
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda(), min_alloc);
 }
 
