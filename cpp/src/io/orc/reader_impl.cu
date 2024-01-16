@@ -138,13 +138,13 @@ table_with_metadata reader::impl::read_chunk()
     //    }
   }
 
-  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `-1` means unlimited*/, {});
+  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
   return read_chunk_internal();
 }
 
 bool reader::impl::has_next()
 {
-  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `-1` means unlimited*/, {});
+  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
   return _chunk_read_info.current_chunk_idx < _chunk_read_info.chunk_ranges.size();
 }
 

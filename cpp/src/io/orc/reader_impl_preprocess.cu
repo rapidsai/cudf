@@ -783,7 +783,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                         return sum + stripe_source_mapping.stripe_info.size();
                       });
     auto const num_columns = columns_level.size();
-    // Each chunk corresponds to data of a column in a stripe.
+    // Each chunk stores all data of a column in a stripe.
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
       total_num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
