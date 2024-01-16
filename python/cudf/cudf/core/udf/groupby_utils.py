@@ -209,7 +209,9 @@ def _can_be_jitted(frame, func, args):
         # Numba requires bytecode to be present to proceed.
         # See https://github.com/numba/numba/issues/4587
         return False
-    elif frame._has_nulls:
+
+    any_na = frame.isna()
+    if (frame.ndim == 1 and any_na) or (frame.ndim == 2 and any_na.any()):
         return False
     np_field_types = np.dtype(
         list(

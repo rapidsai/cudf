@@ -1252,7 +1252,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
         # Nulls are not yet supported
-        if self.grouping._obj._has_nulls:
+        obj = self.grouping._obj
+        any_na = obj.isna()
+        if (obj.ndim == 1 and any_na) or (obj.ndim == 2 and any_na.any()):
             raise ValueError("Nulls not yet supported with groupby JIT engine")
 
         chunk_results = jit_groupby_apply(

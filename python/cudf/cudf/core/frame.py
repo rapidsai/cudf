@@ -94,10 +94,6 @@ class Frame(BinaryOperand, Scannable):
             zip(self._data.names, (col.dtype for col in self._data.columns))
         )
 
-    @property
-    def _has_nulls(self) -> bool:
-        return any(col.has_nulls() for col in self._data.values())
-
     @_cudf_nvtx_annotate
     def serialize(self):
         # TODO: See if self._data can be serialized outright
