@@ -527,6 +527,7 @@ dependencies:
           - matrix: {cuda: "12.*"}
             packages:
               - cuda-python>=12.0,<13.0a0
+              - pynvjitlink
           - matrix: {cuda: "11.*"}
             packages: &run_cudf_packages_all_cu11
               - cuda-python>=11.7.1,<12.0a0
