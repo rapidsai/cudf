@@ -303,7 +303,7 @@ def make_intermediate_proxy_type(
         if self._fsproxy_state is _State.FAST:
             return super(type(self), self)._fsproxy_fast_to_slow()
         return self._fsproxy_wrapped
-    
+
     slow_dir = dir(slow_type)
     cls_dict = {
         "__init__": __init__,
@@ -709,7 +709,6 @@ class _FinalProxy(_FastSlowProxy):
         proxy._fsproxy_wrapped = value
         return proxy
 
-
     def __reduce__(self):
         """
         In conjunction with `__proxy_setstate__`, this effectively enables
@@ -722,7 +721,6 @@ class _FinalProxy(_FastSlowProxy):
             pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
         return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
 
-
     def __setstate__(self, state):
         # Need a local import to avoid circular import issues
         from .module_accelerator import disable_module_accelerator
@@ -730,7 +728,7 @@ class _FinalProxy(_FastSlowProxy):
         with disable_module_accelerator():
             unpickled_wrapped_obj = pickle.loads(state)
         self._fsproxy_wrapped = unpickled_wrapped_obj
-    
+
 
 class _IntermediateProxy(_FastSlowProxy):
     """
@@ -786,7 +784,7 @@ class _IntermediateProxy(_FastSlowProxy):
         func, args, kwargs = self._method_chain
         args, kwargs = _slow_arg(args), _slow_arg(kwargs)
         return func(*args, **kwargs)
-    
+
     def __reduce__(self):
         """
         In conjunction with `__proxy_setstate__`, this effectively enables
@@ -798,8 +796,11 @@ class _IntermediateProxy(_FastSlowProxy):
         with disable_module_accelerator():
             pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
         pickled_method_chain = pickle.dumps(self._method_chain)
-        return (_PickleConstructor(type(self)), (), (pickled_wrapped_obj, pickled_method_chain))
-
+        return (
+            _PickleConstructor(type(self)),
+            (),
+            (pickled_wrapped_obj, pickled_method_chain),
+        )
 
     def __setstate__(self, state):
         # Need a local import to avoid circular import issues
