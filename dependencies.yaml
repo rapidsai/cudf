@@ -603,7 +603,6 @@ dependencies:
           - cramjam
           - fastavro>=0.22.9
           - hypothesis
-          - mimesis>=4.1.0
           - pytest-benchmark
           - pytest-cases
           - python-snappy>=0.6.0
@@ -755,7 +754,12 @@ dependencies:
           - ipython
           - openpyxl
   notebook_cuda_version:
-    common:
-      - output_types: conda
-        packages:
-          - cuda-version=12.0
+    specific:
+       - output_types: conda
+         matrices:
+           - matrix: {cuda: "12.0"}
+             packages:
+               - cuda-version=12.0
+           - matrix: {cuda: "11.8"}
+             packages:
+               - cuda-version=11.8

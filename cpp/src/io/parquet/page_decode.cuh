@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -506,14 +506,9 @@ __device__ void gpuDecodeStream(
             cur++;
           }
         }
-        if (cur > end) {
-          s->set_error_code(decode_error::LEVEL_STREAM_OVERRUN);
-          break;
-        }
-        if (level_run <= 1) {
-          s->set_error_code(decode_error::INVALID_LEVEL_RUN);
-          break;
-        }
+        // If there are errors, set the error code and continue. The loop will be exited below.
+        if (cur > end) { s->set_error_code(decode_error::LEVEL_STREAM_OVERRUN); }
+        if (level_run <= 1) { s->set_error_code(decode_error::INVALID_LEVEL_RUN); }
         sym_len = (int32_t)(cur - cur_def);
         __threadfence_block();
       }
