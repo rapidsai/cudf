@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -754,7 +754,7 @@ class CategoricalColumn(column.ColumnBase):
             self._encode(item)
         except ValueError:
             return False
-        return self._encode(item) in self.as_numerical
+        return self._encode(item) in self.codes
 
     def set_base_data(self, value):
         if value is not None:
@@ -798,15 +798,6 @@ class CategoricalColumn(column.ColumnBase):
             )
             self._children = (codes_column,)
         return self._children
-
-    @property
-    def as_numerical(self) -> NumericalColumn:
-        return cast(
-            cudf.core.column.NumericalColumn,
-            column.build_column(
-                data=self.codes.data, dtype=self.codes.dtype, mask=self.mask
-            ),
-        )
 
     @property
     def categories(self) -> ColumnBase:
@@ -925,7 +916,7 @@ class CategoricalColumn(column.ColumnBase):
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical._binaryop(other.as_numerical, op)
+        return self.codes._binaryop(other.codes, op)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):
@@ -950,7 +941,7 @@ class CategoricalColumn(column.ColumnBase):
     def sort_values(
         self, ascending: bool = True, na_position="last"
     ) -> CategoricalColumn:
-        codes = self.as_numerical.sort_values(ascending, na_position)
+        codes = self.codes.sort_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -961,7 +952,7 @@ class CategoricalColumn(column.ColumnBase):
         return col
 
     def element_indexing(self, index: int) -> ScalarLike:
-        val = self.as_numerical.element_indexing(index)
+        val = self.codes.element_indexing(index)
         return self._decode(int(val)) if val is not None else val
 
     @property
@@ -996,15 +987,16 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if isinstance(col.categories.dtype, IntervalDtype):
+        cats = col.categories
+        if cats.dtype.kind in "biuf":
+            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
+        elif not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            categories = col.categories.to_pandas()
-        else:
-            categories = col.categories.dropna(drop_nan=True).to_pandas()
+            cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=col.ordered
+            codes, categories=cats.to_pandas(), ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
@@ -1053,7 +1045,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> CategoricalColumn:
-        codes = self.as_numerical.unique()
+        codes = self.codes.unique()
         return column.build_categorical_column(
             categories=self.categories,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -1167,7 +1159,7 @@ class CategoricalColumn(column.ColumnBase):
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
         new_cats = cudf.DataFrame._from_data(
             {
-                "index": cudf.core.column.arange(len(new_cats_col)),
+                "index": column.as_column(range(len(new_cats_col))),
                 "cats": new_cats_col,
             }
         )
@@ -1236,9 +1228,8 @@ class CategoricalColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Any = None,
-        dtype: Optional[Dtype] = None,
-    ) -> CategoricalColumn:
+        method: Optional[str] = None,
+    ) -> Self:
         """
         Fill null values with *fill_value*
         """
@@ -1276,20 +1267,20 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
-        return super().fillna(value=fill_value, method=method)
+        return super().fillna(fill_value, method=method)
 
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
-        return self.as_numerical.indices_of(self._encode(value))
+        return self.codes.indices_of(self._encode(value))
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return bool(self.ordered) and self.as_numerical.is_monotonic_increasing
+        return bool(self.ordered) and self.codes.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
+        return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
     def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
@@ -1320,22 +1311,28 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
+    def as_string_column(
+        self, dtype, format: str | None = None
+    ) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
 
-    def as_datetime_column(self, dtype, **kwargs) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype, format: str | None = None
+    ) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(
-            dtype, **kwargs
+            dtype, format
         )
 
-    def as_timedelta_column(self, dtype, **kwargs) -> TimeDeltaColumn:
+    def as_timedelta_column(
+        self, dtype, format: str | None = None
+    ) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(
-            dtype, **kwargs
+            dtype, format
         )
 
     def _get_decategorized_column(self) -> ColumnBase:
@@ -1382,7 +1379,9 @@ class CategoricalColumn(column.ColumnBase):
         # improved as the concatenation API is solidified.
 
         # Find the first non-null column:
-        head = next((obj for obj in objs if obj.valid_count), objs[0])
+        head = next(
+            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
+        )
 
         # Combine and de-dupe the categories
         cats = column.concat_columns([o.categories for o in objs]).unique()
@@ -1532,9 +1531,13 @@ class CategoricalColumn(column.ColumnBase):
         )
         out_code_dtype = min_unsigned_type(max_cat_size)
 
-        cur_order = column.arange(len(cur_codes))
-        old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
-        new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
+        cur_order = column.as_column(range(len(cur_codes)))
+        old_codes = column.as_column(
+            range(len(cur_cats)), dtype=out_code_dtype
+        )
+        new_codes = column.as_column(
+            range(len(new_cats)), dtype=out_code_dtype
+        )
 
         new_df = cudf.DataFrame._from_data(
             data={"new_codes": new_codes, "cats": new_cats}

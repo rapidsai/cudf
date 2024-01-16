@@ -21,6 +21,8 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cudf_test/base_fixture.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
