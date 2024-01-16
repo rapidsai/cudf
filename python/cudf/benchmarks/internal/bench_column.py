@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Benchmarks of Column methods."""
 
@@ -18,9 +18,8 @@ def bench_apply_boolean_mask(benchmark, column):
 
 
 @benchmark_with_object(cls="column", dtype="float")
-@pytest.mark.parametrize("dropnan", [True, False])
-def bench_dropna(benchmark, column, dropnan):
-    benchmark(column.dropna, drop_nan=dropnan)
+def bench_dropna(benchmark, column):
+    benchmark(column.dropna)
 
 
 @benchmark_with_object(cls="column", dtype="float")
