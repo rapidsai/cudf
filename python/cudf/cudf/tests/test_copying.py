@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -113,11 +113,8 @@ def test_series_setitem_partial_slice_cow_on():
         assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
         new_slice = actual[2:]
-        # TODO: when COW and spilling has been unified, find a clean way to
-        # test this without accessing the internal attributes _base and _ptr
         assert (
-            new_slice._column.base_data._base._ptr
-            == actual._column.base_data._base._ptr
+            new_slice._column.base_data.owner == actual._column.base_data.owner
         )
         new_slice[0:2] = 10
         assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
@@ -134,9 +131,11 @@ def test_series_setitem_partial_slice_cow_off():
         assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
         new_slice = actual[2:]
-        assert (
-            new_slice._column.base_data._ptr == actual._column.base_data._ptr
-        )
+        # Since COW is off, a slice should point to the same memory
+        ptr1 = new_slice._column.base_data.get_ptr(mode="read")
+        ptr2 = actual._column.base_data.get_ptr(mode="read")
+        assert ptr1 == ptr2
+
         new_slice[0:2] = 10
         assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
         assert_eq(actual, cudf.Series([1, 2, 10, 10, 5]))
