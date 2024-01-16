@@ -342,8 +342,8 @@ public class TableTest extends CudfTestBase {
             .build();
          MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
          Table table = Table.readJSON(schema, opts, source)) {
-            assertTablesAreEqual(expected, table);
-         }
+      assertTablesAreEqual(expected, table);
+    }
   }
 
   @Test
