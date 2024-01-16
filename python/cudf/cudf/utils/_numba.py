@@ -1,24 +1,13 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import glob
 import os
 import sys
-import warnings
 
 from numba import config as numba_config
-
-try:
-    from pynvjitlink.patch import (
-        patch_numba_linker as patch_numba_linker_pynvjitlink,
-    )
-except ImportError:
-
-    def patch_numba_linker_pynvjitlink():
-        warnings.warn(
-            "CUDA Toolkit is newer than CUDA driver. "
-            "Numba features will not work in this configuration. "
-        )
-
+from pynvjitlink.patch import (
+    patch_numba_linker as patch_numba_linker_pynvjitlink,
+)
 
 CC_60_PTX_FILE = os.path.join(
     os.path.dirname(__file__), "../core/udf/shim_60.ptx"
