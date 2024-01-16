@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -229,6 +230,7 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                                                       rmm::cuda_stream_view stream,
                                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
