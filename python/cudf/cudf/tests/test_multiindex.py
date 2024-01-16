@@ -2111,7 +2111,16 @@ def test_multindex_constructor_levels_always_indexes(midx):
 
 @pytest.mark.parametrize(
     "array",
-    [list, tuple, np.array, pd.Index, cudf.Index, pd.Series, cudf.Series],
+    [
+        list,
+        tuple,
+        np.array,
+        cp.array,
+        pd.Index,
+        cudf.Index,
+        pd.Series,
+        cudf.Series,
+    ],
 )
 def test_multiindex_from_arrays(array):
     pd_data = [[0, 0, 1, 1], [1, 0, 1, 0]]

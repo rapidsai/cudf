@@ -1448,6 +1448,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         arrays : list / sequence of array-likes
             Each array-like gives one level's value for each data point.
             len(arrays) is the number of levels.
+        sortorder : optional int
+            Not yet supported
         names : list / sequence of str, optional
             Names for the levels in the index.
 
