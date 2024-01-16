@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
 from collections import namedtuple
@@ -401,7 +401,7 @@ def min_column_type(x, expected_type):
 
     if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
-    if x.valid_count == 0:
+    if x.null_count == len(x):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
