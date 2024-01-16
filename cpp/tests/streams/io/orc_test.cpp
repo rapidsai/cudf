@@ -50,25 +50,27 @@ cudf::table construct_table()
 {
   constexpr auto num_rows = 10;
 
-  std::vector<size_t> zeros(num_rows, 0);
-  std::vector<size_t> ones(num_rows, 1);
+  auto const zeros_iterator = thrust::make_constant_iterator(0);
+  auto const ones_iterator  = thrust::make_constant_iterator(1);
 
-  cudf::test::fixed_width_column_wrapper<bool> col0(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<int8_t> col1(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<int16_t> col2(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<float> col4(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<double> col5(zeros.begin(), zeros.end());
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones, num_rows] {
+  cudf::test::fixed_width_column_wrapper<bool> col0(zeros_iterator, zeros_iterator + num_rows);
+  cudf::test::fixed_width_column_wrapper<int8_t> col1(zeros_iterator, zeros_iterator + num_rows);
+  cudf::test::fixed_width_column_wrapper<int16_t> col2(zeros_iterator, zeros_iterator + num_rows);
+  cudf::test::fixed_width_column_wrapper<int32_t> col3(zeros_iterator, zeros_iterator + num_rows);
+  cudf::test::fixed_width_column_wrapper<float> col4(zeros_iterator, zeros_iterator + num_rows);
+  cudf::test::fixed_width_column_wrapper<double> col5(zeros_iterator, zeros_iterator + num_rows);
+
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col6 = [&ones_iterator, num_rows] {
     auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-      return numeric::decimal128{ones[i], numeric::scale_type{12}};
+      return numeric::decimal128{ones_iterator[i], numeric::scale_type{12}};
     });
     return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col6_data,
                                                                        col6_data + num_rows);
   }();
-  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones, num_rows] {
+
+  cudf::test::fixed_width_column_wrapper<numeric::decimal128> col7 = [&ones_iterator, num_rows] {
     auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-      return numeric::decimal128{ones[i], numeric::scale_type{-12}};
+      return numeric::decimal128{ones_iterator[i], numeric::scale_type{-12}};
     });
     return cudf::test::fixed_width_column_wrapper<numeric::decimal128>(col7_data,
                                                                        col7_data + num_rows);
@@ -82,11 +84,11 @@ cudf::table construct_table()
       col8_mask);
   }();
 
-  cudf::test::structs_column_wrapper col9 = [&ones] {
+  cudf::test::structs_column_wrapper col9 = [&ones_iterator] {
     auto child_col_mask =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
     cudf::test::fixed_width_column_wrapper<int32_t> child_col(
-      ones.begin(), ones.end(), child_col_mask);
+      ones_iterator, ones_iterator + num_rows, child_col_mask);
     return cudf::test::structs_column_wrapper{child_col};
   }();
 
