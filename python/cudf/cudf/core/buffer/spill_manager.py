@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
 
-from cudf.core.buffer.spillable_buffer import SpillableBuffer
+from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 from cudf.options import get_option
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.string import format_bytes
@@ -128,7 +128,7 @@ class SpillStatistics:
                 total_time + time,
             )
 
-    def log_expose(self, buf: SpillableBuffer) -> None:
+    def log_expose(self, buf: SpillableBufferOwner) -> None:
         """Log an expose event
 
         We track logged exposes by grouping them by their traceback such
@@ -224,7 +224,7 @@ class SpillManager:
         SpillStatistics for the different levels.
     """
 
-    _buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
+    _buffers: weakref.WeakValueDictionary[int, SpillableBufferOwner]
     statistics: SpillStatistics
 
     def __init__(
@@ -298,14 +298,14 @@ class SpillManager:
         )
         return False  # Since we didn't find anything to spill, we give up
 
-    def add(self, buffer: SpillableBuffer) -> None:
+    def add(self, buffer: SpillableBufferOwner) -> None:
         """Add buffer to the set of managed buffers
 
         The manager keeps a weak reference to the buffer
 
         Parameters
         ----------
-        buffer : SpillableBuffer
+        buffer : SpillableBufferOwner
             The buffer to manage
         """
         if buffer.size > 0 and not buffer.exposed:
@@ -316,7 +316,7 @@ class SpillManager:
 
     def buffers(
         self, order_by_access_time: bool = False
-    ) -> Tuple[SpillableBuffer, ...]:
+    ) -> Tuple[SpillableBufferOwner, ...]:
         """Get all managed buffers
 
         Parameters
