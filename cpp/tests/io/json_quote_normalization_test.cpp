@@ -113,4 +113,21 @@ TEST_F(JsonNormalizationTest, ReadJsonOption)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());
 }
 
+TEST_F(JsonNormalizationTest, ErrorCheck)
+{
+  // RMM memory resource
+  std::shared_ptr<rmm::mr::device_memory_resource> rsc =
+    std::make_shared<rmm::mr::cuda_memory_resource>();
+
+  // Test input
+  std::string const host_input = R"({"A":'TEST"'})";
+  cudf::io::json_reader_options input_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{host_input.data(), host_input.size()})
+      .lines(true);
+
+  EXPECT_THROW(cudf::io::read_json(input_options, cudf::test::get_default_stream(), rsc.get()),
+               cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
