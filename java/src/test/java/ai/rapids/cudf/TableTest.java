@@ -347,6 +347,21 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadSingleQuotesJSONFileFeatureDisabled() throws IOException {
+    Schema schema = Schema.builder()
+      .column(DType.STRING, "A")
+      .build();
+    JSONOptions opts = JSONOptions.builder()
+      .withLines(true)
+      .withNormalizeSingleQuotes(false)
+      .build();
+    try (MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE)) {
+      assertThrows(CudfException.class, () ->
+        Table.readJSON(schema, opts, source));
+    }
+  }
+
+  @Test
   void testReadJSONFromDataSource() throws IOException {
     Schema schema = Schema.builder()
             .column(DType.STRING, "name")
