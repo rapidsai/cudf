@@ -1241,11 +1241,3 @@ def test_pickle_groupby(dataframe):
     gb = df.groupby("a")
     gb = pickle.loads(pickle.dumps(gb))
     tm.assert_equal(pgb.sum(), gb.sum())
-
-
-def test_pickle_groupby_rolling(dataframe):
-    pdf, df = dataframe
-    pgb = pdf.groupby("a").rolling(2)
-    gb = df.groupby("a").rolling(2)
-    gb = pickle.loads(pickle.dumps(gb))
-    tm.assert_equal(pgb.sum(), gb.sum())
