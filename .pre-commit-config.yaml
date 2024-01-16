@@ -2,7 +2,7 @@
 
 repos:
       - repo: https://github.com/pre-commit/pre-commit-hooks
-        rev: v4.3.0
+        rev: v4.5.0
         hooks:
               - id: trailing-whitespace
                 exclude: |
@@ -15,7 +15,7 @@ repos:
                     ^python/cudf/cudf/tests/data/subword_tokenizer_data/.*
                   )
       - repo: https://github.com/PyCQA/isort
-        rev: 5.12.0
+        rev: 5.13.2
         hooks:
               - id: isort
                 # Use the config file specific to each subproject so that each
@@ -24,14 +24,14 @@ repos:
                 files: python/.*
                 types_or: [python, cython, pyi]
       - repo: https://github.com/psf/black
-        rev: 22.3.0
+        rev: 23.12.1
         hooks:
               - id: black
                 files: python/.*
                 # Explicitly specify the pyproject.toml at the repo root, not per-project.
                 args: ["--config", "pyproject.toml"]
       - repo: https://github.com/MarcoGorelli/cython-lint
-        rev: v0.15.0
+        rev: v0.16.0
         hooks:
               - id: cython-lint
       - repo: https://github.com/pre-commit/mirrors-mypy
@@ -46,7 +46,7 @@ repos:
                        "python/dask_cudf/dask_cudf"]
                 pass_filenames: false
       - repo: https://github.com/PyCQA/pydocstyle
-        rev: 6.1.1
+        rev: 6.3.0
         hooks:
               - id: pydocstyle
                 # https://github.com/PyCQA/pydocstyle/issues/603
@@ -58,7 +58,7 @@ repos:
                     ^python/cudf/cudf_pandas_tests/.*
                   )
       - repo: https://github.com/nbQA-dev/nbQA
-        rev: 1.6.3
+        rev: 1.7.1
         hooks:
               - id: nbqa-isort
                 # Use the cudf_kafka isort orderings in notebooks so that dask
@@ -74,7 +74,7 @@ repos:
                 types_or: [c, c++, cuda]
                 args: ["-fallback-style=none", "-style=file", "-i"]
       - repo: https://github.com/sirosen/texthooks
-        rev: 0.4.0
+        rev: 0.6.3
         hooks:
               - id: fix-smartquotes
                 exclude: |
@@ -150,7 +150,7 @@ repos:
             - id: rapids-dependency-file-generator
               args: ["--clean"]
       - repo: https://github.com/astral-sh/ruff-pre-commit
-        rev: v0.0.278
+        rev: v0.1.13
         hooks:
           - id: ruff
             files: python/.*$

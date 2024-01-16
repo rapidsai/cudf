@@ -1719,7 +1719,7 @@ def build_interval_column(
     right = as_column(right_col)
     if closed not in {"left", "right", "both", "neither"}:
         closed = "right"
-    if type(left_col) is not list:
+    if not isinstance(left_col, list):
         dtype = IntervalDtype(left_col.dtype, closed)
     else:
         dtype = IntervalDtype("int64", closed)

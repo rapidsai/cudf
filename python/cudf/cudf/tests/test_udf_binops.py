@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
@@ -23,7 +23,6 @@ _CUDA_JIT128INT_SUPPORTED = (_driver_version >= 11050) and (
     "dtype", sorted(list(dtypeutils.NUMERIC_TYPES - {"int8"}))
 )
 def test_generic_ptx(dtype):
-
     size = 500
 
     lhs_arr = np.random.random(size).astype(dtype)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import copyreg
@@ -1322,6 +1322,7 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
+
 
 # timestamps and timedeltas are not proxied, but non-proxied
 # pandas types are currently not picklable. Thus, we define

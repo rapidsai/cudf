@@ -201,7 +201,6 @@ class _SeriesIlocIndexer(_FrameIndexer):
 
     @_cudf_nvtx_annotate
     def __setitem__(self, key, value):
-
         if isinstance(key, tuple):
             key = list(key)
 

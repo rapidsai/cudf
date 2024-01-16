@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 import math
 import operator
 
@@ -74,7 +74,6 @@ def run_masked_udf_test(func, data, args=(), nullable=True, **kwargs):
 
 
 def run_masked_string_udf_test(func, data, args=(), **kwargs):
-
     gdf = data
     pdf = data.to_pandas(nullable=True)
 

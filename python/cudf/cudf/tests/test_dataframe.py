@@ -4004,7 +4004,6 @@ def test_diff(dtype, period, data_empty):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_isnull_isna(df, nan_as_null):
-
     if nan_as_null is False and (
         df.select_dtypes(object).isna().any().any()
         and not df.select_dtypes(object).isna().all().all()

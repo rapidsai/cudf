@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from decimal import Decimal
 
@@ -1057,7 +1057,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
 def test_concat_join_no_overlapping_columns_empty_df_basic(
     ignore_index, sort, join, axis
 ):
-
     pdf6 = pd.DataFrame(
         {
             "x": range(10),
