@@ -560,9 +560,7 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             use_real = any(
                 calling_module.is_relative_to(path)
                 for path in loader._denylist
-            ) and not calling_module.is_relative_to(
-                CUDF_PANDAS_PATH
-            )
+            ) and not calling_module.is_relative_to(CUDF_PANDAS_PATH)
         try:
             if use_real:
                 return real[name]
