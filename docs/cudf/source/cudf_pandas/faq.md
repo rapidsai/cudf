@@ -113,6 +113,9 @@ There are a few known limitations that you should be aware of:
   pandas
 - `cudf.pandas` isn't compatible with directly using `import cudf`
    and is intended to be used with pandas-based workflows.
+- Unpickling objects that were pickled with "regular" pandas will not
+  work: you must have pickled an object with `cudf.pandas` enabled for
+  it to be unpickled when `cudf.pandas` is enabled.
 - Global variables can be accessed but can't be modified during CPU-fallback
 
   ```python

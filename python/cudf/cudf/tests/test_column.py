@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf._lib.transform import mask_to_bools
-from cudf.core.column.column import arange, as_column
+from cudf.core.column.column import as_column
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 from cudf.utils import dtypes as dtypeutils
 
@@ -558,9 +558,3 @@ def test_astype_with_aliases(alias, expect_dtype, data):
 def test_as_column_invalid_length(length):
     with pytest.raises(ValueError):
         as_column(1, length=length)
-
-
-def test_arange_empty():
-    result = arange(0)
-    assert len(result) == 0
-    assert result.dtype == np.dtype(np.int64)

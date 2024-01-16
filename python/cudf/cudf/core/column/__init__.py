@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 """
 isort: skip_file
@@ -8,7 +8,6 @@ isort: skip_file
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import (
     ColumnBase,
-    arange,
     as_column,
     build_categorical_column,
     build_column,
