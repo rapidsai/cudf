@@ -95,7 +95,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @property
-    def _has_nulls(self):
+    def _has_nulls(self) -> bool:
         return any(col.has_nulls() for col in self._data.values())
 
     @_cudf_nvtx_annotate
@@ -910,38 +910,6 @@ class Frame(BinaryOperand, Scannable):
         if name not in self._data:
             raise KeyError(f"column '{name}' does not exist")
         del self._data[name]
-
-    @_cudf_nvtx_annotate
-    def _drop_na_columns(self, how="any", subset=None, thresh=None):
-        """
-        Drop columns containing nulls
-        """
-        out_cols = []
-
-        if subset is None:
-            df = self
-        else:
-            df = self.take(subset)
-
-        if thresh is None:
-            if how == "all":
-                thresh = 1
-            else:
-                thresh = len(df)
-
-        for name, col in df._data.items():
-            try:
-                check_col = col.nans_to_nulls()
-            except AttributeError:
-                check_col = col
-            no_threshold_valid_count = (
-                len(col) - check_col.null_count
-            ) < thresh
-            if no_threshold_valid_count:
-                continue
-            out_cols.append(name)
-
-        return self[out_cols]
 
     @_cudf_nvtx_annotate
     def _quantile_table(

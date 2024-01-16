@@ -1445,9 +1445,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
         if engine == "auto":
-            if (not grouped_values._has_nulls) and _can_be_jitted(
-                grouped_values, function, args
-            ):
+            if _can_be_jitted(grouped_values, function, args):
                 engine = "jit"
             else:
                 engine = "cudf"
