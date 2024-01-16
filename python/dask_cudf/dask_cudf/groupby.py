@@ -194,12 +194,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
     @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
     def aggregate(
-        self,
-        arg,
-        split_every=None,
-        split_out=1,
-        shuffle=None,  # Deprecated
-        shuffle_method=None,
+        self, arg, split_every=None, split_out=1, shuffle_method=None
     ):
         if arg == "size":
             return self.size()
@@ -343,12 +338,7 @@ class CudfSeriesGroupBy(SeriesGroupBy):
     @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
     def aggregate(
-        self,
-        arg,
-        split_every=None,
-        split_out=1,
-        shuffle=None,  # Deprecated
-        shuffle_method=None,
+        self, arg, split_every=None, split_out=1, shuffle_method=None
     ):
         if arg == "size":
             return self.size()

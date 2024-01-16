@@ -267,7 +267,6 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
-    shuffle=None,  # Deprecated
     shuffle_method=None,
     sort_function=None,
     sort_function_kwargs=None,

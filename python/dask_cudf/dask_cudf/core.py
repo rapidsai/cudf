@@ -113,13 +113,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
     @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def merge(
-        self,
-        other,
-        shuffle=None,  # Deprecated
-        shuffle_method=None,
-        **kwargs,
-    ):
+    def merge(self, other, shuffle_method=None, **kwargs):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
@@ -132,13 +126,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
     @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def join(
-        self,
-        other,
-        shuffle=None,  # Deprecated
-        shuffle_method=None,
-        **kwargs,
-    ):
+    def join(self, other, shuffle_method=None, **kwargs):
         # CuDF doesn't support "right" join yet
         how = kwargs.pop("how", "left")
         if how == "right":
@@ -162,7 +150,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         other,
         sorted=False,
         divisions=None,
-        shuffle=None,  # Deprecated
         shuffle_method=None,
         **kwargs,
     ):
@@ -245,7 +232,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         na_position="last",
         sort_function=None,
         sort_function_kwargs=None,
-        shuffle=None,  # Deprecated
         shuffle_method=None,
         **kwargs,
     ):
@@ -318,13 +304,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
     @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def shuffle(
-        self,
-        *args,
-        shuffle=None,  # Deprecated
-        shuffle_method=None,
-        **kwargs,
-    ):
+    def shuffle(self, *args, shuffle_method=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
         return super().shuffle(
             *args, shuffle_method=_get_shuffle_method(shuffle_method), **kwargs
