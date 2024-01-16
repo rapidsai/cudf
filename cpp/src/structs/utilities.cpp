@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -258,19 +258,11 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   // If the input is also a struct, repeat for all its children. Otherwise just return.
   if (input->type().id() != cudf::type_id::STRUCT) { return std::move(input); }
 
-  auto const current_mask   = input->view().null_mask();
   auto const new_null_count = input->null_count();  // this was just computed in the step above
   auto content              = input->release();
 
-  // Build new children columns.
-  std::for_each(content.children.begin(),
-                content.children.end(),
-                [current_mask, new_null_count, stream, mr](auto& child) {
-                  child = superimpose_nulls_no_sanitize(
-                    current_mask, new_null_count, std::move(child), stream, mr);
-                });
-
   // Replace the children columns.
+  // make_structs_column recursively calls superimpose_nulls
   return cudf::make_structs_column(num_rows,
                                    std::move(content.children),
                                    new_null_count,
