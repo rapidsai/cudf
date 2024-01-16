@@ -71,7 +71,7 @@ dependencies:
 - pydata-sphinx-theme!=0.14.2
 - pytest
 - pytest-benchmark
-- pytest-cases
+- pytest-cases<3.8.2
 - pytest-cov
 - pytest-xdist
 - python-confluent-kafka>=1.9.0,<1.10.0a0
