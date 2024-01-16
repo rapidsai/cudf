@@ -10,7 +10,7 @@ from utils import benchmark_with_object
 
 
 @pytest_cases.parametrize_with_cases(
-    "objs", prefix="concat", cases="bench_functions"
+    "objs", prefix="concat", cases="cases_functions"
 )
 @pytest.mark.parametrize(
     "axis",
