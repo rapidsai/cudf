@@ -745,7 +745,6 @@ void make_device_json_column(device_span<SymbolT const> input,
       return parent_node_id != parent_node_sentinel and
              column_categories[col_ids[parent_node_id]] == NC_LIST and
              (!d_ignore_vals[col_ids[parent_node_id]]);
-      // node_categories[parent_node_id] == NC_LIST;
     });
 
   auto const num_list_children =

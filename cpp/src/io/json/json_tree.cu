@@ -135,7 +135,7 @@ struct node_ranges {
 };
 
 struct is_nested_end {
-  SymbolT const* tokens;
+  PdaTokenT const* tokens;
   __device__ auto operator()(NodeIndexT i) -> bool
   {
     return tokens[i] == token_t::StructEnd or tokens[i] == token_t::ListEnd;
