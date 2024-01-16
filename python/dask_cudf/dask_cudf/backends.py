@@ -638,3 +638,72 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         return from_dask_dataframe(
             _default_backend(dd.read_hdf, *args, **kwargs)
         )
+
+
+# Define "cudf" backend engine to be registered with Dask-Expressions
+class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Backend-entrypoint class for Dask-Expressions
+
+    This class is registered under the name "cudf" for the
+    ``dask-expr.dataframe.backends`` entrypoint in ``setup.cfg``.
+    Dask-DataFrame will use the methods defined in this class
+    in place of ``dask_expr.<creation-method>`` when the
+    "dataframe.backend" configuration is set to "cudf":
+
+    Examples
+    --------
+    >>> import dask
+    >>> import dask_expr
+    >>> with dask.config.set({"dataframe.backend": "cudf"}):
+    ...     ddf = dx.from_dict({"a": range(10)})
+    >>> type(ddf._meta)
+    <class 'cudf.core.dataframe.DataFrame'>
+    """
+
+    @classmethod
+    def to_backend_dispatch(cls):
+        return CudfBackendEntrypoint.to_backend_dispatch()
+
+    @classmethod
+    def to_backend(cls, *args, **kwargs):
+        return CudfBackendEntrypoint.to_backend(*args, **kwargs)
+
+    @staticmethod
+    def from_dict(
+        data,
+        npartitions,
+        orient="columns",
+        dtype=None,
+        columns=None,
+        constructor=cudf.DataFrame,
+    ):
+        import dask_expr as dx
+
+        return _default_backend(
+            dx.from_dict,
+            data,
+            npartitions=npartitions,
+            orient=orient,
+            dtype=dtype,
+            columns=columns,
+            constructor=constructor,
+        )
+
+    @staticmethod
+    def read_parquet(*args, **kwargs):
+        import dask_expr as dx
+
+        # Dask-Expressions can handle this (for now)
+        return _default_backend(
+            dx.read_parquet,
+            *args,
+            **kwargs,
+        )
+
+    @staticmethod
+    def read_csv(*args, **kwargs):
+        import dask_expr as dx
+
+        from dask_cudf.io import read_csv
+
+        return dx.from_dask_dataframe(read_csv(*args, **kwargs))
