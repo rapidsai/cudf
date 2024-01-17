@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -342,7 +342,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty() || input.chars_size() == 0) {
+  if (input.is_empty() || input.chars_size(stream) == 0) {
     return cudf::make_empty_column(cudf::type_id::STRING);
   }
 
@@ -356,11 +356,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                    : cudf::detail::get_value<cudf::size_type>(
                                                       input.offsets(), input.offset(), stream);
   auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
-                               ? input.chars().size()
+                               ? input.chars_size(stream)
                                : cudf::detail::get_value<cudf::size_type>(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
-  auto const d_input_chars = input.chars().data<char>() + first_offset;
+  auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
   auto const offset_data_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   auto offsets                = cudf::make_numeric_column(
@@ -406,7 +406,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
       cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
     auto const tmp_size  = offsets_total - 1;
     auto const tmp_input = cudf::column_view(
-      input.parent().type(), tmp_size, nullptr, nullptr, 0, 0, {col_offsets, input.chars()});
+      input.parent().type(), tmp_size, input.chars_begin(stream), nullptr, 0, 0, {col_offsets});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 
     // launch the byte-pair-encoding kernel on the temp column
