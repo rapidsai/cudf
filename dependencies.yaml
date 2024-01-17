@@ -614,14 +614,6 @@ dependencies:
           - pytest
           - pytest-cov
           - pytest-xdist
-    specific:
-      - output_types: [conda, requirements, pyproject]
-        matrices:
-          - matrix: {cuda: "12.*"}
-            packages:
-              - pynvjitlink
-          - matrix:
-            packages:
   test_python_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
