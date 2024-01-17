@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2023, NVIDIA CORPORATION.
+from __future__ import annotations
 
+import functools
 import warnings
 from collections.abc import Iterator
 
@@ -689,21 +691,95 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             constructor=constructor,
         )
 
-    @staticmethod
-    def read_parquet(*args, **kwargs):
-        import dask_expr as dx
 
-        # Dask-Expressions can handle this (for now)
-        return _default_backend(
-            dx.read_parquet,
-            *args,
-            **kwargs,
-        )
+try:
+    # Import and monkey-patch dask-expr for cudf support
+    from dask_expr._collection import (
+        DataFrame as DXDataFrame,
+        Index as DXIndex,
+        Series as DXSeries,
+    )
+    from dask_expr._cumulative import CumulativeBlockwise, TakeLast
+    from dask_expr._dispatch import get_collection_type
+    from dask_expr._expr import Expr
 
-    @staticmethod
-    def read_csv(*args, **kwargs):
-        import dask_expr as dx
+    __ext_dispatch_classes = {}  # Track registered "external" dispatch classes
 
-        from dask_cudf.io import read_csv
+    def register_dispatch(cls, meta_type, ext_cls=None):
+        """Register an external/custom expression dispatch"""
 
-        return dx.from_dask_dataframe(read_csv(*args, **kwargs))
+        def wrapper(ext_cls):
+            if cls not in __ext_dispatch_classes:
+                __ext_dispatch_classes[cls] = Dispatch(
+                    f"{cls.__qualname__}_dispatch"
+                )
+            if isinstance(meta_type, tuple):
+                for t in meta_type:
+                    __ext_dispatch_classes[cls].register(t, ext_cls)
+            else:
+                __ext_dispatch_classes[cls].register(meta_type, ext_cls)
+            return ext_cls
+
+        return wrapper(ext_cls) if ext_cls is not None else wrapper
+
+    def _override_new_expr(cls, *args, **kwargs):
+        """Override the __new__ method of an Expr class"""
+        if args and isinstance(args[0], Expr):
+            meta = args[0]._meta
+            try:
+                use_cls = __ext_dispatch_classes[cls].dispatch(type(meta))
+            except (KeyError, TypeError):
+                use_cls = None  # Default case
+            if use_cls:
+                return use_cls(*args, **kwargs)
+        return object.__new__(cls)
+
+    # Monkey-patch `Expr` with meta-based dispatching
+    Expr.register_dispatch = classmethod(register_dispatch)
+    Expr.__new__ = _override_new_expr
+
+    ##
+    ## Custom expression classes
+    ##
+
+    @CumulativeBlockwise.register_dispatch((cudf.DataFrame, cudf.Series))
+    class CumulativeBlockwiseCudf(CumulativeBlockwise):
+        @functools.cached_property
+        def _args(self) -> list:
+            return self.operands[:1]
+
+        @functools.cached_property
+        def _kwargs(self) -> dict:
+            # Must pass axis and skipna as kwargs in cudf
+            return {"axis": self.axis, "skipna": self.skipna}
+
+    @TakeLast.register_dispatch((cudf.DataFrame, cudf.Series))
+    class TakeLastCudf(TakeLast):
+        @staticmethod
+        def operation(a, skipna=True):
+            if not len(a):
+                return a
+            if skipna:
+                a = a.bfill()
+            # Cannot use `squeeze` with cudf
+            return a.tail(n=1).iloc[0]
+
+    ##
+    ## Custom collection classes
+    ##
+
+    @get_collection_type.register(cudf.DataFrame)
+    class DataFrameCudf(DXDataFrame):
+        pass  # Same as pandas (for now)
+
+    @get_collection_type.register(cudf.Series)
+    class SeriesCudf(DXSeries):
+        pass  # Same as pandas (for now)
+
+    @get_collection_type.register(cudf.BaseIndex)
+    class IndexCudf(DXIndex):
+        pass  # Same as pandas (for now)
+
+except ImportError:
+    # Compatible dask_expr version not installed
+    pass
