@@ -122,11 +122,11 @@ struct bpe_unpairable_offsets_fn {
  * @param d_rerank_data Working memory to hold locations where reranking is required
  */
 template <typename MapRefType>
-__global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
-                                MapRefType const d_map,
-                                int8_t* d_spaces_data,          // working memory
-                                cudf::size_type* d_ranks_data,  // more working memory
-                                int8_t* d_rerank_data           // and one more working memory
+CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
+                                 MapRefType const d_map,
+                                 int8_t* d_spaces_data,          // working memory
+                                 cudf::size_type* d_ranks_data,  // more working memory
+                                 int8_t* d_rerank_data           // and one more working memory
 )
 {
   // string per block
@@ -291,9 +291,9 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
  * @param d_spaces_data Output the location where separator will be inserted
  * @param d_sizes Output sizes of each row
  */
-__global__ void bpe_finalize(cudf::column_device_view const d_strings,
-                             int8_t* d_spaces_data,    // where separators are inserted
-                             cudf::size_type* d_sizes  // output sizes of encoded strings
+CUDF_KERNEL void bpe_finalize(cudf::column_device_view const d_strings,
+                              int8_t* d_spaces_data,    // where separators are inserted
+                              cudf::size_type* d_sizes  // output sizes of encoded strings
 )
 {
   // string per block

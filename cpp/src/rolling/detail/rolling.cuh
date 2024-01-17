@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1022,7 +1022,7 @@ template <typename OutputType,
           typename DeviceRollingOperator,
           typename PrecedingWindowIterator,
           typename FollowingWindowIterator>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void gpu_rolling(column_device_view input,
                    column_device_view default_outputs,
                    mutable_column_device_view output,

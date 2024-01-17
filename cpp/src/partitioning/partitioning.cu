@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,14 +122,14 @@ class bitwise_partitioner {
  * @param[out] global_partition_sizes The number of rows in each partition.
  */
 template <class row_hasher_t, typename partitioner_type>
-__global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
-                                              size_type const num_rows,
-                                              size_type const num_partitions,
-                                              partitioner_type const the_partitioner,
-                                              size_type* __restrict__ row_partition_numbers,
-                                              size_type* __restrict__ row_partition_offset,
-                                              size_type* __restrict__ block_partition_sizes,
-                                              size_type* __restrict__ global_partition_sizes)
+CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
+                                               size_type const num_rows,
+                                               size_type const num_partitions,
+                                               partitioner_type const the_partitioner,
+                                               size_type* __restrict__ row_partition_numbers,
+                                               size_type* __restrict__ row_partition_offset,
+                                               size_type* __restrict__ block_partition_sizes,
+                                               size_type* __restrict__ global_partition_sizes)
 {
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
@@ -197,10 +197,10 @@ __global__ void compute_row_partition_numbers(row_hasher_t the_hasher,
          {block0 partition(num_partitions-1) offset, block1
  partition(num_partitions -1) offset, ...} }
  */
-__global__ void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
-                                             size_type const num_rows,
-                                             size_type const num_partitions,
-                                             size_type* __restrict__ block_partition_offsets)
+CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partition_numbers,
+                                              size_type const num_rows,
+                                              size_type const num_partitions,
+                                              size_type* __restrict__ block_partition_offsets)
 {
   // Shared array that holds the offset of this blocks partitions in
   // global memory
@@ -255,14 +255,14 @@ __global__ void compute_row_output_locations(size_type* __restrict__ row_partiti
  * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
  */
 template <typename InputIter, typename DataType>
-__global__ void copy_block_partitions(InputIter input_iter,
-                                      DataType* __restrict__ output_buf,
-                                      size_type const num_rows,
-                                      size_type const num_partitions,
-                                      size_type const* __restrict__ row_partition_numbers,
-                                      size_type const* __restrict__ row_partition_offset,
-                                      size_type const* __restrict__ block_partition_sizes,
-                                      size_type const* __restrict__ scanned_block_partition_sizes)
+CUDF_KERNEL void copy_block_partitions(InputIter input_iter,
+                                       DataType* __restrict__ output_buf,
+                                       size_type const num_rows,
+                                       size_type const num_partitions,
+                                       size_type const* __restrict__ row_partition_numbers,
+                                       size_type const* __restrict__ row_partition_offset,
+                                       size_type const* __restrict__ block_partition_sizes,
+                                       size_type const* __restrict__ scanned_block_partition_sizes)
 {
   extern __shared__ char shared_memory[];
   auto block_output = reinterpret_cast<DataType*>(shared_memory);

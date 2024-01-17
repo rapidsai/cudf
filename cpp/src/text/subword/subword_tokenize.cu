@@ -56,7 +56,7 @@ namespace {
  * @param[out] attn_mask Identifies valid token id entries
  * @param[out] metadata Additional data per row
  */
-__global__ void kernel_compute_tensor_metadata(
+CUDF_KERNEL void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
   cudf::size_type const* offsets,
