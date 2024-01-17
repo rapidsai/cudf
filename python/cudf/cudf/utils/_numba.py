@@ -3,13 +3,13 @@
 import glob
 import os
 import sys
-
 from functools import lru_cache
 
 from numba import config as numba_config
 from pynvjitlink.patch import (
     patch_numba_linker as patch_numba_linker_pynvjitlink,
 )
+
 
 # Use an lru_cache with a single value to allow a delayed import of
 # strings_udf. This is the easiest way to break an otherwise circular import
