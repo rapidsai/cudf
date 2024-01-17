@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -315,3 +315,22 @@ def test_intervalindex_empty_typed_non_int():
     result = cudf.IntervalIndex(data)
     expected = pd.IntervalIndex(data)
     assert_eq(result, expected)
+
+
+def test_intervalindex_invalid_dtype():
+    with pytest.raises(TypeError):
+        cudf.IntervalIndex([pd.Interval(1, 2)], dtype="int64")
+
+
+def test_intervalindex_conflicting_closed():
+    with pytest.raises(TypeError):
+        cudf.IntervalIndex(
+            [pd.Interval(1, 2)],
+            dtype=cudf.IntervalDtype("int64", closed="left"),
+            closed="right",
+        )
+
+
+def test_intervalindex_invalid_data():
+    with pytest.raises(TypeError):
+        cudf.IntervalIndex([1, 2])

@@ -3224,39 +3224,44 @@ class IntervalIndex(GenericIndex):
         copy=False,
         name=None,
     ):
-        if copy:
-            data = column.as_column(data, dtype=dtype).copy()
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)
 
-        if closed is None:
-            closed = "right"
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if not isinstance(dtype, IntervalDtype):
+                raise TypeError("dtype must be an IntervalDtype")
+            if closed is not None and closed != dtype.closed:
+                raise ValueError("closed keyword does not match dtype.closed")
+            closed = dtype.closed
 
-        if isinstance(data, IntervalColumn):
-            data = data
-        elif isinstance(data, pd.Series) and isinstance(
-            data.dtype, pd.IntervalDtype
-        ):
-            data = column.as_column(data, data.dtype)
-        elif isinstance(data, (pd.Interval, pd.IntervalIndex)):
-            data = column.as_column(
-                data,
-                dtype=dtype,
-            )
+        if closed is None and isinstance(dtype, IntervalDtype):
+            closed = dtype.closed
+
+        closed = closed or "right"
+
+        if dtype is None and len(data) == 0:
+            dtype = IntervalDtype(getattr(data, "dtype", "int64"), closed)
+
+        data = as_column(data)
+        if not isinstance(data, IntervalColumn) and len(data) > 0:
+            raise TypeError("data must be an iterable of Interval data")
         elif len(data) == 0:
             subtype = getattr(data, "dtype", "int64")
             dtype = IntervalDtype(subtype, closed)
-            data = column.column_empty_like_same_mask(
-                column.as_column(data), dtype
-            )
-        else:
-            data = column.as_column(data)
-            data.dtype.closed = closed
 
+        if copy:
+            data = data.copy()
+
+        if dtype:
+            data = data.astype(dtype)
         self.closed = closed
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
     @_cudf_nvtx_annotate
-    def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
+    @classmethod
+    def from_breaks(
+        cls, breaks, closed="right", name=None, copy=False, dtype=None
+    ):
         """
         Construct an IntervalIndex from an array of splits.
 
