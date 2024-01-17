@@ -542,7 +542,7 @@ CUDF_KERNEL void __launch_bounds__(128)
   auto const data_page_type = write_v2_headers ? PageType::DATA_PAGE_V2 : PageType::DATA_PAGE;
 
   // Max page header size excluding statistics
-  auto const max_page_hdr_size = write_v2_headers ? MAX_V2_HDR_SIZE : MAX_V1_HDR_SIZE;
+  auto const max_data_page_hdr_size = write_v2_headers ? MAX_V2_HDR_SIZE : MAX_V1_HDR_SIZE;
 
   if (t == 0) {
     col_g  = col_desc[blockIdx.x];
@@ -694,7 +694,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.chunk_id      = blockIdx.y * num_columns + blockIdx.x;
           page_g.page_type     = data_page_type;
           page_g.hdr_size      = 0;
-          page_g.max_hdr_size  = max_page_hdr_size;  // Max size excluding statistics
+          page_g.max_hdr_size  = max_data_page_hdr_size;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
             if (col_g.stats_dtype == dtype_string || col_g.stats_dtype == dtype_byte_array) {
