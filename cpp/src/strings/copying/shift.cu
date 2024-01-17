@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -69,8 +69,7 @@ struct shift_chars_fn {
         auto const first_index =
           offset + d_column.child(strings_column_view::offsets_column_index)
                      .element<size_type>(d_column.offset() + d_column.size());
-        return d_column.child(strings_column_view::chars_column_index)
-          .element<char>(idx + first_index);
+        return d_column.head<char>()[idx + first_index];
       } else {
         auto const char_index = idx - last_index;
         return d_filler.data()[char_index % d_filler.size_bytes()];
@@ -79,10 +78,9 @@ struct shift_chars_fn {
       if (idx < offset) {
         return d_filler.data()[idx % d_filler.size_bytes()];
       } else {
-        return d_column.child(strings_column_view::chars_column_index)
-          .element<char>(idx - offset +
-                         d_column.child(strings_column_view::offsets_column_index)
-                           .element<size_type>(d_column.offset()));
+        return d_column.head<char>()[idx - offset +
+                                     d_column.child(strings_column_view::offsets_column_index)
+                                       .element<size_type>(d_column.offset())];
       }
     }
   }
