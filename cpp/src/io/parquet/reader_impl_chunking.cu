@@ -404,7 +404,7 @@ void reader::impl::create_global_chunk_info()
 
       // grab the column_chunk_info for each chunk (if it exists)
       column_chunk_info const* const chunk_info =
-        _has_page_index ? &rg.columns.value()[column_mapping[i]] : nullptr;
+        _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
 
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
                                        nullptr,

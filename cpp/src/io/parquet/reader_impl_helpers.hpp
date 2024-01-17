@@ -81,7 +81,7 @@ struct row_group_info {
   size_type source_index;  // file index.
 
   // Optional metadata pulled from the column and offset indexes, if present.
-  std::optional<std::vector<column_chunk_info>> columns;
+  std::optional<std::vector<column_chunk_info>> column_chunks;
 
   row_group_info() = default;
 
@@ -93,7 +93,7 @@ struct row_group_info {
   /**
    * @brief Indicates the presence of page-level indexes.
    */
-  [[nodiscard]] bool has_page_index() const { return columns.has_value(); }
+  [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
 };
 
 /**

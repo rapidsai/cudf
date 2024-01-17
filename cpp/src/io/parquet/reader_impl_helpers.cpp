@@ -387,8 +387,8 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
   auto const& fmd = per_file_metadata[rg_info.source_index];
   auto const& rg  = fmd.row_groups[rg_info.index];
 
-  std::vector<column_chunk_info> columns;
-  columns.resize(rg.columns.size());
+  std::vector<column_chunk_info> chunks;
+  chunks.resize(rg.columns.size());
 
   for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
     auto const& col_chunk    = rg.columns[col_idx];
@@ -399,14 +399,13 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
     // If any columns lack the page indexes then just return without modifying the
     // row_group_info.
     if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
-      rg_info.columns = std::nullopt;
       return;
     }
 
     auto const& offset_index = col_chunk.offset_index.value();
     auto const& column_index = col_chunk.column_index.value();
 
-    auto& chunk_info     = columns[col_idx];
+    auto& chunk_info     = chunks[col_idx];
     auto const num_pages = offset_index.page_locations.size();
 
     // There is a bug in older versions of parquet-mr where the first data page offset
@@ -502,23 +501,17 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
       // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
       // info is missing or insufficient, then just return without modifying the row_group_info.
-      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) {
-        rg_info.columns = std::nullopt;
-        return;
-      }
+      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) { return; }
 
       // if using older page indexes that lack size info, don't use
       // TODO: might be ok if an empty page doesn't have var_byte_size set
-      if (schema.type == BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) {
-        rg_info.columns = std::nullopt;
-        return;
-      }
+      if (schema.type == BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
 
       chunk_info.pages.push_back(std::move(pg_info));
     }
   }
 
-  rg_info.columns = std::move(columns);
+  rg_info.column_chunks = std::move(chunks);
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
