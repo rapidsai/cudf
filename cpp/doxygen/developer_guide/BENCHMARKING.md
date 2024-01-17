@@ -23,7 +23,7 @@ benchmarks in `cpp/benchmarks/copying/scatter.cu`.
 In the interest of improving compile time, whenever possible, test source files should be `.cpp`
 files because `nvcc` is slower than `gcc` in compiling host code. Note that `thrust::device_vector`
 includes device code, and so must only be used in `.cu` files. `rmm::device_uvector`,
-`rmm::device_buffer` and the various `column_wrapper` types described in [Testing](testing)
+`rmm::device_buffer` and the various `column_wrapper` types described in [Testing](TESTING.md)
 can be used in `.cpp` files, and are therefore preferred in test code over `thrust::device_vector`.
 
 ## CUDA Asynchrony and benchmark accuracy
@@ -37,7 +37,7 @@ performance in repeated iterations.
 
 ## Data generation
 
-For generating benchmark input data, helper functions are available at ``cpp/benchmarks/common/generate_input.hpp``. The input data generation happens on device, in contrast to any `column_wrapper` where data generation happens on the host.
+For generating benchmark input data, helper functions are available at [cpp/benchmarks/common/generate_input.hpp](/cpp/benchmarks/common/generate_input.hpp). The input data generation happens on device, in contrast to any `column_wrapper` where data generation happens on the host.
 * `create_sequence_table` can generate sequence columns starting with value 0 in first row and increasing by 1 in subsequent rows.
 * `create_random_column` can generate a column filled with random data. The random data parameters are configurable.
 * `create_random_table` can generate a table of columns filled with random data. The random data parameters are configurable.

@@ -1,6 +1,11 @@
 # libcudf C++ Developer Guide {#DEVELOPER_GUIDE}
 
-This document serves as a guide for contributors to libcudf C++ code.
+This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
+to these additional files for further documentation of libcudf best practices.
+
+* [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
+* [Testing Guide](TESTING.md) for guidelines on writing unit tests.
+* [Benchmarking Guide](BENCHMARKING.md) for guidelines on writing unit benchmarks.
 
 # Overview
 
@@ -130,7 +135,7 @@ Additional style guidelines for libcudf code include:
    `1'234'567`. Hexadecimal values should use separators every 4 characters,
    like `0x0123'ABCD`.
 
-Documentation is discussed in the [Documentation Guide](documentation).
+Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
 ### Includes
 
@@ -429,7 +434,7 @@ inputs. The types of those exceptions (e.g. `cudf::logic_error`) are part of the
 However, the explanatory string returned by the `what` method of those exceptions is not part of the
 API and is subject to change. Calling code should not rely on the contents of libcudf error
 messages to determine the nature of the error. For information on the types of exceptions that
-libcudf throws under different circumstances, see the [section on error handling](#error-handling).
+libcudf throws under different circumstances, see the [section on error handling](#errors).
 
 # libcudf API and Implementation
 
@@ -889,7 +894,6 @@ the "breaking" tag. This ensures that the "Breaking" section of the release note
 description of what has broken from the past release. Label pull requests that contain deprecations
 with the "non-breaking" tag.
 
-(error-handling)=
 
 # Error Handling {#errors}
 
@@ -1335,8 +1339,6 @@ includes a `string_view::const_iterator` which can be used to navigate through i
 within the string.
 
 `cudf::type_dispatcher` dispatches to the `string_view` data type when invoked on a `STRING` column.
-
-(utf-8)=
 
 #### UTF-8
 

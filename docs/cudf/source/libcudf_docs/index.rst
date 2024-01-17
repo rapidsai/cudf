@@ -8,7 +8,6 @@ libcudf documentation
    api_docs/index.rst
    md_regex
    unicode_limitations
-   developer_guide/index.rst
 
 
 Indices and tables
