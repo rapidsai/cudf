@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
@@ -42,7 +43,8 @@ struct nvbench_base_fixture {
 
   inline auto make_pool()
   {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+      make_cuda(), rmm::percent_of_free_device_memory(50));
   }
 
   inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
@@ -56,7 +58,8 @@ struct nvbench_base_fixture {
 
   inline auto make_managed_pool()
   {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_managed());
+    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+      make_managed(), rmm::percent_of_free_device_memory(50));
   }
 
   inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
