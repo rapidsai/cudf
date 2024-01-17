@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,12 +40,12 @@ template <cudf::size_type block_size,
           typename SourceValidityIterator,
           typename T,
           bool has_validity>
-__global__ void copy_range_kernel(SourceValueIterator source_value_begin,
-                                  SourceValidityIterator source_validity_begin,
-                                  cudf::mutable_column_device_view target,
-                                  cudf::size_type target_begin,
-                                  cudf::size_type target_end,
-                                  cudf::size_type* __restrict__ const null_count)
+CUDF_KERNEL void copy_range_kernel(SourceValueIterator source_value_begin,
+                                   SourceValidityIterator source_validity_begin,
+                                   cudf::mutable_column_device_view target,
+                                   cudf::size_type target_begin,
+                                   cudf::size_type target_end,
+                                   cudf::size_type* __restrict__ const null_count)
 {
   using cudf::detail::warp_size;
 
