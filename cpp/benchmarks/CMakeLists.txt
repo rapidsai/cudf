@@ -186,7 +186,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * create benchmark
 # --------------------------------------------------------------------------------
-ConfigureNVBench(STRUCT_CREATION_NVBENCH create/create_structs.cpp)
+ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
