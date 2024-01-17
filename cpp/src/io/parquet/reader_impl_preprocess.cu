@@ -296,8 +296,8 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 {
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
-    CUDF_EXPECTS(chunk.col_info != nullptr, "Expected non-null column info struct");
-    auto const& col_info = *chunk.col_info;
+    CUDF_EXPECTS(chunk.h_col_info != nullptr, "Expected non-null column info struct");
+    auto const& col_info = *chunk.h_col_info;
     chunk.num_dict_pages = col_info.has_dictionary() ? 1 : 0;
     chunk.num_data_pages = col_info.pages.size();
     total_pages += chunk.num_data_pages + chunk.num_dict_pages;
@@ -316,8 +316,8 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks, host_span<PageInfo> pa
   // also fix page chunk_row and num_rows
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
-    CUDF_EXPECTS(chunk.col_info != nullptr, "Expected non-null column info struct");
-    auto const& col_info = *chunk.col_info;
+    CUDF_EXPECTS(chunk.h_col_info != nullptr, "Expected non-null column info struct");
+    auto const& col_info = *chunk.h_col_info;
     size_t start_row     = 0;
     page_count += chunk.num_dict_pages;
     for (size_t p = 0; p < col_info.pages.size(); p++, page_count++) {
