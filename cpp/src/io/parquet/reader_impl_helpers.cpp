@@ -650,10 +650,9 @@ aggregate_reader_metadata::select_row_groups(
         CUDF_EXPECTS(
           rowgroup_idx >= 0 && rowgroup_idx < static_cast<size_type>(fmd.row_groups.size()),
           "Invalid rowgroup index");
-        row_group_info rgi(rowgroup_idx, rows_to_read, src_idx);
+        selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
         // if page-level indexes are present, then collect extra chunk and page info.
-        column_info_for_row_group(rgi, 0);
-        selection.emplace_back(std::move(rgi));
+        column_info_for_row_group(selection.back(), 0);
         rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
       }
     }
@@ -666,10 +665,9 @@ aggregate_reader_metadata::select_row_groups(
         auto const chunk_start_row = count;
         count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
-          row_group_info rgi(rg_idx, chunk_start_row, src_idx);
+          selection.emplace_back(rg_idx, chunk_start_row, src_idx);
           // if page-level indexes are present, then collect extra chunk and page info.
-          column_info_for_row_group(rgi, chunk_start_row);
-          selection.emplace_back(std::move(rgi));
+          column_info_for_row_group(selection.back(), chunk_start_row);
         }
         if (count >= rows_to_skip + rows_to_read) { break; }
       }
