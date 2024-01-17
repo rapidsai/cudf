@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -104,10 +104,10 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
-  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../udf" ${tgt}.ptx)
+  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../cudf/core/udf" ${tgt}.ptx)
   install(
     FILES $<TARGET_OBJECTS:${tgt}>
-    DESTINATION ./cudf/core/udf/
+    DESTINATION cudf/core/udf/
     RENAME ${tgt}.ptx
   )
 endforeach()
