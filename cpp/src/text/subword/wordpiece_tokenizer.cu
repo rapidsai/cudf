@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,12 +75,12 @@ namespace {
  * @param[out] tokens_per_word An array of size `num_code_points` which hold the number of
  *        tokens. This kernel just sets all the values to 0.
  */
-__global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
-                                                       uint32_t* start_word_indices,
-                                                       uint32_t* end_word_indices,
-                                                       size_t num_code_points,
-                                                       uint32_t* token_ids,
-                                                       uint8_t* tokens_per_word)
+CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
+                                                        uint32_t* start_word_indices,
+                                                        uint32_t* end_word_indices,
+                                                        size_t num_code_points,
+                                                        uint32_t* token_ids,
+                                                        uint8_t* tokens_per_word)
 {
   cudf::thread_index_type char_for_thread = static_cast<cudf::thread_index_type>(blockDim.x) *
                                               static_cast<cudf::thread_index_type>(blockIdx.x) +
@@ -131,11 +131,11 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_poin
  *        written to indicate this.
  * @param num_strings The total number of strings to be processed.
  */
-__global__ void mark_string_start_and_ends(uint32_t const* code_points,
-                                           cudf::size_type const* strings_offsets,
-                                           uint32_t* start_word_indices,
-                                           uint32_t* end_word_indices,
-                                           uint32_t num_strings)
+CUDF_KERNEL void mark_string_start_and_ends(uint32_t const* code_points,
+                                            cudf::size_type const* strings_offsets,
+                                            uint32_t* start_word_indices,
+                                            uint32_t* end_word_indices,
+                                            uint32_t num_strings)
 {
   cudf::thread_index_type idx = static_cast<cudf::thread_index_type>(blockDim.x) *
                                   static_cast<cudf::thread_index_type>(blockIdx.x) +
@@ -319,20 +319,20 @@ struct mark_special_tokens {
  * @param outer_hash_b_param: The b parameter for the outer hash
  * @param num_outer_bins: The number of bins for the outer hash
  */
-__global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
-                                           uint64_t const* hash_table,
-                                           uint64_t const* bin_coefficients,
-                                           uint16_t const* bin_offsets,
-                                           uint16_t unk_token_id,
-                                           uint32_t outer_hash_a_param,
-                                           uint32_t outer_hash_b_param,
-                                           uint16_t num_outer_bins,
-                                           uint32_t const* word_starts,
-                                           uint32_t const* word_ends,
-                                           uint32_t max_word_length,
-                                           uint32_t total_words,
-                                           uint32_t* token_ids,
-                                           uint8_t* tokens_per_word)
+CUDF_KERNEL void kernel_wordpiece_tokenizer(uint32_t const* code_points,
+                                            uint64_t const* hash_table,
+                                            uint64_t const* bin_coefficients,
+                                            uint16_t const* bin_offsets,
+                                            uint16_t unk_token_id,
+                                            uint32_t outer_hash_a_param,
+                                            uint32_t outer_hash_b_param,
+                                            uint16_t num_outer_bins,
+                                            uint32_t const* word_starts,
+                                            uint32_t const* word_ends,
+                                            uint32_t max_word_length,
+                                            uint32_t total_words,
+                                            uint32_t* token_ids,
+                                            uint8_t* tokens_per_word)
 {
   cudf::thread_index_type word_to_tokenize = static_cast<cudf::thread_index_type>(blockDim.x) *
                                                static_cast<cudf::thread_index_type>(blockIdx.x) +

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -363,7 +363,7 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()), stream);
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto const h_offsets = cudf::detail::make_std_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),

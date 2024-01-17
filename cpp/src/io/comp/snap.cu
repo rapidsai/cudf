@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -257,7 +257,7 @@ static __device__ uint32_t Match60(uint8_t const* src1,
  * @param[out] outputs Compression status per block
  * @param[in] count Number of blocks to compress
  */
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   snap_kernel(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
               device_span<compression_result> results)
