@@ -99,6 +99,7 @@ cd $CUDF_HOME
 **Note:** Using a conda environment is the easiest way to satisfy the library's dependencies.
 Instructions for a minimal build environment without conda are included below.
 
+- [Install conda](https://conda.io/projects/conda/en/latest/user-guide/install/index.html) if needed.
 - Create the conda development environment:
 
 ```bash
