@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -431,8 +431,8 @@ def test_assert_column_memory_basic_same(arrow_arrays):
     data = cudf.core.column.ColumnBase.from_arrow(arrow_arrays)
     buf = cudf.core.buffer.as_buffer(data.base_data)
 
-    left = cudf.core.column.build_column(buf, dtype=np.int32)
-    right = cudf.core.column.build_column(buf, dtype=np.int32)
+    left = cudf.core.column.build_column(buf, dtype=np.int8)
+    right = cudf.core.column.build_column(buf, dtype=np.int8)
 
     assert_column_memory_eq(left, right)
     with pytest.raises(AssertionError):

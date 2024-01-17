@@ -78,11 +78,11 @@ __forceinline__ __device__ uint4 load_uint4(char const* ptr)
  * @param total_out_strings Number of output strings to be gathered.
  */
 template <typename StringIterator, typename MapIterator>
-__global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
-                                                char* out_chars,
-                                                cudf::detail::input_offsetalator const out_offsets,
-                                                MapIterator string_indices,
-                                                size_type total_out_strings)
+CUDF_KERNEL void gather_chars_fn_string_parallel(StringIterator strings_begin,
+                                                 char* out_chars,
+                                                 cudf::detail::input_offsetalator const out_offsets,
+                                                 MapIterator string_indices,
+                                                 size_type total_out_strings)
 {
   constexpr size_t out_datatype_size = sizeof(uint4);
   constexpr size_t in_datatype_size  = sizeof(uint);
@@ -160,11 +160,11 @@ __global__ void gather_chars_fn_string_parallel(StringIterator strings_begin,
  * @param total_out_strings Number of output strings to be gathered.
  */
 template <int strings_per_threadblock, typename StringIterator, typename MapIterator>
-__global__ void gather_chars_fn_char_parallel(StringIterator strings_begin,
-                                              char* out_chars,
-                                              cudf::detail::input_offsetalator const out_offsets,
-                                              MapIterator string_indices,
-                                              size_type total_out_strings)
+CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
+                                               char* out_chars,
+                                               cudf::detail::input_offsetalator const out_offsets,
+                                               MapIterator string_indices,
+                                               size_type total_out_strings)
 {
   __shared__ int64_t out_offsets_threadblock[strings_per_threadblock + 1];
 

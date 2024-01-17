@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <benchmark/benchmark.h>
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -33,7 +34,8 @@ inline auto make_pool_instance()
 {
   static rmm::mr::cuda_memory_resource cuda_mr;
   static auto pool_mr =
-    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(&cuda_mr);
+    std::make_shared<rmm::mr::pool_memory_resource<rmm::mr::cuda_memory_resource>>(
+      &cuda_mr, rmm::percent_of_free_device_memory(50));
   return pool_mr;
 }
 }  // namespace
