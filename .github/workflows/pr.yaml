@@ -15,6 +15,7 @@ jobs:
       - checks
       - conda-cpp-build
       - conda-cpp-tests
+      - conda-cpp-checks
       - conda-python-build
       - conda-python-cudf-tests
       - conda-python-other-tests
@@ -49,6 +50,13 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.02
     with:
       build_type: pull-request
+  conda-cpp-checks:
+    needs: conda-cpp-build
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.02
+    with:
+      build_type: pull-request
+      enable_check_symbols: true
   conda-python-build:
     needs: conda-cpp-build
     secrets: inherit
