@@ -35,7 +35,7 @@ constexpr unsigned int init_threads_per_group = 32;
 constexpr unsigned int init_groups_per_block  = 4;
 constexpr unsigned int init_threads_per_block = init_threads_per_group * init_groups_per_block;
 
-__global__ void __launch_bounds__(init_threads_per_block)
+CUDF_KERNEL void __launch_bounds__(init_threads_per_block)
   gpu_init_statistics_groups(statistics_group* groups,
                              stats_column_desc const* cols,
                              device_2dspan<rowgroup_rows const> rowgroup_bounds)
@@ -73,7 +73,7 @@ constexpr unsigned int pb_fldlen_common =
   pb_fld_hdrlen + (pb_fld_hdrlen + pb_fldlen_int64) + 2 * pb_fld_hdrlen;
 
 template <unsigned int block_size>
-__global__ void __launch_bounds__(block_size, 1)
+CUDF_KERNEL void __launch_bounds__(block_size, 1)
   gpu_init_statistics_buffersize(statistics_merge_group* groups,
                                  statistics_chunk const* chunks,
                                  uint32_t statistics_count)
@@ -249,7 +249,7 @@ constexpr unsigned int encode_chunks_per_block  = 4;
 constexpr unsigned int encode_threads_per_block =
   encode_threads_per_chunk * encode_chunks_per_block;
 
-__global__ void __launch_bounds__(encode_threads_per_block)
+CUDF_KERNEL void __launch_bounds__(encode_threads_per_block)
   gpu_encode_statistics(uint8_t* blob_bfr,
                         statistics_merge_group* groups,
                         statistics_chunk const* chunks,
