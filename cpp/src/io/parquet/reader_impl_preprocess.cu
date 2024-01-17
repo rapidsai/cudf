@@ -919,7 +919,6 @@ void reader::impl::load_and_decompress_data()
     // level decode space
     allocate_level_decode_space();
 
-    // TODO(ets): what in the above 2 can be skipped if we have stats
     if (_has_page_index) { fill_in_page_info(chunks, pages); }
   }
   pages.host_to_device_async(_stream);
