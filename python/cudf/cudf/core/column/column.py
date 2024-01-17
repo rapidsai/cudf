@@ -2036,6 +2036,8 @@ def as_column(
                 new_dtype = "str"
 
             col = col.astype(new_dtype)
+        elif dtype is not None:
+            col = col.astype(dtype)
 
         return col
 
@@ -2112,6 +2114,15 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
+            if len(arbitrary) == 0:
+                # TODO: Can remove once empty constructor default becomes
+                # object instead of float.
+                return as_column(
+                    pa.array([], type=pa.string()),
+                    nan_as_null=nan_as_null,
+                    dtype=dtype,
+                    length=length,
+                )
             if isinstance(arbitrary, pd.arrays.PandasArray):
                 # infer_dtype does not handle PandasArray
                 arbitrary = np.array(arbitrary, dtype=object)
@@ -2140,15 +2151,9 @@ def as_column(
                 arbitrary,
                 from_pandas=True,
             )
-            if isinstance(pyarrow_array.type, pa.Decimal128Type):
-                pyarrow_type = cudf.Decimal128Dtype.from_arrow(
-                    pyarrow_array.type
-                )
-            else:
-                pyarrow_type = arbitrary.dtype
             data = as_column(
                 pyarrow_array,
-                dtype=pyarrow_type,
+                dtype=dtype,
                 nan_as_null=nan_as_null,
                 length=length,
             )
@@ -2280,7 +2285,7 @@ def as_column(
             if dtype is not None:
                 data = data.astype(dtype)
         elif arb_dtype.kind in ("O", "U"):
-            data = as_column(pa.array(arbitrary), dtype=arbitrary.dtype)
+            data = as_column(pa.array(arbitrary), dtype=dtype)
             # There is no cast operation available for pa.Array from int to
             # str, Hence instead of handling in pa.Array block, we
             # will have to type-cast here.
