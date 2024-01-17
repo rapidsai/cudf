@@ -105,7 +105,7 @@ def _setup_numba():
     with the user cuDF package.
     """
 
-    # Either ptxcompiler, or our vendored version (_ptxcompiloer.py)
+    # Either ptxcompiler, or our vendored version (_ptxcompiler.py)
     # is needed to determine the driver and runtime CUDA versions in
     # the environment. In a CUDA 11.x environment, ptxcompiler is used
     # to provide MVC directly, whereas for CUDA 12.x this is provided
