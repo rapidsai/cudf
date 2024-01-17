@@ -12,6 +12,7 @@ dependencies:
 - benchmark==1.8.0
 - boto3>=1.21.21
 - botocore>=1.24.21
+- breathe>=4.35.0
 - c-compiler
 - cachetools
 - clang-tools=16.0.6
