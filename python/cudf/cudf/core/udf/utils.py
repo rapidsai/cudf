@@ -61,12 +61,12 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 launch_arg_getters: Dict[Any, Any] = {}
 
+
 @functools.cache
 def _ptx_file():
     return _get_ptx_file(
         os.path.join(
-            os.path.dirname(strings_udf.__file__),
-            "..", "core", "udf"
+            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
         ),
         "shim_",
     )
