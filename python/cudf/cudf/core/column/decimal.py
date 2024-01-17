@@ -1,4 +1,6 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+
+from __future__ import annotations
 
 import warnings
 from decimal import Decimal
@@ -7,6 +9,7 @@ from typing import Any, Optional, Sequence, Union, cast
 import cupy as cp
 import numpy as np
 import pyarrow as pa
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -36,7 +39,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self,
+        dtype: Dtype,
     ) -> Union["DecimalBaseColumn"]:
         if (
             isinstance(dtype, cudf.core.dtypes.DecimalDtype)
@@ -52,7 +56,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return cpp_from_decimal(self)
@@ -125,29 +129,28 @@ class DecimalBaseColumn(NumericalBaseColumn):
 
     def fillna(
         self,
-        value: Any = None,
+        fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ):
+    ) -> Self:
         """Fill null values with ``value``.
 
         Returns a copy with null filled.
         """
-        if isinstance(value, (int, Decimal)):
-            value = cudf.Scalar(value, dtype=self.dtype)
+        if isinstance(fill_value, (int, Decimal)):
+            fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
         elif (
-            isinstance(value, DecimalBaseColumn)
-            or isinstance(value, cudf.core.column.NumericalColumn)
-            and is_integer_dtype(value.dtype)
+            isinstance(fill_value, DecimalBaseColumn)
+            or isinstance(fill_value, cudf.core.column.NumericalColumn)
+            and is_integer_dtype(fill_value.dtype)
         ):
-            value = value.astype(self.dtype)
+            fill_value = fill_value.astype(self.dtype)
         else:
             raise TypeError(
                 "Decimal columns only support using fillna with decimal and "
                 "integer values"
             )
 
-        return super().fillna(value=value, method=method)
+        return super().fillna(fill_value, method=method)
 
     def normalize_binop_value(self, other):
         if isinstance(other, ColumnBase):
@@ -201,7 +204,7 @@ class DecimalBaseColumn(NumericalBaseColumn):
         return result._with_type_metadata(self.dtype)
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
 

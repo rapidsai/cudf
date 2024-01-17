@@ -1,4 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+
+from __future__ import annotations
 
 from functools import cached_property
 from typing import List, Optional, Sequence, Tuple, Union
@@ -243,7 +245,7 @@ class ListColumn(ColumnBase):
         return res
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         """
         Create a strings column from a list column
