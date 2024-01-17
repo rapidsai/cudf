@@ -93,7 +93,7 @@ __device__ inline uint64_t swap_endian(uint64_t x)
  * Licensed under the MIT license.
  * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
  */
-void __device__ inline uint32ToLowercaseHexString(uint32_t num, char* destination)
+__device__ inline void uint32ToLowercaseHexString(uint32_t num, char* destination)
 {
   // Transform 0xABCD'1234 => 0x0000'ABCD'0000'1234 => 0x0B0A'0D0C'0201'0403
   uint64_t x = num;

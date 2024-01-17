@@ -108,7 +108,7 @@ struct HashBase : public crtp<Hasher> {
    * This accepts arbitrary data, handles it as bytes, and calls the hash step
    * when the buffer is filled up to message_chunk_size bytes.
    */
-  void __device__ inline process(uint8_t const* data, uint32_t len)
+  __device__ inline void process(uint8_t const* data, uint32_t len)
   {
     auto& state = this->underlying().state;
     state.message_length += len;
@@ -140,7 +140,7 @@ struct HashBase : public crtp<Hasher> {
   }
 
   template <typename T>
-  void __device__ inline process_fixed_width(T const& key)
+  __device__ inline void process_fixed_width(T const& key)
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
     uint32_t constexpr len = sizeof(T);
@@ -154,7 +154,7 @@ struct HashBase : public crtp<Hasher> {
    * the message length (in another step of the hash, if needed), and performs
    * the final hash step.
    */
-  void __device__ inline finalize()
+  __device__ inline void finalize()
   {
     auto& state = this->underlying().state;
     // Message length in bits.
@@ -238,7 +238,7 @@ struct HasherDispatcher {
   }
 
   template <typename Element>
-  void __device__ inline operator()(size_type row_index)
+  __device__ inline void operator()(size_type row_index)
   {
     if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
       Element const& key = input_col.element<Element>(row_index);
@@ -271,7 +271,7 @@ struct HasherDispatcher {
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename hash_state>
-void __device__ inline sha1_hash_step(hash_state& state)
+__device__ inline void sha1_hash_step(hash_state& state)
 {
   uint32_t words[80];
 
@@ -338,7 +338,7 @@ void __device__ inline sha1_hash_step(hash_state& state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename hash_state>
-void __device__ inline sha256_hash_step(hash_state& state)
+__device__ inline void sha256_hash_step(hash_state& state)
 {
   uint32_t words[64];
 
@@ -404,7 +404,7 @@ void __device__ inline sha256_hash_step(hash_state& state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename hash_state>
-void __device__ inline sha512_hash_step(hash_state& state)
+__device__ inline void sha512_hash_step(hash_state& state)
 {
   uint64_t words[80];
 

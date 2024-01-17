@@ -54,7 +54,7 @@ struct SHA224Hash : HashBase<SHA224Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void __device__ inline hash_step(hash_state& state) { sha256_hash_step(state); }
+  __device__ inline void hash_step(hash_state& state) { sha256_hash_step(state); }
 
   hash_state state;
 };
