@@ -104,13 +104,13 @@ def _setup_numba():
     version of the CUDA Toolkit used to build the PTX files shipped
     with the user cuDF package.
     """
-    # ptxcompiler needed for MVC for CUDA 11.x packages but not
-    # CUDA 12.x packages. However its version checking machinery
-    # is still necessary. In a CUDA 12.x environment, ptxcompiler
-    # provides version checking, but not MVC directly, which is
-    # provided by pynvjitlink instead. The presence of either package
-    # does not perturb cuDF's operation in situations where they
-    # are not necessary.
+
+    # Either ptxcompiler, or our vendored version (_ptxcompiloer.py)
+    # is needed to determine the driver and runtime CUDA versions in
+    # the environment. In a CUDA 11.x environment, ptxcompiler is used
+    # to provide MVC directly, whereas for CUDA 12.x this is provided
+    # through pynvjitlink. The presence of either package does not
+    # perturb cuDF's operation in situations where they aren't used.
     try:
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
