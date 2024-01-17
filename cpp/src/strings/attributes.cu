@@ -110,8 +110,8 @@ std::unique_ptr<column> counts_fn(strings_column_view const& strings,
  * @param d_strings Column with strings to count
  * @param d_lengths Results of the counts per string
  */
-__global__ void count_characters_parallel_fn(column_device_view const d_strings,
-                                             size_type* d_lengths)
+CUDF_KERNEL void count_characters_parallel_fn(column_device_view const d_strings,
+                                              size_type* d_lengths)
 {
   auto const idx    = cudf::detail::grid_1d::global_thread_id();
   using warp_reduce = cub::WarpReduce<size_type>;

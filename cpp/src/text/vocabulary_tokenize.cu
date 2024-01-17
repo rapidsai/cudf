@@ -214,10 +214,10 @@ struct mark_delimiters_fn {
   }
 };
 
-__global__ void token_counts_fn(cudf::column_device_view const d_strings,
-                                cudf::string_view const d_delimiter,
-                                cudf::size_type* d_counts,
-                                int8_t* d_results)
+CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
+                                 cudf::string_view const d_delimiter,
+                                 cudf::size_type* d_counts,
+                                 int8_t* d_results)
 {
   // string per warp
   auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
