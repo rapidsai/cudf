@@ -768,17 +768,18 @@ try:
     ## Custom collection classes
     ##
 
-    @get_collection_type.register(cudf.DataFrame)
     class DataFrameCudf(DXDataFrame):
         pass  # Same as pandas (for now)
 
-    @get_collection_type.register(cudf.Series)
     class SeriesCudf(DXSeries):
         pass  # Same as pandas (for now)
 
-    @get_collection_type.register(cudf.BaseIndex)
     class IndexCudf(DXIndex):
         pass  # Same as pandas (for now)
+
+    get_collection_type.register(cudf.DataFrame, lambda _: DataFrameCudf)
+    get_collection_type.register(cudf.Series, lambda _: SeriesCudf)
+    get_collection_type.register(cudf.BaseIndex, lambda _: IndexCudf)
 
 except ImportError:
     # Compatible dask_expr version not installed
