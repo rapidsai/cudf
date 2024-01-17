@@ -464,9 +464,9 @@ the host (`to_host`).
 
 ### Background
 
-libcudf employs a custom-built [preload library
-docs](https://man7.org/linux/man-pages/man8/ld.so.8.html) to validate its internal stream usage (the
-code may be found
+libcudf employs a custom-built [preload
+library](https://man7.org/linux/man-pages/man8/ld.so.8.html) to validate its internal stream usage
+(the code may be found
 [`here`](https://github.com/rapidsai/cudf/blob/main/cpp/tests/utilities/identify_stream_usage.cpp)).
 This library wraps every asynchronous CUDA runtime API call that accepts a stream with a check to
 ensure that the passed CUDA stream is a valid one, immediately throwing an exception if an invalid
