@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,15 +41,15 @@ template <typename InType,
           class agg_op,
           typename PrecedingWindowType,
           typename FollowingWindowType>
-__global__ void gpu_rolling_new(cudf::size_type nrows,
-                                InType const* const __restrict__ in_col,
-                                cudf::bitmask_type const* const __restrict__ in_col_valid,
-                                OutType* __restrict__ out_col,
-                                cudf::bitmask_type* __restrict__ out_col_valid,
-                                cudf::size_type* __restrict__ output_valid_count,
-                                PrecedingWindowType preceding_window_begin,
-                                FollowingWindowType following_window_begin,
-                                cudf::size_type min_periods)
+CUDF_KERNEL void gpu_rolling_new(cudf::size_type nrows,
+                                 InType const* const __restrict__ in_col,
+                                 cudf::bitmask_type const* const __restrict__ in_col_valid,
+                                 OutType* __restrict__ out_col,
+                                 cudf::bitmask_type* __restrict__ out_col_valid,
+                                 cudf::size_type* __restrict__ output_valid_count,
+                                 PrecedingWindowType preceding_window_begin,
+                                 FollowingWindowType following_window_begin,
+                                 cudf::size_type min_periods)
 {
   cudf::thread_index_type i            = blockIdx.x * blockDim.x + threadIdx.x;
   cudf::thread_index_type const stride = blockDim.x * gridDim.x;
