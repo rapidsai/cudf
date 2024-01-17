@@ -402,8 +402,8 @@ void reader::impl::create_global_chunk_info()
                         schema.converted_type,
                         schema.type_length);
 
-      // grab the column_info for each chunk (if it exists)
-      column_info const* const col_info =
+      // grab the column_chunk_info for each chunk (if it exists)
+      column_chunk_info const* const chunk_info =
         _has_page_index ? &rg.columns.value()[column_mapping[i]] : nullptr;
 
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
@@ -425,7 +425,7 @@ void reader::impl::create_global_chunk_info()
                                        clock_rate,
                                        i,
                                        col.schema_idx,
-                                       col_info));
+                                       chunk_info));
     }
 
     remaining_rows -= row_group_rows;

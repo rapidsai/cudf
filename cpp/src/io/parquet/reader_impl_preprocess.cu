@@ -296,10 +296,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 {
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
-    CUDF_EXPECTS(chunk.h_col_info != nullptr, "Expected non-null column info struct");
-    auto const& col_info = *chunk.h_col_info;
-    chunk.num_dict_pages = col_info.has_dictionary() ? 1 : 0;
-    chunk.num_data_pages = col_info.pages.size();
+    CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
+    auto const& chunk_info = *chunk.h_chunk_info;
+    chunk.num_dict_pages = chunk_info.has_dictionary() ? 1 : 0;
+    chunk.num_data_pages = chunk_info.pages.size();
     total_pages += chunk.num_data_pages + chunk.num_dict_pages;
   }
   return total_pages;
@@ -316,19 +316,19 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks, host_span<PageInfo> pa
   // also fix page chunk_row and num_rows
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
-    CUDF_EXPECTS(chunk.h_col_info != nullptr, "Expected non-null column info struct");
-    auto const& col_info = *chunk.h_col_info;
+    CUDF_EXPECTS(chunk.h_chunk_info != nullptr, "Expected non-null column info struct");
+    auto const& chunk_info = *chunk.h_chunk_info;
     size_t start_row     = 0;
     page_count += chunk.num_dict_pages;
-    for (size_t p = 0; p < col_info.pages.size(); p++, page_count++) {
+    for (size_t p = 0; p < chunk_info.pages.size(); p++, page_count++) {
       auto& page          = pages[page_count];
-      page.num_rows       = col_info.pages[p].num_rows;
+      page.num_rows       = chunk_info.pages[p].num_rows;
       page.chunk_row      = start_row;
       page.has_page_index = true;
       // the following fields will need to be updated for bounds pages
-      page.num_nulls  = col_info.pages[p].num_nulls.value_or(0);
-      page.num_valids = col_info.pages[p].num_valid.value_or(0);
-      page.str_bytes  = col_info.pages[p].var_bytes_size.value_or(0);
+      page.num_nulls  = chunk_info.pages[p].num_nulls.value_or(0);
+      page.num_valids = chunk_info.pages[p].num_valid.value_or(0);
+      page.str_bytes  = chunk_info.pages[p].var_bytes_size.value_or(0);
       page.start_val  = 0;
       page.end_val    = page.num_valids;
 

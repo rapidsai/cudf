@@ -53,7 +53,7 @@ struct page_info {
 /**
  * @brief column chunk metadata
  */
-struct column_info {
+struct column_chunk_info {
   // offset in file of the dictionary (if present)
   std::optional<int64_t> dictionary_offset;
   // size of dictionary (if present)
@@ -81,7 +81,7 @@ struct row_group_info {
   size_type source_index;  // file index.
 
   // Optional metadata pulled from the column and offset indexes, if present.
-  std::optional<std::vector<column_info>> columns;
+  std::optional<std::vector<column_chunk_info>> columns;
 
   row_group_info() = default;
 

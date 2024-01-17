@@ -341,7 +341,7 @@ struct PageInfo {
 };
 
 // forward declaration
-struct column_info;
+struct column_chunk_info;
 
 /**
  * @brief Struct describing a particular chunk of column data
@@ -367,7 +367,7 @@ struct ColumnChunkDesc {
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
-                           column_info const* col_info_)
+                           column_chunk_info const* chunk_info_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -392,7 +392,7 @@ struct ColumnChunkDesc {
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
       src_col_schema(src_col_schema_),
-      h_col_info(col_info_)
+      h_chunk_info(chunk_info_)
   {
   }
 
@@ -425,7 +425,8 @@ struct ColumnChunkDesc {
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
 
-  column_info const* h_col_info{};  // pointer to column_info struct for this chunk (host only)
+  // pointer to column_chunk_info struct for this chunk (host only)
+  column_chunk_info const* h_chunk_info{};
 };
 
 /**
