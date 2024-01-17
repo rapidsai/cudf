@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,7 @@ using index_type = detail::index_type;
  * to be copied to the output. Length must be equal to `num_destination_rows`
  */
 template <bool left_have_valids, bool right_have_valids>
-__global__ void materialize_merged_bitmask_kernel(
+CUDF_KERNEL void materialize_merged_bitmask_kernel(
   column_device_view left_dcol,
   column_device_view right_dcol,
   bitmask_type* out_validity,

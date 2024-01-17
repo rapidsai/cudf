@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -584,7 +584,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-__global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -653,7 +653,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
+CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -725,7 +725,7 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengthPageStringSizes(
+CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengthPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   using cudf::detail::warp_size;
@@ -820,7 +820,7 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -912,7 +912,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeStringPageData(PageInfo* pages,
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,

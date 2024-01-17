@@ -280,9 +280,9 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param buf_info Information on the range of values to be copied for each destination buffer
  */
 template <int block_size, typename IndexToDstBuf>
-__global__ void copy_partitions(IndexToDstBuf index_to_buffer,
-                                uint8_t const** src_bufs,
-                                dst_buf_info* buf_info)
+CUDF_KERNEL void copy_partitions(IndexToDstBuf index_to_buffer,
+                                 uint8_t const** src_bufs,
+                                 dst_buf_info* buf_info)
 {
   auto const buf_index     = blockIdx.x;
   auto const src_buf_index = buf_info[buf_index].src_buf_index;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,9 +17,23 @@
 #pragma once
 
 #ifdef __CUDACC__
+/**
+ * @brief Indicates that the function or method is usable on host and device
+ */
 #define CUDF_HOST_DEVICE __host__ __device__
+/**
+ * @brief Indicates that the function is a CUDA kernel
+ */
+#define CUDF_KERNEL __global__ static
 #else
+/**
+ * @brief Indicates that the function or method is usable on host and device
+ */
 #define CUDF_HOST_DEVICE
+/**
+ * @brief Indicates that the function is a CUDA kernel
+ */
+#define CUDF_KERNEL static
 #endif
 
 #include <cassert>
