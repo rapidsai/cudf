@@ -21,6 +21,7 @@
 
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/binning_memory_resource.hpp>
@@ -43,9 +44,9 @@ inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_res
 
 inline auto make_pool()
 {
-  auto const [free, total] = rmm::detail::available_device_memory();
-  auto min_alloc =
-    rmm::detail::align_down(std::min(free, total / 10), rmm::detail::CUDA_ALLOCATION_ALIGNMENT);
+  auto const [free, total] = rmm::available_device_memory();
+  auto const min_alloc =
+    rmm::align_down(std::min(free, total / 10), rmm::CUDA_ALLOCATION_ALIGNMENT);
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda(), min_alloc);
 }
 

@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import functools
 import os
 from typing import Any, Callable, Dict
 
@@ -17,10 +18,7 @@ from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
 
 import rmm
 
-from cudf._lib.strings_udf import (
-    column_from_udf_string_array,
-    column_to_string_view_array,
-)
+from cudf._lib import strings_udf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
@@ -63,7 +61,15 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 launch_arg_getters: Dict[Any, Any] = {}
 
-_PTX_FILE = _get_ptx_file(os.path.dirname(__file__), "shim_")
+
+@functools.cache
+def _ptx_file():
+    return _get_ptx_file(
+        os.path.join(
+            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
+        ),
+        "shim_",
+    )
 
 
 @_cudf_nvtx_annotate
@@ -286,7 +292,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
     kernel = cuda.jit(
-        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
+        sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
     )(_kernel)
 
     return kernel
@@ -319,7 +325,7 @@ def _return_arr_from_dtype(dtype, size):
 
 def _post_process_output_col(col, retty):
     if retty == _cudf_str_dtype:
-        return column_from_udf_string_array(col)
+        return strings_udf.column_from_udf_string_array(col)
     return as_column(col, retty)
 
 
@@ -361,7 +367,7 @@ def set_malloc_heap_size(size=None):
 
 def column_to_string_view_array_init_heap(col):
     # lazily allocate heap only when a string needs to be returned
-    return column_to_string_view_array(col)
+    return strings_udf.column_to_string_view_array(col)
 
 
 class UDFError(RuntimeError):

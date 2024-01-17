@@ -348,9 +348,9 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
-                                                            int32_t num_chunks,
-                                                            kernel_error::pointer error_code)
+CUDF_KERNEL void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                             int32_t num_chunks,
+                                                             kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -480,7 +480,7 @@ __global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chu
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   gpuBuildStringDictionaryIndex(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
   __shared__ ColumnChunkDesc chunk_g[4];

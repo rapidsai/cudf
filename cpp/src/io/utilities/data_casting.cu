@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -420,14 +420,14 @@ struct bitfield_block {
  * @param d_chars Character array to store the characters of strings
  */
 template <bool is_warp, size_type num_warps, typename str_tuple_it>
-__global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
-                                         size_type total_out_strings,
-                                         size_type* str_counter,
-                                         bitmask_type* null_mask,
-                                         size_type* null_count_data,
-                                         cudf::io::parse_options_view const options,
-                                         size_type* d_offsets,
-                                         char* d_chars)
+CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
+                                          size_type total_out_strings,
+                                          size_type* str_counter,
+                                          bitmask_type* null_mask,
+                                          size_type* null_count_data,
+                                          cudf::io::parse_options_view const options,
+                                          size_type* d_offsets,
+                                          char* d_chars)
 {
   constexpr auto BLOCK_SIZE =
     is_warp ? cudf::detail::warp_size : cudf::detail::warp_size * num_warps;
