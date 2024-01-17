@@ -1,9 +1,10 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import glob
 import os
 import sys
 import warnings
+from functools import lru_cache
 
 from numba import config as numba_config
 
@@ -20,9 +21,20 @@ except ImportError:
         )
 
 
-CC_60_PTX_FILE = os.path.join(
-    os.path.dirname(__file__), "../core/udf/shim_60.ptx"
-)
+# Use an lru_cache with a single value to allow a delayed import of
+# strings_udf. This is the easiest way to break an otherwise circular import
+# loop of _lib.*->cudautils->_numba->_lib.strings_udf
+@lru_cache
+def _get_cc_60_ptx_file():
+    from cudf._lib import strings_udf
+
+    return os.path.join(
+        os.path.dirname(strings_udf.__file__),
+        "..",
+        "core",
+        "udf",
+        "shim_60.ptx",
+    )
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
@@ -119,7 +131,9 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        ptx_toolkit_version = _get_cuda_version_from_ptx_file(CC_60_PTX_FILE)
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(
+            _get_cc_60_ptx_file()
+        )
 
         # MVC is required whenever any PTX is newer than the driver
         # This could be the shipped PTX file or the PTX emitted by

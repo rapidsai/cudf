@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -305,7 +305,7 @@ struct delta_byte_array_decoder {
 // with V2 page headers; see https://www.mail-archive.com/dev@parquet.apache.org/msg11826.html).
 // this kernel only needs 96 threads (3 warps)(for now).
 template <typename level_t>
-__global__ void __launch_bounds__(96)
+CUDF_KERNEL void __launch_bounds__(96)
   gpuDecodeDeltaBinary(PageInfo* pages,
                        device_span<ColumnChunkDesc const> chunks,
                        size_t min_row,
@@ -430,7 +430,7 @@ __global__ void __launch_bounds__(96)
 // suffixes are not encoded in the header, we're going to have to first do a quick pass through them
 // to find the start/end of each structure.
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeDeltaByteArray(PageInfo* pages,
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
@@ -587,7 +587,7 @@ __global__ void __launch_bounds__(decode_block_size)
 // Decode page data that is DELTA_LENGTH_BYTE_ARRAY packed. This encoding consists of a
 // DELTA_BINARY_PACKED array of string lengths, followed by the string data.
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeDeltaLengthByteArray(PageInfo* pages,
                                 device_span<ColumnChunkDesc const> chunks,
                                 size_t min_row,
