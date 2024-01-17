@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -204,8 +204,10 @@ class hostdevice_vector {
 template <typename T>
 class hostdevice_2dvector {
  public:
+  hostdevice_2dvector() : hostdevice_2dvector(0, 0, cudf::get_default_stream()) {}
+
   hostdevice_2dvector(size_t rows, size_t columns, rmm::cuda_stream_view stream)
-    : _size{rows, columns}, _data{rows * columns, stream}
+    : _data{rows * columns, stream}, _size{rows, columns}
   {
   }
 
