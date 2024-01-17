@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -415,7 +415,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets_begin();
-  auto const d_in_chars    = strings.chars_begin();
+  auto const d_in_chars    = strings.chars_begin(stream);
   auto const chars_bytes   = chars_end - chars_start;
   auto const target_size   = d_target.size_bytes();
 
@@ -574,7 +574,7 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
       ? 0
       : cudf::detail::get_value<int32_t>(strings.offsets(), strings.offset(), stream);
   size_type const chars_end   = (offset_count == strings.offsets().size())
-                                  ? strings.chars_size()
+                                  ? strings.chars_size(stream)
                                   : cudf::detail::get_value<int32_t>(
                                     strings.offsets(), strings.offset() + strings_count, stream);
   size_type const chars_bytes = chars_end - chars_start;
@@ -612,7 +612,7 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
                                                      : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
   size_type chars_end      = (offset_count == strings.offsets().size())
-                               ? strings.chars_size()
+                               ? strings.chars_size(stream)
                                : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(

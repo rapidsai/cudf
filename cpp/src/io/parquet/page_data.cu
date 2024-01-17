@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -421,7 +421,7 @@ static __device__ void gpuOutputGeneric(
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodePageData(PageInfo* pages,
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,

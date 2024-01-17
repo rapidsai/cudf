@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -49,16 +51,16 @@ namespace {
  * @brief Create arrow data buffer from given cudf column
  */
 template <typename T>
-std::shared_ptr<arrow::Buffer> fetch_data_buffer(column_view input_view,
+std::shared_ptr<arrow::Buffer> fetch_data_buffer(device_span<T const> input,
                                                  arrow::MemoryPool* ar_mr,
                                                  rmm::cuda_stream_view stream)
 {
-  int64_t const data_size_in_bytes = sizeof(T) * input_view.size();
+  int64_t const data_size_in_bytes = sizeof(T) * input.size();
 
   auto data_buffer = allocate_arrow_buffer(data_size_in_bytes, ar_mr);
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(data_buffer->mutable_data(),
-                                input_view.data<T>(),
+                                input.data(),
                                 data_size_in_bytes,
                                 cudaMemcpyDefault,
                                 stream.value()));
@@ -136,11 +138,13 @@ struct dispatch_to_arrow {
                                            arrow::MemoryPool* ar_mr,
                                            rmm::cuda_stream_view stream)
   {
-    return to_arrow_array(id,
-                          static_cast<int64_t>(input_view.size()),
-                          fetch_data_buffer<T>(input_view, ar_mr, stream),
-                          fetch_mask_buffer(input_view, ar_mr, stream),
-                          static_cast<int64_t>(input_view.null_count()));
+    return to_arrow_array(
+      id,
+      static_cast<int64_t>(input_view.size()),
+      fetch_data_buffer<T>(
+        device_span<T const>(input_view.data<T>(), input_view.size()), ar_mr, stream),
+      fetch_mask_buffer(input_view, ar_mr, stream),
+      static_cast<int64_t>(input_view.null_count()));
   }
 };
 
@@ -280,7 +284,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
 {
   std::unique_ptr<column> tmp_column =
     ((input.offset() != 0) or
-     ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size())))
+     ((input.num_children() == 1) and (input.child(0).size() - 1 != input.size())))
       ? std::make_unique<cudf::column>(input, stream)
       : nullptr;
 
@@ -295,8 +299,13 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
     return std::make_shared<arrow::StringArray>(
       0, std::move(tmp_offset_buffer), std::move(tmp_data_buffer));
   }
-  auto offset_buffer = child_arrays[0]->data()->buffers[1];
-  auto data_buffer   = child_arrays[1]->data()->buffers[1];
+  auto offset_buffer = child_arrays[strings_column_view::offsets_column_index]->data()->buffers[1];
+  auto const sview   = strings_column_view{input_view};
+  auto data_buffer   = fetch_data_buffer<char>(
+    device_span<char const>{sview.chars_begin(stream),
+                              static_cast<std::size_t>(sview.chars_size(stream))},
+    ar_mr,
+    stream);
   return std::make_shared<arrow::StringArray>(static_cast<int64_t>(input_view.size()),
                                               offset_buffer,
                                               data_buffer,

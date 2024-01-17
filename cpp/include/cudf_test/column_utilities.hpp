@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -226,15 +226,15 @@ template <>
 inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<std::string> host_data(c.size());
+  auto stream = cudf::get_default_stream();
   if (c.size() > c.null_count()) {
     auto const scv     = strings_column_view(c);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-      cudf::get_default_stream());
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto const h_offsets = cudf::detail::make_std_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
-      cudf::get_default_stream());
+      stream);
 
     // build std::string vector from chars and offsets
     std::transform(

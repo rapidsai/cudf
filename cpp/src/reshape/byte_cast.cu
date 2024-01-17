@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,10 +135,9 @@ struct byte_list_conversion_fn<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     }
 
     auto col_content     = std::make_unique<column>(input, stream, mr)->release();
-    auto chars_contents  = col_content.children[strings_column_view::chars_column_index]->release();
-    auto const num_chars = chars_contents.data->size();
+    auto const num_chars = col_content.data->size();
     auto uint8_col       = std::make_unique<column>(
-      output_type, num_chars, std::move(*(chars_contents.data)), rmm::device_buffer{}, 0);
+      output_type, num_chars, std::move(*(col_content.data)), rmm::device_buffer{}, 0);
 
     auto result = make_lists_column(
       input.size(),

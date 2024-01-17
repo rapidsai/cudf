@@ -1,6 +1,10 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
-from cudf.core.buffer.buffer import Buffer, cuda_array_interface_wrapper
+from cudf.core.buffer.buffer import (
+    Buffer,
+    BufferOwner,
+    cuda_array_interface_wrapper,
+)
 from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.core.buffer.spillable_buffer import SpillableBuffer, SpillLock
 from cudf.core.buffer.utils import (
