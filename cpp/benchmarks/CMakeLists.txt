@@ -184,7 +184,7 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * create benchmark
+# * structs benchmark
 # --------------------------------------------------------------------------------
 ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 
