@@ -321,7 +321,7 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
-                             std::move(out_chars_column),
+                             std::move(out_chars_column->release().data.release()[0]),
                              0,  // caller sets these
                              rmm::device_buffer{});
 }

@@ -429,8 +429,8 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                std::overflow_error);
 
   // build the output: inserting separators to the input character data
-  auto chars   = cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
-  auto d_chars = chars->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
 
   auto const d_inserts     = d_working.data();  // stores the insert positions
   auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) {
@@ -453,7 +453,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets),
-                                   std::move(chars),
+                                   chars.release(),
                                    input.null_count(),
                                    cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

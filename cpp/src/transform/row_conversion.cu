@@ -2509,8 +2509,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const& input,
           make_strings_column(num_rows,
                               std::make_unique<cudf::column>(
                                 std::move(string_col_offsets[string_idx]), rmm::device_buffer{}, 0),
-                              std::make_unique<cudf::column>(
-                                std::move(string_data_cols[string_idx]), rmm::device_buffer{}, 0),
+                              string_data_cols[string_idx].release(),
                               0,
                               std::move(*string_data.null_mask.release()));
         // Null count set to 0, temporarily. Will be fixed up before return.
