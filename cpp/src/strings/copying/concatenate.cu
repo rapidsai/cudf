@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
@@ -60,8 +60,8 @@ struct chars_size_transform {
   __device__ size_t operator()(column_device_view const& col) const
   {
     if (col.size() > 0) {
-      constexpr auto offsets_index = strings_column_view::offsets_column_index;
-      auto d_offsets               = col.child(offsets_index).data<int32_t>();
+      auto const offsets   = col.child(strings_column_view::offsets_column_index);
+      auto const d_offsets = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
       return d_offsets[col.size() + col.offset()] - d_offsets[col.offset()];
     } else {
       return 0;
@@ -112,14 +112,15 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 }
 
 template <size_type block_size, bool Nullable>
-__global__ void fused_concatenate_string_offset_kernel(column_device_view const* input_views,
-                                                       size_t const* input_offsets,
-                                                       size_t const* partition_offsets,
-                                                       size_type const num_input_views,
-                                                       size_type const output_size,
-                                                       int32_t* output_data,
-                                                       bitmask_type* output_mask,
-                                                       size_type* out_valid_count)
+CUDF_KERNEL void fused_concatenate_string_offset_kernel(
+  column_device_view const* input_views,
+  size_t const* input_offsets,
+  size_t const* partition_offsets,
+  size_type const num_input_views,
+  size_type const output_size,
+  cudf::detail::output_offsetalator output_data,
+  bitmask_type* output_mask,
+  size_type* out_valid_count)
 {
   cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
   size_type warp_valid_count           = 0;
@@ -132,10 +133,11 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
       thrust::seq, input_offsets, input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 
-    auto const offset_index      = output_index - *offset_it;
-    auto const& input_view       = input_views[partition_index];
-    constexpr auto offsets_child = strings_column_view::offsets_column_index;
-    auto const* input_data       = input_view.child(offsets_child).data<int32_t>();
+    auto const offset_index  = output_index - *offset_it;
+    auto const& input_view   = input_views[partition_index];
+    auto const offsets_child = input_view.child(strings_column_view::offsets_column_index);
+    auto const input_data =
+      cudf::detail::input_offsetalator(offsets_child.head(), offsets_child.type());
     output_data[output_index] =
       input_data[offset_index + input_view.offset()]  // handle parent offset
       - input_data[input_view.offset()]               // subtract first offset if non-zero
@@ -169,11 +171,11 @@ __global__ void fused_concatenate_string_offset_kernel(column_device_view const*
   }
 }
 
-__global__ void fused_concatenate_string_chars_kernel(column_device_view const* input_views,
-                                                      size_t const* partition_offsets,
-                                                      size_type const num_input_views,
-                                                      size_type const output_size,
-                                                      char* output_data)
+CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const* input_views,
+                                                       size_t const* partition_offsets,
+                                                       size_type const num_input_views,
+                                                       size_type const output_size,
+                                                       char* output_data)
 {
   cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -186,11 +188,11 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
     auto const offset_index = output_index - *offset_it;
     auto const& input_view  = input_views[partition_index];
 
-    constexpr auto offsets_child   = strings_column_view::offsets_column_index;
-    auto const* input_offsets_data = input_view.child(offsets_child).data<int32_t>();
+    auto const offsets_child = input_view.child(strings_column_view::offsets_column_index);
+    auto const input_offsets_data =
+      cudf::detail::input_offsetalator(offsets_child.head(), offsets_child.type());
 
-    constexpr auto chars_child   = strings_column_view::chars_column_index;
-    auto const* input_chars_data = input_view.child(chars_child).data<char>();
+    auto const* input_chars_data = input_view.head<char>();
 
     auto const first_char     = input_offsets_data[input_view.offset()];
     output_data[output_index] = input_chars_data[offset_index + first_char];
@@ -225,16 +227,16 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
 
-  // create chars column
+  // create output chars column
   auto chars_column = create_chars_child_column(total_bytes, stream, mr);
   auto d_new_chars  = chars_column->mutable_view().data<char>();
   chars_column->set_null_count(0);
 
-  // create offsets column
+  // create output offsets column
   auto offsets_column = make_numeric_column(
     data_type{type_id::INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
-  auto d_new_offsets = offsets_column->mutable_view().data<int32_t>();
-  offsets_column->set_null_count(0);
+  auto itr_new_offsets =
+    cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
 
   rmm::device_buffer null_mask{0, stream, mr};
   size_type null_count{};
@@ -256,7 +258,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
       d_partition_offsets.data(),
       static_cast<size_type>(columns.size()),
       strings_count,
-      d_new_offsets,
+      itr_new_offsets,
       reinterpret_cast<bitmask_type*>(null_mask.data()),
       d_valid_count.data());
 
@@ -284,16 +286,12 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
           continue;            // empty column may not have children
         size_type column_offset   = column->offset();
         column_view offsets_child = column->child(strings_column_view::offsets_column_index);
-        column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
-        auto bytes_offset =
-          cudf::detail::get_value<size_type>(offsets_child, column_offset, stream);
-
+        auto const bytes_offset = get_offset_value(offsets_child, column_offset, stream);
+        auto const bytes_end = get_offset_value(offsets_child, column_size + column_offset, stream);
         // copy the chars column data
-        auto d_chars = chars_child.data<char>() + bytes_offset;
-        auto const bytes =
-          cudf::detail::get_value<size_type>(offsets_child, column_size + column_offset, stream) -
-          bytes_offset;
+        auto d_chars     = column->head<char>() + bytes_offset;
+        auto const bytes = bytes_end - bytes_offset;
 
         CUDF_CUDA_TRY(
           cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));

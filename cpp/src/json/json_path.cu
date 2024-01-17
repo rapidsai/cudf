@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -900,7 +900,7 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * @param options Options controlling behavior
  */
 template <int block_size>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void get_json_object_kernel(column_device_view col,
                               path_operator const* const commands,
                               size_type* output_offsets,

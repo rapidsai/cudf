@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,8 @@ static void BM_combine(benchmark::State& state)
     cudf::strings::concatenate(table->view(), separator);
   }
 
-  state.SetBytesProcessed(state.iterations() * (input1.chars_size() + input2.chars_size()));
+  state.SetBytesProcessed(state.iterations() * (input1.chars_size(cudf::get_default_stream()) +
+                                                input2.chars_size(cudf::get_default_stream())));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

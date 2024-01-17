@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,9 @@
  * @param d_visibilities Column of visibilities
  * @param d_sizes Output sizes for each row
  */
-__global__ void sizes_kernel(cudf::column_device_view const d_names,
-                             cudf::column_device_view const d_visibilities,
-                             cudf::size_type* d_sizes)
+__global__ static void sizes_kernel(cudf::column_device_view const d_names,
+                                    cudf::column_device_view const d_visibilities,
+                                    cudf::size_type* d_sizes)
 {
   // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
@@ -74,10 +74,10 @@ __global__ void sizes_kernel(cudf::column_device_view const d_names,
  * @param d_offsets Byte offset in `d_chars` for each row
  * @param d_chars Output memory for all rows
  */
-__global__ void redact_kernel(cudf::column_device_view const d_names,
-                              cudf::column_device_view const d_visibilities,
-                              cudf::size_type const* d_offsets,
-                              char* d_chars)
+__global__ static void redact_kernel(cudf::column_device_view const d_names,
+                                     cudf::column_device_view const d_visibilities,
+                                     cudf::size_type const* d_offsets,
+                                     char* d_chars)
 {
   // The row index is resolved from the CUDA thread/block objects
   auto index = threadIdx.x + blockIdx.x * blockDim.x;
