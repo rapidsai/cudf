@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,7 +170,8 @@ std::unique_ptr<column> count_characters(strings_column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   if ((input.size() == input.null_count()) ||
-      ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD)) {
+      ((input.chars_size(stream) / (input.size() - input.null_count())) <
+       AVG_CHAR_BYTES_THRESHOLD)) {
     auto ufn = cuda::proclaim_return_type<size_type>(
       [] __device__(string_view const& d_str) { return d_str.length(); });
     return counts_fn(input, ufn, stream, mr);

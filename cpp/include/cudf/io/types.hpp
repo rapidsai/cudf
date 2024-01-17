@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -693,6 +693,11 @@ class column_in_metadata {
   column_in_metadata& set_output_as_binary(bool binary) noexcept
   {
     _output_as_binary = binary;
+    if (_output_as_binary and children.size() == 1) {
+      children.emplace_back();
+    } else if (!_output_as_binary and children.size() == 2) {
+      children.pop_back();
+    }
     return *this;
   }
 
