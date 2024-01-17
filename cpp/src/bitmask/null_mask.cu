@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,11 +98,11 @@ rmm::device_buffer create_null_mask(size_type size,
 }
 
 namespace {
-__global__ void set_null_mask_kernel(bitmask_type* __restrict__ destination,
-                                     size_type begin_bit,
-                                     size_type end_bit,
-                                     bool valid,
-                                     size_type number_of_mask_words)
+CUDF_KERNEL void set_null_mask_kernel(bitmask_type* __restrict__ destination,
+                                      size_type begin_bit,
+                                      size_type end_bit,
+                                      bool valid,
+                                      size_type number_of_mask_words)
 {
   auto x                            = destination + word_index(begin_bit);
   thread_index_type const last_word = word_index(end_bit) - word_index(begin_bit);
@@ -190,11 +190,11 @@ namespace {
  * @param number_of_mask_words The number of `cudf::bitmask_type` words to copy
  */
 // TODO: Also make binops test that uses offset in column_view
-__global__ void copy_offset_bitmask(bitmask_type* __restrict__ destination,
-                                    bitmask_type const* __restrict__ source,
-                                    size_type source_begin_bit,
-                                    size_type source_end_bit,
-                                    size_type number_of_mask_words)
+CUDF_KERNEL void copy_offset_bitmask(bitmask_type* __restrict__ destination,
+                                     bitmask_type const* __restrict__ source,
+                                     size_type source_begin_bit,
+                                     size_type source_end_bit,
+                                     size_type number_of_mask_words)
 {
   auto const stride = cudf::detail::grid_1d::grid_stride();
   for (thread_index_type destination_word_index = grid_1d::global_thread_id();
@@ -260,10 +260,10 @@ namespace {
  * @param[out] global_count The number of non-zero bits in the specified range
  */
 template <size_type block_size>
-__global__ void count_set_bits_kernel(bitmask_type const* bitmask,
-                                      size_type first_bit_index,
-                                      size_type last_bit_index,
-                                      size_type* global_count)
+CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
+                                       size_type first_bit_index,
+                                       size_type last_bit_index,
+                                       size_type* global_count)
 {
   constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
 

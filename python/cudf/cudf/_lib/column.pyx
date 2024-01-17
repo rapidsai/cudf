@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 from typing import Literal
@@ -39,6 +39,7 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
+cimport cudf._lib.cpp.copying as cpp_copying
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.column.column cimport column, column_contents
@@ -50,6 +51,19 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
+
+
+cdef get_element(column_view col_view, size_type index):
+
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.get_element(col_view, index)
+        )
+
+    return DeviceScalar.from_unique_ptr(
+        move(c_output), dtype=dtype_from_column_view(col_view)
+    )
 
 
 cdef class Column:
@@ -652,11 +666,29 @@ cdef class Column:
             mask_owner = mask_owner.base_mask
             base_size = owner.base_size
         base_nbytes = base_size * dtype_itemsize
+        # special case for string column
+        is_string_column = (cv.type().id() == libcudf_types.type_id.STRING)
+        if is_string_column:
+            # get the size from offset child column (device to host copy)
+            offsets_column_index = 0
+            offset_child_column = cv.child(offsets_column_index)
+            if offset_child_column.size() == 0:
+                base_nbytes = 0
+            else:
+                chars_size = get_element(
+                    offset_child_column, offset_child_column.size()-1).value
+                base_nbytes = chars_size
+
         if data_ptr:
             if data_owner is None:
+                buffer_size = (
+                    base_nbytes
+                    if is_string_column
+                    else ((size + offset) * dtype_itemsize)
+                )
                 data = as_buffer(
                     rmm.DeviceBuffer(ptr=data_ptr,
-                                     size=(size+offset) * dtype_itemsize)
+                                     size=buffer_size)
                 )
             elif (
                 column_owner and

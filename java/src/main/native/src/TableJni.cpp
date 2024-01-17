@@ -905,12 +905,12 @@ cudf::column_view remove_validity_from_col(cudf::column_view column_view) {
       children.push_back(remove_validity_from_col(*it));
     }
     if (!column_view.nullable() || column_view.null_count() != 0) {
-      return cudf::column_view(column_view.type(), column_view.size(), nullptr,
+      return cudf::column_view(column_view.type(), column_view.size(), column_view.head(),
                                column_view.null_mask(), column_view.null_count(),
                                column_view.offset(), children);
     } else {
-      return cudf::column_view(column_view.type(), column_view.size(), nullptr, nullptr, 0,
-                               column_view.offset(), children);
+      return cudf::column_view(column_view.type(), column_view.size(), column_view.head(), nullptr,
+                               0, column_view.offset(), children);
     }
   }
 }
