@@ -192,8 +192,7 @@ __global__ void fused_concatenate_string_chars_kernel(column_device_view const* 
     auto const input_offsets_data =
       cudf::detail::input_offsetalator(offsets_child.head(), offsets_child.type());
 
-    constexpr auto chars_child   = strings_column_view::chars_column_index;
-    auto const* input_chars_data = input_view.child(chars_child).data<char>();
+    auto const* input_chars_data = input_view.head<char>();
 
     auto const first_char     = input_offsets_data[input_view.offset()];
     output_data[output_index] = input_chars_data[offset_index + first_char];
@@ -287,12 +286,11 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
           continue;            // empty column may not have children
         size_type column_offset   = column->offset();
         column_view offsets_child = column->child(strings_column_view::offsets_column_index);
-        column_view chars_child   = column->child(strings_column_view::chars_column_index);
 
         auto const bytes_offset = get_offset_value(offsets_child, column_offset, stream);
         auto const bytes_end = get_offset_value(offsets_child, column_size + column_offset, stream);
         // copy the chars column data
-        auto d_chars     = chars_child.data<char>() + bytes_offset;
+        auto d_chars     = column->head<char>() + bytes_offset;
         auto const bytes = bytes_end - bytes_offset;
 
         CUDF_CUDA_TRY(
