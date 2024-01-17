@@ -314,14 +314,14 @@ struct fixed_width_row_offset_functor {
  * @param output_nm array of pointers to the output null masks
  * @param input_data pointing to the incoming row data
  */
-__global__ void copy_from_rows_fixed_width_optimized(const size_type num_rows,
-                                                     const size_type num_columns,
-                                                     const size_type row_size,
-                                                     const size_type* input_offset_in_row,
-                                                     const size_type* num_bytes,
-                                                     int8_t** output_data,
-                                                     bitmask_type** output_nm,
-                                                     const int8_t* input_data)
+CUDF_KERNEL void copy_from_rows_fixed_width_optimized(const size_type num_rows,
+                                                      const size_type num_columns,
+                                                      const size_type row_size,
+                                                      const size_type* input_offset_in_row,
+                                                      const size_type* num_bytes,
+                                                      int8_t** output_data,
+                                                      bitmask_type** output_nm,
+                                                      const int8_t* input_data)
 {
   // We are going to copy the data in two passes.
   // The first pass copies a chunk of data into shared memory.
@@ -433,15 +433,15 @@ __global__ void copy_from_rows_fixed_width_optimized(const size_type num_rows,
   }
 }
 
-__global__ void copy_to_rows_fixed_width_optimized(const size_type start_row,
-                                                   const size_type num_rows,
-                                                   const size_type num_columns,
-                                                   const size_type row_size,
-                                                   const size_type* output_offset_in_row,
-                                                   const size_type* num_bytes,
-                                                   const int8_t** input_data,
-                                                   const bitmask_type** input_nm,
-                                                   int8_t* output_data)
+CUDF_KERNEL void copy_to_rows_fixed_width_optimized(const size_type start_row,
+                                                    const size_type num_rows,
+                                                    const size_type num_columns,
+                                                    const size_type row_size,
+                                                    const size_type* output_offset_in_row,
+                                                    const size_type* num_bytes,
+                                                    const int8_t** input_data,
+                                                    const bitmask_type** input_nm,
+                                                    int8_t* output_data)
 {
   // We are going to copy the data in two passes.
   // The first pass copies a chunk of data into shared memory.
@@ -588,16 +588,16 @@ __global__ void copy_to_rows_fixed_width_optimized(const size_type start_row,
  *
  */
 template <typename RowOffsetFunctor>
-__global__ void copy_to_rows(const size_type num_rows,
-                             const size_type num_columns,
-                             const size_type shmem_used_per_tile,
-                             device_span<const tile_info> tile_infos,
-                             const int8_t** input_data,
-                             const size_type* col_sizes,
-                             const size_type* col_offsets,
-                             RowOffsetFunctor row_offsets,
-                             size_type const* batch_row_boundaries,
-                             int8_t** output_data)
+CUDF_KERNEL void copy_to_rows(const size_type num_rows,
+                              const size_type num_columns,
+                              const size_type shmem_used_per_tile,
+                              device_span<const tile_info> tile_infos,
+                              const int8_t** input_data,
+                              const size_type* col_sizes,
+                              const size_type* col_offsets,
+                              RowOffsetFunctor row_offsets,
+                              size_type const* batch_row_boundaries,
+                              int8_t** output_data)
 {
   // We are going to copy the data in two passes.
   // The first pass copies a chunk of data into shared memory.
@@ -731,15 +731,15 @@ __global__ void copy_to_rows(const size_type num_rows,
  *
  */
 template <typename RowOffsetFunctor>
-__global__ void copy_validity_to_rows(const size_type num_rows,
-                                      const size_type num_columns,
-                                      const size_type shmem_used_per_tile,
-                                      RowOffsetFunctor row_offsets,
-                                      size_type const* batch_row_boundaries,
-                                      int8_t** output_data,
-                                      const size_type validity_offset,
-                                      device_span<const tile_info> tile_infos,
-                                      const bitmask_type** input_nm)
+CUDF_KERNEL void copy_validity_to_rows(const size_type num_rows,
+                                       const size_type num_columns,
+                                       const size_type shmem_used_per_tile,
+                                       RowOffsetFunctor row_offsets,
+                                       size_type const* batch_row_boundaries,
+                                       int8_t** output_data,
+                                       const size_type validity_offset,
+                                       device_span<const tile_info> tile_infos,
+                                       const bitmask_type** input_nm)
 {
   extern __shared__ int8_t shared_data[];
 
@@ -851,15 +851,15 @@ __global__ void copy_validity_to_rows(const size_type num_rows,
  *
  */
 template <typename RowOffsetFunctor>
-__global__ void copy_strings_to_rows(size_type const num_rows,
-                                     size_type const num_variable_columns,
-                                     int8_t const** variable_input_data,
-                                     size_type const* variable_col_output_offsets,
-                                     size_type const** variable_col_offsets,
-                                     size_type fixed_width_row_size,
-                                     RowOffsetFunctor row_offsets,
-                                     size_type const batch_row_offset,
-                                     int8_t* output_data)
+CUDF_KERNEL void copy_strings_to_rows(size_type const num_rows,
+                                      size_type const num_variable_columns,
+                                      int8_t const** variable_input_data,
+                                      size_type const* variable_col_output_offsets,
+                                      size_type const** variable_col_offsets,
+                                      size_type fixed_width_row_size,
+                                      RowOffsetFunctor row_offsets,
+                                      size_type const batch_row_offset,
+                                      int8_t* output_data)
 {
   // Each block will take a group of rows controlled by NUM_STRING_ROWS_PER_BLOCK_TO_ROWS. Each warp
   // will copy a row at a time. The base thread will first go through column data and fill out
@@ -920,16 +920,16 @@ __global__ void copy_strings_to_rows(size_type const num_rows,
  *
  */
 template <typename RowOffsetFunctor>
-__global__ void copy_from_rows(const size_type num_rows,
-                               const size_type num_columns,
-                               const size_type shmem_used_per_tile,
-                               RowOffsetFunctor row_offsets,
-                               size_type const* batch_row_boundaries,
-                               int8_t** output_data,
-                               const size_type* col_sizes,
-                               const size_type* col_offsets,
-                               device_span<const tile_info> tile_infos,
-                               const int8_t* input_data)
+CUDF_KERNEL void copy_from_rows(const size_type num_rows,
+                                const size_type num_columns,
+                                const size_type shmem_used_per_tile,
+                                RowOffsetFunctor row_offsets,
+                                size_type const* batch_row_boundaries,
+                                int8_t** output_data,
+                                const size_type* col_sizes,
+                                const size_type* col_offsets,
+                                device_span<const tile_info> tile_infos,
+                                const int8_t* input_data)
 {
   // We are going to copy the data in two passes.
   // The first pass copies a chunk of data into shared memory.
@@ -1042,15 +1042,15 @@ __global__ void copy_from_rows(const size_type num_rows,
  *
  */
 template <typename RowOffsetFunctor>
-__global__ void copy_validity_from_rows(const size_type num_rows,
-                                        const size_type num_columns,
-                                        const size_type shmem_used_per_tile,
-                                        RowOffsetFunctor row_offsets,
-                                        size_type const* batch_row_boundaries,
-                                        bitmask_type** output_nm,
-                                        const size_type validity_offset,
-                                        device_span<const tile_info> tile_infos,
-                                        const int8_t* input_data)
+CUDF_KERNEL void copy_validity_from_rows(const size_type num_rows,
+                                         const size_type num_columns,
+                                         const size_type shmem_used_per_tile,
+                                         RowOffsetFunctor row_offsets,
+                                         size_type const* batch_row_boundaries,
+                                         bitmask_type** output_nm,
+                                         const size_type validity_offset,
+                                         device_span<const tile_info> tile_infos,
+                                         const int8_t* input_data)
 {
   extern __shared__ int8_t shared[];
 
@@ -1175,14 +1175,14 @@ __global__ void copy_validity_from_rows(const size_type num_rows,
  * @param num_string_columns number of string columns in the table
  */
 template <typename RowOffsetFunctor>
-__global__ void copy_strings_from_rows(RowOffsetFunctor row_offsets,
-                                       int32_t** string_row_offsets,
-                                       int32_t** string_lengths,
-                                       size_type** string_column_offsets,
-                                       char** string_col_data,
-                                       int8_t const* row_data,
-                                       size_type const num_rows,
-                                       size_type const num_string_columns)
+CUDF_KERNEL void copy_strings_from_rows(RowOffsetFunctor row_offsets,
+                                        int32_t** string_row_offsets,
+                                        int32_t** string_lengths,
+                                        size_type** string_column_offsets,
+                                        char** string_col_data,
+                                        int8_t const* row_data,
+                                        size_type const num_rows,
+                                        size_type const num_string_columns)
 {
   // Each warp takes a tile, which is a single column and up to ROWS_PER_BLOCK rows. A tile will not
   // wrap around the bottom of the table. The warp will copy the strings for each row in the tile.

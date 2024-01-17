@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,20 +31,23 @@ namespace detail {
 
 namespace cg = cooperative_groups;
 
+#pragma GCC diagnostic ignored "-Wattributes"
+
 template <int block_size, bool has_nulls>
-__launch_bounds__(block_size) __global__ void compute_mixed_join_output_size_semi(
-  table_device_view left_table,
-  table_device_view right_table,
-  table_device_view probe,
-  table_device_view build,
-  row_hash const hash_probe,
-  row_equality const equality_probe,
-  join_kind const join_type,
-  cudf::detail::semi_map_type::device_view hash_table_view,
-  ast::detail::expression_device_view device_expression_data,
-  bool const swap_tables,
-  std::size_t* output_size,
-  cudf::device_span<cudf::size_type> matches_per_row)
+__attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
+  void compute_mixed_join_output_size_semi(
+    table_device_view left_table,
+    table_device_view right_table,
+    table_device_view probe,
+    table_device_view build,
+    row_hash const hash_probe,
+    row_equality const equality_probe,
+    join_kind const join_type,
+    cudf::detail::semi_map_type::device_view hash_table_view,
+    ast::detail::expression_device_view device_expression_data,
+    bool const swap_tables,
+    std::size_t* output_size,
+    cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
