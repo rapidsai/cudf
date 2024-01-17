@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ namespace detail {
  * @param[out] output_size The resulting output size
  */
 template <int block_size, bool has_nulls>
-__global__ void compute_conditional_join_output_size(
+CUDF_KERNEL void compute_conditional_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
@@ -138,15 +138,15 @@ __global__ void compute_conditional_join_output_size(
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
-__global__ void conditional_join(table_device_view left_table,
-                                 table_device_view right_table,
-                                 join_kind join_type,
-                                 cudf::size_type* join_output_l,
-                                 cudf::size_type* join_output_r,
-                                 cudf::size_type* current_idx,
-                                 cudf::ast::detail::expression_device_view device_expression_data,
-                                 cudf::size_type const max_size,
-                                 bool const swap_tables)
+CUDF_KERNEL void conditional_join(table_device_view left_table,
+                                  table_device_view right_table,
+                                  join_kind join_type,
+                                  cudf::size_type* join_output_l,
+                                  cudf::size_type* join_output_r,
+                                  cudf::size_type* current_idx,
+                                  cudf::ast::detail::expression_device_view device_expression_data,
+                                  cudf::size_type const max_size,
+                                  bool const swap_tables)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];

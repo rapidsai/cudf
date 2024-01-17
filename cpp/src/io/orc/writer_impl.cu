@@ -357,10 +357,10 @@ struct string_length_functor {
   statistics_merge_group const* stripe_stat_merge;
 };
 
-__global__ void copy_string_data(char* string_pool,
-                                 size_type* offsets,
-                                 statistics_chunk* chunks,
-                                 statistics_merge_group const* groups)
+CUDF_KERNEL void copy_string_data(char* string_pool,
+                                  size_type* offsets,
+                                  statistics_chunk* chunks,
+                                  statistics_merge_group const* groups)
 {
   auto const idx = blockIdx.x / 2;
   if (groups[idx].stats_dtype == dtype_string) {

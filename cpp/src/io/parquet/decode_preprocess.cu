@@ -207,7 +207,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  * (PageInfo::str_bytes) as part of the pass
  */
 template <typename level_t>
-__global__ void __launch_bounds__(preprocess_block_size)
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   gpuComputePageSizes(PageInfo* pages,
                       device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
