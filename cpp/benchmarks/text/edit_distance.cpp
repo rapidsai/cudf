@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ static void bench_edit_distance(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  auto chars_size = input1.chars_size() + input2.chars_size();
+  auto chars_size =
+    input1.chars_size(cudf::get_default_stream()) + input2.chars_size(cudf::get_default_stream());
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   // output are integers (one per row)
   state.add_global_memory_writes<nvbench::int32_t>(num_rows);

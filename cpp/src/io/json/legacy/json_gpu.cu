@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -245,14 +245,14 @@ __device__ std::pair<char const*, char const*> get_row_data_range(
  * @param[out] valid_fields The bitmaps indicating whether column fields are valid
  * @param[out] num_valid_fields The numbers of valid fields in columns
  */
-__global__ void convert_data_to_columns_kernel(parse_options_view opts,
-                                               device_span<char const> const data,
-                                               device_span<uint64_t const> const row_offsets,
-                                               device_span<data_type const> const column_types,
-                                               col_map_type col_map,
-                                               device_span<void* const> const output_columns,
-                                               device_span<bitmask_type* const> const valid_fields,
-                                               device_span<cudf::size_type> const num_valid_fields)
+CUDF_KERNEL void convert_data_to_columns_kernel(parse_options_view opts,
+                                                device_span<char const> const data,
+                                                device_span<uint64_t const> const row_offsets,
+                                                device_span<data_type const> const column_types,
+                                                col_map_type col_map,
+                                                device_span<void* const> const output_columns,
+                                                device_span<bitmask_type* const> const valid_fields,
+                                                device_span<cudf::size_type> const num_valid_fields)
 {
   auto const rec_id = grid_1d::global_thread_id();
   if (rec_id >= row_offsets.size()) return;
@@ -321,7 +321,7 @@ __global__ void convert_data_to_columns_kernel(parse_options_view opts,
  * @param[in] num_columns The number of columns of input data
  * @param[out] column_infos The count for each column data type
  */
-__global__ void detect_data_types_kernel(
+CUDF_KERNEL void detect_data_types_kernel(
   parse_options_view const opts,
   device_span<char const> const data,
   device_span<uint64_t const> const row_offsets,
@@ -481,11 +481,11 @@ __device__ key_value_range get_next_key_value_range(char const* begin,
  * @param[out] keys_cnt Number of keys found in the file
  * @param[out] keys_info optional, information (offset, length, hash) for each found key
  */
-__global__ void collect_keys_info_kernel(parse_options_view const options,
-                                         device_span<char const> const data,
-                                         device_span<uint64_t const> const row_offsets,
-                                         unsigned long long int* keys_cnt,
-                                         thrust::optional<mutable_table_device_view> keys_info)
+CUDF_KERNEL void collect_keys_info_kernel(parse_options_view const options,
+                                          device_span<char const> const data,
+                                          device_span<uint64_t const> const row_offsets,
+                                          unsigned long long int* keys_cnt,
+                                          thrust::optional<mutable_table_device_view> keys_info)
 {
   auto const rec_id = grid_1d::global_thread_id();
   if (rec_id >= row_offsets.size()) return;

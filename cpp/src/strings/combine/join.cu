@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -145,15 +145,19 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
   auto chars_column = [&] {
     // build the strings column and commandeer the chars column
     if ((input.size() == input.null_count()) ||
-        ((input.chars_size() / (input.size() - input.null_count())) <= AVG_CHAR_BYTES_THRESHOLD)) {
+        ((input.chars_size(stream) / (input.size() - input.null_count())) <=
+         AVG_CHAR_BYTES_THRESHOLD)) {
       return std::get<1>(
         make_strings_children(join_fn{*d_strings, d_separator, d_narep}, input.size(), stream, mr));
     }
     // dynamically feeds index pairs to build the output
     auto indices = cudf::detail::make_counting_transform_iterator(
       0, join_gather_fn{*d_strings, d_separator, d_narep});
-    auto joined_col = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
-    return std::move(joined_col->release().children.back());
+    auto joined_col       = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
+    auto chars_data       = joined_col->release().data;
+    auto const chars_size = chars_data->size();
+    return std::make_unique<cudf::column>(
+      data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0);
   }();
 
   // build the offsets: single string output has offsets [0,chars-size]
