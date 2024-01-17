@@ -252,7 +252,6 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   // build the offsets column -- converting the ngram sizes into offsets
   auto offsets_column = std::get<0>(
     cudf::detail::make_offsets_child_column(ngram_sizes.begin(), ngram_sizes.end(), stream, mr));
-  // chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
   return make_strings_column(

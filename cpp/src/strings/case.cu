@@ -264,11 +264,10 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                "Size of output exceeds the column size limit",
                std::overflow_error);
 
-  // auto chars = create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
   rmm::device_uvector<char> chars(bytes, stream, mr);
   // second pass, write output
   converter.d_offsets = d_offsets;
-  converter.d_chars   = chars.data();  // chars->mutable_view().data<char>();
+  converter.d_chars   = chars.data();
   thrust::for_each_n(rmm::exec_policy(stream), count_itr, input.size(), converter);
 
   return make_strings_column(input.size(),
