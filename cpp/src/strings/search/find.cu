@@ -186,7 +186,7 @@ void find_utility(strings_column_view const& input,
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = output.mutable_view().data<size_type>();
-  if ((input.chars_size() / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
+  if ((input.chars_size(stream) / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
     // warp-per-string runs faster for longer strings (but not shorter ones)
     constexpr int block_size = 256;
     cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
@@ -538,7 +538,7 @@ std::unique_ptr<column> contains(strings_column_view const& input,
 {
   // use warp parallel when the average string width is greater than the threshold
   if ((input.null_count() < input.size()) &&
-      ((input.chars_size() / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+      ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
     return contains_warp_parallel(input, target, stream, mr);
   }
 

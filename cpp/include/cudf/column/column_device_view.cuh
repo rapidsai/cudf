@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -445,7 +445,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   __device__ T element(size_type element_index) const noexcept
   {
     size_type index       = element_index + offset();  // account for this view's _offset
-    char const* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
+    char const* d_strings = static_cast<char const*>(_data);
     auto const offsets    = d_children[strings_column_view::offsets_column_index];
     auto const itr        = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
     auto const offset     = itr[index];

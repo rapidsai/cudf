@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -101,7 +101,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   auto const offsets = scv.offsets_begin();
 
   // create working memory to hold the output of each string
-  auto working_memory = rmm::device_uvector<char>(scv.chars_size(), stream);
+  auto working_memory = rmm::device_uvector<char>(scv.chars_size(stream), stream);
   // create a vector for the output strings' pointers
   auto str_ptrs = rmm::device_uvector<cudf::string_view>(names.size(), stream);
 
