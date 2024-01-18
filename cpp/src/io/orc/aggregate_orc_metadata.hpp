@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#pragma once
 
 #include "orc.hpp"
 
@@ -33,8 +35,8 @@ struct column_hierarchy {
   // Each element contains column at the given nesting level
   std::vector<std::vector<orc_column_meta>> levels;
 
-  column_hierarchy(nesting_map child_map);
-  auto num_levels() const { return levels.size(); }
+  explicit column_hierarchy(nesting_map child_map);
+  [[nodiscard]] auto num_levels() const { return levels.size(); }
 };
 
 /**
@@ -51,11 +53,6 @@ class aggregate_orc_metadata {
   [[nodiscard]] int64_t calc_num_rows() const;
 
   /**
-   * @brief Number of columns in a ORC file.
-   */
-  [[nodiscard]] size_type calc_num_cols() const;
-
-  /**
    * @brief Sums up the number of stripes of each source
    */
   [[nodiscard]] size_type calc_num_stripes() const;
@@ -69,22 +66,23 @@ class aggregate_orc_metadata {
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources,
                          rmm::cuda_stream_view stream);
 
-  [[nodiscard]] auto const& get_schema(int schema_idx) const
+  [[nodiscard]] auto get_col_type(int col_idx) const
   {
-    return per_file_metadata[0].ff.types[schema_idx];
+    return per_file_metadata[0].ff.types[col_idx];
   }
-
-  auto get_col_type(int col_idx) const { return per_file_metadata[0].ff.types[col_idx]; }
 
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
-  auto get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
+  [[nodiscard]] auto get_num_cols() const { return per_file_metadata[0].get_num_columns(); }
 
   [[nodiscard]] auto get_num_stripes() const { return num_stripes; }
 
   [[nodiscard]] auto const& get_types() const { return per_file_metadata[0].ff.types; }
 
-  [[nodiscard]] int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
+  [[nodiscard]] int get_row_index_stride() const
+  {
+    return static_cast<int>(per_file_metadata[0].ff.rowIndexStride);
+  }
 
   [[nodiscard]] auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 
@@ -115,11 +113,11 @@ class aggregate_orc_metadata {
    *
    * Stripes are potentially selected from multiple files.
    */
-  std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>> select_stripes(
-    std::vector<std::vector<size_type>> const& user_specified_stripes,
-    uint64_t skip_rows,
-    std::optional<size_type> const& num_rows,
-    rmm::cuda_stream_view stream);
+  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
+  select_stripes(std::vector<std::vector<size_type>> const& user_specified_stripes,
+                 uint64_t skip_rows,
+                 std::optional<size_type> const& num_rows,
+                 rmm::cuda_stream_view stream);
 
   /**
    * @brief Filters ORC file to a selection of columns, based on their paths in the file.
@@ -131,7 +129,7 @@ class aggregate_orc_metadata {
    * `nullopt` if user did not select columns to read
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(
+  [[nodiscard]] column_hierarchy select_columns(
     std::optional<std::vector<std::string>> const& column_paths) const;
 };
 

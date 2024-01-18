@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,10 +49,7 @@ namespace cudf::strings::detail {
  */
 template <typename Derived>
 struct base_split_tokenizer {
-  __device__ char const* get_base_ptr() const
-  {
-    return d_strings.child(strings_column_view::chars_column_index).data<char>();
-  }
+  __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
 
   __device__ string_view const get_string(size_type idx) const
   {
