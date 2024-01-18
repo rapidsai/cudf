@@ -1286,7 +1286,7 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
     bool const is_list = chunk.max_level[level_type::REPETITION] > 0;
     if (is_list && max_col_row < last_pass_row) {
       size_t const min_col_row = static_cast<size_t>(chunk.start_row + last_page.chunk_row);
-      CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short list page");
+      CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short subpass");
       max_col_row--;
     }
 
