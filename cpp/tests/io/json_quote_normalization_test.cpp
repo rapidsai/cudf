@@ -39,49 +39,140 @@
 // Base test fixture for tests
 struct JsonNormalizationTest : public cudf::test::BaseFixture {};
 
-TEST_F(JsonNormalizationTest, ValidOutput)
+void run_test(const std::string& host_input, const std::string& expected_host_output)
 {
   // RMM memory resource
   std::shared_ptr<rmm::mr::device_memory_resource> rsc =
     std::make_shared<rmm::mr::cuda_memory_resource>();
 
-  // Test input
-  std::string const host_input = R"({"A":'TEST"'})";
   rmm::device_uvector<char> device_input(
     host_input.size(), cudf::test::get_default_stream(), rsc.get());
-  for (size_t i = 0; i < host_input.size(); i++)
-    device_input.set_element_async(i, host_input[i], cudf::test::get_default_stream());
+  CUDF_CUDA_TRY(cudaMemcpyAsync(device_input.data(),
+                                host_input.data(),
+                                host_input.size(),
+                                cudaMemcpyHostToDevice,
+                                cudf::test::get_default_stream().value()));
   auto device_input_span = cudf::device_span<std::byte>(
     reinterpret_cast<std::byte*>(device_input.data()), device_input.size());
 
   // Preprocessing FST
   auto device_fst_output = cudf::io::json::detail::normalize_single_quotes(
     device_input_span, cudf::test::get_default_stream(), rsc.get());
-  /*
-  for(size_t i = 0; i < device_fst_output_ptr->size(); i++)
-    std::printf("%c", device_fst_output_ptr->element(i, cudf::test::get_default_stream()));
-  std::printf("\n");
-  */
 
-  // Initialize parsing options (reading json lines)
-  auto device_fst_output_span = cudf::device_span<std::byte>(
-    reinterpret_cast<std::byte*>(device_fst_output.data()), device_fst_output.size());
-  cudf::io::json_reader_options input_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{device_fst_output_span})
-      .lines(true);
+  std::string preprocessed_host_output(device_fst_output.size(), 0);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
+                                device_fst_output.data(),
+                                preprocessed_host_output.size(),
+                                cudaMemcpyDeviceToHost,
+                                cudf::test::get_default_stream().value()));
+  CUDF_TEST_EXPECT_VECTOR_EQUAL(
+    preprocessed_host_output, expected_host_output, preprocessed_host_output.size());
+}
 
-  cudf::io::table_with_metadata processed_table =
-    cudf::io::read_json(input_options, cudf::test::get_default_stream(), rsc.get());
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization1)
+{
+  std::string input  = R"({"A":'TEST"'})";
+  std::string output = R"({"A":"TEST\""})";
+  run_test(input, output);
+}
 
-  // Expected table
-  std::string const expected_input = R"({"A":"TEST\""})";
-  cudf::io::json_reader_options expected_input_options =
-    cudf::io::json_reader_options::builder(
-      cudf::io::source_info{expected_input.data(), expected_input.size()})
-      .lines(true);
-  cudf::io::table_with_metadata expected_table =
-    cudf::io::read_json(expected_input_options, cudf::test::get_default_stream(), rsc.get());
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization2)
+{
+  std::string input  = R"({'A':"TEST'"} ['OTHER STUFF'])";
+  std::string output = R"({"A":"TEST'"} ["OTHER STUFF"])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization3)
+{
+  std::string input  = R"(['{"A": "B"}',"{'A': 'B'}"])";
+  std::string output = R"(["{\"A\": \"B\"}","{'A': 'B'}"])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization4)
+{
+  std::string input = R"({"ain't ain't a word and you ain't supposed to say it":'"""""""""""'})";
+  std::string output =
+    R"({"ain't ain't a word and you ain't supposed to say it":"\"\"\"\"\"\"\"\"\"\"\""})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization5)
+{
+  std::string input  = R"({"\"'\"'\"'\"'":'"\'"\'"\'"\'"'})";
+  std::string output = R"({"\"'\"'\"'\"'":"\"'\"'\"'\"'\""})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization6)
+{
+  std::string input  = R"([{"ABC':'CBA":'XYZ":"ZXY'}])";
+  std::string output = R"([{"ABC':'CBA":"XYZ\":\"ZXY"}])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization7)
+{
+  std::string input  = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
+  std::string output = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization8)
+{
+  std::string input  = R"(['\t','\\t','\\','\\\"\'\\\\','\n','\b','\u0012'])";
+  std::string output = R"(["\t","\\t","\\","\\\"'\\\\","\n","\b","\u0012"])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid1)
+{
+  std::string input  = R"(["THIS IS A TEST'])";
+  std::string output = R"(["THIS IS A TEST'])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid2)
+{
+  std::string input  = R"(['THIS IS A TEST"])";
+  std::string output = R"(["THIS IS A TEST\"])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid3)
+{
+  std::string input  = R"({"MORE TEST'N":'RESUL})";
+  std::string output = R"({"MORE TEST'N":"RESUL})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid4)
+{
+  std::string input  = R"({"NUMBER":100'0,'STRING':'SOMETHING'})";
+  std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid5)
+{
+  std::string input  = R"({'NUMBER':100"0,"STRING":"SOMETHING"})";
+  std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid6)
+{
+  std::string input  = R"({'a':'\\''})";
+  std::string output = R"({"a":"\\""})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid7)
+{
+  std::string input  = R"(}'a': 'b'{)";
+  std::string output = R"(}"a": "b"{)";
+  run_test(input, output);
 }
 
 TEST_F(JsonNormalizationTest, ReadJsonOption)
