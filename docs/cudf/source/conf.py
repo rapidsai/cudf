@@ -110,13 +110,10 @@ def clean_definitions(root):
     # For friend, see https://github.com/breathe-doc/breathe/issues/916
     strings_to_remove = ("__forceinline__", "CUDF_HOST_DEVICE", "decltype(auto)", "friend")
     for node in root.iter():
-        if node.text is not None:
-            for string in strings_to_remove:
-                node.text = node.text.replace(string, "")
-        for attr, val in node.items():
-            if attr == "kind" and "friend" in val:
-                node.set(attr, "")
-
+        for attr in ("text", "tail"):
+            if (val := getattr(node, attr)) is not None:
+                for string in strings_to_remove:
+                    setattr(node, attr, val.replace(string, ""))
 
 def clean_all_xml_files(path):
     for fn in glob.glob(os.path.join(path, "*.xml")):
