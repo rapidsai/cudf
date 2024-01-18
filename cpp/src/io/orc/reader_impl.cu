@@ -46,8 +46,8 @@ reader::impl::impl(std::size_t chunk_read_limit,
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
-    _chunk_read_info{chunk_read_limit}
-
+    _chunk_read_info{chunk_read_limit},
+    mem_stats_logger(mr)
 {
 }
 
@@ -125,6 +125,8 @@ table_with_metadata reader::impl::read_chunk_internal()
         orc_col_meta.id, 0, _col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
       return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
     });
+
+  std::cout << "peak_memory_usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
