@@ -1925,15 +1925,11 @@ def test_orc_chunked_writer_stripe_size(datadir):
 
     orc_file = orc.ORCFile(buffer)
     assert_eq(orc_file.nstripes, 10)
-    got = cudf.read_orc(buffer)
 
     buffer = BytesIO()
-    writer = ORCWriter(buffer, stripe_size_rows=20000, row_index_stride=1000)
+    writer = ORCWriter(buffer, stripe_size_rows=20000)
     writer.write_table(df)
     writer.close()
 
     orc_file = orc.ORCFile(buffer)
     assert_eq(orc_file.nstripes, 5)
-    got = cudf.read_orc(buffer)
-
-    assert_eq(1, 2)
