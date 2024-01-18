@@ -800,22 +800,22 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return _dtype_to_index[self.dtype.type]._from_columns(
-            [self._values.take(gather_map, nullify, check_bounds)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_data(
+            {self.name: self._values.take(gather_map, nullify, check_bounds)}
         )
 
     @_cudf_nvtx_annotate
     def _apply_boolean_mask(self, boolean_mask):
-        return _dtype_to_index[self.dtype.type]._from_columns(
-            [self._values.apply_boolean_mask(boolean_mask)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_data(
+            {self.name: self._values.apply_boolean_mask(boolean_mask)}
         )
 
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return _dtype_to_index[self.dtype.type]._from_columns(
-            [self._as_int_index()._split(splits)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_data(
+            {self.name: self._as_int_index()._split(splits)}
         )
 
     def _binaryop(self, other, op: str):
