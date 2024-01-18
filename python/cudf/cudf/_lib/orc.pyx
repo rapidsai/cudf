@@ -378,6 +378,7 @@ cdef class ORCWriter:
     cdef object cols_as_map_type
     cdef object stripe_size_bytes
     cdef object stripe_size_rows
+    cdef object row_index_stride
 
     def __cinit__(self,
                   object path,
@@ -386,7 +387,8 @@ cdef class ORCWriter:
                   object statistics="ROWGROUP",
                   object cols_as_map_type=None,
                   object stripe_size_bytes=None,
-                  object stripe_size_rows=None):
+                  object stripe_size_rows=None,
+                  object row_index_stride=None):
 
         self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_orc_stat_freq(statistics)
@@ -396,6 +398,7 @@ cdef class ORCWriter:
             if cols_as_map_type is None else set(cols_as_map_type)
         self.stripe_size_bytes = stripe_size_bytes
         self.stripe_size_rows = stripe_size_rows
+        self.row_index_stride = row_index_stride
         self.initialized = False
 
     def write_table(self, table):
@@ -475,6 +478,8 @@ cdef class ORCWriter:
             c_opts.set_stripe_size_bytes(self.stripe_size_bytes)
         if self.stripe_size_rows is not None:
             c_opts.set_stripe_size_rows(self.stripe_size_rows)
+        if self.row_index_stride is not None:
+            c_opts.set_row_index_stride(self.row_index_stride)
 
         with nogil:
             self.writer.reset(new orc_chunked_writer(c_opts))
