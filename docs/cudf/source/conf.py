@@ -113,6 +113,9 @@ def clean_definitions(root):
         if node.text is not None:
             for string in strings_to_remove:
                 node.text = node.text.replace(string, "")
+        for attr, val in node.items():
+            if attr == "kind" and "friend" in val:
+                node.set(attr, "")
 
 
 def clean_all_xml_files(path):
