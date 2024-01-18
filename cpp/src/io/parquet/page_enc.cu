@@ -385,7 +385,7 @@ __device__ uint8_t const* delta_encode(page_enc_state_s<0>* s, uint64_t* buffer,
 
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpuInitRowGroupFragments(device_2dspan<PageFragment> frag,
                            device_span<parquet_column_device_view const> col_desc,
                            device_span<partition_info const> partitions,
@@ -422,7 +422,7 @@ __global__ void __launch_bounds__(block_size)
 
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpuCalculatePageFragments(device_span<PageFragment> frag,
                             device_span<size_type const> column_frag_sizes)
 {
@@ -449,7 +449,7 @@ __global__ void __launch_bounds__(block_size)
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   gpuInitFragmentStats(device_span<statistics_group> groups,
                        device_span<PageFragment const> fragments)
 {
@@ -510,7 +510,7 @@ __device__ size_t delta_data_len(Type physical_type,
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   gpuInitPages(device_2dspan<EncColumnChunk> chunks,
                device_span<EncPage> pages,
                device_span<size_type> page_sizes,
@@ -1244,9 +1244,10 @@ __device__ auto julian_days_with_time(int64_t v)
 // the level data is encoded.
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8) gpuEncodePageLevels(device_span<EncPage> pages,
-                                                                     bool write_v2_headers,
-                                                                     encode_kernel_mask kernel_mask)
+CUDF_KERNEL void __launch_bounds__(block_size, 8)
+  gpuEncodePageLevels(device_span<EncPage> pages,
+                      bool write_v2_headers,
+                      encode_kernel_mask kernel_mask)
 {
   __shared__ __align__(8) rle_page_enc_state_s state_g;
 
@@ -1504,7 +1505,7 @@ __device__ void finish_page_encode(state_buf* s,
 // PLAIN page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8)
+CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
@@ -1739,7 +1740,7 @@ __global__ void __launch_bounds__(block_size, 8)
 // DICTIONARY page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8)
+CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDictPages(device_span<EncPage> pages,
                      device_span<device_span<uint8_t const>> comp_in,
                      device_span<device_span<uint8_t>> comp_out,
@@ -1871,7 +1872,7 @@ __global__ void __launch_bounds__(block_size, 8)
 // DELTA_BINARY_PACKED page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8)
+CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaBinaryPages(device_span<EncPage> pages,
                             device_span<device_span<uint8_t const>> comp_in,
                             device_span<device_span<uint8_t>> comp_out,
@@ -1975,7 +1976,7 @@ __global__ void __launch_bounds__(block_size, 8)
 // DELTA_LENGTH_BYTE_ARRAY page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8)
+CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaLengthByteArrayPages(device_span<EncPage> pages,
                                      device_span<device_span<uint8_t const>> comp_in,
                                      device_span<device_span<uint8_t>> comp_out,
@@ -2105,7 +2106,7 @@ constexpr int decide_compression_block_size =
   decide_compression_warps_in_block * cudf::detail::warp_size;
 
 // blockDim(decide_compression_block_size, 1, 1)
-__global__ void __launch_bounds__(decide_compression_block_size)
+CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
   gpuDecideCompression(device_span<EncColumnChunk> chunks)
 {
   __shared__ __align__(8) EncColumnChunk ck_g[decide_compression_warps_in_block];
@@ -2575,7 +2576,7 @@ __device__ uint8_t* EncodeStatistics(uint8_t* start,
 }
 
 // blockDim(128, 1, 1)
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   gpuEncodePageHeaders(device_span<EncPage> pages,
                        device_span<compression_result const> comp_results,
                        device_span<statistics_chunk const> page_stats,
@@ -2670,7 +2671,7 @@ __global__ void __launch_bounds__(128)
 }
 
 // blockDim(1024, 1, 1)
-__global__ void __launch_bounds__(1024)
+CUDF_KERNEL void __launch_bounds__(1024)
   gpuGatherPages(device_span<EncColumnChunk> chunks, device_span<EncPage const> pages)
 {
   __shared__ __align__(8) EncColumnChunk ck_g;
@@ -2848,7 +2849,7 @@ struct mask_tform {
 }  // namespace
 
 // blockDim(1, 1, 1)
-__global__ void __launch_bounds__(1)
+CUDF_KERNEL void __launch_bounds__(1)
   gpuEncodeColumnIndexes(device_span<EncColumnChunk> chunks,
                          device_span<statistics_chunk const> column_stats,
                          int32_t column_index_truncate_length)

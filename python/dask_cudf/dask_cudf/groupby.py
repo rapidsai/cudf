@@ -17,6 +17,8 @@ from dask.utils import funcname
 import cudf
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
+from dask_cudf.sorting import _deprecate_shuffle_kwarg
+
 # aggregations that are dask-cudf optimized
 OPTIMIZED_AGGS = (
     "count",
@@ -189,8 +191,11 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, shuffle_method=None
+    ):
         if arg == "size":
             return self.size()
 
@@ -211,7 +216,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
-                shuffle_method=shuffle,
+                shuffle_method=shuffle_method,
                 **self.dropna,
             )
 
@@ -219,7 +224,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
 
@@ -330,8 +335,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, shuffle_method=None
+    ):
         if arg == "size":
             return self.size()
 
@@ -342,14 +350,14 @@ class CudfSeriesGroupBy(SeriesGroupBy):
 
         if _groupby_optimized(self) and _aggs_optimized(arg, OPTIMIZED_AGGS):
             return _make_groupby_agg_call(
-                self, arg, split_every, split_out, shuffle
+                self, arg, split_every, split_out, shuffle_method
             )[self._slice]
 
         return super().aggregate(
             arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
 
