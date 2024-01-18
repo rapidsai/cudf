@@ -763,7 +763,7 @@ class strings_column_wrapper : public detail::column_wrapper {
     }
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars          = cudf::detail::make_device_uvector_sync(
+    auto d_chars          = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = std::make_unique<cudf::column>(
       cudf::detail::make_device_uvector_sync(
@@ -813,10 +813,10 @@ class strings_column_wrapper : public detail::column_wrapper {
     }
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars                 = cudf::detail::make_device_uvector_sync(
+    auto d_chars                 = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
     auto d_offsets = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_sync(
+      cudf::detail::make_device_uvector_async(
         offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
       rmm::device_buffer{},
       0);
