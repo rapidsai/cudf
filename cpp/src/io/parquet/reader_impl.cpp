@@ -206,8 +206,13 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
 
   // launch delta length byte array decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
-    DecodeDeltaLengthByteArray(
-      subpass.pages, pass.chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
+    DecodeDeltaLengthByteArray(subpass.pages,
+                               pass.chunks,
+                               num_rows,
+                               skip_rows,
+                               level_type_size,
+                               error_code.data(),
+                               streams[s_idx++]);
   }
 
   // launch delta binary decoder

@@ -53,7 +53,7 @@ struct split_info {
 constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
 // percentage of the total available input read limit that should be reserved for compressed
-// data vs uncompressed data. 
+// data vs uncompressed data.
 constexpr float input_limit_compression_reserve = 0.3f;
 
 #if defined(CHUNKING_DEBUG)
@@ -550,8 +550,9 @@ struct get_page_span {
  * @param size_limit The size limit in bytes of the subpass
  * @param num_columns The number of columns
  * @param stream The stream to execute cuda operations on
- * @returns A tuple containing a vector of page_span structs indicating the page indices to include for each column
- * to be processed, the total number of pages over all columns, and the total expected memory usage (including scratch space)
+ * @returns A tuple containing a vector of page_span structs indicating the page indices to include
+ * for each column to be processed, the total number of pages over all columns, and the total
+ * expected memory usage (including scratch space)
  *
  */
 std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
@@ -574,8 +575,9 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
   // data does not contain lists (because our row counts are only estimates in that case)
 
   // find the next split
-  auto const start_index     = find_start_index(h_aggregated_info, start_row);
-  auto const cumulative_size = start_row == 0 || start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
+  auto const start_index = find_start_index(h_aggregated_info, start_row);
+  auto const cumulative_size =
+    start_row == 0 || start_index == 0 ? 0 : h_aggregated_info[start_index - 1].size_bytes;
   auto const end_index =
     find_next_split(start_index, start_row, cumulative_size, h_aggregated_info, size_limit);
   auto const end_row = h_aggregated_info[end_index].row_index;
@@ -1205,21 +1207,25 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   auto const num_columns = _input_columns.size();
 
-  // if the user has passed a very small value (under the hardcoded minimum_subpass_expected_size), respect it.
-  auto const min_subpass_size = _input_pass_read_limit < minimum_subpass_expected_size ? _input_pass_read_limit : minimum_subpass_expected_size;
+  // if the user has passed a very small value (under the hardcoded minimum_subpass_expected_size),
+  // respect it.
+  auto const min_subpass_size = _input_pass_read_limit < minimum_subpass_expected_size
+                                  ? _input_pass_read_limit
+                                  : minimum_subpass_expected_size;
 
   // what do we do if the base memory size (the compressed data) itself is approaching or larger
   // than the overall read limit? we are still going to be decompressing in subpasses, but we have
   // to assume some reasonable minimum size needed to safely decompress a single subpass. so always
-  // reserve at least that much space. this can result in using up to 2x the specified user limit but
-  // should only ever happen with unrealistically low numbers.
+  // reserve at least that much space. this can result in using up to 2x the specified user limit
+  // but should only ever happen with unrealistically low numbers.
   size_t const remaining_read_limit =
     _input_pass_read_limit == 0 ? 0
     : pass.base_mem_size + min_subpass_size >= _input_pass_read_limit
       ? min_subpass_size
       : _input_pass_read_limit - pass.base_mem_size;
 
-  auto [page_indices, total_pages, total_expected_size] = [&]() -> std::tuple<std::vector<page_span>, size_t, size_t> {
+  auto [page_indices, total_pages, total_expected_size] =
+    [&]() -> std::tuple<std::vector<page_span>, size_t, size_t> {
     // special case:  if we contain no compressed data, or if we have no input limit, we can always
     // just do 1 subpass since what we already have loaded is all the temporary memory we will ever
     // use.
@@ -1323,7 +1329,9 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
          subpass.num_rows,
          remaining_read_limit);
   printf("\t\tDecompressed size: %'lu\n", subpass.decomp_page_data.size());
-  printf("\t\tTotal expected usage: %'lu\n", total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size : total_expected_size + pass.base_mem_size);
+  printf("\t\tTotal expected usage: %'lu\n",
+         total_expected_size == 0 ? subpass.decomp_page_data.size() + pass.base_mem_size
+                                  : total_expected_size + pass.base_mem_size);
   for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
     printf("\t\tColumn %'lu: pages(%'lu - %'lu)\n",
            c_idx,
@@ -1428,7 +1436,9 @@ void reader::impl::compute_input_passes()
   // generate passes. make sure to account for the case where a single row group doesn't fit within
   //
   std::size_t const read_limit =
-    _input_pass_read_limit > 0 ? static_cast<size_t>(static_cast<float>(_input_pass_read_limit) * input_limit_compression_reserve) : std::numeric_limits<std::size_t>::max();
+    _input_pass_read_limit > 0 ? static_cast<size_t>(static_cast<float>(_input_pass_read_limit) *
+                                                     input_limit_compression_reserve)
+                               : std::numeric_limits<std::size_t>::max();
   std::size_t cur_pass_byte_size = 0;
   std::size_t cur_rg_start       = 0;
   std::size_t cur_row_count      = 0;
