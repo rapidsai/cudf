@@ -123,6 +123,7 @@ struct ColumnDesc {
   type_id timestamp_type_id;  // output timestamp type id (type_id::EMPTY by default)
   column_validity_info parent_validity_info;  // consists of parent column valid_map and null count
   uint32_t* parent_null_count_prefix_sums;  // per-stripe prefix sums of parent column's null count
+  int32_t str_bytes;                        // string size, only if this is a strings column
 };
 
 /**
