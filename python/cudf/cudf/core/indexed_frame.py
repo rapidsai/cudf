@@ -291,38 +291,6 @@ class IndexedFrame(Frame):
         out._data._level_names = self._data._level_names
         return out
 
-    @classmethod
-    @_cudf_nvtx_annotate
-    def _from_columns(
-        cls,
-        columns: List[ColumnBase],
-        column_names: List[str],
-        index_names: Optional[List[str]] = None,
-    ):
-        """Construct a `Frame` object from a list of columns.
-
-        If `index_names` is set, the first `len(index_names)` columns are
-        used to construct the index of the frame.
-        """
-        data_columns = columns
-        index = None
-
-        if index_names is not None:
-            n_index_columns = len(index_names)
-            data_columns = columns[n_index_columns:]
-            index = _index_from_columns(columns[:n_index_columns])
-            if isinstance(index, cudf.MultiIndex):
-                index.names = index_names
-            else:
-                index.name = index_names[0]
-
-        out = super()._from_columns(data_columns, column_names)
-
-        if index is not None:
-            out._index = index
-
-        return out
-
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
@@ -343,9 +311,24 @@ class IndexedFrame(Frame):
         """
         if column_names is None:
             column_names = self._column_names
-        frame = self.__class__._from_columns(
-            columns, column_names, index_names
-        )
+
+        data_columns = columns
+        index = None
+
+        if index_names is not None:
+            n_index_columns = len(index_names)
+            data_columns = columns[n_index_columns:]
+            index = _index_from_columns(columns[:n_index_columns])
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+
+        data = dict(zip(column_names, data_columns))
+        frame = self.__class__._from_data(data)
+
+        if index is not None:
+            frame._index = index
         return frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
