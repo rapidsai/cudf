@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -347,10 +347,13 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                  d_strview_offsets + row_string_offsets.size(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
+  auto chars_data       = joined_col->release().data;
+  auto const chars_size = chars_data->size();
   return make_strings_column(
     strings_columns.num_rows(),
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
+    std::make_unique<cudf::column>(
+      data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0),
     0,
     {});
 }
@@ -469,10 +472,13 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                  d_strview_offsets.end(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
+  auto chars_data       = joined_col->release().data;
+  auto const chars_size = chars_data->size();
   return make_strings_column(
     num_lists,
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
+    std::make_unique<cudf::column>(
+      data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0),
     lists_strings.null_count(),
     cudf::detail::copy_bitmask(lists_strings.parent(), stream, mr));
 }
@@ -812,8 +818,8 @@ void write_chunked(data_sink* out_sink,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  auto const total_num_bytes = str_column_view.chars_size() - skip_last_chars;
-  char const* ptr_all_bytes  = str_column_view.chars_begin();
+  auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
+  char const* ptr_all_bytes  = str_column_view.chars_begin(stream);
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory

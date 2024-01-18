@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -58,7 +59,7 @@ struct verify_dispatched_type {
   }
 };
 
-__global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
+CUDF_KERNEL void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
     *d_result = cudf::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
@@ -118,7 +119,7 @@ struct verify_double_dispatched_type {
   }
 };
 
-__global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
+CUDF_KERNEL void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
     *d_result = cudf::double_type_dispatcher(

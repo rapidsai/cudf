@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -324,7 +324,7 @@ avro_decode_row(schemadesc_s const* schema,
  * @param[in] min_row_size Minimum size in bytes of a row
  */
 // blockDim {32,num_warps,1}
-__global__ void __launch_bounds__(num_warps * 32, 2)
+CUDF_KERNEL void __launch_bounds__(num_warps * 32, 2)
   gpuDecodeAvroColumnData(device_span<block_desc_s const> blocks,
                           schemadesc_s* schema_g,
                           device_span<string_index_pair const> global_dictionary,

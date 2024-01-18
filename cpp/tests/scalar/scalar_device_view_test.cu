@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,14 +35,14 @@ struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {};
 TYPED_TEST_SUITE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 template <typename ScalarDeviceViewType>
-__global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)
+CUDF_KERNEL void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)
 {
   s1.set_value(s.value());
   s1.set_valid(true);
 }
 
 template <typename ScalarDeviceViewType>
-__global__ void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool* result)
+CUDF_KERNEL void test_value(ScalarDeviceViewType s, ScalarDeviceViewType s1, bool* result)
 {
   *result = (s.value() == s1.value());
 }
@@ -73,7 +73,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, Value)
 }
 
 template <typename ScalarDeviceViewType>
-__global__ void test_null(ScalarDeviceViewType s, bool* result)
+CUDF_KERNEL void test_null(ScalarDeviceViewType s, bool* result)
 {
   *result = s.is_valid();
 }
@@ -92,7 +92,7 @@ TYPED_TEST(TypedScalarDeviceViewTest, ConstructNull)
 }
 
 template <typename ScalarDeviceViewType>
-__global__ void test_setnull(ScalarDeviceViewType s)
+CUDF_KERNEL void test_setnull(ScalarDeviceViewType s)
 {
   s.set_valid(false);
 }
@@ -113,10 +113,10 @@ TYPED_TEST(TypedScalarDeviceViewTest, SetNull)
 
 struct StringScalarDeviceViewTest : public cudf::test::BaseFixture {};
 
-__global__ void test_string_value(cudf::string_scalar_device_view s,
-                                  char const* value,
-                                  cudf::size_type size,
-                                  bool* result)
+CUDF_KERNEL void test_string_value(cudf::string_scalar_device_view s,
+                                   char const* value,
+                                   cudf::size_type size,
+                                   bool* result)
 {
   *result = (s.value() == cudf::string_view(value, size));
 }

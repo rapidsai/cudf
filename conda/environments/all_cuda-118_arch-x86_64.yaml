@@ -12,6 +12,7 @@ dependencies:
 - benchmark==1.8.0
 - boto3>=1.21.21
 - botocore>=1.24.21
+- breathe>=4.35.0
 - c-compiler
 - cachetools
 - clang-tools=16.0.6
@@ -51,7 +52,6 @@ dependencies:
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.2.*
 - make
-- mimesis>=4.1.0
 - moto>=4.0.8
 - msgpack-python
 - myst-nb
@@ -75,7 +75,7 @@ dependencies:
 - pydata-sphinx-theme!=0.14.2
 - pytest
 - pytest-benchmark
-- pytest-cases
+- pytest-cases<3.8.2
 - pytest-cov
 - pytest-xdist
 - python-confluent-kafka>=1.9.0,<1.10.0a0

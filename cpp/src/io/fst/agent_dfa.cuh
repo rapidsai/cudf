@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -493,7 +493,7 @@ template <bool IS_TRANS_VECTOR_PASS,
           typename TransducedOutItT,
           typename TransducedIndexOutItT,
           typename TransducedCountOutItT>
-__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) __global__
+__launch_bounds__(int32_t(AgentDFAPolicy::BLOCK_THREADS)) CUDF_KERNEL
   void SimulateDFAKernel(DfaT dfa,
                          SymbolItT d_chars,
                          OffsetT const num_chars,
