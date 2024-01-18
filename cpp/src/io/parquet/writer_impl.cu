@@ -2184,9 +2184,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
-  if (_write_v2_headers and _compression == Compression::ZSTD) {
-    CUDF_FAIL("V2 page headers cannot be used with ZSTD compression");
-  }
   init_state();
 }
 
@@ -2223,6 +2220,10 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
+  if (_write_v2_headers and _compression == Compression::ZSTD) {
+    CUDF_FAIL("V2 page headers cannot be used with ZSTD compression");
+  }
+
   _current_chunk_offset.resize(_out_sink.size());
   // Write file header
   file_header_s fhdr;
