@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -138,7 +138,7 @@ using byte_offset   = int64_t;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-__global__ void multibyte_split_init_kernel(
+CUDF_KERNEL void multibyte_split_init_kernel(
   cudf::size_type base_tile_idx,
   cudf::size_type num_tiles,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
@@ -154,7 +154,7 @@ __global__ void multibyte_split_init_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -231,7 +231,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,

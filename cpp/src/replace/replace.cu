@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -118,13 +118,13 @@ __device__ int get_new_string_value(cudf::size_type idx,
  * @param output_valid_count The output valid count
  */
 template <bool input_has_nulls, bool replacement_has_nulls>
-__global__ void replace_strings_first_pass(cudf::column_device_view input,
-                                           cudf::column_device_view values_to_replace,
-                                           cudf::column_device_view replacement,
-                                           cudf::mutable_column_device_view offsets,
-                                           cudf::mutable_column_device_view indices,
-                                           cudf::bitmask_type* output_valid,
-                                           cudf::size_type* __restrict__ output_valid_count)
+CUDF_KERNEL void replace_strings_first_pass(cudf::column_device_view input,
+                                            cudf::column_device_view values_to_replace,
+                                            cudf::column_device_view replacement,
+                                            cudf::mutable_column_device_view offsets,
+                                            cudf::mutable_column_device_view indices,
+                                            cudf::bitmask_type* output_valid,
+                                            cudf::size_type* __restrict__ output_valid_count)
 {
   cudf::size_type nrows = input.size();
   auto tid              = cudf::detail::grid_1d::global_thread_id();
@@ -184,11 +184,11 @@ __global__ void replace_strings_first_pass(cudf::column_device_view input,
  * @param indices Temporary column used to store the replacement indices.
  */
 template <bool input_has_nulls, bool replacement_has_nulls>
-__global__ void replace_strings_second_pass(cudf::column_device_view input,
-                                            cudf::column_device_view replacement,
-                                            cudf::mutable_column_device_view offsets,
-                                            cudf::mutable_column_device_view strings,
-                                            cudf::mutable_column_device_view indices)
+CUDF_KERNEL void replace_strings_second_pass(cudf::column_device_view input,
+                                             cudf::column_device_view replacement,
+                                             cudf::mutable_column_device_view offsets,
+                                             cudf::mutable_column_device_view strings,
+                                             cudf::mutable_column_device_view indices)
 {
   cudf::size_type nrows = input.size();
   auto tid              = cudf::detail::grid_1d::global_thread_id();
@@ -245,12 +245,12 @@ __global__ void replace_strings_second_pass(cudf::column_device_view input,
  * @param[in] replacement_valid Valid mask associated with d_replacement_values
  */
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
-__global__ void replace_kernel(cudf::column_device_view input,
-                               cudf::mutable_column_device_view output,
-                               cudf::size_type* __restrict__ output_valid_count,
-                               cudf::size_type nrows,
-                               cudf::column_device_view values_to_replace,
-                               cudf::column_device_view replacement)
+CUDF_KERNEL void replace_kernel(cudf::column_device_view input,
+                                cudf::mutable_column_device_view output,
+                                cudf::size_type* __restrict__ output_valid_count,
+                                cudf::size_type nrows,
+                                cudf::column_device_view values_to_replace,
+                                cudf::column_device_view replacement)
 {
   T* __restrict__ output_data = output.data<T>();
 

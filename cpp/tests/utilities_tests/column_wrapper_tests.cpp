@@ -255,7 +255,7 @@ TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNull)
   EXPECT_EQ(view.size(), count);
   EXPECT_EQ(view.offsets().size(), count + 1);
   // all null entries results in no data allocated to chars
-  EXPECT_EQ(nullptr, view.chars().head());
+  EXPECT_EQ(nullptr, view.parent().head());
   EXPECT_NE(nullptr, view.offsets().head());
   EXPECT_TRUE(view.has_nulls());
   EXPECT_EQ(view.null_count(), 5);
