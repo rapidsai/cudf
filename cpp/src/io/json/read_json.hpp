@@ -22,7 +22,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
@@ -42,4 +41,5 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
                                         json_reader_options const& reader_opts,
                                         char const delimiter,
                                         rmm::cuda_stream_view stream);
+
 }  // namespace cudf::io::json::detail

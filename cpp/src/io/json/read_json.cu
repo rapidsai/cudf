@@ -46,6 +46,16 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
+/**
+ * @brief Read from array of data sources into RMM buffer
+ *
+ * @param sources Array of data sources
+ * @param compression Compression format of source
+ * @param range_offset Number of bytes to skip from source start
+ * @param range_size Number of bytes to read from source
+ * @param normalize_single_quotes Boolean to indicate whether pre-processing FST should be called
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                            compression_type compression,
                                            size_t range_offset,
@@ -105,6 +115,8 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
     }
 
     stream.synchronize();
+    // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
+    // invoke pre-processing FST
     if (normalize_single_quotes) {
       auto d_buffer_span = cudf::device_span<std::byte>(
         reinterpret_cast<std::byte*>(d_buffer.data()), d_buffer.size());
@@ -123,6 +135,7 @@ rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>
       host_span<char const>{reinterpret_cast<char const*>(uncomp_data.data()), uncomp_data.size()},
       stream,
       rmm::mr::get_current_device_resource());
+    // Quote normalization FST
     if (normalize_single_quotes) {
       auto d_buffer_span = cudf::device_span<std::byte>(
         reinterpret_cast<std::byte*>(d_buffer.data()), d_buffer.size());
