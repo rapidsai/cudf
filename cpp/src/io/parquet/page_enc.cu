@@ -57,12 +57,12 @@ constexpr int num_encode_warps  = encode_block_size / cudf::detail::warp_size;
 
 constexpr int rolling_idx(int pos) { return rolling_index<rle_buffer_size>(pos); }
 
-// max V1 header size (27 rounded up to 8 byte boundary)
+// max V1 header size 
 // also valid for dict page header (V1 or V2)
-constexpr int MAX_V1_HDR_SIZE = 32;
+constexpr int MAX_V1_HDR_SIZE = util::round_up_unsafe(27, 8);
 
-// max V2 header size (49 rounded up to 8 byte boundary)
-constexpr int MAX_V2_HDR_SIZE = 56;
+// max V2 header size
+constexpr int MAX_V2_HDR_SIZE = util::round_up_unsafe(49, 8);
 
 // do not truncate statistics
 constexpr int32_t NO_TRUNC_STATS = 0;
