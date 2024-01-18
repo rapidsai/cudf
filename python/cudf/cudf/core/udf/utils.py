@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import functools
 import os
 from typing import Any, Callable, Dict
 
@@ -60,10 +61,15 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 launch_arg_getters: Dict[Any, Any] = {}
 
-_PTX_FILE = _get_ptx_file(
-    os.path.join(os.path.dirname(strings_udf.__file__), "..", "core", "udf"),
-    "shim_",
-)
+
+@functools.cache
+def _ptx_file():
+    return _get_ptx_file(
+        os.path.join(
+            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
+        ),
+        "shim_",
+    )
 
 
 @_cudf_nvtx_annotate
@@ -286,7 +292,7 @@ def _get_kernel(kernel_string, globals_, sig, func):
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
     kernel = cuda.jit(
-        sig, link=[_PTX_FILE], extensions=[str_view_arg_handler]
+        sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
     )(_kernel)
 
     return kernel
