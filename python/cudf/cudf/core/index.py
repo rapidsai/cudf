@@ -3176,10 +3176,12 @@ def interval_range(
         data = column.column_empty_like_same_mask(left_col, dtype)
         return IntervalIndex(data, closed=closed)
 
-    interval_col = column.build_interval_column(
-        left_col, right_col, closed=closed
+    interval_col = IntervalColumn(
+        dtype=IntervalDtype(left_col.dtype, closed),
+        size=len(left_col),
+        children=(left_col, right_col),
     )
-    return IntervalIndex(interval_col)
+    return IntervalIndex(interval_col, closed=closed)
 
 
 class IntervalIndex(GenericIndex):
@@ -3219,12 +3221,12 @@ class IntervalIndex(GenericIndex):
     def __init__(
         self,
         data,
-        closed=None,
+        closed: Optional[Literal["left", "right", "neither", "both"]] = None,
         dtype=None,
-        copy=False,
+        copy: bool = False,
         name=None,
     ):
-        name = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
 
         if dtype is not None:
             dtype = cudf.dtype(dtype)
@@ -3239,28 +3241,51 @@ class IntervalIndex(GenericIndex):
 
         closed = closed or "right"
 
-        if dtype is None and len(data) == 0:
-            dtype = IntervalDtype(getattr(data, "dtype", "int64"), closed)
-
-        data = as_column(data)
-        if not isinstance(data, IntervalColumn) and len(data) > 0:
-            raise TypeError("data must be an iterable of Interval data")
-        elif len(data) == 0:
-            subtype = getattr(data, "dtype", "int64")
-            dtype = IntervalDtype(subtype, closed)
-
-        if copy:
-            data = data.copy()
+        if len(data) == 0:
+            if not hasattr(data, "dtype"):
+                data = np.array([], dtype=np.int64)
+            elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
+                data = np.array([], dtype=data.dtype.subtype)
+            interval_col = IntervalColumn(
+                dtype=IntervalDtype(data.dtype, closed),
+                size=len(data),
+                children=(as_column(data), as_column(data)),
+            )
+        else:
+            col = as_column(data)
+            if not isinstance(col, IntervalColumn):
+                raise TypeError("data must be an iterable of Interval data")
+            if copy:
+                col = col.copy()
+            interval_col = IntervalColumn(
+                dtype=IntervalDtype(col.dtype.subtype, closed),
+                mask=col.mask,
+                size=col.size,
+                offset=col.offset,
+                null_count=col.null_count,
+                children=col.children,
+            )
 
         if dtype:
-            data = data.astype(dtype)
-        self.closed = closed
-        super().__init__(data, name=name)
+            interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
 
-    @_cudf_nvtx_annotate
+        super().__init__(interval_col, name=name)
+
+    @property
+    def closed(self):
+        return self._values.dtype.closed
+
     @classmethod
+    @_cudf_nvtx_annotate
     def from_breaks(
-        cls, breaks, closed="right", name=None, copy=False, dtype=None
+        cls,
+        breaks,
+        closed: Optional[
+            Literal["left", "right", "neither", "both"]
+        ] = "right",
+        name=None,
+        copy: bool = False,
+        dtype=None,
     ):
         """
         Construct an IntervalIndex from an array of splits.
@@ -3290,16 +3315,18 @@ class IntervalIndex(GenericIndex):
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
+        breaks = column.as_column(breaks, dtype=dtype)
         if copy:
-            breaks = column.as_column(breaks, dtype=dtype).copy()
-        left_col = breaks[:-1:]
-        right_col = breaks[+1::]
+            breaks = breaks.copy()
+        left_col = breaks.slice(0, -1)
+        right_col = breaks.slice(1, len(breaks))
 
-        interval_col = column.build_interval_column(
-            left_col, right_col, closed=closed
+        interval_col = IntervalColumn(
+            dtype=IntervalDtype(left_col.dtype, closed),
+            size=len(left_col),
+            children=(left_col, right_col),
         )
-
-        return IntervalIndex(interval_col, name=name)
+        return IntervalIndex(interval_col, name=name, closed=closed)
 
     def __getitem__(self, index):
         raise NotImplementedError(
