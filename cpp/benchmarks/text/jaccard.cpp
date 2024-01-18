@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <benchmarks/common/generate_input.hpp>
 
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <nvtext/jaccard.hpp>
 
@@ -44,9 +45,10 @@ static void bench_jaccard(nvbench::state& state)
   cudf::strings_column_view input1(input_table->view().column(0));
   cudf::strings_column_view input2(input_table->view().column(1));
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  auto stream = cudf::get_default_stream();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
-  auto chars_size = input1.chars_size() + input2.chars_size();
+  auto chars_size = input1.chars_size(stream) + input2.chars_size(stream);
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   state.add_global_memory_writes<nvbench::float32_t>(num_rows);
 

@@ -15,6 +15,8 @@
  */
 
 #include "reader_impl.hpp"
+#include "reader_impl_chunking.hpp"
+#include "reader_impl_helpers.hpp"
 
 namespace cudf::io::orc::detail {
 

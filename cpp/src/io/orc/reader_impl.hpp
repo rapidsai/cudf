@@ -152,7 +152,7 @@ class reader::impl {
   // Intermediate data for internal processing.
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
   aggregate_orc_metadata _metadata;
-  column_hierarchy const _selected_columns;  // Need to be after _metadata
+  column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it
   reader_column_meta _col_meta;              // Track of orc mapping and child details
   file_intermediate_data _file_itm_data;
   chunk_read_info _chunk_read_info;  // Data for chunked reading.
