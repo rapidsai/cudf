@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ namespace detail {
  * @param[out] valid_count The count of set bits in the output bitmask
  */
 template <size_type block_size, typename InputIterator, typename Predicate>
-__global__ void valid_if_kernel(
+CUDF_KERNEL void valid_if_kernel(
   bitmask_type* output, InputIterator begin, size_type size, Predicate p, size_type* valid_count)
 {
   constexpr size_type leader_lane{0};
@@ -151,13 +151,13 @@ template <typename InputIterator1,
           typename InputIterator2,
           typename BinaryPredicate,
           int32_t block_size>
-__global__ void valid_if_n_kernel(InputIterator1 begin1,
-                                  InputIterator2 begin2,
-                                  BinaryPredicate p,
-                                  bitmask_type* masks[],
-                                  size_type mask_count,
-                                  size_type mask_num_bits,
-                                  size_type* valid_counts)
+CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
+                                   InputIterator2 begin2,
+                                   BinaryPredicate p,
+                                   bitmask_type* masks[],
+                                   size_type mask_count,
+                                   size_type mask_num_bits,
+                                   size_type* valid_counts)
 {
   for (size_type mask_idx = 0; mask_idx < mask_count; mask_idx++) {
     auto const mask = masks[mask_idx];

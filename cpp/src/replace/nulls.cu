@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,12 +57,12 @@ namespace {  // anonymous
 static constexpr int BLOCK_SIZE = 256;
 
 template <int phase, bool replacement_has_nulls>
-__global__ void replace_nulls_strings(cudf::column_device_view input,
-                                      cudf::column_device_view replacement,
-                                      cudf::bitmask_type* output_valid,
-                                      cudf::size_type* offsets,
-                                      char* chars,
-                                      cudf::size_type* valid_counter)
+CUDF_KERNEL void replace_nulls_strings(cudf::column_device_view input,
+                                       cudf::column_device_view replacement,
+                                       cudf::bitmask_type* output_valid,
+                                       cudf::size_type* offsets,
+                                       char* chars,
+                                       cudf::size_type* valid_counter)
 {
   cudf::size_type nrows = input.size();
   auto i                = cudf::detail::grid_1d::global_thread_id();
@@ -112,10 +112,10 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
 }
 
 template <typename Type, bool replacement_has_nulls>
-__global__ void replace_nulls(cudf::column_device_view input,
-                              cudf::column_device_view replacement,
-                              cudf::mutable_column_device_view output,
-                              cudf::size_type* output_valid_count)
+CUDF_KERNEL void replace_nulls(cudf::column_device_view input,
+                               cudf::column_device_view replacement,
+                               cudf::mutable_column_device_view output,
+                               cudf::size_type* output_valid_count)
 {
   cudf::size_type nrows = input.size();
   auto i                = cudf::detail::grid_1d::global_thread_id();
