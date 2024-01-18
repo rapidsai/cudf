@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,10 @@ namespace detail {
 
 namespace cg = cooperative_groups;
 
+#pragma GCC diagnostic ignored "-Wattributes"
+
 template <cudf::size_type block_size, bool has_nulls>
-__launch_bounds__(block_size) __global__
+__attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
   void mixed_join(table_device_view left_table,
                   table_device_view right_table,
                   table_device_view probe,

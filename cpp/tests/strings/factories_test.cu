@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,16 +87,18 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     EXPECT_TRUE(column->nullable());
     EXPECT_TRUE(column->has_nulls());
   }
-  EXPECT_EQ(2, column->num_children());
+  EXPECT_EQ(1, column->num_children());
+  EXPECT_NE(nullptr, column->view().head());
 
   cudf::strings_column_view strings_view(column->view());
   EXPECT_EQ(strings_view.size(), count);
   EXPECT_EQ(strings_view.offsets().size(), count + 1);
-  EXPECT_EQ(strings_view.chars().size(), memsize);
+  EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
+    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
+                                  strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::size_type const>(
@@ -159,16 +161,18 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
     count, std::move(d_offsets), std::move(d_buffer), null_count, d_nulls.release());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
-  EXPECT_EQ(2, column->num_children());
+  EXPECT_EQ(1, column->num_children());
+  EXPECT_NE(nullptr, column->view().head());
 
   cudf::strings_column_view strings_view(column->view());
   EXPECT_EQ(strings_view.size(), count);
   EXPECT_EQ(strings_view.offsets().size(), count + 1);
-  EXPECT_EQ(strings_view.chars().size(), memsize);
+  EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
+    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
+                                  strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::size_type const>(
