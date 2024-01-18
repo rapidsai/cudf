@@ -210,8 +210,7 @@ def _can_be_jitted(frame, func, args):
         # See https://github.com/numba/numba/issues/4587
         return False
 
-    any_na = frame.isna().any()
-    if (frame.ndim == 1 and any_na) or (frame.ndim == 2 and any_na.any()):
+    if any(col.has_nulls() for col in frame._data.values()):
         return False
     np_field_types = np.dtype(
         list(
