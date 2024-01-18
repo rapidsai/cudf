@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -2438,7 +2439,9 @@ class IndexedFrame(Frame):
             out.columns = self._data.to_pandas_index()
         return out
 
-    def _n_largest_or_smallest(self, largest, n, columns, keep):
+    def _n_largest_or_smallest(
+        self, largest: bool, n: int, columns, keep: Literal["first", "last"]
+    ):
         # Get column to operate on
         if isinstance(columns, str):
             columns = [columns]

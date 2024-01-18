@@ -1535,13 +1535,11 @@ class Frame(BinaryOperand, Scannable):
             )._columns
         ]
 
-        # If given a scalar need to construct a sequence of length # of columns
-        if np.isscalar(ascending):
-            ascending = [ascending] * len(to_sort)  # type: ignore[assignment]
+        ascending_lst = [ascending] * len(to_sort)
 
         return libcudf.sort.order_by(
             to_sort,
-            ascending,
+            ascending_lst,
             na_position,
             stable=True,
         )
