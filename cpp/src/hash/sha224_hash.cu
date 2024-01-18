@@ -65,8 +65,7 @@ std::unique_ptr<column> sha224(table_view const& input,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  string_scalar const empty_result("d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f");
-  return sha_hash<SHA224Hash>(input, empty_result, stream, mr);
+  return sha_hash<SHA224Hash>(input, stream, mr);
 }
 
 }  // namespace detail

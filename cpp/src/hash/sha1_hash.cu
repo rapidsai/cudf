@@ -64,8 +64,7 @@ std::unique_ptr<column> sha1(table_view const& input,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  string_scalar const empty_result("da39a3ee5e6b4b0d3255bfef95601890afd80709");
-  return sha_hash<SHA1Hash>(input, empty_result, stream, mr);
+  return sha_hash<SHA1Hash>(input, stream, mr);
 }
 
 }  // namespace detail

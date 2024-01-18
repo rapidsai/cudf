@@ -476,24 +476,17 @@ bool inline sha_leaf_type_check(data_type dt)
  *
  * @tparam Hasher The struct used for computing SHA hashes.
  *
- * @param input The input table.
- * results.
- * @param empty_result A string representing the expected result for empty inputs.
- * @param stream CUDA stream on which memory may be allocated if the memory
- * resource supports streams.
+ * @param input The input table
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Memory resource to use for the device memory allocation
- * @return A new column with the computed hash function result.
+ * @return A new column with the computed hash function result
  */
 template <typename Hasher>
 std::unique_ptr<column> sha_hash(table_view const& input,
-                                 string_scalar const& empty_result,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.num_columns() == 0 || input.num_rows() == 0) {
-    // Return the hash of a zero-length input.
-    return make_column_from_scalar(empty_result, input.num_rows(), stream, mr);
-  }
+  if (input.num_rows() == 0) { return cudf::make_empty_column(cudf::type_id::STRING); }
 
   // Accepts string and fixed width columns.
   // TODO: Accept single layer list columns holding those types.
