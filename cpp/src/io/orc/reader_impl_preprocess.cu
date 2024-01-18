@@ -718,6 +718,23 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   // If no rows or stripes to read, return empty columns
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
+  // Get the total number of stripes across all input files.
+  std::size_t total_num_stripes =
+    std::accumulate(selected_stripes.begin(),
+                    selected_stripes.end(),
+                    std::size_t{0},
+                    [](std::size_t sum, auto& stripe_source_mapping) {
+                      return sum + stripe_source_mapping.stripe_info.size();
+                    });
+
+  // Collect number of rows in each stripe.
+  _file_itm_data.stripe_sizes.reserve(total_num_stripes);
+  for (auto const& stripe_source_mapping : selected_stripes) {
+    for (auto const& stripe : stripe_source_mapping.stripe_info) {
+      _file_itm_data.stripe_sizes.push_back(stripe.first->numberOfRows);
+    }
+  }
+
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
     auto const has_timestamp_column = std::any_of(
@@ -734,8 +751,14 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   }();
 
   auto& lvl_stripe_data        = _file_itm_data.lvl_stripe_data;
+  auto& lvl_chunks             = _file_itm_data.lvl_chunks;
+  auto& lvl_num_cols           = _file_itm_data.lvl_num_cols;
+  auto& lvl_col_types          = _file_itm_data.lvl_col_types;
   auto& null_count_prefix_sums = _file_itm_data.null_count_prefix_sums;
   lvl_stripe_data.resize(_selected_columns.num_levels());
+  lvl_chunks.resize(_selected_columns.num_levels());
+  lvl_num_cols.resize(_selected_columns.num_levels());
+  lvl_col_types.resize(_selected_columns.num_levels());
 
   _out_buffers.resize(_selected_columns.num_levels());
 
@@ -754,6 +777,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                    _use_np_dtypes,
                                    _timestamp_type.id(),
                                    to_cudf_decimal_type(_decimal128_columns, _metadata, col.id));
+      lvl_col_types[level].emplace_back(col_type);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -774,18 +798,14 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       }
     }
 
-    // Get the total number of stripes across all input files.
-    std::size_t total_num_stripes =
-      std::accumulate(selected_stripes.begin(),
-                      selected_stripes.end(),
-                      std::size_t{0},
-                      [](std::size_t sum, auto& stripe_source_mapping) {
-                        return sum + stripe_source_mapping.stripe_info.size();
-                      });
     auto const num_columns = columns_level.size();
+    // Collect number of rows in each level.
+    lvl_num_cols[level] = static_cast<size_type>(num_columns);
+
     // Each chunk stores all data of a column in a stripe.
-    cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
-      total_num_stripes, num_columns, _stream);
+    auto& chunks = lvl_chunks[level];
+    chunks =
+      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(total_num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     const bool use_index =
