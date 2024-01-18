@@ -2220,9 +2220,9 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
-  if (_write_v2_headers and _compression == Compression::ZSTD) {
-    CUDF_FAIL("V2 page headers cannot be used with ZSTD compression");
-  }
+  // See issue #14781. Can remove this check once that is fixed.
+  CUDF_EXPECTS(not(_write_v2_headers and _compression == Compression::ZSTD),
+               "V2 page headers cannot be used with ZSTD compression");
 
   _current_chunk_offset.resize(_out_sink.size());
   // Write file header
