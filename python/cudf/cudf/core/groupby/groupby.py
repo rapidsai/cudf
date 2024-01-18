@@ -23,7 +23,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
 from cudf.core.abc import Serializable
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
@@ -1968,10 +1968,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
-                names=(x, y),
+            column_pair_structs[(x, y)] = cudf.core.column.StructColumn(
+                data=None,
+                dtype=StructDtype(
+                    fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
+                ),
                 children=(self.obj._data[x], self.obj._data[y]),
                 size=len(self.obj),
+                offset=0,
             )
 
         column_pair_groupby = cudf.DataFrame._from_data(

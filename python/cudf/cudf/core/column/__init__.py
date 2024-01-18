@@ -12,7 +12,6 @@ from cudf.core.column.column import (
     build_categorical_column,
     build_column,
     build_list_column,
-    build_struct_column,
     column_empty,
     column_empty_like,
     column_empty_like_same_mask,

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
@@ -9,7 +9,7 @@ import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
-from cudf.core.column import ColumnBase, build_struct_column
+from cudf.core.column import ColumnBase
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
 from cudf.core.missing import NA
@@ -134,8 +134,9 @@ class StructColumn(ColumnBase):
         if isinstance(dtype, IntervalDtype):
             return IntervalColumn.from_struct_column(self, closed=dtype.closed)
         elif isinstance(dtype, StructDtype):
-            return build_struct_column(
-                names=dtype.fields.keys(),
+            return StructColumn(
+                data=None,
+                dtype=dtype,
                 children=tuple(
                     self.base_children[i]._with_type_metadata(dtype.fields[f])
                     for i, f in enumerate(dtype.fields.keys())
