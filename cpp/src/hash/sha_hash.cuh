@@ -267,8 +267,10 @@ struct HasherDispatcher {
 };
 
 /**
- * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
- * updating the hash value so far. Does not zero out the buffer contents.
+ * @brief Core SHA-1 algorithm implementation
+ *
+ * Processes a single 512-bit chunk, updating the hash value so far.
+ * This does not zero out the buffer contents.
  */
 template <typename hash_state>
 __device__ inline void sha1_hash_step(hash_state& state)
@@ -334,8 +336,10 @@ __device__ inline void sha1_hash_step(hash_state& state)
 }
 
 /**
- * @brief Core SHA-256 algorithm implementation. Processes a single 512-bit chunk,
- * updating the hash value so far. Does not zero out the buffer contents.
+ * @brief Core SHA-256 algorithm implementation
+ *
+ * Processes a single 512-bit chunk, updating the hash value so far.
+ * This does not zero out the buffer contents.
  */
 template <typename hash_state>
 __device__ inline void sha256_hash_step(hash_state& state)
@@ -400,8 +404,10 @@ __device__ inline void sha256_hash_step(hash_state& state)
 }
 
 /**
- * @brief Core SHA-512 algorithm implementation. Processes a single 1024-bit chunk,
- * updating the hash value so far. Does not zero out the buffer contents.
+ * @brief Core SHA-512 algorithm implementation
+ *
+ * Processes a single 1024-bit chunk, updating the hash value so far.
+ * This does not zero out the buffer contents.
  */
 template <typename hash_state>
 __device__ inline void sha512_hash_step(hash_state& state)
