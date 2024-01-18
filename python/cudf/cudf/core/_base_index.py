@@ -1911,9 +1911,9 @@ class BaseIndex(Serializable):
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
+
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
-
         return self._from_columns_like_self(
             drop_duplicates(
                 list(self._columns),
