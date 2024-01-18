@@ -247,8 +247,8 @@ dependencies:
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
-          - librmm==24.2.*
-          - libkvikio==24.2.*
+          - librmm==24.4.*
+          - libkvikio==24.4.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.5
@@ -281,7 +281,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.2.*
+          - &rmm_conda rmm==24.4.*
           - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
@@ -458,7 +458,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.2.*
+          - dask-cuda==24.4.*
           - *doxygen
           - make
           - myst-nb
@@ -557,7 +557,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.2.*
+          - rapids-dask-dependency==24.4.*
   run_custreamz:
     common:
       - output_types: conda
@@ -656,13 +656,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==24.2.*
+          - dask-cuda==24.4.*
           - *numba
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.2.*
+          - &cudf_conda cudf==24.4.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -683,7 +683,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.2.*
+          - &cudf_kafka_conda cudf_kafka==24.4.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
