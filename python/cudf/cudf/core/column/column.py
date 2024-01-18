@@ -1743,51 +1743,6 @@ def build_interval_column(
     )
 
 
-def build_list_column(
-    indices: ColumnBase,
-    elements: ColumnBase,
-    mask: Optional[Buffer] = None,
-    size: Optional[int] = None,
-    offset: int = 0,
-    null_count: Optional[int] = None,
-) -> "cudf.core.column.ListColumn":
-    """
-    Build a ListColumn
-
-    Parameters
-    ----------
-    indices : ColumnBase
-        Column of list indices
-    elements : ColumnBase
-        Column of list elements
-    mask: Buffer
-        Null mask
-    size: int, optional
-    offset: int, optional
-    """
-    dtype = ListDtype(element_type=elements.dtype)
-    if size is None:
-        if indices.size == 0:
-            size = 0
-        else:
-            # one less because the last element of offsets is the number of
-            # bytes in the data buffer
-            size = indices.size - 1
-        size = size - offset
-
-    result = build_column(
-        data=None,
-        dtype=dtype,
-        mask=mask,
-        size=size,
-        offset=offset,
-        null_count=null_count,
-        children=(indices, elements),
-    )
-
-    return cast("cudf.core.column.ListColumn", result)
-
-
 def _make_copy_replacing_NaT_with_null(column):
     """Return a copy with NaT values replaced with nulls."""
     if np.issubdtype(column.dtype, np.timedelta64):
