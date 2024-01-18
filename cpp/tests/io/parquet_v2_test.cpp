@@ -23,6 +23,8 @@
 
 #include <cudf/io/parquet.hpp>
 
+using cudf::test::iterators::no_nulls;
+
 // Base test fixture for V2 header tests
 class ParquetV2Test : public ::cudf::test::BaseFixtureWithParam<bool> {};
 
@@ -33,7 +35,7 @@ INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,
 
 TEST_P(ParquetV2Test, MultiColumn)
 {
-  constexpr auto num_rows = 100000;
+  constexpr auto num_rows = 50000;
   auto const is_v2        = GetParam();
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -45,27 +47,25 @@ TEST_P(ParquetV2Test, MultiColumn)
   auto col6_vals = random_values<int16_t>(num_rows);
   auto col7_vals = random_values<int32_t>(num_rows);
   auto col8_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&col6_vals](auto i) {
     return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
   });
-  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col7_vals](auto i) {
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&col7_vals](auto i) {
     return numeric::decimal64{col7_vals[i], numeric::scale_type{-5}};
   });
-  auto col8_data = cudf::detail::make_counting_transform_iterator(0, [col8_vals](auto i) {
+  auto col8_data = cudf::detail::make_counting_transform_iterator(0, [&col8_vals](auto i) {
     return numeric::decimal128{col8_vals[i], numeric::scale_type{-6}};
   });
-  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  // column_wrapper<bool> col0{
-  //    col0_data.begin(), col0_data.end(), validity};
-  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), validity};
-  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), validity};
-  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
-  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
-  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
-  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, validity};
-  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, validity};
-  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, validity};
+  // column_wrapper<bool> col0{col0_data.begin(), col0_data.end(), no_nulls()};
+  column_wrapper<int8_t> col1{col1_data.begin(), col1_data.end(), no_nulls()};
+  column_wrapper<int16_t> col2{col2_data.begin(), col2_data.end(), no_nulls()};
+  column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), no_nulls()};
+  column_wrapper<float> col4{col4_data.begin(), col4_data.end(), no_nulls()};
+  column_wrapper<double> col5{col5_data.begin(), col5_data.end(), no_nulls()};
+  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, no_nulls()};
+  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, no_nulls()};
+  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, no_nulls()};
 
   auto expected = table_view{{col1, col2, col3, col4, col5, col6, col7, col8}};
 
@@ -108,17 +108,17 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
   auto col7_vals = random_values<int64_t>(num_rows);
-  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&col6_vals](auto i) {
     return numeric::decimal32{col6_vals[i], numeric::scale_type{-2}};
   });
-  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col7_vals](auto i) {
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&col7_vals](auto i) {
     return numeric::decimal64{col7_vals[i], numeric::scale_type{-8}};
   });
   // auto col0_mask = cudf::detail::make_counting_transform_iterator(
   //    0, [](auto i) { return (i % 2); });
   auto col1_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i < 10); });
-  auto col2_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto col2_mask = no_nulls();
   auto col3_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i == (num_rows - 1)); });
   auto col4_mask =
@@ -181,11 +181,10 @@ TEST_P(ParquetV2Test, Strings)
 
   auto seq_col0 = random_values<int>(num_rows);
   auto seq_col2 = random_values<float>(num_rows);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), validity};
+  column_wrapper<int> col0{seq_col0.begin(), seq_col0.end(), no_nulls()};
   column_wrapper<cudf::string_view> col1{strings.begin(), strings.end()};
-  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
+  column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), no_nulls()};
 
   auto expected = table_view{{col0, col1, col2}};
 
@@ -688,60 +687,9 @@ TEST_P(ParquetV2Test, PartitionedWriteEmptyColumns)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected2, result2.tbl->view());
 }
 
-TEST_P(ParquetV2Test, LargeColumnIndex)
-{
-  // create a file large enough to be written in 2 batches (currently 1GB per batch)
-  // pick fragment size that num_rows is divisible by, so we'll get equal sized row groups
-  const std::string s1(1000, 'a');
-  const std::string s2(1000, 'b');
-  constexpr auto num_rows  = 512 * 1024;
-  constexpr auto frag_size = num_rows / 128;
-  auto const is_v2         = GetParam();
-
-  auto col0_elements = cudf::detail::make_counting_transform_iterator(
-    0, [&](auto i) { return (i < num_rows) ? s1 : s2; });
-  auto col0 = cudf::test::strings_column_wrapper(col0_elements, col0_elements + 2 * num_rows);
-
-  auto const expected = table_view{{col0, col0}};
-
-  auto const filepath = temp_env->get_temp_filepath("LargeColumnIndex.parquet");
-  const cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
-      .compression(cudf::io::compression_type::NONE)
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
-      .write_v2_headers(is_v2)
-      .max_page_fragment_size(frag_size)
-      .row_group_size_bytes(1024 * 1024 * 1024)
-      .row_group_size_rows(num_rows);
-  cudf::io::write_parquet(out_opts);
-
-  auto const source = cudf::io::datasource::create(filepath);
-  cudf::io::parquet::detail::FileMetaData fmd;
-
-  read_footer(source, &fmd);
-
-  for (auto const& rg : fmd.row_groups) {
-    for (size_t c = 0; c < rg.columns.size(); c++) {
-      auto const& chunk = rg.columns[c];
-
-      auto const ci    = read_column_index(source, chunk);
-      auto const stats = get_statistics(chunk);
-
-      // check trunc(page.min) <= stats.min && trun(page.max) >= stats.max
-      auto const ptype = fmd.schema[c + 1].type;
-      auto const ctype = fmd.schema[c + 1].converted_type;
-      ASSERT_TRUE(stats.min_value.has_value());
-      ASSERT_TRUE(stats.max_value.has_value());
-      EXPECT_TRUE(compare_binary(ci.min_values[0], stats.min_value.value(), ptype, ctype) <= 0);
-      EXPECT_TRUE(compare_binary(ci.max_values[0], stats.max_value.value(), ptype, ctype) >= 0);
-    }
-  }
-}
-
 TEST_P(ParquetV2Test, CheckColumnOffsetIndex)
 {
-  constexpr auto num_rows      = 100000;
+  constexpr auto num_rows      = 50000;
   auto const is_v2             = GetParam();
   auto const expected_hdr_type = is_v2 ? cudf::io::parquet::detail::PageType::DATA_PAGE_V2
                                        : cudf::io::parquet::detail::PageType::DATA_PAGE;

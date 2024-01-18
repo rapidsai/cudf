@@ -247,7 +247,7 @@ TEST(SpanTest, CanConstructFromDeviceContainers)
   (void)device_span<int const>(d_uvector_c);
 }
 
-__global__ void simple_device_kernel(device_span<bool> result) { result[0] = true; }
+CUDF_KERNEL void simple_device_kernel(device_span<bool> result) { result[0] = true; }
 
 TEST(SpanTest, CanUseDeviceSpan)
 {
@@ -277,7 +277,7 @@ TEST(MdSpanTest, CanDetermineEmptiness)
   EXPECT_TRUE(device_2dspan<int const>{no_columns_vector}.is_empty());
 }
 
-__global__ void readwrite_kernel(device_2dspan<int> result)
+CUDF_KERNEL void readwrite_kernel(device_2dspan<int> result)
 {
   if (result[5][6] == 5) {
     result[5][6] *= 6;
@@ -436,7 +436,7 @@ TEST(HostDeviceSpanTest, CanSendToDevice)
   EXPECT_EQ(std::string(d_message), hello_world_message);
 }
 
-__global__ void simple_device_char_kernel(device_span<char> result)
+CUDF_KERNEL void simple_device_char_kernel(device_span<char> result)
 {
   char const* str = "world hello";
   for (int offset = 0; offset < result.size(); ++offset) {

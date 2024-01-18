@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,7 +65,7 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
   auto result = std::make_unique<column>(input.parent(), stream, mr);
   auto const d_offsets =
     result->view().child(strings_column_view::offsets_column_index).data<size_type>();
-  auto d_chars = result->mutable_view().child(strings_column_view::chars_column_index).data<char>();
+  auto d_chars = result->mutable_view().head<char>();
 
   auto const d_column = column_device_view::create(input.parent(), stream);
   thrust::for_each_n(rmm::exec_policy(stream),
