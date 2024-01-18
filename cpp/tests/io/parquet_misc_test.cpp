@@ -138,9 +138,8 @@ TEST_P(ParquetSizedTest, DictionaryTest)
   unsigned int const cardinality = (1 << (GetParam() - 1)) + 1;
   unsigned int const nrows       = std::max(cardinality * 3 / 2, 3'000'000U);
 
-  auto elements       = cudf::detail::make_counting_transform_iterator(0, [cardinality](auto i) {
-    return "a unique string value suffixed with " + std::to_string(i % cardinality);
-  });
+  auto const elements = cudf::detail::make_counting_transform_iterator(
+    0, [cardinality](auto i) { return std::to_string(i % cardinality); });
   auto const col0     = cudf::test::strings_column_wrapper(elements, elements + nrows);
   auto const expected = table_view{{col0}};
 
