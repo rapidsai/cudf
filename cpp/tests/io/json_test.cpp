@@ -18,7 +18,6 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
@@ -2133,8 +2132,35 @@ TEST_F(JsonReaderTest, MixedTypes)
         .lines(true);
 
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-    cudf::test::print(result.tbl->get_column(0));
   }
+
+  // test to confirm if reinitialize a non-string column as string affects max_rowoffsets.
+  // max_rowoffsets is generated based on parent col id,
+  // so, even if mixed types are present, their row offset will be correct.
+  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using valid_t = std::vector<cudf::valid_type>;
+
+  cudf::test::lists_column_wrapper expected_list{
+    {
+      cudf::test::lists_column_wrapper({LCW({"1", "2", "3"}), LCW({"4", "5", "6"})}),
+      cudf::test::lists_column_wrapper({LCW()}),
+      cudf::test::lists_column_wrapper({LCW()}),  // null
+      cudf::test::lists_column_wrapper({LCW()}),  // null
+      cudf::test::lists_column_wrapper({LCW({"{\"c\": -1}"}), LCW({"5"})}),
+      cudf::test::lists_column_wrapper({LCW({"7"}), LCW({"8", "9"})}),
+      cudf::test::lists_column_wrapper({LCW()}),  // null
+    },
+    valid_t{1, 1, 0, 0, 1, 1, 0}.begin()};
+  test_fn(R"(
+{"b": [ [1, 2, 3], [ 4, 5, 6] ]}
+{"b": [[]]}
+{}
+{}
+{"b": [ [ {"c": -1} ], [ 5 ] ]}
+{"b": [ [7], [8, 9]]}
+{}
+)",
+          expected_list);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

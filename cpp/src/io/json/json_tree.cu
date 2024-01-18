@@ -413,11 +413,15 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
     rmm::device_uvector<NodeIndexT> parent_node_ids(num_nested, stream);
     auto const push_pop_it = thrust::make_transform_iterator(
       tokens.begin(),
-      cuda::proclaim_return_type<cudf::size_type>([] __device__(PdaTokenT const token) {
-        size_type const is_begin = token == token_t::StructBegin or token == token_t::ListBegin;
-        size_type const is_end   = token == token_t::StructEnd or token == token_t::ListEnd;
-        return is_begin - is_end;
-      }));
+      cuda::proclaim_return_type<cudf::size_type>(
+        [] __device__(PdaTokenT const token) -> size_type {
+          if (token == token_t::StructBegin or token == token_t::ListBegin) {
+            return 1;
+          } else if (token == token_t::StructEnd or token == token_t::ListEnd) {
+            return -1;
+          }
+          return 0;
+        }));
     // copy_if only struct/list's token levels, token ids, tokens.
     auto zipped_in_it =
       thrust::make_zip_iterator(push_pop_it, thrust::make_counting_iterator<NodeIndexT>(0));

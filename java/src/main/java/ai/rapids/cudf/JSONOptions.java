@@ -113,7 +113,7 @@ public final class JSONOptions extends ColumnFilterOptions {
      * Specify how to handle columns that contain mixed types.
      *
      * @param mixedTypesAsStrings true: return unparsed JSON, false: throw exception
-     * @@return builder for chaining
+     * @return builder for chaining
      */
     public Builder withMixedTypesAsStrings(boolean mixedTypesAsStrings) {
       this.mixedTypesAsStrings = mixedTypesAsStrings;

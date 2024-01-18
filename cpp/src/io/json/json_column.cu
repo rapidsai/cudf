@@ -554,7 +554,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   // find column_ids which are values, but should be ignored in validity
   std::vector<uint8_t> ignore_vals(num_columns, 0);
-  std::vector<uint8_t> is_mixed_string_column(num_columns, 0);
+  std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
   for (auto const this_col_id : unique_col_ids) {
@@ -578,10 +578,10 @@ void make_device_json_column(device_span<SymbolT const> input,
       CUDF_FAIL("Unexpected parent column category");
     }
 
-    if (parent_col_id != parent_node_sentinel && is_mixed_string_column[parent_col_id] == 1) {
+    if (parent_col_id != parent_node_sentinel && is_mixed_type_column[parent_col_id] == 1) {
       // if parent is mixed string column, ignore this column.
-      is_mixed_string_column[this_col_id] = 1;
-      ignore_vals[this_col_id]            = 1;
+      is_mixed_type_column[this_col_id] = 1;
+      ignore_vals[this_col_id]          = 1;
       continue;
     }
     // If the child is already found,
@@ -592,18 +592,17 @@ void make_device_json_column(device_span<SymbolT const> input,
     auto& parent_col = it->second.get();
     bool replaced    = false;
     if (mapped_columns.count({parent_col_id, name}) > 0) {
-      // If mixed type is enabled, make both of them as str, merge them.
-      // all its child columns will be ignored from parsing.
+      // If mixed type as string is enabled, make both of them strings and merge them.
+      // All child columns will be ignored when parsing.
       if (is_mixed_type_as_string_enabled) {
         // VAL/STR or STRUCT or LIST
         auto old_col_id = mapped_columns[{parent_col_id, name}];
 
-        is_mixed_string_column[this_col_id] = 1;
-        is_mixed_string_column[old_col_id]  = 1;
+        is_mixed_type_column[this_col_id] = 1;
+        is_mixed_type_column[old_col_id]  = 1;
         // if old col type (not cat) is not string/val, replace with string.
         auto& col = columns.at(old_col_id).get();
         if (col.type != json_col_t::StringColumn) {
-          // TODO: old_col_id or this_col_id ? affects max_rowoffsets, need more tests.
           reinitialize_as_string(old_col_id, col);
           // all its children (which are already inserted) are ignored later.
         }
@@ -648,14 +647,14 @@ void make_device_json_column(device_span<SymbolT const> input,
     // ignore all children of mixed type columns
     for (auto const this_col_id : unique_col_ids) {
       auto parent_col_id = column_parent_ids[this_col_id];
-      if (parent_col_id != parent_node_sentinel and is_mixed_string_column[parent_col_id] == 1) {
-        is_mixed_string_column[this_col_id] = 1;
-        ignore_vals[this_col_id]            = 1;
+      if (parent_col_id != parent_node_sentinel and is_mixed_type_column[parent_col_id] == 1) {
+        is_mixed_type_column[this_col_id] = 1;
+        ignore_vals[this_col_id]          = 1;
         columns.erase(this_col_id);
       }
       // Convert only mixed type columns as string (so to copy), but not its children
-      if (parent_col_id != parent_node_sentinel and is_mixed_string_column[parent_col_id] == 0 and
-          is_mixed_string_column[this_col_id] == 1)
+      if (parent_col_id != parent_node_sentinel and is_mixed_type_column[parent_col_id] == 0 and
+          is_mixed_type_column[this_col_id] == 1)
         column_categories[this_col_id] = NC_STR;
     }
     cudaMemcpyAsync(d_column_tree.node_categories.begin(),

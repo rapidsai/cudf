@@ -98,7 +98,7 @@ class json_reader_options {
 
   // Read the file as a json object per line
   bool _lines = false;
-  // Read the mixed types as string column
+  // Parse mixed types as a string column
   bool _mixed_types_as_string = false;
 
   // Bytes to skip from the start
@@ -228,9 +228,9 @@ class json_reader_options {
   bool is_enabled_lines() const { return _lines; }
 
   /**
-   * @brief Whether to read the mixed types as string column.
+   * @brief Whether to parse mixed types as a string column.
    *
-   * @return `true` if reading the mixed types as string column
+   * @return `true` if mixed types are parsed as a string column
    */
   bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
 
@@ -312,9 +312,9 @@ class json_reader_options {
   void enable_lines(bool val) { _lines = val; }
 
   /**
-   * @brief Set whether to read the mixed types as string column.
+   * @brief Set whether to parse mixed types as a string column.
    *
-   * @param val Boolean value to enable/disable the option to read the mixed types as string column
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
    */
   void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
 
@@ -454,9 +454,9 @@ class json_reader_options_builder {
   }
 
   /**
-   * @brief Set whether to read the mixed types as string column.
+   * @brief Set whether to parse mixed types as a string column.
    *
-   * @param val Boolean value to enable/disable the option to read the mixed types as string column
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
    * @return this for chaining
    */
   json_reader_options_builder& mixed_types_as_string(bool val)
