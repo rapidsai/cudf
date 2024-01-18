@@ -1253,7 +1253,7 @@ class GroupBy(Serializable, Reducible, Scannable):
     ):
         # Nulls are not yet supported
         obj = self.grouping._obj
-        any_na = obj.isna()
+        any_na = obj.isna().any()
         if (obj.ndim == 1 and any_na) or (obj.ndim == 2 and any_na.any()):
             raise ValueError("Nulls not yet supported with groupby JIT engine")
 
