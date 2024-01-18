@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport shared_ptr, unique_ptr

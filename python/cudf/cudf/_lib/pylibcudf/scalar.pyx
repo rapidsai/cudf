@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython cimport no_gc_clear
 from cython.operator cimport dereference
@@ -31,7 +31,10 @@ from .types cimport DataType, type_id
 # https://github.com/rapidsai/rmm/pull/931 for details.
 @no_gc_clear
 cdef class Scalar:
-    """A scalar value in device memory."""
+    """A scalar value in device memory.
+
+    This is the Cython representation of :cpp:class:`cudf::scalar`.
+    """
     # Unlike for columns, libcudf does not support scalar views. All APIs that
     # accept scalar values accept references to the owning object rather than a
     # special view type. As a result, pylibcudf.Scalar has a simpler structure
