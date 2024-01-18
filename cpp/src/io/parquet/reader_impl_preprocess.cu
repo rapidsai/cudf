@@ -1277,19 +1277,20 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
     auto const& last_page = subpass.pages[page_index + (subpass.column_page_count[idx] - 1)];
     auto const& chunk     = pass.chunks[last_page.chunk_idx];
 
-    size_t max_page_row =
+    size_t max_col_row =
       static_cast<size_t>(chunk.start_row + last_page.chunk_row + last_page.num_rows);
     // special case.  list rows can span page boundaries, but we can't tell if that is happening
     // here because we have not yet decoded the pages. the very last row starting in the page may
     // not terminate in the page. to handle this, only decode up to the second to last row in the
-    // page since we know that will safely completed.
+    // subpass since we know that will safely completed.
     bool const is_list = chunk.max_level[level_type::REPETITION] > 0;
-    if (is_list && max_page_row < last_pass_row) {
-      CUDF_EXPECTS(last_page.num_rows > 1, "Unexpected short list page");
-      max_page_row--;
+    if (is_list && max_col_row < last_pass_row) {
+      size_t const min_col_row = static_cast<size_t>(chunk.start_row + last_page.chunk_row);
+      CUDF_EXPECTS((max_col_row - min_col_row) > 1, "Unexpected short list page");
+      max_col_row--;
     }
 
-    max_row = min(max_row, max_page_row);
+    max_row = min(max_row, max_col_row);
 
     page_index += subpass.column_page_count[idx];
   }
