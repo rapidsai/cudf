@@ -5123,7 +5123,9 @@ def test_df_astype_to_categorical_ordered(ordered):
 )
 def test_empty_df_astype(dtype):
     df = cudf.DataFrame()
-    assert_eq(df, df.astype(dtype=dtype))
+    result = df.astype(dtype=dtype)
+    assert_eq(df, result)
+    assert_eq(df.to_pandas().astype(dtype=dtype), result)
 
 
 @pytest.mark.parametrize(
