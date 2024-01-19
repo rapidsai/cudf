@@ -149,10 +149,10 @@ string_policy column_buffer_base<string_policy>::empty_like(string_policy const&
 }
 
 template <typename string_policy>
-std::string type_to_name(column_buffer_base<string_policy> const& buffer, bool include_nesting)
+std::string type_to_name(column_buffer_base<string_policy> const& buffer)
 {
   if (buffer.type.id() == cudf::type_id::LIST) {
-    return "List<" + (type_to_name<string_policy>(buffer.children[0], true)) + ">";
+    return "List<" + (type_to_name<string_policy>(buffer.children[0])) + ">";
   }
 
   if (buffer.type.id() == cudf::type_id::STRUCT) {
@@ -164,7 +164,7 @@ std::string type_to_name(column_buffer_base<string_policy> const& buffer, bool i
       iter,
       iter + buffer.children.size(),
       std::ostream_iterator<std::string>(out, ","),
-      [&buffer](size_type i) { return type_to_name<string_policy>(buffer.children[i], true); });
+      [&buffer](size_type i) { return type_to_name<string_policy>(buffer.children[i]); });
     out << ">";
     return out.str();
   }
@@ -379,10 +379,8 @@ template std::unique_ptr<column> empty_like<pointer_type>(pointer_column_buffer&
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr);
 
-template std::string type_to_name<string_type>(string_column_buffer const& buffer,
-                                               bool include_nesting);
-template std::string type_to_name<pointer_type>(pointer_column_buffer const& buffer,
-                                                bool include_nesting);
+template std::string type_to_name<string_type>(string_column_buffer const& buffer);
+template std::string type_to_name<pointer_type>(pointer_column_buffer const& buffer);
 
 template class column_buffer_base<pointer_type>;
 template class column_buffer_base<string_type>;

@@ -181,7 +181,7 @@ class reader::impl {
    *        bounds
    *
    * A 'subpass' is defined as a subset of pages within a pass that are
-   * decompressed a decoded as a batch. Subpasses may be further subdivided
+   * decompressed and decoded as a batch. Subpasses may be further subdivided
    * into output chunks.
    */
   void setup_next_subpass(bool uses_custom_row_bounds);

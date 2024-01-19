@@ -66,7 +66,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
                            delta_temp_buf,
                            skip_rows,
                            num_rows,
-                           pass.level_type_size,
+                           level_type_size,
                            kernel_mask,
                            _stream);
 
@@ -247,6 +247,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   if (error_code.value() != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + error_code.str());
   }
+  // error_code.value() does a synchronize, but I think we should leave this here as a more explicit
+  // reminder in the code.
+  _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
@@ -287,8 +290,6 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       }
     }
   }
-
-  _stream.synchronize();
 
   // update null counts in the final column buffers
   for (size_t idx = 0; idx < subpass.pages.size(); idx++) {

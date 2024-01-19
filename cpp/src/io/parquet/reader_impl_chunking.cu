@@ -35,6 +35,8 @@
 #include <thrust/sort.h>
 #include <thrust/unique.h>
 
+#include <cuda/functional>
+
 #include <numeric>
 
 namespace cudf::io::parquet::detail {
@@ -198,17 +200,18 @@ __device__ size_t row_size_functor::operator()<string_view>(size_t num_rows, boo
  * Sums across all nesting levels.
  */
 struct get_page_output_size {
-  __device__ cumulative_page_info operator()(PageInfo const& page)
+  __device__ cumulative_page_info operator()(PageInfo const& page) const
   {
     if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
       return cumulative_page_info{0, 0, page.src_col_schema};
     }
 
     // total nested size, not counting string data
-    auto iter = cudf::detail::make_counting_transform_iterator(0, [page] __device__(size_type i) {
-      auto const& pni = page.nesting[i];
-      return cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
-    });
+    auto iter = cudf::detail::make_counting_transform_iterator(0, 
+      cuda::proclaim_return_type<size_t>([page]__device__(size_type i) {
+        auto const& pni = page.nesting[i];
+        return cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
+      }));
     return {
       0,
       thrust::reduce(thrust::seq, iter, iter + page.num_output_nesting_levels) + page.str_bytes,
@@ -220,7 +223,7 @@ struct get_page_output_size {
  * @brief Functor which sets the (uncompressed) size of a page.
  */
 struct get_page_input_size {
-  __device__ cumulative_page_info operator()(PageInfo const& page)
+  __device__ cumulative_page_info operator()(PageInfo const& page) const
   {
     // we treat dictionary page sizes as 0 for subpasses because we have already paid the price for
     // them at the pass level.
@@ -235,8 +238,8 @@ struct get_page_input_size {
  * @brief Functor which sets the absolute row index of a page in a cumulative_page_info struct
  */
 struct set_row_index {
-  device_span<const ColumnChunkDesc> chunks;
-  device_span<const PageInfo> pages;
+  device_span<ColumnChunkDesc const> chunks;
+  device_span<PageInfo const> pages;
   device_span<cumulative_page_info> c_info;
 
   __device__ void operator()(size_t i)
@@ -268,7 +271,7 @@ struct page_total_size {
   size_type const* key_offsets;
   size_t num_keys;
 
-  __device__ cumulative_page_info operator()(cumulative_page_info const& i)
+  __device__ cumulative_page_info operator()(cumulative_page_info const& i) const
   {
     // sum sizes for each input column at this row
     size_t sum = 0;
@@ -276,7 +279,7 @@ struct page_total_size {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(
-        0, [&] __device__(size_type i) { return c_info[i].row_index; });
+        0, cuda::proclaim_return_type<size_t>([&] __device__(size_type i) { return c_info[i].row_index; }));
       auto const page_index =
         thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_index) - iter;
       sum += c_info[page_index].size_bytes;
@@ -289,14 +292,14 @@ struct page_total_size {
  * @brief Functor which returns the compressed data size for a chunk
  */
 struct get_chunk_compressed_size {
-  __device__ size_t operator()(ColumnChunkDesc const& chunk) { return chunk.compressed_size; }
+  __device__ size_t operator()(ColumnChunkDesc const& chunk) const { return chunk.compressed_size; }
 };
 
 /**
  * @brief Find the first entry in the aggreggated_info that corresponds to the specified row
  *
  */
-size_t find_start_index(std::vector<cumulative_page_info> const& aggregated_info, size_t start_row)
+size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_info, size_t start_row)
 {
   auto start = thrust::make_transform_iterator(
     aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.row_index; });
@@ -323,13 +326,13 @@ size_t find_start_index(std::vector<cumulative_page_info> const& aggregated_info
 int64_t find_next_split(int64_t cur_pos,
                         size_t cur_row_index,
                         size_t cur_cumulative_size,
-                        std::vector<cumulative_page_info> const& sizes,
+                        cudf::host_span<cumulative_page_info const> sizes,
                         size_t size_limit)
 {
-  auto start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_page_info const& i) {
+  auto const start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_page_info const& i) {
     return i.size_bytes - cur_cumulative_size;
   });
-  auto end   = start + sizes.size();
+  auto const end   = start + sizes.size();
 
   int64_t split_pos = thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit) - start;
 
@@ -392,7 +395,7 @@ template <typename T = uint8_t>
 }
 
 struct row_count_compare {
-  __device__ bool operator()(cumulative_page_info const& a, cumulative_page_info const& b)
+  __device__ bool operator()(cumulative_page_info const& a, cumulative_page_info const& b) const
   {
     return a.row_index < b.row_index;
   }
@@ -423,7 +426,6 @@ std::pair<size_t, size_t> get_row_group_size(RowGroup const& rg)
  *
  * This function is asynchronous. Call stream.synchronize() before using the
  * results.
- *
  */
 std::pair<rmm::device_uvector<cumulative_page_info>, rmm::device_uvector<int32_t>>
 adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
@@ -443,7 +445,7 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
                     page_keys_by_split.begin(),
-                    [] __device__(cumulative_page_info const& c) { return c.key; });
+                    cuda::proclaim_return_type<int>([] __device__(cumulative_page_info const& c) { return c.key; }));
 
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
   // key
@@ -486,7 +488,7 @@ struct page_span {
 struct get_page_row_index {
   device_span<const cumulative_page_info> c_info;
 
-  __device__ size_t operator()(size_t i) { return c_info[i].row_index; }
+  __device__ size_t operator()(size_t i) const { return c_info[i].row_index; }
 };
 
 /**
@@ -511,7 +513,7 @@ struct get_page_span {
   {
   }
 
-  __device__ page_span operator()(size_t column_index)
+  __device__ page_span operator()(size_t column_index) const
   {
     auto const first_page_index  = page_offsets[column_index];
     auto const column_page_start = page_row_index + first_page_index;
