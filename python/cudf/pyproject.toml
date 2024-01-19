@@ -59,7 +59,7 @@ test = [
     "msgpack",
     "pytest",
     "pytest-benchmark",
-    "pytest-cases<3.8.2",
+    "pytest-cases>=3.8.2",
     "pytest-cov",
     "pytest-xdist",
     "python-snappy>=0.6.0",
