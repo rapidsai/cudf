@@ -131,12 +131,12 @@ std::unique_ptr<column> url_encode(strings_column_view const& input,
 
   auto d_column = column_device_view::create(input.parent(), stream);
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     url_encoder_fn{*d_column}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -391,8 +391,8 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
     cudf::detail::make_offsets_child_column(row_sizes.begin(), row_sizes.end(), stream, mr);
 
   // create the chars column
-  auto chars_column = create_chars_child_column(out_chars_bytes, stream, mr);
-  auto d_out_chars  = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(out_chars_bytes, stream, mr);
+  auto d_out_chars = chars.data();
   auto const offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
@@ -405,7 +405,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars.release(),
                              strings.null_count(),
                              std::move(null_mask));
 }

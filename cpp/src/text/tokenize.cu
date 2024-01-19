@@ -219,14 +219,13 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
       return idx < chars_bytes ? cudf::strings::detail::is_begin_utf8_char(d_chars[idx]) : true;
     });
 
-  // create the output chars column -- just a copy of the input's chars column
-  cudf::column_view chars_view(
-    cudf::data_type{cudf::type_id::INT8}, chars_bytes, d_chars, nullptr, 0);
-  auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
+  // create the output chars buffer -- just a copy of the input's chars
+  rmm::device_uvector<char> output_chars(chars_bytes, stream, mr);
+  thrust::copy(rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, output_chars.data());
 
   // return new strings column
   return cudf::make_strings_column(
-    num_characters, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    num_characters, std::move(offsets_column), output_chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

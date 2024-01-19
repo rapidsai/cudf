@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,7 +142,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
   concat_strings_fn fn{*d_table, d_separator, d_narep, separate_nulls};
-  auto children = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars_column] = make_strings_children(fn, strings_count, stream, mr);
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -157,8 +157,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     mr);
 
   return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }
@@ -237,7 +237,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   multi_separator_concat_fn mscf{
     *d_table, separator_col_view, separator_rep, col_rep, separate_nulls};
-  auto children = make_strings_children(mscf, strings_count, stream, mr);
+  auto [offsets_column, chars_column] = make_strings_children(mscf, strings_count, stream, mr);
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -253,8 +253,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     mr);
 
   return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }
