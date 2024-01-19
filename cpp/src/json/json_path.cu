@@ -1010,7 +1010,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::get_value<size_type>(offsets_view, col.size(), stream);
 
   // allocate output string column
-  auto chars = cudf::strings::detail::create_chars_child_column(output_size, stream, mr);
+  rmm::device_uvector<char> chars(output_size, stream, mr);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether
@@ -1018,7 +1018,6 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, mr);
 
   // compute results
-  cudf::mutable_column_view chars_view(*chars);
   rmm::device_scalar<size_type> d_valid_count{0, stream};
 
   get_json_object_kernel<block_size>
@@ -1026,14 +1025,14 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       *cdv,
       std::get<0>(preprocess).value().data(),
       offsets_view.head<size_type>(),
-      chars_view.head<char>(),
+      chars.data(),
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
 
   auto result = make_strings_column(col.size(),
                                     std::move(offsets),
-                                    std::move(chars),
+                                    chars.release(),
                                     col.size() - d_valid_count.value(stream),
                                     std::move(validity));
   // unmatched array query may result in unsanitized '[' value in the result
