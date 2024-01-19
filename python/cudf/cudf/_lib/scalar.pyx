@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 
@@ -14,12 +14,7 @@ from libcpp.utility cimport move
 import cudf
 from cudf._lib import pylibcudf
 from cudf._lib.types import LIBCUDF_TO_SUPPORTED_NUMPY_TYPES
-from cudf.core.dtypes import (
-    ListDtype,
-    StructDtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
+from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
 cimport cudf._lib.cpp.types as libcudf_types
@@ -79,9 +74,9 @@ def gather_metadata(dtypes):
     out = []
     for name, dtype in dtypes.items():
         v = pylibcudf.interop.ColumnMetadata(name)
-        if is_struct_dtype(dtype):
+        if isinstance(dtype, cudf.StructDtype):
             v.children_meta = gather_metadata(dtype.fields)
-        elif is_list_dtype(dtype):
+        elif isinstance(dtype, cudf.ListDtype):
             # Offsets column is unnamed and has no children
             v.children_meta.append(pylibcudf.interop.ColumnMetadata(""))
             v.children_meta.extend(

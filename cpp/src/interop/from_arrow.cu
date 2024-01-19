@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -290,7 +290,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   auto const num_rows = offsets_column->size() - 1;
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
-                                     std::move(chars_column),
+                                     std::move(chars_column->release().data.release()[0]),
                                      array.null_count(),
                                      std::move(*get_mask_buffer(array, stream, mr)));
 
