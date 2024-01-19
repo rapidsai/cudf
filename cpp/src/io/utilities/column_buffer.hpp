@@ -253,12 +253,11 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
 
-
 /**
- * @brief Given a column_buffer, produce a formatted name string describing the type. 
+ * @brief Given a column_buffer, produce a formatted name string describing the type.
  *
  * @param buffer The column buffer
- * 
+ *
  * @return A string describing the type of the buffer suitable for printing
  */
 template <class string_policy>

@@ -207,10 +207,11 @@ struct get_page_output_size {
     }
 
     // total nested size, not counting string data
-    auto iter = cudf::detail::make_counting_transform_iterator(0, 
-      cuda::proclaim_return_type<size_t>([page]__device__(size_type i) {
+    auto iter = cudf::detail::make_counting_transform_iterator(
+      0, cuda::proclaim_return_type<size_t>([page] __device__(size_type i) {
         auto const& pni = page.nesting[i];
-        return cudf::type_dispatcher(data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
+        return cudf::type_dispatcher(
+          data_type{pni.type}, row_size_functor{}, pni.size, pni.nullable);
       }));
     return {
       0,
@@ -279,7 +280,9 @@ struct page_total_size {
       auto const start = key_offsets[idx];
       auto const end   = key_offsets[idx + 1];
       auto iter        = cudf::detail::make_counting_transform_iterator(
-        0, cuda::proclaim_return_type<size_t>([&] __device__(size_type i) { return c_info[i].row_index; }));
+        0, cuda::proclaim_return_type<size_t>([&] __device__(size_type i) {
+          return c_info[i].row_index;
+        }));
       auto const page_index =
         thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_index) - iter;
       sum += c_info[page_index].size_bytes;
@@ -299,7 +302,8 @@ struct get_chunk_compressed_size {
  * @brief Find the first entry in the aggreggated_info that corresponds to the specified row
  *
  */
-size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_info, size_t start_row)
+size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_info,
+                        size_t start_row)
 {
   auto start = thrust::make_transform_iterator(
     aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.row_index; });
@@ -329,10 +333,10 @@ int64_t find_next_split(int64_t cur_pos,
                         cudf::host_span<cumulative_page_info const> sizes,
                         size_t size_limit)
 {
-  auto const start = thrust::make_transform_iterator(sizes.begin(), [&](cumulative_page_info const& i) {
-    return i.size_bytes - cur_cumulative_size;
-  });
-  auto const end   = start + sizes.size();
+  auto const start = thrust::make_transform_iterator(
+    sizes.begin(),
+    [&](cumulative_page_info const& i) { return i.size_bytes - cur_cumulative_size; });
+  auto const end = start + sizes.size();
 
   int64_t split_pos = thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit) - start;
 
@@ -445,7 +449,8 @@ adjust_cumulative_sizes(rmm::device_uvector<cumulative_page_info> const& c_info,
                     c_info_sorted.begin(),
                     c_info_sorted.end(),
                     page_keys_by_split.begin(),
-                    cuda::proclaim_return_type<int>([] __device__(cumulative_page_info const& c) { return c.key; }));
+                    cuda::proclaim_return_type<int>(
+                      [] __device__(cumulative_page_info const& c) { return c.key; }));
 
   // generate key offsets (offsets to the start of each partition of keys). worst case is 1 page per
   // key
