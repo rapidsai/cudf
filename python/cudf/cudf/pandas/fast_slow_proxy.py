@@ -144,6 +144,7 @@ def make_final_proxy_type(
         construct said unwrapped object. See also `_maybe_wrap_result`.
     bases
         Optional tuple of base classes to insert into the mro.
+
     Notes
     -----
     As a side-effect, this function adds `fast_type` and `slow_type`
