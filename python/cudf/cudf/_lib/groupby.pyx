@@ -1,16 +1,17 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from functools import singledispatch
 
 from pandas.core.groupby.groupby import DataError
 
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
-    is_string_dtype,
-    is_struct_dtype,
-)
+from cudf.api.types import is_string_dtype
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    DecimalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -71,6 +72,43 @@ _DECIMAL_AGGS = {
 }
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef const scalar constscalar
+
+
+@singledispatch
+def get_valid_aggregation(dtype):
+    if is_string_dtype(dtype):
+        return _STRING_AGGS
+    return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: CategoricalDtype):
+    return _CATEGORICAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: StructDtype):
+    return _STRUCT_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: IntervalDtype):
+    return _INTERVAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: DecimalDtype):
+    return _DECIMAL_AGGS
 
 
 cdef _agg_result_from_columns(
@@ -187,15 +225,7 @@ cdef class GroupBy:
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
-            valid_aggregations = (
-                _LIST_AGGS if is_list_dtype(dtype)
-                else _STRING_AGGS if is_string_dtype(dtype)
-                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
-                else _STRUCT_AGGS if is_struct_dtype(dtype)
-                else _INTERVAL_AGGS if is_interval_dtype(dtype)
-                else _DECIMAL_AGGS if is_decimal_dtype(dtype)
-                else "ALL"
-            )
+            valid_aggregations = get_valid_aggregation(dtype)
             included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
@@ -258,15 +288,7 @@ cdef class GroupBy:
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
-            valid_aggregations = (
-                _LIST_AGGS if is_list_dtype(dtype)
-                else _STRING_AGGS if is_string_dtype(dtype)
-                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
-                else _STRUCT_AGGS if is_struct_dtype(dtype)
-                else _INTERVAL_AGGS if is_interval_dtype(dtype)
-                else _DECIMAL_AGGS if is_decimal_dtype(dtype)
-                else "ALL"
-            )
+            valid_aggregations = get_valid_aggregation(dtype)
             included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.scan_request())
