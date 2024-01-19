@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -462,9 +462,31 @@ std::unique_ptr<column> make_strings_column(
  *  nulls is used for interpreting this bitmask.
  * @return Constructed strings column
  */
+[[deprecated]] std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                                           std::unique_ptr<column> offsets_column,
+                                                           std::unique_ptr<column> chars_column,
+                                                           size_type null_count,
+                                                           rmm::device_buffer&& null_mask);
+/**
+ * @brief Construct a STRING type column given offsets column, chars columns, and null mask and null
+ * count.
+ *
+ * The columns and mask are moved into the resulting strings column.
+ *
+ * @param num_strings The number of strings the column represents.
+ * @param offsets_column The column of offset values for this column. The number of elements is
+ *  one more than the total number of strings so the `offset[last] - offset[0]` is the total number
+ *  of bytes in the strings vector.
+ * @param chars_buffer The buffer of char bytes for all the strings for this column. Individual
+ *  strings are identified by the offsets and the nullmask.
+ * @param null_count The number of null string entries.
+ * @param null_mask The bits specifying the null strings in device memory. Arrow format for
+ *  nulls is used for interpreting this bitmask.
+ * @return Constructed strings column
+ */
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
-                                            std::unique_ptr<column> chars_column,
+                                            rmm::device_buffer&& chars_buffer,
                                             size_type null_count,
                                             rmm::device_buffer&& null_mask);
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -210,7 +210,7 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     auto const offsets     = strings.offsets();
     auto const d_offsets   = offsets.data<cudf::size_type>() + strings.offset();
     auto const offset = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
-    auto const d_chars = strings.chars().data<char>() + offset;
+    auto const d_chars = strings.chars_begin(stream) + offset;
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 

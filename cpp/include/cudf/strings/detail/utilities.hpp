@@ -68,6 +68,8 @@ int64_t get_offset64_threshold();
 /**
  * @brief Return a normalized offset value from a strings offsets column
  *
+ * The maximum value returned is `std::numeric_limits<int32_t>::max()`.
+ *
  * @throw std::invalid_argument if `offsets` is neither INT32 nor INT64
  *
  * @param offsets Input column of type INT32 or INT64

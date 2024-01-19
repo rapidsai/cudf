@@ -145,34 +145,38 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto const count = static_cast<size_type>(std::distance(begin, end));
-  auto offsets_column =
-    make_numeric_column(data_type{type_id::INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view = offsets_column->mutable_view();
-  auto d_offsets    = offsets_view.template data<int32_t>();
+  auto constexpr size_type_max = static_cast<int64_t>(std::numeric_limits<size_type>::max());
+  auto const lcount            = static_cast<int64_t>(std::distance(begin, end));
+  CUDF_EXPECTS(
+    lcount <= size_type_max, "Size of output exceeds the column size limit", std::overflow_error);
+  auto const strings_count = static_cast<size_type>(lcount);
+  auto offsets_column      = make_numeric_column(
+    data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
+  auto d_offsets = offsets_column->mutable_view().template data<int32_t>();
 
-  // The number of offsets is count+1 so to build the offsets from the sizes
-  // using exclusive-scan technically requires count+1 input values even though
+  // The number of offsets is strings_count+1 so to build the offsets from the sizes
+  // using exclusive-scan technically requires strings_count+1 input values even though
   // the final input value is never used.
   // The input iterator is wrapped here to allow the 'last value' to be safely read.
-  auto map_fn =
-    cuda::proclaim_return_type<size_type>([begin, count] __device__(size_type idx) -> size_type {
-      return idx < count ? static_cast<size_type>(begin[idx]) : size_type{0};
+  auto map_fn = cuda::proclaim_return_type<size_type>(
+    [begin, strings_count] __device__(size_type idx) -> size_type {
+      return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
     });
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
-  auto const total_elements = sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets, stream);
+  auto const total_elements =
+    sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
 
   // TODO: replace exception with if-statement when enabling creating INT64 offsets
-  CUDF_EXPECTS(total_elements <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds the column size limit",
+  CUDF_EXPECTS(total_elements <= size_type_max,
+               "Size of output exceeds the character size limit",
                std::overflow_error);
   // if (total_elements >= get_offset64_threshold()) {
   //   // recompute as int64 offsets when above the threshold
   //   offsets_column = make_numeric_column(
-  //     data_type{type_id::INT64}, count + 1, mask_state::UNALLOCATED, stream, mr);
+  //     data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   //   auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
-  //   sizes_to_offsets(input_itr, input_itr + count + 1, d_offsets64, stream);
+  //   sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
   // }
 
   return std::pair(std::move(offsets_column), total_elements);
