@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -112,11 +112,11 @@ __device__ __inline__ bool is_like_float(std::size_t len,
  * @param[out] column_info Histogram of column type counters
  */
 template <int BlockSize, typename OptionsView, typename ColumnStringIter>
-__global__ void infer_column_type_kernel(OptionsView options,
-                                         device_span<char const> data,
-                                         ColumnStringIter offset_length_begin,
-                                         std::size_t size,
-                                         cudf::io::column_type_histogram* column_info)
+CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
+                                          device_span<char const> data,
+                                          ColumnStringIter offset_length_begin,
+                                          std::size_t size,
+                                          cudf::io::column_type_histogram* column_info)
 {
   auto thread_type_histogram = cudf::io::column_type_histogram{};
 

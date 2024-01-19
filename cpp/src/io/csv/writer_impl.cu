@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -377,8 +377,8 @@ void write_chunked(data_sink* out_sink,
                                                             rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
-  auto total_num_bytes      = strings_column.chars_size();
-  char const* ptr_all_bytes = strings_column.chars_begin();
+  auto total_num_bytes      = strings_column.chars_size(stream);
+  char const* ptr_all_bytes = strings_column.chars_begin(stream);
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -55,30 +55,6 @@ target_compile_options(
 target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
-# This function will copy the generated PTX file from its generator-specific location in the build
-# tree into a specified location in the build tree from which we can install it.
-function(copy_ptx_to_location target destination new_name)
-  set(cmake_generated_file
-      "${CMAKE_CURRENT_BINARY_DIR}/cmake/cp_${target}_$<LOWER_CASE:$<CONFIG>>_ptx.cmake"
-  )
-  file(
-    GENERATE
-    OUTPUT "${cmake_generated_file}"
-    CONTENT
-      "
-set(ptx_path \"$<TARGET_OBJECTS:${target}>\")
-file(MAKE_DIRECTORY \"${destination}\")
-file(COPY_FILE \${ptx_path} \"${destination}/${new_name}\")"
-  )
-
-  add_custom_target(
-    ${target}_cp_ptx ALL
-    COMMAND ${CMAKE_COMMAND} -P "${cmake_generated_file}"
-    DEPENDS $<TARGET_OBJECTS:${target}>
-    COMMENT "Copying PTX files to '${destination}'"
-  )
-endfunction()
-
 # Create the shim library for each architecture.
 set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
 
@@ -104,10 +80,9 @@ foreach(arch IN LISTS CMAKE_CUDA_ARCHITECTURES)
   target_compile_options(${tgt} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${SHIM_CUDA_FLAGS}>")
   target_link_libraries(${tgt} PUBLIC cudf::cudf)
 
-  copy_ptx_to_location(${tgt} "${CMAKE_CURRENT_BINARY_DIR}/../udf" ${tgt}.ptx)
   install(
     FILES $<TARGET_OBJECTS:${tgt}>
-    DESTINATION ./cudf/core/udf/
+    DESTINATION cudf/core/udf/
     RENAME ${tgt}.ptx
   )
 endforeach()

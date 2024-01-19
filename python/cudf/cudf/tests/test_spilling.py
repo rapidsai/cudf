@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import importlib
 import random
@@ -34,7 +34,7 @@ from cudf.core.buffer.spill_manager import (
 )
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
-    SpillableBufferSlice,
+    SpillableBufferOwner,
     SpillLock,
 )
 from cudf.testing._utils import assert_eq
@@ -196,10 +196,10 @@ def test_creations(manager: SpillManager):
 def test_spillable_df_groupby(manager: SpillManager):
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
-    assert len(single_column_df_base_data(df)._spill_locks) == 0
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
     gb._groupby
     # `gb._groupby`, which is cached on `gb`, holds a spill lock
-    assert len(single_column_df_base_data(df)._spill_locks) == 1
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 1
     assert not single_column_df_data(df).spillable
     del gb
     assert single_column_df_data(df).spillable
@@ -375,7 +375,7 @@ def test_get_ptr(manager: SpillManager, target):
         mem = np.empty(10, dtype="u1")
     buf = as_buffer(data=mem, exposed=False)
     assert buf.spillable
-    assert len(buf._spill_locks) == 0
+    assert len(buf.owner._spill_locks) == 0
     with acquire_spill_lock():
         buf.get_ptr(mode="read")
         assert not buf.spillable
@@ -496,8 +496,8 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     header, frames = protocol.serialize(
         df1, serializers=("cuda",), on_error="raise"
     )
-    buf: SpillableBufferSlice = single_column_df_data(df1)
-    assert len(buf._base._spill_locks) == 1
+    buf: SpillableBuffer = single_column_df_data(df1)
+    assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
     assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
@@ -543,13 +543,14 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     data = cupy.arange(10, dtype="u1")
     b1 = as_buffer(data, exposed=False)
     assert isinstance(b1, SpillableBuffer)
-    assert b1.owner is data
+    assert isinstance(b1.owner, SpillableBufferOwner)
+    assert b1.owner.owner is data
     b2 = as_buffer(b1)
     assert b1 is b2
 
     with pytest.raises(
         ValueError,
-        match="buffer must either be exposed or spilled locked",
+        match="owning spillable buffer must either be exposed or spill locked",
     ):
         # Use `memory_info` to access device point _without_ making
         # the buffer unspillable.
@@ -557,21 +558,21 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
 
     with acquire_spill_lock():
         b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
-    assert isinstance(b3, SpillableBufferSlice)
-    assert b3.owner is b1
+    assert isinstance(b3, SpillableBuffer)
+    assert b3.owner is b1.owner
 
     b4 = as_buffer(
         b1.get_ptr(mode="write") + data.itemsize,
         size=b1.size - data.itemsize,
         owner=b3,
     )
-    assert isinstance(b4, SpillableBufferSlice)
-    assert b4.owner is b1
+    assert isinstance(b4, SpillableBuffer)
+    assert b4.owner is b1.owner
     assert all(cupy.array(b4.memoryview()) == data[1:])
 
     b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
-    assert isinstance(b5, SpillableBufferSlice)
-    assert b5.owner is b1
+    assert isinstance(b5, SpillableBuffer)
+    assert b5.owner is b1.owner
     assert all(cupy.array(b5.memoryview()) == data[1:-1])
 
 

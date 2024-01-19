@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -190,7 +190,7 @@ void BM_case(benchmark::State& state, std::string query_arg)
   int desired_bytes = state.range(1);
   auto input        = build_json_string_column(desired_bytes, num_rows);
   cudf::strings_column_view scv(input->view());
-  size_t num_chars = scv.chars().size();
+  size_t num_chars = scv.chars_size(cudf::get_default_stream());
 
   std::string json_path(query_arg);
 
