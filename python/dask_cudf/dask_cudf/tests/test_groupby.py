@@ -834,26 +834,38 @@ def test_groupby_shuffle():
 
     # Sorted aggregation, single-partition output
     # (sort=True, split_out=1)
-    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=1)
+    got = gddf.groupby("a", sort=True).agg(
+        spec, shuffle_method=True, split_out=1
+    )
     dd.assert_eq(expect, got)
 
     # Sorted aggregation, multi-partition output
     # (sort=True, split_out=2)
-    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=2)
+    got = gddf.groupby("a", sort=True).agg(
+        spec, shuffle_method=True, split_out=2
+    )
     dd.assert_eq(expect, got)
 
     # Un-sorted aggregation, single-partition output
     # (sort=False, split_out=1)
-    got = gddf.groupby("a", sort=False).agg(spec, shuffle=True, split_out=1)
+    got = gddf.groupby("a", sort=False).agg(
+        spec, shuffle_method=True, split_out=1
+    )
     dd.assert_eq(expect.sort_index(), got.compute().sort_index())
 
     # Un-sorted aggregation, multi-partition output
     # (sort=False, split_out=2)
-    # NOTE: `shuffle=True` should be default
+    # NOTE: `shuffle_method=True` should be default
     got = gddf.groupby("a", sort=False).agg(spec, split_out=2)
     dd.assert_eq(expect, got.compute().sort_index())
 
     # Sorted aggregation fails with split_out>1 when shuffle is False
-    # (sort=True, split_out=2, shuffle=False)
+    # (sort=True, split_out=2, shuffle_method=False)
     with pytest.raises(ValueError):
-        gddf.groupby("a", sort=True).agg(spec, shuffle=False, split_out=2)
+        gddf.groupby("a", sort=True).agg(
+            spec, shuffle_method=False, split_out=2
+        )
+
+    # Check shuffle kwarg deprecation
+    with pytest.warns(match="'shuffle' keyword is deprecated"):
+        gddf.groupby("a", sort=True).agg(spec, shuffle=False)

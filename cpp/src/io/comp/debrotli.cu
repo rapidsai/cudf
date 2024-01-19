@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1911,7 +1911,7 @@ static __device__ void ProcessCommands(debrotli_state_s* s, brotli_dictionary_s 
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
  * blocks)
  */
-__global__ void __launch_bounds__(block_size, 2)
+CUDF_KERNEL void __launch_bounds__(block_size, 2)
   gpu_debrotli_kernel(device_span<device_span<uint8_t const> const> inputs,
                       device_span<device_span<uint8_t> const> outputs,
                       device_span<compression_result> results,

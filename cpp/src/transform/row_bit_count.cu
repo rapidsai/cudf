@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -398,10 +398,10 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
  * @param output Output span of size (# rows) where per-row bit sizes are stored
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
  */
-__global__ void compute_row_sizes(device_span<column_device_view const> cols,
-                                  device_span<column_info const> info,
-                                  device_span<size_type> output,
-                                  size_type max_branch_depth)
+CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
+                                   device_span<column_info const> info,
+                                   device_span<size_type> output,
+                                   size_type max_branch_depth)
 {
   extern __shared__ row_span thread_branch_stacks[];
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;

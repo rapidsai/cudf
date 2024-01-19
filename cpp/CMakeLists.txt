@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -380,6 +380,8 @@ add_library(
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
   src/io/orc/reader_impl.cu
+  src/io/orc/reader_impl_helpers.cpp
+  src/io/orc/reader_impl_preprocess.cu
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu
@@ -656,6 +658,12 @@ set_source_files_properties(
   src/rolling/rolling.cu
   src/transform/transform.cpp
   PROPERTIES COMPILE_DEFINITIONS "_FILE_OFFSET_BITS=64"
+)
+
+set_property(
+  SOURCE src/io/parquet/writer_impl.cu
+  APPEND
+  PROPERTY COMPILE_DEFINITIONS "CUDF_VERSION=${PROJECT_VERSION}"
 )
 
 set_target_properties(
