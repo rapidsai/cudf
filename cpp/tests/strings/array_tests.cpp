@@ -25,6 +25,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -154,9 +155,14 @@ TEST_F(StringsColumnTest, GatherTooBig)
   std::vector<int8_t> h_chars(3000000);
   cudf::test::fixed_width_column_wrapper<int8_t> chars(h_chars.begin(), h_chars.end());
   cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets({0, 3000000});
-  auto input = cudf::column_view(
-    cudf::data_type{cudf::type_id::STRING}, 1, nullptr, nullptr, 0, 0, {offsets, chars});
-  auto map = thrust::constant_iterator<int8_t>(0);
+  auto input = cudf::column_view(cudf::data_type{cudf::type_id::STRING},
+                                 1,
+                                 cudf::column_view(chars).begin<int8_t>(),
+                                 nullptr,
+                                 0,
+                                 0,
+                                 {offsets});
+  auto map   = thrust::constant_iterator<int8_t>(0);
   cudf::test::fixed_width_column_wrapper<int8_t> gather_map(map, map + 1000);
   EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), std::overflow_error);
 }
@@ -220,7 +226,6 @@ TEST_F(StringsColumnTest, OffsetsBeginEnd)
   scv = cudf::strings_column_view(cudf::slice(input, {1, 5}).front());
   EXPECT_EQ(std::distance(scv.offsets_begin(), scv.offsets_end()),
             static_cast<std::ptrdiff_t>(scv.size() + 1));
-  EXPECT_EQ(std::distance(scv.chars_begin(), scv.chars_end()), 16L);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
