@@ -417,6 +417,7 @@ struct json_column_data {
  * @param root Root node of the `d_json_column` tree
  * @param is_array_of_arrays Whether the tree is an array of arrays
  * @param is_enabled_lines Whether the input is a line-delimited JSON
+ * @param is_enabled_mixed_types_as_string Whether to enable reading mixed types as string
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the device memory
  * of child_offets and validity members of `d_json_column`
@@ -428,7 +429,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_json_column& root,
                              bool is_array_of_arrays,
                              bool is_enabled_lines,
-                             bool is_mixed_type_as_string_enabled,
+                             bool is_enabled_mixed_types_as_string,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
@@ -579,7 +580,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
 
     if (parent_col_id != parent_node_sentinel && is_mixed_type_column[parent_col_id] == 1) {
-      // if parent is mixed string column, ignore this column.
+      // if parent is mixed type column, ignore this column.
       is_mixed_type_column[this_col_id] = 1;
       ignore_vals[this_col_id]          = 1;
       continue;
@@ -594,7 +595,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     if (mapped_columns.count({parent_col_id, name}) > 0) {
       // If mixed type as string is enabled, make both of them strings and merge them.
       // All child columns will be ignored when parsing.
-      if (is_mixed_type_as_string_enabled) {
+      if (is_enabled_mixed_types_as_string) {
         // VAL/STR or STRUCT or LIST
         auto old_col_id = mapped_columns[{parent_col_id, name}];
 
@@ -643,7 +644,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     mapped_columns.try_emplace(std::make_pair(parent_col_id, name), this_col_id);
   }
 
-  if (is_mixed_type_as_string_enabled) {
+  if (is_enabled_mixed_types_as_string) {
     // ignore all children of mixed type columns
     for (auto const this_col_id : unique_col_ids) {
       auto parent_col_id = column_parent_ids[this_col_id];
