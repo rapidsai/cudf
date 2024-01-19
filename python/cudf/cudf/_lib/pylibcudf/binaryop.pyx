@@ -23,6 +23,31 @@ cpdef Column binary_operation(
     binary_operator op,
     DataType data_type
 ):
+    """Perform a binary operation between a column and another column or scalar.
+
+    Either ``lhs`` or ``rhs`` must be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column`. The other may be a
+    :py:class:`~cudf._lib.pylibcudf.column.Column` or a
+    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
+    For details, see :cpp:func:`binary_operation`.
+
+    Parameters
+    ----------
+    lhs : Column or Scalar
+        The left hand side argument.
+    rhs : Column or Scalar
+        The right hand side argument.
+    op : BinaryOperator
+        The operation to perform.
+    data_type : DataType
+        The output to use for the output.
+
+    Returns
+    -------
+    pylibcudf.Column
+        The result of the binary operation
+    """
     cdef unique_ptr[column] result
 
     if isinstance(lhs, Column) and isinstance(rhs, Column):
