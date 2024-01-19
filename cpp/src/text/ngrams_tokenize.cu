@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -232,9 +232,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   rmm::device_uvector<cudf::size_type> ngram_sizes(total_ngrams, stream);
 
   // build output chars column
-  auto chars_column = cudf::strings::detail::create_chars_child_column(
-    static_cast<cudf::size_type>(output_chars_size), stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(output_chars_size, stream, mr);
+  auto d_chars = chars.data();
   // Generate the ngrams into the chars column data buffer.
   // The ngram_builder_fn functor also fills the ngram_sizes vector with the
   // size of each ngram.
@@ -253,11 +252,10 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   // build the offsets column -- converting the ngram sizes into offsets
   auto offsets_column = std::get<0>(
     cudf::detail::make_offsets_child_column(ngram_sizes.begin(), ngram_sizes.end(), stream, mr));
-  chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
   return make_strings_column(
-    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

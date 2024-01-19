@@ -173,8 +173,11 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
                      : rmm::device_buffer{0, stream, mr};
 
   // perhaps this return a string_scalar instead of a single-row column
-  return make_strings_column(
-    1, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+  return make_strings_column(1,
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
+                             null_count,
+                             std::move(null_mask));
 }
 
 }  // namespace detail
