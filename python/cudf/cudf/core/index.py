@@ -3003,50 +3003,38 @@ class CategoricalIndex(GenericIndex):
         copy=False,
         name=None,
     ):
-        if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            if categories is not None or ordered is not None:
+        name = _setdefault_name(data, name=name)["name"]
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if not isinstance(dtype, cudf.CategoricalDtype):
+                raise ValueError("dtype must be a CategoricalDtype")
+            elif categories is not None or ordered is not None:
                 raise ValueError(
                     "Cannot specify `categories` or "
                     "`ordered` together with `dtype`."
                 )
+        col = column.as_column(data)
         if copy:
-            data = column.as_column(data, dtype=dtype).copy(deep=True)
-        kwargs = _setdefault_name(data, name=name)
-        if isinstance(data, CategoricalColumn):
-            data = data
-        elif isinstance(data, pd.Series) and (
-            isinstance(data.dtype, pd.CategoricalDtype)
-        ):
-            codes_data = column.as_column(data.cat.codes.values)
-            data = column.build_categorical_column(
-                categories=data.cat.categories,
-                codes=codes_data,
-                ordered=data.cat.ordered,
-            )
-        elif isinstance(data, (pd.Categorical, pd.CategoricalIndex)):
-            codes_data = column.as_column(data.codes)
-            data = column.build_categorical_column(
-                categories=data.categories,
-                codes=codes_data,
-                ordered=data.ordered,
-            )
+            col = col.copy()
+        if not isinstance(col, CategoricalColumn):
+            if dtype is None:
+                dtype = cudf.CategoricalDtype(
+                    categories=categories, ordered=ordered
+                )
+            col = col.astype(dtype)
         else:
-            data = column.as_column(
-                data, dtype="category" if dtype is None else dtype
-            )
-            # dtype has already been taken care
-            dtype = None
-
-        if categories is not None:
-            data = data.set_categories(categories, ordered=ordered)
-        elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
-            data = data.set_categories(dtype.categories, ordered=ordered)
-        elif ordered is True and data.ordered is False:
-            data = data.as_ordered()
-        elif ordered is False and data.ordered is True:
-            data = data.as_unordered()
-
-        super().__init__(data, **kwargs)
+            if dtype is not None:
+                col = col.set_categories(
+                    dtype.categories, ordered=dtype.ordered
+                )
+            else:
+                if categories is not None:
+                    col = col.set_categories(
+                        categories, ordered=col.dtype.ordered
+                    )
+                if ordered is not None:
+                    col = col.as_ordered(ordered)
+        super().__init__(data, name=name)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -3054,7 +3042,7 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return as_index(self._values.codes)
+        return self.dtype.codes
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -3062,7 +3050,7 @@ class CategoricalIndex(GenericIndex):
         """
         The categories of this categorical.
         """
-        return as_index(self._values.categories)
+        return self.dtype.categories
 
     def _is_boolean(self):
         return False

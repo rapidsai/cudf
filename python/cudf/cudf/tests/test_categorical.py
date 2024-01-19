@@ -955,3 +955,8 @@ def test_empty_series_category_cast(ordered):
 
     assert_eq(expected, actual)
     assert_eq(expected.dtype.ordered, actual.dtype.ordered)
+
+
+def test_categoricaldtype_ordered_not_settable():
+    with pytest.raises(AttributeError):
+        cudf.CategoricalDtype().ordered = False
