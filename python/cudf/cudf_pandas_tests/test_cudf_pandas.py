@@ -1233,3 +1233,8 @@ def test_concat_fast():
 def test_func_namespace():
     # note: this test is sensitive to Pandas' internal module layout
     assert xpd.concat is xpd.core.reshape.concat.concat
+
+
+def test_isinstance_base_offset():
+    offset = xpd.tseries.frequencies.to_offset("1s")
+    assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
