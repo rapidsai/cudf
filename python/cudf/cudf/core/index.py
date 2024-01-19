@@ -2838,8 +2838,8 @@ class TimedeltaIndex(GenericIndex):
         unit=None,
         freq=None,
         closed=None,
-        dtype="timedelta64[ns]",
-        copy=False,
+        dtype=None,
+        copy: bool = False,
         name=None,
     ):
         if freq is not None:
@@ -2851,19 +2851,19 @@ class TimedeltaIndex(GenericIndex):
                 "dtype parameter is supported"
             )
 
-        valid_dtypes = tuple(
-            f"timedelta64[{res}]" for res in ("s", "ms", "us", "ns")
-        )
-        if dtype not in valid_dtypes:
-            raise TypeError("Invalid dtype")
+        if dtype is None:
+            dtype = "timedelta64[ns]"
+        dtype = cudf.dtype(dtype)
+        if dtype.kind != "m":
+            raise TypeError("dtype must be a timedelta type")
 
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
