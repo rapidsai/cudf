@@ -12,6 +12,7 @@ from shutil import get_terminal_size
 from typing import (
     Any,
     Dict,
+    Literal,
     MutableMapping,
     Optional,
     Sequence,
@@ -2141,7 +2142,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.Series(self._column.nullmask)
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
@@ -2150,7 +2156,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 )
         else:
             dtype = {self.name: dtype}
-        return super().astype(dtype, copy, errors, **kwargs)
+        return super().astype(dtype, copy, errors)
 
     @_cudf_nvtx_annotate
     def sort_index(self, axis=0, *args, **kwargs):
