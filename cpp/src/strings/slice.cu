@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -209,7 +209,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
 
   return make_strings_column(strings.size(),
                              std::move(offsets),
-                             std::move(chars),
+                             std::move(chars->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }

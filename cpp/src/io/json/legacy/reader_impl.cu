@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -530,29 +530,27 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
   auto repl_chars   = std::vector<char>{'"', '\\', '\t', '\r', '\b'};
   auto repl_offsets = std::vector<size_type>{0, 1, 2, 3, 4, 5};
 
-  auto target = make_strings_column(
-    static_cast<size_type>(target_offsets.size() - 1),
-    std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_async(
-        target_offsets, stream, rmm::mr::get_current_device_resource()),
-      rmm::device_buffer{},
-      0),
-    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
-                                     target_chars, stream, rmm::mr::get_current_device_resource()),
-                                   rmm::device_buffer{},
-                                   0),
-    0,
-    {});
+  auto target =
+    make_strings_column(static_cast<size_type>(target_offsets.size() - 1),
+                        std::make_unique<cudf::column>(
+                          cudf::detail::make_device_uvector_async(
+                            target_offsets, stream, rmm::mr::get_current_device_resource()),
+                          rmm::device_buffer{},
+                          0),
+                        cudf::detail::make_device_uvector_async(
+                          target_chars, stream, rmm::mr::get_current_device_resource())
+                          .release(),
+                        0,
+                        {});
   auto repl = make_strings_column(
     static_cast<size_type>(repl_offsets.size() - 1),
     std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
                                      repl_offsets, stream, rmm::mr::get_current_device_resource()),
                                    rmm::device_buffer{},
                                    0),
-    std::make_unique<cudf::column>(cudf::detail::make_device_uvector_async(
-                                     repl_chars, stream, rmm::mr::get_current_device_resource()),
-                                   rmm::device_buffer{},
-                                   0),
+    cudf::detail::make_device_uvector_async(
+      repl_chars, stream, rmm::mr::get_current_device_resource())
+      .release(),
     0,
     {});
 
