@@ -173,7 +173,7 @@ class SHA512HashTestTyped : public cudf::test::BaseFixture {};
 
 TYPED_TEST_CASE(SHA512HashTestTyped, cudf::test::NumericTypes);
 
-TYPED_TEST(SHA512HashTestTyped, Equality)
+TYPED_TEST(SHA512HashTestTyped, NoNulls)
 {
   cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8});
   auto const input = cudf::table_view({col});
@@ -186,21 +186,16 @@ TYPED_TEST(SHA512HashTestTyped, Equality)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
-TYPED_TEST(SHA512HashTestTyped, EqualityNulls)
+TYPED_TEST(SHA512HashTestTyped, WithNulls)
 {
-  using T = TypeParam;
+  cudf::test::fixed_width_column_wrapper<TypeParam> const col({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  auto const input = cudf::table_view({col});
 
-  // Nulls with different values should be equal
-  cudf::test::fixed_width_column_wrapper<T> const col1({0, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<T> const col2({1, 127, 1, 2, 8}, {0, 1, 1, 1, 1});
+  // Hash of same input should be equal
+  auto const output1 = cudf::hashing::sha512(input);
+  auto const output2 = cudf::hashing::sha512(input);
 
-  auto const input1 = cudf::table_view({col1});
-  auto const input2 = cudf::table_view({col2});
-
-  auto const output1 = cudf::hashing::sha512(input1);
-  auto const output2 = cudf::hashing::sha512(input2);
-
-  EXPECT_EQ(input1.num_rows(), output1->size());
+  EXPECT_EQ(input.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 }
 
