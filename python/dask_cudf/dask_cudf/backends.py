@@ -640,7 +640,7 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
 
-# Define "cudf" backend engine to be registered with Dask-Expressions
+# Define "cudf" backend entrypoint for dask-expr
 class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
     """Backend-entrypoint class for Dask-Expressions
 
@@ -690,6 +690,7 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
         )
 
 
+# Import/register cudf-specific classes for dask-expr
 try:
     import dask_cudf.expr  # noqa: F401
 except ImportError:
