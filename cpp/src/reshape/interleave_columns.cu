@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -193,9 +193,8 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
     auto d_results_offsets = offsets_column->view().template data<int32_t>();
 
     // Create the chars column
-    auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
-    // Fill the chars column
-    auto d_results_chars = chars_column->mutable_view().template data<char>();
+    rmm::device_uvector<char> chars(bytes, stream, mr);
+    auto d_results_chars = chars.data();
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
@@ -215,7 +214,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 
     return make_strings_column(num_strings,
                                std::move(offsets_column),
-                               std::move(chars_column),
+                               chars.release(),
                                null_count,
                                std::move(valid_mask.first));
   }
