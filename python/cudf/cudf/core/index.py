@@ -3042,7 +3042,7 @@ class CategoricalIndex(GenericIndex):
         """
         The category codes of this categorical.
         """
-        return self.dtype.codes
+        return as_index(self._values.codes)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
