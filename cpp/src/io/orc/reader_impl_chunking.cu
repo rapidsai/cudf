@@ -92,10 +92,10 @@ __device__ std::size_t column_size_fn::operator()<struct_view>(std::size_t num_r
 struct stripe_size_fn {
   size_type const num_levels;  // total number of nested levels
   //  size_type const num_stripes;              // total number of all stripes
-  uint32_t const* num_rows_per_stripe;    // number of rows in each stripe
-  size_type const* const lvl_num_cols;    // number of columns in each level
-  size_type const* const lvl_offsets;     // prefix sum of number of columns in each level
-  data_type const** const lvl_col_types;  // type of each column in each stripe in each level
+  uint32_t const* num_rows_per_stripe;          // number of rows in each stripe
+  size_type const* const lvl_num_cols;          // number of columns in each level
+  size_type const* const lvl_offsets;           // prefix sum of number of columns in each level
+  data_type const* const* const lvl_col_types;  // type of each column in each stripe in each level
   gpu::ColumnDesc const* const* const
     lvl_chunks;  // data of each column in each stripe in each level
 
@@ -103,23 +103,24 @@ struct stripe_size_fn {
                                      size_type level,
                                      size_type col_idx) const
   {
-    // TODO
-    auto const start_col_idx = lvl_offsets[level];
-    auto const col_type      = lvl_col_types[start_col_idx + col_idx];
-    auto const& chunk        = lvl_chunks[level][todo + col_idx];
-    return cudf::type_dispatcher(
-      col_type, column_size_fn{}, chunk.num_rows, chunk.valid_map_base != nullptr);
+    auto const num_cols = lvl_num_cols[level];
+    auto const col_type = lvl_col_types[level][col_idx];
+    auto const& chunk   = lvl_chunks[level][stripe_idx * num_cols + col_idx];
+    // TODO: comput str_bytes.
+    return chunk.str_bytes +
+           cudf::type_dispatcher(
+             col_type, column_size_fn{}, chunk.num_rows, chunk.valid_map_base != nullptr);
   }
 
   __device__ std::size_t level_size(std::size_t stripe_idx, size_type level) const
   {
+    auto const num_cols  = lvl_num_cols[level];
     auto const size_iter = cudf::detail::make_counting_transform_iterator(
       0,
       cuda::proclaim_return_type<std::size_t>(
-        [this, stripe_idx, level] __device__(size_type column_idx) {
-          return this->column_size(stripe_idx, level, column_idx);
+        [this, num_cols, stripe_idx, level] __device__(size_type col_idx) {
+          return this->column_size(stripe_idx, level, col_idx);
         }));
-    auto const num_cols = lvl_num_cols[level];
     return thrust::reduce(thrust::seq, size_iter, size_iter + num_cols);
   }
 
@@ -134,16 +135,15 @@ struct stripe_size_fn {
       }));
 
     return {num_rows_per_stripe[stripe_idx],
-            thrust::reduce(thrust::seq, size_iter, size_iter + num_levels) +
-              lvl_chunks[stripe_idx].str_bytes};
+            thrust::reduce(thrust::seq, size_iter, size_iter + num_levels)};
   }
 };
 
-std::vector<row_range> find_splits(std::vector<cumulative_row_info> const& sizes,
+std::vector<row_range> find_splits(host_span<cumulative_row_info const> stripe_sizes,
                                    size_t num_rows,
                                    size_t chunk_read_limit)
 {
-  //
+  return {};
 }
 
 #endif
@@ -172,7 +172,7 @@ void reader::impl::compute_chunk_ranges()
 
   hostdevice_vector<data_type const*> lvl_col_types(num_levels, _stream);
   hostdevice_vector<gpu::ColumnDesc const*> lvl_chunks(num_levels, _stream);
-  for (std::size_t level = 0; level < num_levels; ++level) {
+  for (size_type level = 0; level < num_levels; ++level) {
     auto& col_types = _file_itm_data.lvl_col_types[level];
     col_types.host_to_device_async(_stream);
     lvl_col_types.push_back(col_types.d_begin());
@@ -181,17 +181,20 @@ void reader::impl::compute_chunk_ranges()
   lvl_col_types.host_to_device_async(_stream);
   lvl_chunks.host_to_device_async(_stream);
 
-  rmm::device_uvector<std::size_t> stripe_size_bytes(num_stripes, _stream);
+  hostdevice_vector<cumulative_row_info> stripe_size_bytes(num_stripes, _stream);
   thrust::transform(rmm::exec_policy(_stream),
                     thrust::make_counting_iterator(std::size_t{0}),
                     thrust::make_counting_iterator(num_stripes),
-                    stripe_size_bytes.begin(),
+                    stripe_size_bytes.d_begin(),
                     stripe_size_fn{num_levels,
                                    _file_itm_data.stripe_sizes.d_begin(),
                                    _file_itm_data.lvl_num_cols.d_begin(),
                                    _file_itm_data.lvl_offsets.d_begin(),
                                    lvl_col_types.d_begin(),
                                    lvl_chunks.d_begin()});
+
+  stripe_size_bytes.device_to_host_async(_stream);
+  find_splits(stripe_size_bytes, 0, 0);
 }
 
 }  // namespace cudf::io::orc::detail
