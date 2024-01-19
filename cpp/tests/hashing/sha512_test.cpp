@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/iterator.cuh>
 #include <cudf/hashing.hpp>
 #include <cudf/utilities/error.hpp>
 
