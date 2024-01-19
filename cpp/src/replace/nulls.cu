@@ -255,22 +255,19 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
   auto offsets_view = offsets->mutable_view();
 
   // Allocate chars array and output null mask
-  std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
-
-  auto output_chars_view = output_chars->mutable_view();
+  rmm::device_uvector<char> output_chars(bytes, stream, mr);
 
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
     *device_in,
     *device_replacement,
     reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
     offsets_view.begin<cudf::size_type>(),
-    output_chars_view.data<char>(),
+    output_chars.data(),
     valid_count);
 
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets),
-                                   std::move(output_chars),
+                                   output_chars.release(),
                                    input.size() - valid_counter.value(stream),
                                    std::move(valid_bits));
 }

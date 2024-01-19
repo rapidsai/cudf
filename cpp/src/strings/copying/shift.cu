@@ -114,19 +114,19 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   }();
 
   // create output chars child column
-  auto chars_column = create_chars_child_column(static_cast<size_type>(total_bytes), stream, mr);
-  auto d_chars      = mutable_column_device_view::create(chars_column->mutable_view(), stream);
+  rmm::device_uvector<char> chars(total_bytes, stream, mr);
+  auto d_chars = chars.data();
 
   // run kernel to shift all the characters
   thrust::transform(rmm::exec_policy(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(total_bytes),
-                    d_chars->data<char>(),
+                    d_chars,
                     shift_chars_fn{*d_input, d_fill_str, shift_offset});
 
   // caller sets the null-mask
   return make_strings_column(
-    input.size(), std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    input.size(), std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace cudf::strings::detail
