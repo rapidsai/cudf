@@ -177,7 +177,7 @@ struct TransduceToNormalizedQuotes {
 
 namespace detail {
 
-rmm::device_uvector<SymbolT> normalize_single_quotes(cudf::device_span<std::byte const> inbuf,
+rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT>&& inbuf,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
@@ -190,7 +190,7 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(cudf::device_span<std::byte
 
   rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
   rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
-  parser.Transduce(reinterpret_cast<const SymbolT*>(inbuf.data()),
+  parser.Transduce(inbuf.data(),
                    static_cast<SymbolOffsetT>(inbuf.size()),
                    outbuf.data(),
                    thrust::make_discard_iterator(),

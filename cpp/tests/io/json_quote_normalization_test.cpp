@@ -21,7 +21,6 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -52,12 +51,9 @@ void run_test(const std::string& host_input, const std::string& expected_host_ou
                                 host_input.size(),
                                 cudaMemcpyHostToDevice,
                                 cudf::test::get_default_stream().value()));
-  auto device_input_span = cudf::device_span<std::byte>(
-    reinterpret_cast<std::byte*>(device_input.data()), device_input.size());
-
   // Preprocessing FST
   auto device_fst_output = cudf::io::json::detail::normalize_single_quotes(
-    device_input_span, cudf::test::get_default_stream(), rsc.get());
+    std::move(device_input), cudf::test::get_default_stream(), rsc.get());
 
   std::string preprocessed_host_output(device_fst_output.size(), 0);
   CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),

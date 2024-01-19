@@ -227,18 +227,13 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
+  auto buffer = get_record_range_raw_input(sources, reader_opts, stream);
 
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    auto buffer_span = cudf::device_span<std::byte const>(
-      reinterpret_cast<const std::byte*>(buffer.data()), buffer.size());
-    return device_parse_nested_json(cudf::io::json::detail::normalize_single_quotes(
-                                      buffer_span, stream, rmm::mr::get_current_device_resource()),
-                                    reader_opts,
-                                    stream,
-                                    mr);
+    buffer = cudf::io::json::detail::normalize_single_quotes(
+      std::move(buffer), stream, rmm::mr::get_current_device_resource());
   }
 
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
