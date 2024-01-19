@@ -112,7 +112,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
 }
 
 template <size_type block_size, bool Nullable>
-__global__ void fused_concatenate_string_offset_kernel(
+CUDF_KERNEL void fused_concatenate_string_offset_kernel(
   column_device_view const* input_views,
   size_t const* input_offsets,
   size_t const* partition_offsets,
@@ -171,11 +171,11 @@ __global__ void fused_concatenate_string_offset_kernel(
   }
 }
 
-__global__ void fused_concatenate_string_chars_kernel(column_device_view const* input_views,
-                                                      size_t const* partition_offsets,
-                                                      size_type const num_input_views,
-                                                      size_type const output_size,
-                                                      char* output_data)
+CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const* input_views,
+                                                       size_t const* partition_offsets,
+                                                       size_type const num_input_views,
+                                                       size_type const output_size,
+                                                       char* output_data)
 {
   cudf::thread_index_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -228,9 +228,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
 
   // create output chars column
-  auto chars_column = create_chars_child_column(total_bytes, stream, mr);
-  auto d_new_chars  = chars_column->mutable_view().data<char>();
-  chars_column->set_null_count(0);
+  rmm::device_uvector<char> output_chars(total_bytes, stream, mr);
+  auto d_new_chars = output_chars.data();
 
   // create output offsets column
   auto offsets_column = make_numeric_column(
@@ -304,7 +303,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             output_chars.release(),
                              null_count,
                              std::move(null_mask));
 }
