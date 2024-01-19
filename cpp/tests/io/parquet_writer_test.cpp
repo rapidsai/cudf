@@ -1401,6 +1401,31 @@ TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
   EXPECT_EQ(max_value, std::string(max_val));
 }
 
+TEST_F(ParquetWriterTest, RowGroupMetadata)
+{
+  constexpr int num_rows = 1'000;
+  auto const ones        = thrust::make_constant_iterator(1);
+  auto const col   = cudf::test::fixed_width_column_wrapper<int>{ones, ones + num_rows, no_nulls()};
+  auto const table = table_view({col});
+
+  auto const filepath = temp_env->get_temp_filepath("RowGroupMetadata.parquet");
+  // force PLAIN encoding to make size calculation easier
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .compression(cudf::io::compression_type::ZSTD);
+  cudf::io::write_parquet(opts);
+
+  // check row group metadta to make sure total_byte_size is the uncompressed value
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_TRUE(fmd.row_groups.size() > 0);
+  EXPECT_TRUE(fmd.row_groups[0].total_byte_size >= static_cast<int64_t>(num_rows * sizeof(int)));
+}
+
+/////////////////////////////////////////////////////////////
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>
 class custom_test_memmap_sink : public cudf::io::data_sink {
