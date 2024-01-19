@@ -1416,7 +1416,7 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
       .compression(cudf::io::compression_type::ZSTD);
   cudf::io::write_parquet(opts);
 
-  // check row group metadta to make sure total_byte_size is the uncompressed value
+  // check row group metadata to make sure total_byte_size is the uncompressed value
   auto const source = cudf::io::datasource::create(filepath);
   cudf::io::parquet::detail::FileMetaData fmd;
   read_footer(source, &fmd);
