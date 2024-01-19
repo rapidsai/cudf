@@ -17,11 +17,8 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
-#include "orc.hpp"
-#include "orc_gpu.hpp"
 
 #include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/orc.hpp>
@@ -30,15 +27,13 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-#include <string>
-#include <utility>
+#include <optional>
 #include <vector>
 
 namespace cudf::io::orc::detail {
 
-namespace {
 struct reader_column_meta;
-}
+struct file_intermediate_data;
 
 /**
  * @brief Implementation for ORC reader.
@@ -62,7 +57,7 @@ class reader::impl {
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
    * @param skip_rows Number of rows to skip from the start
-   * @param num_rows_opt Optional number of rows to read
+   * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
    * @param stripes Indices of individual stripes to load if non-empty
    * @return The set of columns along with metadata
    */
@@ -71,18 +66,50 @@ class reader::impl {
                            std::vector<std::vector<size_type>> const& stripes);
 
  private:
+  /**
+   * @brief Perform all the necessary data preprocessing before creating an output table.
+   *
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
+   * @param stripes Indices of individual stripes to load if non-empty
+   */
+  void prepare_data(uint64_t skip_rows,
+                    std::optional<size_type> const& num_rows_opt,
+                    std::vector<std::vector<size_type>> const& stripes);
+
+  /**
+   * @brief Create the output table metadata from file metadata.
+   *
+   * @return Columns' metadata to output with the table read from file
+   */
+  table_metadata make_output_metadata();
+
+  /**
+   * @brief Read a chunk of data from the input source and return an output table with metadata.
+   *
+   * This function is called internally and expects all preprocessing steps have already been done.
+   *
+   * @return The output table along with columns' metadata
+   */
+  table_with_metadata read_chunk_internal();
+
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
-  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
-  aggregate_orc_metadata _metadata;
-  column_hierarchy const _selected_columns;  // Need to be after _metadata
-
+  // Reader configs
   data_type const _timestamp_type;  // Override output timestamp resolution
   bool const _use_index;            // Enable or disable attempt to use row index for parsing
   bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
   std::vector<std::string> const _decimal128_columns;   // Control decimals conversion
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
+
+  // Intermediate data for internal processing.
+  std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
+  aggregate_orc_metadata _metadata;
+  column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it
+  std::unique_ptr<file_intermediate_data> _file_itm_data;
+  std::unique_ptr<table_metadata> _output_metadata;
+  std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 };
 
 }  // namespace cudf::io::orc::detail

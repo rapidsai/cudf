@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,8 +81,6 @@ auto generate_empty_output(strings_column_view const& input,
                            rmm::cuda_stream_view stream,
                            rmm::mr::device_memory_resource* mr)
 {
-  auto chars_column = create_chars_child_column(0, stream, mr);
-
   auto offsets_column = make_numeric_column(
     data_type{type_to_id<size_type>()}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   CUDF_CUDA_TRY(cudaMemsetAsync(offsets_column->mutable_view().template data<size_type>(),
@@ -92,7 +90,7 @@ auto generate_empty_output(strings_column_view const& input,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             rmm::device_buffer{},
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -166,7 +164,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
     make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_column->release().data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -252,7 +250,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }
