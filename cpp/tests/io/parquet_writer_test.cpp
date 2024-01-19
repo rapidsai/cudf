@@ -1403,9 +1403,11 @@ TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
 
 TEST_F(ParquetWriterTest, RowGroupMetadata)
 {
+  using column_type      = int;
   constexpr int num_rows = 1'000;
   auto const ones        = thrust::make_constant_iterator(1);
-  auto const col   = cudf::test::fixed_width_column_wrapper<int>{ones, ones + num_rows, no_nulls()};
+  auto const col =
+    cudf::test::fixed_width_column_wrapper<column_type>{ones, ones + num_rows, no_nulls()};
   auto const table = table_view({col});
 
   auto const filepath = temp_env->get_temp_filepath("RowGroupMetadata.parquet");
@@ -1422,7 +1424,8 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   read_footer(source, &fmd);
 
   ASSERT_GT(fmd.row_groups.size(), 0);
-  EXPECT_GE(fmd.row_groups[0].total_byte_size, static_cast<int64_t>(num_rows * sizeof(int)));
+  EXPECT_GE(fmd.row_groups[0].total_byte_size,
+            static_cast<int64_t>(num_rows * sizeof(column_type)));
 }
 
 /////////////////////////////////////////////////////////////
