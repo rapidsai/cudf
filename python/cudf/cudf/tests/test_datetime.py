@@ -2429,3 +2429,11 @@ def test_dateimeindex_from_noniso_string():
 def test_to_datetime_errors_non_scalar_not_implemented(errors):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([1, ""], unit="s", errors=errors)
+
+
+def test_datetimeindex_dtype_np_dtype():
+    dtype = np.dtype("datetime64[ns]")
+    data = [1]
+    gdti = cudf.DatetimeIndex(data, dtype=dtype)
+    pdti = pd.DatetimeIndex(data, dtype=dtype)
+    assert_eq(gdti, pdti)
