@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,11 +60,11 @@ namespace hash {
  * rows. In this way, after all rows are aggregated, `output_values` will likely
  * be "sparse", meaning that not all rows contain the result of an aggregation.
  *
- * @tparam Map The type of the hash map
+ * @tparam SetType The type of the hash set device ref
  */
-template <typename Map>
+template <typename SetType>
 struct compute_single_pass_aggs_fn {
-  Map map;
+  SetType set;
   table_device_view input_values;
   mutable_table_device_view output_values;
   aggregation::Kind const* __restrict__ aggs;
@@ -74,7 +74,7 @@ struct compute_single_pass_aggs_fn {
   /**
    * @brief Construct a new compute_single_pass_aggs_fn functor object
    *
-   * @param map Hash map object to insert key,value pairs into.
+   * @param set_ref Hash map object to insert key,value pairs into.
    * @param input_values The table whose rows will be aggregated in the values
    * of the hash map
    * @param output_values Table that stores the results of aggregating rows of
@@ -87,13 +87,13 @@ struct compute_single_pass_aggs_fn {
    * null values should be skipped. It `true`, it is assumed `row_bitmask` is a
    * bitmask where bit `i` indicates the presence of a null value in row `i`.
    */
-  compute_single_pass_aggs_fn(Map map,
+  compute_single_pass_aggs_fn(SetType set,
                               table_device_view input_values,
                               mutable_table_device_view output_values,
                               aggregation::Kind const* aggs,
                               bitmask_type const* row_bitmask,
                               bool skip_rows_with_nulls)
-    : map(map),
+    : set(set),
       input_values(input_values),
       output_values(output_values),
       aggs(aggs),
@@ -105,10 +105,10 @@ struct compute_single_pass_aggs_fn {
   __device__ void operator()(size_type i)
   {
     if (not skip_rows_with_nulls or cudf::bit_is_set(row_bitmask, i)) {
-      auto result = map.insert(thrust::make_pair(i, i));
+      auto const result = set.insert_and_find(i);
 
       cudf::detail::aggregate_row<true, true>(
-        output_values, result.first->second, input_values, i, aggs);
+        output_values, *result.first, input_values, i, aggs);
     }
   }
 };
