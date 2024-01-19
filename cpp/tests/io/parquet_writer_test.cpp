@@ -1421,8 +1421,8 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   cudf::io::parquet::detail::FileMetaData fmd;
   read_footer(source, &fmd);
 
-  ASSERT_TRUE(fmd.row_groups.size() > 0);
-  EXPECT_TRUE(fmd.row_groups[0].total_byte_size >= static_cast<int64_t>(num_rows * sizeof(int)));
+  ASSERT_GT(fmd.row_groups.size(), 0);
+  EXPECT_GE(fmd.row_groups[0].total_byte_size, static_cast<int64_t>(num_rows * sizeof(int)));
 }
 
 /////////////////////////////////////////////////////////////
