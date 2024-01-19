@@ -94,10 +94,6 @@ class Frame(BinaryOperand, Scannable):
             zip(self._data.names, (col.dtype for col in self._data.columns))
         )
 
-    @property
-    def _has_nulls(self):
-        return any(col.has_nulls() for col in self._data.values())
-
     @_cudf_nvtx_annotate
     def serialize(self):
         # TODO: See if self._data can be serialized outright
@@ -135,13 +131,13 @@ class Frame(BinaryOperand, Scannable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _from_data(cls, data: MutableMapping):
+    def _from_data(cls, data: MutableMapping) -> Self:
         obj = cls.__new__(cls)
         Frame.__init__(obj, data)
         return obj
 
     @_cudf_nvtx_annotate
-    def _from_data_like_self(self, data: MutableMapping):
+    def _from_data_like_self(self, data: MutableMapping) -> Self:
         return self._from_data(data)
 
     @_cudf_nvtx_annotate
@@ -179,7 +175,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     @_cudf_nvtx_annotate
-    def size(self):
+    def size(self) -> int:
         """
         Return the number of elements in the underlying data.
 
@@ -272,7 +268,7 @@ class Frame(BinaryOperand, Scannable):
         raise NotImplementedError
 
     @_cudf_nvtx_annotate
-    def __len__(self):
+    def __len__(self) -> int:
         return self._num_rows
 
     @_cudf_nvtx_annotate
@@ -291,7 +287,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def equals(self, other):
+    def equals(self, other) -> bool:
         """
         Test whether two objects contain the same elements.
 
@@ -375,7 +371,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     @_cudf_nvtx_annotate
-    def values(self):
+    def values(self) -> cupy.ndarray:
         """
         Return a CuPy representation of the DataFrame.
 
@@ -391,7 +387,7 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     @_cudf_nvtx_annotate
-    def values_host(self):
+    def values_host(self) -> np.ndarray:
         """
         Return a NumPy representation of the data.
 
@@ -547,7 +543,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def where(self, cond, other=None, inplace=False):
+    def where(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
         """
         Replace values where the condition is False.
 
@@ -618,7 +614,7 @@ class Frame(BinaryOperand, Scannable):
         raise NotImplementedError
 
     @_cudf_nvtx_annotate
-    def mask(self, cond, other=None, inplace=False):
+    def mask(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
         """
         Replace values where the condition is True.
 
@@ -728,8 +724,13 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def fillna(
-        self, value=None, method=None, axis=None, inplace=False, limit=None
-    ):
+        self,
+        value=None,
+        method: Optional[Literal["ffill", "bfill", "pad", "backfill"]] = None,
+        axis=None,
+        inplace: bool = False,
+        limit=None,
+    ) -> Optional[Self]:
         """Fill null values with ``value`` or specified ``method``.
 
         Parameters
@@ -848,15 +849,15 @@ class Frame(BinaryOperand, Scannable):
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
         elif isinstance(value, cudf.DataFrame):
-            if not self.index.equals(value.index):
-                value = value.reindex(self.index)
+            if not self.index.equals(value.index):  # type: ignore[attr-defined]
+                value = value.reindex(self.index)  # type: ignore[attr-defined]
             else:
                 value = value
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
         else:
             value = {
-                key: value.reindex(self.index)
+                key: value.reindex(self.index)  # type: ignore[attr-defined]
                 if isinstance(value, cudf.Series)
                 else value
                 for key, value in value.items()
@@ -899,43 +900,13 @@ class Frame(BinaryOperand, Scannable):
         del self._data[name]
 
     @_cudf_nvtx_annotate
-    def _drop_na_columns(self, how="any", subset=None, thresh=None):
-        """
-        Drop columns containing nulls
-        """
-        out_cols = []
-
-        if subset is None:
-            df = self
-        else:
-            df = self.take(subset)
-
-        if thresh is None:
-            if how == "all":
-                thresh = 1
-            else:
-                thresh = len(df)
-
-        for name, col in df._data.items():
-            try:
-                check_col = col.nans_to_nulls()
-            except AttributeError:
-                check_col = col
-            no_threshold_valid_count = (
-                len(col) - check_col.null_count
-            ) < thresh
-            if no_threshold_valid_count:
-                continue
-            out_cols.append(name)
-
-        return self[out_cols]
-
-    @_cudf_nvtx_annotate
     def _quantile_table(
         self,
-        q,
-        interpolation="LINEAR",
-        is_sorted=False,
+        q: float,
+        interpolation: Literal[
+            "LINEAR", "LOWER", "HIGHER", "MIDPOINT", "NEAREST"
+        ] = "LINEAR",
+        is_sorted: bool = False,
         column_order=(),
         null_precedence=(),
     ):
@@ -963,7 +934,7 @@ class Frame(BinaryOperand, Scannable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_arrow(cls, data):
+    def from_arrow(cls, data: pa.Table) -> Self:
         """Convert from PyArrow Table to Frame
 
         Parameters
@@ -1140,7 +1111,7 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def _positions_from_column_names(self, column_names):
+    def _positions_from_column_names(self, column_names) -> list[int]:
         """Map each column name into their positions in the frame.
 
         The order of indices returned corresponds to the column order in this
@@ -1542,7 +1513,12 @@ class Frame(BinaryOperand, Scannable):
         ).values
 
     @_cudf_nvtx_annotate
-    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
+    def _get_sorted_inds(
+        self,
+        by=None,
+        ascending=True,
+        na_position: Literal["first", "last"] = "last",
+    ) -> ColumnBase:
         """
         Get the indices required to sort self according to the columns
         specified in by.
@@ -1556,13 +1532,14 @@ class Frame(BinaryOperand, Scannable):
             )._columns
         ]
 
-        # If given a scalar need to construct a sequence of length # of columns
-        if np.isscalar(ascending):
-            ascending = [ascending] * len(to_sort)
+        if is_scalar(ascending):
+            ascending_lst = [ascending] * len(to_sort)
+        else:
+            ascending_lst = list(ascending)
 
         return libcudf.sort.order_by(
             to_sort,
-            ascending,
+            ascending_lst,
             na_position,
             stable=True,
         )
