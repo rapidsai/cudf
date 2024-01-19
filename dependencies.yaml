@@ -457,6 +457,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          - breathe>=4.35.0
           - dask-cuda==24.2.*
           - *doxygen
           - make
@@ -619,7 +620,7 @@ dependencies:
           - fastavro>=0.22.9
           - hypothesis
           - pytest-benchmark
-          - pytest-cases<3.8.2
+          - pytest-cases>=3.8.2
           - python-snappy>=0.6.0
           - scipy
       - output_types: conda
