@@ -430,7 +430,7 @@ def _cached_intersphinx_lookup(env, node, contnode):
 def on_missing_reference(app, env, node, contnode):
     # These variables are defined outside the function to speed up the build.
     global _all_namespaces, _names_to_skip_in_cpp, \
-        _names_to_skip_in_pylibcudf,_intersphinx_extra_prefixes, \
+        _names_to_skip_in_pylibcudf, _intersphinx_extra_prefixes, \
         _domain_objects, _prefixed_domain_objects, _intersphinx_cache
 
     # Precompute and cache domains for faster lookups
