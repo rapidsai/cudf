@@ -276,14 +276,11 @@ class Frame(BinaryOperand, Scannable):
         return self._num_rows
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, **kwargs):
-        result_data = {}
-        for col_name, col in self._data.items():
-            dt = dtype.get(col_name, col.dtype)
-            if not is_dtype_equal(dt, col.dtype):
-                result_data[col_name] = col.astype(dt, copy=copy, **kwargs)
-            else:
-                result_data[col_name] = col.copy() if copy else col
+    def astype(self, dtype, copy: bool = False):
+        result_data = {
+            col_name: col.astype(dtype.get(col_name, col.dtype), copy=copy)
+            for col_name, col in self._data.items()
+        }
 
         return ColumnAccessor._create_unsafe(
             data=result_data,
