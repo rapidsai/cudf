@@ -786,14 +786,13 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     std::vector<orc_column_meta> nested_cols;
 
     // Get a list of column data types
-    std::vector<data_type> column_types;
     lvl_col_types[level] = hostdevice_vector<data_type>{0, num_columns, _stream};
+    auto& col_types      = lvl_col_types[level];
     for (auto& col : columns_level) {
       auto col_type = to_cudf_type(_metadata.get_col_type(col.id).kind,
                                    _use_np_dtypes,
                                    _timestamp_type.id(),
                                    to_cudf_decimal_type(_decimal128_columns, _metadata, col.id));
-      lvl_col_types[level].push_back(data_type{col_type});
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -802,13 +801,13 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         // follow positive scaling.
         auto const scale =
           -static_cast<size_type>(_metadata.get_col_type(col.id).scale.value_or(0));
-        column_types.emplace_back(col_type, scale);
+        col_types.push_back(data_type{col_type, scale});
       } else {
-        column_types.emplace_back(col_type);
+        col_types.push_back(data_type{col_type});
       }
 
       // Map each ORC column to its column
-      _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
+      _col_meta.orc_col_map[level][col.id] = col_types.size() - 1;
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) {
         nested_cols.emplace_back(col);
       }
@@ -943,18 +942,17 @@ void reader::impl::prepare_data(uint64_t skip_rows,
           // num_child_rows for a struct column will be same, for other nested types it will be
           // calculated.
           chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
-          chunk.dtype_id       = column_types[col_idx].id();
+          chunk.dtype_id       = col_types[col_idx].id();
           chunk.decimal_scale  = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
                                   .ff.types[columns_level[col_idx].id]
                                   .scale.value_or(0);
 
-          chunk.rowgroup_id   = rowgroup_id;
-          chunk.dtype_len     = (column_types[col_idx].id() == type_id::STRING)
-                                  ? sizeof(string_index_pair)
-                                : ((column_types[col_idx].id() == type_id::LIST) or
-                               (column_types[col_idx].id() == type_id::STRUCT))
-                                  ? sizeof(size_type)
-                                  : cudf::size_of(column_types[col_idx]);
+          chunk.rowgroup_id = rowgroup_id;
+          chunk.dtype_len = (col_types[col_idx].id() == type_id::STRING) ? sizeof(string_index_pair)
+                            : ((col_types[col_idx].id() == type_id::LIST) or
+                               (col_types[col_idx].id() == type_id::STRUCT))
+                              ? sizeof(size_type)
+                              : cudf::size_of(col_types[col_idx]);
           chunk.num_rowgroups = stripe_num_rowgroups;
           if (chunk.type_kind == orc::TIMESTAMP) { chunk.timestamp_type_id = _timestamp_type.id(); }
           if (not is_stripe_data_empty) {
@@ -1024,7 +1022,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       }
     }
 
-    for (std::size_t i = 0; i < column_types.size(); ++i) {
+    for (std::size_t i = 0; i < col_types.size(); ++i) {
       bool is_nullable = false;
       for (std::size_t j = 0; j < total_num_stripes; ++j) {
         if (chunks[j][i].strm_len[gpu::CI_PRESENT] != 0) {
@@ -1032,11 +1030,11 @@ void reader::impl::prepare_data(uint64_t skip_rows,
           break;
         }
       }
-      auto is_list_type = (column_types[i].id() == type_id::LIST);
+      auto is_list_type = (col_types[i].id() == type_id::LIST);
       auto n_rows       = (level == 0) ? rows_to_read : _col_meta.num_child_rows[i];
       // For list column, offset column will be always size + 1
       if (is_list_type) n_rows++;
-      _out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
+      _out_buffers[level].emplace_back(col_types[i], n_rows, is_nullable, _stream, _mr);
     }
 
     decode_stream_data(num_dict_entries,
