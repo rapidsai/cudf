@@ -90,23 +90,22 @@ __device__ std::size_t column_size_fn::operator()<struct_view>(std::size_t num_r
  * Note that sizes of the strings in string columns must be precomputed.
  */
 struct stripe_size_fn {
-  size_type const num_levels;
-  uint32_t const* num_rows_per_stripe;       // number of rows in each stripe
-  size_type const* const lvl_num_cols;       // number of columns in each level
-  data_type const** const lvl_col_types;     // type of each column in each level
-  gpu::ColumnDesc const** const lvl_chunks;  // data of each column in each level
+  size_type const num_levels;               // total number of nested levels
+  size_type const num_stripes;              // total number of all stripes
+  uint32_t const* num_rows_per_stripe;      // number of rows in each stripe
+  size_type const* const lvl_num_cols;      // number of columns in each level
+  size_type const* const lvl_offsets;       // prefix sum of number of columns in each level
+  data_type const* const lvl_col_types;     // type of each column in each stripe in each level
+  gpu::ColumnDesc const* const lvl_chunks;  // data of each column in each stripe in each level
 
   __device__ std::size_t column_size(std::size_t stripe_idx,
                                      size_type level,
                                      size_type col_idx) const
   {
     // TODO
-    auto const stripe_col_idx =
-      static_cast<std::size_t>(level) * static_cast<std::size_t>(num_levels) +
-      static_cast<std::size_t>(col_idx);
-
-    auto const col_type = lvl_col_types[level][col_idx];
-    auto const& chunk   = lvl_chunks[level][stripe_col_idx];
+    auto const start_col_idx = lvl_num_cols_prefix_sum[level];
+    auto const col_type      = lvl_col_types[start_col_idx + col_idx];
+    auto const& chunk        = lvl_chunks[start_col_idx + col_idx];
     return cudf::type_dispatcher(
       col_type, column_size_fn{}, chunk.num_rows, chunk.valid_map_base != nullptr);
   }

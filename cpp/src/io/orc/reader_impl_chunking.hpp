@@ -27,6 +27,9 @@
 
 namespace cudf::io::orc::detail {
 
+using cudf::detail::hostdevice_2dvector;
+using cudf::detail::hostdevice_vector;
+
 /**
  * @brief Struct to store file-level data that remains constant for all chunks being read.
  */
@@ -34,16 +37,17 @@ struct file_intermediate_data {
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
 
-  std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks;
-  //  cudf::detail::hostdevice_2dvector<gpu::RowGroup> row_groups;
-  std::vector<size_type> lvl_num_cols;                // Number of rows in each stripe.
-  std::vector<std::vector<data_type>> lvl_col_types;  // Type of each column in each level.
+  std::vector<hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks;
+  //  hostdevice_2dvector<gpu::RowGroup> row_groups;
+  std::vector<hostdevice_vector<data_type>> lvl_col_types;  // type of each column in each level
+  hostdevice_vector<size_type> lvl_num_cols;                // number of columns in each level
+  hostdevice_vector<size_type> lvl_offsets;  // prefix sum of number of columns in each level
 
   int64_t rows_to_skip;
   size_type rows_to_read;
   std::vector<metadata::stripe_source_mapping> selected_stripes;
 
-  std::vector<uint32_t> stripe_sizes;  // Number of rows in each stripe.
+  std::vector<uint32_t> stripe_sizes;  // Number of rows at root level in each stripe.
 };
 
 /**
