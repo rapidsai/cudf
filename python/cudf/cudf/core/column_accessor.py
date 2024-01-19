@@ -196,7 +196,7 @@ class ColumnAccessor(abc.MutableMapping):
     def name(self) -> Any:
         return self.level_names[-1]
 
-    @property
+    @cached_property
     def nrows(self) -> int:
         if len(self._data) == 0:
             return 0
@@ -223,7 +223,7 @@ class ColumnAccessor(abc.MutableMapping):
             return self._data
 
     def _clear_cache(self):
-        cached_properties = ("columns", "names", "_grouped_data")
+        cached_properties = ("columns", "names", "_grouped_data", "nrows")
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
