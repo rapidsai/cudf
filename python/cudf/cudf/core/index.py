@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Sequence,
@@ -233,9 +234,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def searchsorted(
         self,
         value: int,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         assert (len(self) <= 1) or (
             ascending == (self._step > 0)
@@ -285,9 +286,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
-            return column.arange(
-                self._start, self._stop, self._step, dtype=self.dtype
-            )
+            return column.as_column(self._range, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -801,22 +800,22 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _gather(self, gather_map, nullify=False, check_bounds=True):
         gather_map = cudf.core.column.as_column(gather_map)
-        return _dtype_to_index[self.dtype.type]._from_columns(
-            [self._values.take(gather_map, nullify, check_bounds)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_data(
+            {self.name: self._values.take(gather_map, nullify, check_bounds)}
         )
 
     @_cudf_nvtx_annotate
     def _apply_boolean_mask(self, boolean_mask):
-        return _dtype_to_index[self.dtype.type]._from_columns(
-            [self._values.apply_boolean_mask(boolean_mask)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_data(
+            {self.name: self._values.apply_boolean_mask(boolean_mask)}
         )
 
     def repeat(self, repeats, axis=None):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return _dtype_to_index[self.dtype.type]._from_columns(
-            [self._as_int_index()._split(splits)], [self.name]
+        return _dtype_to_index[self.dtype.type]._from_data(
+            {self.name: self._as_int_index()._split(splits)}
         )
 
     def _binaryop(self, other, op: str):
@@ -2119,13 +2118,13 @@ class DatetimeIndex(GenericIndex):
         data=None,
         freq=None,
         tz=None,
-        normalize=False,
+        normalize: bool = False,
         closed=None,
-        ambiguous="raise",
-        dayfirst=False,
-        yearfirst=False,
+        ambiguous: Literal["raise"] = "raise",
+        dayfirst: bool = False,
+        yearfirst: bool = False,
         dtype=None,
-        copy=False,
+        copy: bool = False,
         name=None,
     ):
         # we should be more strict on what we accept here but
@@ -2148,22 +2147,20 @@ class DatetimeIndex(GenericIndex):
 
         self._freq = _validate_freq(freq)
 
-        valid_dtypes = tuple(
-            f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
-        )
         if dtype is None:
             # nanosecond default matches pandas
             dtype = "datetime64[ns]"
-        elif dtype not in valid_dtypes:
-            raise TypeError("Invalid dtype")
+        dtype = cudf.dtype(dtype)
+        if dtype.kind != "M":
+            raise TypeError("dtype must be a datetime type")
 
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
         if self._freq is not None:
             unique_vals = self.to_series().diff().unique()
@@ -2205,9 +2202,9 @@ class DatetimeIndex(GenericIndex):
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         value = self.dtype.type(value)
         return super().searchsorted(
@@ -2841,8 +2838,8 @@ class TimedeltaIndex(GenericIndex):
         unit=None,
         freq=None,
         closed=None,
-        dtype="timedelta64[ns]",
-        copy=False,
+        dtype=None,
+        copy: bool = False,
         name=None,
     ):
         if freq is not None:
@@ -2854,19 +2851,19 @@ class TimedeltaIndex(GenericIndex):
                 "dtype parameter is supported"
             )
 
-        valid_dtypes = tuple(
-            f"timedelta64[{res}]" for res in ("s", "ms", "us", "ns")
-        )
-        if dtype not in valid_dtypes:
-            raise TypeError("Invalid dtype")
+        if dtype is None:
+            dtype = "timedelta64[ns]"
+        dtype = cudf.dtype(dtype)
+        if dtype.kind != "m":
+            raise TypeError("dtype must be a timedelta type")
 
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
     def __getitem__(self, index):
         value = super().__getitem__(index)

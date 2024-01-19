@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,12 +111,12 @@ auto create_device_views(host_span<column_view const> views, rmm::cuda_stream_vi
  * @param out_valid_count To hold the total number of valid bits set
  */
 template <size_type block_size>
-__global__ void concatenate_masks_kernel(column_device_view const* views,
-                                         size_t const* output_offsets,
-                                         size_type number_of_views,
-                                         bitmask_type* dest_mask,
-                                         size_type number_of_mask_bits,
-                                         size_type* out_valid_count)
+CUDF_KERNEL void concatenate_masks_kernel(column_device_view const* views,
+                                          size_t const* output_offsets,
+                                          size_type number_of_views,
+                                          bitmask_type* dest_mask,
+                                          size_type number_of_mask_bits,
+                                          size_type* out_valid_count)
 {
   auto tidx         = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -187,11 +187,11 @@ size_type concatenate_masks(host_span<column_view const> views,
 
 namespace {
 template <typename T, size_type block_size, bool Nullable>
-__global__ void fused_concatenate_kernel(column_device_view const* input_views,
-                                         size_t const* input_offsets,
-                                         size_type num_input_views,
-                                         mutable_column_device_view output_view,
-                                         size_type* out_valid_count)
+CUDF_KERNEL void fused_concatenate_kernel(column_device_view const* input_views,
+                                          size_t const* input_offsets,
+                                          size_type num_input_views,
+                                          mutable_column_device_view output_view,
+                                          size_type* out_valid_count)
 {
   auto const output_size = output_view.size();
   auto* output_data      = output_view.data<T>();

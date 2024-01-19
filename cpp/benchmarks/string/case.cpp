@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,18 +43,18 @@ void bench_case(nvbench::state& state)
   if (encoding == "ascii") {
     data_profile ascii_profile = data_profile_builder().no_validity().distribution(
       cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
-    auto input = cudf::strings_column_view(col_view);
-    auto ascii_column =
-      create_random_column(cudf::type_id::INT8, row_count{input.chars_size()}, ascii_profile);
+    auto input        = cudf::strings_column_view(col_view);
+    auto ascii_column = create_random_column(
+      cudf::type_id::INT8, row_count{input.chars_size(cudf::get_default_stream())}, ascii_profile);
     auto ascii_data = ascii_column->view();
 
     col_view = cudf::column_view(col_view.type(),
                                  col_view.size(),
-                                 nullptr,
+                                 ascii_data.data<char>(),
                                  col_view.null_mask(),
                                  col_view.null_count(),
                                  0,
-                                 {input.offsets(), ascii_data});
+                                 {input.offsets()});
 
     ascii_contents = ascii_column->release();
   }
@@ -62,9 +62,9 @@ void bench_case(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  state.add_element_count(input.chars_size(), "chars_size");
-  state.add_global_memory_reads<nvbench::int8_t>(input.chars_size());
-  state.add_global_memory_writes<nvbench::int8_t>(input.chars_size());
+  state.add_element_count(input.chars_size(cudf::get_default_stream()), "chars_size");
+  state.add_global_memory_reads<nvbench::int8_t>(input.chars_size(cudf::get_default_stream()));
+  state.add_global_memory_writes<nvbench::int8_t>(input.chars_size(cudf::get_default_stream()));
 
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto result = cudf::strings::to_lower(input); });

@@ -137,7 +137,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }
@@ -187,13 +187,12 @@ std::unique_ptr<column> make_strings_column(CharIterator chars_begin,
                       [] __device__(auto offset) { return static_cast<int32_t>(offset); }));
 
   // build chars column
-  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
-  auto chars_view   = chars_column->mutable_view();
-  thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_view.data<char>());
+  rmm::device_uvector<char> chars_data(bytes, stream, mr);
+  thrust::copy(rmm::exec_policy(stream), chars_begin, chars_end, chars_data.begin());
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars_data.release(),
                              null_count,
                              std::move(null_mask));
 }
