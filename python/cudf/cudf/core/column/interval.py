@@ -78,7 +78,9 @@ class IntervalColumn(StructColumn):
         struct_copy = super().copy(deep=deep)
         return IntervalColumn(
             size=struct_copy.size,
-            dtype=IntervalDtype(struct_copy.dtype.subtype, self.dtype.closed),
+            dtype=IntervalDtype(
+                struct_copy.dtype.fields["left"], self.dtype.closed
+            ),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
