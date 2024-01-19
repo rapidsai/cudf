@@ -374,12 +374,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     });
 
   // use this utility to gather the string parts into a contiguous chars column
-  auto chars = make_strings_column(indices.begin(), indices.end(), stream, mr);
-  // TODO ideally we can pass this chars_data as rmm buffer to make_strings_column
-  auto chars_data       = chars->release().data;
-  auto const chars_size = chars_data->size();
-  auto chars_col        = std::make_unique<cudf::column>(
-    data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0);
+  auto chars      = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto chars_data = chars->release().data;
 
   // create offsets from the sizes
   offsets =
@@ -388,7 +384,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // build the strings columns from the chars and offsets
   return make_strings_column(strings_count,
                              std::move(offsets),
-                             std::move(chars_col),
+                             std::move(chars_data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -458,12 +454,12 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
   auto d_targets      = column_device_view::create(targets.parent(), stream);
   auto d_replacements = column_device_view::create(repls.parent(), stream);
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
