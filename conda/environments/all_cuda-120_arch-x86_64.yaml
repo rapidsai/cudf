@@ -73,7 +73,7 @@ dependencies:
 - pynvjitlink
 - pytest
 - pytest-benchmark
-- pytest-cases<3.8.2
+- pytest-cases>=3.8.2
 - pytest-cov
 - pytest-xdist
 - python-confluent-kafka>=1.9.0,<1.10.0a0
