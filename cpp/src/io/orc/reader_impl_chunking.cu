@@ -156,7 +156,7 @@ void reader::impl::compute_chunk_ranges()
   if (_chunk_read_info.chunk_size_limit == 0) {
     _chunk_read_info.chunk_ranges = {
       row_range{_file_itm_data.rows_to_skip, _file_itm_data.rows_to_read}};
-    return;
+    //    return;
   }
 
   // Compute string sizes for all strings column.
@@ -170,8 +170,8 @@ void reader::impl::compute_chunk_ranges()
   _file_itm_data.lvl_offsets.host_to_device_async(_stream);
   _file_itm_data.stripe_sizes.host_to_device_async(_stream);
 
-  hostdevice_vector<data_type const*> lvl_col_types(num_levels, _stream);
-  hostdevice_vector<gpu::ColumnDesc const*> lvl_chunks(num_levels, _stream);
+  hostdevice_vector<data_type const*> lvl_col_types(0, num_levels, _stream);
+  hostdevice_vector<gpu::ColumnDesc const*> lvl_chunks(0, num_levels, _stream);
   for (size_type level = 0; level < num_levels; ++level) {
     auto& col_types = _file_itm_data.lvl_col_types[level];
     col_types.host_to_device_async(_stream);
@@ -194,6 +194,17 @@ void reader::impl::compute_chunk_ranges()
                                    lvl_chunks.d_begin()});
 
   stripe_size_bytes.device_to_host_async(_stream);
+  int count{0};
+  int rows{0};
+  for (auto const& size : stripe_size_bytes) {
+    ++count;
+    std::cout << "stripe: " << count << " / " << num_stripes
+              << ", size.row_count: " << size.row_count << ", "
+              << "size.size_bytes: " << size.size_bytes << std::endl;
+    rows += size.row_count;
+  }
+  std::cout << "  total rows: " << rows << " / " << _file_itm_data.rows_to_read << std::endl;
+
   find_splits(stripe_size_bytes, 0, 0);
 }
 
