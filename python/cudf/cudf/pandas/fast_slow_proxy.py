@@ -114,7 +114,6 @@ def make_final_proxy_type(
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
     bases: Tuple = (),
-    picklable: bool = True,
 ) -> Type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
@@ -145,8 +144,6 @@ def make_final_proxy_type(
         construct said unwrapped object. See also `_maybe_wrap_result`.
     bases
         Optional tuple of base classes to insert into the mro.
-    picklable: bool
-        Whether or not the proxy object should be picklable
     Notes
     -----
     As a side-effect, this function adds `fast_type` and `slow_type`
@@ -247,7 +244,6 @@ def make_intermediate_proxy_type(
     slow_type: type,
     *,
     module: Optional[str] = None,
-    picklable: bool = True,
 ) -> Type[_IntermediateProxy]:
     """
     Defines a proxy type for a pair of "intermediate" fast and slow
@@ -264,8 +260,6 @@ def make_intermediate_proxy_type(
         The name of the class returned
     fast_type: type
     slow_type: type
-    picklable: bool
-        Whether or not the proxy object should be picklable
     """
 
     def __init__(self, *args, **kwargs):
@@ -715,6 +709,7 @@ class _FinalProxy(_FastSlowProxy):
         proxy types to be pickled and unpickled by pickling and unpickling
         the underlying wrapped types.
         """
+        # Need a local import to avoid circular import issues
         from .module_accelerator import disable_module_accelerator
 
         with disable_module_accelerator():
@@ -791,6 +786,7 @@ class _IntermediateProxy(_FastSlowProxy):
         proxy types to be pickled and unpickled by pickling and unpickling
         the underlying wrapped types.
         """
+        # Need a local import to avoid circular import issues
         from .module_accelerator import disable_module_accelerator
 
         with disable_module_accelerator():

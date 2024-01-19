@@ -557,10 +557,12 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # We cannot possibly be at the top level.
             assert frame.f_back
             calling_module = pathlib.PurePath(frame.f_back.f_code.co_filename)
-            use_real = any(
+            use_real = not calling_module.is_relative_to(
+                CUDF_PANDAS_PATH
+            ) and any(
                 calling_module.is_relative_to(path)
                 for path in loader._denylist
-            ) and not calling_module.is_relative_to(CUDF_PANDAS_PATH)
+            )
         try:
             if use_real:
                 return real[name]
