@@ -768,7 +768,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                     });
 
   // Collect number of rows in each stripe.
-  _file_itm_data.stripe_sizes.reserve(total_num_stripes);
+  _file_itm_data.stripe_sizes = hostdevice_vector<uint32_t>(0, total_num_stripes, _stream);
   for (auto const& stripe_source_mapping : selected_stripes) {
     for (auto const& stripe : stripe_source_mapping.stripe_info) {
       _file_itm_data.stripe_sizes.push_back(stripe.first->numberOfRows);

@@ -47,7 +47,7 @@ struct file_intermediate_data {
   size_type rows_to_read;
   std::vector<metadata::stripe_source_mapping> selected_stripes;
 
-  std::vector<uint32_t> stripe_sizes;  // Number of rows at root level in each stripe.
+  hostdevice_vector<uint32_t> stripe_sizes;  // Number of rows at root level in each stripe.
 };
 
 /**
