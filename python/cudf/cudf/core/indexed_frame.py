@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -3736,7 +3737,12 @@ class IndexedFrame(Frame):
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         """Cast the object to the given dtype.
 
         Parameters
@@ -3757,7 +3763,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
@@ -3848,7 +3853,7 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy, **kwargs)
+            data = super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e
