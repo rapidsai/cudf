@@ -310,9 +310,8 @@ std::unique_ptr<column> md5(table_view const& input,
   auto [offsets_column, bytes] =
     cudf::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
-  auto chars_view   = chars_column->mutable_view();
-  auto d_chars      = chars_view.data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
 
   auto const device_input = table_device_view::create(input, stream);
 
@@ -343,8 +342,7 @@ std::unique_ptr<column> md5(table_view const& input,
       }
     });
 
-  return make_strings_column(
-    input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, {});
+  return make_strings_column(input.num_rows(), std::move(offsets_column), chars.release(), 0, {});
 }
 
 }  // namespace detail
