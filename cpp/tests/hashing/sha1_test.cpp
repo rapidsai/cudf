@@ -23,8 +23,6 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
-
 class SHA1HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(SHA1HashTest, EmptyTable)

@@ -23,8 +23,6 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
-
 class SHA512HashTest : public cudf::test::BaseFixture {};
 
 TEST_F(SHA512HashTest, EmptyTable)
@@ -104,15 +102,15 @@ TEST_F(SHA512HashTest, MultiValue)
   auto const sha512_string_output2 = cudf::hashing::sha512(string_input2);
   EXPECT_EQ(string_input1.num_rows(), sha512_string_output1->size());
   EXPECT_EQ(string_input2.num_rows(), sha512_string_output2->size());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_string_output1->view(), sha512_string_results1, verbosity);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_string_output2->view(), sha512_string_results2, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_string_output1->view(), sha512_string_results1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_string_output2->view(), sha512_string_results2);
 
   auto const input1         = cudf::table_view({strings_col, ints_col, bools_col1});
   auto const input2         = cudf::table_view({strings_col, ints_col, bools_col2});
   auto const sha512_output1 = cudf::hashing::sha512(input1);
   auto const sha512_output2 = cudf::hashing::sha512(input2);
   EXPECT_EQ(input1.num_rows(), sha512_output1->size());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_output1->view(), sha512_output2->view(), verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha512_output1->view(), sha512_output2->view());
 }
 
 TEST_F(SHA512HashTest, MultiValueNulls)
