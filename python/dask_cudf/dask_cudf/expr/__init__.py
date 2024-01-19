@@ -38,7 +38,9 @@ def _override_new_expr(cls, *args, **kwargs):
     return object.__new__(cls)
 
 
-def patch_dask_expr():
-    """Monkey-patch `Expr` with meta-based dispatching"""
-    Expr.register_dispatch = classmethod(register_dispatch)
-    Expr.__new__ = _override_new_expr
+Expr.register_dispatch = classmethod(register_dispatch)
+Expr.__new__ = _override_new_expr
+
+# Make sure custom expressions and collections are defined
+import dask_cudf.expr._collection
+import dask_cudf.expr._expr
