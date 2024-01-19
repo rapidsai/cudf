@@ -117,6 +117,12 @@ class TimeDeltaColumn(ColumnBase):
             "TimeDelta Arrays is not yet implemented in cudf"
         )
 
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Timedelta(result)
+        return result
+
     @acquire_spill_lock()
     def to_arrow(self) -> pa.Array:
         mask = None

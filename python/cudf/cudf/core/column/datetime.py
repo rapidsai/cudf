@@ -346,6 +346,12 @@ class DatetimeColumn(column.ColumnBase):
             "DateTime Arrays is not yet implemented in cudf"
         )
 
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Timestamp(result)
+        return result
+
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
