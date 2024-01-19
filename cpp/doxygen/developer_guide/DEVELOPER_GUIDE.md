@@ -1197,17 +1197,15 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 ## Strings columns
 
-Strings are represented in much the same way as lists, except that the data child column is always
-a non-nullable column of `INT8` data. The parent column's type is `STRING` and contains no data,
+Strings are represented as a column with a data device buffer and a child offsets column.
+The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
 but its size represents the number of strings in the column, and its null mask represents the
 validity of each string. To summarize, the strings column children are:
 
 1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-   string in a dense column of all characters.
-2. A non-nullable column of `INT8` elements of all the characters across all the strings packed
-   together.
+   string in a dense data buffer of all characters.
 
-With this representation, `characters[offsets[i]]` is the first character of string `i`, and the
+With this representation, `data[offsets[i]]` is the first character of string `i`, and the
 size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
 this compound column representation of strings.
 

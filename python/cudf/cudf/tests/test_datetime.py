@@ -2464,3 +2464,11 @@ def test_to_datetime_dataframe_utc_true():
     result = cudf.to_datetime(data, utc=True)
     expected = pd.Series([datetime.datetime(2020, 1, 1)]).dt.tz_localize("UTC")
     assert_eq(result, expected)
+
+
+def test_datetimeindex_dtype_np_dtype():
+    dtype = np.dtype("datetime64[ns]")
+    data = [1]
+    gdti = cudf.DatetimeIndex(data, dtype=dtype)
+    pdti = pd.DatetimeIndex(data, dtype=dtype)
+    assert_eq(gdti, pdti)

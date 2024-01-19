@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,8 +49,9 @@ void convert_to_fixed_point(benchmark::State& state)
   }
 
   // bytes_processed = bytes_input + bytes_output
-  state.SetBytesProcessed(state.iterations() *
-                          (strings_view.chars_size() + rows * cudf::size_of(dtype)));
+  state.SetBytesProcessed(
+    state.iterations() *
+    (strings_view.chars_size(cudf::get_default_stream()) + rows * cudf::size_of(dtype)));
 }
 
 class StringsFromFixedPoint : public cudf::benchmark {};
@@ -74,7 +75,8 @@ void convert_from_fixed_point(benchmark::State& state)
   // bytes_processed = bytes_input + bytes_output
   state.SetBytesProcessed(
     state.iterations() *
-    (cudf::strings_column_view(results->view()).chars_size() + rows * cudf::size_of(dtype)));
+    (cudf::strings_column_view(results->view()).chars_size(cudf::get_default_stream()) +
+     rows * cudf::size_of(dtype)));
 }
 
 #define CONVERT_TO_FIXED_POINT_BMD(name, fixed_point_type)                  \

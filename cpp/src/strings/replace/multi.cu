@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,10 +74,7 @@ using target_pair = thrust::pair<size_type, size_type>;
  * @brief Helper functions for performing character-parallel replace
  */
 struct replace_multi_parallel_fn {
-  __device__ char const* get_base_ptr() const
-  {
-    return d_strings.child(strings_column_view::chars_column_index).data<char>();
-  }
+  __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
 
   __device__ size_type const* get_offsets_ptr() const
   {
@@ -377,7 +374,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     });
 
   // use this utility to gather the string parts into a contiguous chars column
-  auto chars = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto chars      = make_strings_column(indices.begin(), indices.end(), stream, mr);
+  auto chars_data = chars->release().data;
 
   // create offsets from the sizes
   offsets =
@@ -386,7 +384,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // build the strings columns from the chars and offsets
   return make_strings_column(strings_count,
                              std::move(offsets),
-                             std::move(chars->release().children.back()),
+                             std::move(chars_data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -456,12 +454,12 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
   auto d_targets      = column_device_view::create(targets.parent(), stream);
   auto d_replacements = column_device_view::create(repls.parent(), stream);
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -483,7 +481,8 @@ std::unique_ptr<column> replace(strings_column_view const& input,
     CUDF_EXPECTS(repls.size() == targets.size(), "Sizes for targets and repls must match");
 
   return (input.size() == input.null_count() ||
-          ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD))
+          ((input.chars_size(stream) / (input.size() - input.null_count())) <
+           AVG_CHAR_BYTES_THRESHOLD))
            ? replace_string_parallel(input, targets, repls, stream, mr)
            : replace_character_parallel(input, targets, repls, stream, mr);
 }
