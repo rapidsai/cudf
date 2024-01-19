@@ -98,7 +98,7 @@ std::unique_ptr<column> fill(strings_column_view const& input,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }

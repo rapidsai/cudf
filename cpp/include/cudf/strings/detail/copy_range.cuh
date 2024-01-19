@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -205,7 +205,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
 
     return make_strings_column(target.size(),
                                std::move(p_offsets_column),
-                               std::move(p_chars_column),
+                               std::move(p_chars_column->release().data.release()[0]),
                                null_count,
                                std::move(null_mask));
   }
