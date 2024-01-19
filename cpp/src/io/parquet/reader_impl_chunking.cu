@@ -819,9 +819,9 @@ std::vector<row_range> compute_page_splits_by_row(
   CUDF_EXPECTS(thrust::all_of(rmm::exec_policy(stream),
                               comp_res.begin(),
                               comp_res.end(),
-                              [] __device__(auto const& res) {
+                              cuda::proclaim_return_type<bool>([] __device__(auto const& res) {
                                 return res.status == compression_status::SUCCESS;
-                              }),
+                              })),
                "Error during decompression");
 
   // now copy the uncompressed V2 def and rep level data
