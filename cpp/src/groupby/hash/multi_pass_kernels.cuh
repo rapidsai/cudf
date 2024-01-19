@@ -96,7 +96,7 @@ struct var_hash_functor {
   __device__ inline void operator()(size_type source_index)
   {
     if (row_bitmask == nullptr or cudf::bit_is_set(row_bitmask, source_index)) {
-      auto const target_index       = *set.find(source_index);
+      auto const target_index = *set.find(source_index);
 
       auto col         = source;
       auto source_type = source.type();
