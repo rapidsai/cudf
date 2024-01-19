@@ -2118,13 +2118,13 @@ class DatetimeIndex(GenericIndex):
         data=None,
         freq=None,
         tz=None,
-        normalize=False,
+        normalize: bool = False,
         closed=None,
-        ambiguous="raise",
-        dayfirst=False,
-        yearfirst=False,
+        ambiguous: Literal["raise"] = "raise",
+        dayfirst: bool = False,
+        yearfirst: bool = False,
         dtype=None,
-        copy=False,
+        copy: bool = False,
         name=None,
     ):
         # we should be more strict on what we accept here but
@@ -2147,22 +2147,20 @@ class DatetimeIndex(GenericIndex):
 
         self._freq = _validate_freq(freq)
 
-        valid_dtypes = tuple(
-            f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
-        )
         if dtype is None:
             # nanosecond default matches pandas
             dtype = "datetime64[ns]"
-        elif dtype not in valid_dtypes:
-            raise TypeError("Invalid dtype")
+        dtype = cudf.dtype(dtype)
+        if dtype.kind != "M":
+            raise TypeError("dtype must be a datetime type")
 
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
         if self._freq is not None:
             unique_vals = self.to_series().diff().unique()
