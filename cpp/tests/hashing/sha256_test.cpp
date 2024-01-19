@@ -16,6 +16,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/hashing.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -52,8 +53,20 @@ TEST_F(SHA256HashTest, MultiValue)
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
      "the hash function being tested. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
-     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"});
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~",
+     "Multi-byte characters: é¼³⅝"});
 
+  /*
+  These outputs can be generated with shell:
+  ```
+  echo -n "input string" | sha256sum
+  ```
+  Or with Python:
+  ```
+  import hashlib
+  print(hashlib.sha256("input string".encode()).hexdigest())
+  ```
+  */
   cudf::test::strings_column_wrapper const sha256_string_results1(
     {"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
      "5feceb66ffc86f38d952786c6d696c79c2dbc239dd4e91b46729d73a27fb57e9",
@@ -62,7 +75,8 @@ TEST_F(SHA256HashTest, MultiValue)
      "10a7d211e692c6f71bb9f7524ba1437588c2797356f05fc585340f002fe7015e",
      "339d610dcb030bb4222bcf18c8ab82d911bfe7fb95b2cd9f6785fd4562b02401",
      "2ce9936a4a2234bf8a76c37d92e01d549d03949792242e7f8a1ad68575e4e4a8",
-     "255fdd4d80a72f67921eb36f3e1157ea3e995068cee80e430c034e0d3692f614"});
+     "255fdd4d80a72f67921eb36f3e1157ea3e995068cee80e430c034e0d3692f614",
+     "9f9a89d448937f853c0067a3e2cb732d703eca971e3fb0f88fc73a730b7a85f4"});
 
   cudf::test::strings_column_wrapper const sha256_string_results2(
     {"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -72,16 +86,16 @@ TEST_F(SHA256HashTest, MultiValue)
      "224e4dce71d5dbd5e79ba65aaced7ad9c4f45dda146278087b2b61d164f056f0",
      "91f3108d4e9c696fdb37ae49fdc6a2237f1d1f977b7216406cc8a6365355f43b",
      "490be480afe271685e9c1fdf46daac0b9bf7f25602e153ca92a0ddb0e4b662ef",
-     "4ddc45855d7ce3ab09efacff1fbafb33502f7dd468dc5a62826689c1c658dbce"});
+     "4ddc45855d7ce3ab09efacff1fbafb33502f7dd468dc5a62826689c1c658dbce",
+     "bed32be19e1f432f5caec2b8bf914a968dfa5a5cba3868ea640ba9cbb0f9c9c8"});
 
   using limits = std::numeric_limits<int32_t>;
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
-    {0, 100, -100, limits::min(), limits::max(), 1, 2, 3});
+    {0, -1, 100, -100, limits::min(), limits::max(), 1, 2, 3});
 
-  // Different truth values should be equal
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0, 1, 1, 1});
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0, 1, 2, 255});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0, 1, 1, 1, 0});
 
+  // Test string inputs against known outputs
   auto const string_input1         = cudf::table_view({strings_col});
   auto const string_input2         = cudf::table_view({strings_col, strings_col});
   auto const sha256_string_output1 = cudf::hashing::sha256(string_input1);
@@ -91,53 +105,50 @@ TEST_F(SHA256HashTest, MultiValue)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha256_string_output1->view(), sha256_string_results1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha256_string_output2->view(), sha256_string_results2);
 
-  auto const input1         = cudf::table_view({strings_col, ints_col, bools_col1});
-  auto const input2         = cudf::table_view({strings_col, ints_col, bools_col2});
+  // Test non-string inputs for self-consistency
+  auto const input1         = cudf::table_view({strings_col, ints_col, bools_col});
+  auto const input2         = cudf::table_view({strings_col, ints_col, bools_col});
   auto const sha256_output1 = cudf::hashing::sha256(input1);
   auto const sha256_output2 = cudf::hashing::sha256(input2);
   EXPECT_EQ(input1.num_rows(), sha256_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(sha256_output1->view(), sha256_output2->view());
 }
-
-TEST_F(SHA256HashTest, MultiValueNulls)
+TEST_F(SHA256HashTest, EmptyNullEquivalence)
 {
-  // Nulls with different values should be equal
-  cudf::test::strings_column_wrapper const strings_col1(
-    {"",
-     "Different but null!",
-     "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
-     "the hash function being tested. This string needed to be longer.",
-     "All work and no play makes Jack a dull boy",
-     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~"},
-    {1, 0, 0, 1, 0});
-  cudf::test::strings_column_wrapper const strings_col2(
-    {"",
-     "Another string that is null.",
-     "Very different... but null",
-     "All work and no play makes Jack a dull boy",
-     ""},
-    {1, 0, 0, 1, 1});  // empty string is equivalent to null
+  // Test that empty strings hash the same as nulls
+  cudf::test::strings_column_wrapper const strings_col1({"", ""}, {1, 0});
+  cudf::test::strings_column_wrapper const strings_col2({"", ""}, {0, 1});
 
-  // Nulls with different values should be equal
-  using limits = std::numeric_limits<int32_t>;
-  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col1(
-    {0, 100, -100, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
-  cudf::test::fixed_width_column_wrapper<int32_t> const ints_col2(
-    {0, -200, 200, limits::min(), limits::max()}, {1, 0, 0, 1, 1});
-
-  // Nulls with different values should be equal
-  // Different truth values should be equal
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
-
-  auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
-  auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
+  auto const input1 = cudf::table_view({strings_col1});
+  auto const input2 = cudf::table_view({strings_col2});
 
   auto const output1 = cudf::hashing::sha256(input1);
   auto const output2 = cudf::hashing::sha256(input2);
 
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
+}
+
+TEST_F(SHA256HashTest, ListsUnsupported)
+{
+  cudf::test::lists_column_wrapper<cudf::string_view> strings_list_col(
+    {{""},
+     {"", "Some inputs"},
+     {"All ", "work ", "and", " no", " play ", "makes Jack", " a dull boy"},
+     {"!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`", "{|}~"}});
+
+  auto const input = cudf::table_view({strings_list_col});
+
+  EXPECT_THROW(cudf::hashing::sha256(input), cudf::logic_error);
+}
+
+TEST_F(SHA256HashTest, StructsUnsupported)
+{
+  auto child_col   = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
+  auto struct_col  = cudf::test::structs_column_wrapper{{child_col}};
+  auto const input = cudf::table_view({struct_col});
+
+  EXPECT_THROW(cudf::hashing::sha256(input), cudf::logic_error);
 }
 
 template <typename T>

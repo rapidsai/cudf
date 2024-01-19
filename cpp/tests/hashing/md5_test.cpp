@@ -35,29 +35,43 @@ TEST_F(MD5HashTest, MultiValue)
      "A very long (greater than 128 bytes/char string) to test a multi hash-step data point in the "
      "MD5 hash function. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
-     R"(!"#$%&'()*+,-./0123456789:;<=>?@[\]^_`{|}~)"});
+     "!\"#$%&\'()*+,-./0123456789:;<=>?@[\\]^_`{|}~",
+     "Multi-byte characters: é¼³⅝"});
 
+  /*
+  These outputs can be generated with shell:
+  ```
+  echo -n "input string" | md5sum
+  ```
+  Or with Python:
+  ```
+  import hashlib
+  print(hashlib.md5("input string".encode()).hexdigest())
+  ```
+  */
   cudf::test::strings_column_wrapper const md5_string_results1(
     {"d41d8cd98f00b204e9800998ecf8427e",
      "682240021651ae166d08fe2a014d5c09",
      "3669d5225fddbb34676312ca3b78bbd9",
      "c61a4185135eda043f35e92c3505e180",
-     "52da74c75cb6575d25be29e66bd0adde"});
+     "52da74c75cb6575d25be29e66bd0adde",
+     "65d1f8a3274d134f1ea9e6e854c72caa"});
 
   cudf::test::strings_column_wrapper const md5_string_results2(
     {"d41d8cd98f00b204e9800998ecf8427e",
      "e5a5682e82278e78dbaad9a689df7a73",
      "4121ab1bb6e84172fd94822645862ae9",
      "28970886501efe20164213855afe5850",
-     "6bc1b872103cc6a02d882245b8516e2e"});
+     "6bc1b872103cc6a02d882245b8516e2e",
+     "0772a7e13ec8fef61474c131598762f7"});
 
   using limits = std::numeric_limits<int32_t>;
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
-    {0, 100, -100, limits::min(), limits::max()});
+    {0, -1, 100, -100, limits::min(), limits::max()});
 
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0, 1});
 
-  // Test against known outputs
+  // Test string inputs against known outputs
   auto const string_input1      = cudf::table_view({strings_col});
   auto const string_input2      = cudf::table_view({strings_col, strings_col});
   auto const md5_string_output1 = cudf::hashing::md5(string_input1);
