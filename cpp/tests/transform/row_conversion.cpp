@@ -14,26 +14,20 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/io/parquet.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/row_conversion.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/random.hpp>
-#include <cudf_test/table_utilities.hpp>
-
-#include <rmm/exec_policy.hpp>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <limits>
+#include <random>
 
 struct ColumnToRowTests : public cudf::test::BaseFixture {};
 struct RowToColumnTests : public cudf::test::BaseFixture {};
@@ -833,19 +827,7 @@ TEST_F(RowToColumnTests, SimpleString)
   EXPECT_EQ(new_rows.size(), 1);
   for (auto& row : new_rows) {
     auto new_cols = cudf::convert_from_rows(cudf::lists_column_view(*row), schema);
-
     EXPECT_EQ(row->size(), 5);
-    auto const num_columns = new_cols->num_columns();
-
-    cudf::strings_column_view str_col = new_cols->get_column(1).view();
-    std::vector<thrust::host_vector<int8_t>> col_data;
-    std::vector<thrust::host_vector<cudf::size_type>> offset_data;
-    for (int i = 0; i < num_columns; ++i) {
-      offset_data.emplace_back(
-        std::get<0>(cudf::test::to_host<cudf::size_type>(str_col.offsets())));
-      col_data.emplace_back(std::get<0>(cudf::test::to_host<int8_t>(str_col.chars())));
-    }
-
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(in, *new_cols);
   }
 }

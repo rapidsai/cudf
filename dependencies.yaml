@@ -534,16 +534,19 @@ dependencies:
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - pynvjitlink
           - matrix: {cuda: "11.*"}
             packages:
               - cubinlinker
               - ptxcompiler
-          - {matrix: null, packages: null}
       - output_types: [requirements, pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
               - rmm-cu12==24.2.*
+              - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
               - rmm-cu11==24.2.*
