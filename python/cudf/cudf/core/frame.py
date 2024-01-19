@@ -1519,7 +1519,7 @@ class Frame(BinaryOperand, Scannable):
     def _get_sorted_inds(
         self,
         by=None,
-        ascending: bool = True,
+        ascending=True,
         na_position: Literal["first", "last"] = "last",
     ) -> ColumnBase:
         """
@@ -1535,7 +1535,10 @@ class Frame(BinaryOperand, Scannable):
             )._columns
         ]
 
-        ascending_lst = [ascending] * len(to_sort)
+        if is_scalar(ascending):
+            ascending_lst = [ascending] * len(to_sort)
+        else:
+            ascending_lst = list(ascending)
 
         return libcudf.sort.order_by(
             to_sort,
