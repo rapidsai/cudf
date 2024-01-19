@@ -68,26 +68,10 @@ std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_colu
   rmm::cuda_stream_view stream)
 {
   // no need for copies, just transfer ownership of the data_buffers to the columns
-  auto const state = mask_state::UNALLOCATED;
-  auto str_col =
-    _string_data.is_empty()
-      ? make_empty_column(data_type{type_id::INT8})
-      : std::make_unique<column>(data_type{type_id::INT8},
-                                 string_size(),
-                                 std::move(_string_data),
-                                 cudf::detail::create_null_mask(size, state, stream, _mr),
-                                 state_null_count(state, size),
-                                 std::vector<std::unique_ptr<column>>{});
-  auto offsets_col =
-    std::make_unique<column>(data_type{type_to_id<size_type>()},
-                             size + 1,
-                             std::move(_data),
-                             cudf::detail::create_null_mask(size + 1, state, stream, _mr),
-                             state_null_count(state, size + 1),
-                             std::vector<std::unique_ptr<column>>{});
-
+  auto offsets_col = std::make_unique<column>(
+    data_type{type_to_id<size_type>()}, size + 1, std::move(_data), rmm::device_buffer{}, 0);
   return make_strings_column(
-    size, std::move(offsets_col), std::move(str_col), null_count(), std::move(_null_mask));
+    size, std::move(offsets_col), std::move(_string_data), null_count(), std::move(_null_mask));
 }
 
 namespace {

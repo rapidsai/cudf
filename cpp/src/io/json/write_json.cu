@@ -170,12 +170,12 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
   {
-    auto children =
+    auto [offsets_column, chars_column] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
     return make_strings_column(column_v.size(),
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets_column),
+                               std::move(chars_column->release().data.release()[0]),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream, mr));
   }
@@ -347,13 +347,11 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                  d_strview_offsets + row_string_offsets.size(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
-  auto chars_data       = joined_col->release().data;
-  auto const chars_size = chars_data->size();
+  auto chars_data = joined_col->release().data;
   return make_strings_column(
     strings_columns.num_rows(),
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::make_unique<cudf::column>(
-      data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0),
+    std::move(chars_data.release()[0]),
     0,
     {});
 }
@@ -472,13 +470,11 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                  d_strview_offsets.end(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
-  auto chars_data       = joined_col->release().data;
-  auto const chars_size = chars_data->size();
+  auto chars_data = joined_col->release().data;
   return make_strings_column(
     num_lists,
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::make_unique<cudf::column>(
-      data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0),
+    std::move(chars_data.release()[0]),
     lists_strings.null_count(),
     cudf::detail::copy_bitmask(lists_strings.parent(), stream, mr));
 }
@@ -780,11 +776,7 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
     rmm::device_buffer{},
     0);
   return cudf::make_strings_column(
-    host_strings.size(),
-    std::move(d_offsets),
-    std::make_unique<cudf::column>(std::move(d_chars), rmm::device_buffer{}, 0),
-    0,
-    {});
+    host_strings.size(), std::move(d_offsets), d_chars.release(), 0, {});
 }
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
