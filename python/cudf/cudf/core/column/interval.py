@@ -62,7 +62,7 @@ class IntervalColumn(StructColumn):
 
     @classmethod
     def from_struct_column(cls, struct_column: StructColumn, closed="right"):
-        first_field_name = list(struct_column.dtype.fields.keys())[0]
+        first_field_name = next(iter(struct_column.dtype.fields.keys()))
         return IntervalColumn(
             size=struct_column.size,
             dtype=IntervalDtype(
@@ -78,9 +78,7 @@ class IntervalColumn(StructColumn):
         struct_copy = super().copy(deep=deep)
         return IntervalColumn(
             size=struct_copy.size,
-            dtype=IntervalDtype(
-                struct_copy.dtype.fields["left"], self.dtype.closed
-            ),
+            dtype=IntervalDtype(struct_copy.dtype.subtype, self.dtype.closed),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -97,7 +95,7 @@ class IntervalColumn(StructColumn):
                 # when creating an interval series or interval dataframe
                 if dtype == "interval":
                     dtype = IntervalDtype(
-                        self.dtype.fields["left"], self.dtype.closed
+                        self.dtype.subtype, self.dtype.closed
                     )
                 children = self.children
                 return IntervalColumn(
