@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -291,38 +292,6 @@ class IndexedFrame(Frame):
         out._data._level_names = self._data._level_names
         return out
 
-    @classmethod
-    @_cudf_nvtx_annotate
-    def _from_columns(
-        cls,
-        columns: List[ColumnBase],
-        column_names: List[str],
-        index_names: Optional[List[str]] = None,
-    ):
-        """Construct a `Frame` object from a list of columns.
-
-        If `index_names` is set, the first `len(index_names)` columns are
-        used to construct the index of the frame.
-        """
-        data_columns = columns
-        index = None
-
-        if index_names is not None:
-            n_index_columns = len(index_names)
-            data_columns = columns[n_index_columns:]
-            index = _index_from_columns(columns[:n_index_columns])
-            if isinstance(index, cudf.MultiIndex):
-                index.names = index_names
-            else:
-                index.name = index_names[0]
-
-        out = super()._from_columns(data_columns, column_names)
-
-        if index is not None:
-            out._index = index
-
-        return out
-
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
@@ -343,9 +312,24 @@ class IndexedFrame(Frame):
         """
         if column_names is None:
             column_names = self._column_names
-        frame = self.__class__._from_columns(
-            columns, column_names, index_names
-        )
+
+        data_columns = columns
+        index = None
+
+        if index_names is not None:
+            n_index_columns = len(index_names)
+            data_columns = columns[n_index_columns:]
+            index = _index_from_columns(columns[:n_index_columns])
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+
+        data = dict(zip(column_names, data_columns))
+        frame = self.__class__._from_data(data)
+
+        if index is not None:
+            frame._index = index
         return frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
@@ -2455,7 +2439,9 @@ class IndexedFrame(Frame):
             out.columns = self._data.to_pandas_index()
         return out
 
-    def _n_largest_or_smallest(self, largest, n, columns, keep):
+    def _n_largest_or_smallest(
+        self, largest: bool, n: int, columns, keep: Literal["first", "last"]
+    ):
         # Get column to operate on
         if isinstance(columns, str):
             columns = [columns]
@@ -3083,6 +3069,38 @@ class IndexedFrame(Frame):
             )
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    @_cudf_nvtx_annotate
+    def _drop_na_columns(self, how="any", subset=None, thresh=None):
+        """
+        Drop columns containing nulls
+        """
+        out_cols = []
+
+        if subset is None:
+            df = self
+        else:
+            df = self.take(subset)
+
+        if thresh is None:
+            if how == "all":
+                thresh = 1
+            else:
+                thresh = len(df)
+
+        for name, col in df._data.items():
+            try:
+                check_col = col.nans_to_nulls()
+            except AttributeError:
+                check_col = col
+            no_threshold_valid_count = (
+                len(col) - check_col.null_count
+            ) < thresh
+            if no_threshold_valid_count:
+                continue
+            out_cols.append(name)
+
+        return self[out_cols]
 
     def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
@@ -3753,7 +3771,12 @@ class IndexedFrame(Frame):
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         """Cast the object to the given dtype.
 
         Parameters
@@ -3774,7 +3797,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
@@ -3865,7 +3887,7 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy, **kwargs)
+            data = super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e
