@@ -237,7 +237,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
 
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
-                               std::move(chars_column),
+                               std::move(chars_column->release().data.release()[0]),
                                null_count,
                                std::move(null_mask));
   }

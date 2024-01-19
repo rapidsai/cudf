@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
@@ -23,7 +23,7 @@ import errno
 import io
 import os
 
-from cudf.api.types import is_struct_dtype
+from cudf.core.dtypes import StructDtype
 
 
 # Converts the Python source input to libcudf IO source_info
@@ -172,7 +172,7 @@ cdef Column update_column_struct_field_names(
             )
         col.set_base_children(tuple(children))
 
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, StructDtype):
         field_names.reserve(len(col.base_children))
         for i in range(info.children.size()):
             field_names.push_back(info.children[i].name)

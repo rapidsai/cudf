@@ -957,9 +957,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         raise NotImplementedError()
 
-    def astype(
-        self, dtype: Dtype, copy: bool = False, format: str | None = None
-    ) -> ColumnBase:
+    def astype(self, dtype: Dtype, copy: bool = False) -> ColumnBase:
         if copy:
             col = self.copy()
         else:
@@ -999,7 +997,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     f"Casting to {dtype} is not supported, use "
                     "`.astype('str')` instead."
                 )
-            return col.as_string_column(dtype, format=format)
+            return col.as_string_column(dtype)
         elif isinstance(dtype, (ListDtype, StructDtype)):
             if not col.dtype == dtype:
                 raise NotImplementedError(
@@ -1011,9 +1009,9 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             return col.as_decimal_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.datetime64):
-            return col.as_datetime_column(dtype, format=format)
+            return col.as_datetime_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.timedelta64):
-            return col.as_timedelta_column(dtype, format=format)
+            return col.as_timedelta_column(dtype)
         else:
             return col.as_numerical_column(dtype)
 

@@ -144,17 +144,6 @@ class Frame(BinaryOperand, Scannable):
     def _from_data_like_self(self, data: MutableMapping):
         return self._from_data(data)
 
-    @classmethod
-    @_cudf_nvtx_annotate
-    def _from_columns(
-        cls,
-        columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
-    ):
-        """Construct a `Frame` object from a list of columns."""
-        data = {name: columns[i] for i, name in enumerate(column_names)}
-        return cls._from_data(data)
-
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
@@ -169,7 +158,8 @@ class Frame(BinaryOperand, Scannable):
         """
         if column_names is None:
             column_names = self._column_names
-        frame = self.__class__._from_columns(columns, column_names)
+        data = dict(zip(column_names, columns))
+        frame = self.__class__._from_data(data)
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     @_cudf_nvtx_annotate
@@ -286,14 +276,11 @@ class Frame(BinaryOperand, Scannable):
         return self._num_rows
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, **kwargs):
-        result_data = {}
-        for col_name, col in self._data.items():
-            dt = dtype.get(col_name, col.dtype)
-            if not is_dtype_equal(dt, col.dtype):
-                result_data[col_name] = col.astype(dt, copy=copy, **kwargs)
-            else:
-                result_data[col_name] = col.copy() if copy else col
+    def astype(self, dtype, copy: bool = False):
+        result_data = {
+            col_name: col.astype(dtype.get(col_name, col.dtype), copy=copy)
+            for col_name, col in self._data.items()
+        }
 
         return ColumnAccessor._create_unsafe(
             data=result_data,
