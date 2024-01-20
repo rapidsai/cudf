@@ -232,8 +232,8 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    buffer = cudf::io::json::detail::normalize_single_quotes(
-      std::move(buffer), stream, rmm::mr::get_current_device_resource());
+    buffer =
+      normalize_single_quotes(std::move(buffer), stream, rmm::mr::get_current_device_resource());
   }
 
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
