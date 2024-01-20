@@ -3313,11 +3313,21 @@ class IntervalIndex(GenericIndex):
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
-        breaks = column.as_column(breaks, dtype=dtype)
+        breaks = as_column(breaks, dtype=dtype)
         if copy:
             breaks = breaks.copy()
-        left_col = breaks.slice(0, -1)
+        left_col = breaks.slice(0, len(breaks) - 1)
         right_col = breaks.slice(1, len(breaks))
+        # For indexing, children should both have 0 offset
+        right_col = column.build_column(
+            data=right_col.data,
+            dtype=right_col.dtype,
+            size=right_col.size,
+            mask=right_col.mask,
+            offset=0,
+            null_count=right_col.null_count,
+            children=right_col.children,
+        )
 
         interval_col = IntervalColumn(
             dtype=IntervalDtype(left_col.dtype, closed),
