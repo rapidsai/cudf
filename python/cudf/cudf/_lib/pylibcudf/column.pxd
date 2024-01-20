@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -44,7 +44,7 @@ cdef class Column:
     cpdef gpumemoryview null_mask(self)
     cpdef list children(self)
 
-    cpdef list_view(self)
+    cpdef ListColumnView list_view(self)
 
 
 cdef class ListColumnView:
