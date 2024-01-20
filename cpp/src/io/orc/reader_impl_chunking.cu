@@ -205,7 +205,8 @@ void reader::impl::compute_chunk_ranges()
   }
   std::cout << "  total rows: " << rows << " / " << _file_itm_data.rows_to_read << std::endl;
 
-  find_splits(stripe_size_bytes, 0, 0);
+  _chunk_read_info.chunk_ranges =
+    find_splits(stripe_size_bytes, _file_itm_data.rows_to_read, _chunk_read_info.chunk_size_limit);
 }
 
 }  // namespace cudf::io::orc::detail
