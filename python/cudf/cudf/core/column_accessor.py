@@ -223,12 +223,16 @@ class ColumnAccessor(abc.MutableMapping):
             return self._data
 
     def _clear_cache(self):
-        cached_properties = ("columns", "names", "_grouped_data", "nrows")
+        cached_properties = ("columns", "names", "_grouped_data")
         for attr in cached_properties:
             try:
                 self.__delattr__(attr)
             except AttributeError:
                 pass
+
+        # nrows should only be cleared if no data is present.
+        if len(self._data) == 0 and hasattr(self, "nrows"):
+            del self.nrows
 
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
