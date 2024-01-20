@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
 
@@ -10,7 +10,7 @@ from cudf._lib.cpp.types import type_id as TypeId  # no-cython-lint
 cdef class DataType:
     """Indicator for the logical data type of an element in a column.
 
-    This is the Cython representation of libcudf's data_type.
+    This is the Cython representation of :cpp:class:`cudf::data_type`.
 
     Parameters
     ----------
