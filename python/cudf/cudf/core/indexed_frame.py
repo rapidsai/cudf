@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -2438,7 +2439,9 @@ class IndexedFrame(Frame):
             out.columns = self._data.to_pandas_index()
         return out
 
-    def _n_largest_or_smallest(self, largest, n, columns, keep):
+    def _n_largest_or_smallest(
+        self, largest: bool, n: int, columns, keep: Literal["first", "last"]
+    ):
         # Get column to operate on
         if isinstance(columns, str):
             columns = [columns]
@@ -3066,6 +3069,38 @@ class IndexedFrame(Frame):
             )
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    @_cudf_nvtx_annotate
+    def _drop_na_columns(self, how="any", subset=None, thresh=None):
+        """
+        Drop columns containing nulls
+        """
+        out_cols = []
+
+        if subset is None:
+            df = self
+        else:
+            df = self.take(subset)
+
+        if thresh is None:
+            if how == "all":
+                thresh = 1
+            else:
+                thresh = len(df)
+
+        for name, col in df._data.items():
+            try:
+                check_col = col.nans_to_nulls()
+            except AttributeError:
+                check_col = col
+            no_threshold_valid_count = (
+                len(col) - check_col.null_count
+            ) < thresh
+            if no_threshold_valid_count:
+                continue
+            out_cols.append(name)
+
+        return self[out_cols]
 
     def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
@@ -3736,7 +3771,12 @@ class IndexedFrame(Frame):
 
         return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         """Cast the object to the given dtype.
 
         Parameters
@@ -3757,7 +3797,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
@@ -3848,7 +3887,7 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy, **kwargs)
+            data = super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e
