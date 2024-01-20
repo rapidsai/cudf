@@ -139,14 +139,97 @@ struct stripe_size_fn {
   }
 };
 
-std::vector<row_range> find_splits(host_span<cumulative_row_info const> stripe_sizes,
-                                   size_t num_rows,
+std::vector<row_range> find_splits(host_span<cumulative_row_info const> sizes,
+                                   size_type num_rows,
                                    size_t chunk_read_limit)
 {
-  return {};
+  std::vector<row_range> splits;
+
+  uint32_t cur_row_count     = 0;
+  int64_t cur_pos            = 0;
+  size_t cur_cumulative_size = 0;
+  auto const start           = thrust::make_transform_iterator(
+    sizes.begin(), [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
+  auto const end = start + static_cast<int64_t>(sizes.size());
+  while (cur_row_count < static_cast<uint32_t>(num_rows)) {
+    int64_t split_pos = thrust::distance(
+      start, thrust::lower_bound(thrust::seq, start + cur_pos, end, chunk_read_limit));
+
+    // If we're past the end, or if the returned bucket is bigger than the chunk_read_limit, move
+    // back one.
+    if (static_cast<size_t>(split_pos) >= sizes.size() ||
+        (sizes[split_pos].size_bytes - cur_cumulative_size > chunk_read_limit)) {
+      split_pos--;
+    }
+
+    // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
+    // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
+    // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
+    // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
+    // either do this, or we have to call unique() on the input first.
+    while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
+           (split_pos < 0 || sizes[split_pos].row_count == cur_row_count)) {
+      split_pos++;
+    }
+
+    auto const start_row = cur_row_count;
+    cur_row_count        = sizes[split_pos].row_count;
+    splits.emplace_back(row_range{start_row, static_cast<size_type>(cur_row_count - start_row)});
+    cur_pos             = split_pos;
+    cur_cumulative_size = sizes[split_pos].size_bytes;
+  }
+
+  return splits;
+}
+
+void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
+                               std::string const& label,
+                               std::optional<std::vector<row_range>> splits = std::nullopt)
+{
+  if (splits.has_value()) {
+    printf("------------\nSplits\n");
+    for (size_t idx = 0; idx < splits->size(); idx++) {
+      printf("{%ld, %ld}\n", splits.value()[idx].start_rows, splits.value()[idx].end_rows);
+    }
+  }
+
+  printf("------------\nCumulative sizes %s\n", label.c_str());
+  for (size_t idx = 0; idx < sizes.size(); idx++) {
+    printf("{%u, %lu}", sizes[idx].row_count, sizes[idx].size_bytes);
+
+    if (splits.has_value()) {
+      // if we have a split at this row count and this is the last instance of this row count
+      auto const start = thrust::make_transform_iterator(
+        splits->begin(), [](row_range const& i) { return i.start_rows; });
+      auto const end         = start + splits->size();
+      auto const split       = std::find(start, end, sizes[idx].row_count);
+      auto const split_index = [&]() -> int {
+        if (split != end &&
+            ((idx == sizes.size() - 1) || (sizes[idx + 1].row_count > sizes[idx].row_count))) {
+          return static_cast<int>(std::distance(start, split));
+        }
+        return idx == 0 ? 0 : -1;
+      }();
+      if (split_index >= 0) {
+        printf(" <-- split {%lu, %lu}",
+               splits.value()[split_index].start_rows,
+               splits.value()[split_index].end_rows);
+      }
+    }
+
+    printf("\n");
+  }
 }
 
 #endif
+
+struct cumulative_row_sum {
+  __device__ cumulative_row_info operator()(cumulative_row_info const& a,
+                                            cumulative_row_info const& b) const
+  {
+    return cumulative_row_info{a.row_count + b.row_count, a.size_bytes + b.size_bytes};
+  }
+};
 
 }  // namespace
 
@@ -193,6 +276,12 @@ void reader::impl::compute_chunk_ranges()
                                    lvl_col_types.d_begin(),
                                    lvl_chunks.d_begin()});
 
+  thrust::inclusive_scan(rmm::exec_policy(_stream),
+                         stripe_size_bytes.d_begin(),
+                         stripe_size_bytes.d_end(),
+                         stripe_size_bytes.d_begin(),
+                         cumulative_row_sum{});
+
   stripe_size_bytes.device_to_host_async(_stream);
   int count{0};
   int rows{0};
@@ -206,7 +295,10 @@ void reader::impl::compute_chunk_ranges()
   std::cout << "  total rows: " << rows << " / " << _file_itm_data.rows_to_read << std::endl;
 
   _chunk_read_info.chunk_ranges =
-    find_splits(stripe_size_bytes, _file_itm_data.rows_to_read, _chunk_read_info.chunk_size_limit);
+    find_splits(stripe_size_bytes,
+                _file_itm_data.rows_to_read, /*_chunk_read_info.chunk_size_limit*/
+                500);
+  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunk_ranges);
 }
 
 }  // namespace cudf::io::orc::detail

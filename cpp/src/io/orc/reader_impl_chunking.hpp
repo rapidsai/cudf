@@ -55,7 +55,7 @@ struct file_intermediate_data {
  */
 struct row_range {
   int64_t start_rows;
-  size_type end_rows;
+  int64_t end_rows;
 };
 
 /**
