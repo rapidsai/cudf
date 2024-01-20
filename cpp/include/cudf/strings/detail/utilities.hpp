@@ -54,7 +54,21 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
   rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Return the threshold size for a strings column to use int64 offsets
+ *
+ * A computed size above this threshold should using int64 offsets, otherwise
+ * int32 offsets. By default this function will return std::numeric_limits<int32_t>::max().
+ * This value can be overridden at runtime using the environment variable
+ * LIBCUDF_LARGE_STRINGS_THRESHOLD.
+ *
+ * @return size in bytes
+ */
+int64_t get_offset64_threshold();
+
+/**
  * @brief Return a normalized offset value from a strings offsets column
+ *
+ * The maximum value returned is `std::numeric_limits<int32_t>::max()`.
  *
  * @throw std::invalid_argument if `offsets` is neither INT32 nor INT64
  *

@@ -861,9 +861,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                std::overflow_error);
 
   // CHARS column
-  std::unique_ptr<column> chars =
-    strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
-  auto d_chars = chars->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
 
   single_thread_fn.d_chars = d_chars;
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -902,7 +901,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   return make_strings_column(col_size,
                              std::move(offsets),
-                             std::move(chars),
+                             chars.release(),
                              d_null_count.value(stream),
                              std::move(null_mask));
 }

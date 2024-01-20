@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -215,8 +215,11 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            stream,
                            mr);
 
-  return make_strings_column(
-    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+  return make_strings_column(num_rows,
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
+                             null_count,
+                             std::move(null_mask));
 }
 
 namespace {
@@ -290,8 +293,11 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            stream,
                            mr);
 
-  return make_strings_column(
-    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+  return make_strings_column(num_rows,
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
+                             null_count,
+                             std::move(null_mask));
 }
 
 }  // namespace detail
