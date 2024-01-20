@@ -282,7 +282,7 @@ void reader::impl::compute_chunk_ranges()
                          stripe_size_bytes.d_begin(),
                          cumulative_row_sum{});
 
-  stripe_size_bytes.device_to_host_async(_stream);
+  stripe_size_bytes.device_to_host_sync(_stream);
   int count{0};
   int rows{0};
   for (auto const& size : stripe_size_bytes) {
