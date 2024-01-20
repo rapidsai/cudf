@@ -1251,10 +1251,6 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
-        # Nulls are not yet supported
-        if self.grouping._obj._has_nulls:
-            raise ValueError("Nulls not yet supported with groupby JIT engine")
-
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
         )
@@ -1445,9 +1441,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
         if engine == "auto":
-            if (not grouped_values._has_nulls) and _can_be_jitted(
-                grouped_values, function, args
-            ):
+            if _can_be_jitted(grouped_values, function, args):
                 engine = "jit"
             else:
                 engine = "cudf"
