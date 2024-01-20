@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import os
 import zoneinfo
@@ -89,8 +89,10 @@ def _read_tzfile_as_frame(tzdir, zone_name):
             [np.timedelta64(0, "s")]
         )
 
-    return DataFrame._from_columns(
-        transition_times_and_offsets, ["transition_times", "offsets"]
+    return DataFrame._from_data(
+        dict(
+            zip(["transition_times", "offsets"], transition_times_and_offsets)
+        )
     )
 
 
