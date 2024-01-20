@@ -187,13 +187,13 @@ void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
                                std::optional<std::vector<row_range>> splits = std::nullopt)
 {
   if (splits.has_value()) {
-    printf("------------\nSplits\n");
+    printf("------------\nSplits (start_rows, end_rows): \n");
     for (size_t idx = 0; idx < splits->size(); idx++) {
       printf("{%ld, %ld}\n", splits.value()[idx].start_rows, splits.value()[idx].end_rows);
     }
   }
 
-  printf("------------\nCumulative sizes %s\n", label.c_str());
+  printf("------------\nCumulative sizes (row_count, size_bytes): %s\n", label.c_str());
   for (size_t idx = 0; idx < sizes.size(); idx++) {
     printf("{%u, %lu}", sizes[idx].row_count, sizes[idx].size_bytes);
 
@@ -283,21 +283,13 @@ void reader::impl::compute_chunk_ranges()
                          cumulative_row_sum{});
 
   stripe_size_bytes.device_to_host_sync(_stream);
-  int count{0};
-  int rows{0};
-  for (auto const& size : stripe_size_bytes) {
-    ++count;
-    std::cout << "stripe: " << count << " / " << num_stripes
-              << ", size.row_count: " << size.row_count << ", "
-              << "size.size_bytes: " << size.size_bytes << std::endl;
-    rows += size.row_count;
-  }
-  std::cout << "  total rows: " << rows << " / " << _file_itm_data.rows_to_read << std::endl;
 
   _chunk_read_info.chunk_ranges =
     find_splits(stripe_size_bytes,
                 _file_itm_data.rows_to_read, /*_chunk_read_info.chunk_size_limit*/
                 500);
+
+  std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
   print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunk_ranges);
 }
 
