@@ -418,8 +418,6 @@ static void batched_compress_async(compression_type compression,
                                                     device_compressed_bytes,
                                                     nvcompBatchedLZ4DefaultOpts,
                                                     stream.value());
-      // log info
-      CUDF_LOG_WARN("nvcompBatchedLZ4CompressAsync");
       break;
     default: CUDF_FAIL("Unsupported compression type");
   }
