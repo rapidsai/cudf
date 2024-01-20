@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock
@@ -157,6 +157,8 @@ cdef compression_type _get_comp_type(object compression):
         return compression_type.ZLIB
     elif compression == "ZSTD":
         return compression_type.ZSTD
+    elif compression == "LZ4":
+        return compression_type.LZ4
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 
