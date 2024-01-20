@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -20,8 +20,4 @@ rapids_cython_create_modules(
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX io_ ASSOCIATED_TARGETS cudf
 )
 
-set(targets_using_numpy_and_arrow_headers io_datasource io_utils)
-foreach(target IN LISTS targets_using_numpy_and_arrow_headers)
-  target_include_directories(${target} PRIVATE "${NumPy_INCLUDE_DIRS}")
-  target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
-endforeach()
+link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")

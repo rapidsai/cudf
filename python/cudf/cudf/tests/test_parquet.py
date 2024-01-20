@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import glob
@@ -6,6 +6,7 @@ import math
 import os
 import pathlib
 import random
+import string
 from contextlib import contextmanager
 from io import BytesIO
 from string import ascii_letters
@@ -434,13 +435,20 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
                 dg.ColumnParameters(
                     cardinality=40,
                     null_frequency=0.05,
-                    generator=lambda g: [g.address.city() for _ in range(40)],
+                    generator=lambda: [
+                        "".join(
+                            random.sample(
+                                string.ascii_letters, random.randint(4, 8)
+                            )
+                        )
+                        for _ in range(40)
+                    ],
                     is_sorted=False,
                 ),
                 dg.ColumnParameters(
                     40,
                     0.2,
-                    lambda g: [g.person.age() for _ in range(40)],
+                    lambda: np.random.default_rng().integers(0, 100, size=40),
                     True,
                 ),
             ],
@@ -1295,7 +1303,7 @@ def delta_num_rows():
     return [1, 2, 23, 32, 33, 34, 64, 65, 66, 128, 129, 130, 20000, 50000]
 
 
-@pytest.mark.parametrize("nrows", [1, 100000])
+@pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
 @pytest.mark.parametrize(
     "dtype",
@@ -1348,24 +1356,19 @@ def test_delta_binary(nrows, add_nulls, dtype, tmpdir):
         use_dictionary=False,
     )
 
-    # FIXME(ets): should probably not use more bits than the data type
-    try:
-        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
-    except OSError as e:
-        if dtype == "int32" and nrows == 100000:
-            pytest.mark.xfail(
-                reason="arrow does not support 33-bit delta encoding"
-            )
-        else:
-            raise e
-    else:
-        assert_eq(cdf2, cdf)
+    cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+    assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
-def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
+@pytest.mark.parametrize("max_string_length", [12, 48, 96, 128])
+@pytest.mark.parametrize(
+    "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
+)
+def test_delta_byte_array_roundtrip(
+    nrows, add_nulls, max_string_length, str_encoding, tmpdir
+):
     null_frequency = 0.25 if add_nulls else 0
 
     # Create a pandas dataframe with random data of mixed lengths
@@ -1375,13 +1378,7 @@ def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
                 "dtype": "str",
                 "null_frequency": null_frequency,
                 "cardinality": nrows,
-                "max_string_length": 10,
-            },
-            {
-                "dtype": "str",
-                "null_frequency": null_frequency,
-                "cardinality": nrows,
-                "max_string_length": 100,
+                "max_string_length": max_string_length,
             },
         ],
         rows=nrows,
@@ -1403,10 +1400,24 @@ def test_delta_byte_array_roundtrip(nrows, add_nulls, str_encoding, tmpdir):
     pcdf = cudf.from_pandas(test_pdf)
     assert_eq(cdf, pcdf)
 
+    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
+    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
+        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+        pcdf.to_parquet(
+            cudf_fname,
+            compression="snappy",
+            header_version="2.0",
+            use_dictionary=False,
+        )
+        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+        assert_eq(cdf2, cdf)
+
 
 @pytest.mark.parametrize("nrows", delta_num_rows())
 @pytest.mark.parametrize("add_nulls", [True, False])
-@pytest.mark.parametrize("str_encoding", ["DELTA_BYTE_ARRAY"])
+@pytest.mark.parametrize(
+    "str_encoding", ["DELTA_BYTE_ARRAY", "DELTA_LENGTH_BYTE_ARRAY"]
+)
 def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     # Struct<List<List>>
     lists_per_row = 3
@@ -1453,7 +1464,20 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     # sanity check to verify file is written properly
     assert_eq(test_pdf, pd.read_parquet(pdf_fname))
     cdf = cudf.read_parquet(pdf_fname)
-    assert_eq(cdf, cudf.from_pandas(test_pdf))
+    pcdf = cudf.from_pandas(test_pdf)
+    assert_eq(cdf, pcdf)
+
+    # Test DELTA_LENGTH_BYTE_ARRAY writing as well
+    if str_encoding == "DELTA_LENGTH_BYTE_ARRAY":
+        cudf_fname = tmpdir.join("cdfdeltaba.parquet")
+        pcdf.to_parquet(
+            cudf_fname,
+            compression="snappy",
+            header_version="2.0",
+            use_dictionary=False,
+        )
+        cdf2 = cudf.from_pandas(pd.read_parquet(cudf_fname))
+        assert_eq(cdf2, cdf)
 
 
 @pytest.mark.parametrize(

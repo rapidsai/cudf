@@ -1,12 +1,11 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set, Tuple
+from typing import Any, Literal, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -1773,6 +1772,8 @@ class BaseIndex(Serializable):
         start = loc.start
         stop = loc.stop
         step = 1 if loc.step is None else loc.step
+        start_side: Literal["left", "right"]
+        stop_side: Literal["left", "right"]
         if step < 0:
             start_side, stop_side = "right", "left"
         else:
@@ -1796,9 +1797,9 @@ class BaseIndex(Serializable):
     def searchsorted(
         self,
         value,
-        side: builtins.str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: builtins.str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         """Find index where elements should be inserted to maintain order
 
@@ -1825,7 +1826,11 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def get_slice_bound(self, label, side: builtins.str) -> int:
+    def get_slice_bound(
+        self,
+        label,
+        side: Literal["left", "right"],
+    ) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1899,7 +1904,7 @@ class BaseIndex(Serializable):
             return NotImplemented
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=no_default):
+    def from_pandas(cls, index: pd.Index, nan_as_null=no_default):
         """
         Convert from a Pandas Index.
 

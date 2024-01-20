@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ namespace {
 constexpr int preprocess_block_size    = 512;
 constexpr int decode_block_size        = 128;
 constexpr int delta_preproc_block_size = 64;
+constexpr int delta_length_block_size  = 32;
 constexpr int rolling_buf_size         = decode_block_size * 2;
 constexpr int preproc_buf_size         = LEVEL_DECODE_BUF_SIZE;
 
@@ -78,8 +79,10 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
   // can skip all this if we know there are no nulls
   if (max_def == 0 && !is_bounds_pg) {
-    s->page.num_valids = s->num_input_values;
-    s->page.num_nulls  = 0;
+    if (t == 0) {
+      s->page.num_valids = s->num_input_values;
+      s->page.num_nulls  = 0;
+    }
     return {0, s->num_input_values};
   }
 
@@ -142,6 +145,25 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     bool skipped_values_set = false;
     bool end_value_set      = false;
 
+    // If page_start_row >= min_row, then skipped_values is 0 and we don't have to search for
+    // start_value. If there's repetition then we've already calculated
+    // skipped_values/skipped_leaf_values.
+    // TODO(ets): If we hit this condition, and end_row > last row in page, then we can skip
+    // more of the processing below.
+    if (has_repetition or page_start_row >= min_row) {
+      if (t == 0) {
+        if (has_repetition) {
+          skipped_values      = pp->skipped_values;
+          skipped_leaf_values = pp->skipped_leaf_values;
+        } else {
+          skipped_values      = 0;
+          skipped_leaf_values = 0;
+        }
+      }
+      skipped_values_set = true;
+      __syncthreads();
+    }
+
     while (processed < s->page.num_input_values) {
       thread_index_type start_val = processed;
 
@@ -151,11 +173,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
 
         // special case where page does not begin at a row boundary
         if (processed == 0 && rep_decode[0] != 0) {
-          if (t == 0) {
-            skipped_values      = 0;
-            skipped_leaf_values = 0;
-          }
-          skipped_values_set = true;
           end_row++;  // need to finish off the previous row
           row_fudge = 0;
         }
@@ -280,7 +297,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
       pp->num_nulls  = null_count;
       pp->num_valids = pp->num_input_values - null_count;
     }
-    __syncthreads();
 
     end_value -= pp->num_nulls;
   }
@@ -568,7 +584,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-__global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -600,8 +616,15 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
                                                                                       {rep_runs}};
 
   // setup page info
-  auto const mask = BitOr(decode_kernel_mask::STRING, decode_kernel_mask::DELTA_BYTE_ARRAY);
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{STRINGS_MASK},
+                          page_processing_stage::STRING_BOUNDS)) {
+    return;
+  }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
 
@@ -630,7 +653,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
+CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -644,8 +667,15 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  auto const mask = decode_kernel_mask::DELTA_BYTE_ARRAY;
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, mask_filter{mask}, true)) { return; }
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_BYTE_ARRAY},
+                          page_processing_stage::STRING_BOUNDS)) {
+    return;
+  }
 
   auto const start_value = pp->start_val;
 
@@ -673,11 +703,108 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
     auto const [len, temp_bytes] = totalDeltaByteArraySize(data, end, start_value, end_value);
 
     if (t == 0) {
-      // TODO check for overflow
       pp->str_bytes = len;
 
       // only need temp space if we're skipping values
       if (start_value > 0) { pp->temp_string_size = temp_bytes; }
+    }
+  }
+}
+
+/**
+ * @brief Kernel for computing string page output size information for DELTA_LENGTH_BYTE_ARRAY
+ * encoding.
+ *
+ * This call ignores columns that are not DELTA_LENGTH_BYTE_ARRAY encoded. On exit the `str_bytes`
+ * field of the `PageInfo` struct will be populated.
+ *
+ * Currently this function only supports being called by a single warp.
+ *
+ * @param pages All pages to be decoded
+ * @param chunks All chunks to be decoded
+ * @param min_rows crop all rows below min_row
+ * @param num_rows Maximum number of rows to read
+ */
+CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengthPageStringSizes(
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+{
+  using cudf::detail::warp_size;
+  using WarpReduce = cub::WarpReduce<uleb128_t>;
+  __shared__ typename WarpReduce::TempStorage temp_storage;
+  __shared__ __align__(16) page_state_s state_g;
+  __shared__ __align__(16) delta_binary_decoder string_lengths;
+
+  page_state_s* const s = &state_g;
+  int const page_idx    = blockIdx.x;
+  int const t           = threadIdx.x;
+  PageInfo* const pp    = &pages[page_idx];
+
+  // whether or not we have repetition levels (lists)
+  bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
+
+  // setup page info
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::DELTA_LENGTH_BA},
+                          page_processing_stage::STRING_BOUNDS)) {
+    return;
+  }
+
+  bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // for DELTA_LENGTH_BYTE_ARRAY, string size is page_data_size - size_of_delta_binary_block.
+  // so all we need to do is skip the encoded string size info and then do pointer arithmetic,
+  // if this isn't a bounds page.
+  if (not is_bounds_pg) {
+    if (t == 0) {
+      auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
+      size_t len               = static_cast<size_t>(s->data_end - string_start);
+      pp->str_bytes            = len;
+    }
+  } else {
+    // now process string info in the range [start_value, end_value)
+    // set up for decoding strings...can be either plain or dictionary
+    auto const start_value = pp->start_val;
+    auto const end_value   = pp->end_val;
+
+    if (t == 0) { string_lengths.init_binary_block(s->data_start, s->data_end); }
+    __syncwarp();
+
+    size_t total_bytes = 0;
+
+    // initialize with first value (unless there are no values)
+    if (t == 0 && start_value == 0 && start_value < end_value) {
+      total_bytes = string_lengths.value_at(0);
+    }
+
+    uleb128_t lane_sum = 0;
+    while (string_lengths.current_value_idx < end_value &&
+           string_lengths.current_value_idx < string_lengths.num_encoded_values(true)) {
+      // calculate values for current mini-block
+      string_lengths.calc_mini_block_values(t);
+
+      // get per lane sum for mini-block
+      for (uint32_t i = 0; i < string_lengths.values_per_mb; i += warp_size) {
+        uint32_t const idx = string_lengths.current_value_idx + i + t;
+        if (idx >= start_value && idx < end_value && idx < string_lengths.value_count) {
+          lane_sum += string_lengths.value[rolling_index<delta_rolling_buf_size>(idx)];
+        }
+      }
+
+      if (t == 0) { string_lengths.setup_next_mini_block(true); }
+      __syncwarp();
+    }
+
+    // get sum for warp.
+    // note: warp_sum will only be valid on lane 0.
+    auto const warp_sum = WarpReduce(temp_storage).Sum(lane_sum);
+
+    if (t == 0) {
+      total_bytes += warp_sum;
+      pp->str_bytes = total_bytes;
     }
   }
 }
@@ -693,7 +820,7 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -707,8 +834,13 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
   bool const has_repetition = chunks[pp->chunk_idx].max_level[level_type::REPETITION] > 0;
 
   // setup page info
-  if (!setupLocalPageInfo(
-        s, pp, chunks, min_row, num_rows, mask_filter{decode_kernel_mask::STRING}, true)) {
+  if (!setupLocalPageInfo(s,
+                          pp,
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::STRING},
+                          page_processing_stage::STRING_BOUNDS)) {
     return;
   }
 
@@ -780,7 +912,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeStringPageData(PageInfo* pages,
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,
@@ -801,9 +933,13 @@ __global__ void __launch_bounds__(decode_block_size)
   int const lane_id     = t % warp_size;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
-  auto const mask = decode_kernel_mask::STRING;
-  if (!setupLocalPageInfo(
-        s, &pages[page_idx], chunks, min_row, num_rows, mask_filter{mask}, true)) {
+  if (!setupLocalPageInfo(s,
+                          &pages[page_idx],
+                          chunks,
+                          min_row,
+                          num_rows,
+                          mask_filter{decode_kernel_mask::STRING},
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -834,7 +970,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 1/2 modifying src_pos before all threads have read it
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
@@ -991,15 +1127,19 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 
   // kernel mask may contain other kernels we don't need to count
-  int const count_mask =
-    kernel_mask & BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, decode_kernel_mask::STRING);
-  int const nkernels = std::bitset<32>(count_mask).count();
-  auto const streams = cudf::detail::fork_streams(stream, nkernels);
+  int const count_mask = kernel_mask & STRINGS_MASK;
+  int const nkernels   = std::bitset<32>(count_mask).count();
+  auto const streams   = cudf::detail::fork_streams(stream, nkernels);
 
   int s_idx = 0;
   if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
     dim3 dim_delta(delta_preproc_block_size, 1);
     gpuComputeDeltaPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
+      pages.device_ptr(), chunks, min_row, num_rows);
+  }
+  if (BitAnd(kernel_mask, decode_kernel_mask::DELTA_LENGTH_BA) != 0) {
+    dim3 dim_delta(delta_length_block_size, 1);
+    gpuComputeDeltaLengthPageStringSizes<<<dim_grid, dim_delta, 0, streams[s_idx++].value()>>>(
       pages.device_ptr(), chunks, min_row, num_rows);
   }
   if (BitAnd(kernel_mask, decode_kernel_mask::STRING) != 0) {

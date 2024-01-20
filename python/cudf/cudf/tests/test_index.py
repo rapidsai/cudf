@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -659,7 +659,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if hasattr(ps, "dtype") and isinstance(ps, pd.CategoricalDtype):
+        if hasattr(ps, "dtype") and isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,14 +43,16 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 namespace {
 
 template <bool mark_true, typename MapIterator>
-__global__ void marking_bitmask_kernel(mutable_column_device_view destination,
-                                       MapIterator scatter_map,
-                                       size_type num_scatter_rows)
+CUDF_KERNEL void marking_bitmask_kernel(mutable_column_device_view destination,
+                                        MapIterator scatter_map,
+                                        size_type num_scatter_rows)
 {
   auto row          = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
@@ -356,9 +358,11 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
   // > (2^31)/2, but the end result after the final (% n_rows) will fit. so we'll do the computation
   // using a signed 64 bit value.
   auto scatter_iter = thrust::make_transform_iterator(
-    map_begin, [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
-      return ((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows;
-    });
+    map_begin,
+    cuda::proclaim_return_type<size_type>(
+      [n_rows = static_cast<int64_t>(n_rows)] __device__(size_type in) -> size_type {
+        return static_cast<size_type>(((static_cast<int64_t>(in) % n_rows) + n_rows) % n_rows);
+      }));
 
   // Dispatch over data type per column
   auto result          = std::vector<std::unique_ptr<column>>(target.num_columns());

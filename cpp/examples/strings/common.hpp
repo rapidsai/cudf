@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -60,7 +61,8 @@ auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); 
  */
 auto make_pool_mr()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda_mr());
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_cuda_mr(), rmm::percent_of_free_device_memory(50));
 }
 
 /**

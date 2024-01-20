@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import random
 
@@ -331,10 +331,10 @@ def test_rearrange_by_divisions(nelem, index):
         divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
 
         expect = dd.shuffle.rearrange_by_divisions(
-            ddf1, "x", divisions=divisions, shuffle="tasks"
+            ddf1, "x", divisions=divisions, shuffle_method="tasks"
         )
         result = dd.shuffle.rearrange_by_divisions(
-            gdf1, "x", divisions=divisions, shuffle="tasks"
+            gdf1, "x", divisions=divisions, shuffle_method="tasks"
         )
         dd.assert_eq(expect, result)
 

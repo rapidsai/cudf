@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,20 @@
 #include <thrust/unique.h>
 
 namespace nvtext {
+
+/**
+ * @brief Access the bpe_merge_pairs impl member
+ *
+ * This is used by the encoder to access the impl member functions.
+ *
+ * @param bpe The merge pairs struct
+ * @return The impl object with detailed, internal member data
+ */
+bpe_merge_pairs::bpe_merge_pairs_impl const* get_bpe_merge_pairs_impl(bpe_merge_pairs const& bpe)
+{
+  return bpe.impl;
+}
+
 namespace detail {
 namespace {
 
@@ -108,11 +122,11 @@ struct bpe_unpairable_offsets_fn {
  * @param d_rerank_data Working memory to hold locations where reranking is required
  */
 template <typename MapRefType>
-__global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
-                                MapRefType const d_map,
-                                int8_t* d_spaces_data,          // working memory
-                                cudf::size_type* d_ranks_data,  // more working memory
-                                int8_t* d_rerank_data           // and one more working memory
+CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
+                                 MapRefType const d_map,
+                                 int8_t* d_spaces_data,          // working memory
+                                 cudf::size_type* d_ranks_data,  // more working memory
+                                 int8_t* d_rerank_data           // and one more working memory
 )
 {
   // string per block
@@ -277,9 +291,9 @@ __global__ void bpe_parallel_fn(cudf::column_device_view const d_strings,
  * @param d_spaces_data Output the location where separator will be inserted
  * @param d_sizes Output sizes of each row
  */
-__global__ void bpe_finalize(cudf::column_device_view const d_strings,
-                             int8_t* d_spaces_data,    // where separators are inserted
-                             cudf::size_type* d_sizes  // output sizes of encoded strings
+CUDF_KERNEL void bpe_finalize(cudf::column_device_view const d_strings,
+                              int8_t* d_spaces_data,    // where separators are inserted
+                              cudf::size_type* d_sizes  // output sizes of encoded strings
 )
 {
   // string per block
@@ -328,7 +342,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty() || input.chars_size() == 0) {
+  if (input.is_empty() || input.chars_size(stream) == 0) {
     return cudf::make_empty_column(cudf::type_id::STRING);
   }
 
@@ -342,11 +356,11 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                                                    : cudf::detail::get_value<cudf::size_type>(
                                                       input.offsets(), input.offset(), stream);
   auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
-                               ? input.chars().size()
+                               ? input.chars_size(stream)
                                : cudf::detail::get_value<cudf::size_type>(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
-  auto const d_input_chars = input.chars().data<char>() + first_offset;
+  auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
   auto const offset_data_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
   auto offsets                = cudf::make_numeric_column(
@@ -364,7 +378,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     // this kernel locates unpairable sections of strings to create artificial string row
     // boundaries; the boundary values are recorded as offsets in d_up_offsets
     auto const d_up_offsets = d_working.data();  // store unpairable offsets here
-    auto const mp_map       = merge_pairs.impl->get_mp_table_ref();  // lookup table
+    auto const mp_map = get_bpe_merge_pairs_impl(merge_pairs)->get_mp_table_ref();  // lookup table
     auto const d_chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
     auto up_fn = bpe_unpairable_offsets_fn<decltype(mp_map)>{d_chars_span, first_offset, mp_map};
     thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
@@ -392,13 +406,13 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
       cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
     auto const tmp_size  = offsets_total - 1;
     auto const tmp_input = cudf::column_view(
-      input.parent().type(), tmp_size, nullptr, nullptr, 0, 0, {col_offsets, input.chars()});
+      input.parent().type(), tmp_size, input.chars_begin(stream), nullptr, 0, 0, {col_offsets});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 
     // launch the byte-pair-encoding kernel on the temp column
     rmm::device_uvector<int8_t> d_rerank(chars_size, stream);  // more working memory;
     auto const d_ranks  = d_working.data();                    // store pair ranks here
-    auto const pair_map = merge_pairs.impl->get_merge_pairs_ref();
+    auto const pair_map = get_bpe_merge_pairs_impl(merge_pairs)->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
       *d_tmp_strings, pair_map, d_spaces.data(), d_ranks, d_rerank.data());
   }

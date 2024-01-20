@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -99,9 +100,14 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def serialize(self):
+        # TODO: See if self._data can be serialized outright
         header = {
             "type-serialized": pickle.dumps(type(self)),
             "column_names": pickle.dumps(tuple(self._data.names)),
+            "column_rangeindex": pickle.dumps(self._data.rangeindex),
+            "column_multiindex": pickle.dumps(self._data.multiindex),
+            "column_label_dtype": pickle.dumps(self._data.label_dtype),
+            "column_level_names": pickle.dumps(self._data._level_names),
         }
         header["columns"], frames = serialize_columns(self._columns)
         return header, frames
@@ -112,7 +118,20 @@ class Frame(BinaryOperand, Scannable):
         cls_deserialize = pickle.loads(header["type-serialized"])
         column_names = pickle.loads(header["column_names"])
         columns = deserialize_columns(header["columns"], frames)
-        return cls_deserialize._from_data(dict(zip(column_names, columns)))
+        kwargs = {}
+        for metadata in [
+            "rangeindex",
+            "multiindex",
+            "label_dtype",
+            "level_names",
+        ]:
+            key = f"column_{metadata}"
+            if key in header:
+                kwargs[metadata] = pickle.loads(header[key])
+        col_accessor = ColumnAccessor(
+            data=dict(zip(column_names, columns)), **kwargs
+        )
+        return cls_deserialize._from_data(col_accessor)
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -280,6 +299,8 @@ class Frame(BinaryOperand, Scannable):
             data=result_data,
             multiindex=self._data.multiindex,
             level_names=self._data.level_names,
+            rangeindex=self._data.rangeindex,
+            label_dtype=self._data.label_dtype,
         )
 
     @_cudf_nvtx_annotate
@@ -864,7 +885,7 @@ class Frame(BinaryOperand, Scannable):
                 replace_val = None
             should_fill = (
                 col_name in value
-                and col.contains_na_entries
+                and col.has_nulls(include_nan=True)
                 and not libcudf.scalar._is_null_host_scalar(replace_val)
             ) or method is not None
             if should_fill:
@@ -878,6 +899,8 @@ class Frame(BinaryOperand, Scannable):
                     data=filled_data,
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
+                    rangeindex=self._data.rangeindex,
+                    label_dtype=self._data.label_dtype,
                 )
             ),
             inplace=inplace,
@@ -1334,7 +1357,11 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def searchsorted(
-        self, values, side="left", ascending=True, na_position="last"
+        self,
+        values,
+        side: Literal["left", "right"] = "left",
+        ascending: bool = True,
+        na_position: Literal["first", "last"] = "last",
     ):
         """Find indices where elements should be inserted to maintain order
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,7 @@ class CompactProtocolWriter {
   size_t write(Statistics const&);
   size_t write(PageLocation const&);
   size_t write(OffsetIndex const&);
+  size_t write(SizeStatistics const&);
   size_t write(ColumnOrder const&);
 
  protected:
@@ -77,7 +78,14 @@ class CompactProtocolFieldWriter {
 
   uint32_t put_int(int64_t v);
 
-  void put_field_header(int f, int cur, int t);
+  template <typename T>
+  void put_packed_type_byte(T high_bits, FieldType t)
+  {
+    uint8_t const clamped_high_bits = std::min(std::max(high_bits, T{0}), T{0xf});
+    put_byte((clamped_high_bits << 4) | static_cast<uint8_t>(t));
+  }
+
+  void put_field_header(int f, int cur, FieldType t);
 
   inline void field_bool(int field, bool b);
 
@@ -112,5 +120,9 @@ class CompactProtocolFieldWriter {
 
   inline void set_current_field(int const& field);
 };
+
+template <>
+inline void CompactProtocolFieldWriter::field_int_list<int64_t>(int field,
+                                                                std::vector<int64_t> const& val);
 
 }  // namespace cudf::io::parquet::detail

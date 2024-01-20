@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -257,6 +257,8 @@ ConfigureTest(
   transform/one_hot_encode_tests.cpp
 )
 
+ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
+
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
@@ -284,7 +286,15 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp
+  PARQUET_TEST
+  io/parquet_test.cpp
+  io/parquet_chunked_reader_test.cpp
+  io/parquet_chunked_writer_test.cpp
+  io/parquet_common.cpp
+  io/parquet_misc_test.cpp
+  io/parquet_reader_test.cpp
+  io/parquet_writer_test.cpp
+  io/parquet_v2_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -304,6 +314,7 @@ ConfigureTest(
   PERCENT 30
 )
 target_link_libraries(DATA_CHUNK_SOURCE_TEST PRIVATE ZLIB::ZLIB)
+ConfigureTest(QUOTE_NORMALIZATION_TEST io/fst/quote_normalization_test.cu)
 ConfigureTest(LOGICAL_STACK_TEST io/fst/logical_stack_test.cu)
 ConfigureTest(FST_TEST io/fst/fst_test.cu)
 ConfigureTest(TYPE_INFERENCE_TEST io/type_inference_test.cu)
@@ -644,6 +655,9 @@ ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)

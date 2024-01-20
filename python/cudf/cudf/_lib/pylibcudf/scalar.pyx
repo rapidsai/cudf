@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython cimport no_gc_clear
 from cython.operator cimport dereference
@@ -108,7 +108,7 @@ cdef class Scalar:
 
         return pa.pyarrow_wrap_scalar(c_result)
 
-    cdef const scalar* get(self) except *:
+    cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()
 
     cpdef DataType type(self):

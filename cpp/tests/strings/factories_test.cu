@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,16 +87,18 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     EXPECT_TRUE(column->nullable());
     EXPECT_TRUE(column->has_nulls());
   }
-  EXPECT_EQ(2, column->num_children());
+  EXPECT_EQ(1, column->num_children());
+  EXPECT_NE(nullptr, column->view().head());
 
   cudf::strings_column_view strings_view(column->view());
   EXPECT_EQ(strings_view.size(), count);
   EXPECT_EQ(strings_view.offsets().size(), count + 1);
-  EXPECT_EQ(strings_view.chars().size(), memsize);
+  EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
+    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
+                                  strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::size_type const>(
@@ -143,25 +145,34 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   }
 
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
-  auto d_buffer = cudf::detail::make_device_uvector_sync(
-    h_buffer, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto d_offsets = cudf::detail::make_device_uvector_sync(
-    h_offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_buffer = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(
+      h_buffer, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(
+      h_offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   auto d_nulls = cudf::detail::make_device_uvector_sync(
     h_nulls, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto column = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
+  auto column = cudf::make_strings_column(
+    count, std::move(d_offsets), std::move(d_buffer), null_count, d_nulls.release());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
-  EXPECT_EQ(2, column->num_children());
+  EXPECT_EQ(1, column->num_children());
+  EXPECT_NE(nullptr, column->view().head());
 
   cudf::strings_column_view strings_view(column->view());
   EXPECT_EQ(strings_view.size(), count);
   EXPECT_EQ(strings_view.offsets().size(), count + 1);
-  EXPECT_EQ(strings_view.chars().size(), memsize);
+  EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
+    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
+                                  strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
     cudf::device_span<cudf::size_type const>(
@@ -186,12 +197,17 @@ TEST_F(StringsFactoriesTest, CreateScalar)
 
 TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 {
-  rmm::device_uvector<char> d_chars{0, cudf::get_default_stream()};
-  auto d_offsets = cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_chars = std::make_unique<cudf::column>(
+    rmm::device_uvector<char>{0, cudf::get_default_stream()}, rmm::device_buffer{}, 0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(
+      1, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   rmm::device_uvector<cudf::bitmask_type> d_nulls{0, cudf::get_default_stream()};
 
-  auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0);
+  auto results =
+    cudf::make_strings_column(0, std::move(d_offsets), std::move(d_chars), 0, d_nulls.release());
   cudf::test::expect_column_empty(results->view());
 
   rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> d_strings{

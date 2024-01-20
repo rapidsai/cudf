@@ -1,13 +1,14 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 from typing import Optional
 
 import pyarrow as pa
+import pandas as pd
 
 import cudf
-import pandas as pd
-from cudf.api.types import _is_categorical_dtype, _is_interval_dtype
+
+from cudf.api.types import _is_interval_dtype
 from cudf.core.column import StructColumn
-from cudf.core.dtypes import IntervalDtype
+from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 
 
 class IntervalColumn(StructColumn):
@@ -100,15 +101,15 @@ class IntervalColumn(StructColumn):
             closed=closed,
         )
 
-    def as_interval_column(self, dtype, **kwargs):
-        if _is_interval_dtype(dtype):
-            if _is_categorical_dtype(self):
+    def as_interval_column(self, dtype):
+        if isinstance(dtype, IntervalDtype):
+            if isinstance(self.dtype, CategoricalDtype):
                 new_struct = self._get_decategorized_column()
                 return IntervalColumn.from_struct_column(new_struct)
-            if _is_interval_dtype(dtype):
+            else:
                 # a user can directly input the string `interval` as the dtype
                 # when creating an interval series or interval dataframe
-                if dtype == "interval":
+                if _is_interval_dtype(dtype):
                     dtype = IntervalDtype(
                         self.dtype.fields["left"], self.closed
                     )
@@ -143,7 +144,4 @@ class IntervalColumn(StructColumn):
         result = super().element_indexing(index)
         if cudf.get_option("mode.pandas_compatible"):
             return pd.Interval(**result, closed=self._closed)
-        return {
-            field: value
-            for field, value in zip(self.dtype.fields, result.values())
-        }
+        return result

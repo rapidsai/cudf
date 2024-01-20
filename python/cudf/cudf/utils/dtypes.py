@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
 from collections import namedtuple
@@ -202,12 +202,13 @@ def cudf_dtype_to_pa_type(dtype):
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
-    if cudf.api.types._is_categorical_dtype(dtype):
-        raise NotImplementedError()
-    elif (
-        cudf.api.types.is_list_dtype(dtype)
-        or cudf.api.types.is_struct_dtype(dtype)
-        or cudf.api.types.is_decimal_dtype(dtype)
+    if isinstance(dtype, cudf.CategoricalDtype):
+        raise NotImplementedError(
+            "No conversion from Categorical to pyarrow type"
+        )
+    elif isinstance(
+        dtype,
+        (cudf.StructDtype, cudf.ListDtype, cudf.core.dtypes.DecimalDtype),
     ):
         return dtype.to_arrow()
     else:
@@ -401,7 +402,7 @@ def min_column_type(x, expected_type):
 
     if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
-    if x.valid_count == 0:
+    if x.null_count == len(x):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
@@ -558,7 +559,9 @@ def find_common_type(dtypes):
     # Aggregate same types
     dtypes = set(dtypes)
 
-    if any(cudf.api.types.is_decimal_dtype(dtype) for dtype in dtypes):
+    if any(
+        isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
+    ):
         if all(
             cudf.api.types.is_decimal_dtype(dtype)
             or cudf.api.types.is_numeric_dtype(dtype)
@@ -573,7 +576,7 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
-    if any(cudf.api.types.is_list_dtype(dtype) for dtype in dtypes):
+    if any(isinstance(dtype, cudf.ListDtype) for dtype in dtypes):
         if len(dtypes) == 1:
             return dtypes.get(0)
         else:
@@ -586,7 +589,7 @@ def find_common_type(dtypes):
                 "Finding a common type for `ListDtype` is currently "
                 "not supported"
             )
-    if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
+    if any(isinstance(dtype, cudf.StructDtype) for dtype in dtypes):
         if len(dtypes) == 1:
             return dtypes.get(0)
         else:

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import warnings
 
@@ -9,15 +9,13 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import strings as libstrings
 from cudf.api.types import (
-    _is_categorical_dtype,
     _is_non_decimal_numeric_dtype,
     is_datetime_dtype,
-    is_list_dtype,
     is_string_dtype,
-    is_struct_dtype,
     is_timedelta_dtype,
 )
 from cudf.core.column import as_column
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import can_convert_to_column
 
 
@@ -110,7 +108,7 @@ def to_numeric(arg, errors="raise", downcast=None):
 
     if is_datetime_dtype(dtype) or is_timedelta_dtype(dtype):
         col = col.as_numerical_column(cudf.dtype("int64"))
-    elif _is_categorical_dtype(dtype):
+    elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.type
         if _is_non_decimal_numeric_dtype(cat_dtype):
             col = col.as_numerical_column(cat_dtype)
@@ -132,7 +130,7 @@ def to_numeric(arg, errors="raise", downcast=None):
                 return arg
             else:
                 raise e
-    elif is_list_dtype(dtype) or is_struct_dtype(dtype):
+    elif isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
         raise ValueError("Input does not support nested datatypes")
     elif _is_non_decimal_numeric_dtype(dtype):
         pass
@@ -163,7 +161,7 @@ def to_numeric(arg, errors="raise", downcast=None):
                     break
 
     if isinstance(arg, (cudf.Series, pd.Series)):
-        return cudf.Series(col)
+        return cudf.Series(col, index=arg.index, name=arg.name)
     else:
         if col.has_nulls():
             # To match pandas, always return a floating type filled with nan.

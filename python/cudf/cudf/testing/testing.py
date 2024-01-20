@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -10,12 +10,8 @@ import pandas as pd
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
     _is_categorical_dtype,
-    _is_interval_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
-    is_struct_dtype,
 )
 from cudf.core.missing import NA, NaT
 
@@ -25,10 +21,15 @@ def dtype_can_compare_equal_to_other(dtype):
     # as equal to equal values of a different dtype
     return not (
         is_string_dtype(dtype)
-        or is_list_dtype(dtype)
-        or is_struct_dtype(dtype)
-        or is_decimal_dtype(dtype)
-        or _is_interval_dtype(dtype)
+        or isinstance(
+            dtype,
+            (
+                cudf.IntervalDtype,
+                cudf.ListDtype,
+                cudf.StructDtype,
+                cudf.core.dtypes.DecimalDtype,
+            ),
+        )
     )
 
 
@@ -218,11 +219,11 @@ def assert_column_equal(
     elif not (
         (
             not dtype_can_compare_equal_to_other(left.dtype)
-            and is_numeric_dtype(right)
+            and is_numeric_dtype(right.dtype)
         )
         or (
-            is_numeric_dtype(left)
-            and not dtype_can_compare_equal_to_other(right)
+            is_numeric_dtype(left.dtype)
+            and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
         try:
@@ -231,7 +232,11 @@ def assert_column_equal(
                 left.isnull().values == right.isnull().values
             )
 
-            if columns_equal and not check_exact and is_numeric_dtype(left):
+            if (
+                columns_equal
+                and not check_exact
+                and is_numeric_dtype(left.dtype)
+            ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
                     left.apply_boolean_mask(

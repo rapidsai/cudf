@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import decimal
 import hashlib
@@ -2524,6 +2524,16 @@ def test_series_arrow_list_types_roundtrip():
             cudf.from_pandas(pdf)
 
 
+@pytest.mark.parametrize("klass", [cudf.Index, cudf.Series])
+@pytest.mark.parametrize(
+    "data", [pa.array([float("nan")]), pa.chunked_array([[float("nan")]])]
+)
+def test_nan_as_null_from_arrow_objects(klass, data):
+    result = klass(data, nan_as_null=True)
+    expected = klass(pa.array([None], type=pa.float64()))
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize("reso", ["M", "ps"])
 @pytest.mark.parametrize("typ", ["M", "m"])
 def test_series_invalid_reso_dtype(reso, typ):
@@ -2592,6 +2602,26 @@ def test_astype_pandas_nullable_pandas_compat(dtype, klass, kind):
             ser.astype(kind(dtype))
 
 
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
+@pytest.mark.parametrize(
+    "data",
+    [
+        pa.array([1, None], type=pa.int64()),
+        pa.chunked_array([[1, None]], type=pa.int64()),
+    ],
+)
+def test_from_arrow_array_dtype(klass, data):
+    obj = klass(data, dtype="int8")
+    assert obj.dtype == np.dtype("int8")
+
+
+@pytest.mark.parametrize("klass", [cudf.Series, cudf.Index])
+def test_from_pandas_object_dtype_passed_dtype(klass):
+    result = klass(pd.Series([True, False], dtype=object), dtype="int8")
+    expected = klass(pa.array([1, 0], type=pa.int8()))
+    assert_eq(result, expected)
+
+
 def test_series_where_mixed_bool_dtype():
     s = cudf.Series([True, False, True])
     with pytest.raises(TypeError):
@@ -2635,3 +2665,42 @@ def test_series_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
+
+
+@pytest.mark.parametrize(
+    "klass", [cudf.Series, cudf.Index, pd.Series, pd.Index]
+)
+def test_series_from_named_object_name_priority(klass):
+    result = cudf.Series(klass([1], name="a"), name="b")
+    assert result.name == "b"
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": 1, "b": 2, "c": 3},
+        cudf.Series([1, 2, 3], index=list("abc")),
+        pd.Series([1, 2, 3], index=list("abc")),
+    ],
+)
+def test_series_from_object_with_index_index_arg_reindex(data):
+    result = cudf.Series(data, index=list("bca"))
+    expected = cudf.Series([2, 3, 1], index=list("bca"))
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {0: 1, 1: 2, 2: 3},
+        cudf.Series([1, 2, 3]),
+        cudf.Index([1, 2, 3]),
+        pd.Series([1, 2, 3]),
+        pd.Index([1, 2, 3]),
+        [1, 2, 3],
+    ],
+)
+def test_series_dtype_astypes(data):
+    result = cudf.Series(data, dtype="float64")
+    expected = cudf.Series([1.0, 2.0, 3.0])
+    assert_eq(result, expected)

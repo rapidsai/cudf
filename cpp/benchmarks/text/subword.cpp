@@ -18,8 +18,10 @@
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/file_utilities.hpp>
 
 #include <cudf/strings/strings_column_view.hpp>
+
 #include <nvtext/subword_tokenize.hpp>
 
 #include <filesystem>
@@ -29,8 +31,8 @@
 
 static std::string create_hash_vocab_file()
 {
-  std::string dir_template{std::filesystem::temp_directory_path().string()};
-  if (char const* env_p = std::getenv("WORKSPACE")) dir_template = env_p;
+  static temp_directory const subword_tmpdir{"cudf_gbench"};
+  auto dir_template     = subword_tmpdir.path();
   std::string hash_file = dir_template + "/hash_vocab.txt";
   // create a fake hashed vocab text file for this test
   // this only works with words in the strings in the benchmark code below
@@ -57,7 +59,7 @@ static void BM_subword_tokenizer(benchmark::State& state)
   auto const nrows = static_cast<cudf::size_type>(state.range(0));
   std::vector<char const*> h_strings(nrows, "This is a test ");
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
-  std::string hash_file = create_hash_vocab_file();
+  static std::string hash_file = create_hash_vocab_file();
   std::vector<uint32_t> offsets{14};
   uint32_t max_sequence_length = 64;
   uint32_t stride              = 48;

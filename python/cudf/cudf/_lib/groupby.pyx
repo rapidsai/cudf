@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.api.types import (
     _is_categorical_dtype,
@@ -103,7 +103,7 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, list keys, bool dropna=True, *args, **kwargs):
+    def __cinit__(self, list keys, bool dropna=True):
         cdef libcudf_types.null_policy c_null_handling
         cdef table_view keys_view
 

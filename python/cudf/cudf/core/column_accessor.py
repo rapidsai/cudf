@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -157,6 +157,8 @@ class ColumnAccessor(abc.MutableMapping):
         data: Dict[Any, ColumnBase],
         multiindex: bool = False,
         level_names=None,
+        rangeindex: bool = False,
+        label_dtype: Dtype | None = None,
     ) -> ColumnAccessor:
         # create a ColumnAccessor without verifying column
         # type or size
@@ -164,6 +166,8 @@ class ColumnAccessor(abc.MutableMapping):
         obj._data = data
         obj.multiindex = multiindex
         obj._level_names = level_names
+        obj.rangeindex = rangeindex
+        obj.label_dtype = label_dtype
         return obj
 
     def __iter__(self):

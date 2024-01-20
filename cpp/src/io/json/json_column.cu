@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,6 +47,7 @@
 #include <thrust/unique.h>
 
 #include <cuda/atomic>
+#include <cuda/functional>
 
 #include <algorithm>
 #include <cstdint>
@@ -362,7 +363,7 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()), stream);
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto const h_offsets = cudf::detail::make_std_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
@@ -648,11 +649,12 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
   auto parent_col_id   = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
-    [col_ids         = col_ids.begin(),
-     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
-      return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
-                                                                : col_ids[parent_node_ids[node_id]];
-    });
+    cuda::proclaim_return_type<NodeIndexT>(
+      [col_ids         = col_ids.begin(),
+       parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+        return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
+                                                                  : col_ids[parent_node_ids[node_id]];
+      }));
   auto const list_children_end = thrust::copy_if(
     rmm::exec_policy(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
@@ -799,9 +801,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // This is to match the existing JSON reader's behaviour:
       // - Non-string columns will always be returned as nullable
       // - String columns will be returned as nullable, iff there's at least one null entry
-      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-      }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
@@ -830,7 +830,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
       // null validation applied in make_structs_column factory, which is not needed for json
       auto ret_col = make_structs_column(num_rows, std::move(child_columns), 0, {}, stream, mr);
-      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
       return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
@@ -877,7 +877,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
       // null validation applied in make_lists_column factory, which is not needed for json
       // parent column cannot be null when its children is non-empty in JSON
-      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;

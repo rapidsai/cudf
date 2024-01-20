@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -899,7 +900,7 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * @param options Options controlling behavior
  */
 template <int block_size>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void get_json_object_kernel(column_device_view col,
                               path_operator const* const commands,
                               size_type* output_offsets,
@@ -1029,11 +1030,17 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
-  return make_strings_column(col.size(),
-                             std::move(offsets),
-                             std::move(chars),
-                             col.size() - d_valid_count.value(stream),
-                             std::move(validity));
+
+  auto result = make_strings_column(col.size(),
+                                    std::move(offsets),
+                                    std::move(chars),
+                                    col.size() - d_valid_count.value(stream),
+                                    std::move(validity));
+  // unmatched array query may result in unsanitized '[' value in the result
+  if (cudf::detail::has_nonempty_nulls(result->view(), stream)) {
+    result = cudf::detail::purge_nonempty_nulls(result->view(), stream, mr);
+  }
+  return result;
 }
 
 }  // namespace

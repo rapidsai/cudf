@@ -59,6 +59,20 @@ constexpr int rolling_index(int index)
   return index % rolling_size;
 }
 
+// PARQUET-2261 allows for not writing the level histograms in certain cases.
+// The repetition level histogram may be omitted when max_rep_level equals 0. The definition
+// level histogram may be omitted when max_def_level equals 0 or 1. In the case of
+// max_rep_level == 0, the rep histogram would have a single value equal to num_rows. In the
+// case of max_def_level == 0, the def histogram would have a single value equal to num_values,
+// and when max_def_level == 1, the histogram would be {num_nulls, num_values - num_nulls}.
+//
+// These constants control libcudf's behavior. Currently, each histogram will be written when
+// max level is greater than 0. Even though this leads to some redundancy in the max_def_level == 1
+// case, having the histogram data relieves the reader from having to reconstruct it from the
+// OffsetIndex and ColumnMetaData.
+constexpr uint8_t REP_LVL_HIST_CUTOFF = 0;
+constexpr uint8_t DEF_LVL_HIST_CUTOFF = 0;
+
 // see setupLocalPageInfo() in page_decode.cuh for supported page encodings
 constexpr bool is_supported_encoding(Encoding enc)
 {
@@ -68,6 +82,7 @@ constexpr bool is_supported_encoding(Encoding enc)
     case Encoding::RLE:
     case Encoding::RLE_DICTIONARY:
     case Encoding::DELTA_BINARY_PACKED:
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
     case Encoding::DELTA_BYTE_ARRAY: return true;
     default: return false;
   }
@@ -190,9 +205,14 @@ enum class decode_kernel_mask {
   GENERAL          = (1 << 0),  // Run catch-all decode kernel
   STRING           = (1 << 1),  // Run decode kernel for string data
   DELTA_BINARY     = (1 << 2),  // Run decode kernel for DELTA_BINARY_PACKED data
-  DELTA_BYTE_ARRAY = (1 << 3)   // Run decode kernel for DELTA_BYTE_ARRAY encoded data
+  DELTA_BYTE_ARRAY = (1 << 3),  // Run decode kernel for DELTA_BYTE_ARRAY encoded data
+  DELTA_LENGTH_BA  = (1 << 4),  // Run decode kernel for DELTA_LENGTH_BYTE_ARRAY encoded data
 };
 
+// mask representing all the ways in which a string can be encoded
+constexpr uint32_t STRINGS_MASK =
+  BitOr(BitOr(decode_kernel_mask::DELTA_BYTE_ARRAY, decode_kernel_mask::STRING),
+        decode_kernel_mask::DELTA_LENGTH_BA);
 /**
  * @brief Nesting information specifically needed by the decode and preprocessing
  * kernels.
@@ -410,8 +430,8 @@ struct parquet_column_device_view : stats_column_desc {
                        //!< levels
   constexpr uint8_t num_def_level_bits() const { return level_bits & 0xf; }
   constexpr uint8_t num_rep_level_bits() const { return level_bits >> 4; }
-  size_type const* const*
-    nesting_offsets;  //!< If column is a nested type, contains offset array of each nesting level
+  uint8_t max_def_level;  //!< needed for SizeStatistics calculation
+  uint8_t max_rep_level;
 
   size_type const* level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const* rep_values;       //!< Pre-calculated repetition level values
@@ -434,6 +454,7 @@ struct PageFragment {
   uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
+  uint32_t num_valid;        //<! Number of non-null leaf values
   size_type start_row;       //!< First row in fragment
   uint16_t num_rows;         //!< Number of rows in fragment
   uint16_t num_dict_vals;    //!< Number of unique dictionary entries
@@ -459,9 +480,10 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  * Used to control which encode kernels to run.
  */
 enum class encode_kernel_mask {
-  PLAIN        = (1 << 0),  // Run plain encoding kernel
-  DICTIONARY   = (1 << 1),  // Run dictionary encoding kernel
-  DELTA_BINARY = (1 << 2)   // Run DELTA_BINARY_PACKED encoding kernel
+  PLAIN           = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY      = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY    = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
+  DELTA_LENGTH_BA = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
 };
 
 /**
@@ -498,9 +520,16 @@ struct EncColumnChunk {
   size_type* dict_index;  //!< Index of value in dictionary page. column[dict_data[dict_index[row]]]
   uint8_t dict_rle_bits;  //!< Bit size for encoding dictionary indices
   bool use_dictionary;    //!< True if the chunk uses dictionary encoding
-  uint8_t* column_index_blob;  //!< Binary blob containing encoded column index for this chunk
-  uint32_t column_index_size;  //!< Size of column index blob
-  uint32_t encodings;          //!< Mask representing the set of encodings used for this chunk
+  uint8_t* column_index_blob;    //!< Binary blob containing encoded column index for this chunk
+  uint32_t column_index_size;    //!< Size of column index blob
+  uint32_t encodings;            //!< Mask representing the set of encodings used for this chunk
+  uint32_t* def_histogram_data;  //!< Buffers for size histograms. One for chunk and one per page.
+  uint32_t* rep_histogram_data;  //!< Size is (max(level) + 1) * (num_data_pages + 1).
+  size_t var_bytes_size;         //!< Sum of var_bytes_size from the pages (byte arrays only)
+
+  constexpr uint32_t num_dict_pages() const { return use_dictionary ? 1 : 0; }
+
+  constexpr uint32_t num_data_pages() const { return num_pages - num_dict_pages(); }
 };
 
 /**
@@ -527,6 +556,10 @@ struct EncPage {
   compression_result* comp_res;    //!< Ptr to compression result
   uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
   encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
+  uint32_t* def_histogram;         //!< Histogram of counts for each definition level
+  uint32_t* rep_histogram;         //!< Histogram of counts for each repetition level
+  uint32_t var_bytes_size;  //!< Number of variable length bytes in the page (byte arrays only)
+  uint32_t num_valid;       //!< Number of valid leaf values
 };
 
 /**
@@ -725,6 +758,28 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
                           int level_type_size,
                           kernel_error::pointer error_code,
                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading the DELTA_LENGTH_BYTE_ARRAY column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
+                                cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+                                size_t num_rows,
+                                size_t min_row,
+                                int level_type_size,
+                                kernel_error::pointer error_code,
+                                rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder row group fragments

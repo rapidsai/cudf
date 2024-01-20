@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -207,7 +207,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  * (PageInfo::str_bytes) as part of the pass
  */
 template <typename level_t>
-__global__ void __launch_bounds__(preprocess_block_size)
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   gpuComputePageSizes(PageInfo* pages,
                       device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
@@ -232,7 +232,10 @@ __global__ void __launch_bounds__(preprocess_block_size)
                                                                                       {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, all_types_filter{}, false)) { return; }
+  if (!setupLocalPageInfo(
+        s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
+    return;
+  }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   // the size of the rolling batch buffer

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 # _setup_numba _must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling

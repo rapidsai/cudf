@@ -78,7 +78,7 @@ std::unique_ptr<column> transform(column_view const& input,
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
   std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, input.size(), copy_bitmask(input), input.null_count(), stream, mr);
+    output_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   if (input.is_empty()) { return output; }
 

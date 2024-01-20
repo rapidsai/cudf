@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,12 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
+
+#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -58,16 +61,15 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
                       d_offsets.begin<int32_t>(),
                       d_offsets.end<int32_t>(),
                       d_offsets.begin<int32_t>(),
-                      [chars_offset] __device__(auto offset) { return offset - chars_offset; });
+                      cuda::proclaim_return_type<int32_t>(
+                        [chars_offset] __device__(auto offset) { return offset - chars_offset; }));
   }
 
   // slice the chars child column
-  auto const data_size =
-    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
-  auto chars_column = std::make_unique<cudf::column>(
-    cudf::detail::slice(strings.chars(), {chars_offset, chars_offset + data_size}, stream).front(),
-    stream,
-    mr);
+  auto const data_size = static_cast<std::size_t>(
+    cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream));
+  auto chars_buffer =
+    rmm::device_buffer{strings.chars_begin(stream) + chars_offset, data_size, stream, mr};
 
   // slice the null mask
   auto null_mask = cudf::detail::copy_bitmask(
@@ -78,7 +80,7 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_buffer),
                              null_count,
                              std::move(null_mask));
 }

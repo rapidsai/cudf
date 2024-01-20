@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -421,7 +421,7 @@ static __device__ void gpuOutputGeneric(
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodePageData(PageInfo* pages,
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,
@@ -446,7 +446,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           min_row,
                           num_rows,
                           mask_filter{decode_kernel_mask::GENERAL},
-                          true)) {
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -482,7 +482,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
@@ -495,6 +495,10 @@ __global__ void __launch_bounds__(decode_block_size)
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
       // WARP1: Decode dictionary indices, booleans or string positions
+      // NOTE: racecheck complains of a RAW error involving the s->dict_pos assignment below.
+      // This is likely a false positive in practice, but could be solved by wrapping the next
+      // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
+      // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
       } else if ((s->col.data_type & 7) == BOOLEAN) {

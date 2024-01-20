@@ -1,6 +1,7 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import array as arr
+import contextlib
 import datetime
 import decimal
 import io
@@ -1433,43 +1434,46 @@ def test_assign_callable(mapping):
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5"])
+@pytest.mark.parametrize("method", ["murmur3", "md5", "xxhash64"])
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
+    warning_expected = seed is not None and method not in {
+        "murmur3",
+        "xxhash64",
+    }
+    potential_warning = (
+        pytest.warns(UserWarning, match="Provided seed value has no effect*")
+        if warning_expected
+        else contextlib.nullcontext()
+    )
+
     gdf = cudf.DataFrame()
     data = np.arange(nrows)
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
-    out = gdf.hash_values()
+    with potential_warning:
+        out = gdf.hash_values(method=method, seed=seed)
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
-    assert out.dtype == np.uint32
+    expected_dtypes = {
+        "murmur3": np.uint32,
+        "md5": object,
+        "xxhash64": np.uint64,
+    }
+    assert out.dtype == expected_dtypes[method]
 
-    warning_expected = (
-        True if seed is not None and method not in {"murmur3"} else False
-    )
     # Check single column
-    if warning_expected:
-        with pytest.warns(
-            UserWarning, match="Provided seed value has no effect*"
-        ):
-            out_one = gdf[["a"]].hash_values(method=method, seed=seed)
-    else:
+    with potential_warning:
         out_one = gdf[["a"]].hash_values(method=method, seed=seed)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    if warning_expected:
-        with pytest.warns(
-            UserWarning, match="Provided seed value has no effect*"
-        ):
-            assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
-    else:
+    with potential_warning:
         assert_eq(gdf["a"].hash_values(method=method, seed=seed), out_one)
 
 
-@pytest.mark.parametrize("method", ["murmur3"])
+@pytest.mark.parametrize("method", ["murmur3", "xxhash64"])
 def test_dataframe_hash_values_seed(method):
     gdf = cudf.DataFrame()
     data = np.arange(10)
@@ -1481,6 +1485,52 @@ def test_dataframe_hash_values_seed(method):
     assert out_one.iloc[0] == out_one.iloc[-1]
     assert out_two.iloc[0] == out_two.iloc[-1]
     assert_neq(out_one, out_two)
+
+
+def test_dataframe_hash_values_xxhash64():
+    # xxhash64 has no built-in implementation in Python and we don't want to
+    # add a testing dependency, so we use regression tests against known good
+    # values.
+    gdf = cudf.DataFrame({"a": [0.0, 1.0, 2.0, np.inf, np.nan]})
+    gdf["b"] = -gdf["a"]
+    out_a = gdf["a"].hash_values(method="xxhash64", seed=0)
+    expected_a = cudf.Series(
+        [
+            3803688792395291579,
+            10706502109028787093,
+            9835943264235290955,
+            18031741628920313605,
+            18446744073709551615,
+        ],
+        dtype=np.uint64,
+    )
+    assert_eq(out_a, expected_a)
+
+    out_b = gdf["b"].hash_values(method="xxhash64", seed=42)
+    expected_b = cudf.Series(
+        [
+            9826995235083043316,
+            10150515573749944095,
+            5005707091092326006,
+            5326262080505358431,
+            18446744073709551615,
+        ],
+        dtype=np.uint64,
+    )
+    assert_eq(out_b, expected_b)
+
+    out_df = gdf.hash_values(method="xxhash64", seed=0)
+    expected_df = cudf.Series(
+        [
+            10208049663714815266,
+            4949201786888768834,
+            18122173653994477335,
+            11133539368563441730,
+            18446744073709551615,
+        ],
+        dtype=np.uint64,
+    )
+    assert_eq(out_df, expected_df)
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
@@ -3440,6 +3490,51 @@ def test_series_string_reindex(copy):
     )
 
 
+@pytest.mark.parametrize("names", [None, ["a", "b"]])
+@pytest.mark.parametrize("klass", [cudf.MultiIndex, pd.MultiIndex])
+def test_reindex_multiindex_col_to_multiindex(names, klass):
+    idx = pd.Index(
+        [("A", "one"), ("A", "two")],
+        dtype="object",
+    )
+    df = pd.DataFrame([[1, 2]], columns=idx)
+    gdf = cudf.from_pandas(df)
+    midx = klass.from_tuples([("A", "one"), ("A", "three")], names=names)
+    result = gdf.reindex(columns=midx)
+    expected = cudf.DataFrame([[1, None]], columns=midx)
+    # (pandas2.0): check_dtype=False won't be needed
+    # as None col will return object instead of float
+    assert_eq(result, expected, check_dtype=False)
+
+
+@pytest.mark.parametrize("names", [None, ["a", "b"]])
+@pytest.mark.parametrize("klass", [cudf.MultiIndex, pd.MultiIndex])
+def test_reindex_tuple_col_to_multiindex(names, klass):
+    idx = pd.Index(
+        [("A", "one"), ("A", "two")], dtype="object", tupleize_cols=False
+    )
+    df = pd.DataFrame([[1, 2]], columns=idx)
+    gdf = cudf.from_pandas(df)
+    midx = klass.from_tuples([("A", "one"), ("A", "two")], names=names)
+    result = gdf.reindex(columns=midx)
+    expected = cudf.DataFrame([[1, 2]], columns=midx)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("name", [None, "foo"])
+@pytest.mark.parametrize("klass", [range, cudf.RangeIndex, pd.RangeIndex])
+def test_reindex_columns_rangeindex_keeps_rangeindex(name, klass):
+    new_columns = klass(3)
+    exp_name = None
+    if klass is not range:
+        new_columns.name = name
+        exp_name = name
+    df = cudf.DataFrame([[1, 2]])
+    result = df.reindex(columns=new_columns).columns
+    expected = pd.RangeIndex(3, name=exp_name)
+    assert_eq(result, expected)
+
+
 def test_to_frame(pdf, gdf):
     assert_eq(pdf.x.to_frame(), gdf.x.to_frame())
 
@@ -4642,6 +4737,36 @@ def test_dataframe_columns_empty_data_preserves_dtype(dtype, idx_data, data):
         data, columns=cudf.Index(idx_data, dtype=dtype)
     ).columns
     expected = pd.Index(idx_data, dtype=dtype)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "datetime64[ns]", "int8"])
+def test_dataframe_astype_preserves_column_dtype(dtype):
+    result = cudf.DataFrame([1], columns=cudf.Index([1], dtype=dtype))
+    result = result.astype(np.int32).columns
+    expected = pd.Index([1], dtype=dtype)
+    assert_eq(result, expected)
+
+
+def test_dataframe_astype_preserves_column_rangeindex():
+    result = cudf.DataFrame([1], columns=range(1))
+    result = result.astype(np.int32).columns
+    expected = pd.RangeIndex(1)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("dtype", ["int64", "datetime64[ns]", "int8"])
+def test_dataframe_fillna_preserves_column_dtype(dtype):
+    result = cudf.DataFrame([1, None], columns=cudf.Index([1], dtype=dtype))
+    result = result.fillna(2).columns
+    expected = pd.Index([1], dtype=dtype)
+    assert_eq(result, expected)
+
+
+def test_dataframe_fillna_preserves_column_rangeindex():
+    result = cudf.DataFrame([1, None], columns=range(1))
+    result = result.fillna(2).columns
+    expected = pd.RangeIndex(1)
     assert_eq(result, expected)
 
 
@@ -6111,7 +6236,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
             expect_mask = ps_mask
             got_mask = gs_mask
 
-        if hasattr(expect_where, "dtype") and isinstance(
+        if isinstance(expect_where, pd.Series) and isinstance(
             expect_where.dtype, pd.CategoricalDtype
         ):
             np.testing.assert_array_equal(
@@ -10847,6 +10972,15 @@ def test_dataframe_series_dot():
     expected = gser @ [12, 13]
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_reindex_keep_colname():
+    gdf = cudf.DataFrame([1], columns=cudf.Index([1], name="foo"))
+    result = gdf.reindex(index=[0, 1])
+    expected = cudf.DataFrame(
+        [1, None], columns=cudf.Index([1], name="foo"), index=[0, 1]
+    )
+    assert_eq(result, expected)
 
 
 def test_dataframe_duplicate_index_reindex():

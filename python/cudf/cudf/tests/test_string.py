@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import json
 import re
@@ -2661,6 +2661,13 @@ def test_string_istimestamp():
         ]
     )
     assert_eq(expected, got)
+
+
+def test_istimestamp_empty():
+    gsr = cudf.Series([], dtype="object")
+    result = gsr.str.istimestamp("%Y%m%d")
+    expected = cudf.Series([], dtype="bool")
+    assert_eq(result, expected)
 
 
 def test_string_ip4_to_int():

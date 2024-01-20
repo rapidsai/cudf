@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import copyreg
@@ -705,6 +705,14 @@ ExpandingGroupby = make_intermediate_proxy_type(
 
 Resampler = make_intermediate_proxy_type(
     "Resampler", cudf.core.resample._Resampler, pd_Resampler
+)
+
+DataFrameResampler = make_intermediate_proxy_type(
+    "DataFrameResampler", cudf.core.resample.DataFrameResampler, pd_Resampler
+)
+
+SeriesResampler = make_intermediate_proxy_type(
+    "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
 )
 
 StataReader = make_intermediate_proxy_type(

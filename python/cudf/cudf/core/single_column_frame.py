@@ -1,5 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
-
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 """Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
@@ -288,8 +287,6 @@ class SingleColumnFrame(Frame, NotIterable):
         other: Any,
         fill_value: Any = None,
         reflect: bool = False,
-        *args,
-        **kwargs,
     ) -> Union[
         Dict[Optional[str], Tuple[ColumnBase, Any, bool, Any]],
         NotImplementedType,
@@ -376,7 +373,7 @@ class SingleColumnFrame(Frame, NotIterable):
         else:
             arg = as_column(arg)
             if len(arg) == 0:
-                arg = as_column([], dtype="int32")
+                arg = cudf.core.column.column_empty(0, dtype="int32")
             if is_integer_dtype(arg.dtype):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):

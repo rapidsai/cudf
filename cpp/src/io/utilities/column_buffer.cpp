@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,7 +161,6 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
       if (schema.value_or(reader_column_schema{}).is_enabled_convert_binary_to_strings()) {
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
-          schema_info->children.push_back(column_name_info{"chars"});
         }
 
         // make_strings_column allocates new memory, it does not simply move
@@ -177,12 +176,11 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
         auto col_content      = string_col->release();
 
         // convert to uint8 column, strings are currently stored as int8
-        auto contents =
-          col_content.children[strings_column_view::chars_column_index].release()->release();
-        auto data = contents.data.release();
+        auto data      = col_content.data.release();
+        auto char_size = data->size();
 
         auto uint8_col = std::make_unique<column>(
-          data_type{type_id::UINT8}, data->size(), std::move(*data), rmm::device_buffer{}, 0);
+          data_type{type_id::UINT8}, char_size, std::move(*data), rmm::device_buffer{}, 0);
 
         if (schema_info != nullptr) {
           schema_info->children.push_back(column_name_info{"offsets"});
@@ -194,7 +192,8 @@ std::unique_ptr<column> make_column(column_buffer_base<string_policy>& buffer,
           std::move(col_content.children[strings_column_view::offsets_column_index]),
           std::move(uint8_col),
           null_count,
-          std::move(*col_content.null_mask));
+          std::move(*col_content.null_mask),
+          stream);
       }
 
     case type_id::LIST: {

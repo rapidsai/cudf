@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
+
+#include <cuda/functional>
 
 #include <cstddef>
 #include <numeric>
@@ -278,9 +280,9 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
  * @param buf_info Information on the range of values to be copied for each destination buffer
  */
 template <int block_size, typename IndexToDstBuf>
-__global__ void copy_partitions(IndexToDstBuf index_to_buffer,
-                                uint8_t const** src_bufs,
-                                dst_buf_info* buf_info)
+CUDF_KERNEL void copy_partitions(IndexToDstBuf index_to_buffer,
+                                 uint8_t const** src_bufs,
+                                 dst_buf_info* buf_info)
 {
   auto const buf_index     = blockIdx.x;
   auto const src_buf_index = buf_info[buf_index].src_buf_index;
@@ -500,23 +502,34 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
   int offset_stack_pos,
   int parent_offset_index,
   int offset_depth,
-  rmm::cuda_stream_view)
+  rmm::cuda_stream_view stream)
 {
   if (col.nullable()) {
     std::tie(current, offset_stack_pos) =
       add_null_buffer(col, current, offset_stack_pos, parent_offset_index, offset_depth);
   }
 
-  // string columns hold no actual data, but we need to keep a record
-  // of it so we know it's size when we are constructing the output columns
-  *current = src_buf_info(
-    type_id::STRING, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
-  current++;
-  offset_stack_pos += offset_depth;
+  // the way strings are arranged, the strings column itself contains char data, but our child
+  // offsets column actually contains our offsets. So our parent_offset_index is actually our child.
 
-  // string columns don't necessarily have children
-  if (col.num_children() > 0) {
-    CUDF_EXPECTS(col.num_children() == 2, "Encountered malformed string column");
+  // string columns don't necessarily have children if they are empty
+  auto const has_offsets_child = col.num_children() > 0;
+
+  // string columns contain the underlying chars data.
+  *current = src_buf_info(type_id::STRING,
+                          nullptr,
+                          offset_stack_pos,
+                          // if I have an offsets child, it's index will be my parent_offset_index
+                          has_offsets_child ? ((current + 1) - head) : parent_offset_index,
+                          false,
+                          col.offset());
+
+  // if I have offsets, I need to include that in the stack size
+  offset_stack_pos += has_offsets_child ? offset_depth + 1 : offset_depth;
+  current++;
+
+  if (has_offsets_child) {
+    CUDF_EXPECTS(col.num_children() == 1, "Encountered malformed string column");
     strings_column_view scv(col);
 
     // info for the offsets buffer
@@ -537,15 +550,6 @@ std::pair<src_buf_info*, size_type> buf_info_functor::operator()<cudf::string_vi
     // since we are crossing an offset boundary, calculate our new depth and parent offset index.
     offset_depth++;
     parent_offset_index = offset_col - head;
-
-    // prevent appending buf_info for non-existent chars buffer
-    CUDF_EXPECTS(not scv.chars().nullable(), "Encountered nullable string chars column");
-
-    // info for the chars buffer
-    *current = src_buf_info(
-      type_id::INT8, nullptr, offset_stack_pos, parent_offset_index, false, col.offset());
-    current++;
-    offset_stack_pos += offset_depth;
   }
 
   return {current, offset_stack_pos};
@@ -714,10 +718,24 @@ std::tuple<size_type, int64_t, int64_t, size_type> build_output_column_metadata(
   }();
 
   // size/data pointer for the column
-  auto const col_size       = static_cast<size_type>(current_info->num_elements);
-  int64_t const data_offset = src.num_children() > 0 || col_size == 0 || src.head() == nullptr
-                                ? -1
-                                : static_cast<int64_t>(current_info->dst_offset);
+  auto const col_size = [&]() {
+    // if I am a string column, I need to use the number of rows from my child offset column. the
+    // number of rows in my dst_buf_info struct will be equal to the number of chars, which is
+    // incorrect. this is a quirk of how cudf stores strings.
+    if (src.type().id() == type_id::STRING) {
+      // if I have no children (no offsets), then I must have a row count of 0
+      if (src.num_children() == 0) { return 0; }
+
+      // otherwise my actual number of rows will be the num_rows field of the next dst_buf_info
+      // struct (our child offsets column)
+      return (current_info + 1)->num_rows;
+    }
+
+    // otherwise the number of rows is the number of elements
+    return static_cast<size_type>(current_info->num_elements);
+  }();
+  int64_t const data_offset =
+    col_size == 0 || src.head() == nullptr ? -1 : static_cast<int64_t>(current_info->dst_offset);
 
   mb.add_column_info_to_meta(
     src.type(), col_size, null_count, data_offset, bitmask_offset, src.num_children());
@@ -852,7 +870,11 @@ struct dst_offset_output_iterator {
 
   dst_offset_output_iterator operator+ __host__ __device__(int i) { return {c + i}; }
 
-  void operator++ __host__ __device__() { c++; }
+  dst_offset_output_iterator& operator++ __host__ __device__()
+  {
+    c++;
+    return *this;
+  }
 
   reference operator[] __device__(int i) { return dereference(c + i); }
   reference operator* __device__() { return dereference(c); }
@@ -873,12 +895,13 @@ struct dst_valid_count_output_iterator {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  dst_valid_count_output_iterator operator+ __host__ __device__(int i)
-  {
-    return dst_valid_count_output_iterator{c + i};
-  }
+  dst_valid_count_output_iterator operator+ __host__ __device__(int i) { return {c + i}; }
 
-  void operator++ __host__ __device__() { c++; }
+  dst_valid_count_output_iterator& operator++ __host__ __device__()
+  {
+    c++;
+    return *this;
+  }
 
   reference operator[] __device__(int i) { return dereference(c + i); }
   reference operator* __device__() { return dereference(c); }
@@ -895,9 +918,17 @@ struct dst_valid_count_output_iterator {
  */
 struct size_of_helper {
   template <typename T>
-  constexpr std::enable_if_t<not is_fixed_width<T>(), int> __device__ operator()() const
+  constexpr std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, cudf::string_view>, int>
+    __device__ operator()() const
   {
     return 0;
+  }
+
+  template <typename T>
+  constexpr std::enable_if_t<!is_fixed_width<T>() && std::is_same_v<T, cudf::string_view>, int>
+    __device__ operator()() const
+  {
+    return sizeof(cudf::device_storage_type_t<int8_t>);
   }
 
   template <typename T>
@@ -1188,11 +1219,11 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
     thrust::make_counting_iterator<std::size_t>(0),
     thrust::make_counting_iterator<std::size_t>(num_bufs),
     d_dst_buf_info,
-    [d_src_buf_info,
-     offset_stack_partition_size,
-     d_offset_stack,
-     d_indices,
-     num_src_bufs] __device__(std::size_t t) {
+    cuda::proclaim_return_type<dst_buf_info>([d_src_buf_info,
+                                              offset_stack_partition_size,
+                                              d_offset_stack,
+                                              d_indices,
+                                              num_src_bufs] __device__(std::size_t t) {
       int const split_index   = t / num_src_bufs;
       int const src_buf_index = t % num_src_bufs;
       auto const& src_info    = d_src_buf_info[src_buf_index];
@@ -1229,7 +1260,7 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
       }
 
       // final element indices and row count
-      int const out_element_index = src_info.is_validity ? row_start / 32 : row_start;
+      int const src_element_index = src_info.is_validity ? row_start / 32 : row_start;
       int const num_rows          = row_end - row_start;
       // if I am an offsets column, all my values need to be shifted
       int const value_shift = src_info.offsets == nullptr ? 0 : src_info.offsets[row_start];
@@ -1252,14 +1283,14 @@ std::unique_ptr<packed_partition_buf_size_and_dst_buf_info> compute_splits(
                           num_elements,
                           element_size,
                           num_rows,
-                          out_element_index,
+                          src_element_index,
                           0,
                           value_shift,
                           bit_shift,
                           src_info.is_validity ? 1 : 0,
                           src_buf_index,
                           split_index};
-    });
+    }));
 
   // compute total size of each partition
   // key is the split index
@@ -1400,9 +1431,11 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
   rmm::device_uvector<size_type> d_batch_offsets(num_bufs + 1, stream, temp_mr);
 
   auto const buf_count_iter = cudf::detail::make_counting_transform_iterator(
-    0, [num_bufs, num_batches = num_batches_func{batches.begin()}] __device__(size_type i) {
-      return i == num_bufs ? 0 : num_batches(i);
-    });
+    0,
+    cuda::proclaim_return_type<std::size_t>(
+      [num_bufs, num_batches = num_batches_func{batches.begin()}] __device__(size_type i) {
+        return i == num_bufs ? 0 : num_batches(i);
+      }));
 
   thrust::exclusive_scan(rmm::exec_policy(stream, temp_mr),
                          buf_count_iter,
@@ -1626,25 +1659,26 @@ std::unique_ptr<chunk_iteration_state> compute_batches(int num_bufs,
     d_dst_buf_info,
     d_dst_buf_info + num_bufs,
     batches.begin(),
-    [desired_batch_size = desired_batch_size] __device__(
-      dst_buf_info const& buf) -> thrust::pair<std::size_t, std::size_t> {
-      // Total bytes for this incoming partition
-      std::size_t const bytes =
-        static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
+    cuda::proclaim_return_type<thrust::pair<std::size_t, std::size_t>>(
+      [desired_batch_size = desired_batch_size] __device__(
+        dst_buf_info const& buf) -> thrust::pair<std::size_t, std::size_t> {
+        // Total bytes for this incoming partition
+        std::size_t const bytes =
+          static_cast<std::size_t>(buf.num_elements) * static_cast<std::size_t>(buf.element_size);
 
-      // This clause handles nested data types (e.g. list or string) that store no data in the row
-      // columns, only in their children.
-      if (bytes == 0) { return {1, 0}; }
+        // This clause handles nested data types (e.g. list or string) that store no data in the row
+        // columns, only in their children.
+        if (bytes == 0) { return {1, 0}; }
 
-      // The number of batches we want to subdivide this buffer into
-      std::size_t const num_batches = std::max(
-        std::size_t{1}, util::round_up_unsafe(bytes, desired_batch_size) / desired_batch_size);
+        // The number of batches we want to subdivide this buffer into
+        std::size_t const num_batches = std::max(
+          std::size_t{1}, util::round_up_unsafe(bytes, desired_batch_size) / desired_batch_size);
 
-      // NOTE: leaving batch size as a separate parameter for future tuning
-      // possibilities, even though in the current implementation it will be a
-      // constant.
-      return {num_batches, desired_batch_size};
-    });
+        // NOTE: leaving batch size as a separate parameter for future tuning
+        // possibilities, even though in the current implementation it will be a
+        // constant.
+        return {num_batches, desired_batch_size};
+      }));
 
   return chunk_iteration_state::create(batches,
                                        num_bufs,
@@ -1784,7 +1818,8 @@ struct contiguous_split_state {
 
     auto values = thrust::make_transform_iterator(
       chunk_iter_state->d_batched_dst_buf_info.begin(),
-      [] __device__(dst_buf_info const& info) { return info.valid_count; });
+      cuda::proclaim_return_type<size_type>(
+        [] __device__(dst_buf_info const& info) { return info.valid_count; }));
 
     thrust::reduce_by_key(rmm::exec_policy(stream, temp_mr),
                           keys,

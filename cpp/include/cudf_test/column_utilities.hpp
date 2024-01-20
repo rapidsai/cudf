@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,7 +154,7 @@ std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c);
  * This takes care of padded bits
  *
  * @param        expected_mask A vector representing expected mask
- * @param        got_mask A vector representing mask obtained from column
+ * @param        got_mask_begin A vector representing mask obtained from column
  * @param        number_of_elements number of elements the mask represent
  *
  * @returns      true if both vector match till the `number_of_elements`
@@ -179,6 +179,9 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   return {host_data, bitmask_to_host(c)};
 }
 
+// This signature is identical to the above overload apart from SFINAE so
+// doxygen sees it as a duplicate.
+//! @cond Doxygen_Suppress
 /**
  * @brief Copies the data and bitmask of a `column_view` to the host.
  *
@@ -207,6 +210,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
 
   return {host_fixed_points, bitmask_to_host(c)};
 }
+//! @endcond
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
@@ -222,15 +226,15 @@ template <>
 inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
 {
   thrust::host_vector<std::string> host_data(c.size());
+  auto stream = cudf::get_default_stream();
   if (c.size() > c.null_count()) {
     auto const scv     = strings_column_view(c);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()),
-      cudf::get_default_stream());
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto const h_offsets = cudf::detail::make_std_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
-      cudf::get_default_stream());
+      stream);
 
     // build std::string vector from chars and offsets
     std::transform(

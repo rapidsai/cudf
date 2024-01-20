@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 
@@ -217,13 +217,22 @@ cdef class DeviceScalar:
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
-        cdef libcudf_types.data_type cdtype
-
         s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
-        cdtype = s.get_raw_ptr()[0].type()
+        s._set_dtype(dtype)
+        return s
+
+    @staticmethod
+    cdef DeviceScalar from_pylibcudf(pylibcudf.Scalar pscalar, dtype=None):
+        cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
+        s.c_value = pscalar
+        s._set_dtype(dtype)
+        return s
+
+    cdef void _set_dtype(self, dtype=None):
+        cdef libcudf_types.data_type cdtype = self.get_raw_ptr()[0].type()
 
         if dtype is not None:
-            s._dtype = dtype
+            self._dtype = dtype
         elif cdtype.id() in {
             libcudf_types.type_id.DECIMAL32,
             libcudf_types.type_id.DECIMAL64,
@@ -233,32 +242,31 @@ cdef class DeviceScalar:
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.type_id.STRUCT:
-            struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
-            s._dtype = StructDtype({
+            struct_table_view = (<struct_scalar*>self.get_raw_ptr())[0].view()
+            self._dtype = StructDtype({
                 str(i): dtype_from_column_view(struct_table_view.column(i))
                 for i in range(struct_table_view.num_columns())
             })
         elif cdtype.id() == libcudf_types.type_id.LIST:
             if (
-                <list_scalar*>s.get_raw_ptr()
+                <list_scalar*>self.get_raw_ptr()
             )[0].view().type().id() == libcudf_types.type_id.LIST:
-                s._dtype = dtype_from_column_view(
-                    (<list_scalar*>s.get_raw_ptr())[0].view()
+                self._dtype = dtype_from_column_view(
+                    (<list_scalar*>self.get_raw_ptr())[0].view()
                 )
             else:
-                s._dtype = ListDtype(
+                self._dtype = ListDtype(
                     LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                         <underlying_type_t_type_id>(
-                            (<list_scalar*>s.get_raw_ptr())[0]
+                            (<list_scalar*>self.get_raw_ptr())[0]
                             .view().type().id()
                         )
                     ]
                 )
         else:
-            s._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
+            self._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                 <underlying_type_t_type_id>(cdtype.id())
             ]
-        return s
 
 
 # TODO: Currently the only uses of this function and the one below are in

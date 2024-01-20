@@ -1,8 +1,9 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from enum import IntEnum
 
 import numpy as np
+import pandas as pd
 
 from libcpp.memory cimport make_shared, shared_ptr
 
@@ -270,9 +271,13 @@ cpdef dtype_to_pylibcudf_type(dtype):
         else:
             tid = pylibcudf.TypeId.DECIMAL32
         return pylibcudf.DataType(tid, -dtype.scale)
-    return pylibcudf.DataType(
-        SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[np.dtype(dtype)]
-    )
+
+    # libcudf types don't support localization so convert to the base type
+    if isinstance(dtype, pd.DatetimeTZDtype):
+        dtype = np.dtype(f"<M8[{dtype.unit}]")
+    else:
+        dtype = np.dtype(dtype)
+    return pylibcudf.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
     return tid in (

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -7,7 +7,17 @@ import pickle
 import warnings
 from functools import cache, cached_property
 from numbers import Number
-from typing import Any, List, MutableMapping, Optional, Tuple, Union
+from typing import (
+    Any,
+    List,
+    Literal,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+    cast,
+)
 
 import cupy
 import numpy as np
@@ -22,8 +32,6 @@ from cudf._lib.search import search_sorted
 from cudf._lib.types import size_type_dtype
 from cudf.api.extensions import no_default
 from cudf.api.types import (
-    _is_categorical_dtype,
-    _is_interval_dtype,
     _is_non_decimal_numeric_dtype,
     is_dtype_equal,
     is_integer,
@@ -250,9 +258,9 @@ class RangeIndex(BaseIndex, BinaryOperand):
     def searchsorted(
         self,
         value: int,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         assert (len(self) <= 1) or (
             ascending == (self._step > 0)
@@ -302,9 +310,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @_cudf_nvtx_annotate
     def _values(self):
         if len(self) > 0:
-            return column.arange(
-                self._start, self._stop, self._step, dtype=self.dtype
-            )
+            return column.as_column(self._range, dtype=self.dtype)
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
 
@@ -1368,14 +1374,21 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         dtype_index = tmp_meta.rfind(" dtype=")
         prior_to_dtype = tmp_meta[:dtype_index]
         lines = lines[:-1]
-        lines.append(prior_to_dtype + " dtype='%s'" % self.dtype)
+        keywords = [f"dtype='{self.dtype}'"]
         if self.name is not None:
-            lines[-1] = lines[-1] + ", name='%s'" % self.name
+            keywords.append(f"name={self.name!r}")
         if "length" in tmp_meta:
-            lines[-1] = lines[-1] + ", length=%d)" % len(self)
-        else:
-            lines[-1] = lines[-1] + ")"
-
+            keywords.append(f"length={len(self)}")
+        if (
+            "freq" in tmp_meta
+            and isinstance(self, DatetimeIndex)
+            and self._freq is not None
+        ):
+            keywords.append(
+                f"freq={self._freq._maybe_as_fast_pandas_offset().freqstr!r}"
+            )
+        keywords = ", ".join(keywords)
+        lines.append(f"{prior_to_dtype} {keywords})")
         return "\n".join(lines)
 
     @_cudf_nvtx_annotate
@@ -1673,8 +1686,6 @@ class DatetimeIndex(Index):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        if freq is not None:
-            raise NotImplementedError("Freq is not yet supported")
         if tz is not None:
             raise NotImplementedError("tz is not yet supported")
         if normalize is not False:
@@ -1687,6 +1698,8 @@ class DatetimeIndex(Index):
             raise NotImplementedError("dayfirst == True is not yet supported")
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
+
+        self._freq = _validate_freq(freq)
 
         valid_dtypes = tuple(
             f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
@@ -1704,6 +1717,30 @@ class DatetimeIndex(Index):
             data = data.copy()
         super().__init__(data, **kwargs)
 
+        if self._freq is not None:
+            unique_vals = self.to_series().diff().unique()
+            if len(unique_vals) > 2 or (
+                len(unique_vals) == 2
+                and unique_vals[1] != self._freq._maybe_as_fast_pandas_offset()
+            ):
+                raise ValueError("No unique frequency found")
+
+    @_cudf_nvtx_annotate
+    def _copy_type_metadata(
+        self: DatetimeIndex, other: DatetimeIndex, *, override_dtypes=None
+    ) -> Index:
+        super()._copy_type_metadata(other, override_dtypes=override_dtypes)
+        self._freq = _validate_freq(other._freq)
+        return self
+
+    @classmethod
+    def _from_data(
+        cls, data: MutableMapping, name: Any = no_default, freq: Any = None
+    ):
+        result = super()._from_data(data, name)
+        result._freq = _validate_freq(freq)
+        return result
+
     def __getitem__(self, index):
         value = super().__getitem__(index)
         if cudf.get_option("mode.pandas_compatible") and isinstance(
@@ -1712,12 +1749,17 @@ class DatetimeIndex(Index):
             return pd.Timestamp(value)
         return value
 
+    @_cudf_nvtx_annotate
+    def copy(self, name=None, deep=False):
+        idx_copy = super().copy(name=name, deep=deep)
+        return idx_copy._copy_type_metadata(self)
+
     def searchsorted(
         self,
         value,
-        side: str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         value = self.dtype.type(value)
         return super().searchsorted(
@@ -2069,7 +2111,13 @@ class DatetimeIndex(Index):
                 )
             else:
                 nanos = self._values.astype("datetime64[ns]")
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
+
+        freq = (
+            self._freq._maybe_as_fast_pandas_offset()
+            if self._freq is not None
+            else None
+        )
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name, freq=freq)
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -2214,10 +2262,9 @@ class DatetimeIndex(Index):
         >>> tz_naive = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
         >>> tz_aware = tz_naive.tz_localize("America/New_York")
         >>> tz_aware
-        DatetimeIndex(['2018-03-01 09:00:00-05:00',
-                       '2018-03-02 09:00:00-05:00',
+        DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]')
+                      dtype='datetime64[ns, America/New_York]', freq='D')
 
         Ambiguous or nonexistent datetimes are converted to NaT.
 
@@ -2236,14 +2283,16 @@ class DatetimeIndex(Index):
         ``ambiguous`` and ``nonexistent`` arguments. Any
         ambiguous or nonexistent timestamps are converted
         to 'NaT'.
-        """
+        """  # noqa: E501
         from cudf.core._internals.timezones import delocalize, localize
 
         if tz is None:
             result_col = delocalize(self._column)
         else:
             result_col = localize(self._column, tz, ambiguous, nonexistent)
-        return DatetimeIndex._from_data({self.name: result_col})
+        return DatetimeIndex._from_data(
+            {self.name: result_col}, freq=self._freq
+        )
 
     def tz_convert(self, tz):
         """
@@ -2268,16 +2317,15 @@ class DatetimeIndex(Index):
         >>> dti = cudf.date_range('2018-03-01 09:00', periods=3, freq='D')
         >>> dti = dti.tz_localize("America/New_York")
         >>> dti
-        DatetimeIndex(['2018-03-01 09:00:00-05:00',
-                       '2018-03-02 09:00:00-05:00',
+        DatetimeIndex(['2018-03-01 09:00:00-05:00', '2018-03-02 09:00:00-05:00',
                        '2018-03-03 09:00:00-05:00'],
-                      dtype='datetime64[ns, America/New_York]')
+                      dtype='datetime64[ns, America/New_York]', freq='D')
         >>> dti.tz_convert("Europe/London")
         DatetimeIndex(['2018-03-01 14:00:00+00:00',
                        '2018-03-02 14:00:00+00:00',
                        '2018-03-03 14:00:00+00:00'],
                       dtype='datetime64[ns, Europe/London]')
-        """
+        """  # noqa: E501
         from cudf.core._internals.timezones import convert
 
         if tz is None:
@@ -2532,7 +2580,7 @@ class CategoricalIndex(Index):
         if isinstance(data, CategoricalColumn):
             data = data
         elif isinstance(data, pd.Series) and (
-            _is_categorical_dtype(data.dtype)
+            isinstance(data.dtype, pd.CategoricalDtype)
         ):
             codes_data = column.as_column(data.cat.codes.values)
             data = column.build_categorical_column(
@@ -2749,7 +2797,9 @@ class IntervalIndex(Index):
 
         if isinstance(data, IntervalColumn):
             data = data
-        elif isinstance(data, pd.Series) and (_is_interval_dtype(data.dtype)):
+        elif isinstance(data, pd.Series) and isinstance(
+            data.dtype, pd.IntervalDtype
+        ):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd.Interval, pd.IntervalIndex)):
             data = column.as_column(
@@ -3062,3 +3112,11 @@ def _get_nearest_indexer(
         distance = abs(index[indexer] - target_col)
         return indexer.where(distance <= tolerance, -1)
     return indexer
+
+
+def _validate_freq(freq: Any) -> cudf.DateOffset:
+    if isinstance(freq, str):
+        return cudf.DateOffset._from_freqstr(freq)
+    elif freq is not None and not isinstance(freq, cudf.DateOffset):
+        raise ValueError(f"Invalid frequency: {freq}")
+    return cast(cudf.DateOffset, freq)
