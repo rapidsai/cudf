@@ -187,9 +187,9 @@ void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
                                std::optional<std::vector<row_range>> splits = std::nullopt)
 {
   if (splits.has_value()) {
-    printf("------------\nSplits (start_rows, end_rows): \n");
+    printf("------------\nSplits (start_rows, num_rows): \n");
     for (size_t idx = 0; idx < splits->size(); idx++) {
-      printf("{%ld, %ld}\n", splits.value()[idx].start_rows, splits.value()[idx].end_rows);
+      printf("{%ld, %ld}\n", splits.value()[idx].start_rows, splits.value()[idx].num_rows);
     }
   }
 
@@ -213,7 +213,7 @@ void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
       if (split_index >= 0) {
         printf(" <-- split {%lu, %lu}",
                splits.value()[split_index].start_rows,
-               splits.value()[split_index].end_rows);
+               splits.value()[split_index].num_rows);
       }
     }
 
