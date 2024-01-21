@@ -239,7 +239,7 @@ void reader::impl::compute_chunk_ranges()
   if (_chunk_read_info.chunk_size_limit == 0) {
     _chunk_read_info.chunk_ranges = {
       row_range{_file_itm_data.rows_to_skip, _file_itm_data.rows_to_read}};
-    //    return;
+    return;
   }
 
   // Compute string sizes for all strings column.

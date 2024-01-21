@@ -449,7 +449,7 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
 }
 
 /**
- * @copydoc cudf::io::chunked_orc_reader::chunked_parquet_reader
+ * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader
  */
 chunked_orc_reader::chunked_orc_reader(std::size_t chunk_read_limit,
                                        orc_reader_options const& options,
@@ -476,7 +476,7 @@ bool chunked_orc_reader::has_next() const
 }
 
 /**
- * @copydoc cudf::io::chunked_parquet_reader::read_chunk
+ * @copydoc cudf::io::chunked_orc_reader::read_chunk
  */
 table_with_metadata chunked_orc_reader::read_chunk() const
 {
