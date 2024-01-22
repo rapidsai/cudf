@@ -95,7 +95,7 @@ TEST_F(JSONTypeCastTest, String)
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
   auto str_col = cudf::io::json::detail::parse_data(
-    column.chars().data<char>(),
+    column.chars_begin(stream),
     thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
     column.size(),
     type,
@@ -128,7 +128,7 @@ TEST_F(JSONTypeCastTest, Int)
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
   auto col = cudf::io::json::detail::parse_data(
-    column.chars().data<char>(),
+    column.chars_begin(stream),
     thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
     column.size(),
     type,
@@ -168,7 +168,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
     std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
   auto col = cudf::io::json::detail::parse_data(
-    column.chars().data<char>(),
+    column.chars_begin(stream),
     thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
     column.size(),
     type,
@@ -237,7 +237,7 @@ TEST_F(JSONTypeCastTest, ErrorNulls)
       std::get<0>(cudf::test::detail::make_null_mask(null_mask_it, null_mask_it + column.size()));
 
     auto str_col = cudf::io::json::detail::parse_data(
-      column.chars().data<char>(),
+      column.chars_begin(stream),
       thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
       column.size(),
       type,

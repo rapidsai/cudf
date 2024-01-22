@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ namespace transformation {
 namespace jit {
 
 template <typename TypeOut, typename TypeIn>
-__global__ void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
+CUDF_KERNEL void kernel(cudf::size_type size, TypeOut* out_data, TypeIn* in_data)
 {
   // cannot use global_thread_id utility due to a JIT build issue by including
   // the `cudf/detail/utilities/cuda.cuh` header

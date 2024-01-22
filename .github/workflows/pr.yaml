@@ -137,7 +137,7 @@ jobs:
     with:
       build_command: |
         sccache -z;
-        build-all -DBUILD_BENCHMARKS=ON -DNVBench_ENABLE_CUPTI=OFF --verbose;
+        build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf
