@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
@@ -17,6 +17,26 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
     ) except +
 
     cdef unique_ptr[column] md5 "cudf::hashing::md5" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha1 "cudf::hashing::sha1" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha224 "cudf::hashing::sha224" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha256 "cudf::hashing::sha256" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha384 "cudf::hashing::sha384" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha512 "cudf::hashing::sha512" (
         const table_view& input
     ) except +
 

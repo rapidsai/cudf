@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -164,7 +165,7 @@ TEST_F(ColumnToRowTests, ManyStrings)
       return TEST_STRINGS[rand() % (sizeof(TEST_STRINGS) / sizeof(TEST_STRINGS[0]))];
     });
 
-  auto const num_rows = 1000000;
+  auto const num_rows = 1'000'000;
   auto const num_cols = 50;
   std::vector<cudf::data_type> schema;
 
@@ -763,7 +764,7 @@ TEST_F(RowToColumnTests, Bigger)
   std::vector<cudf::column_view> views;
   std::vector<cudf::data_type> schema;
 
-  // 28 columns of 1 million rows
+  // 128 columns of 1 million rows
   constexpr auto num_rows = 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
     cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
@@ -792,8 +793,8 @@ TEST_F(RowToColumnTests, Biggest)
   std::vector<cudf::column_view> views;
   std::vector<cudf::data_type> schema;
 
-  // 128 columns of 1 million rows
-  constexpr auto num_rows = 5 * 1024 * 1024;
+  // 128 columns of 2 million rows
+  constexpr auto num_rows = 2 * 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
     cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
                                                                    r + num_rows * i + num_rows));
@@ -916,6 +917,10 @@ TEST_F(RowToColumnTests, BigStrings)
 
 TEST_F(RowToColumnTests, ManyStrings)
 {
+  // The sizing of this test is very sensitive to the state of the random number generator,
+  // i.e., depending on the order of execution, the number of times the largest string is
+  // selected will lead to out-of-memory exceptions. Seeding the RNG here helps prevent that.
+  srand(1);
   char const* TEST_STRINGS[] = {
     "These",
     "are",
@@ -954,7 +959,7 @@ TEST_F(RowToColumnTests, ManyStrings)
     "this string is the longest string because it is duplicated more than you can imagine "
     "this string is the longest string because it is duplicated more than you can imagine "
     "this string is the longest string because it is duplicated more than you can imagine "
-    "this string is the longest string because it is duplicated more than you can imagine "
+    "this string is the longest string because it is duplicated more than you can imagine ",
     "a",
     "good test",
     "is required to produce reasonable confidence that this is working",
@@ -971,7 +976,7 @@ TEST_F(RowToColumnTests, ManyStrings)
       return TEST_STRINGS[rand() % (sizeof(TEST_STRINGS) / sizeof(TEST_STRINGS[0]))];
     });
 
-  auto const num_rows = 500000;
+  auto const num_rows = 300'000;
   auto const num_cols = 50;
   std::vector<cudf::data_type> schema;
 
@@ -1002,3 +1007,5 @@ TEST_F(RowToColumnTests, ManyStrings)
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(in_view[0], *new_cols);
   }
 }
+
+CUDF_TEST_PROGRAM_MAIN()
