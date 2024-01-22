@@ -981,7 +981,10 @@ struct get_decomp_scratch {
       case SNAPPY:
         if (cudf::io::detail::nvcomp_integration::is_stable_enabled()) {
           return cudf::io::nvcomp::batched_decompress_temp_size(
-            cudf::io::nvcomp::compression_type::SNAPPY, di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
+            cudf::io::nvcomp::compression_type::SNAPPY,
+            di.num_pages,
+            di.max_page_decompressed_size,
+            di.total_decompressed_size);
         } else {
           return 0;
         }
@@ -989,7 +992,10 @@ struct get_decomp_scratch {
 
       case ZSTD:
         return cudf::io::nvcomp::batched_decompress_temp_size(
-            cudf::io::nvcomp::compression_type::ZSTD, di.num_pages, di.max_page_decompressed_size, di.total_decompressed_size);
+          cudf::io::nvcomp::compression_type::ZSTD,
+          di.num_pages,
+          di.max_page_decompressed_size,
+          di.total_decompressed_size);
 
       default: CUDF_FAIL("Invalid compression codec for parquet decompression");
     }

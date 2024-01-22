@@ -1013,7 +1013,7 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, SingleFixedWidthColumn)
 {
   auto base_path          = temp_env->get_temp_filepath("single_col_fixed_width");
   constexpr auto num_rows = 1'000'000;
-  auto iter1 = thrust::make_constant_iterator(15);
+  auto iter1              = thrust::make_constant_iterator(15);
   cudf::test::fixed_width_column_wrapper<double> col1(iter1, iter1 + num_rows);
   auto tbl = cudf::table_view{{col1}};
 
