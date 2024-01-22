@@ -601,9 +601,9 @@ void make_device_json_column(device_span<SymbolT const> input,
 
         is_mixed_type_column[this_col_id] = 1;
         is_mixed_type_column[old_col_id]  = 1;
-        // if old col type (not cat) is not string/val, replace with string.
+        // if old col type (not cat) is list or struct, replace with string.
         auto& col = columns.at(old_col_id).get();
-        if (col.type != json_col_t::StringColumn) {
+        if (col.type == json_col_t::ListColumn or col.type == json_col_t::StructColumn) {
           reinitialize_as_string(old_col_id, col);
           // all its children (which are already inserted) are ignored later.
         }

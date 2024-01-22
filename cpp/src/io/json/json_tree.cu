@@ -192,16 +192,16 @@ std::pair<rmm::device_uvector<KeyType>, rmm::device_uvector<IndexType>> stable_s
 }
 
 /**
- * @brief Propagate parent node to siblings from first sibling.
+ * @brief Propagate parent node from first sibling to other siblings.
  *
  * @param node_levels Node levels of each node
  * @param parent_node_ids parent node ids initialized for first child of each push node,
  *                       and other siblings are initialized to -1.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-void propagate_parent_to_siblings(cudf::device_span<TreeDepthT const> node_levels,
-                                  cudf::device_span<NodeIndexT> parent_node_ids,
-                                  rmm::cuda_stream_view stream)
+void propagate_first_sibling_to_other(cudf::device_span<TreeDepthT const> node_levels,
+                                      cudf::device_span<NodeIndexT> parent_node_ids,
+                                      rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   auto [sorted_node_levels, sorted_order] = stable_sorted_key_order<size_type>(node_levels, stream);
@@ -354,7 +354,7 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
       });
   }
   // Propagate parent node to siblings from first sibling - inplace.
-  propagate_parent_to_siblings(
+  propagate_first_sibling_to_other(
     cudf::device_span<TreeDepthT const>{node_levels.data(), node_levels.size()},
     parent_node_ids,
     stream);
@@ -465,8 +465,8 @@ tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
         // parent_node_sentinel is -1, useful for segmented max operation below
       });
 
-    // propagate to siblings.
-    propagate_parent_to_siblings(
+    // propagate parent node from first sibling to other siblings - inplace.
+    propagate_first_sibling_to_other(
       cudf::device_span<TreeDepthT const>{token_levels.data(), token_levels.size()},
       parent_node_ids,
       stream);
