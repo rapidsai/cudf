@@ -1241,12 +1241,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     ) -> Union[ColumnBase, ScalarLike]:
         raise NotImplementedError
 
-    def _minmax(self, skipna: Optional[bool] = None):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.minmax(result_col)
-        return result_col
-
     def _reduce(
         self,
         op: str,
@@ -1273,13 +1267,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _process_for_reduction(
         self, skipna: Optional[bool] = None, min_count: int = 0
     ) -> Union[ColumnBase, ScalarLike]:
-        skipna = True if skipna is None else skipna
+        if skipna is None:
+            skipna = True
 
-        if skipna:
-            if self.has_nulls():
+        if self.has_nulls():
+            if skipna:
                 result_col = self.dropna()
-        else:
-            if self.has_nulls():
+            else:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         result_col = self
