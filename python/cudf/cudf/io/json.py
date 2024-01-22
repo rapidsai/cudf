@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections import abc
@@ -25,6 +25,7 @@ def read_json(
     byte_range=None,
     keep_quotes=False,
     storage_options=None,
+    mixed_types_as_string=False,
     *args,
     **kwargs,
 ):
@@ -116,6 +117,7 @@ def read_json(
             byte_range,
             engine == "cudf_legacy",
             keep_quotes,
+            mixed_types_as_string,
         )
     else:
         warnings.warn(
