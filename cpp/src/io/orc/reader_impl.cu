@@ -18,6 +18,8 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <cudf/detail/copy.hpp>
+
 namespace cudf::io::orc::detail {
 
 reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
@@ -93,42 +95,65 @@ table_with_metadata reader::impl::read_chunk_internal()
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
-  std::vector<std::unique_ptr<column>> out_columns;
   auto out_metadata = make_output_metadata();
 
-  // If no rows or stripes to read, return empty columns
-  if (_file_itm_data.rows_to_read == 0 || _file_itm_data.selected_stripes.empty()) {
-    std::transform(_selected_columns.levels[0].begin(),
-                   _selected_columns.levels[0].end(),
-                   std::back_inserter(out_columns),
-                   [&](auto const col_meta) {
-                     out_metadata.schema_info.emplace_back("");
-                     return create_empty_column(col_meta.id,
-                                                _metadata,
-                                                _decimal128_columns,
-                                                _use_np_dtypes,
-                                                _timestamp_type,
-                                                out_metadata.schema_info.back(),
-                                                _stream);
-                   });
-    return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+  // If no rows or stripes to read, or all chunks were read, return empty columns.
+  if (_file_itm_data.rows_to_read == 0 || _file_itm_data.selected_stripes.empty() ||
+      _chunk_read_info.current_chunk_idx >= _chunk_read_info.chunks.size()) {
+    if (!_out_empty_table) {
+      std::vector<std::unique_ptr<column>> empty_cols;
+      std::transform(_selected_columns.levels[0].begin(),
+                     _selected_columns.levels[0].end(),
+                     std::back_inserter(empty_cols),
+                     [&](auto const col_meta) {
+                       out_metadata.schema_info.emplace_back("");
+                       return create_empty_column(col_meta.id,
+                                                  _metadata,
+                                                  _decimal128_columns,
+                                                  _use_np_dtypes,
+                                                  _timestamp_type,
+                                                  out_metadata.schema_info.back(),
+                                                  _stream);
+                     });
+      _out_empty_table = std::make_unique<table>(std::move(empty_cols));
+    }
+    if (_chunk_read_info.chunk_size_limit > 0) {
+      return {std::make_unique<table>(*_out_empty_table), std::move(out_metadata)};
+    } else {
+      return {std::move(_out_empty_table), std::move(out_metadata)};
+    }
   }
 
   // Create columns from buffer with respective schema information.
-  std::transform(
-    _selected_columns.levels[0].begin(),
-    _selected_columns.levels[0].end(),
-    std::back_inserter(out_columns),
-    [&](auto const& orc_col_meta) {
-      out_metadata.schema_info.emplace_back("");
-      auto col_buffer = assemble_buffer(
-        orc_col_meta.id, 0, _col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
-      return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
-    });
-
+  if (!_out_table) {
+    std::vector<std::unique_ptr<column>> out_cols;
+    std::transform(
+      _selected_columns.levels[0].begin(),
+      _selected_columns.levels[0].end(),
+      std::back_inserter(out_cols),
+      [&](auto const& orc_col_meta) {
+        out_metadata.schema_info.emplace_back("");
+        auto col_buffer = assemble_buffer(
+          orc_col_meta.id, 0, _col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
+        return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
+      });
+    _out_table = std::make_unique<table>(std::move(out_cols));
+  }
   std::cout << "peak_memory_usage: " << mem_stats_logger.peak_memory_usage() << std::endl;
 
-  return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
+  if (_chunk_read_info.chunk_size_limit > 0) {
+    auto const& chunk = _chunk_read_info.chunks[_chunk_read_info.current_chunk_idx];
+    ++_chunk_read_info.current_chunk_idx;
+    // TODO: fix this cast.
+    auto const out_tview =
+      cudf::detail::slice(*_out_table,
+                          {static_cast<size_type>(chunk.start_rows),
+                           static_cast<size_type>(chunk.start_rows + chunk.num_rows)},
+                          _stream);
+    return {std::make_unique<table>(out_tview), std::move(out_metadata)};
+  } else {
+    return {std::move(_out_table), std::move(out_metadata)};
+  }
 }
 
 table_with_metadata reader::impl::read_chunk()

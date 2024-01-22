@@ -180,6 +180,8 @@ class reader::impl {
   chunk_read_info _chunk_read_info;  // Data for chunked reading.
   std::unique_ptr<table_metadata> _output_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
+  std::unique_ptr<table> _out_table;
+  std::unique_ptr<table> _out_empty_table;
 
   memory_stats_logger mem_stats_logger;
 };
