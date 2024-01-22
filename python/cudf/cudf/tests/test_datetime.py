@@ -2431,6 +2431,41 @@ def test_to_datetime_errors_non_scalar_not_implemented(errors):
         cudf.to_datetime([1, ""], unit="s", errors=errors)
 
 
+@pytest.mark.parametrize(
+    "box", [list, pd.Index, cudf.Index, pd.Series, cudf.Series]
+)
+@pytest.mark.parametrize("dtype", [np.int64, np.uint64, np.float64])
+def test_to_datetime_arraylike_utc_true(box, dtype):
+    pd_data = [1, 2]
+    cudf_data = box(pd_data)
+    if box is not list:
+        cudf_data = cudf_data.astype(dtype)
+    if box is cudf.Series or box is pd.Series:
+        pd_data = pd.Series(pd_data)
+    result = cudf.to_datetime(cudf_data, utc=True)
+    expected = pd.to_datetime(pd_data, utc=True)
+    assert_eq(result, expected)
+
+
+@pytest.mark.xfail(
+    raises=TypeError,
+    reason="libcudf.copying.get_element doesn't understand pd.DatetimeTZDtype",
+)
+def test_to_datetime_scalar_utc_true():
+    data = pd.Timestamp(2020, 1, 1)
+    with cudf.option_context("mode.pandas_compatible", True):
+        result = cudf.to_datetime(data, utc=True)
+    expected = pd.Timestamp(year=2020, month=1, day=1, tz="UTC")
+    assert_eq(result, expected)
+
+
+def test_to_datetime_dataframe_utc_true():
+    data = cudf.DataFrame([[2020, 1, 1]], columns=["year", "month", "day"])
+    result = cudf.to_datetime(data, utc=True)
+    expected = pd.Series([datetime.datetime(2020, 1, 1)]).dt.tz_localize("UTC")
+    assert_eq(result, expected)
+
+
 def test_datetimeindex_dtype_np_dtype():
     dtype = np.dtype("datetime64[ns]")
     data = [1]

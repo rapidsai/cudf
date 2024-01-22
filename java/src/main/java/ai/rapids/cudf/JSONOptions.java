@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -30,12 +30,14 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean dayFirst;
   private final boolean lines;
   private final boolean recoverWithNull;
+  private final boolean mixedTypesAsStrings;
 
   private JSONOptions(Builder builder) {
     super(builder);
     dayFirst = builder.dayFirst;
     lines = builder.lines;
     recoverWithNull = builder.recoverWithNull;
+    mixedTypesAsStrings = builder.mixedTypesAsStrings;
   }
 
   public boolean isDayFirst() {
@@ -49,6 +51,10 @@ public final class JSONOptions extends ColumnFilterOptions {
   /** Return the value of the recoverWithNull option */
   public boolean isRecoverWithNull() {
     return recoverWithNull;
+  }
+
+  public boolean isMixedTypesAsStrings() {
+    return mixedTypesAsStrings;
   }
 
   @Override
@@ -65,6 +71,8 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean lines = true;
 
     private boolean recoverWithNull = false;
+
+    private boolean mixedTypesAsStrings = false;
 
     /**
      * Whether to parse dates as DD/MM versus MM/DD
@@ -98,6 +106,17 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withRecoverWithNull(boolean recoverWithNull) {
       this.recoverWithNull = recoverWithNull;
+      return this;
+    }
+
+    /**
+     * Specify how to handle columns that contain mixed types.
+     *
+     * @param mixedTypesAsStrings true: return unparsed JSON, false: throw exception
+     * @return builder for chaining
+     */
+    public Builder withMixedTypesAsStrings(boolean mixedTypesAsStrings) {
+      this.mixedTypesAsStrings = mixedTypesAsStrings;
       return this;
     }
 
