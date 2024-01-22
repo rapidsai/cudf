@@ -917,7 +917,9 @@ TEST_F(RowToColumnTests, BigStrings)
 
 TEST_F(RowToColumnTests, ManyStrings)
 {
-  // this test is very sensitive, so seed the random number generator
+  // The sizing of this test is very sensitive to the state of the random number generator,
+  // i.e., depending on the order of execution, the number of times the largest string is
+  // selected will lead to out-of-memory exceptions. Seeding the RNG here helps prevent that.
   srand(1);
   char const* TEST_STRINGS[] = {
     "These",
