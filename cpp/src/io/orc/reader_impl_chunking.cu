@@ -139,11 +139,11 @@ struct stripe_size_fn {
   }
 };
 
-std::vector<row_range> find_splits(host_span<cumulative_row_info const> sizes,
+std::vector<row_chunk> find_splits(host_span<cumulative_row_info const> sizes,
                                    size_type num_rows,
                                    size_t chunk_read_limit)
 {
-  std::vector<row_range> splits;
+  std::vector<row_chunk> splits;
 
   uint32_t cur_row_count     = 0;
   int64_t cur_pos            = 0;
@@ -174,7 +174,7 @@ std::vector<row_range> find_splits(host_span<cumulative_row_info const> sizes,
 
     auto const start_row = cur_row_count;
     cur_row_count        = sizes[split_pos].row_count;
-    splits.emplace_back(row_range{start_row, static_cast<size_type>(cur_row_count - start_row)});
+    splits.emplace_back(row_chunk{start_row, static_cast<size_type>(cur_row_count - start_row)});
     cur_pos             = split_pos;
     cur_cumulative_size = sizes[split_pos].size_bytes;
   }
@@ -184,7 +184,7 @@ std::vector<row_range> find_splits(host_span<cumulative_row_info const> sizes,
 
 void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
                                std::string const& label,
-                               std::optional<std::vector<row_range>> splits = std::nullopt)
+                               std::optional<std::vector<row_chunk>> splits = std::nullopt)
 {
   if (splits.has_value()) {
     printf("------------\nSplits (start_rows, num_rows): \n");
@@ -200,7 +200,7 @@ void print_cumulative_row_info(host_span<cumulative_row_info const> sizes,
     if (splits.has_value()) {
       // if we have a split at this row count and this is the last instance of this row count
       auto const start = thrust::make_transform_iterator(
-        splits->begin(), [](row_range const& i) { return i.start_rows; });
+        splits->begin(), [](auto const& i) { return i.start_rows; });
       auto const end         = start + splits->size();
       auto const split       = std::find(start, end, sizes[idx].row_count);
       auto const split_index = [&]() -> int {
@@ -237,8 +237,7 @@ void reader::impl::compute_chunk_ranges()
 {
   // If there is no limit on the output size, we just read everything.
   if (_chunk_read_info.chunk_size_limit == 0) {
-    _chunk_read_info.chunk_ranges = {
-      row_range{_file_itm_data.rows_to_skip, _file_itm_data.rows_to_read}};
+    _chunk_read_info.chunks = {{_file_itm_data.rows_to_skip, _file_itm_data.rows_to_read}};
     return;
   }
 
@@ -284,13 +283,13 @@ void reader::impl::compute_chunk_ranges()
 
   stripe_size_bytes.device_to_host_sync(_stream);
 
-  _chunk_read_info.chunk_ranges =
+  _chunk_read_info.chunks =
     find_splits(stripe_size_bytes,
                 _file_itm_data.rows_to_read, /*_chunk_read_info.chunk_size_limit*/
                 500);
 
   std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
-  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunk_ranges);
+  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
 }
 
 }  // namespace cudf::io::orc::detail

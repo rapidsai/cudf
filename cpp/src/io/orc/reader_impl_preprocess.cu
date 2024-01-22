@@ -699,6 +699,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes)
 {
+  if (_file_itm_data.preprocessed) { return; }
   auto const num_levels = _selected_columns.num_levels();
 
   // Selected columns at different levels of nesting are stored in different elements
@@ -1071,6 +1072,12 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   }  // end loop level
 
   compute_chunk_ranges();
+  if (_chunk_read_info.chunk_size_limit == 0) {  // read the whole file at once
+    CUDF_EXPECTS(_chunk_read_info.chunks.size() == 1,
+                 "Reading the whole file should yield only one chunk.");
+  }
+
+  _file_itm_data.preprocessed = true;
 }
 
 }  // namespace cudf::io::orc::detail

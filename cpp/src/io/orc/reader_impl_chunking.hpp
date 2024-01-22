@@ -48,12 +48,14 @@ struct file_intermediate_data {
   std::vector<metadata::stripe_source_mapping> selected_stripes;
 
   hostdevice_vector<uint32_t> stripe_sizes;  // Number of rows at root level in each stripe.
+
+  bool preprocessed{false};
 };
 
 /**
- * @brief Struct to identify the range for each chunk of rows during a chunked reading pass.
+ * @brief Struct to identify a chunk of rows during a chunked reading pass.
  */
-struct row_range {
+struct row_chunk {
   int64_t start_rows;
   int64_t num_rows;
 };
@@ -69,7 +71,7 @@ struct chunk_read_info {
   std::size_t chunk_size_limit;  // Maximum size (in bytes) of an output chunk, or 0 for no limit
 
   // The range of rows for output chunks.
-  std::vector<row_range> chunk_ranges;
+  std::vector<row_chunk> chunks;
   std::size_t current_chunk_idx{0};
 };
 

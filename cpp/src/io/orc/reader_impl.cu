@@ -149,7 +149,7 @@ table_with_metadata reader::impl::read_chunk()
 bool reader::impl::has_next()
 {
   prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
-  return _chunk_read_info.current_chunk_idx < _chunk_read_info.chunk_ranges.size();
+  return _chunk_read_info.current_chunk_idx < _chunk_read_info.chunks.size();
 }
 
 }  // namespace cudf::io::orc::detail
