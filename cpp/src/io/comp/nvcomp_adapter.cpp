@@ -128,7 +128,6 @@ std::string compression_type_name(compression_type compression)
     case compression_type::SNAPPY: return "Snappy";
     case compression_type::ZSTD: return "Zstandard";
     case compression_type::DEFLATE: return "Deflate";
-    case compression_type::INVALID: CUDF_FAIL("Invalid nvcomp compression type");
   }
   return "compression_type(" + std::to_string(static_cast<int>(compression)) + ")";
 }
