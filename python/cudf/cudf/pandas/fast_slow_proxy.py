@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -24,6 +24,11 @@ from typing import (
 )
 
 from .annotation import nvtx
+
+
+def call_operator(fn, args, kwargs):
+    return fn(*args, **kwargs)
+
 
 _CUDF_PANDAS_NVTX_COLORS = {
     "COPY_SLOW_TO_FAST": 0xCA0020,
@@ -189,22 +194,6 @@ def make_final_proxy_type(
             else _State.SLOW
         )
 
-    def __reduce__(self):
-        # Need a local import to avoid circular import issues
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
-        return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
-
-    def __setstate__(self, state):
-        # Need a local import to avoid circular import issues
-        from .module_accelerator import disable_module_accelerator
-
-        with disable_module_accelerator():
-            unpickled_wrapped_obj = pickle.loads(state)
-        self._fsproxy_wrapped = unpickled_wrapped_obj
-
     slow_dir = dir(slow_type)
     cls_dict = {
         "__init__": __init__,
@@ -215,9 +204,8 @@ def make_final_proxy_type(
         "_fsproxy_slow_to_fast": _fsproxy_slow_to_fast,
         "_fsproxy_fast_to_slow": _fsproxy_fast_to_slow,
         "_fsproxy_state": _fsproxy_state,
-        "__reduce__": __reduce__,
-        "__setstate__": __setstate__,
     }
+
     if additional_attributes is None:
         additional_attributes = {}
     for method in _SPECIAL_METHODS:
@@ -716,6 +704,27 @@ class _FinalProxy(_FastSlowProxy):
         proxy._fsproxy_wrapped = value
         return proxy
 
+    def __reduce__(self):
+        """
+        In conjunction with `__proxy_setstate__`, this effectively enables
+        proxy types to be pickled and unpickled by pickling and unpickling
+        the underlying wrapped types.
+        """
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
+        return (_PickleConstructor(type(self)), (), pickled_wrapped_obj)
+
+    def __setstate__(self, state):
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            unpickled_wrapped_obj = pickle.loads(state)
+        self._fsproxy_wrapped = unpickled_wrapped_obj
+
 
 class _IntermediateProxy(_FastSlowProxy):
     """
@@ -772,6 +781,34 @@ class _IntermediateProxy(_FastSlowProxy):
         args, kwargs = _slow_arg(args), _slow_arg(kwargs)
         return func(*args, **kwargs)
 
+    def __reduce__(self):
+        """
+        In conjunction with `__proxy_setstate__`, this effectively enables
+        proxy types to be pickled and unpickled by pickling and unpickling
+        the underlying wrapped types.
+        """
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            pickled_wrapped_obj = pickle.dumps(self._fsproxy_wrapped)
+        pickled_method_chain = pickle.dumps(self._method_chain)
+        return (
+            _PickleConstructor(type(self)),
+            (),
+            (pickled_wrapped_obj, pickled_method_chain),
+        )
+
+    def __setstate__(self, state):
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            unpickled_wrapped_obj = pickle.loads(state[0])
+        unpickled_method_chain = pickle.loads(state[1])
+        self._fsproxy_wrapped = unpickled_wrapped_obj
+        self._method_chain = unpickled_method_chain
+
 
 class _CallableProxyMixin:
     """
@@ -788,7 +825,7 @@ class _CallableProxyMixin:
             # _fast_slow_function_call) to avoid infinite recursion.
             # TODO: When Python 3.11 is the minimum supported Python version
             # this can use operator.call
-            lambda fn, args, kwargs: fn(*args, **kwargs),
+            call_operator,
             self,
             args,
             kwargs,
