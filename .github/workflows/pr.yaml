@@ -133,11 +133,11 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
-    uses: rapidsai/shared-action-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.04
+    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.04
     with:
       build_command: |
         sccache -z;
-        build-all -DBUILD_BENCHMARKS=ON -DNVBench_ENABLE_CUPTI=OFF --verbose;
+        build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf

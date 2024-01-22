@@ -1,7 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
-from collections import namedtuple
 from decimal import Decimal
 
 import cupy as cp
@@ -137,17 +136,6 @@ def np_to_pa_dtype(dtype):
         # default fallback unit is ns
         return pa.duration("ns")
     return _np_pa_dtypes[cudf.dtype(dtype).type]
-
-
-def get_numeric_type_info(dtype):
-    _TypeMinMax = namedtuple("_TypeMinMax", "min,max")
-    if dtype.kind in {"i", "u"}:
-        info = np.iinfo(dtype)
-        return _TypeMinMax(info.min, info.max)
-    elif dtype.kind == "f":
-        return _TypeMinMax(dtype.type("-inf"), dtype.type("+inf"))
-    else:
-        raise TypeError(dtype)
 
 
 def numeric_normalize_types(*args):
