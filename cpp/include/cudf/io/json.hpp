@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,6 +98,8 @@ class json_reader_options {
 
   // Read the file as a json object per line
   bool _lines = false;
+  // Parse mixed types as a string column
+  bool _mixed_types_as_string = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -121,7 +123,7 @@ class json_reader_options {
    *
    * @param src source information used to read parquet file
    */
-  explicit json_reader_options(source_info const& src) : _source(src) {}
+  explicit json_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend json_reader_options_builder;
 
@@ -139,7 +141,7 @@ class json_reader_options {
    * @param src source information used to read json file
    * @returns builder to build the options
    */
-  static json_reader_options_builder builder(source_info const& src);
+  static json_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -226,6 +228,13 @@ class json_reader_options {
   bool is_enabled_lines() const { return _lines; }
 
   /**
+   * @brief Whether to parse mixed types as a string column.
+   *
+   * @return `true` if mixed types are parsed as a string column
+   */
+  bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
+
+  /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @returns true if dates are parsed as DD/MM, false if MM/DD
@@ -303,6 +312,13 @@ class json_reader_options {
   void enable_lines(bool val) { _lines = val; }
 
   /**
+   * @brief Set whether to parse mixed types as a string column.
+   *
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
+   */
+  void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -351,7 +367,7 @@ class json_reader_options_builder {
    *
    * @param src The source information used to read avro file
    */
-  explicit json_reader_options_builder(source_info const& src) : options(src) {}
+  explicit json_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Set data types for columns to be read.
@@ -438,6 +454,18 @@ class json_reader_options_builder {
   }
 
   /**
+   * @brief Set whether to parse mixed types as a string column.
+   *
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
+   * @return this for chaining
+   */
+  json_reader_options_builder& mixed_types_as_string(bool val)
+  {
+    options._mixed_types_as_string = val;
+    return *this;
+  }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -512,6 +540,7 @@ class json_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -519,6 +548,7 @@ class json_reader_options_builder {
  */
 table_with_metadata read_json(
   json_reader_options options,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
@@ -861,9 +891,11 @@ class json_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_json(json_writer_options const& options,
+                rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

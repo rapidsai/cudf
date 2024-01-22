@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <gtest/gtest.h>
@@ -381,7 +382,7 @@ struct ClampStringTest : public cudf::test::BaseFixture {};
 
 TEST_F(ClampStringTest, WithNullableColumn)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -391,7 +392,7 @@ TEST_F(ClampStringTest, WithNullableColumn)
   lo->set_valid_async(true);
   hi->set_valid_async(true);
 
-  std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "i", "e", "B"};
+  std::vector<std::string> expected_strings{"B", "b", "c", "", "e", "F", "G", "H", "", "e", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -423,7 +424,7 @@ TEST_F(ClampStringTest, WithNonNullableColumn)
 
 TEST_F(ClampStringTest, WithNullableColumnNullLow)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -433,7 +434,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow)
   lo->set_valid_async(false);
   hi->set_valid_async(true);
 
-  std::vector<std::string> expected_strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "e", "B"};
+  std::vector<std::string> expected_strings{"A", "b", "c", "", "e", "F", "G", "H", "", "e", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -445,7 +446,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullLow)
 
 TEST_F(ClampStringTest, WithNullableColumnNullHigh)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -455,7 +456,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh)
   lo->set_valid_async(true);
   hi->set_valid_async(false);
 
-  std::vector<std::string> expected_strings{"B", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> expected_strings{"B", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());
@@ -467,7 +468,7 @@ TEST_F(ClampStringTest, WithNullableColumnNullHigh)
 
 TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -484,7 +485,7 @@ TEST_F(ClampStringTest, WithNullableColumnBothLoAndHiNull)
 
 TEST_F(ClampStringTest, WithReplaceString)
 {
-  std::vector<std::string> strings{"A", "b", "c", "D", "e", "F", "G", "H", "i", "j", "B"};
+  std::vector<std::string> strings{"A", "b", "c", "", "e", "F", "G", "H", "", "j", "B"};
   std::vector<bool> valids{1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1};
 
   cudf::test::strings_column_wrapper input(strings.begin(), strings.end(), valids.begin());
@@ -498,7 +499,7 @@ TEST_F(ClampStringTest, WithReplaceString)
   hi->set_valid_async(true);
   hi_replace->set_valid_async(true);
 
-  std::vector<std::string> expected_strings{"Z", "b", "c", "D", "e", "F", "G", "H", "z", "z", "B"};
+  std::vector<std::string> expected_strings{"Z", "b", "c", "", "e", "F", "G", "H", "", "z", "B"};
 
   cudf::test::strings_column_wrapper expected(
     expected_strings.begin(), expected_strings.end(), valids.begin());

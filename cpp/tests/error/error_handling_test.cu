@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -39,7 +40,7 @@ TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
 namespace {
 // Some silly kernel that will cause an error
-void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
+CUDF_KERNEL void test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
 // In a release build and without explicit synchronization, CUDF_CHECK_CUDA may
@@ -69,7 +70,7 @@ TEST(StreamCheck, CatchFailedKernel)
   EXPECT_THROW(CUDF_CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
-__global__ void kernel() { asm("trap;"); }
+CUDF_KERNEL void kernel() { asm("trap;"); }
 
 TEST(DeathTest, CudaFatalError)
 {
@@ -87,9 +88,9 @@ TEST(DeathTest, CudaFatalError)
 
 #ifndef NDEBUG
 
-__global__ void assert_false_kernel() { cudf_assert(false && "this kernel should die"); }
+CUDF_KERNEL void assert_false_kernel() { cudf_assert(false && "this kernel should die"); }
 
-__global__ void assert_true_kernel() { cudf_assert(true && "this kernel should live"); }
+CUDF_KERNEL void assert_true_kernel() { cudf_assert(true && "this kernel should live"); }
 
 TEST(DebugAssertDeathTest, cudf_assert_false)
 {

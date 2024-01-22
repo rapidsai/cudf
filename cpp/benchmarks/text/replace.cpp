@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,7 +59,7 @@ static void bench_replace(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  auto chars_size = view.chars_size();
+  auto chars_size = view.chars_size(cudf::get_default_stream());
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 

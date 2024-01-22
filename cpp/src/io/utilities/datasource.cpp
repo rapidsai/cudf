@@ -194,7 +194,9 @@ class memory_mapped_source : public file_source {
     if (result == cudaSuccess) {
       _is_map_registered = true;
     } else {
-      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})", result, cudaGetErrorString(result));
+      CUDF_LOG_WARN("cudaHostRegister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
     }
   }
 
@@ -207,7 +209,9 @@ class memory_mapped_source : public file_source {
 
     auto const result = cudaHostUnregister(_map_addr);
     if (result != cudaSuccess) {
-      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})", result, cudaGetErrorString(result));
+      CUDF_LOG_WARN("cudaHostUnregister failed with {} ({})",
+                    static_cast<int>(result),
+                    cudaGetErrorString(result));
     }
   }
 
@@ -360,6 +364,11 @@ class user_datasource_wrapper : public datasource {
     return source->supports_device_read();
   }
 
+  [[nodiscard]] bool is_device_read_preferred(size_t size) const override
+  {
+    return source->is_device_read_preferred(size);
+  }
+
   size_t device_read(size_t offset,
                      size_t size,
                      uint8_t* dst,
@@ -384,6 +393,8 @@ class user_datasource_wrapper : public datasource {
   }
 
   [[nodiscard]] size_t size() const override { return source->size(); }
+
+  [[nodiscard]] bool is_empty() const override { return source->is_empty(); }
 
  private:
   datasource* const source;  ///< A non-owning pointer to the user-implemented datasource

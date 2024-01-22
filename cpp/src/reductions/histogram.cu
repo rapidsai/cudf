@@ -26,6 +26,7 @@
 #include <thrust/tuple.h>
 
 #include <cuda/atomic>
+#include <cuda/functional>
 
 #include <optional>
 
@@ -178,7 +179,9 @@ compute_row_frequencies(table_view const& input,
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const pair_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+    size_type{0},
+    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>(
+      [] __device__(size_type const i) { return cuco::make_pair(i, i); }));
 
   // Always compare NaNs as equal.
   using nan_equal_comparator =

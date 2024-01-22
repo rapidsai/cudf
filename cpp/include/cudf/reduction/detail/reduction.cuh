@@ -19,6 +19,7 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/utilities/cast_functor.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -64,7 +65,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto const binary_op     = op.get_binary_op();
+  auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream, mr};
 
@@ -124,7 +125,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto const binary_op     = op.get_binary_op();
+  auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
   auto dev_result          = rmm::device_scalar<OutputType>{initial_value, stream};
 
@@ -190,7 +191,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  auto const binary_op     = op.get_binary_op();
+  auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
 
   rmm::device_scalar<IntermediateType> intermediate_result{initial_value, stream};

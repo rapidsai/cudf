@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
+#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -211,12 +212,12 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   upper_lower_fn converter{ccfn, *d_strings};
 
   // For smaller strings, use the regular string-parallel algorithm
-  if ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
+  if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     auto [offsets, chars] =
       cudf::strings::detail::make_strings_children(converter, input.size(), stream, mr);
     return make_strings_column(input.size(),
                                std::move(offsets),
-                               std::move(chars),
+                               std::move(chars->release().data.release()[0]),
                                input.null_count(),
                                cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
@@ -227,16 +228,16 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // but results in a large performance gain when the input contains only single-byte characters.
   // The count_if is faster than any_of or all_of: https://github.com/NVIDIA/thrust/issues/1016
   bool const multi_byte_chars =
-    thrust::count_if(
-      rmm::exec_policy(stream), input.chars_begin(), input.chars_end(), [] __device__(auto chr) {
-        return is_utf8_continuation_char(chr);
-      }) > 0;
+    thrust::count_if(rmm::exec_policy(stream),
+                     input.chars_begin(stream),
+                     input.chars_end(stream),
+                     cuda::proclaim_return_type<bool>(
+                       [] __device__(auto chr) { return is_utf8_continuation_char(chr); })) > 0;
   if (!multi_byte_chars) {
     // optimization for ASCII-only case: copy the input column and inplace replace each character
-    auto result = std::make_unique<column>(input.parent(), stream, mr);
-    auto d_chars =
-      result->mutable_view().child(strings_column_view::chars_column_index).data<char>();
-    auto const chars_size = strings_column_view(result->view()).chars_size();
+    auto result           = std::make_unique<column>(input.parent(), stream, mr);
+    auto d_chars          = result->mutable_view().head<char>();
+    auto const chars_size = strings_column_view(result->view()).chars_size(stream);
     thrust::transform(
       rmm::exec_policy(stream), d_chars, d_chars + chars_size, d_chars, ascii_converter_fn{ccfn});
     result->set_null_count(input.null_count());
@@ -263,15 +264,15 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                "Size of output exceeds the column size limit",
                std::overflow_error);
 
-  auto chars = create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
+  rmm::device_uvector<char> chars(bytes, stream, mr);
   // second pass, write output
   converter.d_offsets = d_offsets;
-  converter.d_chars   = chars->mutable_view().data<char>();
+  converter.d_chars   = chars.data();
   thrust::for_each_n(rmm::exec_policy(stream), count_itr, input.size(), converter);
 
   return make_strings_column(input.size(),
                              std::move(offsets),
-                             std::move(chars),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

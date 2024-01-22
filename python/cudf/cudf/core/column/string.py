@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from typing_extensions import Self
 
 import cudf
 import cudf.api.types
@@ -28,12 +29,7 @@ from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
 from cudf._lib.types import size_type_dtype
-from cudf.api.types import (
-    is_integer,
-    is_list_dtype,
-    is_scalar,
-    is_string_dtype,
-)
+from cudf.api.types import is_integer, is_scalar, is_string_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column, datetime
 from cudf.core.column.column import ColumnBase
@@ -126,7 +122,7 @@ class StringMethods(ColumnMethods):
     def __init__(self, parent):
         value_type = (
             parent.dtype.leaf_type
-            if is_list_dtype(parent.dtype)
+            if isinstance(parent.dtype, cudf.ListDtype)
             else parent.dtype
         )
         if not is_string_dtype(value_type):
@@ -5478,6 +5474,7 @@ class StringColumn(column.ColumnBase):
 
     def __init__(
         self,
+        data: Optional[Buffer] = None,
         mask: Optional[Buffer] = None,
         size: Optional[int] = None,  # TODO: make non-optional
         offset: int = 0,
@@ -5504,11 +5501,10 @@ class StringColumn(column.ColumnBase):
             # all nulls-column:
             offsets = column.full(size + 1, 0, dtype=size_type_dtype)
 
-            chars = cudf.core.column.as_column([], dtype="int8")
-            children = (offsets, chars)
+            children = (offsets,)
 
         super().__init__(
-            data=None,
+            data=data,
             size=size,
             dtype=dtype,
             mask=mask,
@@ -5529,7 +5525,7 @@ class StringColumn(column.ColumnBase):
     def start_offset(self) -> int:
         if self._start_offset is None:
             if (
-                len(self.base_children) == 2
+                len(self.base_children) == 1
                 and self.offset < self.base_children[0].size
             ):
                 self._start_offset = int(
@@ -5544,7 +5540,7 @@ class StringColumn(column.ColumnBase):
     def end_offset(self) -> int:
         if self._end_offset is None:
             if (
-                len(self.base_children) == 2
+                len(self.base_children) == 1
                 and (self.offset + self.size) < self.base_children[0].size
             ):
                 self._end_offset = int(
@@ -5560,16 +5556,14 @@ class StringColumn(column.ColumnBase):
     @cached_property
     def memory_usage(self) -> int:
         n = 0
-        if len(self.base_children) == 2:
+        if self.data is not None:
+            n += self.data.size
+        if len(self.base_children) == 1:
             child0_size = (self.size + 1) * self.base_children[
                 0
             ].dtype.itemsize
 
-            child1_size = (
-                self.end_offset - self.start_offset
-            ) * self.base_children[1].dtype.itemsize
-
-            n += child0_size + child1_size
+            n += child0_size
         if self.nullable:
             n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
         return n
@@ -5580,6 +5574,24 @@ class StringColumn(column.ColumnBase):
             return 0
         else:
             return self.base_children[0].size - 1
+
+    # override for string column
+    @property
+    def data(self):
+        if self.base_data is None:
+            return None
+        if self._data is None:
+            if (
+                self.offset == 0
+                and len(self.base_children) > 0
+                and self.size == self.base_children[0].size - 1
+            ):
+                self._data = self.base_data
+            else:
+                self._data = self.base_data[
+                    self.start_offset : self.end_offset
+                ]
+        return self._data
 
     def data_array_view(
         self, *, mode="write"
@@ -5627,14 +5639,6 @@ class StringColumn(column.ColumnBase):
         else:
             return result_col
 
-    def set_base_data(self, value):
-        if value is not None:
-            raise RuntimeError(
-                "StringColumns do not use data attribute of Column, use "
-                "`set_base_children` instead"
-            )
-        super().set_base_data(value)
-
     def __contains__(self, item: ScalarLike) -> bool:
         if is_scalar(item):
             return True in libcudf.search.contains(
@@ -5646,7 +5650,7 @@ class StringColumn(column.ColumnBase):
             )
 
     def as_numerical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.api.types.dtype(dtype)
         string_col = self
@@ -5668,11 +5672,33 @@ class StringColumn(column.ColumnBase):
 
     def _as_datetime_or_timedelta_column(self, dtype, format):
         if len(self) == 0:
-            return cudf.core.column.as_column([], dtype=dtype)
+            return cudf.core.column.column_empty(0, dtype=dtype)
 
         # Check for None strings
         if (self == "None").any():
             raise ValueError("Could not convert `None` value to datetime")
+
+        is_nat = self == "NaT"
+        if dtype.kind == "M":
+            without_nat = self.apply_boolean_mask(is_nat.unary_operator("not"))
+            all_same_length = (
+                libstrings.count_characters(without_nat).distinct_count(
+                    dropna=True
+                )
+                == 1
+            )
+            if not all_same_length:
+                # Unfortunately disables OK cases like:
+                # ["2020-01-01", "2020-01-01 00:00:00"]
+                # But currently incorrect for cases like (drops 10):
+                # ["2020-01-01", "2020-01-01 10:00:00"]
+                raise NotImplementedError(
+                    "Cannot parse date-like strings with different formats"
+                )
+            valid_ts = str_cast.istimestamp(self, format)
+            valid = valid_ts | is_nat
+            if not valid.all():
+                raise ValueError(f"Column contains invalid data for {format=}")
 
         casting_func = (
             str_cast.timestamp2int
@@ -5681,21 +5707,19 @@ class StringColumn(column.ColumnBase):
         )
         result_col = casting_func(self, dtype, format)
 
-        boolean_match = self == "NaT"
-        if (boolean_match).any():
-            result_col[boolean_match] = None
+        if is_nat.any():
+            result_col[is_nat] = None
 
         return result_col
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         out_dtype = cudf.api.types.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
         # are null in current column
-        format = kwargs.get("format", None)
         if format is None:
             if self.null_count == len(self):
                 return cast(
@@ -5712,19 +5736,20 @@ class StringColumn(column.ColumnBase):
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         out_dtype = cudf.api.types.dtype(dtype)
-        format = "%D days %H:%M:%S"
+        if format is None:
+            format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> StringColumn:
         return self
 
@@ -5744,15 +5769,15 @@ class StringColumn(column.ColumnBase):
 
     def to_pandas(
         self,
+        *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
-        **kwargs,
     ) -> pd.Series:
         if nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)
         else:
-            pd_series = self.to_arrow().to_pandas(**kwargs)
+            pd_series = self.to_arrow().to_pandas()
 
         if index is not None:
             pd_series.index = index
@@ -5817,17 +5842,16 @@ class StringColumn(column.ColumnBase):
         self,
         fill_value: Any = None,
         method: Optional[str] = None,
-        dtype: Optional[Dtype] = None,
-    ) -> StringColumn:
+    ) -> Self:
         if fill_value is not None:
             if not is_scalar(fill_value):
                 fill_value = column.as_column(fill_value, dtype=self.dtype)
             elif cudf._lib.scalar._is_null_host_scalar(fill_value):
                 # Trying to fill <NA> with <NA> value? Return copy.
                 return self.copy(deep=True)
-            return super().fillna(value=fill_value, dtype="object")
-        else:
-            return super().fillna(method=method)
+            else:
+                fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
+        return super().fillna(fill_value, method=method)
 
     def normalize_binop_value(
         self, other
@@ -5931,15 +5955,12 @@ class StringColumn(column.ColumnBase):
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size
         )
-        char_dtype_size = self.base_children[1].dtype.itemsize
 
-        n_bytes_to_view = (
-            str_end_byte_offset - str_byte_offset
-        ) * char_dtype_size
+        n_bytes_to_view = str_end_byte_offset - str_byte_offset
 
         to_view = column.build_column(
-            self.base_children[1].data,
-            dtype=self.base_children[1].dtype,
+            self.base_data,
+            dtype=cudf.api.types.dtype("int8"),
             offset=str_byte_offset,
             size=n_bytes_to_view,
         )

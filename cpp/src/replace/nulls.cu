@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,12 +57,12 @@ namespace {  // anonymous
 static constexpr int BLOCK_SIZE = 256;
 
 template <int phase, bool replacement_has_nulls>
-__global__ void replace_nulls_strings(cudf::column_device_view input,
-                                      cudf::column_device_view replacement,
-                                      cudf::bitmask_type* output_valid,
-                                      cudf::size_type* offsets,
-                                      char* chars,
-                                      cudf::size_type* valid_counter)
+CUDF_KERNEL void replace_nulls_strings(cudf::column_device_view input,
+                                       cudf::column_device_view replacement,
+                                       cudf::bitmask_type* output_valid,
+                                       cudf::size_type* offsets,
+                                       char* chars,
+                                       cudf::size_type* valid_counter)
 {
   cudf::size_type nrows = input.size();
   auto i                = cudf::detail::grid_1d::global_thread_id();
@@ -112,10 +112,10 @@ __global__ void replace_nulls_strings(cudf::column_device_view input,
 }
 
 template <typename Type, bool replacement_has_nulls>
-__global__ void replace_nulls(cudf::column_device_view input,
-                              cudf::column_device_view replacement,
-                              cudf::mutable_column_device_view output,
-                              cudf::size_type* output_valid_count)
+CUDF_KERNEL void replace_nulls(cudf::column_device_view input,
+                               cudf::column_device_view replacement,
+                               cudf::mutable_column_device_view output,
+                               cudf::size_type* output_valid_count)
 {
   cudf::size_type nrows = input.size();
   auto i                = cudf::detail::grid_1d::global_thread_id();
@@ -255,22 +255,19 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
   auto offsets_view = offsets->mutable_view();
 
   // Allocate chars array and output null mask
-  std::unique_ptr<cudf::column> output_chars =
-    cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
-
-  auto output_chars_view = output_chars->mutable_view();
+  rmm::device_uvector<char> output_chars(bytes, stream, mr);
 
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
     *device_in,
     *device_replacement,
     reinterpret_cast<cudf::bitmask_type*>(valid_bits.data()),
     offsets_view.begin<cudf::size_type>(),
-    output_chars_view.data<char>(),
+    output_chars.data(),
     valid_count);
 
   return cudf::make_strings_column(input.size(),
                                    std::move(offsets),
-                                   std::move(output_chars),
+                                   output_chars.release(),
                                    input.size() - valid_counter.value(stream),
                                    std::move(valid_bits));
 }

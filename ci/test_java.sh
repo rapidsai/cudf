@@ -6,12 +6,15 @@ set -euo pipefail
 . /opt/conda/etc/profile.d/conda.sh
 
 rapids-logger "Generate Java testing dependencies"
+
+ENV_YAML_DIR="$(mktemp -d)"
+
 rapids-dependency-file-generator \
   --output conda \
   --file_key test_java \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee env.yaml
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f env.yaml -n test
+rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 export CMAKE_GENERATOR=Ninja
 

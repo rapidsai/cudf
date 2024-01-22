@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -87,6 +87,8 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
   private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
+  private static final File TEST_MIXED_TYPE_1_JSON = TestUtils.getResourceAsFile("mixed_types_1.json");
+  private static final File TEST_MIXED_TYPE_2_JSON = TestUtils.getResourceAsFile("mixed_types_2.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -323,6 +325,54 @@ public class TableTest extends CudfTestBase {
         .column(null, 30, 19)
         .build();
         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadMixedType2JSONFileFeatureDisabled() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(false)
+            .build();
+    assertThrows(CudfException.class, () ->
+      Table.readJSON(schema, opts, TEST_MIXED_TYPE_2_JSON));
+  }
+
+  @Test
+  void testReadMixedType1JSONFile() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("123", "123" )
+            .build();
+         Table table = Table.readJSON(schema, opts, TEST_MIXED_TYPE_1_JSON)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadMixedType2JSONFile() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("[1,2,3]", "{ \"b\": 1 }" )
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_MIXED_TYPE_2_JSON);
+         Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -9073,73 +9123,6 @@ public class TableTest extends CudfTestBase {
          Table expected = new Table(expectedStructs)) {
       assertEquals(expected.getRowCount(), 3L, "Expected column row count is incorrect");
       assertTablesAreEqual(expected, filteredTable);
-    }
-  }
-
-  @Test
-  void fixedWidthRowsRoundTripWide() {
-    TestBuilder tb = new TestBuilder();
-    IntStream.range(0, 10).forEach(i -> tb.column(3l, 9l, 4l, 2l, 20l, null));
-    IntStream.range(0, 10).forEach(i -> tb.column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null));
-    IntStream.range(0, 10).forEach(i -> tb.column(5, 1, 0, 2, 7, null));
-    IntStream.range(0, 10).forEach(i -> tb.column(true, false, false, true, false, null));
-    IntStream.range(0, 10).forEach(i -> tb.column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null));
-    IntStream.range(0, 10).forEach(i -> tb.column(new Byte[]{2, 3, 4, 5, 9, null}));
-    IntStream.range(0, 10).forEach(i -> tb.decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d,
-        9.5d, 0.9d, 7.23d, 2.8d, null));
-    IntStream.range(0, 10).forEach(i -> tb.decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null));
-    try (Table origTable = tb.build()) {
-      ColumnVector[] rowMajorTable = origTable.convertToRows();
-      try {
-        // We didn't overflow
-        assert rowMajorTable.length == 1;
-        ColumnVector cv = rowMajorTable[0];
-        assert cv.getRowCount() == origTable.getRowCount();
-        DType[] types = new DType[origTable.getNumberOfColumns()];
-        for (int i = 0; i < origTable.getNumberOfColumns(); i++) {
-          types[i] = origTable.getColumn(i).getType();
-        }
-        try (Table backAgain = Table.convertFromRows(cv, types)) {
-          assertTablesAreEqual(origTable, backAgain);
-        }
-      } finally {
-        for (ColumnVector cv : rowMajorTable) {
-          cv.close();
-        }
-      }
-    }
-  }
-
-  @Test
-  void fixedWidthRowsRoundTrip() {
-    try (Table origTable = new TestBuilder()
-        .column(3l, 9l, 4l, 2l, 20l, null)
-        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
-        .column(5, 1, 0, 2, 7, null)
-        .column(true, false, false, true, false, null)
-        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null)
-        .column(new Byte[]{2, 3, 4, 5, 9, null})
-        .decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
-        .decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null)
-        .build()) {
-      ColumnVector[] rowMajorTable = origTable.convertToRowsFixedWidthOptimized();
-      try {
-        // We didn't overflow
-        assert rowMajorTable.length == 1;
-        ColumnVector cv = rowMajorTable[0];
-        assert cv.getRowCount() == origTable.getRowCount();
-        DType[] types = new DType[origTable.getNumberOfColumns()];
-        for (int i = 0; i < origTable.getNumberOfColumns(); i++) {
-          types[i] = origTable.getColumn(i).getType();
-        }
-        try (Table backAgain = Table.convertFromRowsFixedWidthOptimized(cv, types)) {
-          assertTablesAreEqual(origTable, backAgain);
-        }
-      } finally {
-        for (ColumnVector cv : rowMajorTable) {
-          cv.close();
-        }
-      }
     }
   }
 

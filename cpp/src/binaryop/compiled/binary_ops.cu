@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
+#include <cuda/functional>
 
 namespace cudf {
 namespace binops {
@@ -84,11 +86,11 @@ scalar_as_column_view::return_type scalar_as_column_view::operator()<cudf::strin
   // Construct string column_view
   auto col_v = column_view(s.type(),
                            1,
-                           nullptr,
+                           h_scalar_type_view.data(),
                            reinterpret_cast<bitmask_type const*>(s.validity_data()),
                            static_cast<size_type>(!s.is_valid(stream)),
                            0,
-                           {offsets_column->view(), chars_column_v});
+                           {offsets_column->view()});
   return std::pair{col_v, std::move(offsets_column)};
 }
 
@@ -231,7 +233,7 @@ struct null_considering_binop {
     cudf::string_view const invalid_str{nullptr, 0};
 
     // Create a compare function lambda
-    auto minmax_func =
+    auto minmax_func = cuda::proclaim_return_type<cudf::string_view>(
       [op, invalid_str] __device__(
         bool lhs_valid, bool rhs_valid, cudf::string_view lhs_value, cudf::string_view rhs_value) {
         if (!lhs_valid && !rhs_valid)
@@ -244,7 +246,7 @@ struct null_considering_binop {
           return lhs_value;
         else
           return rhs_value;
-      };
+      });
 
     // Populate output column
     populate_out_col(

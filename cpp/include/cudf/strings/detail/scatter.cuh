@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 #include <thrust/distance.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scatter.h>
+
+#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -73,7 +75,9 @@ std::unique_ptr<column> scatter(SourceIterator begin,
   // this ensures empty strings are not mapped to nulls in the make_strings_column function
   auto const size = thrust::distance(begin, end);
   auto itr        = thrust::make_transform_iterator(
-    begin, [] __device__(string_view const sv) { return sv.empty() ? string_view{} : sv; });
+    begin, cuda::proclaim_return_type<string_view>([] __device__(string_view const sv) {
+      return sv.empty() ? string_view{} : sv;
+    }));
 
   // do the scatter
   thrust::scatter(

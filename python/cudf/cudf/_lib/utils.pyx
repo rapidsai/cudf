@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -22,12 +22,6 @@ try:
 except ImportError:
     import json
 
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
@@ -92,16 +86,16 @@ cpdef generate_pandas_metadata(table, index):
     # Columns
     for name, col in table._data.items():
         col_names.append(name)
-        if is_categorical_dtype(col):
+        if isinstance(col.dtype, cudf.CategoricalDtype):
             raise ValueError(
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
-        elif (
-            is_list_dtype(col)
-            or is_struct_dtype(col)
-            or is_decimal_dtype(col)
-        ):
+        elif isinstance(col.dtype, (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.core.dtypes.DecimalDtype
+        )):
             types.append(col.dtype.to_arrow())
         else:
             # A boolean element takes 8 bits in cudf and 1 bit in
@@ -147,12 +141,12 @@ cpdef generate_pandas_metadata(table, index):
                         level=level,
                         column_names=col_names
                     )
-                if is_categorical_dtype(idx):
+                if isinstance(idx.dtype, cudf.CategoricalDtype):
                     raise ValueError(
                         "'category' column dtypes are currently not "
                         + "supported by the gpu accelerated parquet writer"
                     )
-                elif is_list_dtype(idx):
+                elif isinstance(idx.dtype, cudf.ListDtype):
                     types.append(col.dtype.to_arrow())
                 else:
                     # A boolean element takes 8 bits in cudf and 1 bit in

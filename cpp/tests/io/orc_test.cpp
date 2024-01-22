@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -1021,6 +1023,8 @@ TEST_F(OrcStatisticsTest, Basic)
     ASSERT_EQ(stats.size(), expected.num_columns() + 1);
     auto& s0 = stats[0];
     EXPECT_EQ(*s0.number_of_values, 9ul);
+    EXPECT_TRUE(s0.has_null.has_value());
+    EXPECT_FALSE(*s0.has_null);
 
     auto& s1 = stats[1];
     EXPECT_EQ(*s1.number_of_values, 4ul);
@@ -1299,20 +1303,16 @@ TEST_F(OrcStatisticsTest, Overflow)
 
 TEST_F(OrcStatisticsTest, HasNull)
 {
-  // This test can now be implemented with libcudf; keeping the pyorc version to keep the test
+  // This test can now be implemented with libcudf; keeping the pandas version to keep the test
   // inputs diversified
   // Method to create file:
-  // >>> import pyorc
-  // >>> output = open("./temp.orc", "wb")
-  // >>> writer = pyorc.Writer(output, pyorc.Struct(a=pyorc.BigInt(), b=pyorc.BigInt()))
-  // >>> writer.write((1, 3))
-  // >>> writer.write((2, 4))
-  // >>> writer.write((None, 5))
-  // >>> writer.close()
+  // >>> import pandas as pd
+  // >>> df = pd.DataFrame({'a':pd.Series([1, 2, None], dtype="Int64"), 'b':[3, 4, 5]})
+  // >>> df.to_orc("temp.orc")
   //
   // Contents of file:
   // >>> import pyarrow.orc as po
-  // >>> po.ORCFile('new.orc').read()
+  // >>> po.ORCFile('temp.orc').read()
   // pyarrow.Table
   // a: int64
   // b: int64
@@ -1932,6 +1932,127 @@ TEST_F(OrcStatisticsTest, AllNulls)
   check_all_null_stats<cudf::io::integer_statistics>(stats.file_stats[1]);
   check_all_null_stats<cudf::io::double_statistics>(stats.file_stats[2]);
   check_all_null_stats<cudf::io::string_statistics>(stats.file_stats[3]);
+}
+
+TEST_F(OrcWriterTest, UnorderedDictionary)
+{
+  std::vector<char const*> strings{
+    "BBBB", "BBBB", "CCCC", "BBBB", "CCCC", "EEEE", "CCCC", "AAAA", "DDDD", "EEEE"};
+  str_col col(strings.begin(), strings.end());
+
+  table_view expected({col});
+
+  std::vector<char> out_buffer_sorted;
+  cudf::io::orc_writer_options out_opts_sorted =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_sorted}, expected);
+  cudf::io::write_orc(out_opts_sorted);
+
+  cudf::io::orc_reader_options in_opts_sorted = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer_sorted.data(), out_buffer_sorted.size()});
+  auto const from_sorted = cudf::io::read_orc(in_opts_sorted).tbl;
+
+  std::vector<char> out_buffer_unsorted;
+  cudf::io::orc_writer_options out_opts_unsorted =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer_unsorted}, expected)
+      .enable_dictionary_sort(false);
+  cudf::io::write_orc(out_opts_unsorted);
+
+  cudf::io::orc_reader_options in_opts_unsorted = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer_unsorted.data(), out_buffer_unsorted.size()});
+  auto const from_unsorted = cudf::io::read_orc(in_opts_unsorted).tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
+}
+
+TEST_F(OrcStatisticsTest, Empty)
+{
+  int32_col col0{};
+  float64_col col1{};
+  str_col col2{};
+  dec64_col col3{};
+  column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> col4;
+  bool_col col5{};
+  table_view expected({col0, col1, col2, col3, col4, col5});
+
+  std::vector<char> out_buffer;
+
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  cudf::io::write_orc(out_opts);
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+
+  auto expected_column_names = std::vector<std::string>{""};
+  std::generate_n(
+    std::back_inserter(expected_column_names),
+    expected.num_columns(),
+    [starting_index = 0]() mutable { return "_col" + std::to_string(starting_index++); });
+  EXPECT_EQ(stats.column_names, expected_column_names);
+
+  EXPECT_EQ(stats.column_names.size(), 7);
+  EXPECT_EQ(stats.stripes_stats.size(), 0);
+
+  auto const& fstats = stats.file_stats;
+  ASSERT_EQ(fstats.size(), 7);
+  auto& s0 = fstats[0];
+  EXPECT_TRUE(s0.number_of_values.has_value());
+  EXPECT_EQ(*s0.number_of_values, 0ul);
+  EXPECT_TRUE(s0.has_null.has_value());
+  EXPECT_FALSE(*s0.has_null);
+
+  auto& s1 = fstats[1];
+  EXPECT_EQ(*s1.number_of_values, 0ul);
+  EXPECT_FALSE(*s1.has_null);
+  auto& ts1 = std::get<cudf::io::integer_statistics>(s1.type_specific_stats);
+  EXPECT_FALSE(ts1.minimum.has_value());
+  EXPECT_FALSE(ts1.maximum.has_value());
+  EXPECT_TRUE(ts1.sum.has_value());
+  EXPECT_EQ(*ts1.sum, 0);
+
+  auto& s2 = fstats[2];
+  EXPECT_EQ(*s2.number_of_values, 0ul);
+  EXPECT_FALSE(*s2.has_null);
+  auto& ts2 = std::get<cudf::io::double_statistics>(s2.type_specific_stats);
+  EXPECT_FALSE(ts2.minimum.has_value());
+  EXPECT_FALSE(ts2.maximum.has_value());
+  EXPECT_TRUE(ts2.sum.has_value());
+  EXPECT_EQ(*ts2.sum, 0);
+
+  auto& s3 = fstats[3];
+  EXPECT_EQ(*s3.number_of_values, 0ul);
+  EXPECT_FALSE(*s3.has_null);
+  auto& ts3 = std::get<cudf::io::string_statistics>(s3.type_specific_stats);
+  EXPECT_FALSE(ts3.minimum.has_value());
+  EXPECT_FALSE(ts3.maximum.has_value());
+  EXPECT_TRUE(ts3.sum.has_value());
+  EXPECT_EQ(*ts3.sum, 0);
+
+  auto& s4 = fstats[4];
+  EXPECT_EQ(*s4.number_of_values, 0ul);
+  EXPECT_FALSE(*s4.has_null);
+  auto& ts4 = std::get<cudf::io::decimal_statistics>(s4.type_specific_stats);
+  EXPECT_FALSE(ts4.minimum.has_value());
+  EXPECT_FALSE(ts4.maximum.has_value());
+  EXPECT_TRUE(ts4.sum.has_value());
+  EXPECT_EQ(*ts4.sum, "0");
+
+  auto& s5 = fstats[5];
+  EXPECT_EQ(*s5.number_of_values, 0ul);
+  EXPECT_FALSE(*s5.has_null);
+  auto& ts5 = std::get<cudf::io::timestamp_statistics>(s5.type_specific_stats);
+  EXPECT_FALSE(ts5.minimum.has_value());
+  EXPECT_FALSE(ts5.maximum.has_value());
+  EXPECT_FALSE(ts5.minimum_utc.has_value());
+  EXPECT_FALSE(ts5.maximum_utc.has_value());
+  EXPECT_FALSE(ts5.minimum_nanos.has_value());
+  EXPECT_FALSE(ts5.maximum_nanos.has_value());
+
+  auto& s6 = fstats[6];
+  EXPECT_EQ(*s6.number_of_values, 0ul);
+  EXPECT_FALSE(*s6.has_null);
+  auto& ts6 = std::get<cudf::io::bucket_statistics>(s6.type_specific_stats);
+  EXPECT_EQ(ts6.count[0], 0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

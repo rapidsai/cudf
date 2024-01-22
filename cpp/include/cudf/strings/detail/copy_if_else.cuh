@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/optional.h>
+
+#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -78,10 +80,11 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
   auto null_mask       = (null_count > 0) ? std::move(valid_mask.first) : rmm::device_buffer{};
 
   // build offsets column
-  auto offsets_transformer = [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
-    auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
-    return result.has_value() ? result->size_bytes() : 0;
-  };
+  auto offsets_transformer = cuda::proclaim_return_type<size_type>(
+    [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
+      auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
+      return result.has_value() ? result->size_bytes() : 0;
+    });
 
   auto offsets_transformer_itr = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0), offsets_transformer);
@@ -106,7 +109,7 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }

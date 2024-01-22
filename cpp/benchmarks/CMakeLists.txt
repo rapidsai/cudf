@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -184,6 +184,11 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * structs benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
+
+# ##################################################################################################
 # * quantiles benchmark
 # --------------------------------------------------------------------------------
 ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
@@ -230,6 +235,7 @@ ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
+ConfigureNVBench(MERGE_NVBENCH merge/merge_structs.cpp merge/merge_lists.cpp)
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
@@ -277,7 +283,7 @@ ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
   TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
-  text/normalize.cpp text/replace.cpp text/tokenize.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
 # ##################################################################################################
@@ -319,7 +325,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH string/json.cu)
+ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)

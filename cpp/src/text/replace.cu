@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -228,12 +228,13 @@ std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& st
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls replacer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(replacer, strings_count, stream, mr);
+  auto [offsets_column, chars_column] =
+    cudf::strings::detail::make_strings_children(replacer, strings_count, stream, mr);
 
   // return new strings column
   return cudf::make_strings_column(strings_count,
-                                   std::move(children.first),
-                                   std::move(children.second),
+                                   std::move(offsets_column),
+                                   std::move(chars_column->release().data.release()[0]),
                                    strings.null_count(),
                                    std::move(null_mask));
 }
@@ -260,12 +261,13 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
+  auto [offsets_column, chars_column] =
+    cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return cudf::make_strings_column(strings_count,
-                                   std::move(children.first),
-                                   std::move(children.second),
+                                   std::move(offsets_column),
+                                   std::move(chars_column->release().data.release()[0]),
                                    strings.null_count(),
                                    std::move(null_mask));
 }
@@ -274,26 +276,26 @@ std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& str
 
 // external APIs
 
-std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> replace_tokens(cudf::strings_column_view const& input,
                                              cudf::strings_column_view const& targets,
                                              cudf::strings_column_view const& replacements,
                                              cudf::string_scalar const& delimiter,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_tokens(
-    strings, targets, replacements, delimiter, cudf::get_default_stream(), mr);
+  return detail::replace_tokens(input, targets, replacements, delimiter, stream, mr);
 }
 
-std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> filter_tokens(cudf::strings_column_view const& input,
                                             cudf::size_type min_token_length,
                                             cudf::string_scalar const& replacement,
                                             cudf::string_scalar const& delimiter,
+                                            rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::filter_tokens(
-    strings, min_token_length, replacement, delimiter, cudf::get_default_stream(), mr);
+  return detail::filter_tokens(input, min_token_length, replacement, delimiter, stream, mr);
 }
 
 }  // namespace nvtext

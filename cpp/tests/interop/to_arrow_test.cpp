@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <tests/interop/arrow_utils.hpp>
@@ -604,7 +605,9 @@ struct ToArrowDecimalScalarTest : public cudf::test::BaseFixture {};
 TEST_F(ToArrowDecimalScalarTest, Basic)
 {
   auto const value{42};
-  auto const precision{18};  // cudf will convert to the widest-precision Arrow scalar of the type
+  auto const precision =
+    cudf::detail::max_precision<__int128_t>();  // cudf will convert to the widest-precision Arrow
+                                                // scalar of the type
   int32_t const scale{4};
 
   auto const cudf_scalar =
