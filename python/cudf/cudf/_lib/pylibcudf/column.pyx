@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -16,12 +16,12 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 cdef class Column:
     """A container of nullable device data as a column of elements.
 
-    This class is an implementation of [Arrow columnar data
-    specification](https://arrow.apache.org/docs/format/Columnar.html) for data
-    stored on GPUs. It relies on Python memoryview-like semantics to maintain
-    shared ownership of the data it is constructed with, so any input data may
-    also be co-owned by other data structures. The Column is designed to be
-    operated on using algorithms backed by libcudf.
+    This class is an implementation of `Arrow columnar data specification
+    <https://arrow.apache.org/docs/format/Columnar.html>`__ for data stored on
+    GPUs. It relies on Python memoryview-like semantics to maintain shared
+    ownership of the data it is constructed with, so any input data may also be
+    co-owned by other data structures. The Column is designed to be operated on
+    using algorithms backed by libcudf.
 
     Parameters
     ----------
@@ -217,25 +217,32 @@ cdef class Column:
         """The number of children of this column."""
         return self._num_children
 
-    cpdef list_view(self):
+    cpdef ListColumnView list_view(self):
+        """Accessor for methods of a Column that are specific to lists."""
         return ListColumnView(self)
 
     cpdef gpumemoryview data(self):
+        """The data buffer of the column."""
         return self._data
 
     cpdef gpumemoryview null_mask(self):
+        """The null mask of the column."""
         return self._mask
 
     cpdef size_type size(self):
+        """The number of elements in the column."""
         return self._size
 
     cpdef size_type offset(self):
+        """The offset of the column."""
         return self._offset
 
     cpdef size_type null_count(self):
+        """The number of null elements in the column."""
         return self._null_count
 
     cpdef list children(self):
+        """The children of the column."""
         return self._children
 
 
@@ -247,7 +254,9 @@ cdef class ListColumnView:
         self._column = col
 
     cpdef child(self):
+        """The data column of the underlying list column."""
         return self._column.child(1)
 
     cpdef offsets(self):
+        """The offsets column of the underlying list column."""
         return self._column.child(1)

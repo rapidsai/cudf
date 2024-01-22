@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,14 +216,17 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   auto const d_separators = column_device_view::create(separators.parent(), stream);
   auto const d_na_rep     = na_rep.value(stream);
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     format_lists_fn{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth},
     input.size(),
     stream,
     mr);
 
-  return make_strings_column(
-    input.size(), std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
+  return make_strings_column(input.size(),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
+                             0,
+                             rmm::device_buffer{});
 }
 
 }  // namespace detail

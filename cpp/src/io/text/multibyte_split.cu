@@ -556,7 +556,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     return cudf::make_strings_column(
       string_count,
       std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-      std::make_unique<cudf::column>(std::move(chars), rmm::device_buffer{}, 0),
+      chars.release(),
       0,
       {});
   }
