@@ -823,12 +823,6 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self, value: bool):
         self.dtype.ordered = value
 
-    def unary_operator(self, unaryop: str):
-        raise TypeError(
-            f"Series of dtype `category` cannot perform the operation: "
-            f"{unaryop}"
-        )
-
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
             value
