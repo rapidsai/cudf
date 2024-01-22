@@ -334,7 +334,6 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
       target_count,
       [d_string_indices, d_targets_offsets] __device__(int64_t idx) {
         auto const str_idx = d_string_indices[idx] - 1;
-        // atomicAdd(d_targets_offsets + str_idx, 1L);
         cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{*(d_targets_offsets + str_idx)};
         ref.fetch_add(1L, cuda::std::memory_order_relaxed);
       });
