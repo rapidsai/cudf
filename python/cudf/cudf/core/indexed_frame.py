@@ -446,11 +446,6 @@ class IndexedFrame(Frame):
         out : bool
             If DataFrame/Series is empty, return True, if not return False.
 
-        Notes
-        -----
-        If DataFrame/Series contains only `null` values, it is still not
-        considered empty. See the example below.
-
         Examples
         --------
         >>> import cudf
@@ -491,6 +486,12 @@ class IndexedFrame(Frame):
         Series([], dtype: float64)
         >>> s.empty
         True
+
+        .. pandas-compat::
+            **DataFrame.empty, Series.empty**
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
         """
         return self.size == 0
 
