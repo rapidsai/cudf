@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 24.02.00
+  VERSION 24.04.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -380,6 +380,8 @@ add_library(
   src/io/orc/dict_enc.cu
   src/io/orc/orc.cpp
   src/io/orc/reader_impl.cu
+  src/io/orc/reader_impl_helpers.cpp
+  src/io/orc/reader_impl_preprocess.cu
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
   src/io/orc/stripe_enc.cu

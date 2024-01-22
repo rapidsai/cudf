@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@
 
 #include <cassert>
 
-__global__ static void init_curand(curandState* state, int const nstates)
+CUDF_KERNEL void init_curand(curandState* state, int const nstates)
 {
   int ithread = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -39,11 +39,11 @@ __global__ static void init_curand(curandState* state, int const nstates)
 }
 
 template <typename key_type, typename size_type>
-__global__ static void init_build_tbl(key_type* const build_tbl,
-                                      size_type const build_tbl_size,
-                                      int const multiplicity,
-                                      curandState* state,
-                                      int const num_states)
+CUDF_KERNEL void init_build_tbl(key_type* const build_tbl,
+                                size_type const build_tbl_size,
+                                int const multiplicity,
+                                curandState* state,
+                                int const num_states)
 {
   auto const start_idx = blockIdx.x * blockDim.x + threadIdx.x;
   auto const stride    = blockDim.x * gridDim.x;
@@ -61,14 +61,14 @@ __global__ static void init_build_tbl(key_type* const build_tbl,
 }
 
 template <typename key_type, typename size_type>
-__global__ void init_probe_tbl(key_type* const probe_tbl,
-                               size_type const probe_tbl_size,
-                               size_type const build_tbl_size,
-                               key_type const rand_max,
-                               double const selectivity,
-                               int const multiplicity,
-                               curandState* state,
-                               int const num_states)
+CUDF_KERNEL void init_probe_tbl(key_type* const probe_tbl,
+                                size_type const probe_tbl_size,
+                                size_type const build_tbl_size,
+                                key_type const rand_max,
+                                double const selectivity,
+                                int const multiplicity,
+                                curandState* state,
+                                int const num_states)
 {
   auto const start_idx = blockIdx.x * blockDim.x + threadIdx.x;
   auto const stride    = blockDim.x * gridDim.x;

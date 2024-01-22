@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ namespace detail {
 constexpr auto regex_launch_kernel_block_size = 256;
 
 template <typename ForEachFunction>
-__global__ void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
+CUDF_KERNEL void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
@@ -71,10 +71,10 @@ void launch_for_each_kernel(ForEachFunction fn,
 }
 
 template <typename TransformFunction, typename OutputType>
-__global__ void transform_kernel(TransformFunction fn,
-                                 reprog_device const d_prog,
-                                 OutputType* d_output,
-                                 size_type size)
+CUDF_KERNEL void transform_kernel(TransformFunction fn,
+                                  reprog_device const d_prog,
+                                  OutputType* d_output,
+                                  size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }

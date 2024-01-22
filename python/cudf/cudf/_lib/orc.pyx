@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cudf
 from cudf.core.buffer import acquire_spill_lock
@@ -59,7 +59,6 @@ from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
-from cudf.api.types import is_list_dtype, is_struct_dtype
 
 
 cpdef read_raw_orc_statistics(filepath_or_buffer):
@@ -474,7 +473,7 @@ cdef class ORCWriter:
 cdef _set_col_children_metadata(Column col,
                                 column_in_metadata& col_meta,
                                 list_column_as_map=False):
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -482,7 +481,7 @@ cdef _set_col_children_metadata(Column col,
             _set_col_children_metadata(
                 child_col, col_meta.child(i), list_column_as_map
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(
