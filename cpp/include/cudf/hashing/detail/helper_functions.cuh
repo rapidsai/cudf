@@ -18,9 +18,16 @@
 
 #include <cudf/types.hpp>
 
+#include <rmm/mr/device/polymorphic_allocator.hpp>
+
 #include <thrust/pair.h>
 
+namespace cudf::hashing::detail {
+
 constexpr int64_t DEFAULT_HASH_TABLE_OCCUPANCY = 50;
+
+using hash_table_allocator_type =
+  rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>>;
 
 /**
  * @brief  Compute requisite size of hash table.
@@ -241,3 +248,5 @@ __host__ __device__ bool operator!=(cycle_iterator_adapter<T> const& lhs,
 {
   return !lhs.equal(rhs);
 }
+
+}  // namespace cudf::hashing::detail
