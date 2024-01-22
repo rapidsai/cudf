@@ -957,10 +957,10 @@ constexpr size_t input_limit_expected_file_count = 4;
 
 std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
 {
-  return { base_filename + "_a.parquet",
-           base_filename + "_b.parquet",
-           base_filename + "_c.parquet",
-           base_filename + "_d.parquet" };
+  return {base_filename + "_a.parquet",
+          base_filename + "_b.parquet",
+          base_filename + "_c.parquet",
+          base_filename + "_d.parquet"};
 }
 
 void input_limit_test_write_one(std::string const& filepath,
@@ -975,31 +975,25 @@ void input_limit_test_write_one(std::string const& filepath,
   cudf::io::write_parquet(out_opts);
 }
 
-void input_limit_test_write(std::vector<std::string> const& test_filenames, cudf::table_view const& t)
+void input_limit_test_write(std::vector<std::string> const& test_filenames,
+                            cudf::table_view const& t)
 {
   CUDF_EXPECTS(test_filenames.size() == 4, "Unexpected count of test filenames");
-  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count, "Unexpected count of test filenames");
+  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+               "Unexpected count of test filenames");
 
   // no compression
-  input_limit_test_write_one(test_filenames[0],
-                             t,
-                             cudf::io::compression_type::NONE,
-                             cudf::io::dictionary_policy::NEVER);
+  input_limit_test_write_one(
+    test_filenames[0], t, cudf::io::compression_type::NONE, cudf::io::dictionary_policy::NEVER);
   // compression with a codec that uses a lot of scratch space at decode time (2.5x the total
   // decompressed buffer size)
-  input_limit_test_write_one(test_filenames[1],
-                             t,
-                             cudf::io::compression_type::ZSTD,
-                             cudf::io::dictionary_policy::NEVER);
+  input_limit_test_write_one(
+    test_filenames[1], t, cudf::io::compression_type::ZSTD, cudf::io::dictionary_policy::NEVER);
   // compression with a codec that uses no scratch space at decode time
-  input_limit_test_write_one(test_filenames[2],
-                             t,
-                             cudf::io::compression_type::SNAPPY,
-                             cudf::io::dictionary_policy::NEVER);
-  input_limit_test_write_one(test_filenames[3],
-                             t,
-                             cudf::io::compression_type::SNAPPY,
-                             cudf::io::dictionary_policy::ALWAYS);
+  input_limit_test_write_one(
+    test_filenames[2], t, cudf::io::compression_type::SNAPPY, cudf::io::dictionary_policy::NEVER);
+  input_limit_test_write_one(
+    test_filenames[3], t, cudf::io::compression_type::SNAPPY, cudf::io::dictionary_policy::ALWAYS);
 }
 
 void input_limit_test_read(std::vector<std::string> const& test_filenames,
@@ -1008,7 +1002,8 @@ void input_limit_test_read(std::vector<std::string> const& test_filenames,
                            size_t input_limit,
                            int const expected_chunk_counts[input_limit_expected_file_count])
 {
-  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count, "Unexpected count of test filenames");
+  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+               "Unexpected count of test filenames");
 
   for (size_t idx = 0; idx < test_filenames.size(); idx++) {
     auto result = chunked_read(test_filenames[idx], output_limit, input_limit);
@@ -1022,7 +1017,7 @@ struct ParquetChunkedReaderInputLimitConstrainedTest : public cudf::test::BaseFi
 
 TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, SingleFixedWidthColumn)
 {
-  auto base_path          = temp_env->get_temp_filepath("single_col_fixed_width");
+  auto base_path      = temp_env->get_temp_filepath("single_col_fixed_width");
   auto test_filenames = input_limit_get_test_names(base_path);
 
   constexpr auto num_rows = 1'000'000;
@@ -1042,7 +1037,7 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, SingleFixedWidthColumn)
 
 TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
 {
-  auto base_path          = temp_env->get_temp_filepath("mixed_columns");
+  auto base_path      = temp_env->get_temp_filepath("mixed_columns");
   auto test_filenames = input_limit_get_test_names(base_path);
 
   constexpr auto num_rows = 1'000'000;
@@ -1084,7 +1079,7 @@ struct value_gen {
 };
 TEST_F(ParquetChunkedReaderInputLimitTest, List)
 {
-  auto base_path          = temp_env->get_temp_filepath("list");
+  auto base_path      = temp_env->get_temp_filepath("list");
   auto test_filenames = input_limit_get_test_names(base_path);
 
   constexpr int num_rows  = 50'000'000;
@@ -1157,7 +1152,7 @@ struct char_values {
 };
 TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
 {
-  auto base_path          = temp_env->get_temp_filepath("mixed_types");
+  auto base_path      = temp_env->get_temp_filepath("mixed_types");
   auto test_filenames = input_limit_get_test_names(base_path);
 
   constexpr int num_rows  = 50'000'000;
@@ -1200,7 +1195,7 @@ TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
                str_offset_iter,
                str_offset_iter + num_rows + 1,
                str_offset_col->mutable_view().begin<int>());
-  auto str_iter      = cudf::detail::make_counting_transform_iterator(0, char_values{});
+  auto str_iter = cudf::detail::make_counting_transform_iterator(0, char_values{});
   rmm::device_buffer str_chars(num_chars, stream);
   thrust::copy(rmm::exec_policy(stream),
                str_iter,
