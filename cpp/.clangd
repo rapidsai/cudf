@@ -1,32 +1,24 @@
-# https://clangd.llvm.org/config
-
-# Apply a config conditionally to all C files
+# Apply this config conditionally to all C files
 If:
   PathMatch: .*\.(c|h)$
-
----
-
-# Apply a config conditionally to all C++ files
-If:
-  PathMatch: .*\.(c|h)pp
-
----
-
-# Apply a config conditionally to all CUDA files
-If:
-  PathMatch: .*\.cuh?
 CompileFlags:
-  Add:
-    - "-x"
-    - "cuda"
-    # No error on unknown CUDA versions
-    - "-Wno-unknown-cuda-version"
-    # Allow variadic CUDA functions
-    - "-Xclang=-fcuda-allow-variadic-functions"
-Diagnostics:
-  Suppress:
-    - "variadic_device_fn"
-    - "attributes_not_allowed"
+  Compiler: /home/yunsongw/dev/rapids/compose/etc/conda/cuda_12.0/envs/rapids/bin/gcc
+
+---
+
+# Apply this config conditionally to all C++ headers
+If:
+  PathMatch: .*\.(c|h)pp$
+CompileFlags:
+  Compiler: /home/yunsongw/dev/rapids/compose/etc/conda/cuda_12.0/envs/rapids/bin/g++
+
+---
+
+# Apply this config conditionally to all CUDA headers
+If:
+  PathMatch: .*\.cuh?$
+CompileFlags:
+  Compiler: /usr/local/cuda/bin/nvcc
 
 ---
 
@@ -35,31 +27,24 @@ CompileFlags:
   Add:
     # report all errors
     - "-ferror-limit=0"
-    - "-fmacro-backtrace-limit=0"
-    - "-ftemplate-backtrace-limit=0"
-    # Skip the CUDA version check
-    - "--no-cuda-version-check"
   Remove:
-    # remove gcc's -fcoroutines
-    - -fcoroutines
-    # remove nvc++ flags unknown to clang
-    - "-gpu=*"
-    - "-stdpar*"
-    # remove nvcc flags unknown to clang
+    # strip CUDA fatbin args
+    - "-Xfatbin*"
+    # strip CUDA arch flags
     - "-arch*"
     - "-gencode*"
     - "--generate-code*"
-    - "-ccbin*"
-    - "-t=*"
-    - "--threads*"
-    - "-Xptxas*"
-    - "-Xcudafe*"
-    - "-Xfatbin*"
-    - "-Xcompiler*"
-    - "--diag-suppress*"
-    - "--diag_suppress*"
-    - "--compiler-options*"
+    # strip CUDA flags unknown to clang
     - "--expt-extended-lambda"
     - "--expt-relaxed-constexpr"
     - "-forward-unknown-to-host-compiler"
     - "-Werror=cross-execution-space-call"
+Hover:
+  ShowAKA: No
+InlayHints:
+  Enabled: No
+Diagnostics:
+  Suppress:
+    - "variadic_device_fn"
+    - "attributes_not_allowed"
+    - "-Wdeprecated-declarations"

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -142,11 +142,12 @@ cudf::size_type distinct_count(table_view const& keys,
   auto const comparator_helper = [&](auto const row_equal) {
     using hasher_type = decltype(hash_key);
     auto key_set      = cuco::experimental::static_set{
-      cuco::experimental::extent{compute_hash_table_size(num_rows)},
+      cuco::experimental::extent{cudf::hashing::detail::compute_hash_table_size(num_rows)},
       cuco::empty_key<cudf::size_type>{-1},
       row_equal,
       cuco::experimental::linear_probing<1, hasher_type>{hash_key},
-      detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+      cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{},
+                                                  stream},
       stream.value()};
 
     auto const iter = thrust::counting_iterator<cudf::size_type>(0);

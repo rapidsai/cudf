@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -227,11 +227,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
       auto set = cuco::experimental::static_set{
-        cuco::experimental::extent{compute_hash_table_size(haystack.num_rows())},
+        cuco::experimental::extent{
+          cudf::hashing::detail::compute_hash_table_size(haystack.num_rows())},
         cuco::empty_key{lhs_index_type{-1}},
         d_equal,
         probing_scheme,
-        detail::hash_table_allocator_type{default_allocator<lhs_index_type>{}, stream},
+        cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{},
+                                                    stream},
         stream.value()};
 
       if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {

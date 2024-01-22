@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -24,7 +25,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_multimap.cuh>
 
@@ -33,8 +33,6 @@
 #include <optional>
 
 // Forward declaration
-template <typename T>
-class default_allocator;
 
 namespace cudf::experimental::row::equality {
 class preprocessed_table;
@@ -62,7 +60,7 @@ struct hash_join {
     cuco::static_multimap<hash_value_type,
                           cudf::size_type,
                           cuda::thread_scope_device,
-                          rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
+                          cudf::hashing::detail::hash_table_allocator,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;

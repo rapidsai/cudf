@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -591,13 +591,14 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const comparator_helper = [&](auto const d_key_equal) {
     using allocator_type = typename map_type<decltype(d_key_equal)>::allocator_type;
 
-    auto const map = map_type<decltype(d_key_equal)>::create(compute_hash_table_size(num_keys),
-                                                             stream,
-                                                             unused_key,
-                                                             unused_value,
-                                                             d_row_hash,
-                                                             d_key_equal,
-                                                             allocator_type());
+    auto const map = map_type<decltype(d_key_equal)>::create(
+      cudf::hashing::detail::compute_hash_table_size(num_keys),
+      stream,
+      unused_key,
+      unused_value,
+      d_row_hash,
+      d_key_equal,
+      allocator_type());
     // Compute all single pass aggs first
     compute_single_pass_aggs(
       keys, requests, &sparse_results, *map, keys_have_nulls, include_null_keys, stream);
