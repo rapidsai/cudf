@@ -15,16 +15,13 @@
  */
 
 #include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/io/detail/json.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -42,7 +39,7 @@ using SymbolOffsetT = uint32_t;
 namespace normalize_quotes {
 
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
-enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_SQS, TT_DEC, TT_SEC, TT_NUM_STATES };
+enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_SQS, TT_DEC, TT_SEC, TT_NUM_STATES };
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
   SINGLE_QUOTE_CHAR,  ///< Quote character SG: '
@@ -58,7 +55,7 @@ constexpr auto TT_DQS            = dfa_states::TT_DQS;
 constexpr auto TT_SQS            = dfa_states::TT_SQS;
 constexpr auto TT_DEC            = dfa_states::TT_DEC;
 constexpr auto TT_SEC            = dfa_states::TT_SEC;
-constexpr auto TT_NUM_STATES     = static_cast<char>(dfa_states::TT_NUM_STATES);
+constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
 // The i-th string representing all the characters of a symbol group
@@ -76,7 +73,7 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const qna_s
 }};
 
 // The DFA's starting state
-constexpr char start_state = static_cast<char>(TT_OOS);
+constexpr char start_state = static_cast<StateT>(TT_OOS);
 
 struct TransduceToNormalizedQuotes {
   /**
@@ -181,11 +178,10 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto parser = cudf::io::fst::detail::make_fst(
-    cudf::io::fst::detail::make_symbol_group_lut(cudf::io::json::normalize_quotes::qna_sgs),
-    cudf::io::fst::detail::make_transition_table(cudf::io::json::normalize_quotes::qna_state_tt),
-    cudf::io::fst::detail::make_translation_functor(
-      cudf::io::json::normalize_quotes::TransduceToNormalizedQuotes{}),
+  auto parser = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
+    fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
+    fst::detail::make_translation_functor(normalize_quotes::TransduceToNormalizedQuotes{}),
     stream);
 
   rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
@@ -195,7 +191,7 @@ rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT
                    outbuf.data(),
                    thrust::make_discard_iterator(),
                    outbuf_size.data(),
-                   cudf::io::json::normalize_quotes::start_state,
+                   normalize_quotes::start_state,
                    stream);
 
   outbuf.resize(outbuf_size.value(stream), stream);

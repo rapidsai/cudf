@@ -16,10 +16,6 @@
 
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
