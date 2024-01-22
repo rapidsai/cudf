@@ -75,7 +75,7 @@ struct findall_fn {
 
 std::unique_ptr<column> findall_util(column_device_view const& d_strings,
                                      reprog_device& d_prog,
-                                     size_type total_matches,
+                                     int64_t total_matches,
                                      cudf::detail::input_offsetalator const d_offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -104,7 +104,7 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 
   // Create lists offsets column
   auto const sizes = count_matches(*d_strings, *d_prog, strings_count, stream, mr);  //+1
-  auto [offsets, total_matches] = cudf::detail::make_offsets_child_column(
+  auto [offsets, total_matches] = cudf::strings::detail::make_offsets_child_column(
     sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
