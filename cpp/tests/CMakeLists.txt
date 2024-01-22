@@ -281,9 +281,7 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  ORC_TEST
-  io/orc_test.cpp
-  io/orc_chunked_reader_test.cpp
+  ORC_TEST io/orc_test.cpp io/orc_chunked_reader_test.cpp
   GPUS 1
   PERCENT 30
 )
