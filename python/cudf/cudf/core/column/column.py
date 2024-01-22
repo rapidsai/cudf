@@ -2134,7 +2134,10 @@ def as_column(
             data = data.astype(dtype)
 
     elif is_scalar(arbitrary) and not isinstance(arbitrary, memoryview):
-        length = length or 1
+        if length is None:
+            length = 1
+        elif length < 0:
+            raise ValueError(f"{length=} must be >=0.")
         if isinstance(arbitrary, pd.Interval):
             # No cudf.Scalar support yet
             return as_column(
@@ -2148,17 +2151,14 @@ def as_column(
             and isinstance(arbitrary, (np.floating, float))
             and np.isnan(arbitrary)
         ):
-            arbitrary = None
             if dtype is None:
-                dtype = cudf.dtype("float64")
-        elif arbitrary is None and dtype is None:
-            dtype = cudf.dtype("object")
+                dtype = getattr(arbitrary, "dtype", cudf.dtype("float64"))
+            arbitrary = None
         arbitrary = cudf.Scalar(arbitrary, dtype=dtype)
-        data = ColumnBase.from_scalar(arbitrary, length)
-
-        if dtype is not None:
-            data = data.astype(dtype)
-        return data
+        if length == 0:
+            return column_empty(length, dtype=arbitrary.dtype)
+        else:
+            return ColumnBase.from_scalar(arbitrary, length)
 
     elif hasattr(arbitrary, "__array_interface__"):
         # CUDF assumes values are always contiguous
