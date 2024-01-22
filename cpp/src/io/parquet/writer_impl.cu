@@ -609,10 +609,10 @@ std::vector<schema_tree_node> construct_schema_tree(
       // column that isn't a single-depth list<int8> the code will throw.
       if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                     "Binary column's corresponding metadata should have zero or two children!");
+                     "Binary column's corresponding metadata should have zero or two children");
         if (col_meta.num_children() > 0) {
           CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.empty(),
-                       "Binary column must not be nested!");
+                       "Binary column must not be nested");
         }
 
         schema_tree_node col_schema{};
@@ -734,8 +734,13 @@ std::vector<schema_tree_node> construct_schema_tree(
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
-          CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                       "String column's corresponding metadata should have zero or two children");
+          if (col_meta.is_enabled_output_as_binary()) {
+            CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                         "Binary column's corresponding metadata should have zero or two children");
+          } else {
+            CUDF_EXPECTS(col_meta.num_children() == 1 or col_meta.num_children() == 0,
+                         "String column's corresponding metadata should have zero or one children");
+          }
         } else {
           CUDF_EXPECTS(col_meta.num_children() == 0,
                        "Leaf column's corresponding metadata cannot have children");
@@ -2215,6 +2220,10 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
+  // See issue #14781. Can remove this check once that is fixed.
+  CUDF_EXPECTS(not(_write_v2_headers and _compression == Compression::ZSTD),
+               "V2 page headers cannot be used with ZSTD compression");
+
   _current_chunk_offset.resize(_out_sink.size());
   // Write file header
   file_header_s fhdr;

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 
 import cupy as cp
@@ -208,6 +208,9 @@ def _can_be_jitted(frame, func, args):
     if not hasattr(func, "__code__"):
         # Numba requires bytecode to be present to proceed.
         # See https://github.com/numba/numba/issues/4587
+        return False
+
+    if any(col.has_nulls() for col in frame._data.values()):
         return False
     np_field_types = np.dtype(
         list(

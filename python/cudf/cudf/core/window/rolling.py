@@ -9,7 +9,6 @@ from pandas.api.indexers import BaseIndexer
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
-from cudf.core import column
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
@@ -235,7 +234,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             start = as_column(start, dtype="int32")
             end = as_column(end, dtype="int32")
 
-            idx = cudf.core.column.arange(len(start))
+            idx = as_column(range(len(start)))
             preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
                 "int32"
             )
@@ -531,7 +530,7 @@ class RollingGroupby(Rolling):
     def _window_to_window_sizes(self, window):
         if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                column.arange(len(self.obj)).data_array_view(mode="read"),
+                as_column(range(len(self.obj))).data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ static void bench_hash(nvbench::state& state)
 
   // collect statistics
   cudf::strings_column_view input(data->get_column(1).view());
-  auto const chars_size = input.chars_size();
+  auto const chars_size = input.chars_size(stream);
   // add memory read from string column
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   // add memory read from int64_t column

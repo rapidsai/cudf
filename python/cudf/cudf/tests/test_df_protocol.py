@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from typing import Any, Tuple
 
@@ -112,7 +112,8 @@ def assert_column_equal(col: _CuDFColumn, cudfcol):
         assert col.get_buffers()["offsets"] is None
 
     elif col.dtype[0] == _DtypeKind.STRING:
-        assert_buffer_equal(col.get_buffers()["data"], cudfcol.children[1])
+        chars_col = build_column(data=cudfcol.data, dtype="int8")
+        assert_buffer_equal(col.get_buffers()["data"], chars_col)
         assert_buffer_equal(col.get_buffers()["offsets"], cudfcol.children[0])
 
     else:

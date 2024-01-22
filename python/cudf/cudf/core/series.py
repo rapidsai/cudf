@@ -12,6 +12,7 @@ from shutil import get_terminal_size
 from typing import (
     Any,
     Dict,
+    Literal,
     MutableMapping,
     Optional,
     Sequence,
@@ -55,7 +56,6 @@ from cudf.core.column import (
     DatetimeColumn,
     IntervalColumn,
     TimeDeltaColumn,
-    arange,
     as_column,
 )
 from cudf.core.column.categorical import (
@@ -1365,7 +1365,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 raise NotImplementedError(
                     "default values in dicts are currently not supported."
                 )
-            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            lhs = cudf.DataFrame(
+                {"x": self, "orig_order": as_column(range(len(self)))}
+            )
             rhs = cudf.DataFrame(
                 {
                     "x": arg.keys(),
@@ -1385,7 +1387,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "Reindexing only valid with"
                     " uniquely valued Index objects"
                 )
-            lhs = cudf.DataFrame({"x": self, "orig_order": arange(len(self))})
+            lhs = cudf.DataFrame(
+                {"x": self, "orig_order": as_column(range(len(self)))}
+            )
             rhs = cudf.DataFrame(
                 {
                     "x": arg.keys(),
@@ -2137,7 +2141,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cudf.Series(self._column.nullmask)
 
     @_cudf_nvtx_annotate
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         if is_dict_like(dtype):
             if len(dtype) > 1 or self.name not in dtype:
                 raise KeyError(
@@ -2146,7 +2155,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 )
         else:
             dtype = {self.name: dtype}
-        return super().astype(dtype, copy, errors, **kwargs)
+        return super().astype(dtype, copy, errors)
 
     @_cudf_nvtx_annotate
     def sort_index(self, axis=0, *args, **kwargs):

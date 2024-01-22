@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,10 +177,10 @@ auto build_json_string_column(int desired_bytes, int num_rows)
   auto d_store_order = cudf::column_device_view::create(float_2bool_columns->get_column(2));
   json_benchmark_row_builder jb{
     desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets, chars] = cudf::strings::detail::make_strings_children(
     jb, num_rows, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   return cudf::make_strings_column(
-    num_rows, std::move(children.first), std::move(children.second), 0, {});
+    num_rows, std::move(offsets), std::move(chars->release().data.release()[0]), 0, {});
 }
 
 void BM_case(benchmark::State& state, std::string query_arg)
@@ -190,7 +190,7 @@ void BM_case(benchmark::State& state, std::string query_arg)
   int desired_bytes = state.range(1);
   auto input        = build_json_string_column(desired_bytes, num_rows);
   cudf::strings_column_view scv(input->view());
-  size_t num_chars = scv.chars().size();
+  size_t num_chars = scv.chars_size(cudf::get_default_stream());
 
   std::string json_path(query_arg);
 

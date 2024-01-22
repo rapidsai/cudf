@@ -457,6 +457,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          - breathe>=4.35.0
           - dask-cuda==24.2.*
           - *doxygen
           - make
@@ -533,16 +534,19 @@ dependencies:
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - pynvjitlink
           - matrix: {cuda: "11.*"}
             packages:
               - cubinlinker
               - ptxcompiler
-          - {matrix: null, packages: null}
       - output_types: [requirements, pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
               - rmm-cu12==24.2.*
+              - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
               - rmm-cu11==24.2.*
@@ -619,7 +623,7 @@ dependencies:
           - fastavro>=0.22.9
           - hypothesis
           - pytest-benchmark
-          - pytest-cases
+          - pytest-cases>=3.8.2
           - python-snappy>=0.6.0
           - scipy
       - output_types: conda

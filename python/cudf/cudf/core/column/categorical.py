@@ -823,12 +823,6 @@ class CategoricalColumn(column.ColumnBase):
     def ordered(self, value: bool):
         self.dtype.ordered = value
 
-    def unary_operator(self, unaryop: str):
-        raise TypeError(
-            f"Series of dtype `category` cannot perform the operation: "
-            f"{unaryop}"
-        )
-
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
             value
@@ -987,15 +981,16 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if isinstance(col.categories.dtype, IntervalDtype):
+        cats = col.categories
+        if cats.dtype.kind in "biuf":
+            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
+        elif not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            categories = col.categories.to_pandas()
-        else:
-            categories = col.categories.dropna(drop_nan=True).to_pandas()
+            cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=col.ordered
+            codes, categories=cats.to_pandas(), ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
@@ -1158,7 +1153,7 @@ class CategoricalColumn(column.ColumnBase):
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
         new_cats = cudf.DataFrame._from_data(
             {
-                "index": cudf.core.column.arange(len(new_cats_col)),
+                "index": column.as_column(range(len(new_cats_col))),
                 "cats": new_cats_col,
             }
         )
@@ -1379,7 +1374,7 @@ class CategoricalColumn(column.ColumnBase):
 
         # Find the first non-null column:
         head = next(
-            (obj for obj in objs if not obj.null_count != len(obj)), objs[0]
+            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
         )
 
         # Combine and de-dupe the categories
@@ -1530,9 +1525,13 @@ class CategoricalColumn(column.ColumnBase):
         )
         out_code_dtype = min_unsigned_type(max_cat_size)
 
-        cur_order = column.arange(len(cur_codes))
-        old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
-        new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
+        cur_order = column.as_column(range(len(cur_codes)))
+        old_codes = column.as_column(
+            range(len(cur_cats)), dtype=out_code_dtype
+        )
+        new_codes = column.as_column(
+            range(len(new_cats)), dtype=out_code_dtype
+        )
 
         new_df = cudf.DataFrame._from_data(
             data={"new_codes": new_codes, "cats": new_cats}

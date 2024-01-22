@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,12 +110,12 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  auto children = make_strings_children(
+  auto [offsets_column, chars_column] = make_strings_children(
     translate_fn{*d_strings, table.begin(), table.end()}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }

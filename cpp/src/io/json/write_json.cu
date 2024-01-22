@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,12 +170,12 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
   {
-    auto children =
+    auto [offsets_column, chars_column] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
     return make_strings_column(column_v.size(),
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets_column),
+                               std::move(chars_column->release().data.release()[0]),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream, mr));
   }
@@ -347,10 +347,11 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                  d_strview_offsets + row_string_offsets.size(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
+  auto chars_data = joined_col->release().data;
   return make_strings_column(
     strings_columns.num_rows(),
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
+    std::move(chars_data.release()[0]),
     0,
     {});
 }
@@ -469,10 +470,11 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                  d_strview_offsets.end(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
+  auto chars_data = joined_col->release().data;
   return make_strings_column(
     num_lists,
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
+    std::move(chars_data.release()[0]),
     lists_strings.null_count(),
     cudf::detail::copy_bitmask(lists_strings.parent(), stream, mr));
 }
@@ -774,11 +776,7 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
     rmm::device_buffer{},
     0);
   return cudf::make_strings_column(
-    host_strings.size(),
-    std::move(d_offsets),
-    std::make_unique<cudf::column>(std::move(d_chars), rmm::device_buffer{}, 0),
-    0,
-    {});
+    host_strings.size(), std::move(d_offsets), d_chars.release(), 0, {});
 }
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
@@ -812,8 +810,8 @@ void write_chunked(data_sink* out_sink,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  auto const total_num_bytes = str_column_view.chars_size() - skip_last_chars;
-  char const* ptr_all_bytes  = str_column_view.chars_begin();
+  auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
+  char const* ptr_all_bytes  = str_column_view.chars_begin(stream);
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory
