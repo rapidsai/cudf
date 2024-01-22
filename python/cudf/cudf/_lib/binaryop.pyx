@@ -54,7 +54,7 @@ def binaryop(lhs, rhs, op, dtype):
                     rhs, dtype=lhs.dtype if rhs is None else None
                 )
             ).c_value,
-            pylibcudf.binaryop.BinaryOperator[op.upper()],
+            pylibcudf.binaryop.BinaryOperator[op],
             dtype_to_pylibcudf_type(dtype),
         )
     )
