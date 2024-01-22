@@ -486,9 +486,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                     offsets_update_fn);
 
   // build the characters column
-  auto chars_column =
-    create_chars_child_column(chars_bytes + (delta_per_target * target_count), stream, mr);
-  auto d_out_chars = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(chars_bytes + (delta_per_target * target_count), stream, mr);
+  auto d_out_chars = chars.data();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(chars_start),
@@ -501,7 +500,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars.release(),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -532,12 +531,12 @@ std::unique_ptr<column> replace_row_parallel(strings_column_view const& strings,
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     replace_row_parallel_fn{*d_strings, d_target, d_repl, maxrepl}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -697,12 +696,12 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     replace_slice_fn{*d_strings, d_repl, start, stop}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -733,8 +732,8 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  auto chars_column = create_chars_child_column(bytes, stream, mr);
-  auto d_chars      = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
@@ -745,7 +744,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                      });
 
   return make_strings_column(
-    strings_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    strings_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
