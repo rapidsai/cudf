@@ -237,6 +237,7 @@ void reader::impl::compute_chunk_ranges()
 {
   // If there is no limit on the output size, we just read everything.
   if (_chunk_read_info.chunk_size_limit == 0) {
+    // TODO: 0 or rows_to_skip?
     _chunk_read_info.chunks = {{_file_itm_data.rows_to_skip, _file_itm_data.rows_to_read}};
     return;
   }
@@ -284,9 +285,7 @@ void reader::impl::compute_chunk_ranges()
   stripe_size_bytes.device_to_host_sync(_stream);
 
   _chunk_read_info.chunks =
-    find_splits(stripe_size_bytes,
-                _file_itm_data.rows_to_read, /*_chunk_read_info.chunk_size_limit*/
-                500);
+    find_splits(stripe_size_bytes, _file_itm_data.rows_to_read, _chunk_read_info.chunk_size_limit);
 
   std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
   print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
