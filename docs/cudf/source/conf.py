@@ -64,12 +64,15 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx_copybutton",
+    "sphinx_remove_toctrees",
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
     "PandasCompat",
     "myst_nb",
 ]
+
+remove_from_toctrees = ["user_guide/api_docs/api/*"]
 
 
 # Preprocess doxygen xml for compatibility with latest Breathe
