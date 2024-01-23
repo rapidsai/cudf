@@ -50,7 +50,7 @@ repos:
     hooks:
       - id: pydocstyle
         # https://github.com/PyCQA/pydocstyle/issues/603
-        additional_dependencies: [toml]
+        additional_dependencies: [tomli]
         args: ["--config=pyproject.toml"]
         exclude: |
           (?x)^(
