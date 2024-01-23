@@ -73,7 +73,7 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const qna_s
 }};
 
 // The DFA's starting state
-constexpr char start_state = static_cast<StateT>(TT_OOS);
+constexpr auto start_state = static_cast<StateT>(TT_OOS);
 
 struct TransduceToNormalizedQuotes {
   /**
@@ -105,7 +105,7 @@ struct TransduceToNormalizedQuotes {
     // SEC   | Sigma\{'}       -> {\*}
 
     // Whether this transition translates to the escape sequence: \"
-    const bool outputs_escape_sequence =
+    bool const outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Case when a double quote needs to be replaced by the escape sequence: \"
@@ -149,19 +149,19 @@ struct TransduceToNormalizedQuotes {
                                                 SymbolT const read_symbol) const
   {
     // Whether this transition translates to the escape sequence: \"
-    const bool sqs_outputs_escape_sequence =
+    bool const sqs_outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Number of characters to output on this transition
     if (sqs_outputs_escape_sequence) { return 2; }
     // Whether this transition translates to the escape sequence \<s> or unescaped '
-    const bool sec_outputs_escape_sequence =
+    bool const sec_outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SEC)) &&
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR));
     // Number of characters to output on this transition
     if (sec_outputs_escape_sequence) { return 2; }
     // Whether this transition translates to no output <nop>
-    const bool sqs_outputs_nop =
+    bool const sqs_outputs_nop =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR));
     // Number of characters to output on this transition
