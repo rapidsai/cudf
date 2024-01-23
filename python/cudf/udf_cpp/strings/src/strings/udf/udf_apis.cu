@@ -28,7 +28,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
-#include <_nrt.cuh>
+#include <numba_cuda_runtime.cuh>
 
 namespace cudf {
 namespace strings {
@@ -144,12 +144,14 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
                      thrust::make_counting_iterator(0),
                      size,
                      [managed_strings] __device__(auto idx) {
-                       managed_strings[idx].udf_str.clear();
-                       //NRT_Free(managed_strings[idx].mi);
-                       //NRT_decref(managed_strings[idx].meminfo);
-                       int refct = reinterpret_cast<MemInfo*>(managed_strings[idx].meminfo)->refct;
-                       printf("%d\n", refct);
-                       free(managed_strings[idx].meminfo);
+                       NRT_MemInfo* mi = reinterpret_cast<NRT_MemInfo*>(managed_strings[idx].meminfo);
+
+                       // Function pointer was compiled in another module
+                       // so can't call it directly, need to replace it with one
+                       // that was compiled along with this code
+                       mi->dtor = udf_str_dtor;
+
+                       NRT_internal_decref(mi);
                      });
 }
 

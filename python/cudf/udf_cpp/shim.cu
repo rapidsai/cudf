@@ -30,7 +30,7 @@
 #include <limits>
 #include <type_traits>
 
-#include <_nrt_cuda.cuh>
+#include <numba_cuda_runtime.cuh>
 
 using namespace cudf::strings::udf;
 
@@ -730,12 +730,6 @@ make_definition_corr(BlockCorr, int64, int64_t);
 NRT CUDA functions
 */
 
-
-__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
-{
-  auto ptr = reinterpret_cast<udf_string*>(udf_str);
-  ptr->~udf_string();
-}
 
 // Only used to allocate the right amount of space, see below
 struct meminfo_and_str {

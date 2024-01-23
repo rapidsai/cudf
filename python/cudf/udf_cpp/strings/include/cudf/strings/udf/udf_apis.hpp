@@ -22,7 +22,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <memory>
-#include <_nrt.cuh>
+#include <numba_cuda_runtime.cuh>
 
 namespace cudf {
 namespace strings {

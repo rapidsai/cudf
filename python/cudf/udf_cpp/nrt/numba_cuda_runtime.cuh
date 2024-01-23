@@ -1,46 +1,40 @@
-/*
-* SPDX-FileCopyrightText: Copyright (c) <2023> NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-* SPDX-License-Identifier: Apache-2.0
-Copyright (c) 2012, Anaconda, Inc.
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are
-met:
-
-Redistributions of source code must retain the above copyright notice,
-this list of conditions and the following disclaimer.
-
-Redistributions in binary form must reproduce the above copyright
-notice, this list of conditions and the following disclaimer in the
-documentation and/or other materials provided with the distribution.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-"AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-#ifndef _NRT_CUDA_H
-#define _NRT_CUDA_H
+#ifndef _NRT_H
+#define _NRT_H
 
 #include <cuda/atomic>
-#include "_nrt.cuh"
+
+typedef __device__ void (*NRT_dtor_function)(void* ptr, size_t size, void* info);
+typedef __device__ void (*NRT_dealloc_func)(void* ptr, void* dealloc_info);
 
 typedef struct MemInfo NRT_MemInfo;
+
+
+extern "C" {
+struct MemInfo {
+  cuda::atomic<size_t, cuda::thread_scope_device> refct;
+  NRT_dtor_function dtor;
+  void* dtor_info;
+  void* data;
+  size_t size;
+ };
+}
+
+// Globally needed variables
+struct NRT_MemSys {
+  struct {
+    bool enabled;
+    cuda::atomic<size_t, cuda::thread_scope_device> alloc;
+    cuda::atomic<size_t, cuda::thread_scope_device> free;
+    cuda::atomic<size_t, cuda::thread_scope_device> mi_alloc;
+    cuda::atomic<size_t, cuda::thread_scope_device> mi_free;
+  } stats;
+};
+
 
 /* The Memory System object */
 __device__ NRT_MemSys TheMSysStruct = {0};
 __device__ NRT_MemSys* TheMSys = &TheMSysStruct;
 
-void setGlobalMemSys(NRT_MemSys* allocated_memsys) {
-  TheMSys = allocated_memsys;
-}
 
 extern "C" __device__ void* NRT_Allocate(size_t size)
 {
@@ -91,4 +85,18 @@ extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
   /* Clear and release MemInfo */
   NRT_MemInfo_destroy(mi);
 }
+
+/*
+  c++ version of the NRT_decref function that usually is added to
+  the final kernel link in PTX form by numba. This version may be
+  used by c++ APIs that accept ownership of live objects and must
+  manage them going forward.
+*/
+extern "C" __device__ void NRT_internal_decref(NRT_MemInfo* mi) {
+  mi->refct--;
+  if (mi->refct == 0) {
+    NRT_MemInfo_call_dtor(mi);
+  }
+}
+
 #endif

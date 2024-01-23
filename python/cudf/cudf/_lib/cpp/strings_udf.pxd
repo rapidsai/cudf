@@ -17,7 +17,7 @@ cdef extern from "cudf/strings/udf/udf_string.hpp" namespace \
     cdef cppclass udf_string
     cdef cppclass managed_udf_string
 
-cdef extern from "_nrt.cuh" nogil:
+cdef extern from "numba_cuda_runtime.cuh" nogil:
     struct NRT_MemSys
 
 cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
