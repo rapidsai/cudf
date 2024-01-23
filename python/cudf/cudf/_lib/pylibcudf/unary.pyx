@@ -7,7 +7,7 @@ from cudf._lib.cpp cimport unary as cpp_unary
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.unary cimport unary_operator
 
-from cudf._lib.cpp.unaryop import \
+from cudf._lib.cpp.unary import \
     unary_operator as UnaryOperator  # no-cython-lint
 
 from .column cimport Column

@@ -1,7 +1,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 # TODO: Verify consistent usage of relative/absolute imports in pylibcudf.
-from . cimport binaryop, copying, interop
+from . cimport binaryop, copying, interop, unary
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -19,4 +19,5 @@ __all__ = [
     "copying",
     "gpumemoryview",
     "interop",
+    "unary",
 ]
