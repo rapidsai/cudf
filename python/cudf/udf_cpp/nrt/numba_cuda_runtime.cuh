@@ -26,17 +26,16 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#pragma once
+#ifndef _NRT_H
+#define _NRT_H
 
 #include <cuda/atomic>
-#include <cuda_runtime.h>
 
 typedef __device__ void (*NRT_dtor_function)(void* ptr, size_t size, void* info);
 typedef __device__ void (*NRT_dealloc_func)(void* ptr, void* dealloc_info);
 
-typedef __device__ void* (*NRT_malloc_func)(size_t size);
-typedef __device__ void* (*NRT_realloc_func)(void* ptr, size_t new_size);
-typedef __device__ void (*NRT_free_func)(void* ptr);
+typedef struct MemInfo NRT_MemInfo;
+
 
 extern "C" {
 struct MemInfo {
@@ -45,19 +44,11 @@ struct MemInfo {
   void* dtor_info;
   void* data;
   size_t size;
-};
+ };
 }
-
-typedef struct MemInfo NRT_MemInfo;
 
 // Globally needed variables
 struct NRT_MemSys {
-  /* System allocation functions */
-  struct {
-    NRT_malloc_func malloc;
-    NRT_realloc_func realloc;
-    NRT_free_func free;
-  } allocator;
   struct {
     bool enabled;
     cuda::atomic<size_t, cuda::thread_scope_device> alloc;
@@ -67,20 +58,17 @@ struct NRT_MemSys {
   } stats;
 };
 
-// malloc and free are special functions whose addresses can not be
-// taken. So we need these small wrappers to pass to the allocator
-__device__ void* malloc_wrapper(size_t size) { return malloc(size); }
-
-__device__ void free_wrapper(void* ptr) { free(ptr); }
 
 /* The Memory System object */
-extern __device__ NRT_MemSys TheMSys;
+__device__ NRT_MemSys TheMSysStruct = {0};
+__device__ NRT_MemSys* TheMSys = &TheMSysStruct;
+
 
 extern "C" __device__ void* NRT_Allocate(size_t size)
 {
   void* ptr = NULL;
-  ptr       = TheMSys.allocator.malloc(size);
-  if (TheMSys.stats.enabled) { TheMSys.stats.alloc++; }
+  ptr       = malloc(size);
+  if (TheMSys->stats.enabled) { TheMSys->stats.alloc++; }
   return ptr;
 }
 
@@ -92,7 +80,7 @@ extern "C" __device__ void NRT_MemInfo_init(
   mi->dtor_info = dtor_info;
   mi->data      = data;
   mi->size      = size;
-  if (TheMSys.stats.enabled) { TheMSys.stats.mi_alloc++; }
+  if (TheMSys->stats.enabled) { TheMSys->stats.mi_alloc++; }
 }
 
 __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
@@ -107,8 +95,8 @@ __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
 
 extern "C" __device__ void NRT_Free(void* ptr)
 {
-  TheMSys.allocator.free(ptr);
-  if (TheMSys.stats.enabled) { TheMSys.stats.free++; }
+  free(ptr);
+  if (TheMSys->stats.enabled) { TheMSys->stats.free++; }
 }
 
 extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi) { NRT_Free(mi); }
@@ -116,7 +104,7 @@ extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi) { NRT_Free(mi); }
 extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi)
 {
   NRT_dealloc(mi);
-  if (TheMSys.stats.enabled) { TheMSys.stats.mi_free++; }
+  if (TheMSys->stats.enabled) { TheMSys->stats.mi_free++; }
 }
 extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
 {
@@ -125,3 +113,18 @@ extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
   /* Clear and release MemInfo */
   NRT_MemInfo_destroy(mi);
 }
+
+/*
+  c++ version of the NRT_decref function that usually is added to
+  the final kernel link in PTX form by numba. This version may be
+  used by c++ APIs that accept ownership of live objects and must
+  manage them going forward.
+*/
+extern "C" __device__ void NRT_internal_decref(NRT_MemInfo* mi) {
+  mi->refct--;
+  if (mi->refct == 0) {
+    NRT_MemInfo_call_dtor(mi);
+  }
+}
+
+#endif

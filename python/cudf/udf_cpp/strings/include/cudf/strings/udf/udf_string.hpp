@@ -545,6 +545,11 @@ class udf_string {
                               cudf::size_type nbytes);
 };
 
+struct managed_udf_string {
+  void* meminfo;
+  udf_string udf_str;
+};
+
 }  // namespace udf
 }  // namespace strings
 }  // namespace cudf

@@ -30,7 +30,7 @@
 #include <limits>
 #include <type_traits>
 
-#include "numba_cuda_runtime.cuh"
+#include <numba_cuda_runtime.cuh>
 
 using namespace cudf::strings::udf;
 
@@ -348,6 +348,8 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
 
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
+  // TODO
+  // move result into where udf_str_ptr points to
   *udf_str_ptr = result;
   return 0;
 }
@@ -728,15 +730,6 @@ make_definition_corr(BlockCorr, int64, int64_t);
 NRT CUDA functions
 */
 
-__device__ NRT_MemSys TheMSys = {
-  .allocator = {(NRT_malloc_func)malloc_wrapper, NULL, (NRT_free_func)free_wrapper},
-  .stats     = {false, 0, 0, 0, 0}};
-
-__device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
-{
-  auto ptr = reinterpret_cast<udf_string*>(udf_str);
-  ptr->~udf_string();
-}
 
 // Only used to allocate the right amount of space, see below
 struct meminfo_and_str {
