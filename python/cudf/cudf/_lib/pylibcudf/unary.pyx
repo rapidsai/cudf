@@ -15,6 +15,22 @@ from .types cimport DataType
 
 
 cpdef Column unary_operation(Column input, unary_operator op):
+    """Perform a unary operation on a column.
+
+    For details, see :cpp:func:`unary_operation`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to operate on.
+    op : UnaryOperator
+        The operation to perform.
+
+    Returns
+    -------
+    pylibcudf.Column
+        The result of the unary operation
+    """
     cdef unique_ptr[column] result
 
     with nogil:
@@ -24,6 +40,20 @@ cpdef Column unary_operation(Column input, unary_operator op):
 
 
 cpdef Column is_null(Column input):
+    """Check whether elements of a column are null.
+
+    For details, see :cpp:func:`is_null`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to check.
+
+    Returns
+    -------
+    pylibcudf.Column
+        A boolean column with ``True`` representing null values.
+    """
     cdef unique_ptr[column] result
 
     with nogil:
@@ -33,6 +63,20 @@ cpdef Column is_null(Column input):
 
 
 cpdef Column is_valid(Column input):
+    """Check whether elements of a column are valid.
+
+    For details, see :cpp:func:`is_valid`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to check.
+
+    Returns
+    -------
+    pylibcudf.Column
+        A boolean column with ``True`` representing valid values.
+    """
     cdef unique_ptr[column] result
 
     with nogil:
@@ -42,6 +86,22 @@ cpdef Column is_valid(Column input):
 
 
 cpdef Column cast(Column input, DataType data_type):
+    """Cast a column to a different data type.
+
+    For details, see :cpp:func:`cast`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to check.
+    data_type : DataType
+        The data type to cast to.
+
+    Returns
+    -------
+    pylibcudf.Column
+        A boolean column with ``True`` representing null values.
+    """
     cdef unique_ptr[column] result
 
     with nogil:
@@ -51,6 +111,20 @@ cpdef Column cast(Column input, DataType data_type):
 
 
 cpdef Column is_nan(Column input):
+    """Check whether elements of a column are nan.
+
+    For details, see :cpp:func:`is_nan`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to check.
+
+    Returns
+    -------
+    pylibcudf.Column
+        A boolean column with ``True`` representing nan values.
+    """
     cdef unique_ptr[column] result
 
     with nogil:
@@ -60,6 +134,20 @@ cpdef Column is_nan(Column input):
 
 
 cpdef Column is_non_nan(Column input):
+    """Check whether elements of a column are not nan.
+
+    For details, see :cpp:func:`is_non_nan`.
+
+    Parameters
+    ----------
+    input : Column
+        The column to check.
+
+    Returns
+    -------
+    pylibcudf.Column
+        A boolean column with ``True`` representing non-nan values.
+    """
     cdef unique_ptr[column] result
 
     with nogil:
