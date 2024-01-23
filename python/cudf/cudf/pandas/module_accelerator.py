@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -551,12 +551,15 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # release the lock after reading this value)
             use_real = not loader._use_fast_lib
         if not use_real:
+            CUDF_PANDAS_PATH = __file__.rsplit("/", 1)[0]
             # Only need to check the denylist if we're not turned off.
             frame = sys._getframe()
             # We cannot possibly be at the top level.
             assert frame.f_back
             calling_module = pathlib.PurePath(frame.f_back.f_code.co_filename)
-            use_real = any(
+            use_real = not calling_module.is_relative_to(
+                CUDF_PANDAS_PATH
+            ) and any(
                 calling_module.is_relative_to(path)
                 for path in loader._denylist
             )

@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 24.02.00
+  VERSION 24.04.00
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -344,6 +344,11 @@ add_library(
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
+  src/hash/sha1_hash.cu
+  src/hash/sha224_hash.cu
+  src/hash/sha256_hash.cu
+  src/hash/sha384_hash.cu
+  src/hash/sha512_hash.cu
   src/hash/spark_murmurhash3_x86_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
