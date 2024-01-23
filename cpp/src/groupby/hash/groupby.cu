@@ -71,7 +71,6 @@ namespace hash {
 namespace {
 
 int constexpr cg_size                  = 1;   ///< Number of threads used to handle each input key
-int constexpr window_size              = 1;   ///< Number of slots checked per thread
 cudf::size_type constexpr key_sentinel = -1;  ///< Sentinel value indicating an empty slot
 
 using probing_scheme_type = cuco::experimental::linear_probing<
@@ -79,15 +78,6 @@ using probing_scheme_type = cuco::experimental::linear_probing<
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>>;
 using allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<cudf::size_type>>;
-
-template <typename ComparatorType>
-using set_type = cuco::experimental::static_set<cudf::size_type,
-                                                cuco::experimental::extent<cudf::size_type>,
-                                                cuda::thread_scope_device,
-                                                ComparatorType,
-                                                probing_scheme_type,
-                                                allocator_type,
-                                                cuco::experimental::storage<window_size>>;
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
@@ -591,13 +581,13 @@ std::unique_ptr<table> groupby(table_view const& keys,
 
   auto const comparator_helper = [&](auto const d_key_equal) {
     auto const set =
-      set_type<decltype(d_key_equal)>{num_keys,
-                                      0.5,  // desired load factor
-                                      cuco::empty_key{key_sentinel},
-                                      d_key_equal,
-                                      probing_scheme_type{d_row_hash},
-                                      allocator_type{default_allocator<cudf::size_type>{}, stream},
-                                      stream.value()};
+      cuco::experimental::static_set{num_keys,
+                                     0.5,  // desired load factor
+                                     cuco::empty_key{key_sentinel},
+                                     d_key_equal,
+                                     probing_scheme_type{d_row_hash},
+                                     allocator_type{default_allocator<cudf::size_type>{}, stream},
+                                     stream.value()};
 
     // Compute all single pass aggs first
     compute_single_pass_aggs(keys,
