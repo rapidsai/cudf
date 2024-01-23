@@ -291,7 +291,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
  * @param input The input column of strings to split
  * @param tokenizer Object used for counting and identifying delimiters and tokens
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned objects' device memory.
+ * @param mr Device memory resource used to allocate the returned objects' device memory
+ * @return Token offsets and a vector of string indices
  */
 template <typename Tokenizer>
 std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split_helper(
@@ -302,9 +303,8 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
 {
   auto const strings_count = input.size();
   auto const chars_bytes =
-    cudf::strings::detail::get_offset_value(
-      input.offsets(), input.offset() + strings_count, stream) -
-    cudf::strings::detail::get_offset_value(input.offsets(), input.offset(), stream);
+    get_offset_value(input.offsets(), input.offset() + strings_count, stream) -
+    get_offset_value(input.offsets(), input.offset(), stream);
   auto const d_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
@@ -383,7 +383,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
 
   // create offsets from the counts for return to the caller
   auto [offsets, total_tokens] =
-    cudf::detail::make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
+    make_offsets_child_column(token_counts.begin(), token_counts.end(), stream, mr);
   auto const d_tokens_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
