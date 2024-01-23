@@ -301,10 +301,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.2.*
+              - &rmm_cu12 rmm-cu12==24.4.*
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.2.*
+              - &rmm_cu11 rmm-cu11==24.4.*
           - {matrix: null, packages: null }
       - output_types: pyproject
         matrices:
@@ -545,11 +545,11 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - rmm-cu12==24.2.*
+              - rmm-cu12==24.4.*
               - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
-              - rmm-cu11==24.2.*
+              - rmm-cu11==24.4.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
           - {matrix: null, packages: null}
@@ -677,10 +677,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf-cu12==24.2.*
+              - cudf-cu12==24.4.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf-cu11==24.2.*
+              - cudf-cu11==24.4.*
           - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
@@ -698,10 +698,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf_kafka-cu12==24.2.*
+              - cudf_kafka-cu12==24.4.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf_kafka-cu11==24.2.*
+              - cudf_kafka-cu11==24.4.*
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:
