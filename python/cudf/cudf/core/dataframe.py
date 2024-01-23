@@ -3616,7 +3616,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             is_bool_dtype(dtype) for dtype in dtypes
         ):
             raise MixedTypeError("Cannot create a column with mixed types")
-        df_normalized = self.copy()
 
         if any(is_string_dtype(dt) for dt in dtypes):
             raise NotImplementedError(
@@ -3634,17 +3633,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
             for agg in aggs:
-                result[agg] = getattr(df_normalized, agg)()
+                result[agg] = getattr(self, agg)()
             return result.T.sort_index(axis=1, ascending=True)
 
         elif isinstance(aggs, str):
-            if not hasattr(df_normalized, aggs):
+            if not hasattr(self, aggs):
                 raise AttributeError(
                     f"{aggs} is not a valid function for "
                     f"'DataFrame' object"
                 )
             result = DataFrame()
-            result[aggs] = getattr(df_normalized, aggs)()
+            result[aggs] = getattr(self, aggs)()
             result = result.iloc[:, 0]
             result.name = None
             return result
@@ -3658,7 +3657,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             elif all(isinstance(val, str) for val in aggs.values()):
                 res = {}
                 for key, value in aggs.items():
-                    col = df_normalized[key]
+                    col = self[key]
                     if not hasattr(col, value):
                         raise AttributeError(
                             f"{value} is not a valid function for "
@@ -3681,7 +3680,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 result = DataFrame(index=idxs, columns=cols)
                 for key in aggs.keys():
-                    col = df_normalized[key]
+                    col = self[key]
                     col_empty = column_empty(
                         len(idxs), dtype=col.dtype, masked=True
                     )
