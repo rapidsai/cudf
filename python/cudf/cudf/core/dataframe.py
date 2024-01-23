@@ -7109,6 +7109,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
 
+        Notes
+        -----
+        Iteratively appending rows to a cudf DataFrame can be more
+        computationally intensive than a single concatenate. A better solution
+        is to append those rows to a list and then concatenate the list with
+        the original DataFrame all at once.
+
         See Also
         --------
         cudf.concat : General function to concatenate DataFrame or
@@ -7172,14 +7179,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.append**
 
-            If a list of dict/series is passed and the keys are all contained
-              in the DataFrame's index, the order of the columns in
-            the resulting DataFrame will be unchanged.
-            Iteratively appending rows to a cudf DataFrame can be more
-            computationally intensive than a single concatenate. A better
-            solution is to append those rows to a list and then concatenate
-            the list with the original DataFrame all at once.
-            `verify_integrity` parameter is not supported yet
+            * If a list of dict/series is passed and the keys are all contained
+              in the DataFrame's index, the order of the columns in the
+              resulting DataFrame will be unchanged.
+            * The `verify_integrity` parameter is not supported yet.
         """
         if isinstance(other, dict):
             if not ignore_index:
