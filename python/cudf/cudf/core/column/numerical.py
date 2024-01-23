@@ -56,6 +56,13 @@ from cudf.utils.dtypes import (
 
 from .numerical_base import NumericalBaseColumn
 
+_unaryop_map = {
+    "ASIN": "ARCSIN",
+    "ACOS": "ARCCOS",
+    "ATAN": "ARCTAN",
+    "INVERT": "BIT_INVERT",
+}
+
 
 class NumericalColumn(NumericalBaseColumn):
     """
@@ -209,7 +216,9 @@ class NumericalColumn(NumericalBaseColumn):
         if callable(unaryop):
             return libcudf.transform.transform(self, unaryop)
 
-        unaryop = libcudf.unary.UnaryOp[unaryop.upper()]
+        unaryop = unaryop.upper()
+        unaryop = _unaryop_map.get(unaryop, unaryop)
+        unaryop = libcudf.unary.UnaryOp[unaryop]
         return libcudf.unary.unary_operation(self, unaryop)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:

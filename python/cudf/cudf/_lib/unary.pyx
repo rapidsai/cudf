@@ -1,6 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
-
-from enum import IntEnum
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.api.types import is_decimal_dtype
 from cudf.core.buffer import acquire_spill_lock
@@ -15,40 +13,16 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport data_type
-from cudf._lib.cpp.unary cimport unary_operator, underlying_type_t_unary_op
+from cudf._lib.cpp.unary cimport unary_operator
 from cudf._lib.types cimport dtype_to_data_type
 
-
-class UnaryOp(IntEnum):
-    SIN = <underlying_type_t_unary_op> unary_operator.SIN
-    COS = <underlying_type_t_unary_op> unary_operator.COS
-    TAN = <underlying_type_t_unary_op> unary_operator.TAN
-    ASIN = <underlying_type_t_unary_op> unary_operator.ARCSIN
-    ACOS = <underlying_type_t_unary_op> unary_operator.ARCCOS
-    ATAN = <underlying_type_t_unary_op> unary_operator.ARCTAN
-    SINH = <underlying_type_t_unary_op> unary_operator.SINH
-    COSH = <underlying_type_t_unary_op> unary_operator.COSH
-    TANH = <underlying_type_t_unary_op> unary_operator.TANH
-    ARCSINH = <underlying_type_t_unary_op> unary_operator.ARCSINH
-    ARCCOSH = <underlying_type_t_unary_op> unary_operator.ARCCOSH
-    ARCTANH = <underlying_type_t_unary_op> unary_operator.ARCTANH
-    EXP = <underlying_type_t_unary_op> unary_operator.EXP
-    LOG = <underlying_type_t_unary_op> unary_operator.LOG
-    SQRT = <underlying_type_t_unary_op> unary_operator.SQRT
-    CBRT = <underlying_type_t_unary_op> unary_operator.CBRT
-    CEIL = <underlying_type_t_unary_op> unary_operator.CEIL
-    FLOOR = <underlying_type_t_unary_op> unary_operator.FLOOR
-    ABS = <underlying_type_t_unary_op> unary_operator.ABS
-    RINT = <underlying_type_t_unary_op> unary_operator.RINT
-    INVERT = <underlying_type_t_unary_op> unary_operator.BIT_INVERT
-    NOT = <underlying_type_t_unary_op> unary_operator.NOT
+from cudf._lib.cpp.unary import unary_operator as UnaryOp  # no-cython-lint
 
 
 @acquire_spill_lock()
 def unary_operation(Column input, object op):
     cdef column_view c_input = input.view()
-    cdef unary_operator c_op = <unary_operator>(<underlying_type_t_unary_op>
-                                                op)
+    cdef unary_operator c_op = op
     cdef unique_ptr[column] c_result
 
     with nogil:
