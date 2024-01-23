@@ -1472,8 +1472,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
     JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jboolean day_first, jboolean lines, jboolean recover_with_null, jboolean normalize_single_quotes, jboolean mixed_types_as_string,
-    jlong ds_handle) {
+    jboolean day_first, jboolean lines, jboolean recover_with_null,
+    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
