@@ -58,6 +58,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}
@@ -169,6 +170,11 @@ ConfigureTest(
   hashing/md5_test.cpp
   hashing/murmurhash3_x86_32_test.cpp
   hashing/murmurhash3_x64_128_test.cpp
+  hashing/sha1_test.cpp
+  hashing/sha224_test.cpp
+  hashing/sha256_test.cpp
+  hashing/sha384_test.cpp
+  hashing/sha512_test.cpp
   hashing/spark_murmurhash3_x86_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
