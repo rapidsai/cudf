@@ -4,14 +4,11 @@ import functools
 
 from dask_expr._cumulative import CumulativeBlockwise, TakeLast
 
-import cudf
-
 ##
 ## Custom expression classes
 ##
 
 
-@CumulativeBlockwise.register_dispatch((cudf.DataFrame, cudf.Series))
 class CumulativeBlockwiseCudf(CumulativeBlockwise):
     @functools.cached_property
     def _args(self) -> list:
@@ -23,7 +20,10 @@ class CumulativeBlockwiseCudf(CumulativeBlockwise):
         return {"axis": self.axis, "skipna": self.skipna}
 
 
-@TakeLast.register_dispatch((cudf.DataFrame, cudf.Series))
+CumulativeBlockwise._args = CumulativeBlockwiseCudf._args
+CumulativeBlockwise._kwargs = CumulativeBlockwiseCudf._kwargs
+
+
 class TakeLastCudf(TakeLast):
     @staticmethod
     def operation(a, skipna=True):
@@ -33,3 +33,6 @@ class TakeLastCudf(TakeLast):
             a = a.bfill()
         # Cannot use `squeeze` with cudf
         return a.tail(n=1).iloc[0]
+
+
+TakeLast.operation = staticmethod(TakeLastCudf.operation)
