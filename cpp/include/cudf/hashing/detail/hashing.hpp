@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,26 @@ std::unique_ptr<column> spark_murmurhash3_x86_32(table_view const& input,
 std::unique_ptr<column> md5(table_view const& input,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha1(table_view const& input,
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha224(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha256(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha384(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
+
+std::unique_ptr<column> sha512(table_view const& input,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> xxhash_64(table_view const& input,
                                   uint64_t seed,
