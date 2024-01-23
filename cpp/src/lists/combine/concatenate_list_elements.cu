@@ -40,6 +40,8 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace lists {
 namespace detail {
@@ -133,11 +135,12 @@ generate_list_offsets_and_validities(column_view const& input,
   // Compute output list sizes and validities.
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
     0,
-    [lists_of_lists_dv = *lists_of_lists_dv_ptr,
-     lists_dv          = *lists_dv_ptr,
-     d_row_offsets,
-     d_list_offsets,
-     d_validities = validities.begin()] __device__(auto const idx) {
+    cuda::proclaim_return_type<size_type>([lists_of_lists_dv = *lists_of_lists_dv_ptr,
+                                           lists_dv          = *lists_dv_ptr,
+                                           d_row_offsets,
+                                           d_list_offsets,
+                                           d_validities =
+                                             validities.begin()] __device__(auto const idx) {
       if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null/empty row.
         d_validities[idx] = static_cast<int8_t>(lists_of_lists_dv.is_valid(idx));
         return size_type{0};
@@ -154,7 +157,7 @@ generate_list_offsets_and_validities(column_view const& input,
 
       // Compute size of the output list as sum of sizes of all lists in the current input row.
       return d_list_offsets[d_row_offsets[idx + 1]] - d_list_offsets[d_row_offsets[idx]];
-    });
+    }));
   // Compute offsets from sizes.
   auto out_offsets = std::get<0>(
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream, mr));
@@ -271,10 +274,11 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
  */
 std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                                                   concatenate_null_policy null_policy,
+                                                  rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_list_elements(input, null_policy, cudf::get_default_stream(), mr);
+  return detail::concatenate_list_elements(input, null_policy, stream, mr);
 }
 
 }  // namespace lists

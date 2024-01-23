@@ -456,3 +456,29 @@ TEST_F(StringsConvertTest, IntegerToHexWithNull)
   auto results = cudf::strings::integers_to_hex(integers);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
+
+TEST_F(StringsConvertTest, IntegerConvertErrors)
+{
+  cudf::test::fixed_width_column_wrapper<bool> bools(
+    {true, true, false, false, true, true, false, true});
+  cudf::test::fixed_width_column_wrapper<double> floats(
+    {123456.0, -1.0, 0.0, 0.0, 12.0, 12345.0, 123456789.0});
+  EXPECT_THROW(cudf::strings::integers_to_hex(bools), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::integers_to_hex(floats), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_integers(bools), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::from_integers(floats), cudf::logic_error);
+
+  auto input = cudf::test::strings_column_wrapper({"123456", "-1", "0"});
+  auto view  = cudf::strings_column_view(input);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::BOOL8)),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::FLOAT32)),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::TIMESTAMP_SECONDS)),
+               cudf::logic_error);
+  EXPECT_THROW(
+    cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::DURATION_MILLISECONDS)),
+    cudf::logic_error);
+  EXPECT_THROW(cudf::strings::to_integers(view, cudf::data_type(cudf::type_id::DECIMAL32)),
+               cudf::logic_error);
+}

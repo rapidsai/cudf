@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,10 +23,7 @@
 #include <rmm/exec_policy.hpp>
 #include <thrust/reduce.h>
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace gpu {
+namespace cudf::io::parquet::detail {
 
 namespace {
 
@@ -64,7 +61,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
     str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
   }
-  if (!t) { *(int32_t volatile*)&s->dict_pos = target_pos; }
+  if (!t) { s->dict_pos = target_pos; }
   return str_len;
 }
 
@@ -210,7 +207,7 @@ static __device__ void gpuUpdatePageSizes(page_state_s* s,
  * (PageInfo::str_bytes) as part of the pass
  */
 template <typename level_t>
-__global__ void __launch_bounds__(preprocess_block_size)
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   gpuComputePageSizes(PageInfo* pages,
                       device_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
@@ -235,7 +232,10 @@ __global__ void __launch_bounds__(preprocess_block_size)
                                                                                       {rep_runs}};
 
   // setup page info
-  if (!setupLocalPageInfo(s, pp, chunks, min_row, num_rows, all_types_filter{}, false)) { return; }
+  if (!setupLocalPageInfo(
+        s, pp, chunks, min_row, num_rows, all_types_filter{}, page_processing_stage::PREPROCESS)) {
+    return;
+  }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   // the size of the rolling batch buffer
@@ -411,7 +411,4 @@ void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
   }
 }
 
-}  // namespace gpu
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

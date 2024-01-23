@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,11 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
+/**
+ * @addtogroup default_stream
+ * @{
+ * @file
+ */
 
 /**
  * @brief Get the current default stream
@@ -37,4 +42,5 @@ rmm::cuda_stream_view const get_default_stream();
  */
 bool is_ptds_enabled();
 
+/** @} */  // end of group
 }  // namespace cudf

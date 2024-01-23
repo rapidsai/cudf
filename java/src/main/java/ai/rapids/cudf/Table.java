@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -235,6 +235,14 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
+  private static native long[] readCSVFromDataSource(String[] columnNames,
+                                       int[] dTypeIds, int[] dTypeScales,
+                                       String[] filterColumnNames,
+                                       int headerRow, byte delim, int quoteStyle, byte quote,
+                                       byte comment, String[] nullValues,
+                                       String[] trueValues, String[] falseValues,
+                                       long dataSourceHandle) throws CudfException;
+
   /**
    * read JSON data and return a pointer to a TableWithMeta object.
    */
@@ -242,10 +250,18 @@ public final class Table implements AutoCloseable {
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines,
-                                        boolean recoverWithNulls) throws CudfException;
+                                        boolean recoverWithNulls,
+                                        boolean mixedTypesAsStrings) throws CudfException;
+
+  private static native long readJSONFromDataSource(String[] columnNames,
+                                      int[] dTypeIds, int[] dTypeScales,
+                                      boolean dayFirst, boolean lines,
+                                      boolean recoverWithNulls,
+                                      boolean mixedTypesAsStrings,
+                                      long dsHandle) throws CudfException;
 
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines, boolean recoverWithNulls) throws CudfException;
+      boolean dayFirst, boolean lines, boolean recoverWithNulls, boolean mixedTypesAsStrings) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -260,6 +276,10 @@ public final class Table implements AutoCloseable {
   private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
                                            long address, long length, int timeUnit) throws CudfException;
 
+  private static native long[] readParquetFromDataSource(String[] filterColumnNames,
+                                                         boolean[] binaryToString, int timeUnit,
+                                                         long dataSourceHandle) throws CudfException;
+
   /**
    * Read in Avro formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
@@ -270,6 +290,9 @@ public final class Table implements AutoCloseable {
    */
   private static native long[] readAvro(String[] filterColumnNames, String filePath,
                                         long address, long length) throws CudfException;
+
+  private static native long[] readAvroFromDataSource(String[] filterColumnNames,
+                                                      long dataSourceHandle) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -371,6 +394,11 @@ public final class Table implements AutoCloseable {
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit,
                                        String[] decimal128Columns) throws CudfException;
+
+  private static native long[] readORCFromDataSource(String[] filterColumnNames,
+                                                     boolean usingNumPyTypes, int timeUnit,
+                                                     String[] decimal128Columns,
+                                                     long dataSourceHandle) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
@@ -725,14 +753,6 @@ public final class Table implements AutoCloseable {
                                              long targetTableHandle)
                                              throws CudfException;
 
-  private static native long[] convertToRows(long nativeHandle);
-
-  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
-
-  private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
-
-  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
-
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
@@ -879,6 +899,27 @@ public final class Table implements AutoCloseable {
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  public static Table readCSV(Schema schema, CSVOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readCSVFromDataSource(schema.getColumnNames(),
+              schema.getTypeIds(),
+              schema.getTypeScales(),
+              opts.getIncludeColumnNames(),
+              opts.getHeaderRow(),
+              opts.getDelim(),
+              opts.getQuoteStyle().nativeId,
+              opts.getQuote(),
+              opts.getComment(),
+              opts.getNullValues(),
+              opts.getTrueValues(),
+              opts.getFalseValues(),
+              dsHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dsHandle);
+    }
   }
 
   private static native void writeCSVToFile(long table,
@@ -1048,7 +1089,8 @@ public final class Table implements AutoCloseable {
             readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
                     path.getAbsolutePath(),
                     0, 0,
-                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()))) {
+                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+                    opts.isMixedTypesAsStrings()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1100,7 +1142,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()));
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+        opts.isMixedTypesAsStrings()));
   }
 
   /**
@@ -1123,8 +1166,26 @@ public final class Table implements AutoCloseable {
     try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
             schema.getTypeIds(), schema.getTypeScales(), null,
             buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
-            opts.isRecoverWithNull()))) {
+            opts.isRecoverWithNull(), opts.isMixedTypesAsStrings()))) {
       return gatherJSONColumns(schema, twm);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param ds the DataSource to read from.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getColumnNames(),
+            schema.getTypeIds(), schema.getTypeScales(), opts.isDayFirst(), opts.isLines(),
+            opts.isRecoverWithNull(), opts.isMixedTypesAsStrings(), dsHandle))) {
+      return gatherJSONColumns(schema, twm);
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
   }
 
@@ -1214,6 +1275,17 @@ public final class Table implements AutoCloseable {
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
+  public static Table readParquet(ParquetOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readParquetFromDataSource(opts.getIncludeColumnNames(),
+              opts.getReadBinaryAsString(), opts.timeUnit().typeId.getNativeId(),
+              dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
+  }
+
   /**
    * Read an Avro file using the default AvroOptions.
    * @param path the local file to read.
@@ -1295,6 +1367,16 @@ public final class Table implements AutoCloseable {
 
     return new Table(readAvro(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len));
+  }
+
+  public static Table readAvro(AvroOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readAvroFromDataSource(opts.getIncludeColumnNames(),
+              dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   /**
@@ -1386,6 +1468,17 @@ public final class Table implements AutoCloseable {
         null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns()));
+  }
+
+  public static Table readORC(ORCOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readORCFromDataSource(opts.getIncludeColumnNames(),
+              opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+              opts.getDecimal128Columns(), dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   private static class ParquetTableWriter extends TableWriter {
@@ -2262,7 +2355,7 @@ public final class Table implements AutoCloseable {
 
   /**
    * Count how many rows in the table are distinct from one another.
-   * @param nullEqual if nulls should be considered equal to each other or not.
+   * @param nullsEqual if nulls should be considered equal to each other or not.
    */
   public int distinctCount(NullEquality nullsEqual) {
     return distinctCount(nativeHandle, nullsEqual.nullsEqual);
@@ -3548,140 +3641,6 @@ public final class Table implements AutoCloseable {
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildSemiJoinGatherMap(gatherMapData);
-  }
-
-  /**
-   * For details about how this method functions refer to
-   * {@link #convertToRowsFixedWidthOptimized()}.
-   *
-   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
-   * is that this can handle roughly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
-   * can only handle columns less than 100
-   */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
-    return ColumnVector.getColumnVectorsFromPointers(ptrs);
-  }
-
-  /**
-   * Convert this table of columns into a row major format that is useful for interacting with other
-   * systems that do row major processing of the data. Currently only fixed-width column types are
-   * supported.
-   * <p/>
-   * The output is one or more ColumnVectors that are lists of bytes. A ColumnVector that is a
-   * list of bytes can have at most 2GB of data stored in it. Multiple ColumnVectors are returned
-   * if not all of the data can fit in a single one.
-   * <p/>
-   * Each row in the returned ColumnVector array corresponds to a row in the input table. The rows
-   * will be in the same order as the input Table. The first ColumnVector in the array will hold
-   * the first N rows followed by the second ColumnVector and so on.  The following illustrates
-   * this and also shows some of the internal structure that will be explained later.
-   * <p/><pre>
-   * result[0]:
-   *  | row 0 | validity for row 0 | padding |
-   *  ...
-   *  | row N | validity for row N | padding |
-   *  result[1]:
-   *  |row N+1 | validity for row N+1 | padding |
-   *  ...
-   * </pre>
-   *
-   * The format of each row is similar in layout to a C struct where each column will have padding
-   * in front of it to align it properly. Each row has padding inserted at the end so the next row
-   * is aligned to a 64-bit boundary. This is so that the first column will always start at the
-   * beginning (first byte) of the list of bytes and each row has a consistent layout for fixed
-   * width types.
-   * <p/>
-   * Validity bytes are added to the end of the row. There will be one byte for each 8 columns in a
-   * row. Because the validity is byte aligned there is no padding between it and the last column
-   * in the row.
-   * <p/>
-   * For example a table consisting of the following columns A, B, C with the corresponding types
-   * <p/><pre>
-   *   | A - BOOL8 (8-bit) | B - INT16 (16-bit) | C - DURATION_DAYS (32-bit) |
-   * </pre>
-   * <p/>
-   *  Will have a layout that looks like
-   *  <p/><pre>
-   *  | A_0 | P | B_0 | B_1 | C_0 | C_1 | C_2 | C_3 | V0 | P | P | P | P | P | P | P |
-   * </pre>
-   * <p/>
-   * In this P corresponds to a byte of padding, [LETTER]_[NUMBER] represents the NUMBER
-   * byte of the corresponding LETTER column, and V[NUMBER] is a validity byte for the `NUMBER * 8`
-   * to `(NUMBER + 1) * 8` columns.
-   * <p/>
-   * The order of the columns will not be changed, but to reduce the total amount of padding it is
-   * recommended to order the columns in the following way.
-   * <p/>
-   * <ol>
-   *  <li>64-bit columns</li>
-   *  <li>32-bit columns</li>
-   *  <li>16-bit columns</li>
-   *  <li>8-bit columns</li>
-   * </ol>
-   * <p/>
-   * This way padding is only inserted at the end of a row to make the next column 64-bit aligned.
-   * So for the example above if the columns were ordered C, B, A the layout would be.
-   * <pre>
-   * | C_0 | C_1 | C_2 | C_3 | B_0 | B_1 | A_0 | V0 |
-   * </pre>
-   * This would have reduced the overall size of the data transferred by half.
-   * <p/>
-   * One of the main motivations for doing a row conversion on the GPU is to avoid cache problems
-   * when walking through columnar data on the CPU in a row wise manner. If you are not transferring
-   * very many columns it is likely to be more efficient to just pull back the columns and walk
-   * through them. This is especially true of a single column of fixed width data. The extra
-   * padding will slow down the transfer and looking at only a handful of buffers is not likely to
-   * cause cache issues.
-   * <p/>
-   * There are some limits on the size of a single row.  If the row is larger than 1KB this will
-   * throw an exception.
-   */
-  public ColumnVector[] convertToRowsFixedWidthOptimized() {
-    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    return ColumnVector.getColumnVectorsFromPointers(ptrs);
-  }
-
-  /**
-   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
-   * and convert it back to a table.
-   *
-   * NOTE: This method doesn't support nested types
-   *
-   * @param vec the row data to process.
-   * @param schema the types of each column.
-   * @return the parsed table.
-   */
-  public static Table convertFromRows(ColumnView vec, DType ... schema) {
-    int[] types = new int[schema.length];
-    int[] scale = new int[schema.length];
-    for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].typeId.nativeId;
-      scale[i] = schema[i].getScale();
-
-    }
-    return new Table(convertFromRows(vec.getNativeView(), types, scale));
-  }
-
-  /**
-   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
-   * and convert it back to a table.
-   *
-   * NOTE: This method doesn't support nested types
-   *
-   * @param vec the row data to process.
-   * @param schema the types of each column.
-   * @return the parsed table.
-   */
-  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
-    int[] types = new int[schema.length];
-    int[] scale = new int[schema.length];
-    for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].typeId.nativeId;
-      scale[i] = schema[i].getScale();
-
-    }
-    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
   }
 
   /**

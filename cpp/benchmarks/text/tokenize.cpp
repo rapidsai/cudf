@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,7 +46,7 @@ static void bench_tokenize(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
 
-  auto chars_size = input.chars_size();
+  auto chars_size = input.chars_size(cudf::get_default_stream());
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 
@@ -67,8 +67,11 @@ static void bench_tokenize(nvbench::state& state)
       auto result = nvtext::count_tokens(input, cudf::strings_column_view(delimiters));
     });
   } else if (tokenize_type == "ngrams") {
-    state.exec(nvbench::exec_tag::sync,
-               [&](nvbench::launch& launch) { auto result = nvtext::ngrams_tokenize(input); });
+    auto const delimiter = cudf::string_scalar("");
+    auto const separator = cudf::string_scalar("_");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      auto result = nvtext::ngrams_tokenize(input, 2, delimiter, separator);
+    });
   } else if (tokenize_type == "characters") {
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { auto result = nvtext::character_tokenize(input); });

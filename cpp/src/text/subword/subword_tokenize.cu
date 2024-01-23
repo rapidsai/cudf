@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,7 @@ namespace {
  * @param[out] attn_mask Identifies valid token id entries
  * @param[out] metadata Additional data per row
  */
-__global__ void kernel_compute_tensor_metadata(
+CUDF_KERNEL void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
   cudf::size_type const* offsets,
@@ -186,7 +186,7 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
   auto const offsets   = strings.offsets();
   auto const d_offsets = offsets.data<cudf::size_type>() + strings.offset();
   auto const offset  = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
-  auto const d_chars = strings.chars().data<char>() + offset;
+  auto const d_chars = strings.chars_begin(stream) + offset;
 
   // Create tokenizer
   wordpiece_tokenizer tokenizer(

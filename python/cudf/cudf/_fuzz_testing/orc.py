@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import copy
 import io
@@ -6,14 +6,13 @@ import logging
 import random
 
 import numpy as np
-import pyorc
+import pyarrow as pa
 
 import cudf
 from cudf._fuzz_testing.io import IOFuzz
 from cudf._fuzz_testing.utils import (
     ALL_POSSIBLE_VALUES,
     _generate_rand_meta,
-    pandas_to_orc,
     pyarrow_to_pandas,
 )
 from cudf.testing import dataset_generator as dg
@@ -82,12 +81,7 @@ class OrcReader(IOFuzz):
         logging.info(f"Shape of DataFrame generated: {table.shape}")
         self._df = df
         file_obj = io.BytesIO()
-        pandas_to_orc(
-            df,
-            file_io_obj=file_obj,
-            stripe_size=self._rand(len(df)),
-            arrow_table_schema=table.schema,
-        )
+        pa.orc.write_table(table, file_obj, stripe_size=self._rand(len(df)))
         file_obj.seek(0)
         buf = file_obj.read()
         self._current_buffer = copy.copy(buf)
@@ -109,8 +103,8 @@ class OrcReader(IOFuzz):
                     )
                 elif param == "stripes":
                     f = io.BytesIO(self._current_buffer)
-                    reader = pyorc.Reader(f)
-                    stripes = [i for i in range(reader.num_of_stripes)]
+                    orcFile = pa.orc.ORCFile(f)
+                    stripes = list(range(orcFile.nstripes))
                     params_dict[param] = np.random.choice(
                         [
                             None,
@@ -119,7 +113,7 @@ class OrcReader(IOFuzz):
                                     int,
                                     np.unique(
                                         np.random.choice(
-                                            stripes, reader.num_of_stripes
+                                            stripes, orcFile.nstripes
                                         )
                                     ),
                                 )

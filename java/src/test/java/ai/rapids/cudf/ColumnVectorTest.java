@@ -2170,6 +2170,15 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCodePoints() {
+    try (ColumnVector cv = ColumnVector.fromStrings("eee", "bb", null, "", "aa", "bbb", "ééé");
+         ColumnVector codePoints = cv.codePoints();
+         ColumnVector expected = ColumnVector.fromBoxedInts(101, 101, 101, 98, 98, 97, 97, 98, 98, 98, 50089, 50089, 50089)) {
+      assertColumnsAreEqual(expected, codePoints);
+    }
+  }
+
+  @Test
   void testEmptyStringColumnOpts() {
     try (ColumnVector cv = ColumnVector.fromStrings()) {
       try (ColumnVector len = cv.getCharLengths()) {
@@ -6875,5 +6884,15 @@ public class ColumnVectorTest extends CudfTestBase {
     ColumnVector vector = ColumnVector.fromBoxedInts(1, 2, 3);
     vector.close();
     assertThrows(NullPointerException.class, vector::getDeviceMemorySize);
+  }
+
+  @Test
+  public void testConvertIntegerToHex() {
+    try (
+      ColumnVector input = ColumnVector.fromInts(14, 2621, 50);
+      ColumnVector expected = ColumnVector.fromStrings("0E", "0A3D", "32");
+      ColumnVector actual = input.toHex()) {
+        assertColumnsAreEqual(expected, actual);
+    }
   }
 }

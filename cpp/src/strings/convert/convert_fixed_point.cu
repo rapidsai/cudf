@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,12 +184,13 @@ std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> to_fixed_point(strings_column_view const& strings,
+std::unique_ptr<column> to_fixed_point(strings_column_view const& input,
                                        data_type output_type,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_fixed_point(strings, output_type, cudf::get_default_stream(), mr);
+  return detail::to_fixed_point(input, output_type, stream, mr);
 }
 
 namespace detail {
@@ -248,7 +249,7 @@ struct dispatch_from_fixed_point_fn {
 
     return make_strings_column(input.size(),
                                std::move(offsets),
-                               std::move(chars),
+                               std::move(chars->release().data.release()[0]),
                                input.null_count(),
                                cudf::detail::copy_bitmask(input, stream, mr));
   }
@@ -277,10 +278,11 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
 // external API
 
 std::unique_ptr<column> from_fixed_point(column_view const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_fixed_point(input, cudf::get_default_stream(), mr);
+  return detail::from_fixed_point(input, stream, mr);
 }
 
 namespace detail {
@@ -341,10 +343,11 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
 
 std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        data_type decimal_type,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_fixed_point(input, decimal_type, cudf::get_default_stream(), mr);
+  return detail::is_fixed_point(input, decimal_type, stream, mr);
 }
 
 }  // namespace strings

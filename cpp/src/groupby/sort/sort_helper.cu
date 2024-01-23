@@ -42,6 +42,8 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/unique.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <numeric>
 #include <tuple>
@@ -96,8 +98,8 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
 
   if (_keys_pre_sorted == sorted::YES) {
     _key_sorted_order = cudf::detail::sequence(_keys.num_rows(),
-                                               numeric_scalar<size_type>(0),
-                                               numeric_scalar<size_type>(1),
+                                               numeric_scalar<size_type>(0, true, stream),
+                                               numeric_scalar<size_type>(1, true, stream),
                                                stream,
                                                rmm::mr::get_current_device_resource());
     return sliced_key_sorted_order();
@@ -236,7 +238,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
   auto [row_bitmask, null_count] =
     cudf::detail::bitmask_and(_keys, stream, rmm::mr::get_current_device_resource());
 
-  auto const zero = numeric_scalar<int8_t>(0);
+  auto const zero = numeric_scalar<int8_t>(0, true, stream);
   // Create a temporary variable and only set _keys_bitmask_column right before the return.
   // This way, a 2nd (parallel) call to this will not be given a partially created object.
   auto keys_bitmask_column = cudf::detail::sequence(
@@ -291,8 +293,10 @@ std::unique_ptr<table> sort_groupby_helper::unique_keys(rmm::cuda_stream_view st
 {
   auto idx_data = key_sort_order(stream).data<size_type>();
 
-  auto gather_map_it = thrust::make_transform_iterator(
-    group_offsets(stream).begin(), [idx_data] __device__(size_type i) { return idx_data[i]; });
+  auto gather_map_it =
+    thrust::make_transform_iterator(group_offsets(stream).begin(),
+                                    cuda::proclaim_return_type<size_type>(
+                                      [idx_data] __device__(size_type i) { return idx_data[i]; }));
 
   return cudf::detail::gather(_keys,
                               gather_map_it,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -176,6 +177,9 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
     elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream()};
 }
 
+// The two signatures below are identical to the above overload apart from
+// SFINAE so doxygen sees it as a duplicate.
+//! @cond Doxygen_Suppress
 /**
  * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
  *
@@ -230,6 +234,7 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   return rmm::device_buffer{
     elements.data(), size * sizeof(RepType), cudf::test::get_default_stream()};
 }
+//! @endcond
 
 /**
  * @brief Create a `std::vector` containing a validity indicator bitmask using
@@ -751,14 +756,22 @@ class strings_column_wrapper : public detail::column_wrapper {
   template <typename StringsIterator>
   strings_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
+    size_type num_strings = std::distance(begin, end);
+    if (num_strings == 0) {
+      wrapped = cudf::make_empty_column(cudf::type_id::STRING);
+      return;
+    }
     auto all_valid        = thrust::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars          = cudf::detail::make_device_uvector_sync(
+    auto d_chars          = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
-    auto d_offsets = cudf::detail::make_device_uvector_sync(
-      offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto d_offsets = std::make_unique<cudf::column>(
+      cudf::detail::make_device_uvector_sync(
+        offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+      rmm::device_buffer{},
+      0);
     wrapped =
-      cudf::make_strings_column(d_chars, d_offsets, {}, 0, cudf::test::get_default_stream());
+      cudf::make_strings_column(num_strings, std::move(d_offsets), d_chars.release(), 0, {});
   }
 
   /**
@@ -793,16 +806,24 @@ class strings_column_wrapper : public detail::column_wrapper {
   strings_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    size_type num_strings        = std::distance(begin, end);
+    size_type num_strings = std::distance(begin, end);
+    if (num_strings == 0) {
+      wrapped = cudf::make_empty_column(cudf::type_id::STRING);
+      return;
+    }
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars                 = cudf::detail::make_device_uvector_sync(
+    auto d_chars                 = cudf::detail::make_device_uvector_async(
       chars, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
-    auto d_offsets = cudf::detail::make_device_uvector_sync(
-      offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
+    auto d_offsets = std::make_unique<cudf::column>(
+      cudf::detail::make_device_uvector_async(
+        offsets, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+      rmm::device_buffer{},
+      0);
     auto d_bitmask = cudf::detail::make_device_uvector_sync(
       null_mask, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource());
-    wrapped = cudf::make_strings_column(d_chars, d_offsets, d_bitmask, null_count);
+    wrapped = cudf::make_strings_column(
+      num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
   }
 
   /**
@@ -944,8 +965,10 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   template <typename InputIterator>
   dictionary_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(
-      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end));
+    wrapped =
+      cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end),
+                               cudf::data_type{type_id::UINT32},
+                               cudf::test::get_default_stream());
   }
 
   /**
@@ -978,7 +1001,9 @@ class dictionary_column_wrapper : public detail::column_wrapper {
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(
-      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v));
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, v),
+      cudf::data_type{type_id::UINT32},
+      cudf::test::get_default_stream());
   }
 
   /**
@@ -1134,7 +1159,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   template <typename StringsIterator>
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end) : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end));
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end),
+                                       cudf::data_type{type_id::UINT32},
+                                       cudf::test::get_default_stream());
   }
 
   /**
@@ -1169,7 +1196,9 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   dictionary_column_wrapper(StringsIterator begin, StringsIterator end, ValidityIterator v)
     : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v));
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v),
+                                       cudf::data_type{type_id::UINT32},
+                                       cudf::test::get_default_stream());
   }
 
   /**
@@ -1273,6 +1302,11 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
 template <typename T, typename SourceElementT = T>
 class lists_column_wrapper : public detail::column_wrapper {
  public:
+  /**
+   * @brief Cast to lists_column_view
+   */
+  operator lists_column_view() const { return cudf::lists_column_view{wrapped->view()}; }
+
   /**
    * @brief Construct a lists column containing a single list of fixed-width
    * type from an initializer list of values.
@@ -1534,8 +1568,12 @@ class lists_column_wrapper : public detail::column_wrapper {
                        rmm::device_buffer&& null_mask)
   {
     // construct the list column
-    wrapped = make_lists_column(
-      num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
+    wrapped = make_lists_column(num_rows,
+                                std::move(offsets),
+                                std::move(values),
+                                null_count,
+                                std::move(null_mask),
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1550,7 +1588,8 @@ class lists_column_wrapper : public detail::column_wrapper {
    * while at the same time, allowing further nesting
    * List<List<int> = { {{0, 1}} }
    *
-   * @param c Input column to be wrapped
+   * @param elements Input columns to be wrapped
+   * @param v The validity of each row
    *
    */
   void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
@@ -1610,8 +1649,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     }();
 
     // construct the list column
-    wrapped = make_lists_column(
-      cols.size(), std::move(offsets), std::move(data), null_count, std::move(null_mask));
+    wrapped = make_lists_column(cols.size(),
+                                std::move(offsets),
+                                std::move(data),
+                                null_count,
+                                std::move(null_mask),
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1639,8 +1682,12 @@ class lists_column_wrapper : public detail::column_wrapper {
     depth = 0;
 
     size_type num_elements = offsets->size() == 0 ? 0 : offsets->size() - 1;
-    wrapped =
-      make_lists_column(num_elements, std::move(offsets), std::move(c), 0, rmm::device_buffer{});
+    wrapped                = make_lists_column(num_elements,
+                                std::move(offsets),
+                                std::move(c),
+                                0,
+                                rmm::device_buffer{},
+                                cudf::test::get_default_stream());
   }
 
   /**
@@ -1689,12 +1736,15 @@ class lists_column_wrapper : public detail::column_wrapper {
     }
 
     lists_column_view lcv(col);
-    return make_lists_column(col.size(),
-                             std::make_unique<column>(lcv.offsets()),
-                             normalize_column(lists_column_view(col).child(),
-                                              lists_column_view(expected_hierarchy).child()),
-                             col.null_count(),
-                             copy_bitmask(col));
+    return make_lists_column(
+      col.size(),
+      std::make_unique<column>(lcv.offsets()),
+      normalize_column(lists_column_view(col).child(),
+                       lists_column_view(expected_hierarchy).child()),
+      col.null_count(),
+      cudf::detail::copy_bitmask(
+        col, cudf::test::get_default_stream(), rmm::mr::get_current_device_resource()),
+      cudf::test::get_default_stream());
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
@@ -1817,7 +1867,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
-                     return std::make_unique<cudf::column>(column_wrapper.get());
+                     return std::make_unique<cudf::column>(column_wrapper.get(),
+                                                           cudf::test::get_default_stream());
                    });
     init(std::move(child_columns), validity);
   }
@@ -1853,7 +1904,8 @@ class structs_column_wrapper : public detail::column_wrapper {
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
-                     return std::make_unique<cudf::column>(column_wrapper.get());
+                     return std::make_unique<cudf::column>(column_wrapper.get(),
+                                                           cudf::test::get_default_stream());
                    });
     init(std::move(child_columns), validity_iter);
   }
@@ -1877,8 +1929,11 @@ class structs_column_wrapper : public detail::column_wrapper {
       return cudf::test::detail::make_null_mask(validity.begin(), validity.end());
     }();
 
-    wrapped = cudf::make_structs_column(
-      num_rows, std::move(child_columns), null_count, std::move(null_mask));
+    wrapped = cudf::make_structs_column(num_rows,
+                                        std::move(child_columns),
+                                        null_count,
+                                        std::move(null_mask),
+                                        cudf::test::get_default_stream());
   }
 
   template <typename V>

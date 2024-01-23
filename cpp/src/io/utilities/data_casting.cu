@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -420,14 +420,14 @@ struct bitfield_block {
  * @param d_chars Character array to store the characters of strings
  */
 template <bool is_warp, size_type num_warps, typename str_tuple_it>
-__global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
-                                         size_type total_out_strings,
-                                         size_type* str_counter,
-                                         bitmask_type* null_mask,
-                                         size_type* null_count_data,
-                                         cudf::io::parse_options_view const options,
-                                         size_type* d_offsets,
-                                         char* d_chars)
+CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
+                                          size_type total_out_strings,
+                                          size_type* str_counter,
+                                          bitmask_type* null_mask,
+                                          size_type* null_count_data,
+                                          cudf::io::parse_options_view const options,
+                                          size_type* d_offsets,
+                                          char* d_chars)
 {
   constexpr auto BLOCK_SIZE =
     is_warp ? cudf::detail::warp_size : cudf::detail::warp_size * num_warps;
@@ -534,8 +534,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
          char_index < cudf::util::round_up_safe(in_end - in_begin, static_cast<long>(BLOCK_SIZE));
          char_index += BLOCK_SIZE) {
       bool const is_within_bounds = char_index < (in_end - in_begin);
-      auto const MASK   = is_warp ? __ballot_sync(0xffffffff, is_within_bounds) : 0xffffffff;
-      auto const c      = is_within_bounds ? in_begin[char_index] : '\0';
+      auto const c                = is_within_bounds ? in_begin[char_index] : '\0';
       auto const prev_c = (char_index > 0 and is_within_bounds) ? in_begin[char_index - 1] : '\0';
       auto const escaped_char = get_escape_char(c);
 
@@ -571,7 +570,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
         __shared__ typename SlashScan::TempStorage temp_slash[num_warps];
         SlashScan(temp_slash[warp_id]).InclusiveScan(curr, scanned, composite_op);
         is_escaping_backslash = scanned.get(init_state);
-        init_state            = __shfl_sync(MASK, is_escaping_backslash, BLOCK_SIZE - 1);
+        init_state            = __shfl_sync(~0u, is_escaping_backslash, BLOCK_SIZE - 1);
         __syncwarp();
         is_slash.shift(warp_id);
         is_slash.set_bits(warp_id, is_escaping_backslash);
@@ -604,7 +603,7 @@ __global__ void parse_fn_string_parallel(str_tuple_it str_tuples,
       }
       // Make sure all threads have no errors before continuing
       if constexpr (is_warp) {
-        error = __any_sync(MASK, error);
+        error = __any_sync(~0u, error);
       } else {
         using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;
@@ -862,9 +861,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
                std::overflow_error);
 
   // CHARS column
-  std::unique_ptr<column> chars =
-    strings::detail::create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
-  auto d_chars = chars->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
 
   single_thread_fn.d_chars = d_chars;
   thrust::for_each_n(rmm::exec_policy(stream),
@@ -903,7 +901,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   return make_strings_column(col_size,
                              std::move(offsets),
-                             std::move(chars),
+                             chars.release(),
                              d_null_count.value(stream),
                              std::move(null_mask));
 }
@@ -924,18 +922,16 @@ std::unique_ptr<column> parse_data(
   if (col_size == 0) { return make_empty_column(col_type); }
   auto d_null_count    = rmm::device_scalar<size_type>(null_count, stream);
   auto null_count_data = d_null_count.data();
+  if (null_mask.is_empty()) {
+    null_mask = cudf::detail::create_null_mask(col_size, mask_state::ALL_VALID, stream, mr);
+  }
 
   // Prepare iterator that returns (string_ptr, string_length)-pairs needed by type conversion
   auto str_tuples = thrust::make_transform_iterator(offset_length_begin, to_string_view_pair{data});
 
   if (col_type == cudf::data_type{cudf::type_id::STRING}) {
-    return parse_string(str_tuples,
-                        col_size,
-                        std::forward<rmm::device_buffer>(null_mask),
-                        d_null_count,
-                        options,
-                        stream,
-                        mr);
+    return parse_string(
+      str_tuples, col_size, std::move(null_mask), d_null_count, options, stream, mr);
   }
 
   auto out_col =

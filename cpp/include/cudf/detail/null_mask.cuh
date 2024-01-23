@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <iterator>
 #include <optional>
@@ -59,12 +61,12 @@ namespace detail {
  * @param count_ptr Pointer to counter of set bits
  */
 template <int block_size, typename Binop>
-__global__ void offset_bitmask_binop(Binop op,
-                                     device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const* const> source,
-                                     device_span<size_type const> source_begin_bits,
-                                     size_type source_size_bits,
-                                     size_type* count_ptr)
+CUDF_KERNEL void offset_bitmask_binop(Binop op,
+                                      device_span<bitmask_type> destination,
+                                      device_span<bitmask_type const* const> source,
+                                      device_span<size_type const> source_begin_bits,
+                                      size_type source_size_bits,
+                                      size_type* count_ptr)
 {
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -212,11 +214,11 @@ enum class count_bits_policy : bool {
  * in each range is updated.
  */
 template <typename OffsetIterator, typename OutputIterator>
-__global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
-                                                          size_type num_ranges,
-                                                          OffsetIterator first_bit_indices,
-                                                          OffsetIterator last_bit_indices,
-                                                          OutputIterator null_counts)
+CUDF_KERNEL void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
+                                                           size_type num_ranges,
+                                                           OffsetIterator first_bit_indices,
+                                                           OffsetIterator last_bit_indices,
+                                                           OutputIterator null_counts)
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
 
@@ -330,20 +332,21 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     // set bits from the length of the segment.
     auto segments_begin =
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-    auto segment_length_iterator =
-      thrust::transform_iterator(segments_begin, [] __device__(auto const& segment) {
+    auto segment_length_iterator = thrust::transform_iterator(
+      segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
         auto const begin = thrust::get<0>(segment);
         auto const end   = thrust::get<1>(segment);
         return end - begin;
-      });
+      }));
     thrust::transform(rmm::exec_policy(stream),
                       segment_length_iterator,
                       segment_length_iterator + num_ranges,
                       d_bit_counts.data(),
                       d_bit_counts.data(),
-                      [] __device__(auto segment_size, auto segment_bit_count) {
-                        return segment_size - segment_bit_count;
-                      });
+                      cuda::proclaim_return_type<size_type>(
+                        [] __device__(auto segment_size, auto segment_bit_count) {
+                          return segment_size - segment_bit_count;
+                        }));
   }
 
   CUDF_CHECK_CUDA(stream.value());
@@ -541,12 +544,12 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
 {
   auto const segments_begin =
     thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-  auto const segment_length_iterator =
-    thrust::make_transform_iterator(segments_begin, [] __device__(auto const& segment) {
+  auto const segment_length_iterator = thrust::make_transform_iterator(
+    segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
       auto const begin = thrust::get<0>(segment);
       auto const end   = thrust::get<1>(segment);
       return end - begin;
-    });
+    }));
 
   auto const num_segments =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));

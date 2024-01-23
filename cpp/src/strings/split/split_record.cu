@@ -35,6 +35,8 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -57,7 +59,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                              std::move(offsets),
                              std::move(results),
                              input.null_count(),
-                             copy_bitmask(input.parent(), stream, mr),
+                             cudf::detail::copy_bitmask(input.parent(), stream, mr),
                              stream,
                              mr);
   }
@@ -72,7 +74,7 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
                            std::move(offsets),
                            std::move(strings_child),
                            input.null_count(),
-                           copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }
@@ -142,7 +144,9 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
 {
   // create offsets column by counting the number of tokens per string
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
-    0, [reader] __device__(auto idx) { return reader.count_tokens(idx); });
+    0, cuda::proclaim_return_type<size_type>([reader] __device__(auto idx) {
+      return reader.count_tokens(idx);
+    }));
   auto [offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
   auto d_offsets = offsets->view().template data<cudf::size_type>();
@@ -160,7 +164,7 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
                            std::move(offsets),
                            std::move(strings_output),
                            input.null_count(),
-                           copy_bitmask(input.parent(), stream, mr),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
                            stream,
                            mr);
 }

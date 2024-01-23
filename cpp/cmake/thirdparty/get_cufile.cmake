@@ -21,10 +21,10 @@ function(find_and_configure_cufile)
   if(cuFile_FOUND AND NOT BUILD_SHARED_LIBS)
     include("${rapids-cmake-dir}/export/find_package_file.cmake")
     rapids_export_find_package_file(
-      BUILD "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+      BUILD "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" EXPORT_SET cudf-exports
     )
     rapids_export_find_package_file(
-      INSTALL "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" cudf-exports
+      INSTALL "${CUDF_SOURCE_DIR}/cmake/Modules/FindcuFile.cmake" EXPORT_SET cudf-exports
     )
   endif()
 endfunction()

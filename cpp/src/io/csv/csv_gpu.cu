@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -168,7 +168,7 @@ __device__ __inline__ bool is_floatingpoint(long len,
  * @param row_offsets The start the CSV data of interest
  * @param d_column_data The count for each column data type
  */
-__global__ void __launch_bounds__(csvparse_block_dim)
+CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   data_type_detection(parse_options_view const opts,
                       device_span<char const> csv_text,
                       device_span<column_parse::flags const> const column_flags,
@@ -305,7 +305,7 @@ __global__ void __launch_bounds__(csvparse_block_dim)
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] valid_counts The number of valid fields in each column
  */
-__global__ void __launch_bounds__(csvparse_block_dim)
+CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
                       device_span<char const> data,
                       device_span<column_parse::flags const> column_flags,
@@ -622,7 +622,7 @@ static inline __device__ rowctx32_t rowctx_inverse_merge_transform(uint64_t ctxt
  * @param escapechar Delimiter escape character
  * @param commentchar Comment line character (skip rows starting with this character)
  */
-__global__ void __launch_bounds__(rowofs_block_dim)
+CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
   gather_row_offsets_gpu(uint64_t* row_ctx,
                          device_span<uint64_t> offsets_out,
                          device_span<char const> const data,

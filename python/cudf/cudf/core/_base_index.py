@@ -1,12 +1,11 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set, Tuple
+from typing import Any, Literal, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -26,10 +25,13 @@ from cudf.api.types import (
     is_integer_dtype,
     is_list_like,
     is_scalar,
+    is_signed_integer_dtype,
+    is_unsigned_integer_dtype,
 )
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
+from cudf.errors import MixedTypeError
 from cudf.utils import ioutils
 from cudf.utils.dtypes import can_convert_to_column, is_mixed_with_object_dtype
 from cudf.utils.utils import _is_same_name
@@ -538,10 +540,36 @@ class BaseIndex(Serializable):
                 f"None or False; {sort} was passed."
             )
 
+        if cudf.get_option("mode.pandas_compatible"):
+            if (
+                is_bool_dtype(self.dtype) and not is_bool_dtype(other.dtype)
+            ) or (
+                not is_bool_dtype(self.dtype) and is_bool_dtype(other.dtype)
+            ):
+                # Bools + other types will result in mixed type.
+                # This is not yet consistent in pandas and specific to APIs.
+                raise MixedTypeError("Cannot perform union with mixed types")
+            if (
+                is_signed_integer_dtype(self.dtype)
+                and is_unsigned_integer_dtype(other.dtype)
+            ) or (
+                is_unsigned_integer_dtype(self.dtype)
+                and is_signed_integer_dtype(other.dtype)
+            ):
+                # signed + unsigned types will result in
+                # mixed type for union in pandas.
+                raise MixedTypeError("Cannot perform union with mixed types")
+
         if not len(other) or self.equals(other):
-            return self._get_reconciled_name_object(other)
+            common_dtype = cudf.utils.dtypes.find_common_type(
+                [self.dtype, other.dtype]
+            )
+            return self._get_reconciled_name_object(other).astype(common_dtype)
         elif not len(self):
-            return other._get_reconciled_name_object(self)
+            common_dtype = cudf.utils.dtypes.find_common_type(
+                [self.dtype, other.dtype]
+            )
+            return other._get_reconciled_name_object(self).astype(common_dtype)
 
         result = self._union(other, sort=sort)
         result.name = _get_result_name(self.name, other.name)
@@ -821,7 +849,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False):
         """
         Convert to a Pandas Index.
 
@@ -1540,6 +1568,8 @@ class BaseIndex(Serializable):
                     (1, 2)],
                    names=['a', 'b'])
         """
+        if return_indexers is not False:
+            raise NotImplementedError("return_indexers is not implemented")
         self_is_multi = isinstance(self, cudf.MultiIndex)
         other_is_multi = isinstance(other, cudf.MultiIndex)
         if level is not None:
@@ -1671,6 +1701,8 @@ class BaseIndex(Serializable):
         start = loc.start
         stop = loc.stop
         step = 1 if loc.step is None else loc.step
+        start_side: Literal["left", "right"]
+        stop_side: Literal["left", "right"]
         if step < 0:
             start_side, stop_side = "right", "left"
         else:
@@ -1694,9 +1726,9 @@ class BaseIndex(Serializable):
     def searchsorted(
         self,
         value,
-        side: builtins.str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: builtins.str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         """Find index where elements should be inserted to maintain order
 
@@ -1723,7 +1755,12 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def get_slice_bound(self, label, side: builtins.str, kind=None) -> int:
+    def get_slice_bound(
+        self,
+        label,
+        side: Literal["left", "right"],
+        kind: Literal["ix", "loc", "getitem", None] = None,
+    ) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1805,7 +1842,7 @@ class BaseIndex(Serializable):
             return NotImplemented
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=None):
+    def from_pandas(cls, index: pd.Index, nan_as_null=no_default):
         """
         Convert from a Pandas Index.
 
@@ -1835,12 +1872,25 @@ class BaseIndex(Serializable):
         >>> cudf.Index.from_pandas(pdi, nan_as_null=False)
         Float64Index([10.0, 20.0, 30.0, nan], dtype='float64')
         """
+        if nan_as_null is no_default:
+            nan_as_null = (
+                False if cudf.get_option("mode.pandas_compatible") else None
+            )
+
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
-
-        ind = cudf.Index(column.as_column(index, nan_as_null=nan_as_null))
-        ind.name = index.name
-        return ind
+        if isinstance(index, pd.RangeIndex):
+            return cudf.RangeIndex(
+                start=index.start,
+                stop=index.stop,
+                step=index.step,
+                name=index.name,
+            )
+        else:
+            return cudf.Index(
+                column.as_column(index, nan_as_null=nan_as_null),
+                name=index.name,
+            )
 
     @property
     def _constructor_expanddim(self):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -156,26 +156,30 @@ std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& string
 
   cudf::string_view const d_separator(separator.data(), separator.size());
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     detokenizer_fn{*strings_column, d_row_map, tokens_offsets.data(), d_separator},
     output_count,
     stream,
     mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(
-    output_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
+  return cudf::make_strings_column(output_count,
+                                   std::move(offsets_column),
+                                   std::move(chars_column->release().data.release()[0]),
+                                   0,
+                                   rmm::device_buffer{});
 }
 
 }  // namespace detail
 
-std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> detokenize(cudf::strings_column_view const& input,
                                          cudf::column_view const& row_indices,
                                          cudf::string_scalar const& separator,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::detokenize(strings, row_indices, separator, cudf::get_default_stream(), mr);
+  return detail::detokenize(input, row_indices, separator, stream, mr);
 }
 
 }  // namespace nvtext

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,8 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 
+#include <cuda/functional>
+
 using namespace cudf::tdigest;
 
 namespace cudf {
@@ -66,13 +68,13 @@ struct make_centroid {
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
 template <typename CentroidIter>
-__global__ void compute_percentiles_kernel(device_span<size_type const> tdigest_offsets,
-                                           column_device_view percentiles,
-                                           CentroidIter centroids_,
-                                           double const* min_,
-                                           double const* max_,
-                                           double const* cumulative_weight_,
-                                           double* output)
+CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest_offsets,
+                                            column_device_view percentiles,
+                                            CentroidIter centroids_,
+                                            double const* min_,
+                                            double const* max_,
+                                            double const* cumulative_weight_,
+                                            double* output)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
 
@@ -199,12 +201,13 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                                                           rmm::mr::get_current_device_resource());
   auto keys               = cudf::detail::make_counting_transform_iterator(
     0,
-    [offsets_begin = offsets.begin<size_type>(),
-     offsets_end   = offsets.end<size_type>()] __device__(size_type i) {
-      return thrust::distance(
-        offsets_begin,
-        thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
-    });
+    cuda::proclaim_return_type<std::ptrdiff_t>(
+      [offsets_begin = offsets.begin<size_type>(),
+       offsets_end   = offsets.end<size_type>()] __device__(size_type i) {
+        return thrust::distance(
+          offsets_begin,
+          thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
+      }));
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
                                 keys + weight.size(),
@@ -381,7 +384,8 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   auto [bitmask, null_count] = [stream, mr, &tdv]() {
     auto tdigest_is_empty = thrust::make_transform_iterator(
       detail::size_begin(tdv),
-      [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; });
+      cuda::proclaim_return_type<size_type>(
+        [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; }));
     auto const null_count =
       thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
     if (null_count == 0) {

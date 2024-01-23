@@ -1,16 +1,17 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from functools import singledispatch
 
 from pandas.core.groupby.groupby import DataError
 
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
-    is_string_dtype,
-    is_struct_dtype,
-)
+from cudf.api.types import is_string_dtype
 from cudf.core.buffer import acquire_spill_lock
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    DecimalDtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
+)
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -24,6 +25,8 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
 from cudf._lib.scalar import as_device_scalar
 
+from libcpp.functional cimport reference_wrapper
+
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.aggregation cimport (
@@ -33,7 +36,6 @@ from cudf._lib.aggregation cimport (
     make_groupby_scan_aggregation,
 )
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.libcpp.functional cimport reference_wrapper
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
@@ -72,6 +74,43 @@ _DECIMAL_AGGS = {
 ctypedef const scalar constscalar
 
 
+@singledispatch
+def get_valid_aggregation(dtype):
+    if is_string_dtype(dtype):
+        return _STRING_AGGS
+    return "ALL"
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: CategoricalDtype):
+    return _CATEGORICAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: ListDtype):
+    return _LIST_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: StructDtype):
+    return _STRUCT_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: IntervalDtype):
+    return _INTERVAL_AGGS
+
+
+@get_valid_aggregation.register
+def _(dtype: DecimalDtype):
+    return _DECIMAL_AGGS
+
+
 cdef _agg_result_from_columns(
     vector[libcudf_groupby.aggregation_result]& c_result_columns,
     set column_included,
@@ -103,7 +142,7 @@ cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, list keys, bool dropna=True, *args, **kwargs):
+    def __cinit__(self, list keys, bool dropna=True):
         cdef libcudf_types.null_policy c_null_handling
         cdef table_view keys_view
 
@@ -186,15 +225,7 @@ cdef class GroupBy:
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
-            valid_aggregations = (
-                _LIST_AGGS if is_list_dtype(dtype)
-                else _STRING_AGGS if is_string_dtype(dtype)
-                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
-                else _STRUCT_AGGS if is_struct_dtype(dtype)
-                else _INTERVAL_AGGS if is_interval_dtype(dtype)
-                else _DECIMAL_AGGS if is_decimal_dtype(dtype)
-                else "ALL"
-            )
+            valid_aggregations = get_valid_aggregation(dtype)
             included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.aggregation_request())
@@ -202,7 +233,7 @@ cdef class GroupBy:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append(agg)
+                    included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )
@@ -257,15 +288,7 @@ cdef class GroupBy:
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
-            valid_aggregations = (
-                _LIST_AGGS if is_list_dtype(dtype)
-                else _STRING_AGGS if is_string_dtype(dtype)
-                else _CATEGORICAL_AGGS if is_categorical_dtype(dtype)
-                else _STRUCT_AGGS if is_struct_dtype(dtype)
-                else _INTERVAL_AGGS if is_interval_dtype(dtype)
-                else _DECIMAL_AGGS if is_decimal_dtype(dtype)
-                else "ALL"
-            )
+            valid_aggregations = get_valid_aggregation(dtype)
             included_aggregations_i = []
 
             c_agg_request = move(libcudf_groupby.scan_request())
@@ -273,7 +296,7 @@ cdef class GroupBy:
                 agg_obj = make_groupby_scan_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append(agg)
+                    included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
                         move(agg_obj.c_obj)
                     )

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/contains.hpp>
 #include <cudf/lists/detail/lists_column_factories.hpp>
@@ -39,6 +40,8 @@
 #include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
+
+#include <cuda/functional>
 
 #include <type_traits>
 
@@ -203,9 +206,10 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   auto const lists_cdv_ptr = column_device_view::create(lists.parent(), stream);
   auto const input_it      = cudf::detail::make_counting_transform_iterator(
     size_type{0},
-    [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
-      return list_device_view{lists, idx};
-    });
+    cuda::proclaim_return_type<list_device_view>(
+      [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(auto const idx) {
+        return list_device_view{lists, idx};
+      }));
 
   auto out_positions = make_numeric_column(
     data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream, mr);
@@ -253,10 +257,10 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin,
                     positions_begin + key_positions->size(),
                     result->mutable_view().template begin<bool>(),
-                    [] __device__(auto const i) {
+                    cuda::proclaim_return_type<bool>([] __device__(auto const i) {
                       // position == NOT_FOUND_SENTINEL: the list does not contain the search key.
                       return i != NOT_FOUND_SENTINEL;
-                    });
+                    }));
 
   auto const null_count                             = key_positions->null_count();
   [[maybe_unused]] auto [data, null_mask, children] = key_positions->release();
@@ -274,12 +278,13 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  rmm::mr::device_memory_resource* mr)
 {
   if (!search_key.is_valid(stream)) {
-    return make_numeric_column(data_type{cudf::type_to_id<size_type>()},
-                               lists.size(),
-                               cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
-                               lists.size(),
-                               stream,
-                               mr);
+    return make_numeric_column(
+      data_type{cudf::type_to_id<size_type>()},
+      lists.size(),
+      cudf::detail::create_null_mask(lists.size(), mask_state::ALL_NULL, stream, mr),
+      lists.size(),
+      stream,
+      mr);
   }
   if (lists.size() == 0) {
     return make_numeric_column(
@@ -287,7 +292,7 @@ std::unique_ptr<column> index_of(lists_column_view const& lists,
   }
 
   auto search_key_col = cudf::make_column_from_scalar(search_key, lists.size(), stream, mr);
-  return index_of(lists, search_key_col->view(), find_option, stream, mr);
+  return detail::index_of(lists, search_key_col->view(), find_option, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
@@ -306,11 +311,11 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto key_indices = index_of(lists,
-                              search_key,
-                              duplicate_find_option::FIND_FIRST,
-                              stream,
-                              rmm::mr::get_current_device_resource());
+  auto key_indices = detail::index_of(lists,
+                                      search_key,
+                                      duplicate_find_option::FIND_FIRST,
+                                      stream,
+                                      rmm::mr::get_current_device_resource());
   return to_contains(std::move(key_indices), stream, mr);
 }
 
@@ -322,11 +327,11 @@ std::unique_ptr<column> contains(lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  auto key_indices = index_of(lists,
-                              search_keys,
-                              duplicate_find_option::FIND_FIRST,
-                              stream,
-                              rmm::mr::get_current_device_resource());
+  auto key_indices = detail::index_of(lists,
+                                      search_keys,
+                                      duplicate_find_option::FIND_FIRST,
+                                      stream,
+                                      rmm::mr::get_current_device_resource());
   return to_contains(std::move(key_indices), stream, mr);
 }
 
@@ -337,25 +342,26 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
   auto const lists_cv      = lists.parent();
   auto output              = make_numeric_column(data_type{type_to_id<bool>()},
                                     lists.size(),
-                                    copy_bitmask(lists_cv, stream, mr),
+                                    cudf::detail::copy_bitmask(lists_cv, stream, mr),
                                     lists_cv.null_count(),
                                     stream,
                                     mr);
   auto const out_begin     = output->mutable_view().template begin<bool>();
   auto const lists_cdv_ptr = column_device_view::create(lists_cv, stream);
 
-  thrust::tabulate(rmm::exec_policy(stream),
-                   out_begin,
-                   out_begin + lists.size(),
-                   [lists = cudf::detail::lists_column_device_view{*lists_cdv_ptr}] __device__(
-                     auto const list_idx) {
-                     auto const list = list_device_view{lists, list_idx};
-                     return list.is_null() ||
-                            thrust::any_of(thrust::seq,
-                                           thrust::make_counting_iterator(0),
-                                           thrust::make_counting_iterator(list.size()),
-                                           [&list](auto const idx) { return list.is_null(idx); });
-                   });
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    out_begin,
+    out_begin + lists.size(),
+    cuda::proclaim_return_type<bool>([lists = cudf::detail::lists_column_device_view{
+                                        *lists_cdv_ptr}] __device__(auto const list_idx) {
+      auto const list = list_device_view{lists, list_idx};
+      return list.is_null() ||
+             thrust::any_of(thrust::seq,
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(list.size()),
+                            [&list](auto const idx) { return list.is_null(idx); });
+    }));
 
   return output;
 }
@@ -364,43 +370,48 @@ std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_key, cudf::get_default_stream(), mr);
+  return detail::contains(lists, search_key, stream, mr);
 }
 
 std::unique_ptr<column> contains(lists_column_view const& lists,
                                  column_view const& search_keys,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_keys, cudf::get_default_stream(), mr);
+  return detail::contains(lists, search_keys, stream, mr);
 }
 
 std::unique_ptr<column> contains_nulls(lists_column_view const& lists,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_nulls(lists, cudf::get_default_stream(), mr);
+  return detail::contains_nulls(lists, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  duplicate_find_option find_option,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_key, find_option, cudf::get_default_stream(), mr);
+  return detail::index_of(lists, search_key, find_option, stream, mr);
 }
 
 std::unique_ptr<column> index_of(lists_column_view const& lists,
                                  column_view const& search_keys,
                                  duplicate_find_option find_option,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::index_of(lists, search_keys, find_option, cudf::get_default_stream(), mr);
+  return detail::index_of(lists, search_keys, find_option, stream, mr);
 }
 
 }  // namespace cudf::lists
