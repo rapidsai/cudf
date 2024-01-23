@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -729,7 +729,6 @@ make_definition_corr(BlockCorr, int64, int64_t);
 /*
 NRT CUDA functions
 */
-
 
 // Only used to allocate the right amount of space, see below
 struct meminfo_and_str {

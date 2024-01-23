@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -144,7 +144,8 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
                      thrust::make_counting_iterator(0),
                      size,
                      [managed_strings] __device__(auto idx) {
-                       NRT_MemInfo* mi = reinterpret_cast<NRT_MemInfo*>(managed_strings[idx].meminfo);
+                       NRT_MemInfo* mi =
+                         reinterpret_cast<NRT_MemInfo*>(managed_strings[idx].meminfo);
 
                        // Function pointer was compiled in another module
                        // so can't call it directly, need to replace it with one

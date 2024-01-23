@@ -36,7 +36,6 @@ typedef __device__ void (*NRT_dealloc_func)(void* ptr, void* dealloc_info);
 
 typedef struct MemInfo NRT_MemInfo;
 
-
 extern "C" {
 struct MemInfo {
   cuda::atomic<size_t, cuda::thread_scope_device> refct;
@@ -44,7 +43,7 @@ struct MemInfo {
   void* dtor_info;
   void* data;
   size_t size;
- };
+};
 }
 
 // Globally needed variables
@@ -58,11 +57,9 @@ struct NRT_MemSys {
   } stats;
 };
 
-
 /* The Memory System object */
 __device__ NRT_MemSys TheMSysStruct = {0};
-__device__ NRT_MemSys* TheMSys = &TheMSysStruct;
-
+__device__ NRT_MemSys* TheMSys      = &TheMSysStruct;
 
 extern "C" __device__ void* NRT_Allocate(size_t size)
 {
@@ -120,11 +117,10 @@ extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
   used by c++ APIs that accept ownership of live objects and must
   manage them going forward.
 */
-extern "C" __device__ void NRT_internal_decref(NRT_MemInfo* mi) {
+extern "C" __device__ void NRT_internal_decref(NRT_MemInfo* mi)
+{
   mi->refct--;
-  if (mi->refct == 0) {
-    NRT_MemInfo_call_dtor(mi);
-  }
+  if (mi->refct == 0) { NRT_MemInfo_call_dtor(mi); }
 }
 
 #endif

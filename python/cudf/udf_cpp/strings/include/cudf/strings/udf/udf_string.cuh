@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@
 #include <algorithm>
 #include <limits>
 #include <string>
-
 
 namespace cudf {
 namespace strings {
@@ -459,7 +458,6 @@ __device__ void udf_str_dtor(void* udf_str, size_t size, void* dtor_info)
   auto ptr = reinterpret_cast<udf_string*>(udf_str);
   ptr->~udf_string();
 }
-
 
 }  // namespace udf
 }  // namespace strings

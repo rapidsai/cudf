@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,7 @@ class udf_string;
 class managed_udf_string;
 
 /**
- * @brief return an NRT_MemSys* pointing to an initialized 
+ * @brief return an NRT_MemSys* pointing to an initialized
  * memory system object persisted in device memory.
  */
 NRT_MemSys* NRT_MemSys_new();
