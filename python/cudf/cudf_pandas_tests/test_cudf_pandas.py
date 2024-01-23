@@ -1235,6 +1235,14 @@ def test_func_namespace():
     assert xpd.concat is xpd.core.reshape.concat.concat
 
 
+def test_pickle_groupby(dataframe):
+    pdf, df = dataframe
+    pgb = pdf.groupby("a")
+    gb = df.groupby("a")
+    gb = pickle.loads(pickle.dumps(gb))
+    tm.assert_equal(pgb.sum(), gb.sum())
+
+
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -88,6 +88,8 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
   private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
   private static final File TEST_JSON_SINGLE_QUOTES_FILE = TestUtils.getResourceAsFile("single_quotes.json");
+  private static final File TEST_MIXED_TYPE_1_JSON = TestUtils.getResourceAsFile("mixed_types_1.json");
+  private static final File TEST_MIXED_TYPE_2_JSON = TestUtils.getResourceAsFile("mixed_types_2.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -341,6 +343,53 @@ public class TableTest extends CudfTestBase {
             .column("TEST\"", "TESTER'")
             .build();
          MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  void testReadMixedType2JSONFileFeatureDisabled() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(false)
+            .build();
+    assertThrows(CudfException.class, () ->
+      Table.readJSON(schema, opts, TEST_MIXED_TYPE_2_JSON));
+  }
+
+  @Test
+  void testReadMixedType1JSONFile() {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("123", "123" )
+            .build();
+         Table table = Table.readJSON(schema, opts, TEST_MIXED_TYPE_1_JSON)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadMixedType2JSONFile() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("[1,2,3]", "{ \"b\": 1 }" )
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_MIXED_TYPE_2_JSON);
          Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
     }

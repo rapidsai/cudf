@@ -344,6 +344,11 @@ add_library(
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
+  src/hash/sha1_hash.cu
+  src/hash/sha224_hash.cu
+  src/hash/sha256_hash.cu
+  src/hash/sha384_hash.cu
+  src/hash/sha512_hash.cu
   src/hash/spark_murmurhash3_x86_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
