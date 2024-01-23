@@ -17,7 +17,9 @@ add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
 target_compile_definitions(jitify_preprocess PRIVATE "_FILE_OFFSET_BITS=64")
 rapids_cuda_set_runtime(jitify_preprocess USE_STATIC ${CUDA_STATIC_RUNTIME})
-target_link_libraries(jitify_preprocess ${CMAKE_DL_LIBS})
+if(CMAKE_DL_LIBS)
+  target_link_libraries(jitify_preprocess PUBLIC ${CMAKE_DL_LIBS})
+endif()
 
 # Take a list of files to JIT-compile and run them through jitify_preprocess.
 function(jit_preprocess_files)
