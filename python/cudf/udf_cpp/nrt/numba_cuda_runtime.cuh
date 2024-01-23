@@ -58,8 +58,10 @@ struct NRT_MemSys {
 };
 
 /* The Memory System object */
-__device__ NRT_MemSys TheMSysStruct = {0};
-__device__ NRT_MemSys* TheMSys      = &TheMSysStruct;
+__device__ NRT_MemSys DefaultMSys = {.stats = {false, 0, 0, 0, 0}};
+__device__ NRT_MemSys* TheMSys    = &DefaultMSys;
+
+__global__ void setGlobalMSysKernel(NRT_MemSys* deviceMSys) { TheMSys = deviceMSys; }
 
 extern "C" __device__ void* NRT_Allocate(size_t size)
 {

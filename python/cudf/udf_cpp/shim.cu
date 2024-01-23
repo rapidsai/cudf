@@ -348,8 +348,7 @@ extern "C" __device__ int concat(int* nb_retval, void* udf_str, void* const* lhs
 
   udf_string result;
   result.append(*lhs_ptr).append(*rhs_ptr);
-  // TODO
-  // move result into where udf_str_ptr points to
+  // TODO - should this be a move?
   *udf_str_ptr = result;
   return 0;
 }
