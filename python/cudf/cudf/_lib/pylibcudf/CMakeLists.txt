@@ -13,7 +13,7 @@
 # =============================================================================
 
 set(cython_sources binaryop.pyx column.pyx copying.pyx gpumemoryview.pyx interop.pyx scalar.pyx
-                   table.pyx types.pyx utils.pyx
+                   table.pyx types.pyx unary.pyx utils.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
