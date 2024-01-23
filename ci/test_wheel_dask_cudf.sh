@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -eou pipefail
 
@@ -27,4 +27,9 @@ python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
+python -m pytest
+  --cache-clear \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  ./python/dask_cudf/dask_cudf/

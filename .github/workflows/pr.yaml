@@ -119,7 +119,7 @@ jobs:
   wheel-tests-cudf:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@wheel-test-summary
     with:
       build_type: pull-request
       script: ci/test_wheel_cudf.sh
@@ -134,7 +134,7 @@ jobs:
   wheel-tests-dask-cudf:
     needs: wheel-build-dask-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@wheel-test-summary
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -150,7 +150,7 @@ jobs:
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@wheel-test-summary
     with:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
@@ -159,7 +159,7 @@ jobs:
     # run the Pandas unit tests using PR branch
     needs: wheel-build-cudf
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@wheel-test-summary
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
       build_type: pull-request

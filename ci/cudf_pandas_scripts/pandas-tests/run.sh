@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -27,12 +27,17 @@ python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas-tests]
 
 git checkout $COMMIT
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -n 10 \
   --tb=line \
   --skip-slow \
   --max-worker-restart=3 \
   --import-mode=importlib \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 # summarize the results and save them to artifacts:
