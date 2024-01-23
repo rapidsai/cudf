@@ -224,9 +224,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
-            self._data = self._data.__class__._create_unsafe(
+            self._data = self._data.__class__(
                 dict(zip(value, self._data.values())),
                 level_names=self._data.level_names,
+                verify=False,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
