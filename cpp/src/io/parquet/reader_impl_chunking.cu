@@ -52,6 +52,12 @@ struct split_info {
 // do a subpass decode. if the difference between the user specified limit and
 // the actual memory used for compressed/temp data is > than this value, we will still use
 // at least this many additional bytes.
+// Example:
+// - user has specified 1 GB limit
+// - we have read in 900 MB of compressed data
+// - that leaves us 100 MB of space for decompression batches
+// - to keep the gpu busy, we really don't want to do less than 200 MB at a time so we're just going to use 200 MB of space
+//   even if that goes past the user-specified limit.
 constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
 // percentage of the total available input read limit that should be reserved for compressed
@@ -1219,9 +1225,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
 
   // if the user has passed a very small value (under the hardcoded minimum_subpass_expected_size),
   // respect it.
-  auto const min_subpass_size = _input_pass_read_limit < minimum_subpass_expected_size
-                                  ? _input_pass_read_limit
-                                  : minimum_subpass_expected_size;
+  auto const min_subpass_size = std::min(_input_pass_read_limit, minimum_subpass_expected_size);
 
   // what do we do if the base memory size (the compressed data) itself is approaching or larger
   // than the overall read limit? we are still going to be decompressing in subpasses, but we have

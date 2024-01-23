@@ -349,7 +349,7 @@ struct get_page_key {
 /**
  * @brief Return an iterator that returns they keys for a vector of pages.
  */
-inline auto make_page_key_iterator(device_span<const PageInfo> pages)
+inline auto make_page_key_iterator(device_span<PageInfo const> pages)
 {
   return thrust::make_transform_iterator(pages.begin(), get_page_key{});
 }

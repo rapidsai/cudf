@@ -230,7 +230,6 @@ class reader::impl {
    * all of the rows in the page, not the number of rows themselves. In order to do subpass reading
    * more accurately, we would like to have a more accurate guess of the real number of rows per
    * page.
-   *
    */
   void generate_list_column_row_count_estimates();
 
