@@ -27,7 +27,7 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   libcudf cudf dask-cudf
 
-export RAPIDS_VERSION_NUMBER="24.02"
+export RAPIDS_VERSION_NUMBER="24.04"
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
 rapids-logger "Build CPP docs"
@@ -40,8 +40,8 @@ popd
 
 rapids-logger "Build Python docs"
 pushd docs/cudf
-make dirhtml O="-j 4"
-make text O="-j 4"
+make dirhtml
+make text
 mkdir -p "${RAPIDS_DOCS_DIR}/cudf/"{html,txt}
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
 mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
