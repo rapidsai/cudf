@@ -57,7 +57,7 @@ cpdef Column binary_operation(
                     (<Column> lhs).view(),
                     (<Column> rhs).view(),
                     op,
-                    data_type.c_obj
+                    output_type.c_obj
                 )
             )
     elif isinstance(lhs, Column) and isinstance(rhs, Scalar):
@@ -67,7 +67,7 @@ cpdef Column binary_operation(
                     (<Column> lhs).view(),
                     dereference((<Scalar> rhs).c_obj),
                     op,
-                    data_type.c_obj
+                    output_type.c_obj
                 )
             )
     elif isinstance(lhs, Scalar) and isinstance(rhs, Column):
@@ -77,7 +77,7 @@ cpdef Column binary_operation(
                     dereference((<Scalar> lhs).c_obj),
                     (<Column> rhs).view(),
                     op,
-                    data_type.c_obj
+                    output_type.c_obj
                 )
             )
     else:
