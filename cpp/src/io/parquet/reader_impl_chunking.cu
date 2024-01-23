@@ -547,6 +547,10 @@ struct get_page_span {
   }
 };
 
+struct get_span_size {
+  __device__ size_t operator()(page_span const& s) const { return s.end - s.start; }
+};
+
 /**
  * @brief Computes the next subpass within the current pass.
  *
@@ -606,13 +610,13 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
                     iter + num_columns,
                     page_bounds.begin(),
                     get_page_span{page_offsets, page_row_index, start_row, end_row});
-  auto h_page_bounds = cudf::detail::make_std_vector_sync(page_bounds, stream);
-
+  
   // total page count over all columns
   auto page_count_iter = thrust::make_transform_iterator(
-    h_page_bounds.begin(), [](page_span const& s) { return s.end - s.start; });
-  size_t const total_pages = std::reduce(page_count_iter, page_count_iter + num_columns);
-
+    page_bounds.begin(), get_span_size{});
+  size_t const total_pages = thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
+  
+  auto h_page_bounds = cudf::detail::make_std_vector_sync(page_bounds, stream);
   return {h_page_bounds, total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
 
@@ -839,12 +843,12 @@ std::vector<row_range> compute_page_splits_by_row(
       copy_out, stream, rmm::mr::get_current_device_resource());
 
     gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
+    stream.synchronize();
   }
 
   pages.host_to_device_async(stream);
 
   stream.synchronize();
-
   return decomp_pages;
 }
 
@@ -948,7 +952,7 @@ struct decompression_info {
 struct get_decomp_info {
   device_span<const ColumnChunkDesc> chunks;
 
-  __device__ decompression_info operator()(PageInfo const& p)
+  __device__ decompression_info operator()(PageInfo const& p) const
   {
     return {static_cast<Compression>(chunks[p.chunk_idx].codec),
             1,
@@ -962,7 +966,7 @@ struct get_decomp_info {
  *
  */
 struct decomp_sum {
-  __device__ decompression_info operator()(decompression_info const& a, decompression_info const& b)
+  __device__ decompression_info operator()(decompression_info const& a, decompression_info const& b) const
   {
     return {a.codec,
             a.num_pages + b.num_pages,
@@ -977,7 +981,7 @@ struct decomp_sum {
  *
  */
 struct get_decomp_scratch {
-  size_t operator()(decompression_info const& di)
+  size_t operator()(decompression_info const& di) const
   {
     switch (di.codec) {
       case UNCOMPRESSED:
