@@ -56,7 +56,8 @@ struct split_info {
 // - user has specified 1 GB limit
 // - we have read in 900 MB of compressed data
 // - that leaves us 100 MB of space for decompression batches
-// - to keep the gpu busy, we really don't want to do less than 200 MB at a time so we're just going to use 200 MB of space
+// - to keep the gpu busy, we really don't want to do less than 200 MB at a time so we're just going
+// to use 200 MB of space
 //   even if that goes past the user-specified limit.
 constexpr size_t minimum_subpass_expected_size = 200 * 1024 * 1024;
 
