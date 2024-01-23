@@ -610,12 +610,12 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
                     iter + num_columns,
                     page_bounds.begin(),
                     get_page_span{page_offsets, page_row_index, start_row, end_row});
-  
+
   // total page count over all columns
-  auto page_count_iter = thrust::make_transform_iterator(
-    page_bounds.begin(), get_span_size{});
-  size_t const total_pages = thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
-  
+  auto page_count_iter = thrust::make_transform_iterator(page_bounds.begin(), get_span_size{});
+  size_t const total_pages =
+    thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
+
   auto h_page_bounds = cudf::detail::make_std_vector_sync(page_bounds, stream);
   return {h_page_bounds, total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
@@ -966,7 +966,8 @@ struct get_decomp_info {
  *
  */
 struct decomp_sum {
-  __device__ decompression_info operator()(decompression_info const& a, decompression_info const& b) const
+  __device__ decompression_info operator()(decompression_info const& a,
+                                           decompression_info const& b) const
   {
     return {a.codec,
             a.num_pages + b.num_pages,
