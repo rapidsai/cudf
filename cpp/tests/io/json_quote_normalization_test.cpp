@@ -16,8 +16,7 @@
 
 #include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/io/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
