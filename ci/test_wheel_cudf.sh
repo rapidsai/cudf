@@ -22,6 +22,10 @@ RAPIDS_PY_WHEEL_NAME="cudf_${manylinux}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-downloa
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/cudf*.whl)[test]
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 # Run smoke tests for aarch64 pull requests
 if [[ "$(arch)" == "aarch64" && ${RAPIDS_BUILD_TYPE} == "pull-request" ]]; then
     python ./ci/wheel_smoke_test_cudf.py
