@@ -13,6 +13,7 @@
 # =============================================================================
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
+include(../../rapids_version.cmake)
 include(../../fetch_rapids.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
@@ -22,7 +23,7 @@ include(rapids-find)
 
 project(
   CUDF_KAFKA
-  VERSION 24.04.00
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES CXX
 )
 
