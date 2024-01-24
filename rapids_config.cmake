@@ -20,7 +20,10 @@ if(_rapids_version MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)\n$")
   set(RAPIDS_VERSION "${RAPIDS_VERSION_MAJOR}.${RAPIDS_VERSION_MINOR}.${RAPIDS_VERSION_PATCH}")
 else()
   string(REPLACE "\n" "\n  " _rapids_version_formatted "  ${_rapids_version}")
-  message(FATAL_ERROR "Could not determine RAPIDS version. Contents of VERSION file:\n${_rapids_version_formatted}")
+  message(
+    FATAL_ERROR
+      "Could not determine RAPIDS version. Contents of VERSION file:\n${_rapids_version_formatted}"
+  )
 endif()
 
 if(NOT EXISTS ${CMAKE_CURRENT_BINARY_DIR}/CUDF_RAPIDS.cmake)
