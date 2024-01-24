@@ -115,6 +115,9 @@ class json_reader_options {
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
 
+  // Normalize single quotes
+  bool _normalize_single_quotes = false;
+
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
@@ -256,6 +259,13 @@ class json_reader_options {
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
 
   /**
+   * @brief Whether the reader should normalize single quotes around strings
+   *
+   * @returns true if the reader should normalize single quotes, false otherwise
+   */
+  bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
+
+  /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
    *
    * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
@@ -339,6 +349,14 @@ class json_reader_options {
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should enable normalization of single quotes around strings.
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes around
+   * strings
+   */
+  void enable_normalize_single_quotes(bool val) { _normalize_single_quotes = val; }
 
   /**
    * @brief Specifies the JSON reader's behavior on invalid JSON lines.
@@ -499,6 +517,19 @@ class json_reader_options_builder {
   json_reader_options_builder& keep_quotes(bool val)
   {
     options._keep_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should normalize single quotes around strings
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes
+   * of strings
+   * @return this for chaining
+   */
+  json_reader_options_builder& normalize_single_quotes(bool val)
+  {
+    options._normalize_single_quotes = val;
     return *this;
   }
 
