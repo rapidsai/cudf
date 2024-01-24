@@ -9173,17 +9173,8 @@ def test_dataframe_constructor_column_index_only():
 @pytest.mark.parametrize(
     "data",
     [
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
-        {"a": [1.0, 2.0, 3.0], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
-        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [True, True, False]},
-        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False]},
-        {
-            "a": [1.0, 2.0, 3.0],
-            "b": [True, True, False],
-            "c": [False, True, False],
-        },
-        {"a": [1, 2, 3], "b": [3, 4, 5], "c": [2.0, 3.0, 4.0]},
-        {"a": [1, 2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0]},
+        {"a": [1, 2.5, 3], "b": [3, 4.5, 5], "c": [2.0, 3.0, 4.0]},
+        {"a": [1, 2.2, 3], "b": [2.0, 3.0, 4.0], "c": [5.0, 6.0, 4.0]},
     ],
 )
 @pytest.mark.parametrize(
@@ -9208,14 +9199,36 @@ def test_agg_for_dataframes(data, aggs):
 
     expect = pdf.agg(aggs).sort_index()
     got = gdf.agg(aggs).sort_index()
-    assert_eq(expect, got, check_dtype=False)
+
+    assert_eq(expect, got, check_dtype=True)
+
+
+@pytest_unmark_spilling
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]},
+        {"a": [1, 2, 3], "b": [True, True, False], "c": [False, True, False]},
+    ],
+)
+@pytest.mark.parametrize(
+    "aggs",
+    [
+        ["min", "sum", "max"],
+        "sum",
+        {"a": "sum", "b": "min", "c": "max"},
+    ],
+)
+def test_agg_for_dataframes_error(data, aggs):
+    gdf = cudf.DataFrame(data)
+
+    with pytest.raises(TypeError):
+        gdf.agg(aggs)
 
 
 @pytest.mark.parametrize("aggs", [{"a": np.sum, "b": np.min, "c": np.max}])
 def test_agg_for_unsupported_function(aggs):
-    gdf = cudf.DataFrame(
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
-    )
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
 
     with pytest.raises(NotImplementedError):
         gdf.agg(aggs)
@@ -9223,9 +9236,7 @@ def test_agg_for_unsupported_function(aggs):
 
 @pytest.mark.parametrize("aggs", ["asdf"])
 def test_agg_for_dataframe_with_invalid_function(aggs):
-    gdf = cudf.DataFrame(
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
-    )
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
 
     with pytest.raises(
         AttributeError,
@@ -9236,9 +9247,7 @@ def test_agg_for_dataframe_with_invalid_function(aggs):
 
 @pytest.mark.parametrize("aggs", [{"a": "asdf"}])
 def test_agg_for_series_with_invalid_function(aggs):
-    gdf = cudf.DataFrame(
-        {"a": [1, 2, 3], "b": [3.0, 4.0, 5.0], "c": [True, True, False]}
-    )
+    gdf = cudf.DataFrame({"a": [1, 2, 3], "b": [3.0, 4.0, 5.0]})
 
     with pytest.raises(
         AttributeError,
