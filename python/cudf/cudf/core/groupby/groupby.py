@@ -596,7 +596,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
-                if agg_kind in {"COUNT", "SIZE"}:
+                if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype("int64")
                 elif (
                     self.obj.empty
@@ -1449,9 +1449,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         dtype: int64
 
         """
-
         if self.obj.empty:
-            res = self.obj.copy(deep=True)
+            if function in {"count", "size", "idxmin", "idxmax"}:
+                res = cudf.Series([], dtype="int64")
+            else:
+                res = self.obj.copy(deep=True)
             res.index = self.grouping.keys
             if function in {"sum", "product"}:
                 # For `sum` & `product`, boolean types
