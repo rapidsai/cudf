@@ -51,38 +51,38 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef cppclass aggregation:
         Kind kind
 
-    cdef cppclass rolling_aggregation:
-        Kind kind
+    cdef cppclass rolling_aggregation(aggregation):
+        pass
 
-    cdef cppclass groupby_aggregation:
-        Kind kind
+    cdef cppclass groupby_aggregation(aggregation):
+        pass
 
-    cdef cppclass groupby_scan_aggregation:
-        Kind kind
+    cdef cppclass groupby_scan_aggregation(aggregation):
+        pass
 
-    cdef cppclass reduce_aggregation:
-        Kind kind
+    cdef cppclass reduce_aggregation(aggregation):
+        pass
 
-    cdef cppclass scan_aggregation:
-        Kind kind
+    cdef cppclass scan_aggregation(aggregation):
+        pass
 
-    cpdef enum class udf_type:
+    cpdef enum class udf_type(bool):
         CUDA
         PTX
 
-    cpdef enum class correlation_type:
+    cpdef enum class correlation_type(int32_t):
         PEARSON
         KENDALL
         SPEARMAN
 
-    cpdef enum class rank_method:
+    cpdef enum class rank_method(int32_t):
         FIRST
         AVERAGE
         MIN
         MAX
         DENSE
 
-    cpdef enum class rank_percentage:
+    cpdef enum class rank_percentage(int32_t):
         NONE
         ZERO_NORMALIZED
         ONE_NORMALIZED
