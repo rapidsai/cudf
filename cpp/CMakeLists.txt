@@ -18,6 +18,7 @@ include(../fetch_rapids.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
+include(${rapids-cmake-dir}/cuda/set_runtime.cmake)
 include(rapids-export)
 include(rapids-find)
 
@@ -780,17 +781,7 @@ if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
 endif()
 
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart_static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart)
-endif()
+rapids_cuda_set_runtime(cudf USE_STATIC ${CUDA_STATIC_RUNTIME})
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -838,6 +829,7 @@ if(CUDF_BUILD_TESTUTIL)
     PUBLIC cudf
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
+  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ${CUDA_STATIC_RUNTIME})
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
@@ -881,6 +873,7 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
+  rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
@@ -919,6 +912,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()
+    rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
     if("${_mode}" STREQUAL "testing")
