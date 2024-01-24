@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -400,7 +400,16 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
   AccumT local_sum = 0;
 
   for (int64_t idx = block.thread_rank(); idx < size; idx += block.size()) {
-    local_sum += static_cast<AccumT>(data[idx]);
+    T element = data[idx];
+
+    // Skip NaN values for float types
+    if constexpr (std::is_floating_point_v<T>) {
+      if (std::isnan(element)) {
+        continue;  // Skip NaN values
+      }
+    }
+
+    local_sum += static_cast<AccumT>(element);
   }
 
   cuda::atomic_ref<AccumT, cuda::thread_scope_block> ref{block_sum};
