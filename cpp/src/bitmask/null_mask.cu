@@ -80,7 +80,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr)
 {
   size_type mask_size{0};
 
@@ -158,7 +158,7 @@ void set_null_mask(bitmask_type* bitmask,
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr)
 {
   return detail::create_null_mask(size, state, stream, mr);
 }

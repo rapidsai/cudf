@@ -86,11 +86,11 @@ size_type num_bitmask_words(size_type number_of_bits);
  * @return A `device_buffer` for use as a null bitmask
  * satisfying the desired size and state
  */
-rmm::device_buffer create_null_mask(
-  size_type size,
-  mask_state state,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+rmm::device_buffer create_null_mask(size_type size,
+                                    mask_state state,
+                                    rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                                    cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr =
+                                      rmm::mr::get_current_device_resource());
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range

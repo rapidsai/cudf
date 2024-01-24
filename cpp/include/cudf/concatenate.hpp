@@ -44,10 +44,10 @@ namespace cudf {
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Bitmasks of all the column views in the views vector
  */
-rmm::device_buffer concatenate_masks(
-  host_span<column_view const> views,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+rmm::device_buffer concatenate_masks(host_span<column_view const> views,
+                                     rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                                     cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr =
+                                       rmm::mr::get_current_device_resource());
 
 /**
  * @brief Concatenates multiple columns into a single column

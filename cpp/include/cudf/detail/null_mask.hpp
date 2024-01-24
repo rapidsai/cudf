@@ -35,7 +35,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr);
 
 /**
  * @copydoc cudf::set_null_mask(bitmask_type*, size_type, size_type, bool)
