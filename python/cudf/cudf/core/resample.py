@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION &
+# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION &
 # AFFILIATES. All rights reserved.  SPDX-License-Identifier:
 # Apache-2.0
 #
@@ -217,10 +217,11 @@ class _ResampleGrouping(_Grouping):
 
         # get the start and end values that will be used to generate
         # the bin labels
-        min_date, max_date = key_column._minmax()
+        min_date = key_column._reduce("min")
+        max_date = key_column._reduce("max")
         start, end = _get_timestamp_range_edges(
-            pd.Timestamp(min_date.value),
-            pd.Timestamp(max_date.value),
+            pd.Timestamp(min_date),
+            pd.Timestamp(max_date),
             offset,
             closed=closed,
         )

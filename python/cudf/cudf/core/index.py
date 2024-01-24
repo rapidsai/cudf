@@ -2118,13 +2118,13 @@ class DatetimeIndex(GenericIndex):
         data=None,
         freq=None,
         tz=None,
-        normalize=False,
+        normalize: bool = False,
         closed=None,
-        ambiguous="raise",
-        dayfirst=False,
-        yearfirst=False,
+        ambiguous: Literal["raise"] = "raise",
+        dayfirst: bool = False,
+        yearfirst: bool = False,
         dtype=None,
-        copy=False,
+        copy: bool = False,
         name=None,
     ):
         # we should be more strict on what we accept here but
@@ -2147,22 +2147,20 @@ class DatetimeIndex(GenericIndex):
 
         self._freq = _validate_freq(freq)
 
-        valid_dtypes = tuple(
-            f"datetime64[{res}]" for res in ("s", "ms", "us", "ns")
-        )
         if dtype is None:
             # nanosecond default matches pandas
             dtype = "datetime64[ns]"
-        elif dtype not in valid_dtypes:
-            raise TypeError("Invalid dtype")
+        dtype = cudf.dtype(dtype)
+        if dtype.kind != "M":
+            raise TypeError("dtype must be a datetime type")
 
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
         if self._freq is not None:
             unique_vals = self.to_series().diff().unique()
@@ -2840,8 +2838,8 @@ class TimedeltaIndex(GenericIndex):
         unit=None,
         freq=None,
         closed=None,
-        dtype="timedelta64[ns]",
-        copy=False,
+        dtype=None,
+        copy: bool = False,
         name=None,
     ):
         if freq is not None:
@@ -2853,19 +2851,19 @@ class TimedeltaIndex(GenericIndex):
                 "dtype parameter is supported"
             )
 
-        valid_dtypes = tuple(
-            f"timedelta64[{res}]" for res in ("s", "ms", "us", "ns")
-        )
-        if dtype not in valid_dtypes:
-            raise TypeError("Invalid dtype")
+        if dtype is None:
+            dtype = "timedelta64[ns]"
+        dtype = cudf.dtype(dtype)
+        if dtype.kind != "m":
+            raise TypeError("dtype must be a timedelta type")
 
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data, dtype=dtype)
 
         if copy:
             data = data.copy()
 
-        super().__init__(data, **kwargs)
+        super().__init__(data, name=name)
 
     def __getitem__(self, index):
         value = super().__getitem__(index)
@@ -3176,10 +3174,12 @@ def interval_range(
         data = column.column_empty_like_same_mask(left_col, dtype)
         return IntervalIndex(data, closed=closed)
 
-    interval_col = column.build_interval_column(
-        left_col, right_col, closed=closed
+    interval_col = IntervalColumn(
+        dtype=IntervalDtype(left_col.dtype, closed),
+        size=len(left_col),
+        children=(left_col, right_col),
     )
-    return IntervalIndex(interval_col)
+    return IntervalIndex(interval_col, closed=closed)
 
 
 class IntervalIndex(GenericIndex):
@@ -3219,44 +3219,72 @@ class IntervalIndex(GenericIndex):
     def __init__(
         self,
         data,
-        closed=None,
+        closed: Optional[Literal["left", "right", "neither", "both"]] = None,
         dtype=None,
-        copy=False,
+        copy: bool = False,
         name=None,
     ):
-        if copy:
-            data = column.as_column(data, dtype=dtype).copy()
-        kwargs = _setdefault_name(data, name=name)
+        name = _setdefault_name(data, name=name)["name"]
 
-        if closed is None:
-            closed = "right"
+        if dtype is not None:
+            dtype = cudf.dtype(dtype)
+            if not isinstance(dtype, IntervalDtype):
+                raise TypeError("dtype must be an IntervalDtype")
+            if closed is not None and closed != dtype.closed:
+                raise ValueError("closed keyword does not match dtype.closed")
+            closed = dtype.closed
 
-        if isinstance(data, IntervalColumn):
-            data = data
-        elif isinstance(data, pd.Series) and isinstance(
-            data.dtype, pd.IntervalDtype
-        ):
-            data = column.as_column(data, data.dtype)
-        elif isinstance(data, (pd.Interval, pd.IntervalIndex)):
-            data = column.as_column(
-                data,
-                dtype=dtype,
-            )
-        elif len(data) == 0:
-            subtype = getattr(data, "dtype", "int64")
-            dtype = IntervalDtype(subtype, closed)
-            data = column.column_empty_like_same_mask(
-                column.as_column(data), dtype
+        if closed is None and isinstance(dtype, IntervalDtype):
+            closed = dtype.closed
+
+        closed = closed or "right"
+
+        if len(data) == 0:
+            if not hasattr(data, "dtype"):
+                data = np.array([], dtype=np.int64)
+            elif isinstance(data.dtype, (pd.IntervalDtype, IntervalDtype)):
+                data = np.array([], dtype=data.dtype.subtype)
+            interval_col = IntervalColumn(
+                dtype=IntervalDtype(data.dtype, closed),
+                size=len(data),
+                children=(as_column(data), as_column(data)),
             )
         else:
-            data = column.as_column(data)
-            data.dtype.closed = closed
+            col = as_column(data)
+            if not isinstance(col, IntervalColumn):
+                raise TypeError("data must be an iterable of Interval data")
+            if copy:
+                col = col.copy()
+            interval_col = IntervalColumn(
+                dtype=IntervalDtype(col.dtype.subtype, closed),
+                mask=col.mask,
+                size=col.size,
+                offset=col.offset,
+                null_count=col.null_count,
+                children=col.children,
+            )
 
-        self.closed = closed
-        super().__init__(data, **kwargs)
+        if dtype:
+            interval_col = interval_col.astype(dtype)  # type: ignore[assignment]
 
+        super().__init__(interval_col, name=name)
+
+    @property
+    def closed(self):
+        return self._values.dtype.closed
+
+    @classmethod
     @_cudf_nvtx_annotate
-    def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
+    def from_breaks(
+        cls,
+        breaks,
+        closed: Optional[
+            Literal["left", "right", "neither", "both"]
+        ] = "right",
+        name=None,
+        copy: bool = False,
+        dtype=None,
+    ):
         """
         Construct an IntervalIndex from an array of splits.
 
@@ -3285,16 +3313,28 @@ class IntervalIndex(GenericIndex):
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
         IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval[int64, right]')
         """
+        breaks = as_column(breaks, dtype=dtype)
         if copy:
-            breaks = column.as_column(breaks, dtype=dtype).copy()
-        left_col = breaks[:-1:]
-        right_col = breaks[+1::]
-
-        interval_col = column.build_interval_column(
-            left_col, right_col, closed=closed
+            breaks = breaks.copy()
+        left_col = breaks.slice(0, len(breaks) - 1)
+        right_col = breaks.slice(1, len(breaks))
+        # For indexing, children should both have 0 offset
+        right_col = column.build_column(
+            data=right_col.data,
+            dtype=right_col.dtype,
+            size=right_col.size,
+            mask=right_col.mask,
+            offset=0,
+            null_count=right_col.null_count,
+            children=right_col.children,
         )
 
-        return IntervalIndex(interval_col, name=name)
+        interval_col = IntervalColumn(
+            dtype=IntervalDtype(left_col.dtype, closed),
+            size=len(left_col),
+            children=(left_col, right_col),
+        )
+        return IntervalIndex(interval_col, name=name, closed=closed)
 
     def __getitem__(self, index):
         raise NotImplementedError(
