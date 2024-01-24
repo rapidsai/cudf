@@ -241,9 +241,7 @@ struct get_page_input_size {
   {
     // we treat dictionary page sizes as 0 for subpasses because we have already paid the price for
     // them at the pass level.
-    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) {
-      return {0, 0, page.src_col_schema};
-    }
+    if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return {0, 0, page.src_col_schema}; }
     return {0, static_cast<size_t>(page.uncompressed_page_size), page.src_col_schema};
   }
 };
@@ -450,11 +448,10 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
                         rmm::cuda_stream_view stream)
 {
   // sort by row count
-  rmm::device_uvector<cumulative_page_info> c_info_sorted = make_device_uvector_async(c_info, stream, rmm::mr::get_current_device_resource());
-  thrust::sort(rmm::exec_policy_nosync(stream),
-               c_info_sorted.begin(),
-               c_info_sorted.end(),
-               row_count_less{});
+  rmm::device_uvector<cumulative_page_info> c_info_sorted =
+    make_device_uvector_async(c_info, stream, rmm::mr::get_current_device_resource());
+  thrust::sort(
+    rmm::exec_policy_nosync(stream), c_info_sorted.begin(), c_info_sorted.end(), row_count_less{});
 
   // page keys grouped by split.
   rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
@@ -626,13 +623,12 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
   return {h_page_bounds, total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
 
-std::vector<row_range> compute_page_splits_by_row(
-  device_span<cumulative_page_info const> c_info,
-  device_span<PageInfo const> pages,
-  size_t skip_rows,
-  size_t num_rows,
-  size_t size_limit,
-  rmm::cuda_stream_view stream)
+std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_info const> c_info,
+                                                  device_span<PageInfo const> pages,
+                                                  size_t skip_rows,
+                                                  size_t num_rows,
+                                                  size_t size_limit,
+                                                  rmm::cuda_stream_view stream)
 {
   auto [aggregated_info, page_keys_by_split] = adjust_cumulative_sizes(c_info, pages, stream);
 
@@ -1408,9 +1404,10 @@ void reader::impl::create_global_chunk_info()
       // for lists, estimate the number of bytes per row. this is used by the subpass reader to
       // determine where to split the decompression boundaries
       float const list_bytes_per_row_est =
-        schema.max_repetition_level > 0 && row_group.num_rows > 0 ? static_cast<float>(col_meta.total_uncompressed_size) /
-                                                                    static_cast<float>(row_group.num_rows)
-                                                                    : 0.0f;
+        schema.max_repetition_level > 0 && row_group.num_rows > 0
+          ? static_cast<float>(col_meta.total_uncompressed_size) /
+              static_cast<float>(row_group.num_rows)
+          : 0.0f;
 
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
                                        nullptr,
@@ -1462,9 +1459,9 @@ void reader::impl::compute_input_passes()
   // generate passes. make sure to account for the case where a single row group doesn't fit within
   //
   std::size_t const comp_read_limit =
-    _input_pass_read_limit > 0 ? static_cast<size_t>(_input_pass_read_limit *
-                                                     input_limit_compression_reserve)
-                               : std::numeric_limits<std::size_t>::max();
+    _input_pass_read_limit > 0
+      ? static_cast<size_t>(_input_pass_read_limit * input_limit_compression_reserve)
+      : std::numeric_limits<std::size_t>::max();
   std::size_t cur_pass_byte_size = 0;
   std::size_t cur_rg_start       = 0;
   std::size_t cur_row_count      = 0;

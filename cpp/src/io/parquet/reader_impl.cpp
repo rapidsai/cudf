@@ -247,7 +247,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   if (error_code.value() != 0) {
     CUDF_FAIL("Parquet data decode failed with code(s) " + error_code.str());
   }
-  // error_code.value() is synchronous; explictly sync here for better visibility
+  // error_code.value() is synchronous; explicitly sync here for better visibility
   _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
