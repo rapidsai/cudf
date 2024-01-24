@@ -17,8 +17,10 @@
 #include <text/subword/detail/data_normalizer.hpp>
 #include <text/subword/detail/tokenizer_utils.cuh>
 
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -274,20 +276,19 @@ data_normalizer::data_normalizer(codepoint_metadata_type const* cp_metadata,
 {
 }
 
-uvector_pair data_normalizer::normalize(char const* d_strings,
-                                        cudf::size_type const* d_offsets,
-                                        cudf::size_type num_strings,
+uvector_pair data_normalizer::normalize(cudf::strings_column_view const& input,
                                         rmm::cuda_stream_view stream) const
 {
-  if (num_strings == 0) {
+  if (input.is_empty()) {
     return uvector_pair{std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                        std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream)};
+                        std::make_unique<rmm::device_uvector<int64_t>>(0, stream)};
   }
 
   // copy offsets to working memory
-  auto const num_offsets = num_strings + 1;
-  auto d_strings_offsets =
-    std::make_unique<rmm::device_uvector<cudf::size_type>>(num_offsets, stream);
+  auto const num_offsets = input.size() + 1;
+  auto d_strings_offsets = std::make_unique<rmm::device_uvector<int64_t>>(num_offsets, stream);
+  auto const d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
   thrust::transform(rmm::exec_policy(stream),
                     thrust::counting_iterator<cudf::size_type>(0),
                     thrust::counting_iterator<cudf::size_type>(num_offsets),
@@ -296,20 +297,22 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
                       auto const offset = d_offsets[0];  // adjust for any offset to the offsets
                       return d_offsets[idx] - offset;
                     });
-  auto const bytes_count = d_strings_offsets->element(num_strings, stream);
+  auto const bytes_count = d_strings_offsets->element(input.size(), stream);
   if (bytes_count == 0) {  // if no bytes, nothing to do
     return uvector_pair{std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                        std::make_unique<rmm::device_uvector<cudf::size_type>>(0, stream)};
+                        std::make_unique<rmm::device_uvector<int64_t>>(0, stream)};
   }
 
-  cudf::detail::grid_1d const grid{bytes_count, THREADS_PER_BLOCK, 1};
-  size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;
+  int64_t const threads_per_block = THREADS_PER_BLOCK;
+  size_t const num_blocks        = cudf::util::div_rounding_up_safe(bytes_count, threads_per_block);
+  size_t const threads_on_device = threads_per_block * num_blocks;
   size_t const max_new_char_total = MAX_NEW_CHARS * threads_on_device;
 
   auto d_code_points = std::make_unique<rmm::device_uvector<uint32_t>>(max_new_char_total, stream);
   rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
-
-  kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  auto const d_strings = input.chars_begin(stream) + cudf::strings::detail::get_offset_value(
+                                                       input.offsets(), input.offset(), stream);
+  kernel_data_normalizer<<<num_blocks, threads_per_block, 0, stream.value()>>>(
     reinterpret_cast<unsigned char const*>(d_strings),
     bytes_count,
     d_cp_metadata,
@@ -335,10 +338,10 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<uint32_t>(1),
-    num_strings,
+    input.size(),
     update_strings_lengths_fn{d_chars_per_thread.data(), d_strings_offsets->data()});
 
-  auto const num_chars = d_strings_offsets->element(num_strings, stream);
+  auto const num_chars = d_strings_offsets->element(input.size(), stream);
   d_code_points->resize(num_chars, stream);  // should be smaller than original allocated size
 
   // return the normalized code points and the new offsets

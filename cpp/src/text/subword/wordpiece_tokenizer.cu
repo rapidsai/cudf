@@ -132,7 +132,7 @@ CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_poi
  * @param num_strings The total number of strings to be processed.
  */
 CUDF_KERNEL void mark_string_start_and_ends(uint32_t const* code_points,
-                                            cudf::size_type const* strings_offsets,
+                                            int64_t const* strings_offsets,
                                             uint32_t* start_word_indices,
                                             uint32_t* end_word_indices,
                                             uint32_t num_strings)
@@ -419,12 +419,10 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
 {
 }
 
-uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
-                                           cudf::size_type const* d_offsets,
-                                           cudf::size_type num_strings,
+uvector_pair wordpiece_tokenizer::tokenize(cudf::strings_column_view const& input,
                                            rmm::cuda_stream_view stream)
 {
-  auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
+  auto cps_and_offsets = normalizer.normalize(input, stream);
   tokenize(cps_and_offsets, stream);
   return uvector_pair(std::move(cps_and_offsets.first), std::move(cps_and_offsets.second));
 }
