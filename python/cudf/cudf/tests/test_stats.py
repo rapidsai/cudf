@@ -244,7 +244,7 @@ def test_misc_quantiles(data, q):
             "nan_as_null": False,
         },
         {"data": [1.1032, 2.32, 43.4, 13, -312.0], "index": [0, 4, 3, 19, 6]},
-        {"data": []},
+        {"data": [], "dtype": "float64"},
         {"data": [-3]},
     ],
 )
@@ -274,13 +274,12 @@ def test_kurt_skew_error(op):
     gs = cudf.Series(["ab", "cd"])
     ps = gs.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        assert_exceptions_equal(
-            getattr(gs, op),
-            getattr(ps, op),
-            lfunc_args_and_kwargs=([], {"numeric_only": True}),
-            rfunc_args_and_kwargs=([], {"numeric_only": True}),
-        )
+    assert_exceptions_equal(
+        getattr(gs, op),
+        getattr(ps, op),
+        lfunc_args_and_kwargs=([], {"numeric_only": True}),
+        rfunc_args_and_kwargs=([], {"numeric_only": True}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -359,10 +358,17 @@ def test_series_median(dtype, num_na):
 @pytest.mark.parametrize(
     "fill_method", ["ffill", "bfill", "pad", "backfill", no_default, None]
 )
-def test_series_pct_change(data, periods, fill_method):
+def test_series_pct_change(request, data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
-
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                len(cs) == 0 and periods == 0 and fill_method is no_default
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/57056",
+        )
+    )
     if np.abs(periods) <= len(cs):
         with expect_warning_if(fill_method not in (no_default, None)):
             got = cs.pct_change(periods=periods, fill_method=fill_method)
