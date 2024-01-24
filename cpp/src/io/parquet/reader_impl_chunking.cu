@@ -411,7 +411,7 @@ template <typename T = uint8_t>
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
-struct row_count_compare {
+struct row_count_less {
   __device__ bool operator()(cumulative_page_info const& a, cumulative_page_info const& b) const
   {
     return a.row_index < b.row_index;
@@ -454,7 +454,7 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   thrust::sort(rmm::exec_policy_nosync(stream),
                c_info_sorted.begin(),
                c_info_sorted.end(),
-               row_count_compare{});
+               row_count_less{});
 
   // page keys grouped by split.
   rmm::device_uvector<int32_t> page_keys_by_split{c_info.size(), stream};
@@ -504,7 +504,7 @@ struct page_span {
 };
 
 struct get_page_row_index {
-  device_span<const cumulative_page_info> c_info;
+  device_span<cumulative_page_info const> c_info;
 
   __device__ size_t operator()(size_t i) const { return c_info[i].row_index; }
 };
@@ -515,12 +515,12 @@ struct get_page_row_index {
  */
 template <typename RowIndexIter>
 struct get_page_span {
-  device_span<const size_type> page_offsets;
+  device_span<size_type const> page_offsets;
   RowIndexIter page_row_index;
   size_t const start_row;
   size_t const end_row;
 
-  get_page_span(device_span<const size_type> _page_offsets,
+  get_page_span(device_span<size_type const> _page_offsets,
                 RowIndexIter _page_row_index,
                 size_t _start_row,
                 size_t _end_row)
@@ -896,8 +896,8 @@ struct row_counts_different {
  * @param expected_row_count Expected row count, if applicable
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void detect_malformed_pages(cudf::detail::hostdevice_vector<PageInfo> const& pages,
-                            cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void detect_malformed_pages(device_span<PageInfo const> pages,
+                            device_span<ColumnChunkDesc const> chunks,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {
@@ -905,7 +905,7 @@ void detect_malformed_pages(cudf::detail::hostdevice_vector<PageInfo> const& pag
   rmm::device_uvector<size_type> row_counts(pages.size(),
                                             stream);  // worst case:  num keys == num pages
   auto const size_iter =
-    thrust::make_transform_iterator(pages.d_begin(), flat_column_num_rows{chunks.device_ptr()});
+    thrust::make_transform_iterator(pages.begin(), flat_column_num_rows{chunks.data()});
   auto const row_counts_begin = row_counts.begin();
   auto page_keys              = make_page_key_iterator(pages);
   auto const row_counts_end   = thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -1025,8 +1025,8 @@ struct get_decomp_scratch {
  * size information.
  *
  */
-void include_decompression_scratch_size(device_span<const ColumnChunkDesc> chunks,
-                                        device_span<const PageInfo> pages,
+void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunks,
+                                        device_span<PageInfo const> pages,
                                         device_span<cumulative_page_info> c_info,
                                         rmm::cuda_stream_view stream)
 {
@@ -1274,7 +1274,7 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
     rmm::device_uvector<cumulative_page_info> c_info(pass.pages.size(), _stream);
     auto page_keys = make_page_key_iterator(pass.pages);
     auto page_size = thrust::make_transform_iterator(pass.pages.d_begin(), get_page_input_size{});
-    thrust::inclusive_scan_by_key(rmm::exec_policy(_stream),
+    thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
                                   page_keys,
                                   page_keys + pass.pages.size(),
                                   page_size,
@@ -1408,9 +1408,9 @@ void reader::impl::create_global_chunk_info()
       // for lists, estimate the number of bytes per row. this is used by the subpass reader to
       // determine where to split the decompression boundaries
       float const list_bytes_per_row_est =
-        schema.max_repetition_level > 0 ? static_cast<float>(col_meta.total_uncompressed_size) /
-                                            static_cast<float>(row_group.num_rows)
-                                        : 0.0f;
+        schema.max_repetition_level > 0 && row_group.num_rows > 0 ? static_cast<float>(col_meta.total_uncompressed_size) /
+                                                                    static_cast<float>(row_group.num_rows)
+                                                                    : 0.0f;
 
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
                                        nullptr,
@@ -1462,7 +1462,7 @@ void reader::impl::compute_input_passes()
   // generate passes. make sure to account for the case where a single row group doesn't fit within
   //
   std::size_t const comp_read_limit =
-    _input_pass_read_limit > 0 ? static_cast<size_t>(static_cast<float>(_input_pass_read_limit) *
+    _input_pass_read_limit > 0 ? static_cast<size_t>(_input_pass_read_limit *
                                                      input_limit_compression_reserve)
                                : std::numeric_limits<std::size_t>::max();
   std::size_t cur_pass_byte_size = 0;
