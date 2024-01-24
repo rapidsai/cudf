@@ -14,8 +14,7 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../../rapids_version.cmake)
-include(../../fetch_rapids.cmake)
+include(../../rapids_config.cmake)
 
 project(
   cudf-kafka-python
