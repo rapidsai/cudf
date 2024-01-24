@@ -619,8 +619,7 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
   size_t const total_pages =
     thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
 
-  auto h_page_bounds = cudf::detail::make_std_vector_sync(page_bounds, stream);
-  return {h_page_bounds, total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
+  return {cudf::detail::make_std_vector_sync(page_bounds, stream), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
 
 std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_info const> c_info,
@@ -749,7 +748,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   copy_out.reserve(num_comp_pages);
 
   rmm::device_uvector<compression_result> comp_res(num_comp_pages, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                comp_res.begin(),
                comp_res.end(),
                compression_result{0, compression_status::FAILURE});
@@ -1056,12 +1055,13 @@ void include_decompression_scratch_size(device_span<ColumnChunkDesc const> chunk
   rmm::device_uvector<size_t> d_temp_cost = cudf::detail::make_device_uvector_async(
     temp_cost, stream, rmm::mr::get_current_device_resource());
   auto iter = thrust::make_counting_iterator(size_t{0});
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream),
                    iter,
                    iter + pages.size(),
                    [temp_cost = d_temp_cost.begin(), c_info = c_info.begin()] __device__(size_t i) {
                      c_info[i].size_bytes += temp_cost[i];
                    });
+  stream.synchronize();
 }
 
 }  // anonymous namespace

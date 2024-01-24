@@ -595,8 +595,8 @@ void reader::impl::build_string_dict_indices()
   // compute number of indices per chunk and a summed total
   rmm::device_uvector<size_t> str_dict_index_count(pass.chunks.size() + 1, _stream);
   thrust::fill(
-    rmm::exec_policy(_stream), str_dict_index_count.begin(), str_dict_index_count.end(), 0);
-  thrust::for_each(rmm::exec_policy(_stream),
+    rmm::exec_policy_nosync(_stream), str_dict_index_count.begin(), str_dict_index_count.end(), 0);
+  thrust::for_each(rmm::exec_policy_nosync(_stream),
                    pass.pages.begin(),
                    pass.pages.end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
@@ -607,7 +607,7 @@ void reader::impl::build_string_dict_indices()
 
   // convert to offsets
   rmm::device_uvector<size_t>& str_dict_index_offsets = str_dict_index_count;
-  thrust::exclusive_scan(rmm::exec_policy(_stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(_stream),
                          str_dict_index_offsets.begin(),
                          str_dict_index_offsets.end(),
                          str_dict_index_offsets.begin(),
@@ -619,7 +619,7 @@ void reader::impl::build_string_dict_indices()
 
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
-    rmm::exec_policy(_stream),
+    rmm::exec_policy_nosync(_stream),
     iter,
     iter + pass.chunks.size(),
     set_str_dict_index_ptr{pass.str_dict_index.data(), str_dict_index_offsets, pass.chunks});
@@ -812,7 +812,6 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks
   for (auto const& rg : row_groups_info) {
     auto const& row_group       = _metadata->get_row_group(rg.index, rg.source_index);
     auto const row_group_source = rg.source_index;
-    // auto const row_group_rows   = std::min<int>(remaining_rows, row_group.num_rows);
 
     // generate ColumnChunkDesc objects for everything to be decoded (all input columns)
     for (size_t i = 0; i < num_input_columns; ++i) {
@@ -834,7 +833,6 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks
 
       chunk_count++;
     }
-    // remaining_rows -= row_group_rows;
   }
 
   // Read compressed chunk data to device memory
@@ -846,8 +844,6 @@ std::pair<bool, std::vector<std::future<void>>> reader::impl::read_column_chunks
                                                       column_chunk_offsets,
                                                       chunk_source_map,
                                                       _stream));
-
-  // CUDF_EXPECTS(remaining_rows == 0, "All rows data must be read.");
 
   return {total_decompressed_size > 0, std::move(read_chunk_tasks)};
 }

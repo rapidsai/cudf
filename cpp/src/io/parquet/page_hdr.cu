@@ -348,10 +348,11 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
-                                                            chunk_page_info* chunk_pages,
-                                                            int32_t num_chunks,
-                                                            kernel_error::pointer error_code)
+CUDF_KERNEL
+void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                 chunk_page_info* chunk_pages,
+                                                 int32_t num_chunks,
+                                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
