@@ -565,9 +565,10 @@ def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
     dataset = groupby_jit_datasets[dataset]
-    groupby_apply_jit_reductions_special_vals_inner(
-        func, dataset, dtype, special_val
-    )
+    with expect_warning_if(func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning):
+        groupby_apply_jit_reductions_special_vals_inner(
+            func, dataset, dtype, special_val
+        )
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
@@ -652,7 +653,8 @@ def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
         with pytest.raises(UDFError, match=m):
             run_groupby_apply_jit_test(dataset, func, keys)
         return
-    run_groupby_apply_jit_test(dataset, func, keys)
+    with expect_warning_if(dtype in {"int32", "int64"}, RuntimeWarning):
+        run_groupby_apply_jit_test(dataset, func, keys)
 
 
 @pytest.mark.parametrize("dtype", ["int32", "int64"])
@@ -667,7 +669,8 @@ def test_groupby_apply_jit_correlation_zero_variance(dtype):
     def func(group):
         return group["b"].corr(group["c"])
 
-    run_groupby_apply_jit_test(data, func, ["a"])
+    with expect_warning_if(dtype in {"int32", "int64"}, RuntimeWarning):
+        run_groupby_apply_jit_test(data, func, ["a"])
 
 
 @pytest.mark.parametrize("op", unary_ops)
