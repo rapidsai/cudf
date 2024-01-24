@@ -41,7 +41,6 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& input,
                                          rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
-  // if (end < 0 || end > strings.size()) end = strings.size();
   CUDF_EXPECTS(((start >= 0) && (start < end)), "Invalid start parameter value.");
   auto const strings_count  = end - start;
   auto const offsets_offset = start + input.offset();
