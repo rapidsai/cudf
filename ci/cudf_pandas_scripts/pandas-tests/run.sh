@@ -37,7 +37,7 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --skip-slow \
   --max-worker-restart=3 \
   --import-mode=importlib \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 # summarize the results and save them to artifacts:

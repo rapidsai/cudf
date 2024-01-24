@@ -26,10 +26,14 @@ python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
 python -m pytest
   --cache-clear \
-  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   ./python/dask_cudf/dask_cudf/
