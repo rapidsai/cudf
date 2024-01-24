@@ -481,12 +481,22 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         index = self._frame.index
         if col_is_scalar:
             s = Series._from_data(
-                ca._select_by_names(column_names), index=index
+                data=ColumnAccessor(
+                    {key: ca._data[key] for key in column_names},
+                    multiindex=ca.multiindex,
+                    level_names=ca.level_names,
+                ),
+                index=index,
             )
             return s._getitem_preprocessed(row_spec)
         if column_names != list(self._frame._column_names):
             frame = self._frame._from_data(
-                ca._select_by_names(column_names), index=index
+                data=ColumnAccessor(
+                    {key: ca._data[key] for key in column_names},
+                    multiindex=ca.multiindex,
+                    level_names=ca.level_names,
+                ),
+                index=index,
             )
         else:
             frame = self._frame
