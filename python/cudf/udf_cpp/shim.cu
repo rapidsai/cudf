@@ -404,9 +404,7 @@ __device__ AccumT device_sum(cooperative_groups::thread_block const& block,
 
     // Skip NaN values for float types
     if constexpr (std::is_floating_point_v<T>) {
-      if (std::isnan(element)) {
-        continue;  // Skip NaN values
-      }
+      if (std::isnan(element)) { continue; }
     }
 
     local_sum += static_cast<AccumT>(element);
