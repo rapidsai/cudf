@@ -16,4 +16,4 @@ cpdef Column cast(Column input, DataType data_type)
 
 cpdef Column is_nan(Column input)
 
-cpdef Column is_non_nan(Column input)
+cpdef Column is_not_nan(Column input)

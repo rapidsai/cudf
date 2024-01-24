@@ -133,10 +133,10 @@ cpdef Column is_nan(Column input):
     return Column.from_libcudf(move(result))
 
 
-cpdef Column is_non_nan(Column input):
+cpdef Column is_not_nan(Column input):
     """Check whether elements of a column are not nan.
 
-    For details, see :cpp:func:`is_non_nan`.
+    For details, see :cpp:func:`is_not_nan`.
 
     Parameters
     ----------

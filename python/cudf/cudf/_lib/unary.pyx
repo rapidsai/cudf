@@ -55,5 +55,5 @@ def is_nan(Column input):
 @acquire_spill_lock()
 def is_non_nan(Column input):
     return Column.from_pylibcudf(
-        pylibcudf.unary.is_non_nan(input.to_pylibcudf(mode="read"))
+        pylibcudf.unary.is_not_nan(input.to_pylibcudf(mode="read"))
     )
