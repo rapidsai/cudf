@@ -414,8 +414,7 @@ struct ColumnChunkDesc {
   uint32_t num_rows{};               // number of rows in this chunk
   int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
   int16_t max_nesting_depth{};                       // max nesting depth of the output
-  uint16_t data_type{};  // basic column data type, ((type_length << 3) |
-                         // parquet::Type)
+  uint16_t data_type{};  // basic column data type, ((type_length << 3) | // parquet::Type)
   uint8_t
     level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
   int32_t num_data_pages{};                     // number of data pages

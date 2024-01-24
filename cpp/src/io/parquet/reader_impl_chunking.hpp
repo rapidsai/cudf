@@ -81,16 +81,9 @@ struct subpass_intermediate_data {
   std::vector<row_range> output_chunk_read_info;
   std::size_t current_output_chunk{0};
 
-  // skip_rows and num_rows values for this particular subpass. in absolute
-  // row indices.
+  // skip_rows and num_rows values for this particular subpass. in absolute row indices.
   size_t skip_rows;
   size_t num_rows;
-};
-
-struct cumulative_page_info {
-  size_t row_index;   // row index
-  size_t size_bytes;  // cumulative size in bytes
-  int key;            // schema index
 };
 
 /**
