@@ -619,7 +619,9 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
   size_t const total_pages =
     thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
 
-  return {cudf::detail::make_std_vector_sync(page_bounds, stream), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
+  return {cudf::detail::make_std_vector_sync(page_bounds, stream),
+          total_pages,
+          h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
 
 std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_info const> c_info,
