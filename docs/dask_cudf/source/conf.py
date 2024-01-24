@@ -8,11 +8,18 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import os.path
+import sys
+
+sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "../../common")))
+
+import rapids.version
+
 project = "dask-cudf"
 copyright = "2018-2023, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = "24.04"
-release = "24.04.00"
+version = rapids.version.version_major_minor
+release = rapids.version.version
 
 language = "en"
 
