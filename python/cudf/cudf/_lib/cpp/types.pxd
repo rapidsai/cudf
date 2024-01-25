@@ -1,52 +1,47 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, uint32_t
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
-    # The declaration below is to work around
-    # https://github.com/cython/cython/issues/5637
-    """
-    #define __PYX_ENUM_CLASS_DECL enum
-    """
     ctypedef int32_t size_type
     ctypedef uint32_t bitmask_type
     ctypedef uint32_t char_utf8
 
-    ctypedef enum mask_state:
-        UNALLOCATED "cudf::mask_state::UNALLOCATED"
-        UNINITIALIZED "cudf::mask_state::UNINITIALIZED"
-        ALL_VALID "cudf::mask_state::ALL_VALID"
-        ALL_NULL "cudf::mask_state::ALL_NULL"
+    cpdef enum class mask_state:
+        UNALLOCATED
+        UNINITIALIZED
+        ALL_VALID
+        ALL_NULL
 
-    ctypedef enum order "cudf::order":
-        ASCENDING "cudf::order::ASCENDING"
-        DESCENDING "cudf::order::DESCENDING"
+    cpdef enum class order:
+        ASCENDING
+        DESCENDING
 
-    ctypedef enum null_order "cudf::null_order":
-        AFTER "cudf::null_order::AFTER"
-        BEFORE "cudf::null_order::BEFORE"
+    cpdef enum class null_order:
+        AFTER
+        BEFORE
 
-    ctypedef enum sorted "cudf::sorted":
-        NO "cudf::sorted::NO"
-        YES "cudf::sorted::YES"
+    cpdef enum class sorted:
+        NO
+        YES
 
     cdef cppclass order_info:
         sorted is_sorted
         order ordering
         null_order null_ordering
 
-    ctypedef enum null_policy "cudf::null_policy":
-        EXCLUDE "cudf::null_policy::EXCLUDE"
-        INCLUDE "cudf::null_policy::INCLUDE"
+    cpdef enum class null_policy:
+        EXCLUDE
+        INCLUDE
 
-    ctypedef enum nan_policy "cudf::nan_policy":
-        NAN_IS_NULL  "cudf::nan_policy::NAN_IS_NULL"
-        NAN_IS_VALID "cudf::nan_policy::NAN_IS_VALID"
+    cpdef enum class nan_policy:
+        NAN_IS_NULL
+        NAN_IS_VALID
 
-    ctypedef enum null_equality "cudf::null_equality":
-        EQUAL "cudf::null_equality::EQUAL"
-        UNEQUAL "cudf::null_equality::UNEQUAL"
+    cpdef enum class null_equality:
+        EQUAL
+        UNEQUAL
 
     ctypedef enum nan_equality "cudf::nan_equality":
         # These names differ from the C++ names due to Cython warnings if
@@ -94,12 +89,12 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         int32_t scale() except +
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
-    ctypedef enum interpolation:
-        LINEAR "cudf::interpolation::LINEAR"
-        LOWER "cudf::interpolation::LOWER"
-        HIGHER "cudf::interpolation::HIGHER"
-        MIDPOINT "cudf::interpolation::MIDPOINT"
-        NEAREST "cudf::interpolation::NEAREST"
+    cpdef enum class interpolation:
+        LINEAR
+        LOWER
+        HIGHER
+        MIDPOINT
+        NEAREST
 
     # A Hack to let cython compile with __int128_t symbol
     # https://stackoverflow.com/a/27609033
