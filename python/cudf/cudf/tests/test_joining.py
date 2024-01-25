@@ -2246,11 +2246,18 @@ def test_index_join_return_indexers_notimplemented():
 
 
 @pytest.mark.parametrize("how", ["inner", "outer"])
-def test_index_join_names(how):
+def test_index_join_names(request, how):
     idx1 = cudf.Index([10, 1, 2, 4, 2, 1], name="a")
     idx2 = cudf.Index([-10, 2, 3, 1, 2], name="b")
+    request.applymarker(
+        pytest.mark.xfail(
+            reason="https://github.com/pandas-dev/pandas/issues/57065",
+        )
+    )
+    pidx1 = idx1.to_pandas()
+    pidx2 = idx2.to_pandas()
 
-    expected = idx1.to_pandas().join(idx2.to_pandas(), how=how)
+    expected = pidx1.join(pidx2, how=how)
     actual = idx1.join(idx2, how=how)
     assert_join_results_equal(actual, expected, how=how)
 

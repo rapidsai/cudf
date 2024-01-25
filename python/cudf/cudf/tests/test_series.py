@@ -2159,7 +2159,8 @@ def test_series_init_scalar_with_index(data, index):
     assert_eq(
         pandas_series,
         cudf_series,
-        check_index_type=False if data is None and index is None else True,
+        check_index_type=data is not None or index is not None,
+        check_dtype=data is not None,
     )
 
 

@@ -2800,7 +2800,9 @@ def test_rangeindex_join_user_option(default_integer_bitwidth):
     actual = idx1.join(idx2, how="inner", sort=True)
     expected = idx1.to_pandas().join(idx2.to_pandas(), how="inner", sort=True)
     assert actual.dtype == cudf.dtype(f"int{default_integer_bitwidth}")
-    assert_eq(expected, actual)
+    # exact=False to ignore dtype comparison,
+    # because `default_integer_bitwidth` is cudf only option
+    assert_eq(expected, actual, exact=False)
 
 
 def test_rangeindex_where_user_option(default_integer_bitwidth):

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections.abc import Iterator
@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
-from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
@@ -42,7 +41,7 @@ from dask.sizeof import sizeof as sizeof_dispatch
 from dask.utils import Dispatch, is_arraylike
 
 import cudf
-from cudf.api.types import is_string_dtype
+from cudf.api.types import _is_datetime64tz_dtype, is_string_dtype
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 from .core import DataFrame, Index, Series
@@ -127,7 +126,7 @@ def _get_non_empty_data(s):
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
-    elif is_datetime64tz_dtype(s.dtype):
+    elif _is_datetime64tz_dtype(s.dtype):
         from cudf.utils.dtypes import get_time_unit
 
         data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
