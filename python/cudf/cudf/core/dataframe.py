@@ -57,6 +57,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -95,11 +96,8 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     numeric_normalize_types,
 )
-
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import GetAttrGetItemMixin, _external_only_api
-from cudf.core._compat import PANDAS_GE_200
-
 
 _cupy_nan_methods_map = {
     "min": "nanmin",
@@ -6112,8 +6110,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     if axis == 0
                     else source.index
                 )
-
         if axis in {0, 2}:
+            if axis == 2 and op in ("kurtosis", "kurt", "skew"):
+                # TODO: concat + op can probably be done in the general case
+                # for axis == 2.
+                return getattr(concat_columns(source._data.columns), op)(
+                    **kwargs
+                )
             try:
                 result = [
                     getattr(source._data[col], op)(**kwargs)
