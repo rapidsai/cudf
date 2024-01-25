@@ -253,14 +253,14 @@ struct set_row_index {
   device_span<ColumnChunkDesc const> chunks;
   device_span<PageInfo const> pages;
   device_span<cumulative_page_info> c_info;
-  size_t const max_row;
+  size_t max_row;
 
   __device__ void operator()(size_t i)
   {
     auto const& page          = pages[i];
     auto const& chunk         = chunks[page.chunk_idx];
     size_t const page_end_row = chunk.start_row + page.chunk_row + page.num_rows;
-    // if we have been passed a cap, apply it
+    // if we have been passed in a cap, apply it
     c_info[i].row_index = max_row > 0 ? min(max_row, page_end_row) : page_end_row;
   }
 };
