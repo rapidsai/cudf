@@ -795,6 +795,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
                     if columns is not None:
+                        label_dtype = getattr(columns, "dtype", None)
                         data = dict(zip(columns, [data]))
                         rangeindex = isinstance(
                             columns, (range, pd.RangeIndex, cudf.RangeIndex)
@@ -802,6 +803,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else:
                         data = dict(enumerate([data]))
                         rangeindex = True
+                        label_dtype = None
                     new_df = DataFrame(data=data, index=index)
 
                     self._data = new_df._data
@@ -812,6 +814,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         else self._data._level_names
                     )
                     self._data.rangeindex = rangeindex
+                    self._data.label_dtype = (
+                        cudf.dtype(label_dtype)
+                        if label_dtype is not None
+                        else None
+                    )
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
