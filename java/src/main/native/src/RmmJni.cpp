@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,8 +96,6 @@ public:
     return scoped_max_total_allocated;
   }
 
-  bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
-
   bool supports_streams() const noexcept override { return resource->supports_streams(); }
 
 private:
@@ -143,10 +141,6 @@ private:
       total_allocated -= size;
       scoped_allocated -= size;
     }
-  }
-
-  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
-    return resource->get_mem_info(stream);
   }
 };
 
@@ -213,8 +207,6 @@ public:
 
   device_memory_resource *get_wrapped_resource() { return resource; }
 
-  bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
-
   bool supports_streams() const noexcept override { return resource->supports_streams(); }
 
 private:
@@ -275,10 +267,6 @@ private:
         }
       }
     }
-  }
-
-  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
-    return resource->get_mem_info(stream);
   }
 
 protected:

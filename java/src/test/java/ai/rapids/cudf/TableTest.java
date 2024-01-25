@@ -87,6 +87,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
   private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
+  private static final File TEST_JSON_SINGLE_QUOTES_FILE = TestUtils.getResourceAsFile("single_quotes.json");
   private static final File TEST_MIXED_TYPE_1_JSON = TestUtils.getResourceAsFile("mixed_types_1.json");
   private static final File TEST_MIXED_TYPE_2_JSON = TestUtils.getResourceAsFile("mixed_types_2.json");
 
@@ -330,6 +331,23 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testReadSingleQuotesJSONFile() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "A")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withNormalizeSingleQuotes(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("TEST\"", "TESTER'")
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
   void testReadMixedType2JSONFileFeatureDisabled() {
     Schema schema = Schema.builder()
             .column(DType.STRING, "a")
@@ -374,6 +392,21 @@ public class TableTest extends CudfTestBase {
          MultiBufferDataSource source = sourceFrom(TEST_MIXED_TYPE_2_JSON);
          Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadSingleQuotesJSONFileFeatureDisabled() throws IOException {
+    Schema schema = Schema.builder()
+      .column(DType.STRING, "A")
+      .build();
+    JSONOptions opts = JSONOptions.builder()
+      .withLines(true)
+      .withNormalizeSingleQuotes(false)
+      .build();
+    try (MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE)) {
+      assertThrows(CudfException.class, () ->
+        Table.readJSON(schema, opts, source));
     }
   }
 
