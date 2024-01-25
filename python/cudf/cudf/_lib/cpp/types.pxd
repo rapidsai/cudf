@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t, uint32_t
+from libcpp cimport bool
 
 
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
@@ -8,21 +9,25 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
     ctypedef uint32_t bitmask_type
     ctypedef uint32_t char_utf8
 
-    cpdef enum class mask_state:
+    # A Hack to let cython compile with __int128_t symbol
+    # https://stackoverflow.com/a/27609033
+    ctypedef int int128 "__int128_t"
+
+    cpdef enum class mask_state(int32_t):
         UNALLOCATED
         UNINITIALIZED
         ALL_VALID
         ALL_NULL
 
-    cpdef enum class order:
+    cpdef enum class order(bool):
         ASCENDING
         DESCENDING
 
-    cpdef enum class null_order:
+    cpdef enum class null_order(bool):
         AFTER
         BEFORE
 
-    cpdef enum class sorted:
+    cpdef enum class sorted(bool):
         NO
         YES
 
@@ -31,19 +36,19 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         order ordering
         null_order null_ordering
 
-    cpdef enum class null_policy:
+    cpdef enum class null_policy(bool):
         EXCLUDE
         INCLUDE
 
-    cpdef enum class nan_policy:
+    cpdef enum class nan_policy(bool):
         NAN_IS_NULL
         NAN_IS_VALID
 
-    cpdef enum class null_equality:
+    cpdef enum class null_equality(bool):
         EQUAL
         UNEQUAL
 
-    cpdef enum class nan_equality:
+    cpdef enum class nan_equality(bool):
         ALL_EQUAL
         UNEQUAL
 
@@ -86,14 +91,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         type_id id() except +
         int32_t scale() except +
 
-cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
-    cpdef enum class interpolation:
+    cpdef enum class interpolation(int32_t):
         LINEAR
         LOWER
         HIGHER
         MIDPOINT
         NEAREST
-
-    # A Hack to let cython compile with __int128_t symbol
-    # https://stackoverflow.com/a/27609033
-    ctypedef int int128 "__int128_t"
