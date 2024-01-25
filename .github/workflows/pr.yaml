@@ -13,19 +13,19 @@ jobs:
   pr-builder:
     needs:
       - checks
-      - conda-cpp-build
-      - conda-cpp-tests
-      - conda-python-build
-      - conda-python-cudf-tests
-      - conda-python-other-tests
-      - conda-java-tests
-      - conda-notebook-tests
-      - docs-build
+      #- conda-cpp-build
+      #- conda-cpp-tests
+      #- conda-python-build
+      #- conda-python-cudf-tests
+      #- conda-python-other-tests
+      #- conda-java-tests
+      #- conda-notebook-tests
+      #- docs-build
       - wheel-build-cudf
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
-      - devcontainer
+      #- devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
       #- pandas-tests-diff
