@@ -684,6 +684,8 @@ cdef cudf_io_types.compression_type _get_comp_type(object compression):
         return cudf_io_types.compression_type.SNAPPY
     elif compression == "ZSTD":
         return cudf_io_types.compression_type.ZSTD
+    elif compression == "lz4":
+        return cudf_io_types.compression_type.LZ4
     else:
         raise ValueError("Unsupported `compression` type")
 
