@@ -11,15 +11,18 @@
 import os.path
 import sys
 
-sys.path.append(os.path.normpath(os.path.join(os.path.dirname(__file__), "../../common")))
+from packaging.version import Version
 
-import rapids.version
+import cudf
+
+
+CUDF_VERSION = Version(cudf.__version__)
 
 project = "dask-cudf"
 copyright = "2018-2023, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = rapids.version.version_major_minor
-release = rapids.version.version
+version = f"{CUDF_VERSION.major:02}.{CUDF_VERSION.minor:02}"
+release = f"{CUDF_VERSION.major:02}.{CUDF_VERSION.minor:02}.{CUDF_VERSION.micro:02}"
 
 language = "en"
 
