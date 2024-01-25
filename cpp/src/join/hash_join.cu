@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/join.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -368,7 +369,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
-                detail::hash_table_allocator_type{default_allocator<char>{}, stream}},
+                cudf::detail::cuco_allocator{stream}},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}
