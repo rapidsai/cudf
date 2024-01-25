@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/types.hpp"
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/concatenate_masks.hpp>
@@ -533,7 +534,7 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
 
 rmm::device_buffer concatenate_masks(host_span<column_view const> views,
                                      rmm::cuda_stream_view stream,
-                                     cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr)
+                                     async_resource_ref mr)
 {
   bool const has_nulls =
     std::any_of(views.begin(), views.end(), [](column_view const col) { return col.has_nulls(); });
@@ -558,7 +559,7 @@ rmm::device_buffer concatenate_masks(host_span<column_view const> views,
 
 rmm::device_buffer concatenate_masks(host_span<column_view const> views,
                                      rmm::cuda_stream_view stream,
-                                     cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr)
+                                     async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::concatenate_masks(views, stream, mr);
