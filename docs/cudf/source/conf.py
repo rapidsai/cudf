@@ -19,7 +19,6 @@
 import filecmp
 import glob
 import os
-import os.path
 import re
 import sys
 import tempfile

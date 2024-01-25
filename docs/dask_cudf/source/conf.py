@@ -8,9 +8,6 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-import os.path
-import sys
-
 from packaging.version import Version
 
 import cudf
