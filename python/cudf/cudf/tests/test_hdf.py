@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -96,7 +96,6 @@ def test_hdf_reader(hdf_files, columns):
     )
 
     for column in hdf_series.keys():
-
         expect_series = pd.read_hdf(hdf_series[column])
         got_series = cudf.read_hdf(hdf_series[column])
 
