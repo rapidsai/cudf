@@ -280,6 +280,7 @@ struct set_row_index {
  */
 struct page_total_size {
   cumulative_page_info const* c_info;
+  size_t info_size;
   size_type const* key_offsets;
   size_t num_keys;
 
@@ -296,7 +297,7 @@ struct page_total_size {
         }));
       auto const page_index =
         thrust::lower_bound(thrust::seq, iter + start, iter + end, i.row_index) - iter;
-      sum += c_info[page_index].size_bytes;
+      if (page_index < info_size) { sum += c_info[page_index].size_bytes; }
     }
     return {i.row_index, sum, i.key};
   }
@@ -488,11 +489,12 @@ adjust_cumulative_sizes(device_span<cumulative_page_info const> c_info,
   // page.
   //
   rmm::device_uvector<cumulative_page_info> aggregated_info(c_info.size(), stream);
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    c_info_sorted.begin(),
-                    c_info_sorted.end(),
-                    aggregated_info.begin(),
-                    page_total_size{c_info.data(), key_offsets.data(), num_unique_keys});
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    c_info_sorted.begin(),
+    c_info_sorted.end(),
+    aggregated_info.begin(),
+    page_total_size{c_info.data(), c_info.size(), key_offsets.data(), num_unique_keys});
   return {std::move(aggregated_info), std::move(page_keys_by_split)};
 }
 
