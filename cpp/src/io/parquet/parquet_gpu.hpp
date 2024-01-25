@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -340,6 +340,21 @@ struct PageInfo {
 };
 
 /**
+ * @brief Return the column schema id as the key for a PageInfo struct.
+ */
+struct get_page_key {
+  __device__ int32_t operator()(PageInfo const& page) const { return page.src_col_schema; }
+};
+
+/**
+ * @brief Return an iterator that returns they keys for a vector of pages.
+ */
+inline auto make_page_key_iterator(device_span<PageInfo const> pages)
+{
+  return thrust::make_transform_iterator(pages.begin(), get_page_key{});
+}
+
+/**
  * @brief Struct describing a particular chunk of column data
  */
 struct ColumnChunkDesc {
@@ -362,7 +377,8 @@ struct ColumnChunkDesc {
                            int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
-                           int32_t src_col_schema_)
+                           int32_t src_col_schema_,
+                           float list_bytes_per_row_est_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -375,7 +391,7 @@ struct ColumnChunkDesc {
       num_data_pages(0),
       num_dict_pages(0),
       max_num_pages(0),
-      page_info(nullptr),
+      dict_page(nullptr),
       str_dict_index(nullptr),
       valid_map_base{nullptr},
       column_data_base{nullptr},
@@ -386,26 +402,25 @@ struct ColumnChunkDesc {
       decimal_precision(decimal_precision_),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
-      src_col_schema(src_col_schema_)
+      src_col_schema(src_col_schema_),
+      list_bytes_per_row_est(list_bytes_per_row_est_)
   {
   }
 
-  uint8_t const* compressed_data{};                  // pointer to compressed column chunk data
-  size_t compressed_size{};                          // total compressed data size for this chunk
-  size_t num_values{};                               // total number of values in this column
-  size_t start_row{};                                // starting row of this chunk
-  uint32_t num_rows{};                               // number of rows in this chunk
+  uint8_t const* compressed_data{};  // pointer to compressed column chunk data
+  size_t compressed_size{};          // total compressed data size for this chunk
+  size_t num_values{};               // total number of values in this column
+  size_t start_row{};                // file-wide, absolute starting row of this chunk
+  uint32_t num_rows{};               // number of rows in this chunk
   int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
   int16_t max_nesting_depth{};                       // max nesting depth of the output
-  uint16_t data_type{};  // basic column data type, ((type_length << 3) |
-                         // parquet::Type)
+  uint16_t data_type{};  // basic column data type, ((type_length << 3) | // parquet::Type)
   uint8_t
-    level_bits[level_type::NUM_LEVEL_TYPES]{};   // bits to encode max definition/repetition levels
-  int32_t num_data_pages{};                      // number of data pages
-  int32_t num_dict_pages{};                      // number of dictionary pages
-  int32_t max_num_pages{};                       // size of page_info array
-  PageInfo* page_info{};                         // output page info for up to num_dict_pages +
-                                                 // num_data_pages (dictionary pages first)
+    level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
+  int32_t num_data_pages{};                     // number of data pages
+  int32_t num_dict_pages{};                     // number of dictionary pages
+  int32_t max_num_pages{};                      // size of page_info array
+  PageInfo const* dict_page{};
   string_index_pair* str_dict_index{};           // index for string dictionary
   bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
   void** column_data_base{};                     // base pointers of column data
@@ -418,6 +433,15 @@ struct ColumnChunkDesc {
 
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
+
+  float list_bytes_per_row_est{};  // for LIST columns, an estimate on number of bytes per row
+};
+
+/**
+ * @brief A utility structure for use in decoding page headers.
+ */
+struct chunk_page_info {
+  PageInfo* pages;
 };
 
 /**
@@ -578,11 +602,13 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
  * @brief Launches kernel for parsing the page headers in the column chunks
  *
  * @param[in] chunks List of column chunks
+ * @param[in] chunk_pages List of pages associated with the chunks, in chunk-sorted order
  * @param[in] num_chunks Number of column chunks
  * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodePageHeaders(ColumnChunkDesc* chunks,
+                       chunk_page_info* chunk_pages,
                        int32_t num_chunks,
                        kernel_error::pointer error_code,
                        rmm::cuda_stream_view stream);

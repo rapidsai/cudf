@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 import numpy as np
@@ -16,7 +16,6 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("data3, data4", [(6, 10), (5.0, 9.0), (2, 6.0)])
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
 def test_create_interval_series(data1, data2, data3, data4, closed):
-
     expect = pd.Series(pd.Interval(data1, data2, closed), dtype="interval")
     got = cudf.Series(pd.Interval(data1, data2, closed), dtype="interval")
     assert_eq(expect, got)

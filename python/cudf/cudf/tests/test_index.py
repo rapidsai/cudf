@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -803,6 +803,7 @@ def test_index_to_series(data):
         pd.Series(["1", "2", "a", "3", None], dtype="category"),
         range(0, 10),
         [],
+        [1, 1, 2, 2],
     ],
 )
 @pytest.mark.parametrize(
@@ -819,6 +820,7 @@ def test_index_to_series(data):
         range(2, 4),
         pd.Series(["1", "a", "3", None], dtype="category"),
         [],
+        [2],
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
