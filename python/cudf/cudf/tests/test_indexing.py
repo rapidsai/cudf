@@ -1285,8 +1285,6 @@ def test_iloc_categorical_index(index):
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-    # TODO: Pandas now seems to want true datetimes as slice inputs
-    # for the non-monotonic index case:
     sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
 
     if is_dataframe is True:
