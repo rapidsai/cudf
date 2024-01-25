@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -120,6 +120,8 @@ class reader::impl {
    */
   table_with_metadata read_chunk();
 
+  // top level functions involved with ratcheting through the passes, subpasses
+  // and output chunks of the read process
  private:
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -138,20 +140,101 @@ class reader::impl {
                     std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @brief Create chunk information and start file reads
+   * @brief Preprocess step for the entire file.
+   *
+   * Only ever called once. This function reads in rowgroup and associated chunk
+   * information and computes the schedule of top level passes (see `pass_intermediate_data`).
+   *
+   * @param skip_rows The number of rows to skip in the requested set of rowgroups to be read
+   * @param num_rows The total number of rows to read out of the selected rowgroups
+   * @param row_group_indices Lists of row groups to read, one per source
+   * @param filter Optional AST expression to filter output rows
+   */
+  void preprocess_file(int64_t skip_rows,
+                       std::optional<size_type> const& num_rows,
+                       host_span<std::vector<size_type> const> row_group_indices,
+                       std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  /**
+   * @brief Ratchet the pass/subpass/chunk process forward.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specified
+   *        bounds
+   */
+  void handle_chunking(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Setup step for the next input read pass.
+   *
+   * A 'pass' is defined as a subset of row groups read out of the globally
+   * requested set of all row groups.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   */
+  void setup_next_pass(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Setup step for the next decompression subpass.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   *
+   * A 'subpass' is defined as a subset of pages within a pass that are
+   * decompressed and decoded as a batch. Subpasses may be further subdivided
+   * into output chunks.
+   */
+  void setup_next_subpass(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Read a chunk of data and return an output table.
+   *
+   * This function is called internally and expects all preprocessing steps have already been done.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   * @param filter Optional AST expression to filter output rows
+   * @return The output table along with columns' metadata
+   */
+  table_with_metadata read_chunk_internal(
+    bool uses_custom_row_bounds,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  // utility functions
+ private:
+  /**
+   * @brief Read the set of column chunks to be processed for this pass.
+   *
+   * Does not decompress the chunk data.
    *
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> read_and_decompress_column_chunks();
+  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
 
   /**
-   * @brief Load and decompress the input file(s) into memory.
+   * @brief Read compressed data and page information for the current pass.
    */
-  void load_and_decompress_data();
+  void read_compressed_data();
 
   /**
-   * @brief Perform some preprocessing for page data and also compute the split locations
+   * @brief Build string dictionary indices for a pass.
+   *
+   */
+  void build_string_dict_indices();
+
+  /**
+   * @brief For list columns, generate estimated row counts for pages in the current pass.
+   *
+   * The row counts in the pages that come out of the file only reflect the number of values in
+   * all of the rows in the page, not the number of rows themselves. In order to do subpass reading
+   * more accurately, we would like to have a more accurate guess of the real number of rows per
+   * page.
+   */
+  void generate_list_column_row_count_estimates();
+
+  /**
+   * @brief Perform some preprocessing for subpass page data and also compute the split locations
    * {skip_rows, num_rows} for chunked reading.
    *
    * There are several pieces of information we can't compute directly from row counts in
@@ -166,7 +249,7 @@ class reader::impl {
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
-  void preprocess_pages(bool uses_custom_row_bounds, size_t chunk_read_limit);
+  void preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -193,20 +276,6 @@ class reader::impl {
    * @param out_metadata The output table metadata to add to
    */
   void populate_metadata(table_metadata& out_metadata);
-
-  /**
-   * @brief Read a chunk of data and return an output table.
-   *
-   * This function is called internally and expects all preprocessing steps have already been done.
-   *
-   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
-   *        bounds
-   * @param filter Optional AST expression to filter output rows
-   * @return The output table along with columns' metadata
-   */
-  table_with_metadata read_chunk_internal(
-    bool uses_custom_row_bounds,
-    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
@@ -261,16 +330,17 @@ class reader::impl {
   void compute_input_passes();
 
   /**
-   * @brief Close out the existing pass (if any) and prepare for the next pass.
-   */
-  void setup_next_pass();
-
-  /**
    * @brief Given a set of pages that have had their sizes computed by nesting level and
    * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
    * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
    */
-  void compute_splits_for_pass();
+  void compute_output_chunks_for_subpass();
+
+  [[nodiscard]] bool has_more_work() const
+  {
+    return _file_itm_data.num_passes() > 0 &&
+           _file_itm_data._current_input_pass < _file_itm_data.num_passes();
+  }
 
  private:
   rmm::cuda_stream_view _stream;
@@ -311,13 +381,9 @@ class reader::impl {
   bool _file_preprocessed{false};
 
   std::unique_ptr<pass_intermediate_data> _pass_itm_data;
-  bool _pass_preprocessed{false};
 
   std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
   std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
-
-  std::size_t _current_input_pass{0};  // current input pass index
-  std::size_t _chunk_count{0};         // how many output chunks we have produced
 };
 
 }  // namespace cudf::io::parquet::detail
