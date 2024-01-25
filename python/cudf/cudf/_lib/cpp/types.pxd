@@ -43,11 +43,9 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         EQUAL
         UNEQUAL
 
-    ctypedef enum nan_equality "cudf::nan_equality":
-        # These names differ from the C++ names due to Cython warnings if
-        # "UNEQUAL" is declared by both null_equality and nan_equality.
-        ALL_EQUAL "cudf::nan_equality::ALL_EQUAL"
-        NANS_UNEQUAL "cudf::nan_equality::UNEQUAL"
+    cpdef enum class nan_equality:
+        ALL_EQUAL
+        UNEQUAL
 
     cpdef enum class type_id(int32_t):
         EMPTY
