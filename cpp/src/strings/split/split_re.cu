@@ -275,10 +275,6 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =
     generate_tokens(*d_strings, *d_prog, direction, maxsplit, counts->view(), stream);
-  // lists columns only support int32 offsets
-  CUDF_EXPECTS(offsets->type().id() == type_id::INT32,
-               "Size of output exceeds the column size limit",
-               std::overflow_error);
 
   // convert the tokens into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
