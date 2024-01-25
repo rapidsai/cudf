@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,8 +89,7 @@ size_type num_bitmask_words(size_type number_of_bits);
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream = cudf::get_default_stream(),
-                                    cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr =
-                                      rmm::mr::get_current_device_resource());
+                                    async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Sets a pre-allocated bitmask buffer to a given state in the range

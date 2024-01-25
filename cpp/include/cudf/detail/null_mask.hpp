@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    cuda::mr::async_resource_ref<cuda::mr::device_accessible> mr);
+                                    async_resource_ref mr);
 
 /**
  * @copydoc cudf::set_null_mask(bitmask_type*, size_type, size_type, bool)
