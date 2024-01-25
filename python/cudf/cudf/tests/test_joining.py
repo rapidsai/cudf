@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from itertools import combinations, product, repeat
 
@@ -502,7 +502,6 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 
 def test_safe_merging_with_left_empty():
-
     np.random.seed(0)
 
     pairs = ("bcd", "b")
@@ -910,7 +909,6 @@ def test_join_multi(how, column_a, column_b, column_c):
     ],
 )
 def test_merge_multi(kwargs):
-
     left = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4, 3, 5, 6],
@@ -1072,7 +1070,6 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
 
 
 def test_typecast_on_join_no_float_round():
-
     other_data = ["a", "b", "c", "d", "e"]
 
     join_data_l = cudf.Series([1, 2, 3, 4, 5], dtype="int8")
@@ -1530,7 +1527,6 @@ def test_categorical_typecast_outer():
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
 def test_categorical_typecast_inner_one_cat(dtype):
-
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
@@ -1542,7 +1538,6 @@ def test_categorical_typecast_inner_one_cat(dtype):
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
 def test_categorical_typecast_left_one_cat(dtype):
-
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
@@ -1554,7 +1549,6 @@ def test_categorical_typecast_left_one_cat(dtype):
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
 def test_categorical_typecast_outer_one_cat(dtype):
-
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
@@ -1810,7 +1804,6 @@ def test_typecast_on_join_indexes_matching_categorical():
     ],
 )
 def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
-
     if how in ("leftsemi", "leftanti") and (
         kwargs.get("left_index") or kwargs.get("right_index")
     ):
