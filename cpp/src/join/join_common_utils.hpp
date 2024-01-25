@@ -15,14 +15,13 @@
  */
 #pragma once
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
-
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
@@ -50,13 +49,11 @@ using multimap_type = cudf::hash_join::impl_type::map_type;
 using mixed_multimap_type = cuco::static_multimap<hash_value_type,
                                                   size_type,
                                                   cuda::thread_scope_device,
-                                                  cudf::hashing::detail::hash_table_allocator,
+                                                  cudf::detail::cuco_allocator,
                                                   cuco::double_hashing<1, hash_type, hash_type>>;
 
-using semi_map_type = cuco::static_map<hash_value_type,
-                                       size_type,
-                                       cuda::thread_scope_device,
-                                       cudf::hashing::detail::hash_table_allocator>;
+using semi_map_type = cuco::
+  static_map<hash_value_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 using row_hash_legacy =
   cudf::row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>;

@@ -16,8 +16,8 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/hashing.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -60,7 +60,7 @@ struct hash_join {
     cuco::static_multimap<hash_value_type,
                           cudf::size_type,
                           cuda::thread_scope_device,
-                          cudf::hashing::detail::hash_table_allocator,
+                          cudf::detail::cuco_allocator,
                           cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,21 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #pragma once
 
-#include <cudf/detail/cuco_helpers.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/polymorphic_allocator.hpp>
 
-#include <cuco/static_map.cuh>
+namespace cudf::detail {
 
-#include <limits>
+class cuco_allocator
+  : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>> {
+  using default_allocator = rmm::mr::polymorphic_allocator<char>;
+  using base_type         = rmm::mr::stream_allocator_adaptor<default_allocator>;
 
-namespace cudf {
-namespace detail {
+ public:
+  cuco_allocator(rmm::cuda_stream_view stream) : base_type{default_allocator{}, stream} {}
+};
 
-using hash_map_type =
-  cuco::static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
-
-}  // namespace detail
-}  // namespace cudf
+}  // namespace cudf::detail

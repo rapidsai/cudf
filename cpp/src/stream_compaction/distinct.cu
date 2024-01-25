@@ -21,6 +21,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -51,12 +52,11 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
     return rmm::device_uvector<size_type>(0, stream, mr);
   }
 
-  auto map = hash_map_type{
-    cudf::hashing::detail::compute_hash_table_size(input.num_rows()),
-    cuco::empty_key{-1},
-    cuco::empty_value{std::numeric_limits<size_type>::min()},
-    cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{}, stream},
-    stream.value()};
+  auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
+                           cuco::empty_key{-1},
+                           cuco::empty_value{std::numeric_limits<size_type>::min()},
+                           cudf::detail::cuco_allocator{stream},
+                           stream.value()};
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);

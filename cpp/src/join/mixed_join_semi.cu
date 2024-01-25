@@ -20,6 +20,7 @@
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -169,12 +170,11 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  semi_map_type hash_table{
-    cudf::hashing::detail::compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{}, stream},
-    stream.value()};
+  semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
+                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::empty_value{cudf::detail::JoinNoneValue},
+                           cudf::detail::cuco_allocator{stream},
+                           stream.value()};
 
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many
@@ -431,12 +431,11 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
   auto const equality_probe = row_comparator.equal_to<false>(has_nulls, compare_nulls);
 
-  semi_map_type hash_table{
-    cudf::hashing::detail::compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{}, stream},
-    stream.value()};
+  semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
+                           cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                           cuco::empty_value{cudf::detail::JoinNoneValue},
+                           cudf::detail::cuco_allocator{stream},
+                           stream.value()};
 
   // Create hash table containing all keys found in right table
   // TODO: To add support for nested columns we will need to flatten in many

@@ -364,12 +364,11 @@ hash_join<Hasher>::hash_join(cudf::table_view const& build,
   : _has_nulls(has_nulls),
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
-    _hash_table{cudf::hashing::detail::compute_hash_table_size(build.num_rows()),
+    _hash_table{compute_hash_table_size(build.num_rows()),
                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                 cuco::empty_value{cudf::detail::JoinNoneValue},
                 stream.value(),
-                cudf::hashing::detail::hash_table_allocator{
-                  cudf::hashing::detail::default_allocator{}, stream}},
+                cudf::detail::cuco_allocator{stream}},
     _build{build},
     _preprocessed_build{
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)}

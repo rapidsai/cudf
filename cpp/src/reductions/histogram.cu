@@ -15,9 +15,11 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
@@ -163,12 +165,11 @@ compute_row_frequencies(table_view const& input,
                "Nested types are not yet supported in histogram aggregation.",
                std::invalid_argument);
 
-  auto map = cudf::detail::hash_map_type{
-    cudf::hashing::detail::compute_hash_table_size(input.num_rows()),
-    cuco::empty_key{-1},
-    cuco::empty_value{std::numeric_limits<size_type>::min()},
-    cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{}, stream},
-    stream.value()};
+  auto map = cudf::detail::hash_map_type{compute_hash_table_size(input.num_rows()),
+                                         cuco::empty_key{-1},
+                                         cuco::empty_value{std::numeric_limits<size_type>::min()},
+                                         cudf::detail::cuco_allocator{stream},
+                                         stream.value()};
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);

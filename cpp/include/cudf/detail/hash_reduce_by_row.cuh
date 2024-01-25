@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <cudf/hashing/detail/helper_functions.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -31,10 +30,8 @@
 
 namespace cudf::detail {
 
-using hash_map_type = cuco::static_map<size_type,
-                                       size_type,
-                                       cuda::thread_scope_device,
-                                       cudf::hashing::detail::hash_table_allocator>;
+using hash_map_type =
+  cuco::static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 /**
  * @brief The base struct for customized reduction functor to perform reduce-by-key with keys are

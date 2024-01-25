@@ -116,7 +116,7 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
 template <typename Key,
           typename Element,
           typename Hasher    = cudf::hashing::detail::default_hash<Key>,
-          typename Equality  = cudf::hashing::detail::equal_to<Key>,
+          typename Equality  = equal_to<Key>,
           typename Allocator = rmm::mr::polymorphic_allocator<thrust::pair<Key, Element>>>
 class concurrent_unordered_map {
  public:
@@ -127,8 +127,8 @@ class concurrent_unordered_map {
   using key_type       = Key;
   using mapped_type    = Element;
   using value_type     = thrust::pair<Key, Element>;
-  using iterator       = cudf::hashing::detail::cycle_iterator_adapter<value_type*>;
-  using const_iterator = cudf::hashing::detail::cycle_iterator_adapter<value_type*> const;
+  using iterator       = cycle_iterator_adapter<value_type*>;
+  using const_iterator = cycle_iterator_adapter<value_type*> const;
 
  public:
   /**
@@ -452,9 +452,9 @@ class concurrent_unordered_map {
   void clear_async(rmm::cuda_stream_view stream)
   {
     constexpr int block_size = 128;
-    cudf::hashing::detail::
-      init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
-        m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+
+    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
+      m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
   }
 
   void print()
@@ -550,9 +550,8 @@ class concurrent_unordered_map {
     }
 
     if (m_capacity > 0) {
-      cudf::hashing::detail::
-        init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
-          m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+      init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
+        m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
     }
 
     CUDF_CHECK_CUDA(stream.value());

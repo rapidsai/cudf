@@ -20,14 +20,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 
@@ -101,14 +100,13 @@ struct bpe_equal {
 
 using bpe_probe_scheme = cuco::experimental::linear_probing<1, bpe_hasher>;
 
-using merge_pairs_map_type =
-  cuco::experimental::static_map<cudf::size_type,
-                                 cudf::size_type,
-                                 cuco::experimental::extent<std::size_t>,
-                                 cuda::thread_scope_device,
-                                 bpe_equal,
-                                 bpe_probe_scheme,
-                                 cudf::hashing::detail::hash_table_allocator>;
+using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
+                                                            cudf::size_type,
+                                                            cuco::experimental::extent<std::size_t>,
+                                                            cuda::thread_scope_device,
+                                                            bpe_equal,
+                                                            bpe_probe_scheme,
+                                                            cudf::detail::cuco_allocator>;
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
@@ -159,14 +157,13 @@ struct mp_equal {
 
 using mp_probe_scheme = cuco::experimental::linear_probing<1, mp_hasher>;
 
-using mp_table_map_type =
-  cuco::experimental::static_map<cudf::size_type,
-                                 cudf::size_type,
-                                 cuco::experimental::extent<std::size_t>,
-                                 cuda::thread_scope_device,
-                                 mp_equal,
-                                 mp_probe_scheme,
-                                 cudf::hashing::detail::hash_table_allocator>;
+using mp_table_map_type = cuco::experimental::static_map<cudf::size_type,
+                                                         cudf::size_type,
+                                                         cuco::experimental::extent<std::size_t>,
+                                                         cuda::thread_scope_device,
+                                                         mp_equal,
+                                                         mp_probe_scheme,
+                                                         cudf::detail::cuco_allocator>;
 
 }  // namespace detail
 

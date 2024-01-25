@@ -227,13 +227,11 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
       auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
       auto set = cuco::experimental::static_set{
-        cuco::experimental::extent{
-          cudf::hashing::detail::compute_hash_table_size(haystack.num_rows())},
+        cuco::experimental::extent{compute_hash_table_size(haystack.num_rows())},
         cuco::empty_key{lhs_index_type{-1}},
         d_equal,
         probing_scheme,
-        cudf::hashing::detail::hash_table_allocator{cudf::hashing::detail::default_allocator{},
-                                                    stream},
+        cudf::detail::cuco_allocator{stream},
         stream.value()};
 
       if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
