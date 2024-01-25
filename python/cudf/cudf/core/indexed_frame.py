@@ -198,9 +198,18 @@ def _get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            # TODO: Once Index binary ops are updated to support logical_and,
-            # can use that instead of using cupy.
-            boolean_mask = cp.logical_and((index >= start), (index <= stop))
+            if (start in index) and (stop in index):
+                # when we have a non-monotonic datetime index, return
+                # values in the slice defined by index_of(start) and
+                # index_of(end)
+                start_loc = index.get_loc(start.to_datetime64())
+                stop_loc = index.get_loc(stop.to_datetime64()) + 1
+                return slice(start_loc, stop_loc)
+            else:
+                raise KeyError(
+                    "Value based partial slicing on non-monotonic DatetimeIndexes "
+                    "with non-existing keys is not allowed.",
+                )
         elif start is not None:
             boolean_mask = index >= start
         else:
