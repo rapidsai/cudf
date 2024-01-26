@@ -32,8 +32,6 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
 python -m pytest
-  --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
-  --dist=loadscope \
   ./python/dask_cudf/dask_cudf/
