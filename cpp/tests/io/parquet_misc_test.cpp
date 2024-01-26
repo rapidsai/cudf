@@ -28,8 +28,7 @@
 
 // Test fixture for delta encoding tests
 template <typename T>
-struct ParquetWriterDeltaTest : public ParquetWriterTest {
-};
+struct ParquetWriterDeltaTest : public ParquetWriterTest {};
 
 struct ParquetCompressionTest : public cudf::test::BaseFixture,
                                 public ::testing::WithParamInterface<cudf::io::compression_type> {};
