@@ -1135,7 +1135,6 @@ def test_index_new():
 
 @pytest.mark.xfail(not LOADED, reason="Should not fail in accelerated mode")
 def test_groupby_apply_callable_referencing_pandas(dataframe):
-
     pdf, df = dataframe
 
     class Callable1:

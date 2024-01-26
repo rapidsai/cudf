@@ -67,10 +67,10 @@ sed_runner 's/'"branch-.*\/cmake-format-rapids-cmake.json"'/'"branch-${NEXT_SHOR
 sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_TAG}'/g' cpp/doxygen/Doxyfile
 
 # sphinx docs update
-sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/cudf/source/conf.py
-sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/cudf/source/conf.py
-sed_runner 's/version = .*/version = '"'${NEXT_SHORT_TAG}'"'/g' docs/dask_cudf/source/conf.py
-sed_runner 's/release = .*/release = '"'${NEXT_FULL_TAG}'"'/g' docs/dask_cudf/source/conf.py
+sed_runner 's/version = .*/version = "'${NEXT_SHORT_TAG}'"/g' docs/cudf/source/conf.py
+sed_runner 's/release = .*/release = "'${NEXT_FULL_TAG}'"/g' docs/cudf/source/conf.py
+sed_runner 's/version = .*/version = "'${NEXT_SHORT_TAG}'"/g' docs/dask_cudf/source/conf.py
+sed_runner 's/release = .*/release = "'${NEXT_FULL_TAG}'"/g' docs/dask_cudf/source/conf.py
 
 DEPENDENCIES=(
   cudf

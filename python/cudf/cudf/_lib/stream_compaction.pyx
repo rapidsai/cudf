@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -209,7 +209,7 @@ def distinct_indices(
     cdef nan_equality cpp_nans_equal = (
         nan_equality.ALL_EQUAL
         if nans_equal
-        else nan_equality.NANS_UNEQUAL
+        else nan_equality.UNEQUAL
     )
     cdef table_view source = table_view_from_columns(columns)
     cdef unique_ptr[column] c_result

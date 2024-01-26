@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import gzip
 import os
@@ -248,7 +248,6 @@ def test_read_csv_nrows(csv_end_bad_lines):
 
 
 def test_read_csv_nrows_error(csv_end_bad_lines):
-
     with pytest.raises(ValueError):
         dask_cudf.read_csv(
             csv_end_bad_lines, nrows=2, blocksize="100 MiB"
