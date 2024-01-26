@@ -5,7 +5,6 @@ from __future__ import annotations
 import builtins
 import pickle
 import warnings
-
 from collections import abc
 from functools import cached_property
 from itertools import chain
@@ -25,6 +24,7 @@ from typing import (
 
 import cupy
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 from numba import cuda
@@ -33,7 +33,6 @@ from typing_extensions import Self
 import rmm
 
 import cudf
-import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.column import Column
 from cudf._lib.null_mask import (
@@ -87,6 +86,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
+    find_common_type,
     get_time_unit,
     is_mixed_with_object_dtype,
     min_scalar_type,
@@ -2671,8 +2671,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         and np.issubdtype(dtyp, np.datetime64)
         for dtyp in not_null_col_dtypes
     ):
-        # Use NumPy to find a common dtype
-        common_dtype = np.find_common_type(not_null_col_dtypes, [])
+        common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype
         objs = [obj.astype(common_dtype) for obj in objs]
 

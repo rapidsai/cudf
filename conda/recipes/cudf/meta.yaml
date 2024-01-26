@@ -80,8 +80,7 @@ requirements:
     - cupy >=12.0.0
     # TODO: Pin to numba<0.58 until #14160 is resolved
     - numba >=0.57,<0.58
-    # TODO: Pin to numpy<1.25 until cudf requires pandas 2
-    - numpy >=1.21,<1.25
+    - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}

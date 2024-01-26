@@ -702,7 +702,7 @@ class NumericalColumn(NumericalBaseColumn):
                 col_dtype if col_dtype.kind == "f" else np.dtype("int64")
             )
         elif reduction_op == "sum_of_squares":
-            col_dtype = np.find_common_type([col_dtype], [np.dtype("uint64")])
+            col_dtype = np.result_dtype(col_dtype, np.dtype("uint64"))
 
         return col_dtype
 

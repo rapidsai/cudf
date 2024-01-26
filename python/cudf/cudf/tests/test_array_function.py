@@ -69,9 +69,9 @@ def test_array_func_cudf_series(np_ar, func):
         lambda x: np.dot(x, x.transpose()),
         lambda x: np.all(x),
         lambda x: np.any(x),
-        lambda x: np.product(x),
-        lambda x: np.product(x, axis=0),
-        lambda x: np.product(x, axis=1),
+        lambda x: np.prod(x),
+        lambda x: np.prod(x, axis=0),
+        lambda x: np.prod(x, axis=1),
     ],
 )
 def test_array_func_cudf_dataframe(pd_df, func):
