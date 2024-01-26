@@ -1434,7 +1434,19 @@ def test_assign_callable(mapping):
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5", "xxhash64"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        "murmur3",
+        "md5",
+        "sha1",
+        "sha224",
+        "sha256",
+        "sha384",
+        "sha512",
+        "xxhash64",
+    ],
+)
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
     warning_expected = seed is not None and method not in {
@@ -1459,6 +1471,11 @@ def test_dataframe_hash_values(nrows, method, seed):
     expected_dtypes = {
         "murmur3": np.uint32,
         "md5": object,
+        "sha1": object,
+        "sha224": object,
+        "sha256": object,
+        "sha384": object,
+        "sha512": object,
         "xxhash64": np.uint64,
     }
     assert out.dtype == expected_dtypes[method]
@@ -4046,7 +4063,6 @@ def test_diff(dtype, period, data_empty):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_isnull_isna(df, nan_as_null):
-
     if nan_as_null is False and (
         df.select_dtypes(object).isna().any().any()
         and not df.select_dtypes(object).isna().all().all()
@@ -4173,15 +4189,7 @@ def test_dataframe_round_dict_decimal_validation():
         [None, None],
         [[0, 5], [1, 6], [2, 7], [3, 8], [4, 9]],
         [[1, True], [2, False], [3, False]],
-        pytest.param(
-            [["a", True], ["b", False], ["c", False]],
-            marks=[
-                pytest_xfail(
-                    reason="NotImplementedError: all does not "
-                    "support columns of object dtype."
-                )
-            ],
-        ),
+        [["a", True], ["b", False], ["c", False]],
     ],
 )
 def test_all(data):
@@ -4192,6 +4200,9 @@ def test_all(data):
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data=data, dtype=dtype).replace([None], False)
         gdata = cudf.Series.from_pandas(pdata)
+        got = gdata.all()
+        expected = pdata.all()
+        assert_eq(got, expected)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"], dtype=dtype).replace(
             [None], False
@@ -4203,10 +4214,10 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
-
-    got = gdata.all()
-    expected = pdata.all()
-    assert_eq(got, expected)
+        else:
+            got = gdata.all()
+            expected = pdata.all()
+            assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -4226,21 +4237,13 @@ def test_all(data):
         [None, None],
         [[0, 5], [1, 6], [2, 7], [3, 8], [4, 9]],
         [[1, True], [2, False], [3, False]],
-        pytest.param(
-            [["a", True], ["b", False], ["c", False]],
-            marks=[
-                pytest_xfail(
-                    reason="NotImplementedError: any does not "
-                    "support columns of object dtype."
-                )
-            ],
-        ),
+        [["a", True], ["b", False], ["c", False]],
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     # Provide a dtype when data is empty to avoid future pandas changes.
-    dtype = None if data else float
+    dtype = float if all(x is None for x in data) or len(data) < 1 else None
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data=data, dtype=dtype)
         gdata = cudf.Series(data=data, dtype=dtype)
@@ -4261,10 +4264,10 @@ def test_any(data, axis):
             got = gdata.any(bool_only=True)
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
-
-        got = gdata.any(axis=axis)
-        expected = pdata.any(axis=axis)
-        assert_eq(got, expected)
+        else:
+            got = gdata.any(axis=axis)
+            expected = pdata.any(axis=axis)
+            assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -5166,15 +5169,18 @@ def test_df_astype_to_categorical_ordered(ordered):
 
 
 @pytest.mark.parametrize(
-    "dtype,args",
-    [(dtype, {}) for dtype in ALL_TYPES]
-    + [("category", {"ordered": True}), ("category", {"ordered": False})],
+    "dtype",
+    [dtype for dtype in ALL_TYPES]
+    + [
+        cudf.CategoricalDtype(ordered=True),
+        cudf.CategoricalDtype(ordered=False),
+    ],
 )
-def test_empty_df_astype(dtype, args):
+def test_empty_df_astype(dtype):
     df = cudf.DataFrame()
-    kwargs = {}
-    kwargs.update(args)
-    assert_eq(df, df.astype(dtype=dtype, **kwargs))
+    result = df.astype(dtype=dtype)
+    assert_eq(df, result)
+    assert_eq(df.to_pandas().astype(dtype=dtype), result)
 
 
 @pytest.mark.parametrize(
@@ -10197,7 +10203,7 @@ def test_empty_numeric_only(data):
     pdf = gdf.to_pandas()
     expected = pdf.prod(numeric_only=True)
     actual = gdf.prod(numeric_only=True)
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_dtype=True)
 
 
 @pytest.fixture(params=[0, 10], ids=["empty", "10"])

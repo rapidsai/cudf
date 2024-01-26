@@ -20,6 +20,26 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
         const table_view& input
     ) except +
 
+    cdef unique_ptr[column] sha1 "cudf::hashing::sha1" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha224 "cudf::hashing::sha224" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha256 "cudf::hashing::sha256" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha384 "cudf::hashing::sha384" (
+        const table_view& input
+    ) except +
+
+    cdef unique_ptr[column] sha512 "cudf::hashing::sha512" (
+        const table_view& input
+    ) except +
+
     cdef unique_ptr[column] xxhash_64 "cudf::hashing::xxhash_64" (
         const table_view& input,
         const uint64_t seed

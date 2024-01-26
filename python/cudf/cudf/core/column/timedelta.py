@@ -404,6 +404,24 @@ class TimeDeltaColumn(ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
+    def cov(self, other: TimeDeltaColumn) -> float:
+        if not isinstance(other, TimeDeltaColumn):
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
+        return self.as_numerical_column("int64").cov(
+            other.as_numerical_column("int64")
+        )
+
+    def corr(self, other: TimeDeltaColumn) -> float:
+        if not isinstance(other, TimeDeltaColumn):
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
+        return self.as_numerical_column("int64").corr(
+            other.as_numerical_column("int64")
+        )
+
     def components(self, index=None) -> "cudf.DataFrame":
         """
         Return a Dataframe of the components of the Timedeltas.

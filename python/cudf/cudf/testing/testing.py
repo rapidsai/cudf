@@ -45,7 +45,6 @@ def _check_isinstance(left, right, obj):
 
 
 def raise_assert_detail(obj, message, left, right, diff=None):
-
     msg = f"""{obj} are different
 
 {message}

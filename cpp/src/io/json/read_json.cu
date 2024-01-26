@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -45,6 +46,15 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
+/**
+ * @brief Read from array of data sources into RMM buffer
+ *
+ * @param sources Array of data sources
+ * @param compression Compression format of source
+ * @param range_offset Number of bytes to skip from source start
+ * @param range_size Number of bytes to read from source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                            compression_type compression,
                                            size_t range_offset,
@@ -217,7 +227,14 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
+  auto buffer = get_record_range_raw_input(sources, reader_opts, stream);
+
+  // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
+  // invoke pre-processing FST
+  if (reader_opts.is_enabled_normalize_single_quotes()) {
+    buffer =
+      normalize_single_quotes(std::move(buffer), stream, rmm::mr::get_current_device_resource());
+  }
 
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
   // For debug purposes, use host_parse_nested_json()

@@ -2074,7 +2074,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           need_sync = true;
         }
 
-        row_group.total_byte_size += ck.compressed_size;
+        row_group.total_byte_size += ck.bfr_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2220,6 +2220,10 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
+  // See issue #14781. Can remove this check once that is fixed.
+  CUDF_EXPECTS(not(_write_v2_headers and _compression == Compression::ZSTD),
+               "V2 page headers cannot be used with ZSTD compression");
+
   _current_chunk_offset.resize(_out_sink.size());
   // Write file header
   file_header_s fhdr;

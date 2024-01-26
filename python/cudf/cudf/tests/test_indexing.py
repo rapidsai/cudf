@@ -1278,15 +1278,15 @@ def test_iloc_categorical_index(index):
 @pytest.mark.parametrize(
     "sli",
     [
-        slice("2001", "2020"),
         slice("2001", "2002"),
         slice("2002", "2001"),
-        slice(None, "2020"),
         slice("2001", None),
     ],
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
+    sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
+
     if is_dataframe is True:
         pd_data = pd.DataFrame(
             {"a": [1, 2, 3]},
@@ -1299,11 +1299,30 @@ def test_loc_datetime_index(sli, is_dataframe):
         )
 
     gd_data = cudf.from_pandas(pd_data)
-
     expect = pd_data.loc[sli]
     got = gd_data.loc[sli]
-
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "sli",
+    [
+        slice("2001", "2020"),
+        slice(None, "2020"),
+    ],
+)
+def test_loc_datetime_index_slice_not_in(sli):
+    pd_data = pd.Series(
+        [1, 2, 3],
+        pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
+    )
+    gd_data = cudf.from_pandas(pd_data)
+    with pytest.raises(KeyError):
+        assert_eq(pd_data.loc[sli], gd_data.loc[sli])
+
+    with pytest.raises(KeyError):
+        sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
+        assert_eq(pd_data.loc[sli], gd_data.loc[sli])
 
 
 @pytest.mark.parametrize(

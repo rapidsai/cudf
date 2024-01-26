@@ -774,7 +774,6 @@ def test_round_nan_as_null_false(series, decimal):
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_isnull_isna(ps, nan_as_null):
-
     if nan_as_null is False and (
         ps.isna().any() and not ps.isna().all() and ps.dtype == object
     ):
@@ -790,7 +789,6 @@ def test_series_isnull_isna(ps, nan_as_null):
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_notnull_notna(ps, nan_as_null):
-
     if nan_as_null is False and (
         ps.isna().any() and not ps.isna().all() and ps.dtype == object
     ):
@@ -1363,7 +1361,9 @@ def test_series_sort_index(
         assert_eq(expected, got, check_index_type=True)
 
 
-@pytest.mark.parametrize("method", ["md5"])
+@pytest.mark.parametrize(
+    "method", ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
+)
 def test_series_hash_values(method):
     inputs = cudf.Series(
         [

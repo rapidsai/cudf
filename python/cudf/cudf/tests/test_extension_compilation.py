@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 import operator
 
 import cupy as cp
@@ -198,7 +198,6 @@ def func_na_is_x(x):
 
 @pytest.mark.parametrize("fn", (func_x_is_na, func_na_is_x))
 def test_is_na(fn):
-
     valid = Masked(1, True)
     invalid = Masked(1, False)
 
@@ -288,7 +287,6 @@ na_comparison_funcs = (
 @pytest.mark.parametrize("fn", na_comparison_funcs)
 @pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_na_masked_comparisons(fn, ty):
-
     device_fn = cuda.jit(device=True)(fn)
 
     @cuda.jit
@@ -317,7 +315,6 @@ def test_na_masked_comparisons(fn, ty):
 @pytest.mark.parametrize("fn", na_comparison_funcs)
 @pytest.mark.parametrize("ty", number_types, ids=number_ids)
 def test_na_scalar_comparisons(fn, ty):
-
     device_fn = cuda.jit(device=True)(fn)
 
     @cuda.jit

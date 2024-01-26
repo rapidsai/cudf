@@ -22,12 +22,6 @@ try:
 except ImportError:
     import json
 
-from cudf.api.types import (
-    _is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
@@ -91,17 +85,22 @@ cpdef generate_pandas_metadata(table, index):
 
     # Columns
     for name, col in table._data.items():
-        col_names.append(name)
-        if _is_categorical_dtype(col):
+        if cudf.get_option("mode.pandas_compatible"):
+            # in pandas-compat mode, non-string column names are stringified.
+            col_names.append(str(name))
+        else:
+            col_names.append(name)
+
+        if isinstance(col.dtype, cudf.CategoricalDtype):
             raise ValueError(
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
-        elif (
-            is_list_dtype(col)
-            or is_struct_dtype(col)
-            or is_decimal_dtype(col)
-        ):
+        elif isinstance(col.dtype, (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.core.dtypes.DecimalDtype
+        )):
             types.append(col.dtype.to_arrow())
         else:
             # A boolean element takes 8 bits in cudf and 1 bit in
@@ -147,12 +146,12 @@ cpdef generate_pandas_metadata(table, index):
                         level=level,
                         column_names=col_names
                     )
-                if _is_categorical_dtype(idx):
+                if isinstance(idx.dtype, cudf.CategoricalDtype):
                     raise ValueError(
                         "'category' column dtypes are currently not "
                         + "supported by the gpu accelerated parquet writer"
                     )
-                elif is_list_dtype(idx):
+                elif isinstance(idx.dtype, cudf.ListDtype):
                     types.append(col.dtype.to_arrow())
                 else:
                     # A boolean element takes 8 bits in cudf and 1 bit in
@@ -174,7 +173,7 @@ cpdef generate_pandas_metadata(table, index):
             for col in table._columns
         ],
         df=table,
-        column_names=map(str, col_names),
+        column_names=col_names,
         index_levels=index_levels,
         index_descriptors=index_descriptors,
         preserve_index=index,

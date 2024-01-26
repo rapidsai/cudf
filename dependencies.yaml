@@ -247,8 +247,8 @@ dependencies:
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
-          - librmm==24.2.*
-          - libkvikio==24.2.*
+          - librmm==24.4.*
+          - libkvikio==24.4.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.5
@@ -280,7 +280,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.2.*
+          - &rmm_conda rmm==24.4.*
           - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
@@ -300,10 +300,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.2.*
+              - &rmm_cu12 rmm-cu12==24.4.*
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.2.*
+              - &rmm_cu11 rmm-cu11==24.4.*
           - {matrix: null, packages: null }
       - output_types: pyproject
         matrices:
@@ -456,7 +456,8 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-          - dask-cuda==24.2.*
+          - breathe>=4.35.0
+          - dask-cuda==24.4.*
           - *doxygen
           - make
           - myst-nb
@@ -532,19 +533,22 @@ dependencies:
           - {matrix: null, packages: *run_cudf_packages_all_cu11}
       - output_types: conda
         matrices:
+          - matrix: {cuda: "12.*"}
+            packages:
+              - pynvjitlink
           - matrix: {cuda: "11.*"}
             packages:
               - cubinlinker
               - ptxcompiler
-          - {matrix: null, packages: null}
       - output_types: [requirements, pyproject]
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - rmm-cu12==24.2.*
+              - rmm-cu12==24.4.*
+              - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
-              - rmm-cu11==24.2.*
+              - rmm-cu11==24.4.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
           - {matrix: null, packages: null}
@@ -555,7 +559,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.2.*
+          - rapids-dask-dependency==24.4.*
   run_custreamz:
     common:
       - output_types: conda
@@ -618,7 +622,7 @@ dependencies:
           - fastavro>=0.22.9
           - hypothesis
           - pytest-benchmark
-          - pytest-cases<3.8.2
+          - pytest-cases>=3.8.2
           - python-snappy>=0.6.0
           - scipy
       - output_types: conda
@@ -654,13 +658,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==24.2.*
+          - dask-cuda==24.4.*
           - *numba
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.2.*
+          - &cudf_conda cudf==24.4.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -672,16 +676,16 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf-cu12==24.2.*
+              - cudf-cu12==24.4.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf-cu11==24.2.*
+              - cudf-cu11==24.4.*
           - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.2.*
+          - &cudf_kafka_conda cudf_kafka==24.4.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -693,10 +697,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf_kafka-cu12==24.2.*
+              - cudf_kafka-cu12==24.4.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf_kafka-cu11==24.2.*
+              - cudf_kafka-cu11==24.4.*
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:

@@ -2074,12 +2074,7 @@ def test_multiindex_eq_other_multiindex():
     params=[
         "from_product",
         "from_tuples",
-        pytest.param(
-            "from_arrays",
-            marks=pytest.mark.xfail(
-                reason="TODO: from_arrays is not implemented"
-            ),
-        ),
+        "from_arrays",
         "init",
     ]
 )
@@ -2089,7 +2084,7 @@ def midx(request):
     elif request.param == "from_tuples":
         return cudf.MultiIndex.from_tuples([(0, 1), (0, 0), (1, 1), (1, 0)])
     elif request.param == "from_arrays":
-        return cudf.MultiIndex.from_arrays([0, 0, 1, 1], [1, 0, 1, 0])
+        return cudf.MultiIndex.from_arrays([[0, 0, 1, 1], [1, 0, 1, 0]])
     elif request.param == "init":
         return cudf.MultiIndex(
             levels=[[0, 1], [0, 1]], codes=[[0, 0, 1, 1], [1, 0, 1, 0]]
@@ -2101,3 +2096,30 @@ def midx(request):
 def test_multindex_constructor_levels_always_indexes(midx):
     assert_eq(midx.levels[0], cudf.Index([0, 1]))
     assert_eq(midx.levels[1], cudf.Index([0, 1]))
+
+
+@pytest.mark.parametrize(
+    "array",
+    [
+        list,
+        tuple,
+        np.array,
+        cp.array,
+        pd.Index,
+        cudf.Index,
+        pd.Series,
+        cudf.Series,
+    ],
+)
+def test_multiindex_from_arrays(array):
+    pd_data = [[0, 0, 1, 1], [1, 0, 1, 0]]
+    cudf_data = [array(lst) for lst in pd_data]
+    result = pd.MultiIndex.from_arrays(pd_data)
+    expected = cudf.MultiIndex.from_arrays(cudf_data)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("arg", ["foo", ["foo"]])
+def test_multiindex_from_arrays_wrong_arg(arg):
+    with pytest.raises(TypeError):
+        cudf.MultiIndex.from_arrays(arg)

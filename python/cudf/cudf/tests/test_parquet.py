@@ -21,7 +21,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_LT_153, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_153
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -2683,29 +2683,31 @@ def test_parquet_writer_decimal(decimal_type, data):
 
 
 def test_parquet_writer_column_validation():
+    cudf_parquet = BytesIO()
+    pandas_parquet = BytesIO()
     df = cudf.DataFrame({1: [1, 2, 3], "a": ["a", "b", "c"]})
     pdf = df.to_pandas()
 
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.warns(UserWarning):
-            df.to_parquet("cudf.parquet")
+            df.to_parquet(cudf_parquet)
 
     if PANDAS_GE_200:
         with pytest.warns(UserWarning):
-            pdf.to_parquet("pandas.parquet")
+            pdf.to_parquet(pandas_parquet)
 
         assert_eq(
-            pd.read_parquet("cudf.parquet"),
-            cudf.read_parquet("pandas.parquet"),
+            pd.read_parquet(cudf_parquet),
+            cudf.read_parquet(pandas_parquet),
         )
         assert_eq(
-            cudf.read_parquet("cudf.parquet"),
-            pd.read_parquet("pandas.parquet"),
+            cudf.read_parquet(cudf_parquet),
+            pd.read_parquet(pandas_parquet),
         )
 
     with cudf.option_context("mode.pandas_compatible", False):
         with pytest.raises(ValueError):
-            df.to_parquet("cudf.parquet")
+            df.to_parquet(cudf_parquet)
 
 
 def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):

@@ -646,15 +646,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     how="left",
                 )
                 result = result.take(indices)
-                if isinstance(result._index, cudf.CategoricalIndex):
-                    # Needs re-ordering the categories in the order
-                    # they are after grouping.
-                    result._index = cudf.Index(
-                        result._index._column.reorder_categories(
-                            result._index._column._get_decategorized_column()
-                        ),
-                        name=result._index.name,
-                    )
 
         if not self._as_index:
             result = result.reset_index()
@@ -689,10 +680,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Computed {op} of values within each group.
 
-        Notes
-        -----
-        Difference from pandas:
-            * Not supporting: numeric_only, min_count
+        .. pandas-compat::
+            **{cls}.{op}**
+
+            The numeric_only, min_count
         """
         if numeric_only:
             raise NotImplementedError(
@@ -1266,10 +1257,6 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _jit_groupby_apply(
         self, function, group_names, offsets, group_keys, grouped_values, *args
     ):
-        # Nulls are not yet supported
-        if self.grouping._obj._has_nulls:
-            raise ValueError("Nulls not yet supported with groupby JIT engine")
-
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
         )
@@ -1407,7 +1394,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           6    2    6   12
 
         .. pandas-compat::
-            **groupby.apply**
+            **GroupBy.apply**
 
             cuDF's ``groupby.apply`` is limited compared to pandas.
             In some situations, Pandas returns the grouped keys as part of
@@ -1468,9 +1455,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped()
 
         if engine == "auto":
-            if (not grouped_values._has_nulls) and _can_be_jitted(
-                grouped_values, function, args
-            ):
+            if _can_be_jitted(grouped_values, function, args):
                 engine = "jit"
             else:
                 engine = "cudf"
@@ -2134,9 +2119,13 @@ class GroupBy(Serializable, Reducible, Scannable):
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`"""
         values = self.grouping.values
-        result = self.obj._from_columns(
-            self._groupby.replace_nulls([*values._columns], method),
-            values._column_names,
+        result = self.obj._from_data(
+            dict(
+                zip(
+                    values._column_names,
+                    self._groupby.replace_nulls([*values._columns], method),
+                )
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
@@ -2266,9 +2255,10 @@ class GroupBy(Serializable, Reducible, Scannable):
         Series or DataFrame
             Object shifted within each group.
 
-        Notes
-        -----
-        Parameter ``freq`` is unsupported.
+        .. pandas-compat::
+            **GroupBy.shift**
+
+            Parameter ``freq`` is unsupported.
         """
 
         if freq is not None:
@@ -2286,9 +2276,15 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             fill_value = [fill_value] * len(values._data)
 
-        result = self.obj.__class__._from_columns(
-            self._groupby.shift([*values._columns], periods, fill_value)[0],
-            values._column_names,
+        result = self.obj.__class__._from_data(
+            dict(
+                zip(
+                    values._column_names,
+                    self._groupby.shift(
+                        [*values._columns], periods, fill_value
+                    )[0],
+                )
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)

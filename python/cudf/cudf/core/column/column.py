@@ -965,9 +965,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         raise NotImplementedError()
 
-    def astype(
-        self, dtype: Dtype, copy: bool = False, format: str | None = None
-    ) -> ColumnBase:
+    def astype(self, dtype: Dtype, copy: bool = False) -> ColumnBase:
         if copy:
             col = self.copy()
         else:
@@ -1007,21 +1005,21 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
                     f"Casting to {dtype} is not supported, use "
                     "`.astype('str')` instead."
                 )
-            return col.as_string_column(dtype, format=format)
+            return col.as_string_column(dtype)
+        elif isinstance(dtype, IntervalDtype):
+            return col.as_interval_column(dtype)
         elif isinstance(dtype, (ListDtype, StructDtype)):
             if not col.dtype == dtype:
                 raise NotImplementedError(
                     f"Casting {self.dtype} columns not currently supported"
                 )
             return col
-        elif isinstance(dtype, IntervalDtype):
-            return col.as_interval_column(dtype)
         elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
             return col.as_decimal_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.datetime64):
-            return col.as_datetime_column(dtype, format=format)
+            return col.as_datetime_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.timedelta64):
-            return col.as_timedelta_column(dtype, format=format)
+            return col.as_timedelta_column(dtype)
         else:
             return col.as_numerical_column(dtype)
 
@@ -1250,12 +1248,6 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     ) -> Union[ColumnBase, ScalarLike]:
         raise NotImplementedError
 
-    def _minmax(self, skipna: Optional[bool] = None):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.minmax(result_col)
-        return result_col
-
     def _reduce(
         self,
         op: str,
@@ -1282,13 +1274,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
     def _process_for_reduction(
         self, skipna: Optional[bool] = None, min_count: int = 0
     ) -> Union[ColumnBase, ScalarLike]:
-        skipna = True if skipna is None else skipna
+        if skipna is None:
+            skipna = True
 
-        if skipna:
-            if self.has_nulls():
+        if self.has_nulls():
+            if skipna:
                 result_col = self.dropna()
-        else:
-            if self.has_nulls():
+            else:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         result_col = self
@@ -1704,52 +1696,6 @@ def build_categorical_column(
     return cast("cudf.core.column.CategoricalColumn", result)
 
 
-def build_interval_column(
-    left_col,
-    right_col,
-    mask=None,
-    size=None,
-    offset=0,
-    null_count=None,
-    closed="right",
-):
-    """
-    Build an IntervalColumn
-
-    Parameters
-    ----------
-    left_col : Column
-        Column of values representing the left of the interval
-    right_col : Column
-        Column of representing the right of the interval
-    mask : Buffer
-        Null mask
-    size : int, optional
-    offset : int, optional
-    closed : {"left", "right", "both", "neither"}, default "right"
-            Whether the intervals are closed on the left-side, right-side,
-            both or neither.
-    """
-    left = as_column(left_col)
-    right = as_column(right_col)
-    if closed not in {"left", "right", "both", "neither"}:
-        closed = "right"
-    if type(left_col) is not list:
-        dtype = IntervalDtype(left_col.dtype, closed)
-    else:
-        dtype = IntervalDtype("int64", closed)
-    size = len(left)
-    return build_column(
-        data=None,
-        dtype=dtype,
-        mask=mask,
-        size=size,
-        offset=offset,
-        null_count=null_count,
-        children=(left, right),
-    )
-
-
 def build_list_column(
     indices: ColumnBase,
     elements: ColumnBase,
@@ -1880,6 +1826,7 @@ def as_column(
         If None (default), treats NaN values in arbitrary as null if there is
         no mask passed along with it. If True, combines the mask and NaNs to
         form a new validity mask. If False, leaves NaN values as is.
+        Only applies when arbitrary is not a cudf object (Index, Series, Column).
     dtype : optional
         Optionally typecast the constructed Column to the given
         dtype.
@@ -1916,22 +1863,17 @@ def as_column(
                 f'i{cudf.get_option("default_integer_bitwidth")//8}'
             )
         if dtype is not None:
-            column = column.astype(dtype)
+            return column.astype(dtype)
         return column
-    elif isinstance(arbitrary, ColumnBase):
+    elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.BaseIndex)):
+        # Ignoring nan_as_null per the docstring
+        if isinstance(arbitrary, cudf.Series):
+            arbitrary = arbitrary._column
+        elif isinstance(arbitrary, cudf.BaseIndex):
+            arbitrary = arbitrary._values
         if dtype is not None:
             return arbitrary.astype(dtype)
-        else:
-            return arbitrary
-    elif isinstance(arbitrary, cudf.Series):
-        data = arbitrary._column
-        if dtype is not None:
-            data = data.astype(dtype)
-    elif isinstance(arbitrary, cudf.BaseIndex):
-        data = arbitrary._values
-        if dtype is not None:
-            data = data.astype(dtype)
-
+        return arbitrary
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         shape = desc["shape"]

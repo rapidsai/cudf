@@ -112,7 +112,6 @@ def test_basic_assert_series_equal(
     check_categorical,
     dtype,
 ):
-
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)
     p_right = pd.Series(rdata, name=rname, dtype=dtype)
 
