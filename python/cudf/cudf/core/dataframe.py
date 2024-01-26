@@ -3517,7 +3517,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if index:
             if (
-                any(type(item) == str for item in index.values())
+                any(isinstance(item, str) for item in index.values())
                 and type(self.index) != cudf.StringIndex
             ):
                 raise NotImplementedError(
@@ -5274,7 +5274,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if isinstance(dataframe, pd.DataFrame):
-
             if not dataframe.columns.is_unique:
                 raise ValueError("Duplicate column names are not allowed")
 
