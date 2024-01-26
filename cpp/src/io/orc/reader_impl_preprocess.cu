@@ -769,33 +769,11 @@ void reader::impl::query_stripe_compression_info()
     auto& columns_level = _selected_columns.levels[level];
     // Association between each ORC column and its cudf::column
     col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
-    std::vector<orc_column_meta> nested_cols;
 
-    // Get a list of column data types
-    std::vector<data_type> column_types;
+    size_type col_id{0};
     for (auto& col : columns_level) {
-      auto col_type = to_cudf_type(_metadata.get_col_type(col.id).kind,
-                                   _use_np_dtypes,
-                                   _timestamp_type.id(),
-                                   to_cudf_decimal_type(_decimal128_columns, _metadata, col.id));
-      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
-          col_type == type_id::DECIMAL128) {
-        // sign of the scale is changed since cuDF follows c++ libraries like CNL
-        // which uses negative scaling, but liborc and other libraries
-        // follow positive scaling.
-        auto const scale =
-          -static_cast<size_type>(_metadata.get_col_type(col.id).scale.value_or(0));
-        column_types.emplace_back(col_type, scale);
-      } else {
-        column_types.emplace_back(col_type);
-      }
-
       // Map each ORC column to its column
-      col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
-      if (col_type == type_id::LIST or col_type == type_id::STRUCT) {
-        nested_cols.emplace_back(col);
-      }
+      col_meta.orc_col_map[level][col.id] = col_id++;
     }
 
     // Get the total number of stripes across all input files.
@@ -810,18 +788,6 @@ void reader::impl::query_stripe_compression_info()
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
       total_num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
-
-    const bool use_index =
-      _use_index &&
-      // Do stripes have row group index
-      _metadata.is_row_grp_idx_present() &&
-      // Only use if we don't have much work with complete columns & stripes
-      // TODO: Consider nrows, gpu, and tune the threshold
-      (rows_to_read > _metadata.get_row_index_stride() && !(_metadata.get_row_index_stride() & 7) &&
-       _metadata.get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
-      // Only use if first row is aligned to a stripe boundary
-      // TODO: Fix logic to handle unaligned rows
-      (rows_to_skip == 0);
 
     // Logically view streams as columns
     std::vector<orc_stream_info> stream_info;
