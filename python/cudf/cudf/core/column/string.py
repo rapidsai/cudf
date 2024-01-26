@@ -5584,6 +5584,20 @@ class StringColumn(column.ColumnBase):
                 ]
         return self._data
 
+    def all(self, skipna: bool = True) -> bool:
+        # The skipna argument is only used for numerical columns.
+        # If all entries are null the result is True, including when the column
+        # is empty.
+
+        raise NotImplementedError("`all` not implemented for `StringColumn`")
+
+    def any(self, skipna: bool = True) -> bool:
+        # The skipna argument is only used for numerical columns.
+        # If all entries are null the result is True, including when the column
+        # is empty.
+
+        raise NotImplementedError("`any` not implemented for `StringColumn`")
+
     def data_array_view(
         self, *, mode="write"
     ) -> cuda.devicearray.DeviceNDArray:

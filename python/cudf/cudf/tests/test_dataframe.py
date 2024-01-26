@@ -4173,15 +4173,7 @@ def test_dataframe_round_dict_decimal_validation():
         [None, None],
         [[0, 5], [1, 6], [2, 7], [3, 8], [4, 9]],
         [[1, True], [2, False], [3, False]],
-        pytest.param(
-            [["a", True], ["b", False], ["c", False]],
-            marks=[
-                pytest_xfail(
-                    reason="NotImplementedError: all does not "
-                    "support columns of object dtype."
-                )
-            ],
-        ),
+        [["a", True], ["b", False], ["c", False]],
     ],
 )
 def test_all(data):
@@ -4192,6 +4184,9 @@ def test_all(data):
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data=data, dtype=dtype).replace([None], False)
         gdata = cudf.Series.from_pandas(pdata)
+        got = gdata.all()
+        expected = pdata.all()
+        assert_eq(got, expected)
     else:
         pdata = pd.DataFrame(data, columns=["a", "b"], dtype=dtype).replace(
             [None], False
@@ -4203,10 +4198,10 @@ def test_all(data):
             got = gdata.all(bool_only=True)
             expected = pdata.all(bool_only=True)
             assert_eq(got, expected)
-
-    got = gdata.all()
-    expected = pdata.all()
-    assert_eq(got, expected)
+        else:
+            got = gdata.all()
+            expected = pdata.all()
+            assert_eq(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -4226,21 +4221,13 @@ def test_all(data):
         [None, None],
         [[0, 5], [1, 6], [2, 7], [3, 8], [4, 9]],
         [[1, True], [2, False], [3, False]],
-        pytest.param(
-            [["a", True], ["b", False], ["c", False]],
-            marks=[
-                pytest_xfail(
-                    reason="NotImplementedError: any does not "
-                    "support columns of object dtype."
-                )
-            ],
-        ),
+        [["a", True], ["b", False], ["c", False]],
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1])
 def test_any(data, axis):
     # Provide a dtype when data is empty to avoid future pandas changes.
-    dtype = None if data else float
+    dtype = float if all(x is None for x in data) or len(data) < 1 else None
     if np.array(data).ndim <= 1:
         pdata = pd.Series(data=data, dtype=dtype)
         gdata = cudf.Series(data=data, dtype=dtype)
@@ -4261,10 +4248,10 @@ def test_any(data, axis):
             got = gdata.any(bool_only=True)
             expected = pdata.any(bool_only=True)
             assert_eq(got, expected)
-
-        got = gdata.any(axis=axis)
-        expected = pdata.any(axis=axis)
-        assert_eq(got, expected)
+        else:
+            got = gdata.any(axis=axis)
+            expected = pdata.any(axis=axis)
+            assert_eq(got, expected)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -10197,7 +10184,7 @@ def test_empty_numeric_only(data):
     pdf = gdf.to_pandas()
     expected = pdf.prod(numeric_only=True)
     actual = gdf.prod(numeric_only=True)
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, check_dtype=True)
 
 
 @pytest.fixture(params=[0, 10], ids=["empty", "10"])

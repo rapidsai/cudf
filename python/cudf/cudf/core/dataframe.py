@@ -1038,7 +1038,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 empty_column = functools.partial(
                     cudf.core.column.column_empty,
                     row_count=(0 if index is None else len(index)),
-                    dtype=None,
                     masked=index is not None,
                 )
 
@@ -6115,7 +6114,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 return Series(
                     index=self._data.to_pandas_index()[:0]
                     if axis == 0
-                    else source.index
+                    else source.index,
+                    dtype="float64",
                 )
         if axis in {0, 2}:
             if axis == 2 and op in ("kurtosis", "kurt", "skew"):
