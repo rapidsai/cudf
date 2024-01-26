@@ -1265,12 +1265,7 @@ def test_index_basic(data, dtype, name):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_integer_index_apis(data, name, dtype):
-    if PANDAS_GE_200:
-        pindex = pd.Index(data, dtype=dtype, name=name)
-    else:
-        with pytest.warns(FutureWarning):
-            pindex = pd.Int64Index(data, dtype=dtype, name=name)
-
+    pindex = pd.Index(data, dtype=dtype, name=name)
     gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
@@ -1281,12 +1276,7 @@ def test_integer_index_apis(data, name, dtype):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", UNSIGNED_TYPES)
 def test_unsigned_integer_index_apis(data, name, dtype):
-    if PANDAS_GE_200:
-        pindex = pd.Index(data, dtype=dtype, name=name)
-    else:
-        with pytest.warns(FutureWarning):
-            pindex = pd.UInt64Index(data, dtype=dtype, name=name)
-
+    pindex = pd.Index(data, dtype=dtype, name=name)
     gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
@@ -1297,12 +1287,7 @@ def test_unsigned_integer_index_apis(data, name, dtype):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_float_index_apis(data, name, dtype):
-    if PANDAS_GE_200:
-        pindex = pd.Index(data, dtype=dtype, name=name)
-    else:
-        with pytest.warns(FutureWarning):
-            pindex = pd.Float64Index(data, dtype=dtype, name=name)
-
+    pindex = pd.Index(data, dtype=dtype, name=name)
     gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)

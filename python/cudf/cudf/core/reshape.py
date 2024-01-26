@@ -1,11 +1,11 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
 import cupy
-import warnings
 import numpy as np
 import pandas as pd
 
@@ -35,7 +35,7 @@ def _align_objs(objs, how="outer", sort=None):
     A list of reindexed and aligned objects
     ready for concatenation
     """
-    # Check if multiindex then check if indexes match. GenericIndex
+    # Check if multiindex then check if indexes match. Index
     # returns ndarray tuple of bools requiring additional filter.
     # Then check for duplicate index value.
     i_objs = iter(objs)

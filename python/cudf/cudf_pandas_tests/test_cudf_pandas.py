@@ -1017,12 +1017,6 @@ def test_subclass_series():
         xpd.PeriodIndex,
         xpd.MultiIndex,
         xpd.IntervalIndex,
-        xpd.UInt64Index,
-        xpd.Int64Index,
-        xpd.Float64Index,
-        xpd.core.indexes.numeric.UInt64Index,
-        xpd.core.indexes.numeric.Int64Index,
-        xpd.core.indexes.numeric.Float64Index,
     ],
 )
 def test_index_subclass(index_type):
@@ -1030,22 +1024,6 @@ def test_index_subclass(index_type):
     # from Index
     assert issubclass(index_type, xpd.Index)
     assert not issubclass(xpd.Index, index_type)
-
-
-def test_index_internal_subclass():
-    # test that proxy index types that are not related by inheritance
-    # still appear to be so if the underlying slow types are related
-    # by inheritance:
-    assert issubclass(
-        xpd.Int64Index,
-        xpd.core.indexes.numeric.NumericIndex,
-    ) == issubclass(
-        pd.Int64Index,
-        pd.core.indexes.numeric.NumericIndex,
-    )
-    assert isinstance(
-        xpd.Index([1, 2, 3]), xpd.core.indexes.numeric.NumericIndex
-    ) == isinstance(pd.Index([1, 2, 3]), pd.core.indexes.numeric.NumericIndex)
 
 
 def test_np_array_of_timestamps():
@@ -1212,15 +1190,6 @@ def test_read_sas_context():
     with xpd.read_sas(path, format="sas7bdat", iterator=True) as reader:
         df = reader.read()
     assert isinstance(df, xpd.DataFrame)
-
-
-@pytest.mark.parametrize(
-    "idx_obj", ["Float64Index", "Int64Index", "UInt64Index"]
-)
-def test_pandas_module_getattr_objects(idx_obj):
-    # Objects that are behind pandas.__getattr__ (version 1.5 specific)
-    idx = getattr(xpd, idx_obj)([1, 2, 3])
-    assert isinstance(idx, xpd.Index)
 
 
 def test_concat_fast():

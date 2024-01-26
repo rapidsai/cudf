@@ -346,7 +346,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             with pytest.warns(UserWarning):
                 df.scatter_by_map("a", map_size=1, debug=True)  # Bad map_size
 
-    # Test GenericIndex
+    # Test Index
     df2 = df.set_index("c")
     generic_result = df2.scatter_by_map("b", map_size, keep_index=keep)
     _check_scatter_by_map(generic_result, df2["b"])
