@@ -269,25 +269,6 @@ def test_rename_categories():
     tm.assert_series_equal(psr, sr)
 
 
-def test_rename_categories_inplace():
-    psr = pd.Series([1, 2, 3], dtype="category")
-    sr = xpd.Series([1, 2, 3], dtype="category")
-    with pytest.warns(FutureWarning):
-        psr.cat.rename_categories({1: 5}, inplace=True)
-        sr.cat.rename_categories({1: 5}, inplace=True)
-    tm.assert_series_equal(psr, sr)
-
-
-def test_rename_categories_inplace_after_copying_parent():
-    s = xpd.Series([1, 2, 3], dtype="category")
-    # cudf does not define "rename_categories",
-    # so this copies `s` from device to host:
-    rename_categories = s.cat.rename_categories
-    _ = len(s)  # trigger a copy of `s` from host to device:
-    with pytest.warns(FutureWarning):
-        rename_categories([5, 2, 3], inplace=True)
-    assert s.cat.categories.tolist() == [5, 2, 3]
-
 
 def test_column_rename(dataframe):
     pdf, df = dataframe
@@ -663,8 +644,7 @@ def test_rolling_win_type():
     pdf = pd.DataFrame(range(5))
     df = xpd.DataFrame(range(5))
     result = df.rolling(2, win_type="boxcar").mean()
-    with pytest.warns(DeprecationWarning):
-        expected = pdf.rolling(2, win_type="boxcar").mean()
+    expected = pdf.rolling(2, win_type="boxcar").mean()
     tm.assert_equal(result, expected)
 
 
@@ -1058,7 +1038,7 @@ def test_np_array_of_timestamps():
         # Other types
         xpd.tseries.offsets.BDay(5),
         xpd.Timestamp("2001-01-01"),
-        xpd.Timestamp("2001-01-01", freq="D"),
+        xpd.Timestamp("2001-01-01", tz="UTC"),
         xpd.Timedelta("1 days"),
         xpd.Timedelta(1, "D"),
     ],
