@@ -30,21 +30,31 @@
 
 namespace cudf::io::orc::detail {
 
+using stream_index = struct {
+  std::size_t stripe_idx;
+  std::size_t level;
+  std::size_t col_idx;
+  std::size_t stream_idx;
+};
+using stream_comp_info = struct {
+  std::size_t num_compressed_blocks;
+  std::size_t num_uncompressed_blocks;
+  std::size_t total_decomp_size;
+};
+struct stream_index_hash {
+  std::size_t operator()(stream_index const& index) const
+  {
+    auto const hasher = std::hash<size_t>{};
+    return hasher(index.stripe_idx) ^ hasher(index.level) ^ hasher(index.col_idx) ^
+           hasher(index.stream_idx);
+  }
+};
+
 /**
  * @brief Struct to store file-level data that remains constant for all chunks being read.
  */
 struct file_intermediate_data {
-  using chunk_index     = std::tuple<size_t, size_t, size_t>;
-  using chunk_comp_info = std::tuple<size_t, size_t, size_t>;
-
-  struct index_hash {
-    std::size_t operator()(chunk_index const& index) const
-    {
-      return std::hash<size_t>()(std::get<0>(index)) ^ std::hash<size_t>()(std::get<1>(index)) ^
-             std::hash<size_t>()(std::get<2>(index));
-    }
-  };
-  std::unordered_map<chunk_index, chunk_comp_info, index_hash> compinfo_map;
+  std::unordered_map<stream_index, stream_comp_info, stream_index_hash> compinfo_map;
   bool compinfo_ready{false};
 
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
