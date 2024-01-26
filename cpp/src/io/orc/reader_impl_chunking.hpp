@@ -45,6 +45,7 @@ struct file_intermediate_data {
     }
   };
   std::unordered_map<chunk_index, chunk_comp_info, index_hash> compinfo_map;
+  bool compinfo_ready{false};
 
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
