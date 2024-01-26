@@ -1368,7 +1368,6 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
         CUDF_FAIL("Compression error: " + reason.value());
       }
       nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-
       break;
     }
     case Compression::LZ4_RAW: {
@@ -1377,7 +1376,6 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
         CUDF_FAIL("Compression error: " + reason.value());
       }
       nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
-
       break;
     }
     case Compression::UNCOMPRESSED: break;
