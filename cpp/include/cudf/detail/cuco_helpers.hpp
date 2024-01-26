@@ -30,10 +30,15 @@ namespace cudf::detail {
  */
 class cuco_allocator
   : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>> {
-  using default_allocator = rmm::mr::polymorphic_allocator<char>;
-  using base_type         = rmm::mr::stream_allocator_adaptor<default_allocator>;
+  using default_allocator =
+    rmm::mr::polymorphic_allocator<char>;  ///< Default stream-ordered allocator type
+  using base_type =
+    rmm::mr::stream_allocator_adaptor<default_allocator>;  ///< The base allocator adaptor type
 
  public:
+  /**
+   * @brief Constructs the adaptor with the given `stream`
+   */
   cuco_allocator(rmm::cuda_stream_view stream) : base_type{default_allocator{}, stream} {}
 };
 
