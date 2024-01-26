@@ -57,33 +57,27 @@ struct orc_stream_info {
   explicit orc_stream_info(uint64_t offset_,
                            std::size_t dst_pos_,
                            uint32_t length_,
-                           uint32_t stripe_idx_)
-    : offset(offset_), dst_pos(dst_pos_), length(length_), stripe_idx(stripe_idx_)
+                           uint32_t stripe_idx_,
+                           std::size_t level_)
+    : offset(offset_), dst_pos(dst_pos_), length(length_), stripe_idx(stripe_idx_), level(level_)
   {
   }
   uint64_t offset;      // offset in file
   std::size_t dst_pos;  // offset in memory relative to start of compressed stripe data
   std::size_t length;   // length in file
   uint32_t stripe_idx;  // stripe processing index, not stripe index in source
-};
-
-struct stream_comp_info {
-  orc_stream_info* stream_info;
-  gpu::CompressedStreamInfo* comp_info;
+  std::size_t level;    // TODO
 };
 
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
-std::size_t gather_stream_info(
-  std::size_t stripe_index,
-  std::size_t level,
-  orc::StripeInformation const* stripeinfo,
-  orc::StripeFooter const* stripefooter,
-  host_span<int const> orc2gdf,
-  std::vector<orc_stream_info>& stream_info,
-  std::unordered_map<stripe_level_index, stream_comp_info, stripe_level_hash, stripe_level_equal>&
-    stream_compinfo_map)
+std::size_t gather_stream_info(std::size_t stripe_index,
+                               std::size_t level,
+                               orc::StripeInformation const* stripeinfo,
+                               orc::StripeFooter const* stripefooter,
+                               host_span<int const> orc2gdf,
+                               std::vector<orc_stream_info>& stream_info)
 {
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -99,9 +93,7 @@ std::size_t gather_stream_info(
 
     if (col_order != -1) {
       stream_info.emplace_back(
-        stripeinfo->offset + src_offset, dst_offset, stream.length, stripe_index);
-      stream_compinfo_map[stripe_level_index{stripe_index, level}] =
-        stream_comp_info{&stream_info.back(), nullptr};
+        stripeinfo->offset + src_offset, dst_offset, stream.length, stripe_index, level);
       dst_offset += stream.length;
     }
     src_offset += stream.length;
@@ -115,6 +107,7 @@ std::size_t gather_stream_info(
  */
 std::size_t gather_stream_info_and_update_chunks(
   std::size_t stripe_index,
+  std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
   host_span<int const> orc2gdf,
@@ -188,7 +181,7 @@ std::size_t gather_stream_info_and_update_chunks(
         }
       }
       stream_info.emplace_back(
-        stripeinfo->offset + src_offset, dst_offset, stream.length, stripe_index);
+        stripeinfo->offset + src_offset, dst_offset, stream.length, stripe_index, level);
       dst_offset += stream.length;
     }
     src_offset += stream.length;
@@ -773,7 +766,10 @@ void reader::impl::query_stripe_compression_info()
   auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
   lvl_stripe_data.resize(_selected_columns.num_levels());
 
-  std::unordered_map<stripe_level_index, stream_comp_info, stripe_level_hash, stripe_level_equal>
+  std::unordered_map<stripe_level_index,
+                     gpu::CompressedStreamInfo*,
+                     stripe_level_hash,
+                     stripe_level_equal>
     stream_compinfo_map;
 
   // Iterates through levels of nested columns, child column will be one level down
@@ -819,13 +815,8 @@ void reader::impl::query_stripe_compression_info()
         auto const stripe_footer = stripe.second;
 
         auto stream_count          = stream_info.size();
-        auto const total_data_size = gather_stream_info(stripe_idx,
-                                                        level,
-                                                        stripe_info,
-                                                        stripe_footer,
-                                                        col_meta.orc_col_map[level],
-                                                        stream_info,
-                                                        stream_compinfo_map);
+        auto const total_data_size = gather_stream_info(
+          stripe_idx, level, stripe_info, stripe_footer, col_meta.orc_col_map[level], stream_info);
 
         auto const is_stripe_data_empty = total_data_size == 0;
         CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
@@ -882,19 +873,14 @@ void reader::impl::query_stripe_compression_info()
       cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
         0, stream_info.size(), _stream);
 
-      for (auto& [stripe_level, stripe_level_info] : stream_compinfo_map) {
-        auto const& info = *(stripe_level_info.stream_info);
+      for (auto const& info : stream_info) {
         compinfo.push_back(gpu::CompressedStreamInfo(
-          static_cast<uint8_t const*>(stripe_data[stripe_level.stripe_idx].data()) + info.dst_pos,
+          static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
           info.length));
-        stripe_level_info.comp_info = &compinfo[compinfo.size() - 1];
+        stream_compinfo_map[stripe_level_index{info.stripe_idx, info.level}] =
+          &compinfo[compinfo.size() - 1];
       }
 
-      // for (auto const& info : stream_info) {
-      //   compinfo.push_back(gpu::CompressedStreamInfo(
-      //     static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
-      //     info.length));
-      // }
       compinfo.host_to_device_async(_stream);
 
       gpu::ParseCompressedStripeData(compinfo.device_ptr(),
@@ -905,15 +891,14 @@ void reader::impl::query_stripe_compression_info()
       compinfo.device_to_host_sync(_stream);
 
       auto& compinfo_map = _file_itm_data->compinfo_map;
-      for (auto& [stripe_level, stripe_level_info] : stream_compinfo_map) {
+      for (auto& [stripe_level, stream_compinfo] : stream_compinfo_map) {
         if (compinfo_map.find(stripe_level) == compinfo_map.end()) {
           compinfo_map[stripe_level] = stripe_level_comp_info{0, 0};
         }
-        auto const& stream_compinfo = *stripe_level_info.comp_info;
-        compinfo_map[stripe_level].num_compressed_blocks += stream_compinfo.num_compressed_blocks;
+        compinfo_map[stripe_level].num_compressed_blocks += stream_compinfo->num_compressed_blocks;
         compinfo_map[stripe_level].num_uncompressed_blocks +=
-          stream_compinfo.num_uncompressed_blocks;
-        compinfo_map[stripe_level].total_decomp_size += stream_compinfo.max_uncompressed_size;
+          stream_compinfo->num_uncompressed_blocks;
+        compinfo_map[stripe_level].total_decomp_size += stream_compinfo->max_uncompressed_size;
       }
 
     } else {
@@ -1069,6 +1054,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         auto stream_count = stream_info.size();
         auto const total_data_size =
           gather_stream_info_and_update_chunks(stripe_idx,
+                                               level,
                                                stripe_info,
                                                stripe_footer,
                                                col_meta.orc_col_map[level],
