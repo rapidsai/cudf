@@ -415,8 +415,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 {
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = cudf::detail::offsetalator_factory::make_input_iterator(
-    strings.offsets(), strings.offset());  // strings.offsets_begin();
+  auto const d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(strings.offsets(), strings.offset());
   auto const d_in_chars  = strings.chars_begin(stream);
   auto const chars_bytes = chars_end - chars_start;
   auto const target_size = d_target.size_bytes();
@@ -569,14 +569,13 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
-  auto const chars_start   = (strings.offset() == 0) ? 0L
-                                                     : cudf::strings::detail::get_offset_value(
-                                                       strings.offsets(), strings.offset(), stream);
-  auto const chars_end     = (offset_count == strings.offsets().size())
-                               ? static_cast<int64_t>(strings.chars_size(stream))
-                               : cudf::strings::detail::get_offset_value(
-                               strings.offsets(), strings.offset() + strings_count, stream);
-  auto const chars_bytes   = chars_end - chars_start;
+  auto const chars_start =
+    (strings.offset() == 0) ? 0L : get_offset_value(strings.offsets(), strings.offset(), stream);
+  auto const chars_end =
+    (offset_count == strings.offsets().size())
+      ? static_cast<int64_t>(strings.chars_size(stream))
+      : get_offset_value(strings.offsets(), strings.offset() + strings_count, stream);
+  auto const chars_bytes = chars_end - chars_start;
 
   auto const avg_bytes_per_row = chars_bytes / std::max(strings_count - strings.null_count(), 1);
   return (avg_bytes_per_row < BYTES_PER_VALID_ROW_THRESHOLD)
@@ -607,13 +606,12 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets_begin();
-  auto const chars_start   = (strings.offset() == 0) ? 0L
-                                                     : cudf::strings::detail::get_offset_value(
-                                                       strings.offsets(), strings.offset(), stream);
-  auto const chars_end     = (offset_count == strings.offsets().size())
-                               ? static_cast<int64_t>(strings.chars_size(stream))
-                               : cudf::strings::detail::get_offset_value(
-                               strings.offsets(), strings.offset() + strings_count, stream);
+  auto const chars_start =
+    (strings.offset() == 0) ? 0L : get_offset_value(strings.offsets(), strings.offset(), stream);
+  auto const chars_end =
+    (offset_count == strings.offsets().size())
+      ? static_cast<int64_t>(strings.chars_size(stream))
+      : get_offset_value(strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(
     strings, chars_start, chars_end, d_target, d_repl, maxrepl, stream, mr);
 }
