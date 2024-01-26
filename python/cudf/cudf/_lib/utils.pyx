@@ -85,7 +85,8 @@ cpdef generate_pandas_metadata(table, index):
 
     # Columns
     for name, col in table._data.items():
-        if not isinstance(name, str) and cudf.get_option("mode.pandas_compatible"):
+        if cudf.get_option("mode.pandas_compatible"):
+            # in pandas-compat mode, non-string column names are stringified.
             col_names.append(str(name))
         else:
             col_names.append(name)
