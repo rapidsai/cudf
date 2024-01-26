@@ -2682,9 +2682,9 @@ def test_parquet_writer_decimal(decimal_type, data):
     assert_eq(gdf["dec_val"].to_pandas(), got["dec_val"])
 
 
-def test_parquet_writer_column_validation(tmpdir):
-    cudf_parquet = tmpdir / "cudf.parquet"
-    pandas_parquet = tmpdir / "pandas.parquet"
+def test_parquet_writer_column_validation():
+    cudf_parquet = BytesIO()
+    pandas_parquet = BytesIO()
     df = cudf.DataFrame({1: [1, 2, 3], "a": ["a", "b", "c"]})
     pdf = df.to_pandas()
 
