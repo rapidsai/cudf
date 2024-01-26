@@ -1954,7 +1954,7 @@ def test_writer_lz4():
     gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
 
     buffer = BytesIO()
-    gdf.to_orc(buffer, compression="LZ4")
+    gdf.to_orc(buffer, compression="lz4")
 
     got = pd.read_orc(buffer)
     assert_eq(gdf, got)
