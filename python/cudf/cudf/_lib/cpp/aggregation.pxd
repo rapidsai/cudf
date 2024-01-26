@@ -95,8 +95,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_max_aggregation[T]() except +
 
-    cdef unique_ptr[T] make_count_aggregation[T]() except +
-
     cdef unique_ptr[T] make_count_aggregation[T](null_policy) except +
 
     cdef unique_ptr[T] make_any_aggregation[T]() except +
@@ -122,10 +120,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[T] make_argmin_aggregation[T]() except +
 
     cdef unique_ptr[T] make_nunique_aggregation[T]() except +
-
-    cdef unique_ptr[T] make_nth_element_aggregation[T](
-        size_type n
-    ) except +
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](
         size_type n,

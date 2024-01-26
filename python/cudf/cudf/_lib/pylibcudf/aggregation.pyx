@@ -1,10 +1,25 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 # Have to alias this so that the Pythonic name gets capitalized
-from cudf._lib.cpp.aggregation cimport Kind as kind_t
+# TODO: Expose the enums to Python
+from cudf._lib.cpp.aggregation cimport (
+    Kind as kind_t,
+    aggregation,
+    correlation_type,
+    rank_method,
+    rank_percentage,
+)
+from cudf._lib.cpp.types cimport (
+    interpolation,
+    null_order,
+    null_policy,
+    order,
+    size_type,
+)
 
 
 # TODO: If/when https://github.com/cython/cython/issues/1271 is resolved, we
@@ -34,35 +49,340 @@ cdef class Aggregation:
         return dereference(self.c_ptr).kind
 
 
-cdef class SumAggregation(Aggregation):
+# The below aggregation types are effectively mixins used to implement specific
+# types of aggregations. They function like mixins when combined with the
+# algorithm-specific classes below. The factory methods all construct an object
+# of type cls but save that to a variable of the base class Aggregation,
+# allowing the logic of the function to be generic regardless of which concrete
+# algorithm-type the mixin is mixed into. Since the methods are pure Python,
+# the end result is an object that Python will dynamically resolve to the
+# correct type at the call site.
+class SumAggregation(Aggregation):
     @classmethod
     def sum(cls):
-        # We construct using cls but cdef as the base class because Cython
-        # objects are effectively pointers so this will polymorphically store
-        # the derived object. This allows us to construct the desired derived
-        # object without needing to override this method in the base class.
         cdef Aggregation out = cls.__new__(cls)
-        cdef unique_ptr[rolling_aggregation] ptr = move(
-            cpp_aggregation.make_sum_aggregation[rolling_aggregation]())
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_sum_aggregation[aggregation]())
         out.c_ptr = ptr.release()
         return out
 
 
-cdef class RollingAggregation(SumAggregation):
+class ProductAggregation(Aggregation):
+    @classmethod
+    def product(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_product_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class MinAggregation(Aggregation):
+    @classmethod
+    def min(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_min_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class MaxAggregation(Aggregation):
+    @classmethod
+    def max(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_max_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class CountAggregation(Aggregation):
+    @classmethod
+    def count(cls, null_policy null_handling):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_count_aggregation[aggregation](null_handling))
+        out.c_ptr = ptr.release()
+        return out
+
+
+class AnyAggregation(Aggregation):
+    @classmethod
+    def any(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_any_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class AllAggregation(Aggregation):
+    @classmethod
+    def all(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_any_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class SumOfSquaresAggregation(Aggregation):
+    @classmethod
+    def sum_of_squares(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_product_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class MeanAggregation(Aggregation):
+    @classmethod
+    def mean(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_mean_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class VarianceAggregation(Aggregation):
+    @classmethod
+    def variance(cls, size_type ddof):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_variance_aggregation[aggregation](ddof))
+        out.c_ptr = ptr.release()
+        return out
+
+
+class StdAggregation(Aggregation):
+    @classmethod
+    def std(cls, size_type ddof):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_std_aggregation[aggregation](ddof))
+        out.c_ptr = ptr.release()
+        return out
+
+
+class MedianAggregation(Aggregation):
+    @classmethod
+    def median(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_median_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class QuantileAggregation(Aggregation):
+    @classmethod
+    def quantile(cls, list quantiles, interpolation interp):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_quantile_aggregation[aggregation](quantiles, interp))
+        out.c_ptr = ptr.release()
+        return out
+
+
+class ArgmaxAggregation(Aggregation):
+    @classmethod
+    def argmax(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_argmax_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class ArgminAggregation(Aggregation):
+    @classmethod
+    def argmin(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_argmin_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class NuniqueAggregation(Aggregation):
+    @classmethod
+    def nunique(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_nunique_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class NthElementAggregation(Aggregation):
+    @classmethod
+    def nth_element(cls, size_type n, null_policy null_handling):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_nth_element_aggregation[aggregation](n, null_handling))
+        out.c_ptr = ptr.release()
+        return out
+
+
+class CollectListAggregation(Aggregation):
+    @classmethod
+    def collect_list(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_collect_list_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+class CollectSetAggregation(Aggregation):
+    @classmethod
+    def collect_set(cls):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_collect_set_aggregation[aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+# class UdfAggregation(Aggregation):
+#     @classmethod
+#     def udf(
+#         cls,
+#         udf_type type,
+#         string user_defined_aggregator,
+#         data_type output_type
+#     ):
+
+
+class CorrelationAggregation(Aggregation):
+    @classmethod
+    def correlation(cls, correlation_type type, size_type min_periods):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_correlation_aggregation[aggregation](
+                type, min_periods
+            )
+        )
+        out.c_ptr = ptr.release()
+        return out
+
+
+class CovarianceAggregation(Aggregation):
+    @classmethod
+    def covariance(cls, size_type min_periods, size_type ddof):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_covariance_aggregation[aggregation](
+                min_periods, ddof
+            )
+        )
+        out.c_ptr = ptr.release()
+        return out
+
+
+class RankAggregation(Aggregation):
+    @classmethod
+    def rank(
+            cls,
+            rank_method method,
+            order column_order,
+            null_policy null_handling,
+            null_order null_precedence,
+            rank_percentage percentage
+    ):
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[aggregation] ptr = move(
+            cpp_aggregation.make_rank_aggregation[aggregation](
+                method, column_order, null_handling, null_precedence, percentage
+            )
+        )
+        out.c_ptr = ptr.release()
+        return out
+
+
+# The following are the concrete aggregation types corresponding to aggregation
+# algorithms.
+class RollingAggregation(
+    SumAggregation,
+    MinAggregation,
+    MaxAggregation,
+    CountAggregation,
+    MeanAggregation,
+    StdAggregation,
+    VarianceAggregation,
+    ArgmaxAggregation,
+    ArgminAggregation,
+    NthElementAggregation,
+    RankAggregation,
+    CollectListAggregation,
+    CollectSetAggregation,
+):
     pass
 
 
-cdef class GroupbyAggregation(Aggregation):
+class GroupbyAggregation(
+    SumAggregation,
+    ProductAggregation,
+    MinAggregation,
+    MaxAggregation,
+    CountAggregation,
+    SumOfSquaresAggregation,
+    MeanAggregation,
+    StdAggregation,
+    VarianceAggregation,
+    MedianAggregation,
+    QuantileAggregation,
+    ArgmaxAggregation,
+    ArgminAggregation,
+    NuniqueAggregation,
+    NthElementAggregation,
+    CollectListAggregation,
+    CollectSetAggregation,
+    CovarianceAggregation,
+    CorrelationAggregation,
+):
     pass
 
 
-cdef class GroupbyScanAggregation(Aggregation):
+class GroupbyScanAggregation(
+    SumAggregation,
+    MinAggregation,
+    MaxAggregation,
+    CountAggregation,
+    RankAggregation,
+):
     pass
 
 
-cdef class ReduceAggregation(Aggregation):
+class ReduceAggregation(
+    SumAggregation,
+    ProductAggregation,
+    MinAggregation,
+    MaxAggregation,
+    AnyAggregation,
+    AllAggregation,
+    SumOfSquaresAggregation,
+    MeanAggregation,
+    StdAggregation,
+    VarianceAggregation,
+    MedianAggregation,
+    QuantileAggregation,
+    NuniqueAggregation,
+    NthElementAggregation,
+    CollectListAggregation,
+    CollectSetAggregation,
+):
     pass
 
 
-cdef class ScanAggregation(Aggregation):
+class ScanAggregation(
+    SumAggregation,
+    ProductAggregation,
+    MinAggregation,
+    MaxAggregation,
+    RankAggregation,
+):
     pass
