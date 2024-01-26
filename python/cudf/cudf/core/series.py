@@ -594,7 +594,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         copy=False,
         nan_as_null=True,
     ):
-
         index_from_data = None
         name_from_data = None
         if data is None:
@@ -2317,8 +2316,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return obj
 
     @_cudf_nvtx_annotate
-    def replace(self, to_replace=None, value=None, *args, **kwargs):
-        if is_dict_like(to_replace) and value is not None:
+    def replace(self, to_replace=None, value=no_default, *args, **kwargs):
+        if is_dict_like(to_replace) and value not in {None, no_default}:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
                 "value"
