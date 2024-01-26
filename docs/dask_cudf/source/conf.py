@@ -15,13 +15,13 @@ from packaging.version import Version
 import dask_cudf
 
 
-CUDF_VERSION = Version(dask_cudf.__version__)
+DASK_CUDF_VERSION = Version(dask_cudf.__version__)
 
 project = "dask-cudf"
 copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = f"{CUDF_VERSION.major:02}.{CUDF_VERSION.minor:02}"
-release = f"{CUDF_VERSION.major:02}.{CUDF_VERSION.minor:02}.{CUDF_VERSION.micro:02}"
+version = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}"
+release = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}.{DASK_CUDF_VERSION.micro:02}"
 
 language = "en"
 
