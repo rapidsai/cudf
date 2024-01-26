@@ -23,6 +23,20 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
+# Notes:
+# - We use raw pointers because Cython does not understand converting between
+#   compatible unique_ptr types
+# - We invert the inheritance hierarchy from the C++ side. In C++, the
+#   operation classes inherit from the algorithm classes, which are effectively
+#   used as tags to determine which operations are supported. This pattern is
+#   useful in C++ because it provides compile-time checks on what can be
+#   constructed. In Python we cannot leverage this information though since we
+#   work with a precompiled libcudf library so the symbols are fully
+#   predetermined and the template definitions are not available. Moreover,
+#   Cython's knowledge of templating is insufficient. Therefore, we have to
+#   manage the set of supported operations by algorithm. The inverted hierarchy
+#   and use of mixins is the cleanest approach for doing that.
+
 
 cdef class Aggregation:
     """A wrapper for aggregations.
@@ -148,8 +162,7 @@ class MeanAggregation(Aggregation):
     @classmethod
     def mean(cls):
         return _create_nullary_agg(
-            cls,
-            cpp_aggregation.make_mean_aggregation[aggregation],
+            cls, cpp_aggregation.make_mean_aggregation[aggregation],
         )
 
 
