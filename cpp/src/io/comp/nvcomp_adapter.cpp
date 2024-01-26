@@ -528,7 +528,12 @@ std::optional<std::string> is_compression_disabled_impl(compression_type compres
       }
       return std::nullopt;
     }
-    case compression_type::LZ4: return std::nullopt;
+    case compression_type::LZ4:
+      if (not params.are_stable_integrations_enabled) {
+        return "LZ4 compression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
+               "environment variable.";
+      }
+      return std::nullopt;
     default: return "Unsupported compression type";
   }
   return "Unsupported compression type";
