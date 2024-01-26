@@ -5338,7 +5338,7 @@ def _get_replacement_values_for_columns(
                 "value argument must be scalar, list-like or Series"
             )
     elif _is_series(to_replace):
-        if value in {None, no_default}:
+        if value is None or value is no_default:
             to_replace_columns = {
                 col: as_column(to_replace.index) for col in columns_dtype_map
             }
@@ -5369,7 +5369,7 @@ def _get_replacement_values_for_columns(
                 "value"
             )
     elif is_dict_like(to_replace):
-        if value in {None, no_default}:
+        if value is None or value is no_default:
             to_replace_columns = {
                 col: list(to_replace.keys()) for col in columns_dtype_map
             }
