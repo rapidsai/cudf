@@ -581,28 +581,28 @@ def test_min_count_ops(data, ops, skipna, min_count):
 
 
 @pytest.mark.parametrize(
-    "gsr",
+    "data1",
     [
-        cudf.Series([1, 2, 3, 4], dtype="datetime64[ns]"),
-        cudf.Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
+        [1, 2, 3, 4],
+        [10, 1, 3, 5],
     ],
 )
-def test_cov_corr_invalid_dtypes(gsr):
-    psr = gsr.to_pandas()
+@pytest.mark.parametrize(
+    "data2",
+    [
+        [1, 2, 3, 4],
+        [10, 1, 3, 5],
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_cov_corr_datetime_timedelta(data1, data2, dtype):
+    gsr1 = cudf.Series(data1, dtype=dtype)
+    gsr2 = cudf.Series(data2, dtype=dtype)
+    psr1 = gsr1.to_pandas()
+    psr2 = gsr2.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=psr.corr,
-        rfunc=gsr.corr,
-        lfunc_args_and_kwargs=([psr],),
-        rfunc_args_and_kwargs=([gsr],),
-    )
-
-    assert_exceptions_equal(
-        lfunc=psr.cov,
-        rfunc=gsr.cov,
-        lfunc_args_and_kwargs=([psr],),
-        rfunc_args_and_kwargs=([gsr],),
-    )
+    assert_eq(psr1.corr(psr2), gsr1.corr(gsr2))
+    assert_eq(psr1.cov(psr2), gsr1.cov(gsr2))
 
 
 @pytest.mark.parametrize(

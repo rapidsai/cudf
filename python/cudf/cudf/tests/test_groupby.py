@@ -565,7 +565,9 @@ def test_groupby_apply_jit_reductions_special_vals(
     func, dtype, dataset, groupby_jit_datasets, special_val
 ):
     dataset = groupby_jit_datasets[dataset]
-    with expect_warning_if(func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning):
+    with expect_warning_if(
+        func in {"var", "std"} and not np.isnan(special_val), RuntimeWarning
+    ):
         groupby_apply_jit_reductions_special_vals_inner(
             func, dataset, dtype, special_val
         )
@@ -1409,7 +1411,7 @@ def test_groupby_multi_agg_hash_groupby(agg):
 
 
 @pytest.mark.parametrize(
-    "agg", ["min", "max", "idxmax", "idxmax", "sum", "prod", "count", "mean"]
+    "agg", ["min", "max", "idxmax", "idxmin", "sum", "prod", "count", "mean"]
 )
 def test_groupby_nulls_basic(agg):
     check_dtype = agg not in _index_type_aggs
@@ -1447,11 +1449,12 @@ def test_groupby_nulls_basic(agg):
 
     # TODO: fillna() used here since we don't follow
     # Pandas' null semantics. Should we change it?
-    assert_groupby_results_equal(
-        getattr(pdf.groupby("a"), agg)().fillna(0),
-        getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
-        check_dtype=check_dtype,
-    )
+    with expect_warning_if(agg in {"idxmax", "idxmin"}):
+        assert_groupby_results_equal(
+            getattr(pdf.groupby("a"), agg)().fillna(0),
+            getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
+            check_dtype=check_dtype,
+        )
 
 
 def test_groupby_nulls_in_index():
@@ -3702,8 +3705,9 @@ def test_categorical_grouping_pandas_compatibility():
 
     with cudf.option_context("mode.pandas_compatible", True):
         actual = gdf.groupby("key", sort=False).sum()
-    expected = pdf.groupby("key", sort=False).sum()
-
+    with pytest.warns(FutureWarning):
+        # observed param deprecation.
+        expected = pdf.groupby("key", sort=False).sum()
     assert_eq(actual, expected)
 
 

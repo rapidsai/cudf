@@ -183,8 +183,8 @@ def test_dataframe_join_suffix():
     assert list(expect.columns) == list(got.columns)
     assert_eq(expect.index.values, got.index.values)
 
-    got_sorted = got.sort_values(by=list(got.columns), axis=0)
-    expect_sorted = expect.sort_values(by=list(expect.columns), axis=0)
+    got_sorted = got.sort_values(by=["b_left", "c", "b_right"], axis=0)
+    expect_sorted = expect.sort_values(by=["b_left", "c", "b_right"], axis=0)
     for k in expect_sorted.columns:
         _check_series(expect_sorted[k].fillna(-1), got_sorted[k].fillna(-1))
 

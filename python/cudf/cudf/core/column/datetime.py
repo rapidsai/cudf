@@ -532,6 +532,24 @@ class DatetimeColumn(column.ColumnBase):
             unit=self.time_unit,
         ).as_unit(self.time_unit)
 
+    def cov(self, other: DatetimeColumn) -> float:
+        if not isinstance(other, DatetimeColumn):
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
+        return self.as_numerical_column("int64").cov(
+            other.as_numerical_column("int64")
+        )
+
+    def corr(self, other: DatetimeColumn) -> float:
+        if not isinstance(other, DatetimeColumn):
+            raise TypeError(
+                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+            )
+        return self.as_numerical_column("int64").corr(
+            other.as_numerical_column("int64")
+        )
+
     def quantile(
         self,
         q: np.ndarray,
