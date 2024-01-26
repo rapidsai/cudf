@@ -26,7 +26,8 @@ namespace cudf::detail {
  *
  * The stream-ordered `rmm::mr::polymorphic_allocator` cannot be used in `cuco` directly since the
  * later expects a standard C++ `Allocator` interface. This allocator helper provides a simple way
- * to handle cuco memory allocation/deallocation with the default rmm memory resource.
+ * to handle cuco memory allocation/deallocation with the given `stream` and the rmm default memory
+ * resource.
  */
 class cuco_allocator
   : public rmm::mr::stream_allocator_adaptor<rmm::mr::polymorphic_allocator<char>> {
@@ -37,7 +38,7 @@ class cuco_allocator
 
  public:
   /**
-   * @brief Constructs the adaptor with the given `stream`
+   * @brief Constructs the allocator adaptor with the given `stream`
    */
   cuco_allocator(rmm::cuda_stream_view stream) : base_type{default_allocator{}, stream} {}
 };
