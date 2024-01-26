@@ -187,6 +187,8 @@ aggregate_orc_metadata::select_stripes(
           "Invalid stripe index");
         stripe_infos.push_back(
           std::pair(&per_file_metadata[src_file_idx].ff.stripes[stripe_idx], nullptr));
+
+        // TODO: check for overflow here.
         rows_to_read += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
       }
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
