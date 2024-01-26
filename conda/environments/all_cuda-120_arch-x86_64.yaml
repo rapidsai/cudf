@@ -91,6 +91,7 @@ dependencies:
 - sphinx-autobuild
 - sphinx-copybutton
 - sphinx-markdown-tables
+- sphinx-remove-toctrees
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.17

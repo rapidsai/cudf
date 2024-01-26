@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Defines pytest fixtures for all benchmarks.
 
@@ -206,7 +206,6 @@ while num_new_fixtures > 0:
         (r"_rows_\d+", ""),
         (r"_cols_\d+", ""),
     ]:
-
         collapse_fixtures(fixtures, pat, repl, globals(), idfunc)
 
     num_new_fixtures = len(fixtures) - num_fixtures

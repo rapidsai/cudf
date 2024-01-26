@@ -226,7 +226,6 @@ class SpillableBufferOwner(BufferOwner):
                     color=_get_color_for_nvtx("SpillHtoD"),
                     domain="cudf_python-spill",
                 ):
-
                     dev_mem = rmm.DeviceBuffer.to_device(
                         self._ptr_desc.pop("memoryview")
                     )

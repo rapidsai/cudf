@@ -364,7 +364,6 @@ def test_categorical_set_categories_preserves_order():
 
 @pytest.mark.parametrize("inplace", [True, False])
 def test_categorical_as_ordered(pd_str_cat, inplace):
-
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(False))
 
@@ -388,7 +387,6 @@ def test_categorical_as_ordered(pd_str_cat, inplace):
 
 @pytest.mark.parametrize("inplace", [True, False])
 def test_categorical_as_unordered(pd_str_cat, inplace):
-
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(True))
 
@@ -428,7 +426,6 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
 def test_categorical_reorder_categories(
     pd_str_cat, from_ordered, to_ordered, inplace
 ):
-
     pd_sr = pd.Series(pd_str_cat.copy().set_ordered(from_ordered))
     cd_sr = cudf.Series(pd_str_cat.copy().set_ordered(from_ordered))
 
@@ -469,7 +466,6 @@ def test_categorical_reorder_categories(
     ],
 )
 def test_categorical_add_categories(pd_str_cat, inplace):
-
     pd_sr = pd.Series(pd_str_cat.copy())
     cd_sr = cudf.Series(pd_str_cat.copy())
 
@@ -510,7 +506,6 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     ],
 )
 def test_categorical_remove_categories(pd_str_cat, inplace):
-
     pd_sr = pd.Series(pd_str_cat.copy())
     cd_sr = cudf.Series(pd_str_cat.copy())
 
