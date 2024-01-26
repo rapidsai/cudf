@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -47,7 +47,6 @@ def _check_isinstance(left, right, obj):
 
 
 def raise_assert_detail(obj, message, left, right, diff=None):
-
     msg = f"""{obj} are different
 
 {message}

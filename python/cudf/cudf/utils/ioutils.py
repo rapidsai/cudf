@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -2028,7 +2028,7 @@ def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
         return new_ranges
 
     offset, size = byte_ranges[0]
-    for (new_offset, new_size) in byte_ranges[1:]:
+    for new_offset, new_size in byte_ranges[1:]:
         gap = new_offset - (offset + size)
         if gap > max_gap or (size + new_size + gap) > max_block:
             # Gap is too large or total read is too large
@@ -2068,7 +2068,7 @@ def _read_byte_ranges(
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf
     workers = []
-    for (offset, nbytes) in ranges:
+    for offset, nbytes in ranges:
         if len(ranges) > 1:
             workers.append(
                 Thread(
