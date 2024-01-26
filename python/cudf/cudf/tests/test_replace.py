@@ -1068,8 +1068,10 @@ def test_replace_inplace(pframe, replace_args):
 
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
-    gpu_frame.replace(**replace_args)
-    pandas_frame.replace(**replace_args)
+    with expect_warning_if(len(replace_args) == 0):
+        gpu_frame.replace(**replace_args)
+    with expect_warning_if(len(replace_args) == 0):
+        pandas_frame.replace(**replace_args)
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
 

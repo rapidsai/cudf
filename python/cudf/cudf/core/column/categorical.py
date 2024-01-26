@@ -7,12 +7,12 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from numba import cuda
 from typing_extensions import Self
 
 import cudf
-import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
@@ -21,6 +21,7 @@ from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
+    find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -265,8 +266,8 @@ class CategoricalAccessor(ColumnMethods):
                 f"type-cast new_categories to the same type as "
                 f"existing categories."
             )
-        common_dtype = np.find_common_type(
-            [old_categories.dtype, new_categories.dtype], []
+        common_dtype = find_common_type(
+            [old_categories.dtype, new_categories.dtype]
         )
 
         new_categories = new_categories.astype(common_dtype)
