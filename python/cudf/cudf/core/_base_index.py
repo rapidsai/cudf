@@ -1109,14 +1109,14 @@ class BaseIndex(Serializable):
         res_name = _get_result_name(self.name, other.name)
 
         if is_mixed_with_object_dtype(self, other) or len(other) == 0:
-            difference = self.copy()
+            difference = self.copy().unique()
             difference.name = res_name
             if sort is True:
                 return difference.sort_values()
         else:
             other = other.copy(deep=False)
             difference = cudf.core.index._index_from_data(
-                cudf.DataFrame._from_data({"None": self._column})
+                cudf.DataFrame._from_data({"None": self._column.unique()})
                 .merge(
                     cudf.DataFrame._from_data({"None": other._column}),
                     how="leftanti",

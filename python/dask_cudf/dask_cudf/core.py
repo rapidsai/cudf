@@ -153,7 +153,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         shuffle_method=None,
         **kwargs,
     ):
-
         pre_sorted = sorted
         del sorted
 
@@ -165,7 +164,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
-
             # Let upstream-dask handle "pre-sorted" case
             if pre_sorted:
                 return dd.shuffle.set_sorted_index(

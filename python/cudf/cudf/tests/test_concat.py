@@ -1088,7 +1088,6 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
 def test_concat_join_no_overlapping_columns_empty_df_basic(
     ignore_index, sort, join, axis
 ):
-
     pdf6 = pd.DataFrame(
         {
             "x": range(10),

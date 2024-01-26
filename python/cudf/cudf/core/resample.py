@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION &
-# AFFILIATES. All rights reserved.  SPDX-License-Identifier:
-# Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -34,7 +34,6 @@ from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
 
 
 class _Resampler(GroupBy):
-
     grouping: "_ResampleGrouping"
 
     def __init__(self, obj, by, axis=None, kind=None):
@@ -121,7 +120,6 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-
     bin_labels: cudf.core.index.Index
 
     def __init__(self, obj, by=None, level=None):
@@ -220,10 +218,11 @@ class _ResampleGrouping(_Grouping):
 
         # get the start and end values that will be used to generate
         # the bin labels
-        min_date, max_date = key_column._minmax()
+        min_date = key_column._reduce("min")
+        max_date = key_column._reduce("max")
         start, end = _get_timestamp_range_edges(
-            pd.Timestamp(min_date.value),
-            pd.Timestamp(max_date.value),
+            pd.Timestamp(min_date),
+            pd.Timestamp(max_date),
             offset,
             closed=closed,
         )

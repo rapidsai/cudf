@@ -2050,4 +2050,117 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
     float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
 }
 
+TEST_F(JsonReaderTest, MixedTypes)
+{
+  {
+    // Simple test for mixed types
+    std::string json_string = R"({ "foo": [1,2,3], "bar": 123 }
+                               { "foo": { "a": 1 }, "bar": 456 })";
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+    EXPECT_EQ(result.tbl->num_columns(), 2);
+    EXPECT_EQ(result.tbl->num_rows(), 2);
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+    EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT64);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                   cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"a\": 1 }"}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                   cudf::test::fixed_width_column_wrapper<int64_t>({123, 456}));
+  }
+
+  // Testing function for mixed types in JSON (for spark json reader)
+  auto test_fn = [](std::string_view json_string, cudf::column_view expected) {
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected);
+  };
+
+  // test cases.
+  test_fn(R"(
+{ "a": "123" }
+{ "a": 123 }
+)",
+          cudf::test::strings_column_wrapper({"123", "123"}));
+
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }"}));
+
+  test_fn(R"(
+{ "a": "fox" }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"fox", "{ \"b\": 1 }"}));
+
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": "fox" }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "fox"}));
+
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": [true,false,true] }
+{ "a": ["a", "b", "c"] }
+)",
+          cudf::test::lists_column_wrapper<cudf::string_view>{
+            {"1", "2", "3"}, {"true", "false", "true"}, {"a", "b", "c"}});
+  {
+    std::string json_string = R"(
+{ "var1": true }
+{ "var1": [{ "var0": true, "var1": "hello", "var2": null }, null, [true, null, null]] }
+  )";
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+  }
+
+  // test to confirm if reinitialize a non-string column as string affects max_rowoffsets.
+  // max_rowoffsets is generated based on parent col id,
+  // so, even if mixed types are present, their row offset will be correct.
+  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using valid_t = std::vector<cudf::valid_type>;
+
+  cudf::test::lists_column_wrapper expected_list{
+    {
+      cudf::test::lists_column_wrapper({LCW({"1", "2", "3"}), LCW({"4", "5", "6"})}),
+      cudf::test::lists_column_wrapper({LCW()}),
+      cudf::test::lists_column_wrapper({LCW()}),  // null
+      cudf::test::lists_column_wrapper({LCW()}),  // null
+      cudf::test::lists_column_wrapper({LCW({"{\"c\": -1}"}), LCW({"5"})}),
+      cudf::test::lists_column_wrapper({LCW({"7"}), LCW({"8", "9"})}),
+      cudf::test::lists_column_wrapper({LCW()}),  // null
+    },
+    valid_t{1, 1, 0, 0, 1, 1, 0}.begin()};
+  test_fn(R"(
+{"b": [ [1, 2, 3], [ 4, 5, 6] ]}
+{"b": [[]]}
+{}
+{}
+{"b": [ [ {"c": -1} ], [ 5 ] ]}
+{"b": [ [7], [8, 9]]}
+{}
+)",
+          expected_list);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

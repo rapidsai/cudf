@@ -59,7 +59,6 @@ from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
-from cudf.api.types import is_list_dtype, is_struct_dtype
 
 
 cpdef read_raw_orc_statistics(filepath_or_buffer):
@@ -383,13 +382,19 @@ cdef class ORCWriter:
     cdef object index
     cdef table_input_metadata tbl_meta
     cdef object cols_as_map_type
+    cdef object stripe_size_bytes
+    cdef object stripe_size_rows
+    cdef object row_index_stride
 
     def __cinit__(self,
                   object path,
                   object index=None,
                   object compression="snappy",
                   object statistics="ROWGROUP",
-                  object cols_as_map_type=None):
+                  object cols_as_map_type=None,
+                  object stripe_size_bytes=None,
+                  object stripe_size_rows=None,
+                  object row_index_stride=None):
 
         self.sink = make_sink_info(path, self._data_sink)
         self.stat_freq = _get_orc_stat_freq(statistics)
@@ -397,6 +402,9 @@ cdef class ORCWriter:
         self.index = index
         self.cols_as_map_type = cols_as_map_type \
             if cols_as_map_type is None else set(cols_as_map_type)
+        self.stripe_size_bytes = stripe_size_bytes
+        self.stripe_size_rows = stripe_size_rows
+        self.row_index_stride = row_index_stride
         self.initialized = False
 
     def write_table(self, table):
@@ -464,9 +472,7 @@ cdef class ORCWriter:
         pandas_metadata = generate_pandas_metadata(table, self.index)
         user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
-        cdef chunked_orc_writer_options args
-        with nogil:
-            args = move(
+        cdef chunked_orc_writer_options c_opts = move(
                 chunked_orc_writer_options.builder(self.sink)
                 .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
@@ -474,14 +480,22 @@ cdef class ORCWriter:
                 .enable_statistics(self.stat_freq)
                 .build()
             )
-            self.writer.reset(new orc_chunked_writer(args))
+        if self.stripe_size_bytes is not None:
+            c_opts.set_stripe_size_bytes(self.stripe_size_bytes)
+        if self.stripe_size_rows is not None:
+            c_opts.set_stripe_size_rows(self.stripe_size_rows)
+        if self.row_index_stride is not None:
+            c_opts.set_row_index_stride(self.row_index_stride)
+
+        with nogil:
+            self.writer.reset(new orc_chunked_writer(c_opts))
 
         self.initialized = True
 
 cdef _set_col_children_metadata(Column col,
                                 column_in_metadata& col_meta,
                                 list_column_as_map=False):
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -489,7 +503,7 @@ cdef _set_col_children_metadata(Column col,
             _set_col_children_metadata(
                 child_col, col_meta.child(i), list_column_as_map
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         if list_column_as_map:
             col_meta.set_list_column_as_map()
         _set_col_children_metadata(

@@ -385,7 +385,6 @@ def test_dataframe_drop_duplicates_method():
 
 
 def test_datetime_drop_duplicates():
-
     date_df = cudf.DataFrame()
     date_df["date"] = pd.date_range("11/20/2018", periods=6, freq="D")
     date_df["value"] = np.random.sample(len(date_df))

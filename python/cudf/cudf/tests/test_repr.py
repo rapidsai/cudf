@@ -383,7 +383,6 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
     ],
 )
 def test_generic_index_null(index, expected_repr):
-
     actual_repr = repr(index)
 
     assert expected_repr == actual_repr

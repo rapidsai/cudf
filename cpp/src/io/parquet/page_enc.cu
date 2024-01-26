@@ -57,6 +57,13 @@ constexpr int num_encode_warps  = encode_block_size / cudf::detail::warp_size;
 
 constexpr int rolling_idx(int pos) { return rolling_index<rle_buffer_size>(pos); }
 
+// max V1 header size
+// also valid for dict page header (V1 or V2)
+constexpr int MAX_V1_HDR_SIZE = util::round_up_unsafe(27, 8);
+
+// max V2 header size
+constexpr int MAX_V2_HDR_SIZE = util::round_up_unsafe(49, 8);
+
 // do not truncate statistics
 constexpr int32_t NO_TRUNC_STATS = 0;
 
@@ -534,6 +541,9 @@ CUDF_KERNEL void __launch_bounds__(128)
   uint32_t const t          = threadIdx.x;
   auto const data_page_type = write_v2_headers ? PageType::DATA_PAGE_V2 : PageType::DATA_PAGE;
 
+  // Max page header size excluding statistics
+  auto const max_data_page_hdr_size = write_v2_headers ? MAX_V2_HDR_SIZE : MAX_V1_HDR_SIZE;
+
   if (t == 0) {
     col_g  = col_desc[blockIdx.x];
     ck_g   = chunks[blockIdx.y][blockIdx.x];
@@ -584,7 +594,7 @@ CUDF_KERNEL void __launch_bounds__(128)
         page_g.chunk           = &chunks[blockIdx.y][blockIdx.x];
         page_g.chunk_id        = blockIdx.y * num_columns + blockIdx.x;
         page_g.hdr_size        = 0;
-        page_g.max_hdr_size    = 32;
+        page_g.max_hdr_size    = MAX_V1_HDR_SIZE;
         page_g.max_data_size   = ck_g.uniq_data_size;
         page_g.start_row       = cur_row;
         page_g.num_rows        = ck_g.num_dict_entries;
@@ -684,7 +694,7 @@ CUDF_KERNEL void __launch_bounds__(128)
           page_g.chunk_id      = blockIdx.y * num_columns + blockIdx.x;
           page_g.page_type     = data_page_type;
           page_g.hdr_size      = 0;
-          page_g.max_hdr_size  = 32;  // Max size excluding statistics
+          page_g.max_hdr_size  = max_data_page_hdr_size;  // Max size excluding statistics
           if (ck_g.stats) {
             uint32_t stats_hdr_len = 16;
             if (col_g.stats_dtype == dtype_string || col_g.stats_dtype == dtype_byte_array) {

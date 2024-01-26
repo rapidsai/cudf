@@ -31,7 +31,10 @@ from .types cimport DataType, type_id
 # https://github.com/rapidsai/rmm/pull/931 for details.
 @no_gc_clear
 cdef class Scalar:
-    """A scalar value in device memory."""
+    """A scalar value in device memory.
+
+    This is the Cython representation of :cpp:class:`cudf::scalar`.
+    """
     # Unlike for columns, libcudf does not support scalar views. All APIs that
     # accept scalar values accept references to the owning object rather than a
     # special view type. As a result, pylibcudf.Scalar has a simpler structure
@@ -50,6 +53,16 @@ cdef class Scalar:
 
     @staticmethod
     def from_arrow(pa.Scalar value, DataType data_type=None):
+        """Create a Scalar from a pyarrow Scalar.
+
+        Parameters
+        ----------
+        value : pyarrow.Scalar
+            The pyarrow scalar to construct from
+        data_type : DataType, optional
+            The data type of the scalar. If not passed, the data type will be
+            inferred from the pyarrow scalar.
+        """
         # Allow passing a dtype, but only for the purpose of decimals for now
 
         cdef shared_ptr[pa.CScalar] cscalar = (
@@ -100,6 +113,13 @@ cdef class Scalar:
         return s
 
     cpdef pa.Scalar to_arrow(self, ColumnMetadata metadata):
+        """Convert to a pyarrow scalar.
+
+        Parameters
+        ----------
+        metadata : ColumnMetadata
+            The metadata for the column the scalar is being used in.
+        """
         cdef shared_ptr[pa.CScalar] c_result
         cdef column_metadata c_metadata = metadata.to_libcudf()
 
