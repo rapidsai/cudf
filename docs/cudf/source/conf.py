@@ -16,10 +16,12 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
+import filecmp
 import glob
 import os
 import re
 import sys
+import tempfile
 import xml.etree.ElementTree as ET
 
 from docutils.nodes import Text
@@ -62,12 +64,15 @@ extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx_copybutton",
+    "sphinx_remove_toctrees",
     "numpydoc",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
     "PandasCompat",
     "myst_nb",
 ]
+
+remove_from_toctrees = ["user_guide/api_docs/api/*"]
 
 
 # Preprocess doxygen xml for compatibility with latest Breathe
@@ -126,7 +131,13 @@ def clean_all_xml_files(path):
     for fn in glob.glob(os.path.join(path, "*.xml")):
         tree = ET.parse(fn)
         clean_definitions(tree.getroot())
-        tree.write(fn)
+        with tempfile.NamedTemporaryFile() as tmp_fn:
+            tree.write(tmp_fn.name)
+            # Only write files that have actually changed.
+            if not filecmp.cmp(tmp_fn.name, fn):
+                tree.write(fn)
+
+
 
 
 # Breathe Configuration

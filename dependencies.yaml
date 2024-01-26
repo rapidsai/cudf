@@ -472,6 +472,7 @@ dependencies:
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables
+          - sphinx-remove-toctrees
           - sphinxcontrib-websupport
   notebooks:
     common:
