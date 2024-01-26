@@ -255,7 +255,6 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -292,7 +291,6 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 @pytest.mark.parametrize("dtype", ALL_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_tile(nulls, num_cols, num_rows, dtype, count):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 

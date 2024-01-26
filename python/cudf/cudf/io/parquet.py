@@ -1261,7 +1261,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],

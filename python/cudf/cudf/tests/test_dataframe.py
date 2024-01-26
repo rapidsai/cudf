@@ -1434,7 +1434,19 @@ def test_assign_callable(mapping):
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5", "xxhash64"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        "murmur3",
+        "md5",
+        "sha1",
+        "sha224",
+        "sha256",
+        "sha384",
+        "sha512",
+        "xxhash64",
+    ],
+)
 @pytest.mark.parametrize("seed", [None, 42])
 def test_dataframe_hash_values(nrows, method, seed):
     warning_expected = seed is not None and method not in {
@@ -1459,6 +1471,11 @@ def test_dataframe_hash_values(nrows, method, seed):
     expected_dtypes = {
         "murmur3": np.uint32,
         "md5": object,
+        "sha1": object,
+        "sha224": object,
+        "sha256": object,
+        "sha384": object,
+        "sha512": object,
         "xxhash64": np.uint64,
     }
     assert out.dtype == expected_dtypes[method]
@@ -4046,7 +4063,6 @@ def test_diff(dtype, period, data_empty):
 @pytest.mark.parametrize("df", _dataframe_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_dataframe_isnull_isna(df, nan_as_null):
-
     if nan_as_null is False and (
         df.select_dtypes(object).isna().any().any()
         and not df.select_dtypes(object).isna().all().all()
@@ -5166,15 +5182,18 @@ def test_df_astype_to_categorical_ordered(ordered):
 
 
 @pytest.mark.parametrize(
-    "dtype,args",
-    [(dtype, {}) for dtype in ALL_TYPES]
-    + [("category", {"ordered": True}), ("category", {"ordered": False})],
+    "dtype",
+    [dtype for dtype in ALL_TYPES]
+    + [
+        cudf.CategoricalDtype(ordered=True),
+        cudf.CategoricalDtype(ordered=False),
+    ],
 )
-def test_empty_df_astype(dtype, args):
+def test_empty_df_astype(dtype):
     df = cudf.DataFrame()
-    kwargs = {}
-    kwargs.update(args)
-    assert_eq(df, df.astype(dtype=dtype, **kwargs))
+    result = df.astype(dtype=dtype)
+    assert_eq(df, result)
+    assert_eq(df.to_pandas().astype(dtype=dtype), result)
 
 
 @pytest.mark.parametrize(

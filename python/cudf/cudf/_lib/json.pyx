@@ -17,6 +17,7 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.io.types as cudf_io_types
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.json cimport (
     json_reader_options,
@@ -42,10 +43,6 @@ from cudf._lib.io.utils cimport (
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
-from cudf.api.types import is_list_dtype, is_struct_dtype
-
-from cudf._lib.column cimport Column
-
 
 cpdef read_json(object filepaths_or_buffers,
                 object dtype,
@@ -53,7 +50,8 @@ cpdef read_json(object filepaths_or_buffers,
                 object compression,
                 object byte_range,
                 bool legacy,
-                bool keep_quotes):
+                bool keep_quotes,
+                bool mixed_types_as_string):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -131,6 +129,7 @@ cpdef read_json(object filepaths_or_buffers,
         opts.set_dtypes(c_dtypes_schema_map)
 
     opts.enable_keep_quotes(keep_quotes)
+    opts.enable_mixed_types_as_string(mixed_types_as_string)
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
@@ -214,13 +213,12 @@ def write_json(
 cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except *:
     cdef schema_element s_element
     cdef data_type lib_type
-    if cudf.api.types._is_categorical_dtype(dtype):
+    dtype = cudf.dtype(dtype)
+    if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
         )
-
-    dtype = cudf.dtype(dtype)
     lib_type = dtype_to_data_type(dtype)
     s_element.type = lib_type
     if isinstance(dtype, cudf.StructDtype):
@@ -237,19 +235,18 @@ cdef schema_element _get_cudf_schema_element_from_dtype(object dtype) except *:
 
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
-    if cudf.api.types._is_categorical_dtype(dtype):
+    dtype = cudf.dtype(dtype)
+    if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
         )
-
-    dtype = cudf.dtype(dtype)
     return dtype_to_data_type(dtype)
 
 cdef _set_col_children_metadata(Column col,
                                 column_name_info& col_meta):
     cdef column_name_info child_info
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -258,7 +255,7 @@ cdef _set_col_children_metadata(Column col,
             _set_col_children_metadata(
                 child_col, col_meta.children[i]
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         for i, child_col in enumerate(col.children):
             col_meta.children.push_back(child_info)
             _set_col_children_metadata(

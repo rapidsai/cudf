@@ -22,7 +22,7 @@ include(rapids-find)
 
 project(
   CUDF_KAFKA
-  VERSION 24.02.00
+  VERSION 24.04.00
   LANGUAGES CXX
 )
 

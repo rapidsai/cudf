@@ -74,7 +74,6 @@ def run_masked_udf_test(func, data, args=(), nullable=True, **kwargs):
 
 
 def run_masked_string_udf_test(func, data, args=(), **kwargs):
-
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
@@ -646,7 +645,7 @@ def test_masked_udf_subset_selection(data):
             ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
         ),
         cudf.Series([1, 2, 3], dtype="category"),
-        cudf.interval_range(start=0, end=3, closed=True),
+        cudf.interval_range(start=0, end=3),
         [[1, 2], [3, 4], [5, 6]],
         [{"a": 1}, {"a": 2}, {"a": 3}],
     ],

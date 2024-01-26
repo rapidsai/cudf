@@ -847,7 +847,6 @@ def test_string_contains_case(ps_gs):
     ],
 )
 def test_string_like(pat, esc, expect):
-
     expectation = does_not_raise()
     if len(esc) > 1:
         expectation = pytest.raises(ValueError)
@@ -2409,7 +2408,6 @@ def test_string_str_translate(data):
 
 
 def test_string_str_filter_characters():
-
     data = [
         "hello world",
         "A+B+C+D",
@@ -2439,7 +2437,6 @@ def test_string_str_filter_characters():
 
 
 def test_string_str_code_points():
-
     data = [
         "abc",
         "Def",
@@ -2605,7 +2602,6 @@ def test_string_typecast_error(data, obj_type, dtype):
     ],
 )
 def test_string_hex_to_int(data):
-
     gsr = cudf.Series(data)
 
     expected = cudf.Series([263988422296292, 0, 281474976710655])

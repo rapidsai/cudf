@@ -28,6 +28,8 @@
 
 #include <fstream>
 
+using cudf::test::iterators::no_nulls;
+
 template <typename mask_op_t>
 void test_durations(mask_op_t mask_op)
 {
@@ -100,13 +102,12 @@ TEST_F(ParquetWriterTest, MultiIndex)
   auto col2_data = random_values<int32_t>(num_rows);
   auto col3_data = random_values<float>(num_rows);
   auto col4_data = random_values<double>(num_rows);
-  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
-  column_wrapper<int8_t> col0{col0_data.begin(), col0_data.end(), validity};
-  column_wrapper<int16_t> col1{col1_data.begin(), col1_data.end(), validity};
-  column_wrapper<int32_t> col2{col2_data.begin(), col2_data.end(), validity};
-  column_wrapper<float> col3{col3_data.begin(), col3_data.end(), validity};
-  column_wrapper<double> col4{col4_data.begin(), col4_data.end(), validity};
+  column_wrapper<int8_t> col0{col0_data.begin(), col0_data.end(), no_nulls()};
+  column_wrapper<int16_t> col1{col1_data.begin(), col1_data.end(), no_nulls()};
+  column_wrapper<int32_t> col2{col2_data.begin(), col2_data.end(), no_nulls()};
+  column_wrapper<float> col3{col3_data.begin(), col3_data.end(), no_nulls()};
+  column_wrapper<double> col4{col4_data.begin(), col4_data.end(), no_nulls()};
 
   auto expected = table_view{{col0, col1, col2, col3, col4}};
 
@@ -139,9 +140,7 @@ TEST_F(ParquetWriterTest, BufferSource)
 {
   constexpr auto num_rows = 100 << 10;
   auto const seq_col      = random_values<int>(num_rows);
-  auto const validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  column_wrapper<int> col{seq_col.begin(), seq_col.end(), validity};
+  column_wrapper<int> col{seq_col.begin(), seq_col.end(), no_nulls()};
 
   auto const expected = table_view{{col}};
 
@@ -185,12 +184,13 @@ TEST_F(ParquetWriterTest, BufferSource)
 TEST_F(ParquetWriterTest, ManyFragments)
 {
   srand(31337);
-  auto const expected = create_random_fixed_table<int>(10, 6'000'000, false);
+  auto const expected = create_random_fixed_table<int>(1, 700'000, false);
 
   auto const filepath = temp_env->get_temp_filepath("ManyFragments.parquet");
   cudf::io::parquet_writer_options const args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected)
-      .max_page_size_bytes(8 * 1024);
+      .max_page_size_bytes(8 * 1024)
+      .max_page_fragment_size(10);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options const read_opts =
@@ -342,11 +342,12 @@ TEST_F(ParquetWriterTest, DeviceWriteLargeishFile)
 
   // exercises multiple rowgroups
   srand(31337);
-  auto expected = create_random_fixed_table<int>(4, 4 * 1024 * 1024, false);
+  auto expected = create_random_fixed_table<int>(4, 1024 * 1024, false);
 
   // write out using the custom sink (which uses device writes)
   cudf::io::parquet_writer_options args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&custom_sink}, *expected)
+      .row_group_size_rows(128 * 1024);
   cudf::io::write_parquet(args);
 
   cudf::io::parquet_reader_options custom_args =
@@ -613,11 +614,10 @@ TEST_F(ParquetWriterTest, EmptyListWithStruct)
 TEST_F(ParquetWriterTest, CheckPageRows)
 {
   auto sequence = thrust::make_counting_iterator(0);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto page_rows = 5000;
   constexpr auto num_rows  = 2 * page_rows;
-  column_wrapper<int> col(sequence, sequence + num_rows, validity);
+  column_wrapper<int> col(sequence, sequence + num_rows, no_nulls());
 
   auto expected = table_view{{col}};
 
@@ -1267,8 +1267,7 @@ TEST_F(ParquetWriterTest, CompStatsEmptyTable)
 
 TEST_F(ParquetWriterTest, NoNullsAsNonNullable)
 {
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  column_wrapper<int32_t> col{{1, 2, 3}, valids};
+  column_wrapper<int32_t> col{{1, 2, 3}, no_nulls()};
   table_view expected({col});
 
   cudf::io::table_input_metadata expected_metadata(expected);
@@ -1402,6 +1401,49 @@ TEST_F(ParquetWriterTest, EmptyMinStringStatistics)
   EXPECT_EQ(max_value, std::string(max_val));
 }
 
+TEST_F(ParquetWriterTest, RowGroupMetadata)
+{
+  using column_type      = int;
+  constexpr int num_rows = 1'000;
+  auto const ones        = thrust::make_constant_iterator(1);
+  auto const col =
+    cudf::test::fixed_width_column_wrapper<column_type>{ones, ones + num_rows, no_nulls()};
+  auto const table = table_view({col});
+
+  auto const filepath = temp_env->get_temp_filepath("RowGroupMetadata.parquet");
+  // force PLAIN encoding to make size calculation easier
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .compression(cudf::io::compression_type::ZSTD);
+  cudf::io::write_parquet(opts);
+
+  // check row group metadata to make sure total_byte_size is the uncompressed value
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_GT(fmd.row_groups.size(), 0);
+  EXPECT_GE(fmd.row_groups[0].total_byte_size,
+            static_cast<int64_t>(num_rows * sizeof(column_type)));
+}
+
+// See #14772.
+// zStandard compression cannot currently be used with V2 page headers due to buffer
+// alignment issues.
+// TODO: Remove this test when #14781 is closed.
+TEST_F(ParquetWriterTest, ZstdWithV2Header)
+{
+  auto const expected = table_view{};
+
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{"14772.pq"}, expected)
+      .compression(cudf::io::compression_type::ZSTD)
+      .write_v2_headers(true);
+  EXPECT_THROW(cudf::io::write_parquet(out_opts), cudf::logic_error);
+}
+
+/////////////////////////////////////////////////////////////
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>
 class custom_test_memmap_sink : public cudf::io::data_sink {
@@ -1459,10 +1501,9 @@ TYPED_TEST(ParquetWriterNumericTypeTest, SingleColumn)
 {
   auto sequence =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return TypeParam(i % 400); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 800;
-  column_wrapper<TypeParam> col(sequence, sequence + num_rows, validity);
+  column_wrapper<TypeParam> col(sequence, sequence + num_rows, no_nulls());
 
   auto expected = table_view{{col}};
 
@@ -1516,11 +1557,10 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, Timestamps)
 {
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
-    sequence, sequence + num_rows, validity);
+    sequence, sequence + num_rows, no_nulls());
 
   auto expected = table_view{{col}};
 
@@ -1567,11 +1607,10 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
 {
   constexpr int64_t max = std::numeric_limits<int64_t>::max();
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return max - i; });
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   constexpr auto num_rows = 100;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
-    sequence, sequence + num_rows, validity);
+    sequence, sequence + num_rows, no_nulls());
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");

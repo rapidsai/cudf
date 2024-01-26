@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -66,7 +66,6 @@ def test_series_reduce(reducer):
     "op", ["max", "min", "sum", "prod", "mean", "var", "std"]
 )
 def test_rowwise_reductions(data, op):
-
     gddf = dgd.from_cudf(data, npartitions=10)
     pddf = gddf.to_dask_dataframe()
 

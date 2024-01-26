@@ -1036,6 +1036,15 @@ DateOffset = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+BaseOffset = make_final_proxy_type(
+    "BaseOffset",
+    _Unusable,
+    pd.offsets.BaseOffset,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
 Day = make_final_proxy_type(
     "Day",
     _Unusable,
@@ -1313,6 +1322,7 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
+
 
 # timestamps and timedeltas are not proxied, but non-proxied
 # pandas types are currently not picklable. Thus, we define

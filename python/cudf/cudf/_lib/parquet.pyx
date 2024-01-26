@@ -18,12 +18,7 @@ import numpy as np
 
 from cython.operator cimport dereference
 
-from cudf.api.types import (
-    is_decimal_dtype,
-    is_list_dtype,
-    is_list_like,
-    is_struct_dtype,
-)
+from cudf.api.types import is_list_like
 
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -224,7 +219,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
         # update the decimal precision of each column
         for col in names:
-            if is_decimal_dtype(df._data[col].dtype):
+            if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
                 )
@@ -716,7 +711,7 @@ cdef _set_col_metadata(
         # is true.
         col_meta.set_nullability(True)
 
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -726,13 +721,11 @@ cdef _set_col_metadata(
                 col_meta.child(i),
                 force_nullable_schema
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         _set_col_metadata(
             col.children[1],
             col_meta.child(1),
             force_nullable_schema
         )
-    else:
-        if is_decimal_dtype(col):
-            col_meta.set_decimal_precision(col.dtype.precision)
-        return
+    elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
+        col_meta.set_decimal_precision(col.dtype.precision)

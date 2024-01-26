@@ -14,6 +14,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     MutableMapping,
     Optional,
     Tuple,
@@ -291,38 +292,6 @@ class IndexedFrame(Frame):
         out._data._level_names = self._data._level_names
         return out
 
-    @classmethod
-    @_cudf_nvtx_annotate
-    def _from_columns(
-        cls,
-        columns: List[ColumnBase],
-        column_names: List[str],
-        index_names: Optional[List[str]] = None,
-    ):
-        """Construct a `Frame` object from a list of columns.
-
-        If `index_names` is set, the first `len(index_names)` columns are
-        used to construct the index of the frame.
-        """
-        data_columns = columns
-        index = None
-
-        if index_names is not None:
-            n_index_columns = len(index_names)
-            data_columns = columns[n_index_columns:]
-            index = _index_from_columns(columns[:n_index_columns])
-            if isinstance(index, cudf.MultiIndex):
-                index.names = index_names
-            else:
-                index.name = index_names[0]
-
-        out = super()._from_columns(data_columns, column_names)
-
-        if index is not None:
-            out._index = index
-
-        return out
-
     @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
@@ -343,9 +312,24 @@ class IndexedFrame(Frame):
         """
         if column_names is None:
             column_names = self._column_names
-        frame = self.__class__._from_columns(
-            columns, column_names, index_names
-        )
+
+        data_columns = columns
+        index = None
+
+        if index_names is not None:
+            n_index_columns = len(index_names)
+            data_columns = columns[n_index_columns:]
+            index = _index_from_columns(columns[:n_index_columns])
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+
+        data = dict(zip(column_names, data_columns))
+        frame = self.__class__._from_data(data)
+
+        if index is not None:
+            frame._index = index
         return frame._copy_type_metadata(
             self,
             include_index=bool(index_names),
@@ -462,11 +446,6 @@ class IndexedFrame(Frame):
         out : bool
             If DataFrame/Series is empty, return True, if not return False.
 
-        Notes
-        -----
-        If DataFrame/Series contains only `null` values, it is still not
-        considered empty. See the example below.
-
         Examples
         --------
         >>> import cudf
@@ -507,6 +486,12 @@ class IndexedFrame(Frame):
         Series([], dtype: float64)
         >>> s.empty
         True
+
+        .. pandas-compat::
+            **DataFrame.empty, Series.empty**
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
         """
         return self.size == 0
 
@@ -654,11 +639,6 @@ class IndexedFrame(Frame):
         result : Series
             Series after replacement. The mask and index are preserved.
 
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
-
         Examples
         --------
         **Series**
@@ -801,6 +781,12 @@ class IndexedFrame(Frame):
         2    2    7  c
         3    3    8  d
         4    4    9  e
+
+        .. pandas-compat::
+            **DataFrame.replace, Series.replace**
+
+            Parameters that are currently not supported are: `limit`, `regex`,
+            `method`
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
@@ -1155,13 +1141,6 @@ class IndexedFrame(Frame):
         `before` and `after` may be specified as strings instead of
         Timestamps.
 
-        .. pandas-compat::
-            **DataFrame.truncate, Series.truncate**
-
-            The ``copy`` parameter is only present for API compatibility, but
-            ``copy=False`` is not supported. This method always generates a
-            copy.
-
         Examples
         --------
         **Series**
@@ -1303,6 +1282,13 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:25  1  2
         2021-01-01 23:45:26  1  2
         2021-01-01 23:45:27  1  2
+
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not supported. This method always generates a
+            copy.
         """
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
@@ -1557,11 +1543,6 @@ class IndexedFrame(Frame):
         -------
         Frame or None
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: kind, sort_remaining=False
-
         Examples
         --------
         **Series**
@@ -1604,6 +1585,11 @@ class IndexedFrame(Frame):
         1  2  3
         3  1  2
         2  3  1
+
+        .. pandas-compat::
+            **DataFrame.sort_index, Series.sort_index**
+
+            * Not supporting: kind, sort_remaining=False
         """
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
@@ -2423,12 +2409,6 @@ class IndexedFrame(Frame):
         -------
         Frame : Frame with sorted values.
 
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
         Examples
         --------
         >>> import cudf
@@ -2440,6 +2420,12 @@ class IndexedFrame(Frame):
         0  0 -3
         2  2  0
         1  1  2
+
+        .. pandas-compat::
+            **DataFrame.sort_values, Series.sort_values**
+
+            * Support axis='index' only.
+            * Not supporting: inplace, kind
         """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -2479,7 +2465,9 @@ class IndexedFrame(Frame):
             out.columns = self._data.to_pandas_index()
         return out
 
-    def _n_largest_or_smallest(self, largest, n, columns, keep):
+    def _n_largest_or_smallest(
+        self, largest: bool, n: int, columns, keep: Literal["first", "last"]
+    ):
         # Get column to operate on
         if isinstance(columns, str):
             columns = [columns]
@@ -2961,13 +2949,14 @@ class IndexedFrame(Frame):
         2018-02-28      18.0  63.333333
 
 
-        Notes
-        -----
-        Note that the dtype of the index (or the 'on' column if using
-        'on=') in the result will be of a frequency closest to the
-        resampled frequency.  For example, if resampling from
-        nanoseconds to milliseconds, the index will be of dtype
-        'datetime64[ms]'.
+        .. pandas-compat::
+            **DataFrame.resample, Series.resample**
+
+            Note that the dtype of the index (or the 'on' column if using
+            'on=') in the result will be of a frequency closest to the
+            resampled frequency.  For example, if resampling from
+            nanoseconds to milliseconds, the index will be of dtype
+            'datetime64[ms]'.
         """
         import cudf.core.resample
 
@@ -3107,6 +3096,38 @@ class IndexedFrame(Frame):
             )
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    @_cudf_nvtx_annotate
+    def _drop_na_columns(self, how="any", subset=None, thresh=None):
+        """
+        Drop columns containing nulls
+        """
+        out_cols = []
+
+        if subset is None:
+            df = self
+        else:
+            df = self.take(subset)
+
+        if thresh is None:
+            if how == "all":
+                thresh = 1
+            else:
+                thresh = len(df)
+
+        for name, col in df._data.items():
+            try:
+                check_col = col.nans_to_nulls()
+            except AttributeError:
+                check_col = col
+            no_threshold_valid_count = (
+                len(col) - check_col.null_count
+            ) < thresh
+            if no_threshold_valid_count:
+                continue
+            out_cols.append(name)
+
+        return self[out_cols]
 
     def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
@@ -3423,18 +3444,6 @@ class IndexedFrame(Frame):
         provided via the `random_state` parameter. This function will always
         produce the same sample given an identical `random_state`.
 
-        Notes
-        -----
-        When sampling from ``axis=0/'index'``, ``random_state`` can be either
-        a numpy random state (``numpy.random.RandomState``) or a cupy random
-        state (``cupy.random.RandomState``). When a numpy random state is
-        used, the output is guaranteed to match the output of the corresponding
-        pandas method call, but generating the sample may be slow. If exact
-        pandas equivalence is not required, using a cupy random state will
-        achieve better performance, especially when sampling large number of
-        items. It's advised to use the matching `ndarray` type to the random
-        state for the `weights` array.
-
         Parameters
         ----------
         n : int, optional
@@ -3502,6 +3511,20 @@ class IndexedFrame(Frame):
            a  c
         0  1  3
         1  2  4
+
+        .. pandas-compat::
+            **DataFrame.sample, Series.sample**
+
+            When sampling from ``axis=0/'index'``, ``random_state`` can be
+            either a numpy random state (``numpy.random.RandomState``)
+            or a cupy random state (``cupy.random.RandomState``). When a numpy
+            random state is used, the output is guaranteed to match the output
+            of the corresponding pandas method call, but generating the sample
+            maybe slow. If exact pandas equivalence is not required, using a
+            cupy random state will achieve better performance,
+            especially when sampling large number of
+            items. It's advised to use the matching `ndarray` type to
+            the random state for the `weights` array.
         """
         axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
@@ -3759,7 +3782,12 @@ class IndexedFrame(Frame):
             self._index_names,
         )
 
-    def astype(self, dtype, copy=False, errors="raise", **kwargs):
+    def astype(
+        self,
+        dtype,
+        copy: bool = False,
+        errors: Literal["raise", "ignore"] = "raise",
+    ):
         """Cast the object to the given dtype.
 
         Parameters
@@ -3780,7 +3808,6 @@ class IndexedFrame(Frame):
             -   ``raise`` : allow exceptions to be raised
             -   ``ignore`` : suppress exceptions. On error return original
                 object.
-        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
@@ -3871,7 +3898,7 @@ class IndexedFrame(Frame):
             raise ValueError("invalid error value specified")
 
         try:
-            data = super().astype(dtype, copy, **kwargs)
+            data = super().astype(dtype, copy)
         except Exception as e:
             if errors == "raise":
                 raise e

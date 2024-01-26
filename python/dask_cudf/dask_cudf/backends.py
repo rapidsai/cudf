@@ -437,7 +437,6 @@ def hash_object_cudf(frame, index=True):
 @hash_object_dispatch.register(cudf.BaseIndex)
 @_dask_cudf_nvtx_annotate
 def hash_object_cudf_index(ind, index=None):
-
     if isinstance(ind, cudf.MultiIndex):
         return ind.to_frame(index=False).hash_values()
 
@@ -585,7 +584,6 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         columns=None,
         constructor=cudf.DataFrame,
     ):
-
         return _default_backend(
             dd.from_dict,
             data,

@@ -33,6 +33,7 @@ from cudf.core.index import (
     as_index,
 )
 from cudf.core.join._join_helpers import _match_join_keys
+from cudf.utils.dtypes import is_column_like
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
@@ -229,9 +230,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
-            self._data = self._data.__class__._create_unsafe(
+            self._data = self._data.__class__(
                 dict(zip(value, self._data.values())),
                 level_names=self._data.level_names,
+                verify=False,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
@@ -1153,6 +1155,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         See Also
         --------
+        MultiIndex.from_arrays : Convert list of arrays to MultiIndex.
         MultiIndex.from_product : Make a MultiIndex from cartesian product
                                   of iterables.
         MultiIndex.from_frame : Make a MultiIndex from a DataFrame.
@@ -1262,6 +1265,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         See Also
         --------
+        MultiIndex.from_arrays : Convert list of arrays to MultiIndex.
         MultiIndex.from_tuples : Convert list of tuples to MultiIndex.
         MultiIndex.from_product : Make a MultiIndex from cartesian product
                                   of iterables.
@@ -1355,6 +1359,66 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         return cls.from_pandas(pdi)
+
+    @classmethod
+    @_cudf_nvtx_annotate
+    def from_arrays(
+        cls,
+        arrays,
+        sortorder=None,
+        names=None,
+    ) -> MultiIndex:
+        """
+        Convert arrays to MultiIndex.
+
+        Parameters
+        ----------
+        arrays : list / sequence of array-likes
+            Each array-like gives one level's value for each data point.
+            len(arrays) is the number of levels.
+        sortorder : optional int
+            Not yet supported
+        names : list / sequence of str, optional
+            Names for the levels in the index.
+
+        Returns
+        -------
+        MultiIndex
+
+        See Also
+        --------
+        MultiIndex.from_tuples : Convert list of tuples to MultiIndex.
+        MultiIndex.from_product : Make a MultiIndex from cartesian product
+                                  of iterables.
+        MultiIndex.from_frame : Make a MultiIndex from a DataFrame.
+
+        Examples
+        --------
+        >>> arrays = [[1, 1, 2, 2], ['red', 'blue', 'red', 'blue']]
+        >>> cudf.MultiIndex.from_arrays(arrays, names=('number', 'color'))
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue')],
+                   names=['number', 'color'])
+        """
+        # Imported here due to circular import
+        from cudf.core.algorithms import factorize
+
+        error_msg = "Input must be a list / sequence of array-likes."
+        if not is_list_like(arrays):
+            raise TypeError(error_msg)
+        codes = []
+        levels = []
+        for array in arrays:
+            if not (is_list_like(array) or is_column_like(array)):
+                raise TypeError(error_msg)
+            code, level = factorize(array, sort=True)
+            codes.append(code)
+            levels.append(level)
+        return cls(
+            codes=codes, levels=levels, sortorder=sortorder, names=names
+        )
 
     @_cudf_nvtx_annotate
     def _poplevels(self, level):
