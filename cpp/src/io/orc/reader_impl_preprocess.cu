@@ -206,6 +206,7 @@ std::size_t gather_stream_info_and_update_chunks(
  */
 rmm::device_buffer decompress_stripe_data(
   OrcDecompressor const& decompressor,
+  stripe_level_comp_info comp_info,
   host_span<rmm::device_buffer const> stripe_data,
   host_span<orc_stream_info> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
@@ -215,32 +216,11 @@ rmm::device_buffer decompress_stripe_data(
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
-  // Parse the columns' compressed info
-  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
-    0, stream_info.size(), stream);
-  for (auto const& info : stream_info) {
-    compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
-      info.length));
-  }
-  compinfo.host_to_device_async(stream);
-
-  gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                 compinfo.size(),
-                                 decompressor.GetBlockSize(),
-                                 decompressor.GetLog2MaxCompressionRatio(),
-                                 stream);
-  compinfo.device_to_host_sync(stream);
-
   // Count the exact number of compressed blocks
-  std::size_t num_compressed_blocks   = 0;
-  std::size_t num_uncompressed_blocks = 0;
-  std::size_t total_decomp_size       = 0;
-  for (std::size_t i = 0; i < compinfo.size(); ++i) {
-    num_compressed_blocks += compinfo[i].num_compressed_blocks;
-    num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
-    total_decomp_size += compinfo[i].max_uncompressed_size;
-  }
+  std::size_t num_compressed_blocks   = comp_info.num_compressed_blocks;
+  std::size_t num_uncompressed_blocks = comp_info.num_uncompressed_blocks;
+  std::size_t total_decomp_size       = comp_info.total_decomp_size;
+
   CUDF_EXPECTS(
     not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
     "Inconsistent info on compression blocks");
@@ -261,12 +241,25 @@ rmm::device_buffer decompress_stripe_data(
                inflate_res.end(),
                compression_result{0, compression_status::FAILURE});
 
+  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
+    0, stream_info.size(), stream);
+  for (auto const& info : stream_info) {
+    compinfo.push_back(gpu::CompressedStreamInfo(
+      static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
+      info.length));
+  }
+
   // Parse again to populate the decompression input/output buffers
   std::size_t decomp_offset      = 0;
   uint32_t max_uncomp_block_size = 0;
   uint32_t start_pos             = 0;
   auto start_pos_uncomp          = (uint32_t)num_compressed_blocks;
   for (std::size_t i = 0; i < compinfo.size(); ++i) {
+    // TODO: need this?
+    compinfo[i].num_compressed_blocks   = num_compressed_blocks;
+    compinfo[i].num_uncompressed_blocks = num_uncompressed_blocks;
+    compinfo[i].max_uncompressed_size   = total_decomp_size;
+
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
     compinfo[i].dec_in_ctl        = inflate_in.data() + start_pos;
@@ -766,6 +759,7 @@ void reader::impl::query_stripe_compression_info()
   auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
   lvl_stripe_data.resize(_selected_columns.num_levels());
 
+  // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stripe_level_index,
                      gpu::CompressedStreamInfo*,
                      stripe_level_hash,
@@ -1190,7 +1184,18 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     }
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      stripe_level_comp_info comp_info;
+      auto& compinfo_map = _file_itm_data->compinfo_map;
+      for (auto const& info : stream_info) {
+        auto const& precomputed_info =
+          compinfo_map.at(stripe_level_index{info.stripe_idx, info.level});
+        comp_info.num_compressed_blocks += precomputed_info.num_compressed_blocks;
+        comp_info.num_uncompressed_blocks += precomputed_info.num_uncompressed_blocks;
+        comp_info.total_decomp_size += precomputed_info.total_decomp_size;
+      }
+
       auto decomp_data = decompress_stripe_data(*_metadata.per_file_metadata[0].decompressor,
+                                                comp_info,
                                                 stripe_data,
                                                 stream_info,
                                                 chunks,

@@ -35,9 +35,9 @@ struct stripe_level_index {
   std::size_t level;
 };
 struct stripe_level_comp_info {
-  std::size_t num_compressed_blocks;
-  std::size_t num_uncompressed_blocks;
-  std::size_t total_decomp_size;
+  std::size_t num_compressed_blocks{0};
+  std::size_t num_uncompressed_blocks{0};
+  std::size_t total_decomp_size{0};
 };
 struct stripe_level_equal {
   bool operator()(stripe_level_index const& lhs, stripe_level_index const& rhs) const
