@@ -255,7 +255,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
-ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
+ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
