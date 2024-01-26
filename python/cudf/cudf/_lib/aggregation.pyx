@@ -191,7 +191,7 @@ cdef class RollingAggregation:
         cdef RollingAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.make_collect_list_aggregation[
-                rolling_aggregation]())
+                rolling_aggregation](libcudf_types.null_policy.INCLUDE))
         return agg
 
     @classmethod
@@ -335,7 +335,9 @@ cdef class GroupbyAggregation:
         cdef GroupbyAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.
-            make_collect_list_aggregation[groupby_aggregation]())
+            make_collect_list_aggregation[groupby_aggregation](
+                libcudf_types.null_policy.INCLUDE
+            ))
         return agg
 
     @classmethod
@@ -343,7 +345,9 @@ cdef class GroupbyAggregation:
         cdef GroupbyAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.
-            make_nunique_aggregation[groupby_aggregation]())
+            make_nunique_aggregation[groupby_aggregation](
+                libcudf_types.null_policy.EXCLUDE
+            ))
         return agg
 
     @classmethod
@@ -422,7 +426,11 @@ cdef class GroupbyAggregation:
         cdef GroupbyAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.
-            make_collect_set_aggregation[groupby_aggregation]())
+            make_collect_set_aggregation[groupby_aggregation](
+                libcudf_types.null_policy.INCLUDE,
+                libcudf_types.null_equality.EQUAL,
+                libcudf_types.nan_equality.ALL_EQUAL,
+            ))
         return agg
 
     @classmethod
@@ -724,7 +732,9 @@ cdef class ReduceAggregation:
     def nunique(cls):
         cdef ReduceAggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.make_nunique_aggregation[reduce_aggregation]())
+            libcudf_aggregation.make_nunique_aggregation[reduce_aggregation](
+                libcudf_types.null_policy.EXCLUDE
+            ))
         return agg
 
     @classmethod

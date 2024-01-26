@@ -8,6 +8,8 @@ from libcpp.vector cimport vector
 from cudf._lib.cpp.types cimport (
     data_type,
     interpolation,
+    nan_equality,
+    null_equality,
     null_order,
     null_policy,
     order,
@@ -119,16 +121,20 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_argmin_aggregation[T]() except +
 
-    cdef unique_ptr[T] make_nunique_aggregation[T]() except +
+    cdef unique_ptr[T] make_nunique_aggregation[T](null_policy null_handling) except +
 
     cdef unique_ptr[T] make_nth_element_aggregation[T](
         size_type n,
         null_policy null_handling
     ) except +
 
-    cdef unique_ptr[T] make_collect_list_aggregation[T]() except +
+    cdef unique_ptr[T] make_collect_list_aggregation[T](
+        null_policy null_handling
+    ) except +
 
-    cdef unique_ptr[T] make_collect_set_aggregation[T]() except +
+    cdef unique_ptr[T] make_collect_set_aggregation[T](
+        null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal
+    ) except +
 
     cdef unique_ptr[T] make_udf_aggregation[T](
         udf_type type,
