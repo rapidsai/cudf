@@ -922,10 +922,11 @@ void reader::impl::query_stripe_compression_info()
       CUDF_EXPECTS(
         not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
         "Inconsistent info on compression blocks");
-      printf("compression correct\n");
-      fflush(stdout);
 
     } else {
+      printf("no compression \n");
+      fflush(stdout);
+
       // Set decompressed data size equal to the input size.
       // TODO
     }
@@ -961,7 +962,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   // If no rows or stripes to read, return empty columns
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
-  // query_stripe_compression_info();
+  query_stripe_compression_info();
 
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
