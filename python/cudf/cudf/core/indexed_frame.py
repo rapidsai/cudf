@@ -598,11 +598,11 @@ class IndexedFrame(Frame):
     def replace(
         self,
         to_replace=None,
-        value=None,
+        value=no_default,
         inplace=False,
         limit=None,
         regex=False,
-        method=None,
+        method=no_default,
     ):
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -803,12 +803,30 @@ class IndexedFrame(Frame):
         if regex:
             raise NotImplementedError("regex parameter is not implemented yet")
 
-        if method not in ("pad", None):
-            raise NotImplementedError(
-                "method parameter is not implemented yet"
+        if method is not no_default:
+            warnings.warn(
+                "The 'method' keyword in "
+                f"{type(self).__name__}.replace is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
             )
+        elif method not in {"pad", None, no_default}:
+            raise NotImplementedError("method parameter is not implemented")
 
-        if not (to_replace is None and value is None):
+        if (
+            value is no_default
+            and method is no_default
+            and not is_dict_like(to_replace)
+            and regex is False
+        ):
+            warnings.warn(
+                f"{type(self).__name__}.replace without 'value' and with "
+                "non-dict-like 'to_replace' is deprecated "
+                "and will raise in a future version. "
+                "Explicitly specify the new values instead.",
+                FutureWarning,
+            )
+        if not (to_replace is None and value is no_default):
             copy_data = {}
             (
                 all_na_per_column,
@@ -5320,7 +5338,7 @@ def _get_replacement_values_for_columns(
                 "value argument must be scalar, list-like or Series"
             )
     elif _is_series(to_replace):
-        if value is None:
+        if value in {None, no_default}:
             to_replace_columns = {
                 col: as_column(to_replace.index) for col in columns_dtype_map
             }
@@ -5351,7 +5369,7 @@ def _get_replacement_values_for_columns(
                 "value"
             )
     elif is_dict_like(to_replace):
-        if value is None:
+        if value in {None, no_default}:
             to_replace_columns = {
                 col: list(to_replace.keys()) for col in columns_dtype_map
             }
