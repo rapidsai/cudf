@@ -30,6 +30,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean dayFirst;
   private final boolean lines;
   private final boolean recoverWithNull;
+  private final boolean normalizeSingleQuotes;
   private final boolean mixedTypesAsStrings;
 
   private JSONOptions(Builder builder) {
@@ -37,6 +38,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     dayFirst = builder.dayFirst;
     lines = builder.lines;
     recoverWithNull = builder.recoverWithNull;
+    normalizeSingleQuotes = builder.normalizeSingleQuotes;
     mixedTypesAsStrings = builder.mixedTypesAsStrings;
   }
 
@@ -51,6 +53,10 @@ public final class JSONOptions extends ColumnFilterOptions {
   /** Return the value of the recoverWithNull option */
   public boolean isRecoverWithNull() {
     return recoverWithNull;
+  }
+
+  public boolean isNormalizeSingleQuotes() {
+    return normalizeSingleQuotes;
   }
 
   public boolean isMixedTypesAsStrings() {
@@ -71,6 +77,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean lines = true;
 
     private boolean recoverWithNull = false;
+    private boolean normalizeSingleQuotes = false;
 
     private boolean mixedTypesAsStrings = false;
 
@@ -106,6 +113,14 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withRecoverWithNull(boolean recoverWithNull) {
       this.recoverWithNull = recoverWithNull;
+      return this;
+    }
+
+    /**
+     * Should the single quotes be normalized.
+     */
+    public Builder withNormalizeSingleQuotes(boolean normalizeSingleQuotes) {
+      this.normalizeSingleQuotes = normalizeSingleQuotes;
       return this;
     }
 
