@@ -85,7 +85,11 @@ cpdef generate_pandas_metadata(table, index):
 
     # Columns
     for name, col in table._data.items():
-        col_names.append(name)
+        if not isinstance(name, str) and cudf.get_option("mode.pandas_compatible"):
+            col_names.append(str(name))
+        else:
+            col_names.append(name)
+
         if isinstance(col.dtype, cudf.CategoricalDtype):
             raise ValueError(
                 "'category' column dtypes are currently not "
