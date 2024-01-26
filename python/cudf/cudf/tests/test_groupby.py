@@ -3130,8 +3130,10 @@ def test_groupby_get_group(pdf, group, name, obj):
     else:
         gobj = obj
 
-    expected = pdf.groupby(group).get_group(name=name, obj=obj)
-    actual = gdf.groupby(group).get_group(name=name, obj=gobj)
+    with expect_warning_if(obj is not None):
+        expected = pdf.groupby(group).get_group(name=name, obj=obj)
+    with expect_warning_if(obj is not None):
+        actual = gdf.groupby(group).get_group(name=name, obj=gobj)
 
     assert_groupby_results_equal(expected, actual)
 

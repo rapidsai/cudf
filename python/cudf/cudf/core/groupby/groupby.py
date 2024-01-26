@@ -379,6 +379,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if obj is None:
             obj = self.obj
+        else:
+            warnings.warn(
+                "obj is deprecated and will be removed in a future version. "
+                "Do ``df.iloc[gb.indices.get(name)]`` "
+                "instead of ``gb.get_group(name, obj=df)``.",
+                FutureWarning,
+            )
 
         return obj.loc[self.groups[name].drop_duplicates()]
 
