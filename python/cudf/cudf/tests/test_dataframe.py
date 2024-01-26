@@ -10794,7 +10794,6 @@ def test_series_data_with_name_with_columns_matching():
 def test_series_data_with_name_with_columns_not_matching():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1])
-    # import pdb;pdb.set_trace()
     assert_eq(gdf, pdf)
 
 

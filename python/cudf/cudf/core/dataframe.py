@@ -1038,7 +1038,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 empty_column = functools.partial(
                     cudf.core.column.column_empty,
                     row_count=(0 if index is None else len(index)),
-                    # dtype=None,
                     masked=index is not None,
                 )
 
