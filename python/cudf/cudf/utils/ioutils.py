@@ -228,7 +228,7 @@ path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset. Use list of str with partition_offsets
     to write parts of the dataframe to different files.
-compression : {{'snappy', 'ZSTD', None}}, default 'snappy'
+compression : {{'snappy', 'ZSTD', 'lz4', None}}, default 'snappy'
     Name of the compression to use. Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output.
@@ -490,7 +490,7 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
+compression : {{ 'snappy', 'ZSTD', 'lz4', None }}, default 'snappy'
     Name of the compression to use. Use None for no compression.
 statistics: str {{ "ROWGROUP", "STRIPE", None }}, default "ROWGROUP"
     The granularity with which column statistics must
