@@ -1,6 +1,13 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from cudf._lib.cpp.aggregation cimport Kind as kind_t, aggregation
+from libcpp.memory cimport unique_ptr
+
+from cudf._lib.cpp cimport aggregation as cpp_aggregation
+from cudf._lib.cpp.aggregation cimport (
+    Kind as kind_t,
+    aggregation,
+    rolling_aggregation,
+)
 
 
 cdef class Aggregation:
@@ -8,7 +15,11 @@ cdef class Aggregation:
     cpdef kind_t kind(self)
 
 
-cdef class RollingAggregation(Aggregation):
+cdef class SumAggregation(Aggregation):
+    pass
+
+
+cdef class RollingAggregation(SumAggregation):
     pass
 
 

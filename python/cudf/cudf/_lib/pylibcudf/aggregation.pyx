@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp.utility cimport move
 
 # Have to alias this so that the Pythonic name gets capitalized
 from cudf._lib.cpp.aggregation cimport Kind as kind_t
@@ -23,12 +24,31 @@ cdef class Aggregation:
             "Use one of the factory functions."
         )
 
+    def __dealloc__(self):
+        # Deletion is always handled by child classes.
+        if type(self) is not Aggregation and self.c_ptr is not NULL:
+            del self.c_ptr
+
     cpdef kind_t kind(self):
         """Get the kind of the aggregation."""
-        return dereference(self.c_parent_obj).kind
+        return dereference(self.c_ptr).kind
 
 
-cdef class RollingAggregation(Aggregation):
+cdef class SumAggregation(Aggregation):
+    @classmethod
+    def sum(cls):
+        # We construct using cls but cdef as the base class because Cython
+        # objects are effectively pointers so this will polymorphically store
+        # the derived object. This allows us to construct the desired derived
+        # object without needing to override this method in the base class.
+        cdef Aggregation out = cls.__new__(cls)
+        cdef unique_ptr[rolling_aggregation] ptr = move(
+            cpp_aggregation.make_sum_aggregation[rolling_aggregation]())
+        out.c_ptr = ptr.release()
+        return out
+
+
+cdef class RollingAggregation(SumAggregation):
     pass
 
 
