@@ -58,7 +58,7 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
-- numpy>=1.21,<1.25
+- numpy>=1.21
 - numpydoc
 - nvcomp==3.0.5
 - nvtx>=0.2.1

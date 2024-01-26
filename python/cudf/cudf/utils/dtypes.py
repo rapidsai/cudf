@@ -602,7 +602,7 @@ def find_common_type(dtypes):
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
 
-    common_dtype = np.find_common_type(list(dtypes), [])
+    common_dtype = np.result_type(*dtypes)
     if common_dtype == np.dtype("float16"):
         return cudf.dtype("float32")
     return cudf.dtype(common_dtype)
