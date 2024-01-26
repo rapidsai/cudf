@@ -625,7 +625,6 @@ def test_groupby_apply_jit_sum_integer_overflow(dtype):
     ],
 )
 def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
-
     dataset = groupby_jit_datasets[dataset]
 
     dataset["val1"] = dataset["val1"].astype(dtype)

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -1259,7 +1259,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],

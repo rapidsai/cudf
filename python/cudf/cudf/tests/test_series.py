@@ -813,7 +813,6 @@ def test_round_nan_as_null_false(series, decimal):
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_isnull_isna(ps, nan_as_null):
-
     if nan_as_null is False and (
         ps.isna().any() and not ps.isna().all() and ps.dtype == object
     ):
@@ -829,7 +828,6 @@ def test_series_isnull_isna(ps, nan_as_null):
 @pytest.mark.parametrize("ps", _series_na_data())
 @pytest.mark.parametrize("nan_as_null", [True, False, None])
 def test_series_notnull_notna(ps, nan_as_null):
-
     if nan_as_null is False and (
         ps.isna().any() and not ps.isna().all() and ps.dtype == object
     ):
