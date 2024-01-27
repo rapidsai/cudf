@@ -78,6 +78,11 @@ class reader::impl {
                     std::vector<std::vector<size_type>> const& stripes);
 
   /**
+   *
+   */
+  void create_pass_data();
+
+  /**
    * @brief Compute stripe sizes.
    */
   void query_stripe_compression_info();

@@ -130,8 +130,7 @@ void reader::impl::query_stripe_compression_info()
     stream_compinfo_map;
 
   // Logically view streams as columns
-  std::vector<orc_stream_info> stream_info;
-  stream_info.reserve(selected_stripes.size() * selected_stripes.front().stripe_info.size());
+  _file_itm_data->lvl_stream_info.resize(_selected_columns.num_levels());
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
@@ -149,6 +148,9 @@ void reader::impl::query_stripe_compression_info()
   }
 
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& stream_info = _file_itm_data->lvl_stream_info[level];
+    stream_info.reserve(selected_stripes.size() * selected_stripes.front().stripe_info.size());
+
     // Get the total number of stripes across all input files.
     std::size_t total_num_stripes =
       std::accumulate(selected_stripes.begin(),
@@ -282,7 +284,6 @@ void reader::impl::query_stripe_compression_info()
       }
 
       // Must clear so we will not overwrite the old compression info stream_id.
-      stream_info.clear();
       stream_compinfo_map.clear();
 
     } else {

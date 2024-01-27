@@ -65,7 +65,7 @@ std::size_t gather_stream_info_and_update_chunks(
   bool use_index,
   bool apply_struct_map,
   std::size_t* num_dictionary_entries,
-  std::vector<orc_stream_info>& stream_info,
+  std::size_t* stream_idx,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
 {
   uint64_t src_offset = 0;
@@ -106,7 +106,7 @@ std::size_t gather_stream_info_and_update_chunks(
             if (child_idx >= 0) {
               col                             = child_idx;
               auto& chunk                     = chunks[stripe_index][col];
-              chunk.strm_id[gpu::CI_PRESENT]  = stream_info.size();
+              chunk.strm_id[gpu::CI_PRESENT]  = *stream_idx;
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
           }
@@ -118,7 +118,7 @@ std::size_t gather_stream_info_and_update_chunks(
         auto& chunk           = chunks[stripe_index][col];
         auto const index_type = get_stream_index_type(stream.kind);
         if (index_type < gpu::CI_NUM_STREAMS) {
-          chunk.strm_id[index_type]  = stream_info.size();
+          chunk.strm_id[index_type]  = *stream_idx;
           chunk.strm_len[index_type] = stream.length;
           // NOTE: skip_count field is temporarily used to track the presence of index streams
           chunk.skip_count |= 1 << index_type;
@@ -131,13 +131,7 @@ std::size_t gather_stream_info_and_update_chunks(
         }
       }
 
-      stream_info.emplace_back(stripeinfo->offset + src_offset,
-                               dst_offset,
-                               stream.length,
-                               stripe_index,
-                               level,
-                               column_id,
-                               stream.kind);
+      (*stream_idx)++;
       dst_offset += stream.length;
     }
     src_offset += stream.length;
@@ -165,7 +159,7 @@ rmm::device_buffer decompress_stripe_data(
     compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
-  host_span<orc_stream_info> stream_info,
+  host_span<orc_stream_info const> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
   std::size_t num_stripes,
@@ -288,7 +282,7 @@ rmm::device_buffer decompress_stripe_data(
     compinfo[i].copy_in_ctl  = inflate_in.data() + start_pos_uncomp;
     compinfo[i].copy_out_ctl = inflate_out.data() + start_pos_uncomp;
 
-    stream_info[i].dst_pos = decomp_offset;
+    //    stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
     start_pos += compinfo[i].num_compressed_blocks;
     start_pos_uncomp += compinfo[i].num_uncompressed_blocks;
@@ -748,6 +742,31 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
+void reader::impl::create_pass_data()
+{
+  auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
+  lvl_stripe_data.resize(_selected_columns.num_levels());
+
+  auto const& selected_stripes = _file_itm_data->selected_stripes;
+
+  // Logically view streams as columns
+  std::vector<orc_stream_info> stream_info;
+  stream_info.reserve(selected_stripes.size() * selected_stripes.front().stripe_info.size());
+
+  auto& col_meta = *_col_meta;
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& columns_level = _selected_columns.levels[level];
+    // Association between each ORC column and its cudf::column
+    col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
+
+    size_type col_id{0};
+    for (auto& col : columns_level) {
+      // Map each ORC column to its column
+      col_meta.orc_col_map[level][col.id] = col_id++;
+    }
+  }
+}
+
 void reader::impl::prepare_data(uint64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes)
@@ -856,7 +875,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       (rows_to_skip == 0);
 
     // Logically view streams as columns
-    std::vector<orc_stream_info> stream_info;
+    auto const& stream_info = _file_itm_data->lvl_stream_info[level];
 
     null_count_prefix_sums.emplace_back();
     null_count_prefix_sums.back().reserve(_selected_columns.levels[level].size());
@@ -873,7 +892,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     std::size_t stripe_start_row = 0;
     std::size_t num_dict_entries = 0;
     std::size_t num_rowgroups    = 0;
-    int stripe_idx               = 0;
+    std::size_t stripe_idx       = 0;
+    std::size_t stream_idx       = 0;
 
     // std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
     for (auto const& stripe_source_mapping : selected_stripes) {
@@ -882,7 +902,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         auto const stripe_info   = stripe.first;
         auto const stripe_footer = stripe.second;
 
-        auto stream_count = stream_info.size();
         auto const total_data_size =
           gather_stream_info_and_update_chunks(stripe_idx,
                                                level,
@@ -893,7 +912,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                                use_index,
                                                level == 0,
                                                &num_dict_entries,
-                                               stream_info,
+                                               &stream_idx,
                                                chunks);
 
         auto const is_stripe_data_empty = total_data_size == 0;
