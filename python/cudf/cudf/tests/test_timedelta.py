@@ -11,7 +11,6 @@ import pytest
 import cudf
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
-from cudf.core._compat import PANDAS_GE_200
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -1333,11 +1332,7 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
     psr = sr.to_pandas()
 
     actual = sr.astype(timedelta_dtype)
-
-    if PANDAS_GE_200:
-        expected = psr.astype(timedelta_dtype)
-    else:
-        expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
+    expected = psr.astype(timedelta_dtype)
 
     assert_eq(expected, actual)
 

@@ -18,8 +18,6 @@ from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _all_bools_with_nulls
-from cudf.core._compat import PANDAS_GE_200
-
 
 _dtype_to_format_conversion = {
     "timedelta64[ns]": "%D days %H:%M:%S",
@@ -154,11 +152,7 @@ class TimeDeltaColumn(ColumnBase):
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
 
-        if PANDAS_GE_200:
-            host_values = self.to_arrow()
-        else:
-            # Pandas<2.0 supports only `timedelta64[ns]`, hence the cast.
-            host_values = self.astype("timedelta64[ns]").to_arrow()
+        host_values = self.to_arrow()
 
         # Pandas only supports `timedelta64[ns]` dtype
         # and conversion to this type is necessary to make

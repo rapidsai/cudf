@@ -15,7 +15,6 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
-from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -519,10 +518,6 @@ def test_empty_df_head_tail_index(n):
             pd.Index(range(5)) > 1,
             10,
             None,
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_133,
-                reason="https://github.com/pandas-dev/pandas/issues/43240",
-            ),
         ),
         (
             pd.Index(np.arange(10)),
@@ -1524,7 +1519,7 @@ def test_index_from_arrow(data):
     arrow_array = pa.Array.from_pandas(pdi)
     expected_index = pd.Index(arrow_array.to_pandas())
     gdi = cudf.Index.from_arrow(arrow_array)
-    if PANDAS_GE_200 and gdi.dtype == cudf.dtype("datetime64[s]"):
+    if gdi.dtype == cudf.dtype("datetime64[s]"):
         # Arrow bug:
         # https://github.com/apache/arrow/issues/33321
         # arrow cannot convert non-nanosecond
@@ -1738,8 +1733,7 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        with expect_warning_if(not PANDAS_GE_200 and method is not None):
-            expected = pi.get_indexer(key, method=method)
+        expected = pi.get_indexer(key, method=method)
         got = gi.get_indexer(key, method=method)
 
         assert_eq(expected, got)
@@ -2278,7 +2272,6 @@ def test_range_index_concat(objs):
             pd.RangeIndex(0, 10, 2),
             pd.RangeIndex(1, 5, 3),
             marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
                 reason="https://github.com/pandas-dev/pandas/issues/53490",
                 strict=False,
             ),
@@ -2287,7 +2280,6 @@ def test_range_index_concat(objs):
             pd.RangeIndex(1, 5, 3),
             pd.RangeIndex(0, 10, 2),
             marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
                 reason="https://github.com/pandas-dev/pandas/issues/53490",
                 strict=False,
             ),
@@ -2296,7 +2288,6 @@ def test_range_index_concat(objs):
             pd.RangeIndex(1, 10, 3),
             pd.RangeIndex(1, 5, 2),
             marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
                 reason="https://github.com/pandas-dev/pandas/issues/53490",
                 strict=False,
             ),
@@ -2308,7 +2299,6 @@ def test_range_index_concat(objs):
             pd.RangeIndex(1, 100, 6),
             pd.RangeIndex(1, 50, 3),
             marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
                 reason="https://github.com/pandas-dev/pandas/issues/53490",
                 strict=False,
             ),
@@ -2446,11 +2436,9 @@ def test_index_type_methods(data, func):
     pidx = pd.Index(data)
     gidx = cudf.from_pandas(pidx)
 
-    if PANDAS_GE_200:
-        with pytest.warns(FutureWarning):
-            expected = getattr(pidx, func)()
-    else:
+    with pytest.warns(FutureWarning):
         expected = getattr(pidx, func)()
+
     with pytest.warns(FutureWarning):
         actual = getattr(gidx, func)()
 
@@ -3058,21 +3046,6 @@ def test_index_getitem_time_duration(dtype):
 
 @pytest.mark.parametrize("dtype", ALL_TYPES)
 def test_index_empty_from_pandas(request, dtype):
-    request.node.add_marker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_200
-            and dtype
-            in {
-                "datetime64[ms]",
-                "datetime64[s]",
-                "datetime64[us]",
-                "timedelta64[ms]",
-                "timedelta64[s]",
-                "timedelta64[us]",
-            },
-            reason="Fixed in pandas-2.0",
-        )
-    )
     pidx = pd.Index([], dtype=dtype)
     gidx = cudf.from_pandas(pidx)
 
@@ -3096,8 +3069,7 @@ def test_index_to_frame(data, data_name, index, name):
     pidx = pd.Index(data, name=data_name)
     gidx = cudf.from_pandas(pidx)
 
-    with expect_warning_if(not PANDAS_GE_200 and name is None):
-        expected = pidx.to_frame(index=index, name=name)
+    expected = pidx.to_frame(index=index, name=name)
     actual = gidx.to_frame(index=index, name=name)
 
     assert_eq(expected, actual)

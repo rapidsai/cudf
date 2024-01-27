@@ -21,7 +21,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_153
+from cudf.core._compat import PANDAS_GE_201
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -291,7 +291,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     expect = expect.reset_index(drop=True)
     got = got.reset_index(drop=True)
 
-    assert_eq(expect, got, check_column_type=not PANDAS_GE_200)
+    assert_eq(expect, got, check_column_type=False)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
@@ -1607,22 +1607,20 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
     expect = pdf
     got = pd.read_parquet(gdf_fname)
-    if PANDAS_GE_200:
-        # https://github.com/pandas-dev/pandas/issues/52412
-        assert got["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
-        assert got["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
-        got["col_datetime64[ms]"] = got["col_datetime64[ms]"].astype(
-            "datetime64[ms]"
-        )
-        got["col_datetime64[us]"] = got["col_datetime64[us]"].astype(
-            "datetime64[us]"
-        )
+    # https://github.com/pandas-dev/pandas/issues/52412
+    assert got["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
+    assert got["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
+    got["col_datetime64[ms]"] = got["col_datetime64[ms]"].astype(
+        "datetime64[ms]"
+    )
+    got["col_datetime64[us]"] = got["col_datetime64[us]"].astype(
+        "datetime64[us]"
+    )
     # verify INT96 timestamps were converted back to the same data.
     assert_eq(expect, got, check_categorical=False)
 
 
 def test_multifile_parquet_folder(tmpdir):
-
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
     test_pdf2 = make_pdf(nrows=20, dtype="float64")
     expect = pd.concat([test_pdf1, test_pdf2])
@@ -1907,7 +1905,7 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200 and isinstance(got_pd["c"].dtype, pd.CategoricalDtype):
+    if isinstance(got_pd["c"].dtype, pd.CategoricalDtype):
         # Work-around for pandas bug:
         # https://github.com/pandas-dev/pandas/issues/53345
         got_pd["c"] = got_pd["c"].astype(
@@ -1963,15 +1961,14 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        got_pd["a"] = got_pd["a"].astype(
-            pd.CategoricalDtype(
-                categories=got_pd["a"].dtype.categories.astype("int64"),
-                ordered=got_pd["a"].dtype.ordered,
-            )
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    got_pd["a"] = got_pd["a"].astype(
+        pd.CategoricalDtype(
+            categories=got_pd["a"].dtype.categories.astype("int64"),
+            ordered=got_pd["a"].dtype.ordered,
         )
+    )
     assert_eq(got_pd, got_cudf)
 
 
@@ -2012,15 +2009,14 @@ def test_parquet_writer_chunked_max_file_size(
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        got_pd["a"] = got_pd["a"].astype(
-            pd.CategoricalDtype(
-                categories=got_pd["a"].dtype.categories.astype("int64"),
-                ordered=got_pd["a"].dtype.ordered,
-            )
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    got_pd["a"] = got_pd["a"].astype(
+        pd.CategoricalDtype(
+            categories=got_pd["a"].dtype.categories.astype("int64"),
+            ordered=got_pd["a"].dtype.ordered,
         )
+    )
     assert_eq(
         got_pd.sort_values(["b"]).reset_index(drop=True),
         got_cudf.sort_values(["b"]).reset_index(drop=True),
@@ -2066,15 +2062,14 @@ def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        got_pd["a"] = got_pd["a"].astype(
-            pd.CategoricalDtype(
-                categories=got_pd["a"].dtype.categories.astype("int64"),
-                ordered=got_pd["a"].dtype.ordered,
-            )
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    got_pd["a"] = got_pd["a"].astype(
+        pd.CategoricalDtype(
+            categories=got_pd["a"].dtype.categories.astype("int64"),
+            ordered=got_pd["a"].dtype.ordered,
         )
+    )
     assert_eq(got_pd, got_cudf)
 
 
@@ -2182,15 +2177,14 @@ def test_read_parquet_partitioned_filtered(
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
     got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        expect["c"] = expect["c"].astype(
-            pd.CategoricalDtype(
-                categories=expect["c"].dtype.categories.astype("int64"),
-                ordered=expect["c"].dtype.ordered,
-            )
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    expect["c"] = expect["c"].astype(
+        pd.CategoricalDtype(
+            categories=expect["c"].dtype.categories.astype("int64"),
+            ordered=expect["c"].dtype.ordered,
         )
+    )
     assert_eq(expect, got)
 
 
@@ -2413,7 +2407,7 @@ def run_parquet_index(pdf, index):
         expected,
         actual,
         check_index_type=True,
-        check_column_type=not PANDAS_GE_200,
+        check_column_type=False,
     )
 
 
@@ -2613,43 +2607,37 @@ def test_parquet_writer_list_statistics(tmpdir):
             ]
         },
         # Struct of Lists
-        pytest.param(
-            {
-                "Real estate records": [
-                    None,
-                    {
-                        "Status": "NRI",
-                        "Ownerships": {
-                            "land_unit": [None, 2, None],
-                            "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
-                        },
+        {
+            "Real estate records": [
+                None,
+                {
+                    "Status": "NRI",
+                    "Ownerships": {
+                        "land_unit": [None, 2, None],
+                        "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
                     },
-                    {
-                        "Status": None,
-                        "Ownerships": {
-                            "land_unit": [4, 5],
-                            "flats": [[7, 8], []],
-                        },
+                },
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [4, 5],
+                        "flats": [[7, 8], []],
                     },
-                    {
-                        "Status": "RI",
-                        "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {
+                    "Status": "RI",
+                    "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {"Status": "RI", "Ownerships": None},
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [7, 8, 9],
+                        "flats": [[], [], []],
                     },
-                    {"Status": "RI", "Ownerships": None},
-                    {
-                        "Status": None,
-                        "Ownerships": {
-                            "land_unit": [7, 8, 9],
-                            "flats": [[], [], []],
-                        },
-                    },
-                ]
-            },
-            marks=pytest.mark.xfail(
-                condition=PANDAS_LT_153,
-                reason="pandas assertion fixed in pandas 1.5.3",
-            ),
-        ),
+                },
+            ]
+        },
     ],
 )
 def test_parquet_writer_nested(tmpdir, data):
@@ -2692,18 +2680,17 @@ def test_parquet_writer_column_validation():
         with pytest.warns(UserWarning):
             df.to_parquet(cudf_parquet)
 
-    if PANDAS_GE_200:
-        with pytest.warns(UserWarning):
-            pdf.to_parquet(pandas_parquet)
+    with pytest.warns(UserWarning):
+        pdf.to_parquet(pandas_parquet)
 
-        assert_eq(
-            pd.read_parquet(cudf_parquet),
-            cudf.read_parquet(pandas_parquet),
-        )
-        assert_eq(
-            cudf.read_parquet(cudf_parquet),
-            pd.read_parquet(pandas_parquet),
-        )
+    assert_eq(
+        pd.read_parquet(cudf_parquet),
+        cudf.read_parquet(pandas_parquet),
+    )
+    assert_eq(
+        cudf.read_parquet(cudf_parquet),
+        pd.read_parquet(pandas_parquet),
+    )
 
     with cudf.option_context("mode.pandas_compatible", False):
         with pytest.raises(ValueError):
@@ -2730,7 +2717,7 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     got = pd.read_parquet(fname)
     nullable = num_rows > 0
 
-    if not PANDAS_GE_200:
+    if not PANDAS_GE_201:
         # BUG in pre-2.0.1:
         # https://github.com/pandas-dev/pandas/issues/52449
         gdf["col_datetime64[ms]"] = gdf["col_datetime64[ms]"].astype(
@@ -3049,7 +3036,7 @@ def test_parquet_roundtrip_time_delta():
     df.to_parquet(buffer)
     # TODO: Remove `check_dtype` once following issue is fixed in arrow:
     # https://github.com/apache/arrow/issues/33321
-    assert_eq(df, cudf.read_parquet(buffer), check_dtype=not PANDAS_GE_200)
+    assert_eq(df, cudf.read_parquet(buffer), check_dtype=False)
 
 
 def test_parquet_reader_malformed_file(datadir):

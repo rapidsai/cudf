@@ -2,6 +2,7 @@
 
 import datetime
 import operator
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -10,16 +11,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-import warnings
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import (
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-    PANDAS_EQ_200,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-)
+from cudf.core._compat import PANDAS_EQ_200, PANDAS_GE_210
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -623,22 +617,13 @@ def test_datetime_dataframe():
 @pytest.mark.parametrize("dayfirst", [True, False])
 def test_cudf_to_datetime(data, dayfirst):
     pd_data = data
-    is_string_data = False
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
-        is_string_data = (
-            gd_data.ndim == 1
-            and not gd_data.empty
-            and gd_data.dtype.kind == "O"
-        )
     else:
         if type(pd_data).__module__ == np.__name__:
             gd_data = cp.array(pd_data)
         else:
             gd_data = pd_data
-            is_string_data = isinstance(gd_data, list) and isinstance(
-                next(iter(gd_data), None), str
-            )
 
     expected = pd.to_datetime(pd_data, dayfirst=dayfirst)
     actual = cudf.to_datetime(gd_data, dayfirst=dayfirst)
@@ -696,7 +681,6 @@ def test_to_datetime_errors(data):
 
 
 def test_to_datetime_not_implemented():
-
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([], exact=False)
 
@@ -817,7 +801,6 @@ def test_to_datetime_different_formats_notimplemented():
 
 
 def test_datetime_can_cast_safely():
-
     sr = cudf.Series(
         ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
     )
@@ -938,7 +921,6 @@ def test_str_to_datetime_error():
 @pytest.mark.parametrize("data_dtype", DATETIME_TYPES)
 @pytest.mark.parametrize("other_dtype", DATETIME_TYPES)
 def test_datetime_subtract(data, other, data_dtype, other_dtype):
-
     gsr = cudf.Series(data, dtype=data_dtype)
     psr = gsr.to_pandas()
 
@@ -1512,26 +1494,12 @@ date_range_test_dates_end = [
 date_range_test_periods = [1, 10, 100]
 date_range_test_freq = [
     {"months": 3, "years": 1},
-    pytest.param(
-        {"hours": 10, "days": 57, "nanoseconds": 3},
-        marks=pytest.mark.xfail(
-            condition=PANDAS_LT_140,
-            reason="Pandas ignoring nanoseconds component. "
-            "https://github.com/pandas-dev/pandas/issues/44393",
-        ),
-    ),
+    {"hours": 10, "days": 57, "nanoseconds": 3},
     "83D",
     "17h",
     "-680T",
     "110546s",
-    pytest.param(
-        "110546789L",
-        marks=pytest.mark.xfail(
-            condition=not PANDAS_GE_150,
-            reason="Pandas DateOffset ignores milliseconds. "
-            "https://github.com/pandas-dev/pandas/issues/43371",
-        ),
-    ),
+    "110546789L",
     "110546789248U",
 ]
 
@@ -1577,44 +1545,6 @@ def test_date_range_start_end_freq(request, start, end, freq):
             reason="https://github.com/rapidsai/cudf/issues/12133",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_200 and isinstance(freq, dict)
-                and freq.get("hours", None) == 10
-                and freq.get("days", None) == 57
-                and freq.get("nanoseconds", None) == 3
-                and (
-                    (
-                        start == "1996-11-21 04:05:30"
-                        and end == "2000-02-13 08:41:06"
-                    )
-                    or (
-                        start == "1970-01-01 00:00:00"
-                        and end == "2000-02-13 08:41:06"
-                    )
-                    or (
-                        start == "1970-01-01 00:00:00"
-                        and end == "1996-11-21 04:05:30"
-                    )
-                    or (
-                        start == "1831-05-08 15:23:21"
-                        and end == "2000-02-13 08:41:06"
-                    )
-                    or (
-                        start == "1831-05-08 15:23:21"
-                        and end == "1996-11-21 04:05:30"
-                    )
-                    or (
-                        start == "1831-05-08 15:23:21"
-                        and end == "1970-01-01 00:00:00"
-                    )
-                )
-            ),
-            reason="Nanosecond offsets being dropped by pandas, which is "
-            "fixed in pandas-2.0+",
-        )
-    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1631,28 +1561,6 @@ def test_date_range_start_end_freq(request, start, end, freq):
 
 
 def test_date_range_start_freq_periods(request, start, freq, periods):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_200 and isinstance(freq, dict)
-                and freq.get("hours", None) == 10
-                and freq.get("days", None) == 57
-                and freq.get("nanoseconds", None) == 3
-                and periods in (10, 100)
-                and (
-                    start
-                    in {
-                        "2000-02-13 08:41:06",
-                        "1996-11-21 04:05:30",
-                        "1970-01-01 00:00:00",
-                        "1831-05-08 15:23:21",
-                    }
-                )
-            ),
-            reason="Nanosecond offsets being dropped by pandas, which is "
-            "fixed in pandas-2.0+",
-        )
-    )
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -2322,12 +2230,6 @@ def test_daterange_pandas_compatibility():
     ],
 )
 def test_datetime_index_with_freq(request, data, dtype, freq):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(not PANDAS_GE_200 and dtype != "datetime64[ns]"),
-            reason="Pandas < 2.0 lacks non-nano-second dtype support.",
-        )
-    )
     actual = cudf.DatetimeIndex(data, dtype=dtype, freq=freq)
     expected = pd.DatetimeIndex(data, dtype=dtype, freq=freq)
     assert_eq(actual, expected)

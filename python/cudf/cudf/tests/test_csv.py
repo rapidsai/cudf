@@ -17,7 +17,6 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_LT_140, PANDAS_GE_200
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -372,11 +371,10 @@ def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    if PANDAS_GE_200:
-        # TODO: Remove typecast to `ns` after following
-        # issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/52449
-        out["2"] = out["2"].astype("datetime64[ns]")
+    # TODO: Remove typecast to `ns` after following
+    # issue is fixed:
+    # https://github.com/pandas-dev/pandas/issues/52449
+    out["2"] = out["2"].astype("datetime64[ns]")
     assert_eq(df_out, out)
 
 
@@ -1368,10 +1366,6 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(
-    condition=PANDAS_LT_140,
-    reason="https://github.com/rapidsai/cudf/issues/10618",
-)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a

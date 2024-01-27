@@ -1,30 +1,14 @@
 # Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import math
-from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200
 from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
-
-
-@contextmanager
-def _hide_pandas_rolling_min_periods_warning(agg):
-    if not PANDAS_GE_200 and agg == "count":
-        with pytest.warns(
-            FutureWarning,
-            match="min_periods=None will default to the size of window "
-            "consistent with other methods in a future version. Specify "
-            "min_periods=0 instead.",
-        ):
-            yield
-    else:
-        yield
 
 
 @pytest.mark.parametrize(
@@ -151,7 +135,6 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -312,7 +295,6 @@ def test_rolling_getitem_window():
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
-
     psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
@@ -349,7 +331,6 @@ def test_rollling_series_numba_udf_basic(data, index, center):
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_numba_udf_basic(data, center):
-
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
@@ -412,10 +393,9 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        with _hide_pandas_rolling_min_periods_warning(agg):
-            expect = getattr(
-                pdf.groupby("a").rolling(window_size), agg
-            )().fillna(-1)
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -425,10 +405,9 @@ def test_rolling_groupby_simple(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        with _hide_pandas_rolling_min_periods_warning(agg):
-            expect = getattr(
-                pdf.groupby("a").rolling(window_size), agg
-            )().fillna(-1)
+        expect = getattr(pdf.groupby("a").rolling(window_size), agg)().fillna(
+            -1
+        )
         got = getattr(gdf.groupby("a").rolling(window_size), agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
@@ -447,10 +426,9 @@ def test_rolling_groupby_multi(agg):
     gdf = cudf.from_pandas(pdf)
 
     for window_size in range(1, len(pdf) + 1):
-        with _hide_pandas_rolling_min_periods_warning(agg):
-            expect = getattr(
-                pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
-            )().fillna(-1)
+        expect = getattr(
+            pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
+        )().fillna(-1)
         got = getattr(
             gdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
         )().fillna(-1)
@@ -499,23 +477,12 @@ def test_rolling_custom_index_support():
 
             return start, end
 
-        if PANDAS_GE_150:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed, step
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed, step
-                )
-
-        else:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed
-                )
+        def get_window_bounds(
+            self, num_values, min_periods, center, closed, step
+        ):
+            return self.custom_get_window_bounds(
+                num_values, min_periods, center, closed, step
+            )
 
     use_expanding = [True, False, True, False, True]
     indexer = CustomIndexer(window_size=1, use_expanding=use_expanding)

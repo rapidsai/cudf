@@ -12,10 +12,10 @@ from typing import List, Union
 
 import cupy as cp
 import numpy as np
+import pandas as pd
+from pandas.api import types as pd_types
 
 import cudf
-import pandas as pd
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     _is_categorical_dtype,
@@ -30,7 +30,6 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
-from pandas.api import types as pd_types
 
 
 def is_numeric_dtype(obj):
@@ -497,8 +496,9 @@ def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
             pd.Float64Dtype,
             pd.BooleanDtype,
             pd.StringDtype,
+            pd.ArrowDtype,
         ),
-    ) or (PANDAS_GE_150 and isinstance(dtype_to_check, pd.ArrowDtype)):
+    ):
         return True
     elif isinstance(dtype_to_check, pd.CategoricalDtype):
         return _is_pandas_nullable_extension_dtype(

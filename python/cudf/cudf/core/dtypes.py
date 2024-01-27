@@ -9,26 +9,21 @@ from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
 import numpy as np
-import pyarrow as pa
-
-import cudf
 import pandas as pd
-from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_150
-from cudf.core.abc import Serializable
-from cudf.core.buffer import Buffer
-from cudf.utils.docutils import doc_apply
+import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from pandas.core.dtypes.dtypes import (
     CategoricalDtype as pd_CategoricalDtype,
     CategoricalDtypeType as pd_CategoricalDtypeType,
 )
 
-if PANDAS_GE_150:
-    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-else:
-    from pandas.core.arrays._arrow_utils import ArrowIntervalType
+import cudf
+from cudf._typing import Dtype
+from cudf.core.abc import Serializable
+from cudf.core.buffer import Buffer
+from cudf.utils.docutils import doc_apply
 
 
 def dtype(arbitrary):

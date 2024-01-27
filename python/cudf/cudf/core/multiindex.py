@@ -24,7 +24,6 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
 from cudf.core.index import (
     BaseIndex,
@@ -34,8 +33,8 @@ from cudf.core.index import (
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
-from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -469,21 +468,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             )
 
-            if not PANDAS_GE_150:
-                # Need this whole `if` block,
-                # this is a workaround for the following issue:
-                # https://github.com/pandas-dev/pandas/issues/39984
-                preprocess_pdf = pd.DataFrame(
-                    {
-                        name: col.to_pandas(nullable=(col.dtype.kind != "f"))
-                        for name, col in preprocess._data.items()
-                    }
-                )
-
-                preprocess_pdf.columns = preprocess.names
-                preprocess = pd.MultiIndex.from_frame(preprocess_pdf)
-            else:
-                preprocess = preprocess.to_pandas(nullable=True)
+            preprocess = preprocess.to_pandas(nullable=True)
             preprocess.values[:] = tuples_list
         else:
             preprocess = preprocess.to_pandas(nullable=True)
@@ -726,7 +711,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 [
                     frame,
                     cudf.DataFrame(
-                        {"idx": cudf.Series(column.as_column(range(len(frame))))}
+                        {
+                            "idx": cudf.Series(
+                                column.as_column(range(len(frame)))
+                            )
+                        }
                     ),
                 ],
                 axis=1,

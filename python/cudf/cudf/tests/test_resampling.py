@@ -6,7 +6,6 @@ import pytest
 
 import cudf
 from cudf.testing._utils import assert_eq
-from cudf.core._compat import PANDAS_GE_200
 
 
 def assert_resample_results_equal(lhs, rhs, **kwargs):
@@ -15,7 +14,7 @@ def assert_resample_results_equal(lhs, rhs, **kwargs):
         rhs.sort_index(),
         check_dtype=False,
         check_freq=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
         **kwargs,
     )
 

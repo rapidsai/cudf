@@ -8,12 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_GE_134,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-)
+from cudf.core._compat import PANDAS_GE_210
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -172,18 +167,12 @@ def test_series_replace_with_nulls():
                 "c": ["abc", "def", ".", None, None],
             }
         ),
-        pytest.param(
-            cudf.DataFrame(
-                {
-                    "a": ["one", "two", None, "three"],
-                    "b": ["one", None, "two", "three"],
-                },
-                dtype="category",
-            ),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/46672",
-            ),
+        cudf.DataFrame(
+            {
+                "a": ["one", "two", None, "three"],
+                "b": ["one", None, "two", "three"],
+            },
+            dtype="category",
         ),
         cudf.DataFrame(
             {
@@ -1016,7 +1005,6 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                condition=(not PANDAS_GE_134) or (PANDAS_GE_200),
                 reason="https://github.com/pandas-dev/pandas/issues/43232"
                 "https://github.com/pandas-dev/pandas/issues/53358",
             ),

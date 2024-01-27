@@ -1,17 +1,15 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
+from contextlib import contextmanager
 from decimal import Decimal
 
-import warnings
 import numpy as np
 import pandas as pd
 import pytest
 
-from contextlib import contextmanager
-
 import cudf as gd
 from cudf.api.types import _is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140, PANDAS_GE_200
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
@@ -387,13 +385,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    with expect_warning_if(not PANDAS_GE_200):
-        assert_exceptions_equal(
-            lfunc=pd.concat,
-            rfunc=gd.concat,
-            lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
-            rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
-        )
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=gd.concat,
+        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+    )
 
 
 @pytest.mark.parametrize("name", [None, "a"])
@@ -623,7 +620,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
             expected,
             actual,
             check_index_type=not gdf.empty,
-            check_column_type=not PANDAS_GE_200,
+            check_column_type=False,
         )
 
 
@@ -829,13 +826,7 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         axis=axis,
     )
 
-    if PANDAS_GE_150:
-        assert_eq(expected, actual, check_index_type=True)
-    else:
-        # special handling of check_index_type below
-        # required because:
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -903,13 +894,7 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
         [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
 
-    if PANDAS_GE_150:
-        assert_eq(expected, actual, check_index_type=True)
-    else:
-        # special handling of check_index_type below
-        # required because:
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -933,10 +918,6 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [0, 1])
-@pytest.mark.xfail(
-    condition=PANDAS_LT_140,
-    reason="https://github.com/pandas-dev/pandas/issues/43584",
-)
 def test_concat_join_no_overlapping_columns(
     pdf1, pdf2, ignore_index, sort, join, axis
 ):
@@ -958,13 +939,7 @@ def test_concat_join_no_overlapping_columns(
         axis=axis,
     )
 
-    if PANDAS_GE_150:
-        assert_eq(expected, actual, check_index_type=True)
-    else:
-        # special handling of check_index_type below
-        # required because:
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [False, True])
@@ -1118,8 +1093,7 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     assert_eq(
         expected,
         actual,
-        check_index_type=PANDAS_GE_150,
-        check_column_type=not PANDAS_GE_200,
+        check_column_type=False,
     )
 
 
@@ -1154,21 +1128,11 @@ def test_concat_join_series(ignore_index, sort, join, axis):
             axis=axis,
         )
 
-    if PANDAS_GE_150:
-        assert_eq(
-            expected,
-            actual,
-            check_index_type=True,
-        )
-    else:
-        # special handling of check_index_type required below:
-        # https://github.com/pandas-dev/pandas/issues/46675
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(
-            expected,
-            actual,
-            check_index_type=(axis == 0),
-        )
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -1332,13 +1296,7 @@ def test_concat_join_empty_dataframes(
     "join",
     [
         "inner",
-        pytest.param(
-            "outer",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/37937",
-            ),
-        ),
+        "outer",
     ],
 )
 @pytest.mark.parametrize("axis", [1])
