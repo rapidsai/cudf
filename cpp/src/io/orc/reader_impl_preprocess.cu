@@ -100,7 +100,8 @@ std::size_t gather_stream_info(std::size_t stripe_index,
 
   for (auto const& stream : stripefooter->streams) {
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
-      dst_offset += stream.length;
+      // Ignore reading this stream from source.
+      src_offset += stream.length;
       continue;
     }
 
