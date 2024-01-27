@@ -351,48 +351,18 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         Examples
         --------
-
-        For SeriesGroupBy:
-
-        >>> lst = ['a', 'a', 'b']
-        >>> ser = pd.Series([1, 2, 3], index=lst)
-        >>> ser
-        a    1
-        a    2
-        b    3
-        dtype: int64
-        >>> ser.groupby(level=0).indices
-        {'a': array([0, 1]), 'b': array([2])}
-
-        For DataFrameGroupBy:
-
-        >>> data = [[1, 2, 3], [1, 5, 6], [7, 8, 9]]
-        >>> df = pd.DataFrame(data, columns=["a", "b", "c"],
-        ...                   index=["owl", "toucan", "eagle"])
+        >>> import cudf
+        >>> data = [[10, 20, 30], [10, 30, 40], [40, 50, 30]]
+        >>> df = cudf.DataFrame(data, columns=["a", "b", "c"])
         >>> df
-                a  b  c
-        owl     1  2  3
-        toucan  1  5  6
-        eagle   7  8  9
+            a   b   c
+        0  10  20  30
+        1  10  30  40
+        2  40  50  30
         >>> df.groupby(by=["a"]).indices
-        {1: array([0, 1]), 7: array([2])}
-
-        For Resampler:
-
-        >>> ser = pd.Series([1, 2, 3, 4], index=pd.DatetimeIndex(
-        ...                 ['2023-01-01', '2023-01-15', '2023-02-01', '2023-02-15']))
-        >>> ser
-        2023-01-01    1
-        2023-01-15    2
-        2023-02-01    3
-        2023-02-15    4
-        dtype: int64
-        >>> ser.resample('MS').indices
-        defaultdict(<class 'list'>, {Timestamp('2023-01-01 00:00:00'): [0, 1],
-        Timestamp('2023-02-01 00:00:00'): [2, 3]})
+        {10: array([0, 1]), 40: array([2])}
         """
         group_names, offsets, _, grouped_values = self._grouped()
-        grouped_index = cudf.RangeIndex(0, len(grouped_values.index))._as_int_index()
 
         if len(group_names) > self._MAX_GROUPS_BEFORE_WARN:
             warnings.warn(
@@ -401,9 +371,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             )
 
         return dict(
-            zip(group_names.to_pandas(), [part.values for part in grouped_index._split(offsets[1:-1])])
+            zip(
+                group_names.to_pandas(),
+                [
+                    part.values
+                    for part in grouped_values.index._split(offsets[1:-1])
+                ],
+            )
         )
-        # return res_dict
 
     @_cudf_nvtx_annotate
     def get_group(self, name, obj=None):

@@ -3137,12 +3137,11 @@ def test_groupby_get_group(pdf, group, name, obj):
     with expect_warning_if(obj is not None):
         actual = ggb.get_group(name=name, obj=gobj)
 
-
     assert_groupby_results_equal(expected, actual)
 
     expected = pdf.iloc[pgb.indices.get(name)]
     actual = gdf.iloc[ggb.indices.get(name)]
-    import pdb;pdb.set_trace()
+
     assert_eq(expected, actual)
 
 
