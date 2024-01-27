@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -254,7 +254,6 @@ def test_string_slicing(data):
 
 
 def test_categorical_categories():
-
     df = DataFrame(
         {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
     )
@@ -283,7 +282,6 @@ def test_categorical_as_known():
 
 
 def test_str_slice():
-
     df = DataFrame({"a": ["abc,def,123", "xyz,hi,bye"]})
 
     ddf = dgd.from_cudf(df, 1)

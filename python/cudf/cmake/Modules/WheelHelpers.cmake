@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -14,15 +14,15 @@
 include_guard(GLOBAL)
 
 # Making libraries available inside wheels by installing the associated targets.
-function(add_target_libs_to_wheel)
-  list(APPEND CMAKE_MESSAGE_CONTEXT "add_target_libs_to_wheel")
+function(install_aliased_imported_targets)
+  list(APPEND CMAKE_MESSAGE_CONTEXT "install_aliased_imported_targets")
 
   set(options "")
-  set(one_value "LIB_DIR")
+  set(one_value "DESTINATION")
   set(multi_value "TARGETS")
   cmake_parse_arguments(_ "${options}" "${one_value}" "${multi_value}" ${ARGN})
 
-  message(VERBOSE "Installing targets '${__TARGETS}' into lib_dir '${__LIB_DIR}'")
+  message(VERBOSE "Installing targets '${__TARGETS}' into lib_dir '${__DESTINATION}'")
 
   foreach(target IN LISTS __TARGETS)
 
@@ -39,33 +39,21 @@ function(add_target_libs_to_wheel)
     get_target_property(is_imported ${target} IMPORTED)
     if(NOT is_imported)
       # If the target isn't imported, install it into the wheel
-      install(TARGETS ${target} DESTINATION ${__LIB_DIR})
-      message(VERBOSE "install(TARGETS ${target} DESTINATION ${__LIB_DIR})")
+      install(TARGETS ${target} DESTINATION ${__DESTINATION})
+      message(VERBOSE "install(TARGETS ${target} DESTINATION ${__DESTINATION})")
     else()
       # If the target is imported, make sure it's global
-      get_target_property(already_global ${target} IMPORTED_GLOBAL)
-      if(NOT already_global)
-        set_target_properties(${target} PROPERTIES IMPORTED_GLOBAL TRUE)
+      get_target_property(type ${target} TYPE)
+      if(${type} STREQUAL "UNKNOWN_LIBRARY")
+        install(FILES $<TARGET_FILE:${target}> DESTINATION ${__DESTINATION})
+        message(VERBOSE "install(FILES $<TARGET_FILE:${target}> DESTINATION ${__DESTINATION})")
+      else()
+        install(IMPORTED_RUNTIME_ARTIFACTS ${target} DESTINATION ${__DESTINATION})
+        message(
+          VERBOSE
+          "install(IMPORTED_RUNTIME_ARTIFACTS $<TARGET_FILE:${target}> DESTINATION ${__DESTINATION})"
+        )
       endif()
-
-      # Find the imported target's library so we can copy it into the wheel
-      set(lib_loc)
-      foreach(prop IN ITEMS IMPORTED_LOCATION IMPORTED_LOCATION_RELEASE IMPORTED_LOCATION_DEBUG)
-        get_target_property(lib_loc ${target} ${prop})
-        if(lib_loc)
-          message(VERBOSE "Found ${prop} for ${target}: ${lib_loc}")
-          break()
-        endif()
-        message(VERBOSE "${target} has no value for property ${prop}")
-      endforeach()
-
-      if(NOT lib_loc)
-        message(FATAL_ERROR "Found no libs to install for target ${target}")
-      endif()
-
-      # Copy the imported library into the wheel
-      install(FILES ${lib_loc} DESTINATION ${__LIB_DIR})
-      message(VERBOSE "install(FILES ${lib_loc} DESTINATION ${__LIB_DIR})")
     endif()
   endforeach()
 endfunction()

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import json
 import re
@@ -847,7 +847,6 @@ def test_string_contains_case(ps_gs):
     ],
 )
 def test_string_like(pat, esc, expect):
-
     expectation = does_not_raise()
     if len(esc) > 1:
         expectation = pytest.raises(ValueError)
@@ -2409,7 +2408,6 @@ def test_string_str_translate(data):
 
 
 def test_string_str_filter_characters():
-
     data = [
         "hello world",
         "A+B+C+D",
@@ -2439,7 +2437,6 @@ def test_string_str_filter_characters():
 
 
 def test_string_str_code_points():
-
     data = [
         "abc",
         "Def",
@@ -2605,7 +2602,6 @@ def test_string_typecast_error(data, obj_type, dtype):
     ],
 )
 def test_string_hex_to_int(data):
-
     gsr = cudf.Series(data)
 
     expected = cudf.Series([263988422296292, 0, 281474976710655])
@@ -2661,6 +2657,13 @@ def test_string_istimestamp():
         ]
     )
     assert_eq(expected, got)
+
+
+def test_istimestamp_empty():
+    gsr = cudf.Series([], dtype="object")
+    result = gsr.str.istimestamp("%Y%m%d")
+    expected = cudf.Series([], dtype="bool")
+    assert_eq(result, expected)
 
 
 def test_string_ip4_to_int():

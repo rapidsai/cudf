@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -11,8 +11,6 @@ import cudf
 from cudf.api.extensions import no_default
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
-    _create_cudf_series_float64_default,
-    _create_pandas_series_float64_default,
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
@@ -225,8 +223,8 @@ def test_approx_quantiles_int():
 )
 def test_misc_quantiles(data, q):
 
-    pdf_series = _create_pandas_series_float64_default(data)
-    gdf_series = _create_cudf_series_float64_default(data)
+    pdf_series = pd.Series(data, dtype="float64" if len(data) == 0 else None)
+    gdf_series = cudf.from_pandas(pdf_series)
 
     expected = pdf_series.quantile(q.get() if isinstance(q, cp.ndarray) else q)
     actual = gdf_series.quantile(q)
@@ -246,7 +244,7 @@ def test_misc_quantiles(data, q):
             "nan_as_null": False,
         },
         {"data": [1.1032, 2.32, 43.4, 13, -312.0], "index": [0, 4, 3, 19, 6]},
-        {"data": []},
+        {"data": [], "dtype": "float64"},
         {"data": [-3]},
     ],
 )
@@ -276,13 +274,12 @@ def test_kurt_skew_error(op):
     gs = cudf.Series(["ab", "cd"])
     ps = gs.to_pandas()
 
-    with pytest.warns(FutureWarning):
-        assert_exceptions_equal(
-            getattr(gs, op),
-            getattr(ps, op),
-            lfunc_args_and_kwargs=([], {"numeric_only": True}),
-            rfunc_args_and_kwargs=([], {"numeric_only": True}),
-        )
+    assert_exceptions_equal(
+        getattr(gs, op),
+        getattr(ps, op),
+        lfunc_args_and_kwargs=([], {"numeric_only": True}),
+        rfunc_args_and_kwargs=([], {"numeric_only": True}),
+    )
 
 
 @pytest.mark.parametrize(
@@ -361,10 +358,17 @@ def test_series_median(dtype, num_na):
 @pytest.mark.parametrize(
     "fill_method", ["ffill", "bfill", "pad", "backfill", no_default, None]
 )
-def test_series_pct_change(data, periods, fill_method):
+def test_series_pct_change(request, data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
-
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                len(cs) == 0 and periods == 0 and fill_method is no_default
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/57056",
+        )
+    )
     if np.abs(periods) <= len(cs):
         with expect_warning_if(fill_method not in (no_default, None)):
             got = cs.pct_change(periods=periods, fill_method=fill_method)
@@ -539,14 +543,16 @@ def test_df_corr(method):
 )
 @pytest.mark.parametrize("skipna", [True, False])
 def test_nans_stats(data, ops, skipna):
-    psr = _create_pandas_series_float64_default(data)
-    gsr = _create_cudf_series_float64_default(data, nan_as_null=False)
+    psr = pd.Series(data, dtype="float64" if len(data) == 0 else None)
+    gsr = cudf.from_pandas(psr)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
 
-    gsr = _create_cudf_series_float64_default(data, nan_as_null=False)
+    gsr = cudf.Series(
+        data, dtype="float64" if len(data) == 0 else None, nan_as_null=False
+    )
     # Since there is no concept of `nan_as_null` in pandas,
     # nulls will be returned in the operations. So only
     # testing for `skipna=True` when `nan_as_null=False`
@@ -575,28 +581,28 @@ def test_min_count_ops(data, ops, skipna, min_count):
 
 
 @pytest.mark.parametrize(
-    "gsr",
+    "data1",
     [
-        cudf.Series([1, 2, 3, 4], dtype="datetime64[ns]"),
-        cudf.Series([1, 2, 3, 4], dtype="timedelta64[ns]"),
+        [1, 2, 3, 4],
+        [10, 1, 3, 5],
     ],
 )
-def test_cov_corr_invalid_dtypes(gsr):
-    psr = gsr.to_pandas()
+@pytest.mark.parametrize(
+    "data2",
+    [
+        [1, 2, 3, 4],
+        [10, 1, 3, 5],
+    ],
+)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]", "timedelta64[ns]"])
+def test_cov_corr_datetime_timedelta(data1, data2, dtype):
+    gsr1 = cudf.Series(data1, dtype=dtype)
+    gsr2 = cudf.Series(data2, dtype=dtype)
+    psr1 = gsr1.to_pandas()
+    psr2 = gsr2.to_pandas()
 
-    assert_exceptions_equal(
-        lfunc=psr.corr,
-        rfunc=gsr.corr,
-        lfunc_args_and_kwargs=([psr],),
-        rfunc_args_and_kwargs=([gsr],),
-    )
-
-    assert_exceptions_equal(
-        lfunc=psr.cov,
-        rfunc=gsr.cov,
-        lfunc_args_and_kwargs=([psr],),
-        rfunc_args_and_kwargs=([gsr],),
-    )
+    assert_eq(psr1.corr(psr2), gsr1.corr(gsr2))
+    assert_eq(psr1.cov(psr2), gsr1.cov(gsr2))
 
 
 @pytest.mark.parametrize(

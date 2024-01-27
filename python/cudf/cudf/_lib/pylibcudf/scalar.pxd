@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -21,7 +21,7 @@ cdef class Scalar:
     # needed for deallocation
     cdef DeviceMemoryResource mr
 
-    cdef const scalar* get(self) except *
+    cdef const scalar* get(self) noexcept nogil
 
     cpdef DataType type(self)
     cpdef bool is_valid(self)

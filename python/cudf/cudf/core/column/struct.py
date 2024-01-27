@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
@@ -9,7 +9,6 @@ import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
-from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
@@ -158,7 +157,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not is_struct_dtype(parent.dtype):
+        if not isinstance(parent.dtype, StructDtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -31,8 +31,6 @@ from cudf.testing._utils import (
     SERIES_OR_INDEX_NAMES,
     SIGNED_INTEGER_TYPES,
     UNSIGNED_TYPES,
-    _create_cudf_series_float64_default,
-    _create_pandas_series_float64_default,
     assert_column_memory_eq,
     assert_column_memory_ne,
     assert_eq,
@@ -661,7 +659,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if hasattr(ps, "dtype") and isinstance(ps, pd.CategoricalDtype):
+        if hasattr(ps, "dtype") and isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
@@ -781,6 +779,7 @@ def test_index_to_series(data):
         pd.Series(["1", "2", "a", "3", None], dtype="category"),
         range(0, 10),
         [],
+        [1, 1, 2, 2],
     ],
 )
 @pytest.mark.parametrize(
@@ -797,6 +796,7 @@ def test_index_to_series(data):
         range(2, 4),
         pd.Series(["1", "a", "3", None], dtype="category"),
         [],
+        [2],
     ],
 )
 @pytest.mark.parametrize("sort", [None, False, True])
@@ -987,8 +987,8 @@ def test_index_equal_misc(data, other):
     actual = gd_data.equals(np.array(gd_other))
     assert_eq(expected, actual)
 
-    expected = pd_data.equals(_create_pandas_series_float64_default(pd_other))
-    actual = gd_data.equals(_create_cudf_series_float64_default(gd_other))
+    expected = pd_data.equals(pd.Series(pd_other))
+    actual = gd_data.equals(cudf.Series(gd_other))
     assert_eq(expected, actual)
 
     expected = pd_data.astype("category").equals(pd_other)
@@ -1265,12 +1265,7 @@ def test_index_basic(data, dtype, name):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", SIGNED_INTEGER_TYPES)
 def test_integer_index_apis(data, name, dtype):
-    if PANDAS_GE_200:
-        pindex = pd.Index(data, dtype=dtype, name=name)
-    else:
-        with pytest.warns(FutureWarning):
-            pindex = pd.Int64Index(data, dtype=dtype, name=name)
-
+    pindex = pd.Index(data, dtype=dtype, name=name)
     gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
@@ -1281,12 +1276,7 @@ def test_integer_index_apis(data, name, dtype):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", UNSIGNED_TYPES)
 def test_unsigned_integer_index_apis(data, name, dtype):
-    if PANDAS_GE_200:
-        pindex = pd.Index(data, dtype=dtype, name=name)
-    else:
-        with pytest.warns(FutureWarning):
-            pindex = pd.UInt64Index(data, dtype=dtype, name=name)
-
+    pindex = pd.Index(data, dtype=dtype, name=name)
     gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
@@ -1297,12 +1287,7 @@ def test_unsigned_integer_index_apis(data, name, dtype):
 @pytest.mark.parametrize("name", [1, "a", None])
 @pytest.mark.parametrize("dtype", FLOAT_TYPES)
 def test_float_index_apis(data, name, dtype):
-    if PANDAS_GE_200:
-        pindex = pd.Index(data, dtype=dtype, name=name)
-    else:
-        with pytest.warns(FutureWarning):
-            pindex = pd.Float64Index(data, dtype=dtype, name=name)
-
+    pindex = pd.Index(data, dtype=dtype, name=name)
     gindex = cudf.Index(data, dtype=dtype, name=name)
 
     assert_eq(pindex, gindex)
@@ -2559,7 +2544,7 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
     ],
 )
 def test_isin_index(data, values):
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
     got = gsr.index.isin(values)
@@ -2802,7 +2787,9 @@ def test_rangeindex_join_user_option(default_integer_bitwidth):
     actual = idx1.join(idx2, how="inner", sort=True)
     expected = idx1.to_pandas().join(idx2.to_pandas(), how="inner", sort=True)
     assert actual.dtype == cudf.dtype(f"int{default_integer_bitwidth}")
-    assert_eq(expected, actual)
+    # exact=False to ignore dtype comparison,
+    # because `default_integer_bitwidth` is cudf only option
+    assert_eq(expected, actual, exact=False)
 
 
 def test_rangeindex_where_user_option(default_integer_bitwidth):

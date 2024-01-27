@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -6,10 +6,12 @@ from libcpp.vector cimport vector
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
 
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
+    nan_equality,
     nan_policy,
     null_equality,
     null_policy,
@@ -44,4 +46,11 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
         vector[size_type] keys,
         duplicate_keep_option keep,
         null_equality nulls_equal,
+    ) except +
+
+    cdef unique_ptr[column] distinct_indices(
+        table_view input,
+        duplicate_keep_option keep,
+        null_equality nulls_equal,
+        nan_equality nans_equal,
     ) except +

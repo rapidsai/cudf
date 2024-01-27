@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def _match_join_keys(
         common_type = (
             max(ltype, rtype)
             if ltype.kind == rtype.kind
-            else np.find_common_type([], (ltype, rtype))
+            else np.result_type(ltype, rtype)
         )
     elif (
         np.issubdtype(ltype, np.datetime64)

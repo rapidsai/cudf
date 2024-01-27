@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -415,6 +415,8 @@ std::unique_ptr<column> make_strings_column(
  * span of byte offsets identifying individual strings within the char vector, and an optional
  * null bitmask.
  *
+ * @deprecated Since 24.02
+ *
  * `offsets.front()` must always be zero.
  *
  * The total number of char bytes must not exceed the maximum size of size_type. Use the
@@ -435,7 +437,7 @@ std::unique_ptr<column> make_strings_column(
  * columns' device memory
  * @return Constructed strings column
  */
-std::unique_ptr<column> make_strings_column(
+[[deprecated]] std::unique_ptr<column> make_strings_column(
   cudf::device_span<char const> strings,
   cudf::device_span<size_type const> offsets,
   cudf::device_span<bitmask_type const> null_mask,
@@ -460,15 +462,39 @@ std::unique_ptr<column> make_strings_column(
  *  nulls is used for interpreting this bitmask.
  * @return Constructed strings column
  */
+[[deprecated]] std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                                           std::unique_ptr<column> offsets_column,
+                                                           std::unique_ptr<column> chars_column,
+                                                           size_type null_count,
+                                                           rmm::device_buffer&& null_mask);
+/**
+ * @brief Construct a STRING type column given offsets column, chars columns, and null mask and null
+ * count.
+ *
+ * The columns and mask are moved into the resulting strings column.
+ *
+ * @param num_strings The number of strings the column represents.
+ * @param offsets_column The column of offset values for this column. The number of elements is
+ *  one more than the total number of strings so the `offset[last] - offset[0]` is the total number
+ *  of bytes in the strings vector.
+ * @param chars_buffer The buffer of char bytes for all the strings for this column. Individual
+ *  strings are identified by the offsets and the nullmask.
+ * @param null_count The number of null string entries.
+ * @param null_mask The bits specifying the null strings in device memory. Arrow format for
+ *  nulls is used for interpreting this bitmask.
+ * @return Constructed strings column
+ */
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
-                                            std::unique_ptr<column> chars_column,
+                                            rmm::device_buffer&& chars_buffer,
                                             size_type null_count,
                                             rmm::device_buffer&& null_mask);
 
 /**
  * @brief Construct a STRING type column given offsets, columns, and optional null count and null
  * mask.
+ *
+ * @deprecated Since 24.02
  *
  * @param[in] num_strings The number of strings the column represents.
  * @param[in] offsets The offset values for this column. The number of elements is one more than the
@@ -481,11 +507,11 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * @param[in] null_count The number of null string entries.
  * @return Constructed strings column
  */
-std::unique_ptr<column> make_strings_column(size_type num_strings,
-                                            rmm::device_uvector<size_type>&& offsets,
-                                            rmm::device_uvector<char>&& chars,
-                                            rmm::device_buffer&& null_mask,
-                                            size_type null_count);
+[[deprecated]] std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                                           rmm::device_uvector<size_type>&& offsets,
+                                                           rmm::device_uvector<char>&& chars,
+                                                           rmm::device_buffer&& null_mask,
+                                                           size_type null_count);
 
 /**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null

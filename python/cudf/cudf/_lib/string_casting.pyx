@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf._lib.column cimport Column
 
@@ -95,7 +95,7 @@ def dtos(Column input_col):
     return floating_to_string(input_col)
 
 
-def stod(Column input_col, **kwargs):
+def stod(Column input_col):
     """
     Converting/Casting input column of type string to double
 
@@ -127,7 +127,7 @@ def ftos(Column input_col):
     return floating_to_string(input_col)
 
 
-def stof(Column input_col, **kwargs):
+def stof(Column input_col):
     """
     Converting/Casting input column of type string to float
 
@@ -188,7 +188,7 @@ def i8tos(Column input_col):
     return integer_to_string(input_col)
 
 
-def stoi8(Column input_col, **kwargs):
+def stoi8(Column input_col):
     """
     Converting/Casting input column of type string to int8
 
@@ -284,7 +284,7 @@ def ltos(Column input_col):
     return integer_to_string(input_col)
 
 
-def stol(Column input_col, **kwargs):
+def stol(Column input_col):
     """
     Converting/Casting input column of type string to int64
 
@@ -316,7 +316,7 @@ def ui8tos(Column input_col):
     return integer_to_string(input_col)
 
 
-def stoui8(Column input_col, **kwargs):
+def stoui8(Column input_col):
     """
     Converting/Casting input column of type string to uint8
 
@@ -348,7 +348,7 @@ def ui16tos(Column input_col):
     return integer_to_string(input_col)
 
 
-def stoui16(Column input_col, **kwargs):
+def stoui16(Column input_col):
     """
     Converting/Casting input column of type string to uint16
 
@@ -380,7 +380,7 @@ def uitos(Column input_col):
     return integer_to_string(input_col)
 
 
-def stoui(Column input_col, **kwargs):
+def stoui(Column input_col):
     """
     Converting/Casting input column of type string to uint32
 
@@ -412,7 +412,7 @@ def ultos(Column input_col):
     return integer_to_string(input_col)
 
 
-def stoul(Column input_col, **kwargs):
+def stoul(Column input_col):
     """
     Converting/Casting input column of type string to uint64
 
@@ -456,7 +456,7 @@ def _to_booleans(Column input_col, object string_true="True"):
     return Column.from_unique_ptr(move(c_result))
 
 
-def to_booleans(Column input_col, **kwargs):
+def to_booleans(Column input_col):
 
     return _to_booleans(input_col)
 
@@ -569,10 +569,7 @@ def timestamp2int(Column input_col, dtype, format):
     return Column.from_unique_ptr(move(c_result))
 
 
-def istimestamp(
-        Column input_col,
-        object format,
-        **kwargs):
+def istimestamp(Column input_col, str format):
     """
     Check input string column matches the specified timestamp format
 
@@ -588,7 +585,7 @@ def istimestamp(
 
     """
     if input_col.size == 0:
-        return cudf.core.column.as_column([], dtype=kwargs.get('dtype'))
+        return cudf.core.column.column_empty(0, dtype=cudf.dtype("bool"))
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = <string>str(format).encode('UTF-8')
     cdef unique_ptr[column] c_result
@@ -634,9 +631,7 @@ def timedelta2int(Column input_col, dtype, format):
     return Column.from_unique_ptr(move(c_result))
 
 
-def int2timedelta(
-        Column input_col,
-        **kwargs):
+def int2timedelta(Column input_col, str format):
     """
     Converting/Casting input Timedelta column to string
     column with specified format
@@ -652,8 +647,7 @@ def int2timedelta(
     """
 
     cdef column_view input_column_view = input_col.view()
-    cdef string c_duration_format = kwargs.get(
-        'format', "%D days %H:%M:%S").encode('UTF-8')
+    cdef string c_duration_format = format.encode('UTF-8')
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
@@ -664,7 +658,7 @@ def int2timedelta(
     return Column.from_unique_ptr(move(c_result))
 
 
-def int2ip(Column input_col, **kwargs):
+def int2ip(Column input_col):
     """
     Converting/Casting integer column to string column in ipv4 format
 
@@ -687,7 +681,7 @@ def int2ip(Column input_col, **kwargs):
     return Column.from_unique_ptr(move(c_result))
 
 
-def ip2int(Column input_col, **kwargs):
+def ip2int(Column input_col):
     """
     Converting string ipv4 column to integer column
 
@@ -735,7 +729,6 @@ def htoi(Column input_col, **kwargs):
     Parameters
     ----------
     input_col : input column of type string
-    out_type : The type of integer column expected
 
     Returns
     -------
@@ -745,9 +738,7 @@ def htoi(Column input_col, **kwargs):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
-                kwargs.get('dtype', cudf.dtype("int64"))
-            ]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[cudf.dtype("int64")]
         )
     )
     cdef data_type c_out_type = data_type(tid)

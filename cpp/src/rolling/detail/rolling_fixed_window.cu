@@ -23,6 +23,8 @@
 
 #include <thrust/extrema.h>
 
+#include <cuda/functional>
+
 namespace cudf::detail {
 
 // Applies a fixed-size rolling window function to the values in a column.
@@ -63,14 +65,13 @@ std::unique_ptr<column> rolling_window(column_view const& input,
     // E.g. If preceding_window == 2, then for a column of 5 elements, preceding_window will be:
     //      [1, 2, 2, 2, 1]
 
-    auto const preceding_calc = [preceding_window] __device__(size_type i) {
-      return thrust::min(i + 1, preceding_window);
-    };
+    auto const preceding_calc = cuda::proclaim_return_type<cudf::size_type>(
+      [preceding_window] __device__(size_type i) { return thrust::min(i + 1, preceding_window); });
 
-    auto const following_calc = [col_size = input.size(),
-                                 following_window] __device__(size_type i) {
-      return thrust::min(col_size - i - 1, following_window);
-    };
+    auto const following_calc = cuda::proclaim_return_type<cudf::size_type>(
+      [col_size = input.size(), following_window] __device__(size_type i) {
+        return thrust::min(col_size - i - 1, following_window);
+      });
 
     auto const preceding_column = expand_to_column(preceding_calc, input.size(), stream);
     auto const following_column = expand_to_column(following_calc, input.size(), stream);

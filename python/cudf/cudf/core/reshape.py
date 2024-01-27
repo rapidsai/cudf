@@ -1,11 +1,11 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
 import cupy
-import warnings
 import numpy as np
 import pandas as pd
 
@@ -35,7 +35,7 @@ def _align_objs(objs, how="outer", sort=None):
     A list of reindexed and aligned objects
     ready for concatenation
     """
-    # Check if multiindex then check if indexes match. GenericIndex
+    # Check if multiindex then check if indexes match. Index
     # returns ndarray tuple of bools requiring additional filter.
     # Then check for duplicate index value.
     i_objs = iter(objs)
@@ -429,11 +429,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return result
 
     elif typ is cudf.Series:
-        objs = [obj for obj in objs if len(obj)]
-        if len(objs) == 0:
-            return cudf.Series()
-        elif len(objs) == 1 and not ignore_index:
-            return objs[0]
+        new_objs = [obj for obj in objs if len(obj)]
+        if len(new_objs) == 1 and not ignore_index:
+            return new_objs[0]
         else:
             return cudf.Series._concat(
                 objs, axis=axis, index=None if ignore_index else True
@@ -552,7 +550,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(cudf.api.types._is_categorical_dtype(t) for t in dtypes):
+    if any(isinstance(typ, cudf.CategoricalDtype) for typ in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
         )

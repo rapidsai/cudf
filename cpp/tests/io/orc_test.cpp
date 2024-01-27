@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,9 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/concatenate.hpp>
@@ -1021,6 +1023,8 @@ TEST_F(OrcStatisticsTest, Basic)
     ASSERT_EQ(stats.size(), expected.num_columns() + 1);
     auto& s0 = stats[0];
     EXPECT_EQ(*s0.number_of_values, 9ul);
+    EXPECT_TRUE(s0.has_null.has_value());
+    EXPECT_FALSE(*s0.has_null);
 
     auto& s1 = stats[1];
     EXPECT_EQ(*s1.number_of_values, 4ul);
@@ -1054,12 +1058,8 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*ts4.maximum, 3);
     EXPECT_EQ(*ts4.minimum_utc, -4);
     EXPECT_EQ(*ts4.maximum_utc, 3);
-    // nanosecond precision can't be included until we write a writer version that includes ORC-135
-    // see https://github.com/rapidsai/cudf/issues/14325
-    // EXPECT_EQ(*ts4.minimum_nanos, 999994);
-    EXPECT_FALSE(ts4.minimum_nanos.has_value());
-    // EXPECT_EQ(*ts4.maximum_nanos, 6);
-    EXPECT_FALSE(ts4.maximum_nanos.has_value());
+    EXPECT_EQ(*ts4.minimum_nanos, 999994);
+    EXPECT_EQ(*ts4.maximum_nanos, 6);
 
     auto& s5 = stats[5];
     EXPECT_EQ(*s5.number_of_values, 4ul);
@@ -1069,12 +1069,8 @@ TEST_F(OrcStatisticsTest, Basic)
     EXPECT_EQ(*ts5.maximum, 3000);
     EXPECT_EQ(*ts5.minimum_utc, -3001);
     EXPECT_EQ(*ts5.maximum_utc, 3000);
-    // nanosecond precision can't be included until we write a writer version that includes ORC-135
-    // see https://github.com/rapidsai/cudf/issues/14325
-    // EXPECT_EQ(*ts5.minimum_nanos, 994000);
-    EXPECT_FALSE(ts5.minimum_nanos.has_value());
-    // EXPECT_EQ(*ts5.maximum_nanos, 6000);
-    EXPECT_FALSE(ts5.maximum_nanos.has_value());
+    EXPECT_EQ(*ts5.minimum_nanos, 994000);
+    EXPECT_EQ(*ts5.maximum_nanos, 6000);
 
     auto& s6 = stats[6];
     EXPECT_EQ(*s6.number_of_values, 4ul);
@@ -1966,6 +1962,97 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
   auto const from_unsorted = cudf::io::read_orc(in_opts_unsorted).tbl;
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
+}
+
+TEST_F(OrcStatisticsTest, Empty)
+{
+  int32_col col0{};
+  float64_col col1{};
+  str_col col2{};
+  dec64_col col3{};
+  column_wrapper<cudf::timestamp_ns, cudf::timestamp_ns::rep> col4;
+  bool_col col5{};
+  table_view expected({col0, col1, col2, col3, col4, col5});
+
+  std::vector<char> out_buffer;
+
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected);
+  cudf::io::write_orc(out_opts);
+
+  auto const stats = cudf::io::read_parsed_orc_statistics(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+
+  auto expected_column_names = std::vector<std::string>{""};
+  std::generate_n(
+    std::back_inserter(expected_column_names),
+    expected.num_columns(),
+    [starting_index = 0]() mutable { return "_col" + std::to_string(starting_index++); });
+  EXPECT_EQ(stats.column_names, expected_column_names);
+
+  EXPECT_EQ(stats.column_names.size(), 7);
+  EXPECT_EQ(stats.stripes_stats.size(), 0);
+
+  auto const& fstats = stats.file_stats;
+  ASSERT_EQ(fstats.size(), 7);
+  auto& s0 = fstats[0];
+  EXPECT_TRUE(s0.number_of_values.has_value());
+  EXPECT_EQ(*s0.number_of_values, 0ul);
+  EXPECT_TRUE(s0.has_null.has_value());
+  EXPECT_FALSE(*s0.has_null);
+
+  auto& s1 = fstats[1];
+  EXPECT_EQ(*s1.number_of_values, 0ul);
+  EXPECT_FALSE(*s1.has_null);
+  auto& ts1 = std::get<cudf::io::integer_statistics>(s1.type_specific_stats);
+  EXPECT_FALSE(ts1.minimum.has_value());
+  EXPECT_FALSE(ts1.maximum.has_value());
+  EXPECT_TRUE(ts1.sum.has_value());
+  EXPECT_EQ(*ts1.sum, 0);
+
+  auto& s2 = fstats[2];
+  EXPECT_EQ(*s2.number_of_values, 0ul);
+  EXPECT_FALSE(*s2.has_null);
+  auto& ts2 = std::get<cudf::io::double_statistics>(s2.type_specific_stats);
+  EXPECT_FALSE(ts2.minimum.has_value());
+  EXPECT_FALSE(ts2.maximum.has_value());
+  EXPECT_TRUE(ts2.sum.has_value());
+  EXPECT_EQ(*ts2.sum, 0);
+
+  auto& s3 = fstats[3];
+  EXPECT_EQ(*s3.number_of_values, 0ul);
+  EXPECT_FALSE(*s3.has_null);
+  auto& ts3 = std::get<cudf::io::string_statistics>(s3.type_specific_stats);
+  EXPECT_FALSE(ts3.minimum.has_value());
+  EXPECT_FALSE(ts3.maximum.has_value());
+  EXPECT_TRUE(ts3.sum.has_value());
+  EXPECT_EQ(*ts3.sum, 0);
+
+  auto& s4 = fstats[4];
+  EXPECT_EQ(*s4.number_of_values, 0ul);
+  EXPECT_FALSE(*s4.has_null);
+  auto& ts4 = std::get<cudf::io::decimal_statistics>(s4.type_specific_stats);
+  EXPECT_FALSE(ts4.minimum.has_value());
+  EXPECT_FALSE(ts4.maximum.has_value());
+  EXPECT_TRUE(ts4.sum.has_value());
+  EXPECT_EQ(*ts4.sum, "0");
+
+  auto& s5 = fstats[5];
+  EXPECT_EQ(*s5.number_of_values, 0ul);
+  EXPECT_FALSE(*s5.has_null);
+  auto& ts5 = std::get<cudf::io::timestamp_statistics>(s5.type_specific_stats);
+  EXPECT_FALSE(ts5.minimum.has_value());
+  EXPECT_FALSE(ts5.maximum.has_value());
+  EXPECT_FALSE(ts5.minimum_utc.has_value());
+  EXPECT_FALSE(ts5.maximum_utc.has_value());
+  EXPECT_FALSE(ts5.minimum_nanos.has_value());
+  EXPECT_FALSE(ts5.maximum_nanos.has_value());
+
+  auto& s6 = fstats[6];
+  EXPECT_EQ(*s6.number_of_values, 0ul);
+  EXPECT_FALSE(*s6.has_null);
+  auto& ts6 = std::get<cudf::io::bucket_statistics>(s6.type_specific_stats);
+  EXPECT_EQ(ts6.count[0], 0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

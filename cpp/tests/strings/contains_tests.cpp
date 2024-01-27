@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -299,9 +299,12 @@ TEST_F(StringsContainsTests, HexTest)
      thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
   auto d_chars = cudf::detail::make_device_uvector_sync(
     ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto d_offsets = cudf::detail::make_device_uvector_sync(
-    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto input = cudf::make_strings_column(d_chars, d_offsets, {}, 0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(
+      offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
+  auto input = cudf::make_strings_column(count, std::move(d_offsets), d_chars.release(), 0, {});
 
   auto strings_view = cudf::strings_column_view(input->view());
   for (auto ch : ascii_chars) {

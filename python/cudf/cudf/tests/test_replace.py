@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import re
 from decimal import Decimal
@@ -873,7 +873,6 @@ def test_dataframe_with_nulls_where_with_scalars(fill_value):
 
 
 def test_dataframe_with_different_types():
-
     # Testing for int and float
     pdf = pd.DataFrame(
         {"A": [111, 22, 31, 410, 56], "B": [-10.12, 121.2, 45.7, 98.4, 87.6]}
@@ -973,7 +972,6 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
     # to_replace is a list, replacement is a scalar
     if not can_replace:
         with pytest.raises(TypeError):
-
             sr.replace([2, 3], replacement)
     else:
         expect = psr.replace([2, 3], replacement).astype(psr.dtype)
@@ -1070,8 +1068,10 @@ def test_replace_inplace(pframe, replace_args):
 
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
-    gpu_frame.replace(**replace_args)
-    pandas_frame.replace(**replace_args)
+    with expect_warning_if(len(replace_args) == 0):
+        gpu_frame.replace(**replace_args)
+    with expect_warning_if(len(replace_args) == 0):
+        pandas_frame.replace(**replace_args)
     assert_eq(gpu_frame, pandas_frame)
     assert_eq(gpu_copy, cpu_copy)
 
@@ -1179,7 +1179,6 @@ def test_series_clip(data, lower, upper, inplace):
 
 
 def test_series_exceptions_for_clip():
-
     with pytest.raises(ValueError):
         cudf.Series([1, 2, 3, 4]).clip([1, 2], [2, 3])
 
@@ -1342,7 +1341,6 @@ def test_series_replace_errors():
     ],
 )
 def test_replace_nulls(gsr, old, new, expected):
-
     actual = gsr.replace(old, new)
     assert_eq(
         expected.sort_values().reset_index(drop=True),

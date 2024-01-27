@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 {% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -58,7 +58,7 @@ requirements:
     - protobuf ==4.24.*
     - python
     - cython >=3.0.3
-    - scikit-build >=0.13.1
+    - scikit-build-core >=0.7.0
     - setuptools
     - dlpack >=0.5,<0.6.0a0
     - pyarrow ==14.0.1.*
@@ -80,8 +80,7 @@ requirements:
     - cupy >=12.0.0
     # TODO: Pin to numba<0.58 until #14160 is resolved
     - numba >=0.57,<0.58
-    # TODO: Pin to numpy<1.25 until cudf requires pandas 2
-    - numpy >=1.21,<1.25
+    - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x') }}
     - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
@@ -98,6 +97,7 @@ requirements:
     # xref: https://github.com/rapidsai/cudf/issues/12822
     - cuda-nvrtc
     - cuda-python >=12.0,<13.0a0
+    - pynvjitlink
     {% endif %}
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1

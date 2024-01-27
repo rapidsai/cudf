@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -333,7 +333,6 @@ def test_column_view_valid_string_to_numeric(data, to_dtype):
 
 
 def test_column_view_nulls_widths_even():
-
     data = [1, 2, None, 4, None]
     expect_data = [
         np.int32(val).view("float32") if val is not None else np.nan
@@ -361,7 +360,6 @@ def test_column_view_nulls_widths_even():
 
 @pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
 def test_column_view_numeric_slice(slc):
-
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 
@@ -398,7 +396,7 @@ def test_column_view_string_slice(slc):
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.as_column([], dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype="uint8"),
         ),
         (
             cp.array([255], dtype="uint8"),

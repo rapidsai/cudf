@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -21,5 +21,10 @@ cdef class DeviceScalar:
 
     @staticmethod
     cdef DeviceScalar from_unique_ptr(unique_ptr[scalar] ptr, dtype=*)
+
+    @staticmethod
+    cdef DeviceScalar from_pylibcudf(pylibcudf.Scalar scalar, dtype=*)
+
+    cdef void _set_dtype(self, dtype=*)
 
     cpdef bool is_valid(DeviceScalar s)

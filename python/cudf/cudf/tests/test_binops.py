@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -605,7 +605,6 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns(binop):
-
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
@@ -639,7 +638,6 @@ def test_different_shapes_and_columns(binop):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_same_columns(binop):
-
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
@@ -658,7 +656,6 @@ def test_different_shapes_and_same_columns(binop):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns_with_unaligned_indices(binop):
-
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
@@ -791,7 +788,6 @@ _permu_values = [0, 1, None, np.nan]
 def test_operator_func_between_series_logical(
     dtype, func, scalar_a, scalar_b, fill_value
 ):
-
     gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
     gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
 
@@ -1787,7 +1783,6 @@ def test_datetime_dateoffset_binaryop(
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
-
     gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
@@ -2294,7 +2289,6 @@ def test_binops_with_NA_consistent(dtype, op):
     ],
 )
 def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
-
     if isinstance(lhs, (int, float)):
         a = cudf.Scalar(lhs, l_dtype)
     else:
@@ -2358,7 +2352,6 @@ def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 def test_binops_reflect_decimal(
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype
 ):
-
     a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
     expect = utils._decimal_series(expect, expect_dtype)

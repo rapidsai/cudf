@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,10 +62,10 @@ template <
   typename HashFunction,
   typename hash_value_type = std::
     conditional_t<std::is_same_v<typename HashFunction::result_type, uint32_t>, uint32_t, uint64_t>>
-__global__ void minhash_kernel(cudf::column_device_view const d_strings,
-                               cudf::device_span<hash_value_type const> seeds,
-                               cudf::size_type width,
-                               hash_value_type* d_hashes)
+CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
+                                cudf::device_span<hash_value_type const> seeds,
+                                cudf::size_type width,
+                                hash_value_type* d_hashes)
 {
   auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
   if (idx >= (static_cast<std::size_t>(d_strings.size()) *
@@ -166,8 +166,8 @@ std::unique_ptr<cudf::column> build_list_result(cudf::strings_column_view const&
                                                 rmm::mr::device_memory_resource* mr)
 {
   // build the offsets for the output lists column
-  auto const zero = cudf::numeric_scalar<cudf::size_type>(0);
-  auto const size = cudf::numeric_scalar<cudf::size_type>(seeds_size);
+  auto const zero = cudf::numeric_scalar<cudf::size_type>(0, true, stream);
+  auto const size = cudf::numeric_scalar<cudf::size_type>(seeds_size, true, stream);
   auto offsets    = cudf::detail::sequence(input.size() + 1, zero, size, stream, mr);
   hashes->set_null_mask(rmm::device_buffer{}, 0);  // children have no nulls
 
@@ -188,7 +188,7 @@ std::unique_ptr<cudf::column> build_list_result(cudf::strings_column_view const&
 }  // namespace
 
 std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
-                                      cudf::numeric_scalar<uint32_t> seed,
+                                      cudf::numeric_scalar<uint32_t> const& seed,
                                       cudf::size_type width,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
@@ -212,7 +212,7 @@ std::unique_ptr<cudf::column> minhash(cudf::strings_column_view const& input,
 }
 
 std::unique_ptr<cudf::column> minhash64(cudf::strings_column_view const& input,
-                                        cudf::numeric_scalar<uint64_t> seed,
+                                        cudf::numeric_scalar<uint64_t> const& seed,
                                         cudf::size_type width,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -812,7 +812,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     if "number_of_values" in file_stats[0][col]:
         stats_valid_count = file_stats[0][col]["number_of_values"]
-        actual_valid_count = gdf[col].valid_count
+        actual_valid_count = len(gdf[col]) - gdf[col].null_count
         assert normalized_equals(actual_valid_count, stats_valid_count)
 
     # compare stripe statistics with actual min/max
@@ -827,7 +827,9 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
             assert normalized_equals(actual_true_count, stats_true_count)
 
         if "number_of_values" in stripes_stats[stripe_idx][col]:
-            actual_valid_count = stripe_df[col].valid_count
+            actual_valid_count = (
+                len(stripe_df[col]) - stripe_df[col].null_count
+            )
             stats_valid_count = stripes_stats[stripe_idx][col][
                 "number_of_values"
             ]
@@ -1902,3 +1904,25 @@ def test_orc_reader_empty_deeply_nested_level(datadir):
     got = cudf.read_orc(path)
 
     assert_eq(expect, got)
+
+
+def test_orc_chunked_writer_stripe_size(datadir):
+    from pyarrow import orc
+
+    df = cudf.DataFrame({"col": gen_rand_series("int", 100000)})
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_bytes=64 * 1024)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 10)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_rows=20000)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 5)

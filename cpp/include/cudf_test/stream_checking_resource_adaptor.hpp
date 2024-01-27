@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -71,16 +71,6 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    */
   bool supports_streams() const noexcept override { return upstream_->supports_streams(); }
 
-  /**
-   * @brief Query whether the resource supports the get_mem_info API.
-   *
-   * @return Whether or not the upstream resource supports get_mem_info
-   */
-  bool supports_get_mem_info() const noexcept override
-  {
-    return upstream_->supports_get_mem_info();
-  }
-
  private:
   /**
    * @brief Allocates memory of size at least `bytes` using the upstream
@@ -129,21 +119,6 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);
     return cast != nullptr ? upstream_->is_equal(*cast->get_upstream())
                            : upstream_->is_equal(other);
-  }
-
-  /**
-   * @brief Get free and available memory from upstream resource.
-   *
-   * @throws `rmm::cuda_error` if unable to retrieve memory info.
-   * @throws `cudf::logic_error` if attempted on a default stream
-   *
-   * @param stream Stream on which to get the mem info.
-   * @return std::pair with available and free memory for resource
-   */
-  std::pair<std::size_t, std::size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override
-  {
-    verify_stream(stream);
-    return upstream_->get_mem_info(stream);
   }
 
   /**

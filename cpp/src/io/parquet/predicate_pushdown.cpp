@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -188,11 +188,11 @@ struct stats_caster {
             auto [d_chars, d_offsets] = make_strings_children(val, stream, mr);
             return cudf::make_strings_column(
               val.size(),
-              std::move(d_offsets),
-              std::move(d_chars),
+              std::make_unique<column>(std::move(d_offsets), rmm::device_buffer{}, 0),
+              d_chars.release(),
+              null_count,
               rmm::device_buffer{
-                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr},
-              null_count);
+                null_mask.data(), cudf::bitmask_allocation_size_bytes(val.size()), stream, mr});
           }
           return std::make_unique<column>(
             dtype,

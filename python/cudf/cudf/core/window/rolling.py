@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION
+# Copyright (c) 2020-2024, NVIDIA CORPORATION
 
 import itertools
 
@@ -235,7 +235,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             start = as_column(start, dtype="int32")
             end = as_column(end, dtype="int32")
 
-            idx = cudf.core.column.arange(len(start))
+            idx = as_column(range(len(start)))
             preceding_window = (idx - start + cudf.Scalar(1, "int32")).astype(
                 "int32"
             )
@@ -531,7 +531,7 @@ class RollingGroupby(Rolling):
     def _window_to_window_sizes(self, window):
         if is_integer(window):
             return cudautils.grouped_window_sizes_from_offset(
-                column.arange(len(self.obj)).data_array_view(mode="read"),
+                as_column(range(len(self.obj))).data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )
