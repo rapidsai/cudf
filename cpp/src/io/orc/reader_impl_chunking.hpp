@@ -67,7 +67,8 @@ struct file_intermediate_data {
     compinfo_map;
   bool compinfo_ready{false};
 
-  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
+  // Tracker for eventually deallocating compressed and uncompressed data
+  std::vector<rmm::device_buffer> stripe_data;
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
 
   int64_t rows_to_skip;
