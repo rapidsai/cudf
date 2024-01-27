@@ -14,17 +14,17 @@ from typing import (
     MutableMapping,
     Optional,
     Tuple,
-    Type,
     Union,
     cast,
 )
 
 import cupy
 import numpy as np
+import pandas as pd
+from pandas._config import get_option
 from typing_extensions import Self
 
 import cudf
-import pandas as pd
 from cudf import _lib as libcudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
@@ -66,12 +66,8 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import (
-    _warn_no_dask_cudf,
-    search_range,
-)
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
-from pandas._config import get_option
+from cudf.utils.utils import _warn_no_dask_cudf, search_range
 
 
 class IndexMeta(type):
@@ -1356,9 +1352,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 # from the output due to the type-cast to
                 # object dtype happening above.
                 # Note : The replacing of single quotes has
-                # to happen only in case of non-StringIndex types,
+                # to happen only in case of non-Index[string] types,
                 # as we want to preserve single quotes in case
-                # of StringIndex and it is valid to have them.
+                # of Index[string] and it is valid to have them.
                 output = output.replace("'", "")
         else:
             output = repr(preprocess.to_pandas())
@@ -2947,7 +2943,7 @@ def as_index(
     result : subclass of Index
         - CategoricalIndex for Categorical input.
         - DatetimeIndex for Datetime input.
-        - GenericIndex for all other inputs.
+        - Index for all other inputs.
 
     Notes
     -----

@@ -11,8 +11,8 @@ import re
 import string
 import textwrap
 import warnings
-from contextlib import contextmanager
 from collections import OrderedDict, defaultdict, namedtuple
+from contextlib import contextmanager
 from copy import copy
 
 import cupy
@@ -24,6 +24,7 @@ from numba import cuda
 from packaging import version
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.core._compat import (
     PANDAS_GE_134,
     PANDAS_GE_150,
@@ -32,7 +33,6 @@ from cudf.core._compat import (
     PANDAS_LT_140,
     PANDAS_LT_203,
 )
-from cudf.api.extensions import no_default
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -5499,7 +5499,6 @@ def test_rowwise_ops_nullable_int_dtypes(op, expected):
 @pytest.mark.parametrize("skipna", [True, False])
 @pytest.mark.parametrize("numeric_only", [True, False])
 def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
-
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -5528,7 +5527,6 @@ def test_rowwise_ops_datetime_dtypes(data, op, skipna, numeric_only):
             # https://github.com/pandas-dev/pandas/issues/52524
             assert_eq(got.astype("datetime64[ns]"), expected)
         else:
-
             assert_eq(got, expected, check_dtype=False)
 
 
@@ -10921,7 +10919,7 @@ def test_dataframe_contains(name, contains, other_names):
         assert (contains in pdf) == expectation
         assert (contains in gdf) == expectation
     elif pd.api.types.is_float_dtype(gdf.columns.dtype):
-        # In some cases, the columns are converted to a Float64Index based on
+        # In some cases, the columns are converted to a Index[float] based on
         # the other column names. That casts name values from None to np.nan.
         expectation = contains is np.nan and (name is None or name is np.nan)
         assert (contains in pdf) == expectation
