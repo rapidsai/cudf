@@ -998,7 +998,7 @@ void reader::impl::query_stripe_compression_info()
 
   }  // end loop level
 
-  lvl_stripe_data.clear();
+  // lvl_stripe_data.clear();
   _file_itm_data->compinfo_ready = true;
 }
 
@@ -1131,7 +1131,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     std::size_t num_rowgroups    = 0;
     int stripe_idx               = 0;
 
-    std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
+    // std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
     for (auto const& stripe_source_mapping : selected_stripes) {
       // Iterate through the source files selected stripes
       for (auto const& stripe : stripe_source_mapping.stripe_info) {
@@ -1156,41 +1156,37 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                      "Invalid index rowgroup stream data");
 
-        // Buffer needs to be padded.
-        // Required by `copy_uncompressed_kernel`.
-        stripe_data.emplace_back(
-          cudf::util::round_up_safe(total_data_size, BUFFER_PADDING_MULTIPLE), _stream);
-        auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
+        auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx].data());
 
         // Coalesce consecutive streams into one read
-        while (not is_stripe_data_empty and stream_count < stream_info.size()) {
-          auto const d_dst  = dst_base + stream_info[stream_count].dst_pos;
-          auto const offset = stream_info[stream_count].offset;
-          auto len          = stream_info[stream_count].length;
-          stream_count++;
+        // while (not is_stripe_data_empty and stream_count < stream_info.size()) {
+        //   auto const d_dst  = dst_base + stream_info[stream_count].dst_pos;
+        //   auto const offset = stream_info[stream_count].offset;
+        //   auto len          = stream_info[stream_count].length;
+        //   stream_count++;
 
-          while (stream_count < stream_info.size() &&
-                 stream_info[stream_count].offset == offset + len) {
-            len += stream_info[stream_count].length;
-            stream_count++;
-          }
-          if (_metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                .source->is_device_read_preferred(len)) {
-            read_tasks.push_back(
-              std::pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                          .source->device_read_async(offset, len, d_dst, _stream),
-                        len));
+        //   while (stream_count < stream_info.size() &&
+        //          stream_info[stream_count].offset == offset + len) {
+        //     len += stream_info[stream_count].length;
+        //     stream_count++;
+        //   }
+        //   if (_metadata.per_file_metadata[stripe_source_mapping.source_idx]
+        //         .source->is_device_read_preferred(len)) {
+        //     read_tasks.push_back(
+        //       std::pair(_metadata.per_file_metadata[stripe_source_mapping.source_idx]
+        //                   .source->device_read_async(offset, len, d_dst, _stream),
+        //                 len));
 
-          } else {
-            auto const buffer =
-              _metadata.per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
-                offset, len);
-            CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-            CUDF_CUDA_TRY(
-              cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, _stream.value()));
-            _stream.synchronize();
-          }
-        }
+        //   } else {
+        //     auto const buffer =
+        //       _metadata.per_file_metadata[stripe_source_mapping.source_idx].source->host_read(
+        //         offset, len);
+        //     CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
+        //     CUDF_CUDA_TRY(
+        //       cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, _stream.value()));
+        //     _stream.synchronize();
+        //   }
+        // }
 
         auto const num_rows_per_stripe = stripe_info->numberOfRows;
         auto const rowgroup_id         = num_rowgroups;
@@ -1250,9 +1246,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         stripe_idx++;
       }
     }
-    for (auto& task : read_tasks) {
-      CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
-    }
+    // for (auto& task : read_tasks) {
+    //   CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
+    // }
 
     if (stripe_data.empty()) { continue; }
 
