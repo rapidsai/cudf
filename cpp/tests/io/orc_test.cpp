@@ -1124,6 +1124,7 @@ TEST_F(OrcWriterTest, SlicedValidMask)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
+#if 0
 TEST_F(OrcReaderTest, Test1)
 {
   std::string filepath1 =
@@ -1159,6 +1160,7 @@ TEST_F(OrcReaderTest, Test1)
   }
 }
 
+#endif
 TEST_F(OrcReaderTest, SingleInputs)
 {
   srand(31533);

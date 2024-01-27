@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#define PRINT_DEBUG
+// #define PRINT_DEBUG
 
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
@@ -96,6 +96,8 @@ std::size_t gather_stream_info(std::size_t stripe_index,
                                orc::StripeInformation const* stripeinfo,
                                orc::StripeFooter const* stripefooter,
                                host_span<int const> orc2gdf,
+                               host_span<orc::SchemaType const> types,
+                               bool apply_struct_map,
                                std::vector<orc_stream_info>& stream_info)
 {
   uint64_t src_offset = 0;
@@ -108,9 +110,25 @@ std::size_t gather_stream_info(std::size_t stripe_index,
     }
 
     auto const column_id = *stream.column_id;
-    auto const col_order = orc2gdf[column_id];
+    auto col             = orc2gdf[column_id];
+    printf("first construct col id = %d, order = %d\n", (int)column_id, (int)col);
 
-    if (col_order != -1) {
+    if (col == -1 and apply_struct_map) {
+      // A struct-type column has no data itself, but rather child columns
+      // for each of its fields. There is only a PRESENT stream, which
+      // needs to be included for the reader.
+      auto const schema_type = types[column_id];
+      if (not schema_type.subtypes.empty()) {
+        if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
+          for (auto const& idx : schema_type.subtypes) {
+            auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
+            if (child_idx >= 0) { col = child_idx; }
+          }
+        }
+      }
+    }
+
+    if (col != -1) {
       stream_info.emplace_back(stripeinfo->offset + src_offset,
                                dst_offset,
                                stream.length,
@@ -167,6 +185,7 @@ std::size_t gather_stream_info_and_update_chunks(
 
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
+    printf("construct col id = %d, order = %d\n", (int)column_id, (int)col);
 
     if (col == -1 and apply_struct_map) {
       // A struct-type column has no data itself, but rather child columns
@@ -205,6 +224,7 @@ std::size_t gather_stream_info_and_update_chunks(
         }
       }
 
+      printf("before construct col id = %d, order = %d\n", (int)column_id, (int)col);
       stream_info.emplace_back(stripeinfo->offset + src_offset,
                                dst_offset,
                                stream.length,
@@ -884,8 +904,14 @@ void reader::impl::query_stripe_compression_info()
         auto const stripe_footer = stripe.second;
 
         auto stream_count          = stream_info.size();
-        auto const total_data_size = gather_stream_info(
-          stripe_idx, level, stripe_info, stripe_footer, col_meta.orc_col_map[level], stream_info);
+        auto const total_data_size = gather_stream_info(stripe_idx,
+                                                        level,
+                                                        stripe_info,
+                                                        stripe_footer,
+                                                        col_meta.orc_col_map[level],
+                                                        _metadata.get_types(),
+                                                        level == 0,
+                                                        stream_info);
 
         auto const is_stripe_data_empty = total_data_size == 0;
         CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
