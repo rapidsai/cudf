@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#define PRINT_DEBUG
+
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
@@ -69,7 +71,7 @@ struct orc_stream_info {
       orc_col_idx(orc_col_idx_),
       kind(kind_)
   {
-#if 0
+#ifdef PRINT_DEBUG
     printf("   construct stripe id [%d, %d, %d, %d]\n",
            (int)stripe_idx,
            (int)level,
@@ -253,7 +255,7 @@ rmm::device_buffer decompress_stripe_data(
   cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
     0, stream_info.size(), stream);
   for (auto const& info : stream_info) {
-#if 0
+#ifdef PRINT_DEBUG
     printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
            (int)info.stripe_idx,
            (int)info.level,
@@ -268,8 +270,12 @@ rmm::device_buffer decompress_stripe_data(
       static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
 
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
     auto const& cached_comp_info =
       compinfo_map.at(stream_id_info{info.stripe_idx, info.level, info.orc_col_idx, info.kind});
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
     // auto const& cached_comp_info =
     //   compinfo_map[stream_id_info{info.stripe_idx, info.level, info.orc_col_idx, info.kind}];
     auto& stream_comp_info                   = compinfo[compinfo.size() - 1];
@@ -286,7 +292,7 @@ rmm::device_buffer decompress_stripe_data(
     not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
     "Inconsistent info on compression blocks");
 
-#if 0
+#ifdef XXX
   std::size_t old_num_compressed_blocks   = num_compressed_blocks;
   std::size_t old_num_uncompressed_blocks = num_uncompressed_blocks;
   std::size_t old_total_decomp_size       = total_decomp_size;
@@ -943,7 +949,7 @@ void reader::impl::query_stripe_compression_info()
         stream_compinfo_map[stream_id_info{
           info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
           &compinfo[compinfo.size() - 1];
-#if 0
+#ifdef PRINT_DEBUG
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
                (int)info.stripe_idx,
                (int)info.level,
@@ -969,7 +975,7 @@ void reader::impl::query_stripe_compression_info()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
-#if 0
+#ifdef PRINT_DEBUG
         printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
                (int)stream_id.stripe_idx,
                (int)stream_id.level,

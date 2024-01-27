@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
@@ -1121,6 +1122,41 @@ TEST_F(OrcWriterTest, SlicedValidMask)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+}
+
+TEST_F(OrcReaderTest, Test1)
+{
+  std::string filepath1 =
+    "/home/nghiat/Devel/cudf/1/python/cudf/cudf/tests/data/orc/"
+    "TestOrcFile.boolean_corruption_PR_6636.orc";
+
+  std::string filepath2 =
+    "/home/nghiat/Devel/cudf/1/python/cudf/cudf/tests/data/orc/"
+    "TestOrcFile.boolean_corruption_PR_6702.orc";
+
+  {
+    printf("test1\n");
+    cudf::io::orc_reader_options read_opts =
+      cudf::io::orc_reader_options::builder(cudf::io::source_info{{filepath1}});
+    auto result = cudf::io::read_orc(read_opts);
+    for (int i = 0; i < result.tbl->num_columns(); i++) {
+      auto& col = result.tbl->get_column(i);
+      cudf::test::print(col);
+      printf("\n");
+    }
+  }
+
+  {
+    printf("test2\n");
+    cudf::io::orc_reader_options read_opts =
+      cudf::io::orc_reader_options::builder(cudf::io::source_info{{filepath2}});
+    auto result = cudf::io::read_orc(read_opts);
+    for (int i = 0; i < result.tbl->num_columns(); i++) {
+      auto& col = result.tbl->get_column(i);
+      cudf::test::print(col);
+      printf("\n");
+    }
+  }
 }
 
 TEST_F(OrcReaderTest, SingleInputs)
