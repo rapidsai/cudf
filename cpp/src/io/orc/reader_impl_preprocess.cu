@@ -111,7 +111,6 @@ std::size_t gather_stream_info(std::size_t stripe_index,
 
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
-    printf("first construct col id = %d, order = %d\n", (int)column_id, (int)col);
 
     if (col == -1 and apply_struct_map) {
       // A struct-type column has no data itself, but rather child columns
@@ -185,7 +184,6 @@ std::size_t gather_stream_info_and_update_chunks(
 
     auto const column_id = *stream.column_id;
     auto col             = orc2gdf[column_id];
-    printf("construct col id = %d, order = %d\n", (int)column_id, (int)col);
 
     if (col == -1 and apply_struct_map) {
       // A struct-type column has no data itself, but rather child columns
@@ -224,7 +222,6 @@ std::size_t gather_stream_info_and_update_chunks(
         }
       }
 
-      printf("before construct col id = %d, order = %d\n", (int)column_id, (int)col);
       stream_info.emplace_back(stripeinfo->offset + src_offset,
                                dst_offset,
                                stream.length,
@@ -290,12 +287,12 @@ rmm::device_buffer decompress_stripe_data(
       static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
 
-    printf("line %d\n", __LINE__);
-    fflush(stdout);
+    //    printf("line %d\n", __LINE__);
+    //    fflush(stdout);
     auto const& cached_comp_info =
       compinfo_map.at(stream_id_info{info.stripe_idx, info.level, info.orc_col_idx, info.kind});
-    printf("line %d\n", __LINE__);
-    fflush(stdout);
+    //    printf("line %d\n", __LINE__);
+    //    fflush(stdout);
     // auto const& cached_comp_info =
     //   compinfo_map[stream_id_info{info.stripe_idx, info.level, info.orc_col_idx, info.kind}];
     auto& stream_comp_info                   = compinfo[compinfo.size() - 1];
