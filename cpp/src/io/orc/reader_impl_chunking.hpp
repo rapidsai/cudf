@@ -30,6 +30,42 @@
 
 namespace cudf::io::orc::detail {
 
+/**
+ * @brief Struct that maps ORC streams to columns
+ */
+struct orc_stream_info {
+  explicit orc_stream_info(uint64_t offset_,
+                           std::size_t dst_pos_,
+                           uint32_t length_,
+                           uint32_t stripe_idx_,
+                           std::size_t level_,
+                           uint32_t orc_col_idx_,
+                           StreamKind kind_)
+    : offset(offset_),
+      dst_pos(dst_pos_),
+      length(length_),
+      stripe_idx(stripe_idx_),
+      level(level_),
+      orc_col_idx(orc_col_idx_),
+      kind(kind_)
+  {
+#ifdef PRINT_DEBUG
+    printf("   construct stripe id [%d, %d, %d, %d]\n",
+           (int)stripe_idx,
+           (int)level,
+           (int)orc_col_idx,
+           (int)kind);
+#endif
+  }
+  uint64_t offset;      // offset in file
+  std::size_t dst_pos;  // offset in memory relative to start of compressed stripe data
+  std::size_t length;   // length in file
+  uint32_t stripe_idx;  // stripe processing index, not stripe index in source
+  std::size_t level;    // TODO
+  uint32_t orc_col_idx;
+  StreamKind kind;
+};
+
 // unify this with orc_stream_info
 struct stream_id_info {
   std::size_t stripe_idx;
