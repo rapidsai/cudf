@@ -69,6 +69,13 @@ struct orc_stream_info {
       orc_col_idx(orc_col_idx_),
       kind(kind_)
   {
+#if 0
+    printf("   construct stripe id [%d, %d, %d, %d]\n",
+           (int)stripe_idx,
+           (int)level,
+           (int)orc_col_idx,
+           (int)kind);
+#endif
   }
   uint64_t offset;      // offset in file
   std::size_t dst_pos;  // offset in memory relative to start of compressed stripe data
@@ -195,6 +202,7 @@ std::size_t gather_stream_info_and_update_chunks(
           }
         }
       }
+
       stream_info.emplace_back(stripeinfo->offset + src_offset,
                                dst_offset,
                                stream.length,
@@ -245,6 +253,17 @@ rmm::device_buffer decompress_stripe_data(
   cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
     0, stream_info.size(), stream);
   for (auto const& info : stream_info) {
+#if 0
+    printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
+           (int)info.stripe_idx,
+           (int)info.level,
+           (int)info.orc_col_idx,
+           (int)info.kind,
+           info.dst_pos,
+           info.length);
+    fflush(stdout);
+#endif
+
     compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
       info.length));
@@ -264,6 +283,46 @@ rmm::device_buffer decompress_stripe_data(
   CUDF_EXPECTS(
     not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
     "Inconsistent info on compression blocks");
+
+#if 0
+  std::size_t old_num_compressed_blocks   = num_compressed_blocks;
+  std::size_t old_num_uncompressed_blocks = num_uncompressed_blocks;
+  std::size_t old_total_decomp_size       = total_decomp_size;
+
+  num_compressed_blocks   = 0;
+  num_uncompressed_blocks = 0;
+  total_decomp_size       = 0;
+  for (std::size_t i = 0; i < compinfo.size(); ++i) {
+    num_compressed_blocks += compinfo[i].num_compressed_blocks;
+    num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
+    total_decomp_size += compinfo[i].max_uncompressed_size;
+
+    auto const& info = stream_info[i];
+    printf("compute info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
+           (int)info.stripe_idx,
+           (int)info.level,
+           (int)info.orc_col_idx,
+           (int)info.kind,
+           (size_t)compinfo[i].num_compressed_blocks,
+           (size_t)compinfo[i].num_uncompressed_blocks,
+           compinfo[i].max_uncompressed_size);
+    fflush(stdout);
+  }
+
+  if (old_num_compressed_blocks != num_compressed_blocks ||
+      old_num_uncompressed_blocks != num_uncompressed_blocks ||
+      old_total_decomp_size != total_decomp_size) {
+    printf("invalid: %d - %d, %d - %d, %d - %d\n",
+           (int)old_num_compressed_blocks,
+           (int)num_compressed_blocks,
+           (int)old_num_uncompressed_blocks,
+           (int)num_uncompressed_blocks,
+           (int)old_total_decomp_size,
+           (int)total_decomp_size
+
+    );
+  }
+#endif
 
   // Buffer needs to be padded.
   // Required by `gpuDecodeOrcColumnData`.
@@ -768,21 +827,6 @@ void reader::impl::query_stripe_compression_info()
   // TODO : remove?
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
-  // Set up table for converting timestamp columns from local to UTC time
-  auto const tz_table = [&, &selected_stripes = selected_stripes] {
-    auto const has_timestamp_column = std::any_of(
-      _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto const& col_lvl) {
-        return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
-          return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
-        });
-      });
-
-    return has_timestamp_column
-             ? cudf::detail::make_timezone_transition_table(
-                 {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
-             : std::make_unique<cudf::table>();
-  }();
-
   auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
   lvl_stripe_data.resize(_selected_columns.num_levels());
 
@@ -898,6 +942,16 @@ void reader::impl::query_stripe_compression_info()
         stream_compinfo_map[stream_id_info{
           info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
           &compinfo[compinfo.size() - 1];
+#if 0
+        printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
+               (int)info.stripe_idx,
+               (int)info.level,
+               (int)info.orc_col_idx,
+               (int)info.kind,
+               info.dst_pos,
+               info.length);
+        fflush(stdout);
+#endif
       }
 
       compinfo.host_to_device_async(_stream);
@@ -914,7 +968,21 @@ void reader::impl::query_stripe_compression_info()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
+#if 0
+        printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
+               (int)stream_id.stripe_idx,
+               (int)stream_id.level,
+               (int)stream_id.orc_col_idx,
+               (int)stream_id.kind,
+               (size_t)stream_compinfo->num_compressed_blocks,
+               (size_t)stream_compinfo->num_uncompressed_blocks,
+               stream_compinfo->max_uncompressed_size);
+        fflush(stdout);
+#endif
       }
+
+      // Must clear so we will not overwrite the old compression info stream_id.
+      stream_compinfo_map.clear();
 
     } else {
       printf("no compression \n");
@@ -923,6 +991,8 @@ void reader::impl::query_stripe_compression_info()
       // Set decompressed data size equal to the input size.
       // TODO
     }
+
+    printf("  end level %d\n\n", (int)level);
 
   }  // end loop level
 
