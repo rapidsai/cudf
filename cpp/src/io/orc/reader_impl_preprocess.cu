@@ -987,8 +987,8 @@ void reader::impl::query_stripe_compression_info()
       stream_compinfo_map.clear();
 
     } else {
-      printf("no compression \n");
-      fflush(stdout);
+      // printf("no compression \n");
+      // fflush(stdout);
 
       // Set decompressed data size equal to the input size.
       // TODO
