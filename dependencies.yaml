@@ -266,8 +266,7 @@ dependencies:
           - *cmake_ver
           - cython>=3.0.3
           - *ninja
-          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
-          - &numpy numpy>=1.21,<1.25
+          - &numpy numpy>=1.21
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.1.*

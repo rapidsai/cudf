@@ -17,7 +17,6 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _Unusable,
-    get_final_type_map,
     make_final_proxy_type as _make_final_proxy_type,
     make_intermediate_proxy_type as _make_intermediate_proxy_type,
     register_proxy_func,
@@ -202,19 +201,6 @@ Index = make_final_proxy_type(
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
-
-get_final_type_map()[cudf.StringIndex] = Index
-get_final_type_map()[cudf.Int8Index] = Index
-get_final_type_map()[cudf.Int8Index] = Index
-get_final_type_map()[cudf.Int16Index] = Index
-get_final_type_map()[cudf.Int32Index] = Index
-get_final_type_map()[cudf.UInt8Index] = Index
-get_final_type_map()[cudf.UInt16Index] = Index
-get_final_type_map()[cudf.UInt32Index] = Index
-get_final_type_map()[cudf.UInt64Index] = Index
-get_final_type_map()[cudf.Float32Index] = Index
-get_final_type_map()[cudf.GenericIndex] = Index
-
 
 RangeIndex = make_final_proxy_type(
     "RangeIndex",
@@ -471,17 +457,6 @@ Int64Dtype = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
-
-Int64Index = make_final_proxy_type(
-    "Int64Index",
-    cudf.Int64Index,
-    pd.core.indexes.numeric.Int64Index,
-    fast_to_slow=lambda fast: fast.to_pandas(),
-    slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
-)
-
 UInt8Dtype = make_final_proxy_type(
     "UInt8Dtype",
     _Unusable,
@@ -516,16 +491,6 @@ UInt64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-)
-
-UInt64Index = make_final_proxy_type(
-    "UInt64Index",
-    cudf.UInt64Index,
-    pd.core.indexes.numeric.UInt64Index,
-    fast_to_slow=lambda fast: fast.to_pandas(),
-    slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
 )
 
 IntervalIndex = make_final_proxy_type(
@@ -591,16 +556,6 @@ Float64Dtype = make_final_proxy_type(
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
-)
-
-Float64Index = make_final_proxy_type(
-    "Float64Index",
-    cudf.Float64Index,
-    pd.core.indexes.numeric.Float64Index,
-    fast_to_slow=lambda fast: fast.to_pandas(),
-    slow_to_fast=cudf.from_pandas,
-    bases=(Index,),
-    additional_attributes={"__init__": _DELETE},
 )
 
 SeriesGroupBy = make_intermediate_proxy_type(
@@ -1273,8 +1228,6 @@ _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.indexes.datetimelike.DatetimeTimedeltaMixin,
     pd.core.indexes.datetimelike.DatetimeIndexOpsMixin,
     pd.core.indexes.extension.NDArrayBackedExtensionIndex,
-    pd.core.indexes.numeric.IntegerIndex,
-    pd.core.indexes.numeric.NumericIndex,
     pd.core.generic.NDFrame,
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
