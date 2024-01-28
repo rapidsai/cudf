@@ -154,6 +154,9 @@ struct file_intermediate_data {
   size_type rows_to_read;
   std::vector<metadata::OrcStripeInfo> selected_stripes;
 
+  // TODO: Change this
+  std::size_t read_size_limit{0};
+
   bool global_preprocessed{false};
   bool pass_preprocessed{false};
   bool subpass_preprocessed{false};

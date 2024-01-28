@@ -121,24 +121,28 @@ struct cumulative_size_sum {
 
 #if 1
 std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
-                               size_type total_count,
+                               int64_t total_count,
                                size_t size_limit)
 {
-  std::vector<chunk> splits;
+  // if (size_limit == 0) { return {chunk{0, total_count}}; }
+  CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
 
-  int64_t cur_count          = 0;
-  int64_t cur_pos            = 0;
-  size_t cur_cumulative_size = 0;
-  auto const start           = thrust::make_transform_iterator(
+  std::vector<chunk> splits;
+  int64_t cur_count{0};
+  int64_t cur_pos{0};
+  size_t cur_cumulative_size{0};
+
+  auto const start = thrust::make_transform_iterator(
     sizes.begin(), [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
   auto const end = start + static_cast<int64_t>(sizes.size());
-  while (cur_count < static_cast<uint32_t>(total_count)) {
+
+  while (cur_count < total_count) {
     int64_t split_pos =
       thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit));
 
     // If we're past the end, or if the returned bucket is bigger than the chunk_read_limit, move
     // back one.
-    if (static_cast<size_t>(split_pos) >= sizes.size() ||
+    if (static_cast<std::size_t>(split_pos) >= sizes.size() ||
         (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
       split_pos--;
     }
@@ -164,6 +168,7 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 }
 #endif
 
+#ifdef PRINT_DEBUG
 void verify_splits(host_span<chunk const> splits,
                    host_span<cumulative_size const> sizes,
                    size_type total_count,
@@ -207,6 +212,7 @@ void verify_splits(host_span<chunk const> splits,
                "Invalid split start_idx.");
   CUDF_EXPECTS(count == total_count, "Invalid total count.");
 }
+#endif
 
 }  // namespace
 
@@ -323,6 +329,12 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     total_stripe_sizes[stripe_idx] = {1, total_stripe_size};
   }
 
+  // Load all chunks if there is no read limit.
+  if (_file_itm_data->read_size_limit == 0) {
+    _file_itm_data->load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
+    return;
+  }
+
   // Compute the prefix sum of stripe data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),
@@ -337,13 +349,10 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //    printf("size: %ld, %zu\n", size.count, size.size_bytes);
   //  }
 
-  auto limit = total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
+  _file_itm_data->load_stripe_chunks =
+    find_splits(total_stripe_sizes, num_stripes, _file_itm_data->read_size_limit);
 
-  _file_itm_data->load_stripe_chunks = find_splits(total_stripe_sizes,
-                                                   num_stripes,
-                                                   /*chunk_size_limit/2*/ limit);
-
-#if 0
+#ifdef PRINT_DEBUG
   auto& splits = _file_itm_data->load_stripe_chunks;
   printf("------------\nSplits (/%d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
@@ -360,7 +369,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
   //  4. sum(number of stripes in all chunks) == total_num_stripes.
   // TODO: enable only in debug.
-  verify_splits(splits, total_stripe_sizes, num_stripes, limit);
+  verify_splits(splits, total_stripe_sizes, num_stripes, _file_itm_data->read_size_limit);
 #endif
 }
 
