@@ -742,44 +742,6 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
-void reader::impl::global_preprocess(uint64_t skip_rows,
-                                     std::optional<size_type> const& num_rows_opt,
-                                     std::vector<std::vector<size_type>> const& stripes)
-{
-  if (_file_itm_data == nullptr) { _file_itm_data = std::make_unique<file_intermediate_data>(); }
-  if (_file_itm_data->global_preprocessed) { return; }
-
-  // TODO: move this to end of func.
-  _file_itm_data->global_preprocessed = true;
-
-  // Select only stripes required (aka row groups)
-  std::tie(
-    _file_itm_data->rows_to_skip, _file_itm_data->rows_to_read, _file_itm_data->selected_stripes) =
-    _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
-  auto const rows_to_skip      = _file_itm_data->rows_to_skip;
-  auto const rows_to_read      = _file_itm_data->rows_to_read;
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
-
-  // If no rows or stripes to read, return empty columns
-  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
-
-  query_stripe_compression_info();
-}
-
-void reader::impl::pass_preprocess()
-{
-  if (_file_itm_data->pass_preprocessed) { return; }
-
-  _file_itm_data->pass_preprocessed = true;
-}
-
-void reader::impl::subpass_preprocess()
-{
-  if (_file_itm_data->subpass_preprocessed) { return; }
-
-  _file_itm_data->subpass_preprocessed = true;
-}
-
 void reader::impl::prepare_data(uint64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes)

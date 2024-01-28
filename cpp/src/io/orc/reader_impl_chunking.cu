@@ -166,16 +166,25 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 
 }  // namespace
 
-void reader::impl::query_stripe_compression_info()
+void reader::impl::global_preprocess(uint64_t skip_rows,
+                                     std::optional<size_type> const& num_rows_opt,
+                                     std::vector<std::vector<size_type>> const& stripes)
 {
-  // if (_file_itm_data->compinfo_ready) { return; }
-  if (_selected_columns.num_levels() == 0) { return; }
+  if (_file_itm_data == nullptr) { _file_itm_data = std::make_unique<file_intermediate_data>(); }
+  if (_file_itm_data->global_preprocessed) { return; }
 
+  // TODO: move this to end of func.
+  _file_itm_data->global_preprocessed = true;
+
+  // Select only stripes required (aka row groups)
+  std::tie(
+    _file_itm_data->rows_to_skip, _file_itm_data->rows_to_read, _file_itm_data->selected_stripes) =
+    _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
+  auto const rows_to_skip      = _file_itm_data->rows_to_skip;
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
 
   // If no rows or stripes to read, return empty columns
-  // TODO : remove?
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
@@ -303,6 +312,32 @@ void reader::impl::query_stripe_compression_info()
         cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
     }
   }
+}
+
+void reader::impl::pass_preprocess()
+{
+  if (_file_itm_data->pass_preprocessed) { return; }
+  _file_itm_data->pass_preprocessed = true;
+
+  auto const rows_to_read      = _file_itm_data->rows_to_read;
+  auto const& selected_stripes = _file_itm_data->selected_stripes;
+  auto& lvl_stripe_data        = _file_itm_data->lvl_stripe_data;
+  auto& lvl_stripe_sizes       = _file_itm_data->lvl_stripe_sizes;
+  auto& read_info              = _file_itm_data->stream_read_info;
+
+  std::size_t num_stripes = selected_stripes.size();
+
+  // TODO: this is a pass
+
+  // Prepare the buffer to read raw data onto.
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& stripe_data  = lvl_stripe_data[level];
+    auto& stripe_sizes = lvl_stripe_sizes[level];
+    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+      stripe_data[stripe_idx] = rmm::device_buffer(
+        cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
+    }
+  }
 
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
   // Should not read all, but read stripe by stripe.
@@ -354,6 +389,19 @@ void reader::impl::query_stripe_compression_info()
   for (auto& task : read_tasks) {
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
+}
+
+void reader::impl::subpass_preprocess()
+{
+  if (_file_itm_data->subpass_preprocessed) { return; }
+  _file_itm_data->subpass_preprocessed = true;
+
+  auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
+
+  // TODO: This is subpass
+  // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
+  std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
+    stream_compinfo_map;
 
   // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {

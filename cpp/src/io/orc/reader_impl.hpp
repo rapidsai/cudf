@@ -87,11 +87,6 @@ class reader::impl {
   void subpass_preprocess();
 
   /**
-   * @brief Compute stripe sizes.
-   */
-  void query_stripe_compression_info();
-
-  /**
    * @brief Create the output table metadata from file metadata.
    *
    * @return Columns' metadata to output with the table read from file
