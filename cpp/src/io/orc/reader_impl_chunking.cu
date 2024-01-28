@@ -119,9 +119,9 @@ struct cumulative_size_sum {
   }
 };
 
-#if 0
+#if 1
 std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
-                               size_type num_rows,
+                               size_type total_count,
                                size_t size_limit)
 {
   std::vector<chunk> splits;
@@ -132,7 +132,7 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
   auto const start           = thrust::make_transform_iterator(
     sizes.begin(), [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
   auto const end = start + static_cast<int64_t>(sizes.size());
-  while (cur_count < static_cast<uint32_t>(num_rows)) {
+  while (cur_count < static_cast<uint32_t>(total_count)) {
     int64_t split_pos =
       thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit));
 
@@ -153,9 +153,9 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
       split_pos++;
     }
 
-    auto const start_row = cur_count;
+    auto const start_idx = cur_count;
     cur_count            = sizes[split_pos].count;
-    splits.emplace_back(chunk{start_row, static_cast<size_type>(cur_count - start_row)});
+    splits.emplace_back(chunk{start_idx, static_cast<size_type>(cur_count - start_idx)});
     cur_pos             = split_pos;
     cur_cumulative_size = sizes[split_pos].size_bytes;
   }
@@ -279,9 +279,17 @@ void reader::impl::query_stripe_compression_info()
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
-  //  fix this:
-  //  _file_itm_data->stripe_chunks =
-  //    find_splits(total_stripe_sizes, _file_itm_data->rows_to_read, /*chunk_size_limit*/ 0);
+  _file_itm_data->stripe_chunks = find_splits(
+    total_stripe_sizes,
+    total_stripe_sizes.size(),
+    /*chunk_size_limit/2*/ total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3);
+
+  auto& splits = _file_itm_data->stripe_chunks;
+  printf("------------\nSplits (/%d): \n", (int)num_stripes);
+  for (size_t idx = 0; idx < splits.size(); idx++) {
+    printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
+  }
+  fflush(stdout);
 
   //  std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
   //  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
