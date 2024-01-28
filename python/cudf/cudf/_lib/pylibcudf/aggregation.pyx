@@ -38,6 +38,24 @@ from cudf._lib.cpp.types cimport (
 #   and use of mixins is the cleanest approach for doing that.
 
 
+cdef Aggregation _create_nullary_agg(cls, nullary_factory_type cpp_agg_factory):
+    cdef Aggregation out = cls.__new__(cls)
+    cdef unique_ptr[aggregation] ptr = move(cpp_agg_factory())
+    out.c_ptr = ptr.release()
+    return out
+
+
+cdef Aggregation _create_unary_null_handling_agg(
+    cls,
+    unary_null_handling_factory_type cpp_agg_factory,
+    null_policy null_handling,
+):
+    cdef Aggregation out = cls.__new__(cls)
+    cdef unique_ptr[aggregation] ptr = move(cpp_agg_factory(null_handling))
+    out.c_ptr = ptr.release()
+    return out
+
+
 cdef class Aggregation:
     """A wrapper for aggregations.
 
@@ -61,70 +79,33 @@ cdef class Aggregation:
         """Get the kind of the aggregation."""
         return dereference(self.c_ptr).kind
 
-
-cdef Aggregation _create_nullary_agg(cls, nullary_factory_type cpp_agg_factory):
-    cdef Aggregation out = cls.__new__(cls)
-    cdef unique_ptr[aggregation] ptr = move(cpp_agg_factory())
-    out.c_ptr = ptr.release()
-    return out
-
-
-cdef Aggregation _create_unary_null_handling_agg(
-    cls,
-    unary_null_handling_factory_type cpp_agg_factory,
-    null_policy null_handling,
-):
-    cdef Aggregation out = cls.__new__(cls)
-    cdef unique_ptr[aggregation] ptr = move(cpp_agg_factory(null_handling))
-    out.c_ptr = ptr.release()
-    return out
-
-
-# TODO: If/when https://github.com/cython/cython/issues/1271 is resolved, we
-# should migrate the various factories to cpdef classmethods instead of Python
-# def methods.
-
-# The below aggregation types are effectively mixins used to implement specific
-# types of aggregations. They function like mixins when combined with the
-# algorithm-specific classes below. The factory methods all construct an object
-# of type cls but save that to a variable of the base class Aggregation,
-# allowing the logic of the function to be generic regardless of which concrete
-# algorithm-type the mixin is mixed into. Since the methods are pure Python,
-# the end result is an object that Python will dynamically resolve to the
-# correct type at the call site.
-class SumAggregation(Aggregation):
+    # TODO: If/when https://github.com/cython/cython/issues/1271 is resolved, we
+    # should migrate the various factories to cpdef classmethods instead of Python
+    # def methods.
     @classmethod
     def sum(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_sum_aggregation[aggregation]
         )
 
-
-class ProductAggregation(Aggregation):
     @classmethod
     def product(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_product_aggregation[aggregation]
         )
 
-
-class MinAggregation(Aggregation):
     @classmethod
     def min(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_min_aggregation[aggregation]
         )
 
-
-class MaxAggregation(Aggregation):
     @classmethod
     def max(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_max_aggregation[aggregation]
         )
 
-
-class CountAggregation(Aggregation):
     @classmethod
     def count(cls, null_policy null_handling):
         return _create_unary_null_handling_agg(
@@ -133,40 +114,30 @@ class CountAggregation(Aggregation):
             null_handling,
         )
 
-
-class AnyAggregation(Aggregation):
     @classmethod
     def any(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_any_aggregation[aggregation],
         )
 
-
-class AllAggregation(Aggregation):
     @classmethod
     def all(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_all_aggregation[aggregation]
         )
 
-
-class SumOfSquaresAggregation(Aggregation):
     @classmethod
     def sum_of_squares(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_sum_of_squares_aggregation[aggregation],
         )
 
-
-class MeanAggregation(Aggregation):
     @classmethod
     def mean(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_mean_aggregation[aggregation],
         )
 
-
-class VarianceAggregation(Aggregation):
     @classmethod
     def variance(cls, size_type ddof):
         cdef Aggregation out = cls.__new__(cls)
@@ -175,8 +146,6 @@ class VarianceAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-class StdAggregation(Aggregation):
     @classmethod
     def std(cls, size_type ddof):
         cdef Aggregation out = cls.__new__(cls)
@@ -185,16 +154,12 @@ class StdAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-class MedianAggregation(Aggregation):
     @classmethod
     def median(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_median_aggregation[aggregation]
         )
 
-
-class QuantileAggregation(Aggregation):
     @classmethod
     def quantile(cls, list quantiles, interpolation interp = interpolation.LINEAR):
         cdef Aggregation out = cls.__new__(cls)
@@ -203,24 +168,18 @@ class QuantileAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-class ArgmaxAggregation(Aggregation):
     @classmethod
     def argmax(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_argmax_aggregation[aggregation]
         )
 
-
-class ArgminAggregation(Aggregation):
     @classmethod
     def argmin(cls):
         return _create_nullary_agg(
             cls, cpp_aggregation.make_argmin_aggregation[aggregation]
         )
 
-
-class NuniqueAggregation(Aggregation):
     @classmethod
     def nunique(cls, null_policy null_handling = null_policy.EXCLUDE):
         return _create_unary_null_handling_agg(
@@ -229,8 +188,6 @@ class NuniqueAggregation(Aggregation):
             null_handling,
         )
 
-
-class NthElementAggregation(Aggregation):
     @classmethod
     def nth_element(cls, size_type n, null_policy null_handling = null_policy.INCLUDE):
         cdef Aggregation out = cls.__new__(cls)
@@ -239,8 +196,6 @@ class NthElementAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-class CollectListAggregation(Aggregation):
     @classmethod
     def collect_list(cls, null_policy null_handling = null_policy.INCLUDE):
         return _create_unary_null_handling_agg(
@@ -249,8 +204,6 @@ class CollectListAggregation(Aggregation):
             null_handling,
         )
 
-
-class CollectSetAggregation(Aggregation):
     @classmethod
     def collect_set(
         cls,
@@ -266,8 +219,6 @@ class CollectSetAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-# class UdfAggregation(Aggregation):
 #     @classmethod
 #     def udf(
 #         cls,
@@ -276,8 +227,6 @@ class CollectSetAggregation(Aggregation):
 #         data_type output_type
 #     ):
 
-
-class CorrelationAggregation(Aggregation):
     @classmethod
     def correlation(cls, correlation_type type, size_type min_periods):
         cdef Aggregation out = cls.__new__(cls)
@@ -289,8 +238,6 @@ class CorrelationAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-class CovarianceAggregation(Aggregation):
     @classmethod
     def covariance(cls, size_type min_periods, size_type ddof):
         cdef Aggregation out = cls.__new__(cls)
@@ -302,8 +249,6 @@ class CovarianceAggregation(Aggregation):
         out.c_ptr = ptr.release()
         return out
 
-
-class RankAggregation(Aggregation):
     @classmethod
     def rank(
         cls,
@@ -321,88 +266,3 @@ class RankAggregation(Aggregation):
         )
         out.c_ptr = ptr.release()
         return out
-
-
-# The following are the concrete aggregation types corresponding to aggregation
-# algorithms.
-class RollingAggregation(
-    SumAggregation,
-    MinAggregation,
-    MaxAggregation,
-    CountAggregation,
-    MeanAggregation,
-    StdAggregation,
-    VarianceAggregation,
-    ArgmaxAggregation,
-    ArgminAggregation,
-    NthElementAggregation,
-    RankAggregation,
-    CollectListAggregation,
-    CollectSetAggregation,
-):
-    pass
-
-
-class GroupbyAggregation(
-    SumAggregation,
-    ProductAggregation,
-    MinAggregation,
-    MaxAggregation,
-    CountAggregation,
-    SumOfSquaresAggregation,
-    MeanAggregation,
-    StdAggregation,
-    VarianceAggregation,
-    MedianAggregation,
-    QuantileAggregation,
-    ArgmaxAggregation,
-    ArgminAggregation,
-    NuniqueAggregation,
-    NthElementAggregation,
-    CollectListAggregation,
-    CollectSetAggregation,
-    CovarianceAggregation,
-    CorrelationAggregation,
-):
-    pass
-
-
-class GroupbyScanAggregation(
-    SumAggregation,
-    MinAggregation,
-    MaxAggregation,
-    CountAggregation,
-    RankAggregation,
-):
-    pass
-
-
-class ReduceAggregation(
-    SumAggregation,
-    ProductAggregation,
-    MinAggregation,
-    MaxAggregation,
-    AnyAggregation,
-    AllAggregation,
-    SumOfSquaresAggregation,
-    MeanAggregation,
-    StdAggregation,
-    VarianceAggregation,
-    MedianAggregation,
-    QuantileAggregation,
-    NuniqueAggregation,
-    NthElementAggregation,
-    CollectListAggregation,
-    CollectSetAggregation,
-):
-    pass
-
-
-class ScanAggregation(
-    SumAggregation,
-    ProductAggregation,
-    MinAggregation,
-    MaxAggregation,
-    RankAggregation,
-):
-    pass
