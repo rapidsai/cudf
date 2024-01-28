@@ -302,28 +302,22 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   //  std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
   //  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
-
-  // Prepare the buffer to read raw data onto.
-  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    auto& stripe_data  = lvl_stripe_data[level];
-    auto& stripe_sizes = lvl_stripe_sizes[level];
-    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
-      stripe_data[stripe_idx] = rmm::device_buffer(
-        cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
-    }
-  }
 }
 
 void reader::impl::pass_preprocess()
 {
+  auto const rows_to_read      = _file_itm_data->rows_to_read;
+  auto const& selected_stripes = _file_itm_data->selected_stripes;
+
+  // If no rows or stripes to read, return empty columns
+  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
+
   if (_file_itm_data->pass_preprocessed) { return; }
   _file_itm_data->pass_preprocessed = true;
 
-  auto const rows_to_read      = _file_itm_data->rows_to_read;
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
-  auto& lvl_stripe_data        = _file_itm_data->lvl_stripe_data;
-  auto& lvl_stripe_sizes       = _file_itm_data->lvl_stripe_sizes;
-  auto& read_info              = _file_itm_data->stream_read_info;
+  auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
+  auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
+  auto& read_info        = _file_itm_data->stream_read_info;
 
   std::size_t num_stripes = selected_stripes.size();
 
@@ -393,6 +387,12 @@ void reader::impl::pass_preprocess()
 
 void reader::impl::subpass_preprocess()
 {
+  auto const rows_to_read      = _file_itm_data->rows_to_read;
+  auto const& selected_stripes = _file_itm_data->selected_stripes;
+
+  // If no rows or stripes to read, return empty columns
+  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
+
   if (_file_itm_data->subpass_preprocessed) { return; }
   _file_itm_data->subpass_preprocessed = true;
 
