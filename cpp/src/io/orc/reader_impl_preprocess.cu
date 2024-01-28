@@ -810,7 +810,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   auto& lvl_stripe_data        = _file_itm_data->lvl_stripe_data;
   auto& null_count_prefix_sums = _file_itm_data->null_count_prefix_sums;
+  auto& lvl_chunks             = _file_itm_data->lvl_data_chunks;
   lvl_stripe_data.resize(_selected_columns.num_levels());
+  lvl_chunks.resize(_selected_columns.num_levels());
 
   _out_buffers.resize(_selected_columns.num_levels());
 
@@ -851,8 +853,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     // Get the total number of stripes across all input files.
     std::size_t total_num_stripes = selected_stripes.size();
     auto const num_columns        = columns_level.size();
-    cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
-      total_num_stripes, num_columns, _stream);
+    auto& chunks                  = lvl_chunks[level];
+    chunks =
+      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(total_num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     const bool use_index =

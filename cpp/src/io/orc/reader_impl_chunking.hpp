@@ -105,7 +105,7 @@ struct file_intermediate_data {
 
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
-
+  std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
 
   int64_t rows_to_skip;
