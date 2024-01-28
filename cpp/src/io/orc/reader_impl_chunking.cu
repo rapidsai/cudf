@@ -123,7 +123,9 @@ void reader::impl::query_stripe_compression_info()
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
+  auto& lvl_read_info   = _file_itm_data->lvl_read_info;
   lvl_stripe_data.resize(_selected_columns.num_levels());
+  lvl_read_info.resize(_selected_columns.num_levels());
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
@@ -150,7 +152,9 @@ void reader::impl::query_stripe_compression_info()
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& stream_info      = _file_itm_data->lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
-    stream_info.reserve(selected_stripes.size() * num_columns);
+    auto& read_info        = lvl_read_info[level];
+    stream_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
+    read_info.reserve(selected_stripes.size() * num_columns);    // final size is unknown
 
     // Get the total number of stripes across all input files.
     std::size_t total_num_stripes = selected_stripes.size();
@@ -197,6 +201,7 @@ void reader::impl::query_stripe_compression_info()
           len += stream_info[stream_count].length;
           stream_count++;
         }
+        read_info.emplace_back(offset, len, d_dst);
         if (_metadata.per_file_metadata[stripe.source_idx].source->is_device_read_preferred(len)) {
           read_tasks.push_back(
             std::pair(_metadata.per_file_metadata[stripe.source_idx].source->device_read_async(
