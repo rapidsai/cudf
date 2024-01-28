@@ -92,7 +92,7 @@ cdef class Aggregation:
         cdef groupby_aggregation *agg_cast = dynamic_cast[gba_ptr](raw_agg)
         if agg_cast is NULL:
             raise TypeError(
-                f"{self.kind().title()} aggregations are not supported by groupby"
+                f"{str(self.kind()).title()} aggregations are not supported by groupby"
             )
             return unique_ptr[groupby_aggregation](NULL)
         agg.release()
