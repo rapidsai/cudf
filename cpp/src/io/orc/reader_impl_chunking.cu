@@ -126,7 +126,7 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 {
   std::vector<chunk> splits;
 
-  uint32_t cur_count         = 0;
+  int64_t cur_count          = 0;
   int64_t cur_pos            = 0;
   size_t cur_cumulative_size = 0;
   auto const start           = thrust::make_transform_iterator(
@@ -198,7 +198,6 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
                                      std::vector<std::vector<size_type>> const& stripes)
 {
   if (_file_itm_data == nullptr) { _file_itm_data = std::make_unique<file_intermediate_data>(); }
-  if (_file_itm_data->has_no_data()) { return; }
   if (_file_itm_data->global_preprocessed) { return; }
 
   // TODO: move this to end of func.
@@ -208,6 +207,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   std::tie(
     _file_itm_data->rows_to_skip, _file_itm_data->rows_to_read, _file_itm_data->selected_stripes) =
     _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
+  if (_file_itm_data->has_no_data()) { return; }
+
   auto const rows_to_skip      = _file_itm_data->rows_to_skip;
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
