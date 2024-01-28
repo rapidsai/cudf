@@ -88,16 +88,14 @@ cdef class Aggregation:
         as a groupby aggregation.
         """
         cdef unique_ptr[aggregation] agg = self.c_ptr.clone()
-        cdef aggregation *raw_agg = agg.release()
+        cdef aggregation *raw_agg = agg.get()
         cdef groupby_aggregation *agg_cast = dynamic_cast[gba_ptr](raw_agg)
         if agg_cast is NULL:
-            del raw_agg
             raise TypeError(
-                "Aggregation type {} is not supported as a groupby aggregation".format(
-                    type(self)
-                )
+                f"{self.kind().title()} aggregations are not supported by groupby"
             )
             return unique_ptr[groupby_aggregation](NULL)
+        agg.release()
         return unique_ptr[groupby_aggregation](agg_cast)
 
     # TODO: If/when https://github.com/cython/cython/issues/1271 is resolved, we
