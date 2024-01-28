@@ -88,13 +88,13 @@ cdef class Aggregation:
         as a groupby aggregation.
         """
         cdef unique_ptr[aggregation] agg = self.c_ptr.clone()
+        # This roundabout casting is required because Cython does not understand
+        # that unique_ptrs can be cast along class hierarchies.
         cdef aggregation *raw_agg = agg.get()
         cdef groupby_aggregation *agg_cast = dynamic_cast[gba_ptr](raw_agg)
         if agg_cast is NULL:
-            raise TypeError(
-                f"{str(self.kind()).title()} aggregations are not supported by groupby"
-            )
-            return unique_ptr[groupby_aggregation](NULL)
+            agg_repr = str(self.kind()).split(".")[1].title()
+            raise TypeError(f"{agg_repr} aggregations are not supported by groupby")
         agg.release()
         return unique_ptr[groupby_aggregation](agg_cast)
 

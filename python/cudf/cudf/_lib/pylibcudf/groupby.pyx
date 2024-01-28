@@ -48,16 +48,16 @@ cdef class GroupBy:
         )
         cdef Table group_keys = Table.from_libcudf(move(c_res.first))
 
-        # TODO: For now, I'm assuming that all aggregations produce a single
-        # column. I'm not sure what the exceptions are, but I know there must
-        # be some. I expect that to be obvious when I start replacing the
-        # existing libcudf code.
-        cdef int i
+        cdef int i, j
         cdef list results = []
+        cdef list inner_results
         for i in range(c_res.second.size()):
-            results.append(
-                Column.from_libcudf(move(c_res.second[i].results[0]))
-            )
+            inner_results = []
+            for j in range(c_res.second[i].results.size()):
+                inner_results.append(
+                    Column.from_libcudf(move(c_res.second[i].results[j]))
+                )
+            results.append(inner_results)
         return group_keys, results
 
     cdef groupby * get(self) nogil:
