@@ -742,29 +742,15 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
-void reader::impl::global_preprocess() {}
-
-void reader::impl::pass_preprocess() {}
-
-void reader::impl::subpass_preprocess() {}
-
-void reader::impl::prepare_data(uint64_t skip_rows,
-                                std::optional<size_type> const& num_rows_opt,
-                                std::vector<std::vector<size_type>> const& stripes)
+void reader::impl::global_preprocess(uint64_t skip_rows,
+                                     std::optional<size_type> const& num_rows_opt,
+                                     std::vector<std::vector<size_type>> const& stripes)
 {
-  // Selected columns at different levels of nesting are stored in different elements
-  // of `selected_columns`; thus, size == 1 means no nested columns
-  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.num_levels() == 1,
-               "skip_rows is not supported by nested columns");
+  if (_file_itm_data == nullptr) { _file_itm_data = std::make_unique<file_intermediate_data>(); }
+  if (_file_itm_data->global_preprocessed) { return; }
 
-  // There are no columns in the table
-  if (_selected_columns.num_levels() == 0) { return; }
-
-  global_preprocess();
-  pass_preprocess();
-  subpass_preprocess();
-
-  _file_itm_data = std::make_unique<file_intermediate_data>();
+  // TODO: move this to end of func.
+  _file_itm_data->global_preprocessed = true;
 
   // Select only stripes required (aka row groups)
   std::tie(
@@ -778,6 +764,44 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   query_stripe_compression_info();
+}
+
+void reader::impl::pass_preprocess()
+{
+  if (_file_itm_data->pass_preprocessed) { return; }
+
+  _file_itm_data->pass_preprocessed = true;
+}
+
+void reader::impl::subpass_preprocess()
+{
+  if (_file_itm_data->subpass_preprocessed) { return; }
+
+  _file_itm_data->subpass_preprocessed = true;
+}
+
+void reader::impl::prepare_data(uint64_t skip_rows,
+                                std::optional<size_type> const& num_rows_opt,
+                                std::vector<std::vector<size_type>> const& stripes)
+{
+  // Selected columns at different levels of nesting are stored in different elements
+  // of `selected_columns`; thus, size == 1 means no nested columns
+  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.num_levels() == 1,
+               "skip_rows is not supported by nested columns");
+
+  // There are no columns in the table
+  if (_selected_columns.num_levels() == 0) { return; }
+
+  global_preprocess(skip_rows, num_rows_opt, stripes);
+  pass_preprocess();
+  subpass_preprocess();
+
+  auto const rows_to_skip      = _file_itm_data->rows_to_skip;
+  auto const rows_to_read      = _file_itm_data->rows_to_read;
+  auto const& selected_stripes = _file_itm_data->selected_stripes;
+
+  // If no rows or stripes to read, return empty columns
+  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {

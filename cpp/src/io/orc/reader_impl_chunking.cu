@@ -168,7 +168,7 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 
 void reader::impl::query_stripe_compression_info()
 {
-  if (_file_itm_data->compinfo_ready) { return; }
+  // if (_file_itm_data->compinfo_ready) { return; }
   if (_selected_columns.num_levels() == 0) { return; }
 
   auto const rows_to_read      = _file_itm_data->rows_to_read;
@@ -432,7 +432,7 @@ void reader::impl::query_stripe_compression_info()
   }  // end loop level
 
   // lvl_stripe_data.clear();
-  _file_itm_data->compinfo_ready = true;
+  // _file_itm_data->compinfo_ready = true;
 }
 
 }  // namespace cudf::io::orc::detail

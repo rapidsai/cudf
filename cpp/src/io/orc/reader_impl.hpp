@@ -78,7 +78,9 @@ class reader::impl {
                     std::vector<std::vector<size_type>> const& stripes);
 
   // Do once for the entire file.
-  void global_preprocess();
+  void global_preprocess(uint64_t skip_rows,
+                         std::optional<size_type> const& num_rows_opt,
+                         std::vector<std::vector<size_type>> const& stripes);
 
   void pass_preprocess();
 

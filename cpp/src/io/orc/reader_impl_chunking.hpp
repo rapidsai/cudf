@@ -106,7 +106,7 @@ struct chunk {
 struct file_intermediate_data {
   std::unordered_map<stream_id_info, stripe_level_comp_info, stream_id_hash, stream_id_equal>
     compinfo_map;
-  bool compinfo_ready{false};
+  // bool compinfo_ready{false};
 
   std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
@@ -123,11 +123,11 @@ struct file_intermediate_data {
   // Each read correspond to one or more consecutive stream combined.
   struct stream_read_info {
     stream_read_info(uint64_t offset_,
-              std::size_t length_,
-              std::size_t dst_pos_,
-              std::size_t source_idx_,
-              std::size_t stripe_idx_,
-              std::size_t level_)
+                     std::size_t length_,
+                     std::size_t dst_pos_,
+                     std::size_t source_idx_,
+                     std::size_t stripe_idx_,
+                     std::size_t level_)
       : offset(offset_),
         length(length_),
         dst_pos(dst_pos_),
@@ -148,6 +148,10 @@ struct file_intermediate_data {
   int64_t rows_to_skip;
   size_type rows_to_read;
   std::vector<metadata::OrcStripeInfo> selected_stripes;
+
+  bool global_preprocessed{false};
+  bool pass_preprocessed{false};
+  bool subpass_preprocessed{false};
 };
 
 }  // namespace cudf::io::orc::detail
