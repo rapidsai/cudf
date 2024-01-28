@@ -107,6 +107,63 @@ std::size_t gather_stream_info(std::size_t stripe_index,
   return dst_offset;
 }
 
+struct cumulative_size {
+  std::size_t count;
+  std::size_t size_bytes;
+};
+
+struct cumulative_size_sum {
+  __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
+  {
+    return cumulative_size{a.count + b.count, a.size_bytes + b.size_bytes};
+  }
+};
+
+#if 0
+std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
+                               size_type num_rows,
+                               size_t size_limit)
+{
+  std::vector<chunk> splits;
+
+  uint32_t cur_count         = 0;
+  int64_t cur_pos            = 0;
+  size_t cur_cumulative_size = 0;
+  auto const start           = thrust::make_transform_iterator(
+    sizes.begin(), [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
+  auto const end = start + static_cast<int64_t>(sizes.size());
+  while (cur_count < static_cast<uint32_t>(num_rows)) {
+    int64_t split_pos =
+      thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit));
+
+    // If we're past the end, or if the returned bucket is bigger than the chunk_read_limit, move
+    // back one.
+    if (static_cast<size_t>(split_pos) >= sizes.size() ||
+        (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
+      split_pos--;
+    }
+
+    // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
+    // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
+    // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
+    // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
+    // either do this, or we have to call unique() on the input first.
+    while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
+           (split_pos < 0 || sizes[split_pos].count == cur_count)) {
+      split_pos++;
+    }
+
+    auto const start_row = cur_count;
+    cur_count            = sizes[split_pos].count;
+    splits.emplace_back(chunk{start_row, static_cast<size_type>(cur_count - start_row)});
+    cur_pos             = split_pos;
+    cur_cumulative_size = sizes[split_pos].size_bytes;
+  }
+
+  return splits;
+}
+#endif
+
 }  // namespace
 
 void reader::impl::query_stripe_compression_info()
@@ -114,7 +171,6 @@ void reader::impl::query_stripe_compression_info()
   if (_file_itm_data->compinfo_ready) { return; }
   if (_selected_columns.num_levels() == 0) { return; }
 
-  auto const rows_to_skip      = _file_itm_data->rows_to_skip;
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
 
@@ -166,12 +222,15 @@ void reader::impl::query_stripe_compression_info()
     }
   }
 
+  cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_stripes, _stream);
+
   // Compute input size for each stripe.
   for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
     auto const& stripe       = selected_stripes[stripe_idx];
     auto const stripe_info   = stripe.stripe_info;
     auto const stripe_footer = stripe.stripe_footer;
 
+    std::size_t total_stripe_size{0};
     for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
       auto& stream_info  = _file_itm_data->lvl_stream_info[level];
       auto& stripe_sizes = lvl_stripe_sizes[level];
@@ -186,6 +245,7 @@ void reader::impl::query_stripe_compression_info()
                                                   level == 0,
                                                   stream_info);
       stripe_sizes[stripe_idx] = stripe_size;
+      total_stripe_size += stripe_size;
 
       auto const is_stripe_data_empty = stripe_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
@@ -206,7 +266,25 @@ void reader::impl::query_stripe_compression_info()
         read_info.emplace_back(offset, len, d_dst, stripe.source_idx, stripe_idx, level);
       }
     }
+    total_stripe_sizes[stripe_idx] = {1, total_stripe_size};
   }
+
+  // Compute the prefix sum of stripe data sizes.
+  total_stripe_sizes.host_to_device_async(_stream);
+  thrust::inclusive_scan(rmm::exec_policy(_stream),
+                         total_stripe_sizes.d_begin(),
+                         total_stripe_sizes.d_end(),
+                         total_stripe_sizes.d_begin(),
+                         cumulative_size_sum{});
+
+  total_stripe_sizes.device_to_host_sync(_stream);
+
+  //  fix this:
+  //  _file_itm_data->stripe_chunks =
+  //    find_splits(total_stripe_sizes, _file_itm_data->rows_to_read, /*chunk_size_limit*/ 0);
+
+  //  std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
+  //  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
 
   // Prepare the buffer to read raw data onto.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -221,6 +299,9 @@ void reader::impl::query_stripe_compression_info()
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
   // Should not read all, but read stripe by stripe.
   // read_info should be limited by stripe.
+  // Read level-by-level.
+  // TODO: Test with read and parse/decode column by column.
+  // This is future work.
   for (auto const& read : read_info) {
     auto& stripe_data = lvl_stripe_data[read.level];
     auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());

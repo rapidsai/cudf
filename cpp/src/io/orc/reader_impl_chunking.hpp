@@ -95,6 +95,11 @@ struct stream_id_hash {
   }
 };
 
+struct chunk {
+  int64_t start_idx;
+  int64_t count;
+};
+
 /**
  * @brief Struct to store file-level data that remains constant for all chunks being read.
  */
@@ -108,6 +113,8 @@ struct file_intermediate_data {
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
+
+  std::vector<chunk> stripe_chunks;
 
   // Each read correspond to one or more consecutive stream combined.
   struct read_info {
