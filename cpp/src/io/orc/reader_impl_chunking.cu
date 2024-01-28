@@ -124,10 +124,10 @@ void reader::impl::query_stripe_compression_info()
 
   auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
   auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
-  auto& lvl_read_info    = _file_itm_data->lvl_read_info;
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
-  lvl_read_info.resize(_selected_columns.num_levels());
+
+  auto& read_info = _file_itm_data->read_info;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
@@ -151,51 +151,46 @@ void reader::impl::query_stripe_compression_info()
     }
   }
 
+  // Get the total number of stripes across all input files.
+  std::size_t num_stripes = selected_stripes.size();
+
+  // Compute input size for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    lvl_stripe_data[level].resize(num_stripes);
+
     auto& stream_info      = _file_itm_data->lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
-    auto& read_info        = lvl_read_info[level];
     auto& stripe_sizes     = lvl_stripe_sizes[level];
-    stream_info.reserve(selected_stripes.size() * num_columns);   // final size is unknown
-    read_info.reserve(selected_stripes.size() * num_columns);     // final size is unknown
-    stripe_sizes.reserve(selected_stripes.size() * num_columns);  // final size is unknown
+    stream_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
 
-    // Get the total number of stripes across all input files.
-    std::size_t num_stripes = selected_stripes.size();
+    stripe_sizes.resize(selected_stripes.size());
+    if (read_info.capacity() < selected_stripes.size()) {
+      read_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
+    }
 
-    // Tracker for eventually deallocating compressed and uncompressed data
-    auto& stripe_data = lvl_stripe_data[level];
-
-    std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
-    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; stripe_idx++) {
+    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
       auto const& stripe       = selected_stripes[stripe_idx];
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
-      auto stream_count          = stream_info.size();
-      auto const total_data_size = gather_stream_info(stripe_idx,
-                                                      level,
-                                                      stripe_info,
-                                                      stripe_footer,
-                                                      col_meta.orc_col_map[level],
-                                                      _metadata.get_types(),
-                                                      level == 0,
-                                                      stream_info);
-      stripe_sizes.push_back(total_data_size);
+      auto stream_count        = stream_info.size();
+      auto const stripe_size   = gather_stream_info(stripe_idx,
+                                                  level,
+                                                  stripe_info,
+                                                  stripe_footer,
+                                                  col_meta.orc_col_map[level],
+                                                  _metadata.get_types(),
+                                                  level == 0,
+                                                  stream_info);
+      stripe_sizes[stripe_idx] = stripe_size;
 
-      auto const is_stripe_data_empty = total_data_size == 0;
+      auto const is_stripe_data_empty = stripe_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      // Buffer needs to be padded.
-      // Required by `copy_uncompressed_kernel`.
-      stripe_data.emplace_back(cudf::util::round_up_safe(total_data_size, BUFFER_PADDING_MULTIPLE),
-                               _stream);
-      auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
-
       // Coalesce consecutive streams into one read
       while (not is_stripe_data_empty and stream_count < stream_info.size()) {
-        auto const d_dst  = dst_base + stream_info[stream_count].dst_pos;
+        auto const d_dst  = stream_info[stream_count].dst_pos;
         auto const offset = stream_info[stream_count].offset;
         auto len          = stream_info[stream_count].length;
         stream_count++;
@@ -205,28 +200,65 @@ void reader::impl::query_stripe_compression_info()
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        read_info.emplace_back(offset, len, d_dst);
-        if (_metadata.per_file_metadata[stripe.source_idx].source->is_device_read_preferred(len)) {
-          read_tasks.push_back(
-            std::pair(_metadata.per_file_metadata[stripe.source_idx].source->device_read_async(
-                        offset, len, d_dst, _stream),
-                      len));
-
-        } else {
-          auto const buffer =
-            _metadata.per_file_metadata[stripe.source_idx].source->host_read(offset, len);
-          CUDF_EXPECTS(buffer->size() == len, "Unexpected discrepancy in bytes read.");
-          CUDF_CUDA_TRY(
-            cudaMemcpyAsync(d_dst, buffer->data(), len, cudaMemcpyDefault, _stream.value()));
-          _stream.synchronize();
-        }
+        read_info.emplace_back(offset, len, d_dst, stripe.source_idx, stripe_idx, level);
       }
     }
+  }
 
-    for (auto& task : read_tasks) {
-      CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
+  // Prepare the buffer to read raw data onto.
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& stripe_data  = lvl_stripe_data[level];
+    auto& stripe_sizes = lvl_stripe_sizes[level];
+    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+      stripe_data[stripe_idx] = rmm::device_buffer(
+        cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
     }
+  }
 
+  std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
+  // Should not read all, but read stripe by stripe.
+  for (auto const& read : read_info) {
+    auto& stripe_data = lvl_stripe_data[read.level];
+    auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
+
+    if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
+          read.length)) {
+      read_tasks.push_back(
+        std::pair(_metadata.per_file_metadata[read.source_idx].source->device_read_async(
+                    read.offset, read.length, dst_base + read.dst_pos, _stream),
+                  read.length));
+
+    } else {
+      read_tasks.push_back(
+        std::pair(std::async(std::launch::async,
+                             [&, read = read, dst_base = dst_base] {
+                               auto const buffer =
+                                 _metadata.per_file_metadata[read.source_idx].source->host_read(
+                                   read.offset, read.length);
+                               CUDF_EXPECTS(buffer->size() == read.length,
+                                            "Unexpected discrepancy in bytes read.");
+                               CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read.dst_pos,
+                                                             buffer->data(),
+                                                             read.length,
+                                                             cudaMemcpyDefault,
+                                                             _stream.value()));
+                               _stream.synchronize();
+                               return read.length;
+                             }),
+                  read.length));
+    }
+  }
+  for (auto& task : read_tasks) {
+    CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
+  }
+
+  // Parse the decompressed sizes for each stripe.
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    auto& stream_info      = _file_itm_data->lvl_stream_info[level];
+    auto const num_columns = _selected_columns.levels[level].size();
+
+    // Tracker for eventually deallocating compressed and uncompressed data
+    auto& stripe_data = lvl_stripe_data[level];
     if (stripe_data.empty()) { continue; }
 
     // Setup row group descriptors if using indexes
