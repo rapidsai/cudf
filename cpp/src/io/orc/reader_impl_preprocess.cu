@@ -742,30 +742,11 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
-void reader::impl::create_pass_data()
-{
-  auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
-  lvl_stripe_data.resize(_selected_columns.num_levels());
+void reader::impl::global_preprocess() {}
 
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
+void reader::impl::pass_preprocess() {}
 
-  // Logically view streams as columns
-  std::vector<orc_stream_info> stream_info;
-  //  stream_info.reserve(selected_stripes.size() * selected_stripes.front().stripe_info.size());
-
-  auto& col_meta = *_col_meta;
-  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    auto& columns_level = _selected_columns.levels[level];
-    // Association between each ORC column and its cudf::column
-    col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
-
-    size_type col_id{0};
-    for (auto& col : columns_level) {
-      // Map each ORC column to its column
-      col_meta.orc_col_map[level][col.id] = col_id++;
-    }
-  }
-}
+void reader::impl::subpass_preprocess() {}
 
 void reader::impl::prepare_data(uint64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
@@ -778,6 +759,10 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   // There are no columns in the table
   if (_selected_columns.num_levels() == 0) { return; }
+
+  global_preprocess();
+  pass_preprocess();
+  subpass_preprocess();
 
   _file_itm_data = std::make_unique<file_intermediate_data>();
 

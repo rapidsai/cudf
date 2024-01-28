@@ -77,10 +77,12 @@ class reader::impl {
                     std::optional<size_type> const& num_rows_opt,
                     std::vector<std::vector<size_type>> const& stripes);
 
-  /**
-   *
-   */
-  void create_pass_data();
+  // Do once for the entire file.
+  void global_preprocess();
+
+  void pass_preprocess();
+
+  void subpass_preprocess();
 
   /**
    * @brief Compute stripe sizes.
