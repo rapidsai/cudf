@@ -782,14 +782,16 @@ def test_dataframe_set_index():
     df["str"] = list("abcdefghijklmnopqrstuvwxyz")
     pdf = df.to_pandas()
 
-    ddf = dgd.from_cudf(df, npartitions=4)
-    ddf = ddf.set_index("str")
+    with dask.config.set({"dataframe.convert-string": False}):
+        ddf = dgd.from_cudf(df, npartitions=4)
+        ddf = ddf.set_index("str")
 
-    pddf = dd.from_pandas(pdf, npartitions=4)
-    pddf = pddf.set_index("str")
-    from cudf.testing._utils import assert_eq
+        pddf = dd.from_pandas(pdf, npartitions=4)
+        pddf = pddf.set_index("str")
 
-    assert_eq(ddf.compute(), pddf.compute())
+        from cudf.testing._utils import assert_eq
+
+        assert_eq(ddf.compute(), pddf.compute())
 
 
 def test_series_describe():
