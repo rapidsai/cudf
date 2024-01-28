@@ -117,9 +117,11 @@ struct file_intermediate_data {
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
 
+  // Chunks of stripes that can be load such that total of their data size is within a limit.
   std::vector<chunk> load_stripe_chunks;
   std::size_t curr_load_stripe_chunk{0};
 
+  // Chunks of stripes such that total of their decompression size is within a limit.
   std::vector<chunk> decode_stripe_chunks;
   std::size_t curr_decode_stripe_chunk{0};
 

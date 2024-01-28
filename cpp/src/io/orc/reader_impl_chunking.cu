@@ -171,6 +171,7 @@ void verify_splits(host_span<chunk const> splits,
 {
   chunk last_split{0, 0};
   int64_t count{0};
+  size_t cur_cumulative_size{0};
   for (auto const& split : splits) {
     CUDF_EXPECTS(split.count > 0, "Invalid split count.");
     CUDF_EXPECTS(last_split.start_idx + last_split.count == split.start_idx,
@@ -179,12 +180,28 @@ void verify_splits(host_span<chunk const> splits,
     last_split = split;
 
     if (split.count > 1) {
-      std::size_t size{0};
-      for (int64_t i = split.start_idx; i < split.start_idx + split.count; ++i) {
-        size += sizes[i].size_bytes;
+      //      printf("split: %ld - %ld, size: %zu, limit: %zu\n",
+      //             split.start_idx,
+      //             split.count,
+      //             sizes[split.start_idx + split.count - 1].size_bytes - cur_cumulative_size,
+      //             size_limit);
+      //      fflush(stdout);
+      CUDF_EXPECTS(
+        sizes[split.start_idx + split.count - 1].size_bytes - cur_cumulative_size <= size_limit,
+        "Chunk total size exceeds limit.");
+      if (split.start_idx + split.count < total_count) {
+        //        printf("wrong split: %ld - %ld, size: %zu, limit: %zu\n",
+        //               split.start_idx,
+        //               split.count + 1,
+        //               sizes[split.start_idx + split.count].size_bytes - cur_cumulative_size,
+        //               size_limit);
+
+        CUDF_EXPECTS(
+          sizes[split.start_idx + split.count].size_bytes - cur_cumulative_size > size_limit,
+          "Invalid split.");
       }
-      CUDF_EXPECTS(size < size_limit, "Chunk total size exceeds limit.");
     }
+    cur_cumulative_size = sizes[split.start_idx + split.count - 1].size_bytes;
   }
   CUDF_EXPECTS(last_split.start_idx + last_split.count == sizes[sizes.size() - 1].count,
                "Invalid split start_idx.");
@@ -316,11 +333,17 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
-  _file_itm_data->load_stripe_chunks = find_splits(
-    total_stripe_sizes,
-    num_stripes,
-    /*chunk_size_limit/2*/ total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3);
+  //  for (auto& size : total_stripe_sizes) {
+  //    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+  //  }
 
+  auto limit = total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
+
+  _file_itm_data->load_stripe_chunks = find_splits(total_stripe_sizes,
+                                                   num_stripes,
+                                                   /*chunk_size_limit/2*/ limit);
+
+#if 0
   auto& splits = _file_itm_data->load_stripe_chunks;
   printf("------------\nSplits (/%d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
@@ -337,13 +360,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
   //  4. sum(number of stripes in all chunks) == total_num_stripes.
   // TODO: enable only in debug.
-  verify_splits(
-    splits,
-    total_stripe_sizes,
-    num_stripes,
-    /*chunk_size_limit/2*/ total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3);
+  verify_splits(splits, total_stripe_sizes, num_stripes, limit);
+#endif
 }
 
+// Load each chunk from `load_stripe_chunks`.
 void reader::impl::pass_preprocess()
 {
   if (_file_itm_data->has_no_data()) { return; }
