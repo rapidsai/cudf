@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
@@ -10,6 +11,7 @@ from cudf._lib.cpp.aggregation cimport (
     Kind as kind_t,
     aggregation,
     correlation_type,
+    groupby_aggregation,
     rank_method,
     rank_percentage,
 )
@@ -78,6 +80,25 @@ cdef class Aggregation:
     cpdef kind_t kind(self):
         """Get the kind of the aggregation."""
         return dereference(self.c_ptr).kind
+
+    cdef unique_ptr[groupby_aggregation] make_groupby_copy(self) except *:
+        """Make a copy of the aggregation that can be used in a groupby.
+
+        This function will raise an exception if the aggregation is not supported
+        as a groupby aggregation.
+        """
+        cdef unique_ptr[aggregation] agg = self.c_ptr.clone()
+        cdef aggregation *raw_agg = agg.release()
+        cdef groupby_aggregation *agg_cast = dynamic_cast[gba_ptr](raw_agg)
+        if agg_cast is NULL:
+            del raw_agg
+            raise TypeError(
+                "Aggregation type {} is not supported as a groupby aggregation".format(
+                    type(self)
+                )
+            )
+            return unique_ptr[groupby_aggregation](NULL)
+        return unique_ptr[groupby_aggregation](agg_cast)
 
     # TODO: If/when https://github.com/cython/cython/issues/1271 is resolved, we
     # should migrate the various factories to cpdef classmethods instead of Python

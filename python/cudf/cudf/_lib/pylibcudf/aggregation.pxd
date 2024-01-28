@@ -3,13 +3,19 @@
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp cimport aggregation as cpp_aggregation
-from cudf._lib.cpp.aggregation cimport Kind as kind_t, aggregation
+from cudf._lib.cpp.aggregation cimport (
+    Kind as kind_t,
+    aggregation,
+    groupby_aggregation,
+)
 from cudf._lib.cpp.types cimport null_policy
 
+ctypedef groupby_aggregation * gba_ptr
 
 cdef class Aggregation:
     cdef aggregation *c_ptr
     cpdef kind_t kind(self)
+    cdef unique_ptr[groupby_aggregation] make_groupby_copy(self) except *
 
 
 ctypedef unique_ptr[aggregation](*nullary_factory_type)() except +

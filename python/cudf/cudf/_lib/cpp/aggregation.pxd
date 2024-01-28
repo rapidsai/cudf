@@ -52,6 +52,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef cppclass aggregation:
         Kind kind
+        unique_ptr[aggregation] clone()
 
     cdef cppclass rolling_aggregation(aggregation):
         pass
