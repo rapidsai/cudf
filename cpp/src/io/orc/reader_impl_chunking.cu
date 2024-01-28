@@ -108,7 +108,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
 }
 
 struct cumulative_size {
-  std::size_t count;
+  int64_t count;
   std::size_t size_bytes;
 };
 
@@ -164,6 +164,33 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 }
 #endif
 
+void verify_splits(host_span<chunk const> splits,
+                   host_span<cumulative_size const> sizes,
+                   size_type total_count,
+                   size_t size_limit)
+{
+  chunk last_split{0, 0};
+  int64_t count{0};
+  for (auto const& split : splits) {
+    CUDF_EXPECTS(split.count > 0, "Invalid split count.");
+    CUDF_EXPECTS(last_split.start_idx + last_split.count == split.start_idx,
+                 "Invalid split start_idx.");
+    count += split.count;
+    last_split = split;
+
+    if (split.count > 1) {
+      std::size_t size{0};
+      for (int64_t i = split.start_idx; i < split.start_idx + split.count; ++i) {
+        size += sizes[i].size_bytes;
+      }
+      CUDF_EXPECTS(size < size_limit, "Chunk total size exceeds limit.");
+    }
+  }
+  CUDF_EXPECTS(last_split.start_idx + last_split.count == sizes[sizes.size() - 1].count,
+               "Invalid split start_idx.");
+  CUDF_EXPECTS(count == total_count, "Invalid total count.");
+}
+
 }  // namespace
 
 void reader::impl::global_preprocess(uint64_t skip_rows,
@@ -202,6 +229,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // Get the total number of stripes across all input files.
   std::size_t num_stripes = selected_stripes.size();
 
+  // TODO: Check if these data depends on pass and subpass, instead of global pass.
   // Prepare data.
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
@@ -289,7 +317,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   _file_itm_data->load_stripe_chunks = find_splits(
     total_stripe_sizes,
-    total_stripe_sizes.size(),
+    num_stripes,
     /*chunk_size_limit/2*/ total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3);
 
   auto& splits = _file_itm_data->load_stripe_chunks;
@@ -301,6 +329,18 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   //  std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
   //  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
+
+  // We need to verify that:
+  //  1. All chunk must have count > 0
+  //  2. Chunks are continuous.
+  //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
+  //  4. sum(number of stripes in all chunks) == total_num_stripes.
+  // TODO: enable only in debug.
+  verify_splits(
+    splits,
+    total_stripe_sizes,
+    num_stripes,
+    /*chunk_size_limit/2*/ total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3);
 }
 
 void reader::impl::pass_preprocess()
