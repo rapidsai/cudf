@@ -114,11 +114,15 @@ struct file_intermediate_data {
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
 
-  std::vector<chunk> stripe_chunks;
+  std::vector<chunk> load_stripe_chunks;
+  std::size_t curr_load_stripe_chunk{0};
+
+  std::vector<chunk> decode_stripe_chunks;
+  std::size_t curr_decode_stripe_chunk{0};
 
   // Each read correspond to one or more consecutive stream combined.
-  struct read_info {
-    read_info(uint64_t offset_,
+  struct stream_read_info {
+    stream_read_info(uint64_t offset_,
               std::size_t length_,
               std::size_t dst_pos_,
               std::size_t source_idx_,
@@ -139,7 +143,7 @@ struct file_intermediate_data {
     std::size_t stripe_idx;
     std::size_t level;
   };
-  std::vector<read_info> read_info;
+  std::vector<stream_read_info> stream_read_info;
 
   int64_t rows_to_skip;
   size_type rows_to_read;

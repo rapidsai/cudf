@@ -183,7 +183,7 @@ void reader::impl::query_stripe_compression_info()
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
 
-  auto& read_info = _file_itm_data->read_info;
+  auto& read_info = _file_itm_data->stream_read_info;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
@@ -279,12 +279,12 @@ void reader::impl::query_stripe_compression_info()
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
-  _file_itm_data->stripe_chunks = find_splits(
+  _file_itm_data->load_stripe_chunks = find_splits(
     total_stripe_sizes,
     total_stripe_sizes.size(),
     /*chunk_size_limit/2*/ total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3);
 
-  auto& splits = _file_itm_data->stripe_chunks;
+  auto& splits = _file_itm_data->load_stripe_chunks;
   printf("------------\nSplits (/%d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
