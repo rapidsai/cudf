@@ -751,7 +751,7 @@ void reader::impl::create_pass_data()
 
   // Logically view streams as columns
   std::vector<orc_stream_info> stream_info;
-  stream_info.reserve(selected_stripes.size() * selected_stripes.front().stripe_info.size());
+  //  stream_info.reserve(selected_stripes.size() * selected_stripes.front().stripe_info.size());
 
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -803,10 +803,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
         });
       });
 
-    return has_timestamp_column
-             ? cudf::detail::make_timezone_transition_table(
-                 {}, selected_stripes[0].stripe_info[0].second->writerTimezone, _stream)
-             : std::make_unique<cudf::table>();
+    return has_timestamp_column ? cudf::detail::make_timezone_transition_table(
+                                    {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
+                                : std::make_unique<cudf::table>();
   }();
 
   auto& lvl_stripe_data        = _file_itm_data->lvl_stripe_data;
@@ -850,14 +849,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     }
 
     // Get the total number of stripes across all input files.
-    std::size_t total_num_stripes =
-      std::accumulate(selected_stripes.begin(),
-                      selected_stripes.end(),
-                      0,
-                      [](std::size_t sum, auto& stripe_source_mapping) {
-                        return sum + stripe_source_mapping.stripe_info.size();
-                      });
-    auto const num_columns = columns_level.size();
+    std::size_t total_num_stripes = selected_stripes.size();
+    auto const num_columns        = columns_level.size();
     cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> chunks(
       total_num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
@@ -896,89 +889,85 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     std::size_t stream_idx       = 0;
 
     // std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
-    for (auto const& stripe_source_mapping : selected_stripes) {
-      // Iterate through the source files selected stripes
-      for (auto const& stripe : stripe_source_mapping.stripe_info) {
-        auto const stripe_info   = stripe.first;
-        auto const stripe_footer = stripe.second;
+    for (auto const& stripe : selected_stripes) {
+      auto const stripe_info   = stripe.stripe_info;
+      auto const stripe_footer = stripe.stripe_footer;
 
-        auto const total_data_size =
-          gather_stream_info_and_update_chunks(stripe_idx,
-                                               level,
-                                               stripe_info,
-                                               stripe_footer,
-                                               col_meta.orc_col_map[level],
-                                               _metadata.get_types(),
-                                               use_index,
-                                               level == 0,
-                                               &num_dict_entries,
-                                               &stream_idx,
-                                               chunks);
+      auto const total_data_size = gather_stream_info_and_update_chunks(stripe_idx,
+                                                                        level,
+                                                                        stripe_info,
+                                                                        stripe_footer,
+                                                                        col_meta.orc_col_map[level],
+                                                                        _metadata.get_types(),
+                                                                        use_index,
+                                                                        level == 0,
+                                                                        &num_dict_entries,
+                                                                        &stream_idx,
+                                                                        chunks);
 
-        auto const is_stripe_data_empty = total_data_size == 0;
-        CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
-                     "Invalid index rowgroup stream data");
+      auto const is_stripe_data_empty = total_data_size == 0;
+      CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
+                   "Invalid index rowgroup stream data");
 
-        auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx].data());
+      auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx].data());
 
-        auto const num_rows_per_stripe = stripe_info->numberOfRows;
-        auto const rowgroup_id         = num_rowgroups;
-        auto stripe_num_rowgroups      = 0;
-        if (use_index) {
-          stripe_num_rowgroups = (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
-                                 _metadata.get_row_index_stride();
-        }
-        // Update chunks to reference streams pointers
-        for (std::size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-          auto& chunk = chunks[stripe_idx][col_idx];
-          // start row, number of rows in a each stripe and total number of rows
-          // may change in lower levels of nesting
-          chunk.start_row = (level == 0)
-                              ? stripe_start_row
-                              : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
-          chunk.num_rows =
-            (level == 0) ? stripe_info->numberOfRows
-                         : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
-          chunk.column_num_rows = (level == 0) ? rows_to_read : col_meta.num_child_rows[col_idx];
-          chunk.parent_validity_info =
-            (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
-          chunk.parent_null_count_prefix_sums =
-            (level == 0)
-              ? nullptr
-              : null_count_prefix_sums[level - 1][col_meta.parent_column_index[col_idx]].data();
-          chunk.encoding_kind = stripe_footer->columns[columns_level[col_idx].id].kind;
-          chunk.type_kind     = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                              .ff.types[columns_level[col_idx].id]
-                              .kind;
-          // num_child_rows for a struct column will be same, for other nested types it will be
-          // calculated.
-          chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
-          chunk.dtype_id       = column_types[col_idx].id();
-          chunk.decimal_scale  = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
-                                  .ff.types[columns_level[col_idx].id]
-                                  .scale.value_or(0);
+      auto const num_rows_per_stripe = stripe_info->numberOfRows;
+      auto const rowgroup_id         = num_rowgroups;
+      auto stripe_num_rowgroups      = 0;
+      if (use_index) {
+        stripe_num_rowgroups = (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
+                               _metadata.get_row_index_stride();
+      }
+      // Update chunks to reference streams pointers
+      for (std::size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+        auto& chunk = chunks[stripe_idx][col_idx];
+        // start row, number of rows in a each stripe and total number of rows
+        // may change in lower levels of nesting
+        chunk.start_row       = (level == 0)
+                                  ? stripe_start_row
+                                  : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
+        chunk.num_rows        = (level == 0)
+                                  ? stripe_info->numberOfRows
+                                  : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+        chunk.column_num_rows = (level == 0) ? rows_to_read : col_meta.num_child_rows[col_idx];
+        chunk.parent_validity_info =
+          (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
+        chunk.parent_null_count_prefix_sums =
+          (level == 0)
+            ? nullptr
+            : null_count_prefix_sums[level - 1][col_meta.parent_column_index[col_idx]].data();
+        chunk.encoding_kind = stripe_footer->columns[columns_level[col_idx].id].kind;
+        chunk.type_kind =
+          _metadata.per_file_metadata[stripe.source_idx].ff.types[columns_level[col_idx].id].kind;
+        // num_child_rows for a struct column will be same, for other nested types it will be
+        // calculated.
+        chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
+        chunk.dtype_id       = column_types[col_idx].id();
+        chunk.decimal_scale  = _metadata.per_file_metadata[stripe.source_idx]
+                                .ff.types[columns_level[col_idx].id]
+                                .scale.value_or(0);
 
-          chunk.rowgroup_id   = rowgroup_id;
-          chunk.dtype_len     = (column_types[col_idx].id() == type_id::STRING)
-                                  ? sizeof(string_index_pair)
-                                : ((column_types[col_idx].id() == type_id::LIST) or
-                               (column_types[col_idx].id() == type_id::STRUCT))
-                                  ? sizeof(size_type)
-                                  : cudf::size_of(column_types[col_idx]);
-          chunk.num_rowgroups = stripe_num_rowgroups;
-          if (chunk.type_kind == orc::TIMESTAMP) { chunk.timestamp_type_id = _timestamp_type.id(); }
-          if (not is_stripe_data_empty) {
-            for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-              chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
-            }
+        chunk.rowgroup_id   = rowgroup_id;
+        chunk.dtype_len     = (column_types[col_idx].id() == type_id::STRING)
+                                ? sizeof(string_index_pair)
+                              : ((column_types[col_idx].id() == type_id::LIST) or
+                             (column_types[col_idx].id() == type_id::STRUCT))
+                                ? sizeof(size_type)
+                                : cudf::size_of(column_types[col_idx]);
+        chunk.num_rowgroups = stripe_num_rowgroups;
+        if (chunk.type_kind == orc::TIMESTAMP) { chunk.timestamp_type_id = _timestamp_type.id(); }
+        if (not is_stripe_data_empty) {
+          for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
           }
         }
-        stripe_start_row += num_rows_per_stripe;
-        num_rowgroups += stripe_num_rowgroups;
-
-        stripe_idx++;
       }
+      stripe_start_row += num_rows_per_stripe;
+      num_rowgroups += stripe_num_rowgroups;
+
+      stripe_idx++;
     }
+
     // for (auto& task : read_tasks) {
     //   CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
     // }

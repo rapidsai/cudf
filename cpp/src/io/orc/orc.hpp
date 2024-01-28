@@ -601,13 +601,13 @@ struct column_validity_info {
  * convenience methods for initializing and accessing metadata.
  */
 class metadata {
-  using OrcStripeInfo = std::pair<StripeInformation const*, StripeFooter const*>;
-
  public:
-  struct stripe_source_mapping {
+  struct OrcStripeInfo {
+    StripeInformation const* stripe_info;
+    StripeFooter const* stripe_footer;
     int source_idx;
-    std::vector<OrcStripeInfo> stripe_info;
   };
+  std::vector<OrcStripeInfo> stripe_info;
 
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
