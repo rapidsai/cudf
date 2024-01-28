@@ -136,6 +136,9 @@ void reader::impl::query_stripe_compression_info()
   // Logically view streams as columns
   _file_itm_data->lvl_stream_info.resize(_selected_columns.num_levels());
 
+  // Get the total number of stripes across all input files.
+  std::size_t num_stripes = selected_stripes.size();
+
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
   auto& col_meta = *_col_meta;
@@ -149,13 +152,7 @@ void reader::impl::query_stripe_compression_info()
       // Map each ORC column to its column
       col_meta.orc_col_map[level][col.id] = col_id++;
     }
-  }
 
-  // Get the total number of stripes across all input files.
-  std::size_t num_stripes = selected_stripes.size();
-
-  // Compute input size for each stripe.
-  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     lvl_stripe_data[level].resize(num_stripes);
 
     auto& stream_info      = _file_itm_data->lvl_stream_info[level];
@@ -167,11 +164,17 @@ void reader::impl::query_stripe_compression_info()
     if (read_info.capacity() < selected_stripes.size()) {
       read_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
     }
+  }
 
-    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
-      auto const& stripe       = selected_stripes[stripe_idx];
-      auto const stripe_info   = stripe.stripe_info;
-      auto const stripe_footer = stripe.stripe_footer;
+  // Compute input size for each stripe.
+  for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+    auto const& stripe       = selected_stripes[stripe_idx];
+    auto const stripe_info   = stripe.stripe_info;
+    auto const stripe_footer = stripe.stripe_footer;
+
+    for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+      auto& stream_info  = _file_itm_data->lvl_stream_info[level];
+      auto& stripe_sizes = lvl_stripe_sizes[level];
 
       auto stream_count        = stream_info.size();
       auto const stripe_size   = gather_stream_info(stripe_idx,
@@ -217,6 +220,7 @@ void reader::impl::query_stripe_compression_info()
 
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
   // Should not read all, but read stripe by stripe.
+  // read_info should be limited by stripe.
   for (auto const& read : read_info) {
     auto& stripe_data = lvl_stripe_data[read.level];
     auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
