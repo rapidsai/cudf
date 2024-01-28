@@ -78,9 +78,9 @@ def test_rowwise_reductions(data, op):
             expected = getattr(pddf, op)(numeric_only=True, axis=1)
             got = getattr(pddf, op)(numeric_only=True, axis=1)
 
-    dd.assert_eq(
-        expected,
-        got,
-        check_exact=False,
-        check_dtype=op not in ("var", "std"),
-    )
+        dd.assert_eq(
+            expected,
+            got,
+            check_exact=False,
+            check_dtype=op not in ("var", "std"),
+        )
