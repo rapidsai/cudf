@@ -171,6 +171,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
                                      std::vector<std::vector<size_type>> const& stripes)
 {
   if (_file_itm_data == nullptr) { _file_itm_data = std::make_unique<file_intermediate_data>(); }
+  if (_file_itm_data->has_no_data()) { return; }
   if (_file_itm_data->global_preprocessed) { return; }
 
   // TODO: move this to end of func.
@@ -183,9 +184,6 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   auto const rows_to_skip      = _file_itm_data->rows_to_skip;
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
-
-  // If no rows or stripes to read, return empty columns
-  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
   auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
@@ -204,6 +202,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // Get the total number of stripes across all input files.
   std::size_t num_stripes = selected_stripes.size();
 
+  // Prepare data.
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
   auto& col_meta = *_col_meta;
@@ -306,11 +305,10 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
 void reader::impl::pass_preprocess()
 {
+  if (_file_itm_data->has_no_data()) { return; }
+
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
-
-  // If no rows or stripes to read, return empty columns
-  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   if (_file_itm_data->pass_preprocessed) { return; }
   _file_itm_data->pass_preprocessed = true;
@@ -387,11 +385,10 @@ void reader::impl::pass_preprocess()
 
 void reader::impl::subpass_preprocess()
 {
+  if (_file_itm_data->has_no_data()) { return; }
+
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
-
-  // If no rows or stripes to read, return empty columns
-  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   if (_file_itm_data->subpass_preprocessed) { return; }
   _file_itm_data->subpass_preprocessed = true;

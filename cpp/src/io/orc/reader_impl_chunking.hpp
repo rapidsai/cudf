@@ -104,6 +104,9 @@ struct chunk {
  * @brief Struct to store file-level data that remains constant for all chunks being read.
  */
 struct file_intermediate_data {
+  // If no rows or stripes to read, return empty columns
+  bool has_no_data() const { return rows_to_read > 0 && selected_stripes.empty(); }
+
   std::unordered_map<stream_id_info, stripe_level_comp_info, stream_id_hash, stream_id_equal>
     compinfo_map;
   // bool compinfo_ready{false};
