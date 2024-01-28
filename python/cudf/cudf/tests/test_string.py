@@ -3484,3 +3484,21 @@ def test_str_iterate_error():
     s = cudf.Series(["abc", "xyz"])
     with pytest.raises(TypeError):
         iter(s.str)
+
+
+def test_string_reduction_error():
+    s = cudf.Series([None, None], dtype="str")
+    ps = s.to_pandas(nullable=True)
+    assert_exceptions_equal(
+        s.any,
+        ps.any,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+    assert_exceptions_equal(
+        s.all,
+        ps.all,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )

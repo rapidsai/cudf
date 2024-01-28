@@ -5594,16 +5594,17 @@ class StringColumn(column.ColumnBase):
         return self._data
 
     def all(self, skipna: bool = True) -> bool:
-        # The skipna argument is only used for numerical columns.
-        # If all entries are null the result is True, including when the column
-        # is empty.
-
+        if skipna and self.null_count == self.size:
+            return True
+        elif not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
         raise NotImplementedError("`all` not implemented for `StringColumn`")
 
     def any(self, skipna: bool = True) -> bool:
-        # The skipna argument is only used for numerical columns.
-        # If all entries are null the result is True, including when the column
-        # is empty.
+        if not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        elif skipna and self.null_count == self.size:
+            return False
 
         raise NotImplementedError("`any` not implemented for `StringColumn`")
 
