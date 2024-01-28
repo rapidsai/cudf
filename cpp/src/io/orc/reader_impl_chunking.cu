@@ -122,9 +122,11 @@ void reader::impl::query_stripe_compression_info()
   // TODO : remove?
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
-  auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
-  auto& lvl_read_info   = _file_itm_data->lvl_read_info;
+  auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
+  auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
+  auto& lvl_read_info    = _file_itm_data->lvl_read_info;
   lvl_stripe_data.resize(_selected_columns.num_levels());
+  lvl_stripe_sizes.resize(_selected_columns.num_levels());
   lvl_read_info.resize(_selected_columns.num_levels());
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
@@ -153,19 +155,20 @@ void reader::impl::query_stripe_compression_info()
     auto& stream_info      = _file_itm_data->lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
     auto& read_info        = lvl_read_info[level];
-    stream_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
-    read_info.reserve(selected_stripes.size() * num_columns);    // final size is unknown
+    auto& stripe_sizes     = lvl_stripe_sizes[level];
+    stream_info.reserve(selected_stripes.size() * num_columns);   // final size is unknown
+    read_info.reserve(selected_stripes.size() * num_columns);     // final size is unknown
+    stripe_sizes.reserve(selected_stripes.size() * num_columns);  // final size is unknown
 
     // Get the total number of stripes across all input files.
-    std::size_t total_num_stripes = selected_stripes.size();
+    std::size_t num_stripes = selected_stripes.size();
 
     // Tracker for eventually deallocating compressed and uncompressed data
     auto& stripe_data = lvl_stripe_data[level];
 
-    int stripe_idx = 0;
-
     std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
-    for (auto const& stripe : selected_stripes) {
+    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; stripe_idx++) {
+      auto const& stripe       = selected_stripes[stripe_idx];
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
@@ -178,6 +181,7 @@ void reader::impl::query_stripe_compression_info()
                                                       _metadata.get_types(),
                                                       level == 0,
                                                       stream_info);
+      stripe_sizes.push_back(total_data_size);
 
       auto const is_stripe_data_empty = total_data_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
@@ -217,8 +221,6 @@ void reader::impl::query_stripe_compression_info()
           _stream.synchronize();
         }
       }
-
-      stripe_idx++;
     }
 
     for (auto& task : read_tasks) {
