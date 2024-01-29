@@ -54,10 +54,6 @@ cdef class Aggregation:
             "Use one of the factory functions."
         )
 
-    def __dealloc__(self):
-        if self.c_ptr is not NULL:
-            del self.c_ptr
-
     cpdef kind_t kind(self):
         """Get the kind of the aggregation."""
         return dereference(self.c_ptr).kind
@@ -68,7 +64,7 @@ cdef class Aggregation:
         This function will raise an exception if the aggregation is not supported
         as a groupby aggregation.
         """
-        cdef unique_ptr[aggregation] agg = self.c_ptr.clone()
+        cdef unique_ptr[aggregation] agg = dereference(self.c_ptr).clone()
         # This roundabout casting is required because Cython does not understand
         # that unique_ptrs can be cast along class hierarchies.
         cdef aggregation *raw_agg = agg.get()
@@ -79,142 +75,123 @@ cdef class Aggregation:
         agg.release()
         return unique_ptr[groupby_aggregation](agg_cast)
 
-
-cdef Aggregation _create_nullary_agg(nullary_factory_type cpp_agg_factory):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(cpp_agg_factory())
-    out.c_ptr = ptr.release()
-    return out
-
-
-cdef Aggregation _create_unary_null_handling_agg(
-    unary_null_handling_factory_type cpp_agg_factory,
-    null_policy null_handling,
-):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(cpp_agg_factory(null_handling))
-    out.c_ptr = ptr.release()
-    return out
+    @staticmethod
+    cdef Aggregation from_libcudf(unique_ptr[aggregation] agg):
+        """Create a Python Aggregation from a libcudf aggregation."""
+        cdef Aggregation out = Aggregation.__new__(Aggregation)
+        out.c_ptr = move(agg)
+        return out
 
 
 cpdef Aggregation sum():
-    return _create_nullary_agg(
-        cpp_aggregation.make_sum_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_sum_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation product():
-    return _create_nullary_agg(
-        cpp_aggregation.make_product_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_product_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation min():
-    return _create_nullary_agg(
-        cpp_aggregation.make_min_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_min_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation max():
-    return _create_nullary_agg(
-        cpp_aggregation.make_max_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_max_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation count(null_policy null_handling):
-    return _create_unary_null_handling_agg(
-        cpp_aggregation.make_count_aggregation[aggregation],
-        null_handling,
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_count_aggregation[aggregation](null_handling))
     )
 
 
 cpdef Aggregation any():
-    return _create_nullary_agg(
-        cpp_aggregation.make_any_aggregation[aggregation],
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_any_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation all():
-    return _create_nullary_agg(
-        cpp_aggregation.make_all_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_all_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation sum_of_squares():
-    return _create_nullary_agg(
-        cpp_aggregation.make_sum_of_squares_aggregation[aggregation],
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_sum_of_squares_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation mean():
-    return _create_nullary_agg(
-        cpp_aggregation.make_mean_aggregation[aggregation],
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_mean_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation variance(size_type ddof):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_variance_aggregation[aggregation](ddof))
-    out.c_ptr = ptr.release()
-    return out
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_variance_aggregation[aggregation](ddof))
+    )
 
 
 cpdef Aggregation std(size_type ddof):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_std_aggregation[aggregation](ddof))
-    out.c_ptr = ptr.release()
-    return out
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_std_aggregation[aggregation](ddof))
+    )
 
 
 cpdef Aggregation median():
-    return _create_nullary_agg(
-        cpp_aggregation.make_median_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_median_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation quantile(list quantiles, interpolation interp = interpolation.LINEAR):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_quantile_aggregation[aggregation](quantiles, interp))
-    out.c_ptr = ptr.release()
-    return out
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_quantile_aggregation[aggregation](quantiles, interp))
+    )
 
 
 cpdef Aggregation argmax():
-    return _create_nullary_agg(
-        cpp_aggregation.make_argmax_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_argmax_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation argmin():
-    return _create_nullary_agg(
-        cpp_aggregation.make_argmin_aggregation[aggregation]
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_argmin_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
-    return _create_unary_null_handling_agg(
-        cpp_aggregation.make_nunique_aggregation[aggregation],
-        null_handling,
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_nunique_aggregation[aggregation](null_handling))
     )
 
 
 cpdef Aggregation nth_element(
     size_type n, null_policy null_handling = null_policy.INCLUDE
 ):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_nth_element_aggregation[aggregation](n, null_handling))
-    out.c_ptr = ptr.release()
-    return out
+    return Aggregation.from_libcudf(
+        move(
+            cpp_aggregation.make_nth_element_aggregation[aggregation](n, null_handling)
+        )
+    )
 
 
 cpdef Aggregation collect_list(null_policy null_handling = null_policy.INCLUDE):
-    return _create_unary_null_handling_agg(
-        cpp_aggregation.make_collect_list_aggregation[aggregation],
-        null_handling,
+    return Aggregation.from_libcudf(
+        move(cpp_aggregation.make_collect_list_aggregation[aggregation](null_handling))
     )
 
 
@@ -223,13 +200,13 @@ cpdef Aggregation collect_set(
     nulls_equal = null_equality.EQUAL,
     nans_equal = nan_equality.ALL_EQUAL,
 ):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_collect_set_aggregation[aggregation](
-            null_handling, nulls_equal, nans_equal
-        ))
-    out.c_ptr = ptr.release()
-    return out
+    return Aggregation.from_libcudf(
+        move(
+            cpp_aggregation.make_collect_set_aggregation[aggregation](
+                null_handling, nulls_equal, nans_equal
+            )
+        )
+    )
 
 # cpdef Aggregation udf(
 #     udf_type type,
@@ -239,25 +216,23 @@ cpdef Aggregation collect_set(
 
 
 cpdef Aggregation correlation(correlation_type type, size_type min_periods):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_correlation_aggregation[aggregation](
-            type, min_periods
+    return Aggregation.from_libcudf(
+        move(
+            cpp_aggregation.make_correlation_aggregation[aggregation](
+                type, min_periods
+            )
         )
     )
-    out.c_ptr = ptr.release()
-    return out
 
 
 cpdef Aggregation covariance(size_type min_periods, size_type ddof):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_covariance_aggregation[aggregation](
-            min_periods, ddof
+    return Aggregation.from_libcudf(
+        move(
+            cpp_aggregation.make_covariance_aggregation[aggregation](
+                min_periods, ddof
+            )
         )
     )
-    out.c_ptr = ptr.release()
-    return out
 
 
 cpdef Aggregation rank(
@@ -267,11 +242,14 @@ cpdef Aggregation rank(
     null_order null_precedence = null_order.AFTER,
     rank_percentage percentage = rank_percentage.NONE,
 ):
-    cdef Aggregation out = Aggregation.__new__(Aggregation)
-    cdef unique_ptr[aggregation] ptr = move(
-        cpp_aggregation.make_rank_aggregation[aggregation](
-            method, column_order, null_handling, null_precedence, percentage
+    return Aggregation.from_libcudf(
+        move(
+            cpp_aggregation.make_rank_aggregation[aggregation](
+                method,
+                column_order,
+                null_handling,
+                null_precedence,
+                percentage,
+            )
         )
     )
-    out.c_ptr = ptr.release()
-    return out
