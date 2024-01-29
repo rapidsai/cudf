@@ -366,7 +366,7 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if len(group_names) > self._MAX_GROUPS_BEFORE_WARN:
             warnings.warn(
-                f"GroupBy.groups() performance scales poorly with "
+                f"GroupBy.indices performance scales poorly with "
                 f"number of groups. Got {len(group_names)} groups."
             )
 
@@ -418,7 +418,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         else:
             warnings.warn(
                 "obj is deprecated and will be removed in a future version. "
-                "Do ``df.iloc[gb.indices.get(name)]`` "
+                "Use ``df.iloc[gb.indices.get(name)]`` "
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
