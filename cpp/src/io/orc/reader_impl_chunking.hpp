@@ -150,7 +150,11 @@ struct file_intermediate_data {
     std::size_t level;
   };
   std::vector<stream_read_info> stream_read_info;
-  std::vector<chunk> stripe_stream_read_chunks;
+  std::vector<chunk> stripe_stream_read_chunks;  // chunk identify the reading streams (multiple
+                                                 // streams can be read once) for each stripe
+  std::vector<std::vector<chunk>>
+    lvl_stripe_stream_chunks;  // chunk identify all processing streams for each stripe, need to be
+                               // level-based
 
   int64_t rows_to_skip;
   size_type rows_to_read;

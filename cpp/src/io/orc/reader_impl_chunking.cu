@@ -243,6 +243,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   auto& read_info                 = _file_itm_data->stream_read_info;
   auto& stripe_stream_read_chunks = _file_itm_data->stripe_stream_read_chunks;
+  auto& lvl_stripe_stream_chunks  = _file_itm_data->lvl_stripe_stream_chunks;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
@@ -255,6 +256,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   std::size_t num_stripes = selected_stripes.size();
 
   stripe_stream_read_chunks.resize(num_stripes);
+  lvl_stripe_stream_chunks.resize(_selected_columns.num_levels());
 
   // TODO: Check if these data depends on pass and subpass, instead of global pass.
   // Prepare data.
@@ -284,6 +286,9 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     if (read_info.capacity() < selected_stripes.size()) {
       read_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
     }
+
+    auto& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
+    stripe_stream_chunks.resize(num_stripes);
   }
 
   cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_stripes, _stream);
@@ -300,8 +305,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       auto& stream_info  = _file_itm_data->lvl_stream_info[level];
       auto& stripe_sizes = lvl_stripe_sizes[level];
 
-      auto stream_count        = stream_info.size();
-      auto const stripe_size   = gather_stream_info(stripe_idx,
+      auto stream_count      = stream_info.size();
+      auto const stripe_size = gather_stream_info(stripe_idx,
                                                   level,
                                                   stripe_info,
                                                   stripe_footer,
@@ -309,12 +314,18 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
                                                   _metadata.get_types(),
                                                   level == 0,
                                                   stream_info);
-      stripe_sizes[stripe_idx] = stripe_size;
-      total_stripe_size += stripe_size;
 
       auto const is_stripe_data_empty = stripe_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
+
+      stripe_sizes[stripe_idx] = stripe_size;
+      total_stripe_size += stripe_size;
+
+      auto& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
+      stripe_stream_chunks[stripe_idx] =
+        chunk{static_cast<int64_t>(stream_count),
+              static_cast<int64_t>(stream_info.size() - stream_count)};
 
       // Coalesce consecutive streams into one read
       while (not is_stripe_data_empty and stream_count < stream_info.size()) {
@@ -425,6 +436,7 @@ void reader::impl::pass_preprocess()
     auto const read_begin = read_chunk.start_idx;
     auto const read_end   = read_chunk.start_idx + read_chunk.count;
 
+    // TODO: instead of loop stripe => loop read, we can directly loop read of first + last stripe
     for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
       auto const& read  = read_info[read_idx];
       auto& stripe_data = lvl_stripe_data[read.level];
@@ -484,12 +496,17 @@ void reader::impl::subpass_preprocess()
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
 
-  auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
+  auto& lvl_stripe_data          = _file_itm_data->lvl_stripe_data;
+  auto& lvl_stripe_stream_chunks = _file_itm_data->lvl_stripe_stream_chunks;
 
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
     stream_compinfo_map;
+
+  // TODO: fix this, loop only current chunk
+  auto const stripe_chunk =
+    _file_itm_data->load_stripe_chunks[_file_itm_data->curr_load_stripe_chunk++];
 
   // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -500,67 +517,81 @@ void reader::impl::subpass_preprocess()
     auto& stripe_data = lvl_stripe_data[level];
     if (stripe_data.empty()) { continue; }
 
-    // Setup row group descriptors if using indexes
-    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
-      cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
-        0, stream_info.size(), _stream);
+    auto const& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
 
-      for (auto const& info : stream_info) {
-        compinfo.push_back(gpu::CompressedStreamInfo(
-          static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
-          info.length));
-        stream_compinfo_map[stream_id_info{
-          info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
-          &compinfo[compinfo.size() - 1];
+    auto const stripe_start = stripe_chunk.start_idx;
+    auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
+    for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
+      auto const stream_chunk = stripe_stream_chunks[stripe_idx];
+      auto const stream_start = stream_chunk.start_idx;
+      auto const stream_end   = stream_chunk.start_idx + stream_chunk.count;
+
+      // Setup row group descriptors if using indexes
+      if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+        auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
+        cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
+          0, /*stream_info.size()*/ stream_chunk.count, _stream);
+
+        // TODO: Instead of all stream info, loop using read_chunk info to process
+        // only stream info of the curr_load_stripe_chunk.
+
+        for (auto stream_idx = stream_start; stream_idx < stream_end; ++stream_idx) {
+          auto const& info = stream_info[stream_idx];
+          compinfo.push_back(gpu::CompressedStreamInfo(
+            static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
+            info.length));
+          stream_compinfo_map[stream_id_info{
+            info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
+            &compinfo[compinfo.size() - 1];
 #ifdef PRINT_DEBUG
-        printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-               (int)info.stripe_idx,
-               (int)info.level,
-               (int)info.orc_col_idx,
-               (int)info.kind,
-               info.dst_pos,
-               info.length);
-        fflush(stdout);
+          printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
+                 (int)info.stripe_idx,
+                 (int)info.level,
+                 (int)info.orc_col_idx,
+                 (int)info.kind,
+                 info.dst_pos,
+                 info.length);
+          fflush(stdout);
 #endif
-      }
+        }
 
-      compinfo.host_to_device_async(_stream);
+        compinfo.host_to_device_async(_stream);
 
-      gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                     compinfo.size(),
-                                     decompressor.GetBlockSize(),
-                                     decompressor.GetLog2MaxCompressionRatio(),
-                                     _stream);
-      compinfo.device_to_host_sync(_stream);
+        gpu::ParseCompressedStripeData(compinfo.device_ptr(),
+                                       compinfo.size(),
+                                       decompressor.GetBlockSize(),
+                                       decompressor.GetLog2MaxCompressionRatio(),
+                                       _stream);
+        compinfo.device_to_host_sync(_stream);
 
-      auto& compinfo_map = _file_itm_data->compinfo_map;
-      for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
-        compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
-                                   stream_compinfo->num_uncompressed_blocks,
-                                   stream_compinfo->max_uncompressed_size};
+        auto& compinfo_map = _file_itm_data->compinfo_map;
+        for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
+          compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
+                                     stream_compinfo->num_uncompressed_blocks,
+                                     stream_compinfo->max_uncompressed_size};
 #ifdef PRINT_DEBUG
-        printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-               (int)stream_id.stripe_idx,
-               (int)stream_id.level,
-               (int)stream_id.orc_col_idx,
-               (int)stream_id.kind,
-               (size_t)stream_compinfo->num_compressed_blocks,
-               (size_t)stream_compinfo->num_uncompressed_blocks,
-               stream_compinfo->max_uncompressed_size);
-        fflush(stdout);
+          printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
+                 (int)stream_id.stripe_idx,
+                 (int)stream_id.level,
+                 (int)stream_id.orc_col_idx,
+                 (int)stream_id.kind,
+                 (size_t)stream_compinfo->num_compressed_blocks,
+                 (size_t)stream_compinfo->num_uncompressed_blocks,
+                 stream_compinfo->max_uncompressed_size);
+          fflush(stdout);
 #endif
+        }
+
+        // Must clear so we will not overwrite the old compression info stream_id.
+        stream_compinfo_map.clear();
+
+      } else {
+        // printf("no compression \n");
+        // fflush(stdout);
+
+        // Set decompressed data size equal to the input size.
+        // TODO
       }
-
-      // Must clear so we will not overwrite the old compression info stream_id.
-      stream_compinfo_map.clear();
-
-    } else {
-      // printf("no compression \n");
-      // fflush(stdout);
-
-      // Set decompressed data size equal to the input size.
-      // TODO
     }
 
     // printf("  end level %d\n\n", (int)level);

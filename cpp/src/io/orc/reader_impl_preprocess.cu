@@ -755,10 +755,17 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   if (_selected_columns.num_levels() == 0) { return; }
 
   global_preprocess(skip_rows, num_rows_opt, stripes);
+
+  // TODO: fix this, should be called once
   while (_file_itm_data->more_stripe_to_load()) {
     pass_preprocess();
   }
-  subpass_preprocess();
+
+  // Fix this, subpass should be call once
+  _file_itm_data->curr_load_stripe_chunk = 0;
+  while (_file_itm_data->more_stripe_to_load()) {
+    subpass_preprocess();
+  }
 
   auto const rows_to_skip      = _file_itm_data->rows_to_skip;
   auto const rows_to_read      = _file_itm_data->rows_to_read;
