@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -17,7 +18,6 @@ from .column cimport Column
 from .table cimport Table
 
 
-# TODO: This belongs in a separate groupby module eventually.
 cdef class AggregationRequest:
     def __init__(self, Column values, list aggregations):
         self.values = values
@@ -29,7 +29,7 @@ cdef class AggregationRequest:
 
         cdef Aggregation agg
         for agg in self.aggregations:
-            c_obj.aggregations.push_back(move(agg.clone_as_groupby()))
+            c_obj.aggregations.push_back(move(agg.clone_underlying_as_groupby()))
         return move(c_obj)
 
 
@@ -37,14 +37,14 @@ cdef class GroupBy:
     def __init__(self, Table keys):
         self.c_obj.reset(new groupby(keys.view()))
 
-    cpdef aggregate(self, list requests):
+    cpdef tuple aggregate(self, list requests):
         cdef AggregationRequest request
         cdef vector[aggregation_request] c_requests
         for request in requests:
             c_requests.push_back(move(request.to_libcudf()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
-            self.get().aggregate(c_requests)
+            dereference(self.c_obj).aggregate(c_requests)
         )
         cdef Table group_keys = Table.from_libcudf(move(c_res.first))
 
@@ -59,7 +59,3 @@ cdef class GroupBy:
                 )
             results.append(inner_results)
         return group_keys, results
-
-    cdef groupby * get(self) nogil:
-        """Get the underlying groupby object."""
-        return self.c_obj.get()

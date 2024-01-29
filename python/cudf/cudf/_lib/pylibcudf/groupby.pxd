@@ -21,7 +21,5 @@ cdef class AggregationRequest:
 
 
 cdef class GroupBy:
-    # groupby is not default constructible, so we must allocate it on the heap.
     cdef unique_ptr[groupby] c_obj
-    cpdef aggregate(self, list requests)
-    cdef groupby * get(self) nogil
+    cpdef tuple aggregate(self, list requests)
