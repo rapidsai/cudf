@@ -522,6 +522,9 @@ void reader::impl::subpass_preprocess()
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
+
+      // Cannot be cached, since this is for streams in a loaded stripe chunk, while
+      // the latter decoding step will use a different stripe chunk.
       cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, _stream);
 
       // TODO: Instead of all stream info, loop using read_chunk info to process
@@ -558,6 +561,7 @@ void reader::impl::subpass_preprocess()
 
       auto& compinfo_map = _file_itm_data.compinfo_map;
       for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
+        // Cache these parsed numbers so they can be reused in the decoding step.
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};

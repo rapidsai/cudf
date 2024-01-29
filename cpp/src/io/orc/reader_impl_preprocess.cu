@@ -174,6 +174,7 @@ rmm::device_buffer decompress_stripe_data(
 
   cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
     0, stream_info.size(), stream);
+
   for (auto const& info : stream_info) {
 #ifdef PRINT_DEBUG
     printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
@@ -756,6 +757,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   global_preprocess(skip_rows, num_rows_opt, stripes);
 
+  if (_file_itm_data.has_no_data()) { return; }
+
   // TODO: fix this, should be called once
   while (_chunk_read_data.more_stripe_to_load()) {
     pass_preprocess();
@@ -770,9 +773,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   auto const rows_to_read      = _file_itm_data.rows_to_read;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
-
-  // If no rows or stripes to read, return empty columns
-  if (rows_to_read == 0 || selected_stripes.empty()) { return; }
 
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
@@ -791,10 +791,12 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   auto& lvl_stripe_data        = _file_itm_data.lvl_stripe_data;
   auto& null_count_prefix_sums = _file_itm_data.null_count_prefix_sums;
   auto& lvl_chunks             = _file_itm_data.lvl_data_chunks;
-  lvl_stripe_data.resize(_selected_columns.num_levels());
-  lvl_chunks.resize(_selected_columns.num_levels());
 
+  // TODO: move this to global step
+  lvl_chunks.resize(_selected_columns.num_levels());
   _out_buffers.resize(_selected_columns.num_levels());
+
+  std::size_t num_stripes = selected_stripes.size();
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
@@ -830,12 +832,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       }
     }
 
-    // Get the total number of stripes across all input files.
-    std::size_t total_num_stripes = selected_stripes.size();
-    auto const num_columns        = columns_level.size();
-    auto& chunks                  = lvl_chunks[level];
-    chunks =
-      cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(total_num_stripes, num_columns, _stream);
+    auto const num_columns = columns_level.size();
+    auto& chunks           = lvl_chunks[level];
+    chunks = cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     const bool use_index =
@@ -845,7 +844,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       // Only use if we don't have much work with complete columns & stripes
       // TODO: Consider nrows, gpu, and tune the threshold
       (rows_to_read > _metadata.get_row_index_stride() && !(_metadata.get_row_index_stride() & 7) &&
-       _metadata.get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
+       _metadata.get_row_index_stride() > 0 && num_columns * num_stripes < 8 * 128) &&
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);
@@ -859,7 +858,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                     _selected_columns.levels[level].size(),
                     [&]() {
                       return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-                        total_num_stripes, _stream, rmm::mr::get_current_device_resource());
+                        num_stripes, _stream, rmm::mr::get_current_device_resource());
                     });
 
     // Tracker for eventually deallocating compressed and uncompressed data
@@ -868,8 +867,10 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     std::size_t stripe_start_row = 0;
     std::size_t num_dict_entries = 0;
     std::size_t num_rowgroups    = 0;
-    std::size_t stripe_idx       = 0;
-    std::size_t stream_idx       = 0;
+
+    // TODO: Stripe and stream idx must be by chunk.
+    std::size_t stripe_idx = 0;
+    std::size_t stream_idx = 0;
 
     // std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
     for (auto const& stripe : selected_stripes) {
@@ -984,7 +985,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                                 stream_info,
                                                 chunks,
                                                 row_groups,
-                                                total_num_stripes,
+                                                num_stripes,
                                                 _metadata.get_row_index_stride(),
                                                 level == 0,
                                                 _stream);
@@ -999,7 +1000,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 nullptr,
                                 chunks.base_device_ptr(),
                                 num_columns,
-                                total_num_stripes,
+                                num_stripes,
                                 num_rowgroups,
                                 _metadata.get_row_index_stride(),
                                 level == 0,
@@ -1009,7 +1010,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
     for (std::size_t i = 0; i < column_types.size(); ++i) {
       bool is_nullable = false;
-      for (std::size_t j = 0; j < total_num_stripes; ++j) {
+      for (std::size_t j = 0; j < num_stripes; ++j) {
         if (chunks[j][i].strm_len[gpu::CI_PRESENT] != 0) {
           is_nullable = true;
           break;

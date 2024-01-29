@@ -116,8 +116,13 @@ struct file_intermediate_data {
     compinfo_map;
   // bool compinfo_ready{false};
 
-  std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
+  // The buffers are initialized for each reading stripe chunks.
+  // After decoding, such buffers need to be released.
+  // This can only be implemented after chunked output is ready.
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
+
+  std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
+
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
