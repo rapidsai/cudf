@@ -125,6 +125,12 @@ struct file_intermediate_data {
   // Chunks of stripes such that total of their decompression size is within a limit.
   std::vector<chunk> decode_stripe_chunks;
   std::size_t curr_decode_stripe_chunk{0};
+  bool more_stripe_to_decode() { return curr_decode_stripe_chunk < decode_stripe_chunks.size(); }
+
+  // Chunk of rows in the internal decoded table to output for each `read_chunk()`.
+  std::vector<chunk> output_table_chunks;
+  std::size_t curr_output_table_chunk{0};
+  bool more_table_chunk_to_output() { return curr_output_table_chunk < output_table_chunks.size(); }
 
   // Each read correspond to one or more consecutive stream combined.
   struct stream_read_info {
