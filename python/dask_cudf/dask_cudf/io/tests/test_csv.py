@@ -226,11 +226,11 @@ def test_read_csv_skiprows_error(csv_begin_bad_lines):
 
 def test_read_csv_skipfooter(csv_end_bad_lines):
     # Repro from Issue#13552
+    with dask.config.set({"dataframe.convert-string": False}):
+        ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+        ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
 
-    ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
-    ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
-
-    dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
+        dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
 
 
 def test_read_csv_skipfooter_error(csv_end_bad_lines):

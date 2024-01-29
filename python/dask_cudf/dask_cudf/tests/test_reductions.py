@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 from dask import dataframe as dd
 
 import cudf
@@ -69,16 +70,17 @@ def test_rowwise_reductions(data, op):
     gddf = dgd.from_cudf(data, npartitions=10)
     pddf = gddf.to_dask_dataframe()
 
-    if op in ("var", "std"):
-        expected = getattr(pddf, op)(axis=1, numeric_only=True, ddof=0)
-        got = getattr(gddf, op)(axis=1, numeric_only=True, ddof=0)
-    else:
-        expected = getattr(pddf, op)(numeric_only=True, axis=1)
-        got = getattr(pddf, op)(numeric_only=True, axis=1)
+    with dask.config.set({"dataframe.convert-string": False}):
+        if op in ("var", "std"):
+            expected = getattr(pddf, op)(axis=1, numeric_only=True, ddof=0)
+            got = getattr(gddf, op)(axis=1, numeric_only=True, ddof=0)
+        else:
+            expected = getattr(pddf, op)(numeric_only=True, axis=1)
+            got = getattr(pddf, op)(numeric_only=True, axis=1)
 
-    dd.assert_eq(
-        expected,
-        got,
-        check_exact=False,
-        check_dtype=op not in ("var", "std"),
-    )
+        dd.assert_eq(
+            expected,
+            got,
+            check_exact=False,
+            check_dtype=op not in ("var", "std"),
+        )
