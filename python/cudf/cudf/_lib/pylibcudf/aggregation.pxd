@@ -24,9 +24,8 @@ ctypedef unique_ptr[aggregation](*unary_null_handling_factory_type)(
 ) except +
 
 
-cdef Aggregation _create_nullary_agg(cls, nullary_factory_type cpp_agg_factory)
+cdef Aggregation _create_nullary_agg(nullary_factory_type cpp_agg_factory)
 cdef Aggregation _create_unary_null_handling_agg(
-    cls,
     unary_null_handling_factory_type cpp_agg_factory,
     null_policy null_handling,
 )
