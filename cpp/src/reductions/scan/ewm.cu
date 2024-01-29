@@ -179,15 +179,9 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
 {
   rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
-  rmm::device_uvector<cudf::size_type> nullcnt =
-    [&input, stream]() -> rmm::device_uvector<cudf::size_type> {
-    if (input.has_nulls()) {
-      return null_roll_up(input, stream);
-    } else {
-      return rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    }
-  }();
+
   if (input.has_nulls()) {
+    rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
     auto device_view = column_device_view::create(input);
     auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
     auto data =
@@ -199,6 +193,20 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      pairs.begin(),
                                      ewma_adjust_functor<T, true, true>{beta},
                                      recurrence_functor<T>{});
+    // copy the second elements to the output for now
+    thrust::transform(rmm::exec_policy(stream),
+                      pairs.begin(),
+                      pairs.end(),
+                      output.begin(),
+                      [=] __device__(pair_type<T> pair) -> T { return pair.second; });
+
+
+    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
+                                     data,
+                                     data + input.size(),
+                                     pairs.begin(),
+                                     ewma_adjust_functor<T, true, false>{beta},
+                                     recurrence_functor<T>{});
 
   } else {
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
@@ -207,30 +215,14 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      pairs.begin(),
                                      ewma_adjust_functor<T, false, true>{beta},
                                      recurrence_functor<T>{});
-  }
-
-  // copy the second elements to the output for now
-  thrust::transform(rmm::exec_policy(stream),
-                    pairs.begin(),
-                    pairs.end(),
-                    output.begin(),
-                    [=] __device__(pair_type<T> pair) -> T { return pair.second; });
-
-  // denominator
-  if (input.has_nulls()) {
-    auto device_view = column_device_view::create(input);
-    auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
-    auto data =
-      thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin(), input.begin<T>()));
-
-    thrust::transform_inclusive_scan(rmm::exec_policy(stream),
-                                     data,
-                                     data + input.size(),
-                                     pairs.begin(),
-                                     ewma_adjust_functor<T, true, false>{beta},
-                                     recurrence_functor<T>{});
-  } else {
+    // copy the second elements to the output for now
+    thrust::transform(rmm::exec_policy(stream),
+                      pairs.begin(),
+                      pairs.end(),
+                      output.begin(),
+                      [=] __device__(pair_type<T> pair) -> T { return pair.second; });
     auto itr = thrust::make_counting_iterator<size_type>(0);
+
     thrust::transform_inclusive_scan(rmm::exec_policy(stream),
                                      itr,
                                      itr + input.size(),
@@ -238,6 +230,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                      ewma_adjust_functor<T, false, false>{beta},
                                      recurrence_functor<T>{});
   }
+
 
   thrust::transform(
     rmm::exec_policy(stream),
