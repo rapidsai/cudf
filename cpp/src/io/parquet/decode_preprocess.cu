@@ -59,6 +59,70 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
 }
 
 /**
+ * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
+ *
+ * @param s The local page info
+ * @param t Thread index
+ */
+__device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
+{
+  using cudf::detail::warp_size;
+  using WarpReduce = cub::WarpReduce<uleb128_t>;
+  __shared__ typename WarpReduce::TempStorage temp_storage[2];
+
+  __shared__ __align__(16) delta_binary_decoder prefixes;
+  __shared__ __align__(16) delta_binary_decoder suffixes;
+
+  int const lane_id = t % warp_size;
+  int const warp_id = t / warp_size;
+
+  if (t == 0) {
+    auto const* suffix_start = prefixes.find_end_of_block(s->data_start, s->data_end);
+    suffixes.init_binary_block(suffix_start, s->data_end);
+  }
+  __syncthreads();
+
+  // two warps will traverse the prefixes and suffixes and sum them up
+  auto const db = t < warp_size ? &prefixes : t < 2 * warp_size ? &suffixes : nullptr;
+
+  size_t total_bytes = 0;
+  if (db != nullptr) {
+    // initialize with first value (which is stored in last_value)
+    if (lane_id == 0) { total_bytes = db->last_value; }
+
+    uleb128_t lane_sum = 0;
+    while (db->current_value_idx < db->num_encoded_values(true)) {
+      // calculate values for current mini-block
+      db->calc_mini_block_values(lane_id);
+
+      // get per lane sum for mini-block
+      for (uint32_t i = 0; i < db->values_per_mb; i += 32) {
+        uint32_t const idx = db->current_value_idx + i + lane_id;
+        if (idx < db->value_count) {
+          lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
+        }
+      }
+
+      if (lane_id == 0) { db->setup_next_mini_block(true); }
+      __syncwarp();
+    }
+
+    // get sum for warp.
+    // note: warp_sum will only be valid on lane 0.
+    auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
+
+    if (lane_id == 0) { total_bytes += warp_sum; }
+  }
+  __syncthreads();
+
+  // now sum up total_bytes from the two warps
+  auto const final_bytes =
+    cudf::detail::single_lane_block_sum_reduce<preprocess_block_size, 0>(total_bytes);
+
+  return static_cast<size_type>(final_bytes);
+}
+
+/**
  *
  * This function expects the dictionary position to be at 0 and will traverse
  * the entire thing.
@@ -94,14 +158,10 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
 
     case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
 
-    case Encoding::DELTA_BYTE_ARRAY:
-      // throw up hands here. otherwise traverse the lengths like we do for string size calc.
-      // this can be an over or underestimate
-      str_len = (s->data_end - s->data_start);
-      break;
+    case Encoding::DELTA_BYTE_ARRAY: str_len = gpuDeltaPageStringSize(s, t); break;
 
     default:
-      // not a valid encoding, so just return 0
+      // not a valid string encoding, so just return 0
       break;
   }
   if (!t) { s->dict_pos = target_pos; }
