@@ -12,9 +12,10 @@ from typing import List, Union
 
 import cupy as cp
 import numpy as np
+import pandas as pd
+from pandas.api import types as pd_types
 
 import cudf
-import pandas as pd
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
@@ -30,7 +31,6 @@ from cudf.core.dtypes import (  # noqa: F401
     is_list_dtype,
     is_struct_dtype,
 )
-from pandas.api import types as pd_types
 
 
 def is_numeric_dtype(obj):

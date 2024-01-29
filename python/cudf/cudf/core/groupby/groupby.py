@@ -344,6 +344,33 @@ class GroupBy(Serializable, Reducible, Scannable):
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
         )
 
+    @cached_property
+    def indices(self):
+        """
+        Dict {group name -> group indices}.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = [[10, 20, 30], [10, 30, 40], [40, 50, 30]]
+        >>> df = cudf.DataFrame(data, columns=["a", "b", "c"])
+        >>> df
+            a   b   c
+        0  10  20  30
+        1  10  30  40
+        2  40  50  30
+        >>> df.groupby(by=["a"]).indices
+        {10: array([0, 1]), 40: array([2])}
+        """
+        group_names, offsets, _, grouped_values = self._grouped()
+
+        return dict(
+            zip(
+                group_names.to_pandas(),
+                np.split(grouped_values.index.values, offsets[1:-1]),
+            )
+        )
+
     @_cudf_nvtx_annotate
     def get_group(self, name, obj=None):
         """
@@ -379,6 +406,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if obj is None:
             obj = self.obj
+        else:
+            warnings.warn(
+                "obj is deprecated and will be removed in a future version. "
+                "Use ``df.iloc[gb.indices.get(name)]`` "
+                "instead of ``gb.get_group(name, obj=df)``.",
+                FutureWarning,
+            )
 
         return obj.loc[self.groups[name].drop_duplicates()]
 

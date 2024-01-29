@@ -14,6 +14,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.api.extensions import no_default
 from cudf.core._compat import PANDAS_LT_140
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
@@ -25,7 +26,6 @@ from cudf.testing._utils import (
     expect_warning_if,
     gen_rand,
 )
-from cudf.api.extensions import no_default
 
 
 def _series_na_data():

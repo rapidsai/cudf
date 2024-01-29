@@ -17,7 +17,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_LT_140, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_140
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 

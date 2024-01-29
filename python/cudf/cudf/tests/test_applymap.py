@@ -3,8 +3,8 @@
 import pytest
 
 from cudf import NA, DataFrame
-from cudf.testing import _utils as utils
 from cudf.core._compat import PANDAS_GE_210
+from cudf.testing import _utils as utils
 
 
 @pytest.mark.parametrize(

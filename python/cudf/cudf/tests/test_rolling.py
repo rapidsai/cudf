@@ -151,7 +151,6 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("seed", [100, 2000])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
-
     iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
     ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
 
@@ -312,7 +311,6 @@ def test_rolling_getitem_window():
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
-
     psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
@@ -349,7 +347,6 @@ def test_rollling_series_numba_udf_basic(data, index, center):
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_numba_udf_basic(data, center):
-
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 

@@ -22,9 +22,9 @@ from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
 from cudf.core._compat import (
     PANDAS_GE_150,
-    PANDAS_LT_140,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_LT_140,
 )
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
@@ -3130,10 +3130,19 @@ def test_groupby_get_group(pdf, group, name, obj):
     else:
         gobj = obj
 
-    expected = pdf.groupby(group).get_group(name=name, obj=obj)
-    actual = gdf.groupby(group).get_group(name=name, obj=gobj)
+    pgb = pdf.groupby(group)
+    ggb = gdf.groupby(group)
+    with expect_warning_if(obj is not None):
+        expected = pgb.get_group(name=name, obj=obj)
+    with expect_warning_if(obj is not None):
+        actual = ggb.get_group(name=name, obj=gobj)
 
     assert_groupby_results_equal(expected, actual)
+
+    expected = pdf.iloc[pgb.indices.get(name)]
+    actual = gdf.iloc[ggb.indices.get(name)]
+
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(

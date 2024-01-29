@@ -28,7 +28,6 @@ from cudf.api.types import (
     is_scalar,
     is_timedelta64_dtype,
 )
-
 from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string

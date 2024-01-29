@@ -6099,7 +6099,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         numeric_only=False,
         **kwargs,
     ):
-
         source = self
 
         if axis is None:
