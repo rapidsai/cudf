@@ -130,7 +130,6 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class nunique_aggregation const& agg);
   virtual void visit(class nth_element_aggregation const& agg);
   virtual void visit(class row_number_aggregation const& agg);
-  virtual void visit(class ewma_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
@@ -144,6 +143,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class correlation_aggregation const& agg);
   virtual void visit(class tdigest_aggregation const& agg);
   virtual void visit(class merge_tdigest_aggregation const& agg);
+  virtual void visit(class ewma_aggregation const& agg);
 };
 
 /**
@@ -1552,8 +1552,6 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::NTH_ELEMENT>(std::forward<Ts>(args)...);
     case aggregation::ROW_NUMBER:
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
-    case aggregation::EWMA:
-      return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
     case aggregation::RANK:
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
@@ -1580,6 +1578,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::TDIGEST>(std::forward<Ts>(args)...);
     case aggregation::MERGE_TDIGEST:
       return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
+    case aggregation::EWMA:
+      return f.template operator()<aggregation::EWMA>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");
