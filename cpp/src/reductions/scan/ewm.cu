@@ -160,7 +160,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
   auto device_view = column_device_view::create(input);
   auto invalid_it  = thrust::make_transform_iterator(
     cudf::detail::make_validity_iterator(*device_view),
-    cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return not valid; }));
+    cuda::proclaim_return_type<int>([] __device__(int valid) -> int { return 1 - valid; }));
 
   // null mask {0, 1, 0, 1, 1, 0} leads to output array {0, 0, 1, 0, 1, 2}
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
