@@ -13,24 +13,24 @@ jobs:
   pr-builder:
     needs:
       - checks
-      #- conda-cpp-build
-      #- conda-cpp-checks
-      #- conda-cpp-tests
-      #- conda-python-build
-      #- conda-python-cudf-tests
-      #- conda-python-other-tests
-      #- conda-java-tests
-      #- conda-notebook-tests
-      #- docs-build
+      - conda-cpp-build
+      - conda-cpp-checks
+      - conda-cpp-tests
+      - conda-python-build
+      - conda-python-cudf-tests
+      - conda-python-other-tests
+      - conda-java-tests
+      - conda-notebook-tests
+      - docs-build
       - wheel-build-cudf
       - wheel-tests-cudf
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
-      #- devcontainer
+      - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
-      #- pandas-tests-diff
-      #- pandas-tests-diff-comment
+      - pandas-tests-diff
+      - pandas-tests-diff-comment
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.04
   checks:
@@ -38,77 +38,76 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/checks.yaml@branch-24.04
     with:
       enable_check_generated_files: false
-      enable_check_style: false
-  #conda-cpp-build:
-  #  needs: checks
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #conda-cpp-checks:
-  #  needs: conda-cpp-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #    enable_check_symbols: true
-  #conda-cpp-tests:
-  #  needs: conda-cpp-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #conda-python-build:
-  #  needs: conda-cpp-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #conda-python-cudf-tests:
-  #  needs: conda-python-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #    test_script: "ci/test_python_cudf.sh"
-  #conda-python-other-tests:
-  #  # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-  #  needs: conda-python-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #    test_script: "ci/test_python_other.sh"
-  #conda-java-tests:
-  #  needs: conda-cpp-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #    node_type: "gpu-v100-latest-1"
-  #    arch: "amd64"
-  #    container_image: "rapidsai/ci-conda:latest"
-  #    run_script: "ci/test_java.sh"
-  #conda-notebook-tests:
-  #  needs: conda-python-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #    node_type: "gpu-v100-latest-1"
-  #    arch: "amd64"
-  #    container_image: "rapidsai/ci-conda:latest"
-  #    run_script: "ci/test_notebooks.sh"
-  #docs-build:
-  #  needs: conda-python-build
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
-  #  with:
-  #    build_type: pull-request
-  #    node_type: "gpu-v100-latest-1"
-  #    arch: "amd64"
-  #    container_image: "rapidsai/ci-conda:latest"
-  #    run_script: "ci/build_docs.sh"
+  conda-cpp-build:
+   needs: checks
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@branch-24.04
+   with:
+     build_type: pull-request
+  conda-cpp-checks:
+   needs: conda-cpp-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-post-build-checks.yaml@branch-24.04
+   with:
+     build_type: pull-request
+     enable_check_symbols: true
+  conda-cpp-tests:
+   needs: conda-cpp-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-tests.yaml@branch-24.04
+   with:
+     build_type: pull-request
+  conda-python-build:
+   needs: conda-cpp-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/conda-python-build.yaml@branch-24.04
+   with:
+     build_type: pull-request
+  conda-python-cudf-tests:
+   needs: conda-python-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.04
+   with:
+     build_type: pull-request
+     test_script: "ci/test_python_cudf.sh"
+  conda-python-other-tests:
+   # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
+   needs: conda-python-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.04
+   with:
+     build_type: pull-request
+     test_script: "ci/test_python_other.sh"
+  conda-java-tests:
+   needs: conda-cpp-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
+   with:
+     build_type: pull-request
+     node_type: "gpu-v100-latest-1"
+     arch: "amd64"
+     container_image: "rapidsai/ci-conda:latest"
+     run_script: "ci/test_java.sh"
+  conda-notebook-tests:
+   needs: conda-python-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
+   with:
+     build_type: pull-request
+     node_type: "gpu-v100-latest-1"
+     arch: "amd64"
+     container_image: "rapidsai/ci-conda:latest"
+     run_script: "ci/test_notebooks.sh"
+  docs-build:
+   needs: conda-python-build
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
+   with:
+     build_type: pull-request
+     node_type: "gpu-v100-latest-1"
+     arch: "amd64"
+     container_image: "rapidsai/ci-conda:latest"
+     run_script: "ci/build_docs.sh"
   wheel-build-cudf:
     needs: checks
     secrets: inherit
@@ -140,14 +139,14 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.0.1")))
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
-  #devcontainer:
-  #  secrets: inherit
-  #  uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.04
-  #  with:
-  #    build_command: |
-  #      sccache -z;
-  #      build-all -DBUILD_BENCHMARKS=ON --verbose;
-  #      sccache -s;
+  devcontainer:
+   secrets: inherit
+   uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.04
+   with:
+     build_command: |
+       sccache -z;
+       build-all -DBUILD_BENCHMARKS=ON --verbose;
+       sccache -s;
   unit-tests-cudf-pandas:
     needs: wheel-build-cudf
     secrets: inherit
