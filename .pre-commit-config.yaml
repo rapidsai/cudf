@@ -119,12 +119,6 @@ repos:
           - cmakelang==0.6.13
         verbose: true
         require_serial: true
-      - id: copyright-check
-        name: copyright-check
-        entry: python ./ci/checks/copyright.py --git-modified-only --update-current-year
-        language: python
-        pass_filenames: false
-        additional_dependencies: [gitpython]
       - id: doxygen-check
         name: doxygen-check
         entry: ./ci/checks/doxygen.sh
@@ -154,6 +148,11 @@ repos:
     hooks:
       - id: ruff
         files: python/.*$
+  - repo: https://github.com/rapidsai/pre-commit-hooks
+    rev: 62f035a2f238067d07568ea6e04f98601467b3bf
+    hooks:
+      - id: verify-copyright
+        args: [--fix, --batch]
 
 
 default_language_version:
