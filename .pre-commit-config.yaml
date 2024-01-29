@@ -152,7 +152,7 @@ repos:
     rev: 62f035a2f238067d07568ea6e04f98601467b3bf
     hooks:
       - id: verify-copyright
-        args: [--fix, --batch]
+        args: [--fix]
 
 
 default_language_version:
