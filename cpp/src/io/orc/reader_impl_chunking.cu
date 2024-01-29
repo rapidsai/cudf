@@ -427,40 +427,31 @@ void reader::impl::pass_preprocess()
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
 
-  // Should not read all, but read stripe by stripe.
-  // read_info should be limited by stripe.
-  // Read level-by-level.
-  // TODO: Test with read and parse/decode column by column.
-  // This is future work.
-  for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
-    auto const read_chunk = stripe_stream_read_chunks[stripe_idx];
-    auto const read_begin = read_chunk.start_idx;
-    auto const read_end   = read_chunk.start_idx + read_chunk.count;
+  auto const stripe_first_chunk = stripe_stream_read_chunks[stripe_start];
+  auto const stripe_last_chunk  = stripe_stream_read_chunks[stripe_end - 1];
+  auto const read_begin         = stripe_first_chunk.start_idx;
+  auto const read_end           = stripe_last_chunk.start_idx + stripe_last_chunk.count;
 
-    // TODO: instead of loop stripe => loop read, we can directly loop read of first + last stripe
-    for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
-      auto const& read  = read_info[read_idx];
-      auto& stripe_data = lvl_stripe_data[read.level];
-      auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
+  for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
+    auto const& read  = read_info[read_idx];
+    auto& stripe_data = lvl_stripe_data[read.level];
+    auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
 
-      if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
-            read.length)) {
-        read_tasks.push_back(
-          std::pair(_metadata.per_file_metadata[read.source_idx].source->device_read_async(
-                      read.offset, read.length, dst_base + read.dst_pos, _stream),
-                    read.length));
+    if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
+          read.length)) {
+      read_tasks.push_back(
+        std::pair(_metadata.per_file_metadata[read.source_idx].source->device_read_async(
+                    read.offset, read.length, dst_base + read.dst_pos, _stream),
+                  read.length));
 
-      } else {
-        auto buffer =
-          _metadata.per_file_metadata[read.source_idx].source->host_read(read.offset, read.length);
-        CUDF_EXPECTS(buffer->size() == read.length, "Unexpected discrepancy in bytes read.");
-        CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read.dst_pos,
-                                      buffer->data(),
-                                      read.length,
-                                      cudaMemcpyDefault,
-                                      _stream.value()));
-        //        _stream.synchronize();
-        host_read_buffers.emplace_back(std::move(buffer));
+    } else {
+      auto buffer =
+        _metadata.per_file_metadata[read.source_idx].source->host_read(read.offset, read.length);
+      CUDF_EXPECTS(buffer->size() == read.length, "Unexpected discrepancy in bytes read.");
+      CUDF_CUDA_TRY(cudaMemcpyAsync(
+        dst_base + read.dst_pos, buffer->data(), read.length, cudaMemcpyDefault, _stream.value()));
+      //        _stream.synchronize();
+      host_read_buffers.emplace_back(std::move(buffer));
 
 #if 0
      // This in theory should be faster, but in practice it's slower. Why?
@@ -482,9 +473,9 @@ void reader::impl::pass_preprocess()
                              }),
                   read.length));
 #endif
-      }
     }
   }
+
   if (host_read_buffers.size() > 0) { _stream.synchronize(); }
   for (auto& task : read_tasks) {
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
@@ -520,80 +511,78 @@ void reader::impl::subpass_preprocess()
     if (stripe_data.empty()) { continue; }
 
     auto const& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
+    auto const stripe_start          = stripe_chunk.start_idx;
+    auto const stripe_end            = stripe_chunk.start_idx + stripe_chunk.count;
+    auto const stripe_first_chunk    = stripe_stream_chunks[stripe_start];
+    auto const stripe_last_chunk     = stripe_stream_chunks[stripe_end - 1];
+    auto const stream_begin          = stripe_first_chunk.start_idx;
+    auto const stream_end            = stripe_last_chunk.start_idx + stripe_last_chunk.count;
+    auto const num_streams           = stream_end - stream_begin;
 
-    auto const stripe_start = stripe_chunk.start_idx;
-    auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
-    for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
-      auto const stream_chunk = stripe_stream_chunks[stripe_idx];
-      auto const stream_start = stream_chunk.start_idx;
-      auto const stream_end   = stream_chunk.start_idx + stream_chunk.count;
+    // Setup row group descriptors if using indexes
+    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
+      cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, _stream);
 
-      // Setup row group descriptors if using indexes
-      if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-        auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
-        cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
-          0, /*stream_info.size()*/ stream_chunk.count, _stream);
+      // TODO: Instead of all stream info, loop using read_chunk info to process
+      // only stream info of the curr_load_stripe_chunk.
 
-        // TODO: Instead of all stream info, loop using read_chunk info to process
-        // only stream info of the curr_load_stripe_chunk.
-
-        for (auto stream_idx = stream_start; stream_idx < stream_end; ++stream_idx) {
-          auto const& info = stream_info[stream_idx];
-          compinfo.push_back(gpu::CompressedStreamInfo(
-            static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
-            info.length));
-          stream_compinfo_map[stream_id_info{
-            info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
-            &compinfo[compinfo.size() - 1];
+      for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
+        auto const& info = stream_info[stream_idx];
+        compinfo.push_back(gpu::CompressedStreamInfo(
+          static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
+          info.length));
+        stream_compinfo_map[stream_id_info{
+          info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
+          &compinfo[compinfo.size() - 1];
 #ifdef PRINT_DEBUG
-          printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-                 (int)info.stripe_idx,
-                 (int)info.level,
-                 (int)info.orc_col_idx,
-                 (int)info.kind,
-                 info.dst_pos,
-                 info.length);
-          fflush(stdout);
+        printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
+               (int)info.stripe_idx,
+               (int)info.level,
+               (int)info.orc_col_idx,
+               (int)info.kind,
+               info.dst_pos,
+               info.length);
+        fflush(stdout);
 #endif
-        }
-
-        compinfo.host_to_device_async(_stream);
-
-        gpu::ParseCompressedStripeData(compinfo.device_ptr(),
-                                       compinfo.size(),
-                                       decompressor.GetBlockSize(),
-                                       decompressor.GetLog2MaxCompressionRatio(),
-                                       _stream);
-        compinfo.device_to_host_sync(_stream);
-
-        auto& compinfo_map = _file_itm_data.compinfo_map;
-        for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
-          compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
-                                     stream_compinfo->num_uncompressed_blocks,
-                                     stream_compinfo->max_uncompressed_size};
-#ifdef PRINT_DEBUG
-          printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-                 (int)stream_id.stripe_idx,
-                 (int)stream_id.level,
-                 (int)stream_id.orc_col_idx,
-                 (int)stream_id.kind,
-                 (size_t)stream_compinfo->num_compressed_blocks,
-                 (size_t)stream_compinfo->num_uncompressed_blocks,
-                 stream_compinfo->max_uncompressed_size);
-          fflush(stdout);
-#endif
-        }
-
-        // Must clear so we will not overwrite the old compression info stream_id.
-        stream_compinfo_map.clear();
-
-      } else {
-        // printf("no compression \n");
-        // fflush(stdout);
-
-        // Set decompressed data size equal to the input size.
-        // TODO
       }
+
+      compinfo.host_to_device_async(_stream);
+
+      gpu::ParseCompressedStripeData(compinfo.device_ptr(),
+                                     compinfo.size(),
+                                     decompressor.GetBlockSize(),
+                                     decompressor.GetLog2MaxCompressionRatio(),
+                                     _stream);
+      compinfo.device_to_host_sync(_stream);
+
+      auto& compinfo_map = _file_itm_data.compinfo_map;
+      for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
+        compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
+                                   stream_compinfo->num_uncompressed_blocks,
+                                   stream_compinfo->max_uncompressed_size};
+#ifdef PRINT_DEBUG
+        printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
+               (int)stream_id.stripe_idx,
+               (int)stream_id.level,
+               (int)stream_id.orc_col_idx,
+               (int)stream_id.kind,
+               (size_t)stream_compinfo->num_compressed_blocks,
+               (size_t)stream_compinfo->num_uncompressed_blocks,
+               stream_compinfo->max_uncompressed_size);
+        fflush(stdout);
+#endif
+      }
+
+      // Must clear so we will not overwrite the old compression info stream_id.
+      stream_compinfo_map.clear();
+
+    } else {
+      // printf("no compression \n");
+      // fflush(stdout);
+
+      // Set decompressed data size equal to the input size.
+      // TODO
     }
 
     // printf("  end level %d\n\n", (int)level);
