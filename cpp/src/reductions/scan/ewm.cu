@@ -348,8 +348,8 @@ std::unique_ptr<column> ewma(scan_aggregation const& agg,
 }
 
 struct ewma_functor {
-  template <typename T>
-  std::enable_if_t<!is_floating_point<T>(), std::unique_ptr<column>> operator()(
+  template <typename T, CUDF_ENABLE_IF(!std::is_floating_point<T>::value)>
+  std::unique_ptr<column> operator()(
     scan_aggregation const& agg,
     column_view const& input,
     rmm::cuda_stream_view stream,
@@ -358,8 +358,8 @@ struct ewma_functor {
     CUDF_FAIL("Unsupported type for EWMA.");
   }
 
-  template <typename T>
-  std::enable_if_t<is_floating_point<T>(), std::unique_ptr<column>> operator()(
+  template <typename T, CUDF_ENABLE_IF(std::is_floating_point<T>::value)>
+  std::unique_ptr<column> operator()(
     scan_aggregation const& agg,
     column_view const& input,
     rmm::cuda_stream_view stream,
