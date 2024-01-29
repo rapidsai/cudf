@@ -53,13 +53,41 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
 {
   size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
-  if (s->dict_base) {
-    auto const [new_target_pos, len] =
-      gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
-    target_pos = new_target_pos;
-    str_len    = len;
-  } else if ((s->col.data_type & 7) == BYTE_ARRAY) {
-    str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
+  switch (s->page.encoding) {
+    case Encoding::PLAIN_DICTIONARY:
+    case Encoding::RLE_DICTIONARY:
+      if (s->dict_base) {
+        auto const [new_target_pos, len] =
+          gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
+        target_pos = new_target_pos;
+        str_len    = len;
+      }
+      break;
+
+    case Encoding::PLAIN:
+      // TODO: since this is really just an estimate, we could just return
+      // s->dict_size (overestimate) or
+      // s->dict_size - sizeof(int) * s->num_values (underestimate)
+      if ((s->col.data_type & 7) == BYTE_ARRAY) {
+        str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
+      }
+      break;
+
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+      // pretty much the same as PLAIN, but we don't know how big the encoded lengths are, so
+      // just overestimate
+      str_len = s->data_end - s->data_start;
+      break;
+
+    case Encoding::DELTA_BYTE_ARRAY:
+      // throw up hands here. otherwise traverse the lengths like we do for string size calc.
+      // this can be an over or underestimate
+      str_len = (s->data_end - s->data_start);
+      break;
+
+    default:
+      // not a valid encoding, so just return 0
+      break;
   }
   if (!t) { s->dict_pos = target_pos; }
   return str_len;
