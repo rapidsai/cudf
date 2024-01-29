@@ -199,9 +199,18 @@ def _get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            # TODO: Once Index binary ops are updated to support logical_and,
-            # can use that instead of using cupy.
-            boolean_mask = cp.logical_and((index >= start), (index <= stop))
+            if (start in index) and (stop in index):
+                # when we have a non-monotonic datetime index, return
+                # values in the slice defined by index_of(start) and
+                # index_of(end)
+                start_loc = index.get_loc(start.to_datetime64())
+                stop_loc = index.get_loc(stop.to_datetime64()) + 1
+                return slice(start_loc, stop_loc)
+            else:
+                raise KeyError(
+                    "Value based partial slicing on non-monotonic DatetimeIndexes "
+                    "with non-existing keys is not allowed.",
+                )
         elif start is not None:
             boolean_mask = index >= start
         else:
@@ -446,11 +455,6 @@ class IndexedFrame(Frame):
         out : bool
             If DataFrame/Series is empty, return True, if not return False.
 
-        Notes
-        -----
-        If DataFrame/Series contains only `null` values, it is still not
-        considered empty. See the example below.
-
         Examples
         --------
         >>> import cudf
@@ -491,6 +495,12 @@ class IndexedFrame(Frame):
         Series([], dtype: float64)
         >>> s.empty
         True
+
+        .. pandas-compat::
+            **DataFrame.empty, Series.empty**
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
         """
         return self.size == 0
 
@@ -588,11 +598,11 @@ class IndexedFrame(Frame):
     def replace(
         self,
         to_replace=None,
-        value=None,
+        value=no_default,
         inplace=False,
         limit=None,
         regex=False,
-        method=None,
+        method=no_default,
     ):
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -637,11 +647,6 @@ class IndexedFrame(Frame):
         -------
         result : Series
             Series after replacement. The mask and index are preserved.
-
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
 
         Examples
         --------
@@ -785,6 +790,12 @@ class IndexedFrame(Frame):
         2    2    7  c
         3    3    8  d
         4    4    9  e
+
+        .. pandas-compat::
+            **DataFrame.replace, Series.replace**
+
+            Parameters that are currently not supported are: `limit`, `regex`,
+            `method`
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
@@ -792,12 +803,30 @@ class IndexedFrame(Frame):
         if regex:
             raise NotImplementedError("regex parameter is not implemented yet")
 
-        if method not in ("pad", None):
-            raise NotImplementedError(
-                "method parameter is not implemented yet"
+        if method is not no_default:
+            warnings.warn(
+                "The 'method' keyword in "
+                f"{type(self).__name__}.replace is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
             )
+        elif method not in {"pad", None, no_default}:
+            raise NotImplementedError("method parameter is not implemented")
 
-        if not (to_replace is None and value is None):
+        if (
+            value is no_default
+            and method is no_default
+            and not is_dict_like(to_replace)
+            and regex is False
+        ):
+            warnings.warn(
+                f"{type(self).__name__}.replace without 'value' and with "
+                "non-dict-like 'to_replace' is deprecated "
+                "and will raise in a future version. "
+                "Explicitly specify the new values instead.",
+                FutureWarning,
+            )
+        if not (to_replace is None and value is no_default):
             copy_data = {}
             (
                 all_na_per_column,
@@ -987,7 +1016,7 @@ class IndexedFrame(Frame):
                 self._index, cudf.core.index.CategoricalIndex
             ):
                 self._index = cudf.Index(
-                    cast(cudf.core.index.NumericIndex, self._index)._column,
+                    cast("cudf.Index", self._index)._column,
                     name=self._index.name,
                 )
             elif isinstance(other._index, cudf.MultiIndex) and not isinstance(
@@ -1044,6 +1073,14 @@ class IndexedFrame(Frame):
                 f"`limit_direction` must be 'backward' for method `{method}`"
             )
 
+        if method.lower() in {"ffill", "bfill", "pad", "backfill"}:
+            warnings.warn(
+                f"{type(self).__name__}.interpolate with method={method} is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
+
         data = self
 
         if not isinstance(data._index, cudf.RangeIndex):
@@ -1059,6 +1096,12 @@ class IndexedFrame(Frame):
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
         columns = {}
         for colname, col in data._data.items():
+            if isinstance(col, cudf.core.column.StringColumn):
+                warnings.warn(
+                    f"{type(self).__name__}.interpolate with object dtype is "
+                    "deprecated and will raise in a future version.",
+                    FutureWarning,
+                )
             if col.nullable:
                 col = col.astype("float64").fillna(np.nan)
 
@@ -1124,13 +1167,6 @@ class IndexedFrame(Frame):
         If the index being truncated contains only datetime values,
         `before` and `after` may be specified as strings instead of
         Timestamps.
-
-        .. pandas-compat::
-            **DataFrame.truncate, Series.truncate**
-
-            The ``copy`` parameter is only present for API compatibility, but
-            ``copy=False`` is not supported. This method always generates a
-            copy.
 
         Examples
         --------
@@ -1273,6 +1309,13 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:25  1  2
         2021-01-01 23:45:26  1  2
         2021-01-01 23:45:27  1  2
+
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not supported. This method always generates a
+            copy.
         """
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
@@ -1527,11 +1570,6 @@ class IndexedFrame(Frame):
         -------
         Frame or None
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: kind, sort_remaining=False
-
         Examples
         --------
         **Series**
@@ -1574,6 +1612,11 @@ class IndexedFrame(Frame):
         1  2  3
         3  1  2
         2  3  1
+
+        .. pandas-compat::
+            **DataFrame.sort_index, Series.sort_index**
+
+            * Not supporting: kind, sort_remaining=False
         """
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
@@ -1588,8 +1631,6 @@ class IndexedFrame(Frame):
             idx = self.index
             if isinstance(idx, MultiIndex):
                 if level is not None:
-                    # Pandas doesn't handle na_position in case of MultiIndex.
-                    na_position = "first" if ascending is True else "last"
                     if not is_list_like(level):
                         level = [level]
                     by = list(map(idx._get_level_label, level))
@@ -2117,6 +2158,14 @@ class IndexedFrame(Frame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
+        if method is not None:
+            # Do not remove until pandas 3.0 support is added.
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
         old_index = self._index
         ret = super().fillna(value, method, axis, inplace, limit)
         if inplace:
@@ -2134,13 +2183,15 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(
-            method="bfill",
-            value=value,
-            axis=axis,
-            inplace=inplace,
-            limit=limit,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return self.fillna(
+                method="bfill",
+                value=value,
+                axis=axis,
+                inplace=inplace,
+                limit=limit,
+            )
 
     @_cudf_nvtx_annotate
     def backfill(self, value=None, axis=None, inplace=None, limit=None):
@@ -2171,13 +2222,15 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(
-            method="ffill",
-            value=value,
-            axis=axis,
-            inplace=inplace,
-            limit=limit,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return self.fillna(
+                method="ffill",
+                value=value,
+                axis=axis,
+                inplace=inplace,
+                limit=limit,
+            )
 
     @_cudf_nvtx_annotate
     def pad(self, value=None, axis=None, inplace=None, limit=None):
@@ -2383,12 +2436,6 @@ class IndexedFrame(Frame):
         -------
         Frame : Frame with sorted values.
 
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
         Examples
         --------
         >>> import cudf
@@ -2400,6 +2447,12 @@ class IndexedFrame(Frame):
         0  0 -3
         2  2  0
         1  1  2
+
+        .. pandas-compat::
+            **DataFrame.sort_values, Series.sort_values**
+
+            * Support axis='index' only.
+            * Not supporting: inplace, kind
         """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -2923,13 +2976,14 @@ class IndexedFrame(Frame):
         2018-02-28      18.0  63.333333
 
 
-        Notes
-        -----
-        Note that the dtype of the index (or the 'on' column if using
-        'on=') in the result will be of a frequency closest to the
-        resampled frequency.  For example, if resampling from
-        nanoseconds to milliseconds, the index will be of dtype
-        'datetime64[ms]'.
+        .. pandas-compat::
+            **DataFrame.resample, Series.resample**
+
+            Note that the dtype of the index (or the 'on' column if using
+            'on=') in the result will be of a frequency closest to the
+            resampled frequency.  For example, if resampling from
+            nanoseconds to milliseconds, the index will be of dtype
+            'datetime64[ms]'.
         """
         import cudf.core.resample
 
@@ -3334,6 +3388,12 @@ class IndexedFrame(Frame):
         2018-04-09  1
         2018-04-11  2
         """
+        # Do not remove until pandas 3.0 support is added.
+        warnings.warn(
+            "first is deprecated and will be removed in a future version. "
+            "Please create a mask and filter using `.loc` instead",
+            FutureWarning,
+        )
         return self._first_or_last(
             offset,
             idx=0,
@@ -3380,6 +3440,12 @@ class IndexedFrame(Frame):
         2018-04-13  3
         2018-04-15  4
         """
+        # Do not remove until pandas 3.0 support is added.
+        warnings.warn(
+            "last is deprecated and will be removed in a future version. "
+            "Please create a mask and filter using `.loc` instead",
+            FutureWarning,
+        )
         return self._first_or_last(
             offset,
             idx=-1,
@@ -3404,18 +3470,6 @@ class IndexedFrame(Frame):
         If reproducible results are required, a random number generator may be
         provided via the `random_state` parameter. This function will always
         produce the same sample given an identical `random_state`.
-
-        Notes
-        -----
-        When sampling from ``axis=0/'index'``, ``random_state`` can be either
-        a numpy random state (``numpy.random.RandomState``) or a cupy random
-        state (``cupy.random.RandomState``). When a numpy random state is
-        used, the output is guaranteed to match the output of the corresponding
-        pandas method call, but generating the sample may be slow. If exact
-        pandas equivalence is not required, using a cupy random state will
-        achieve better performance, especially when sampling large number of
-        items. It's advised to use the matching `ndarray` type to the random
-        state for the `weights` array.
 
         Parameters
         ----------
@@ -3484,6 +3538,20 @@ class IndexedFrame(Frame):
            a  c
         0  1  3
         1  2  4
+
+        .. pandas-compat::
+            **DataFrame.sample, Series.sample**
+
+            When sampling from ``axis=0/'index'``, ``random_state`` can be
+            either a numpy random state (``numpy.random.RandomState``)
+            or a cupy random state (``cupy.random.RandomState``). When a numpy
+            random state is used, the output is guaranteed to match the output
+            of the corresponding pandas method call, but generating the sample
+            maybe slow. If exact pandas equivalence is not required, using a
+            cupy random state will achieve better performance,
+            especially when sampling large number of
+            items. It's advised to use the matching `ndarray` type to
+            the random state for the `weights` array.
         """
         axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
@@ -3641,14 +3709,6 @@ class IndexedFrame(Frame):
         fname = ufunc.__name__
 
         if ret is not None:
-            # pandas bitwise operations return bools if indexes are misaligned.
-            if "bitwise" in fname:
-                reflect = self is not inputs[0]
-                other = inputs[0] if reflect else inputs[1]
-                if isinstance(other, self.__class__) and not self.index.equals(
-                    other.index
-                ):
-                    ret = ret.astype(bool)
             return ret
 
         # Attempt to dispatch all other functions to cupy.
@@ -3748,28 +3808,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index_names,
         )
-
-    def _append(
-        self, other, ignore_index=False, verify_integrity=False, sort=None
-    ):
-        # Note: Do not remove this function until pandas does. This warning is
-        # to clean up cudf but to match a deprecation in pandas
-        warnings.warn(
-            "The append method is deprecated and will be removed in a future "
-            "version. Use cudf.concat instead.",
-            FutureWarning,
-        )
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
-        if is_list_like(other):
-            to_concat = [self, *other]
-        else:
-            to_concat = [self, other]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
     def astype(
         self,
@@ -5089,7 +5127,7 @@ class IndexedFrame(Frame):
         self,
         axis=0,
         method="average",
-        numeric_only=None,
+        numeric_only=False,
         na_option="keep",
         ascending=True,
         pct=False,
@@ -5112,7 +5150,7 @@ class IndexedFrame(Frame):
             * max: highest rank in the group
             * first: ranks assigned in order they appear in the array
             * dense: like 'min', but rank always increases by 1 between groups.
-        numeric_only : bool, optional
+        numeric_only : bool, default False
             For DataFrame objects, rank only numeric columns if set to True.
         na_option : {'keep', 'top', 'bottom'}, default 'keep'
             How to rank NaN values:
@@ -5147,6 +5185,13 @@ class IndexedFrame(Frame):
 
         source = self
         if numeric_only:
+            if isinstance(
+                source, cudf.Series
+            ) and not _is_non_decimal_numeric_dtype(self.dtype):
+                raise TypeError(
+                    "Series.rank does not allow numeric_only=True with "
+                    "non-numeric dtype."
+                )
             numeric_cols = (
                 name
                 for name in self._data.names
@@ -5295,7 +5340,7 @@ def _get_replacement_values_for_columns(
                 "value argument must be scalar, list-like or Series"
             )
     elif _is_series(to_replace):
-        if value is None:
+        if value is None or value is no_default:
             to_replace_columns = {
                 col: as_column(to_replace.index) for col in columns_dtype_map
             }
@@ -5326,7 +5371,7 @@ def _get_replacement_values_for_columns(
                 "value"
             )
     elif is_dict_like(to_replace):
-        if value is None:
+        if value is None or value is no_default:
             to_replace_columns = {
                 col: list(to_replace.keys()) for col in columns_dtype_map
             }

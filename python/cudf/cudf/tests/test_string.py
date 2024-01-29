@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import json
 import re
@@ -17,7 +17,7 @@ import cudf
 from cudf import concat
 from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column.string import StringColumn
-from cudf.core.index import StringIndex, as_index
+from cudf.core.index import Index, as_index
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -847,7 +847,6 @@ def test_string_contains_case(ps_gs):
     ],
 )
 def test_string_like(pat, esc, expect):
-
     expectation = does_not_raise()
     if len(esc) > 1:
         expectation = pytest.raises(ValueError)
@@ -1075,8 +1074,7 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
-    with pytest.warns(FutureWarning):
-        stringIndex = StringIndex(["a", "b", "c", "d", "e"], name="name")
+    stringIndex = Index(["a", "b", "c", "d", "e"], name="name")
     pdf.index = stringIndex.to_pandas()
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
@@ -1865,7 +1863,11 @@ def test_string_count(data, pat, flags):
         ps.str.count(pat=pat, flags=flags),
         check_dtype=False,
     )
-    assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
+    assert_eq(
+        cudf.Index(gs).str.count(pat=pat),
+        pd.Index(ps).str.count(pat=pat),
+        exact=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2231,7 +2233,11 @@ def test_string_str_rindex(data, sub, er):
 
     if er is None:
         assert_eq(ps.str.rindex(sub), gs.str.rindex(sub), check_dtype=False)
-        assert_eq(pd.Index(ps).str.rindex(sub), as_index(gs).str.rindex(sub))
+        assert_eq(
+            pd.Index(ps).str.rindex(sub),
+            as_index(gs).str.rindex(sub),
+            exact=False,
+        )
 
     try:
         ps.str.rindex(sub)
@@ -2402,7 +2408,6 @@ def test_string_str_translate(data):
 
 
 def test_string_str_filter_characters():
-
     data = [
         "hello world",
         "A+B+C+D",
@@ -2432,7 +2437,6 @@ def test_string_str_filter_characters():
 
 
 def test_string_str_code_points():
-
     data = [
         "abc",
         "Def",
@@ -2598,7 +2602,6 @@ def test_string_typecast_error(data, obj_type, dtype):
     ],
 )
 def test_string_hex_to_int(data):
-
     gsr = cudf.Series(data)
 
     expected = cudf.Series([263988422296292, 0, 281474976710655])
@@ -3481,3 +3484,21 @@ def test_str_iterate_error():
     s = cudf.Series(["abc", "xyz"])
     with pytest.raises(TypeError):
         iter(s.str)
+
+
+def test_string_reduction_error():
+    s = cudf.Series([None, None], dtype="str")
+    ps = s.to_pandas(nullable=True)
+    assert_exceptions_equal(
+        s.any,
+        ps.any,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+    assert_exceptions_equal(
+        s.all,
+        ps.all,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )

@@ -25,7 +25,6 @@ Properties
    Index.empty
    Index.has_duplicates
    Index.hasnans
-   Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
    Index.is_unique
@@ -143,6 +142,7 @@ Selecting
 .. autosummary::
    :toctree: api/
 
+   Index.get_indexer
    Index.get_level_values
    Index.get_loc
    Index.get_slice_bound
@@ -168,9 +168,6 @@ Numeric Index
    RangeIndex.step
    RangeIndex.to_numpy
    RangeIndex.to_arrow
-   Int64Index
-   UInt64Index
-   Float64Index
 
 .. _api.categoricalindex:
 
@@ -212,6 +209,7 @@ IntervalIndex components
 
    IntervalIndex.from_breaks
    IntervalIndex.values
+   IntervalIndex.get_indexer
    IntervalIndex.get_loc
 
 .. _api.multiindex:
@@ -258,6 +256,7 @@ MultiIndex selecting
 .. autosummary::
    :toctree: api/
 
+   MultiIndex.get_indexer
    MultiIndex.get_loc
    MultiIndex.get_level_values
 

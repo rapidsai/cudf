@@ -610,7 +610,8 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
         if as_index:
             # Groupby columns became the index.
             # Sorting the index should not change anything.
-            dd.assert_eq(gf.index, gf.sort_index().index)
+            with dask.config.set({"dataframe.convert-string": False}):
+                dd.assert_eq(gf.index, gf.sort_index().index)
         else:
             # Groupby columns are did NOT become the index.
             # Sorting by these columns should not change anything.

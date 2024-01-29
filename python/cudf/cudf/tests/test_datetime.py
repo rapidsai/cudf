@@ -2,6 +2,7 @@
 
 import datetime
 import operator
+import warnings
 
 import cupy as cp
 import numpy as np
@@ -12,7 +13,13 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_LT_140
+from cudf.core._compat import (
+    PANDAS_EQ_200,
+    PANDAS_GE_150,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_LT_140,
+)
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -191,8 +198,8 @@ def test_dt_series(data, field):
     pd_data = pd.Series(data.copy())
     gdf_data = Series(pd_data)
     base = getattr(pd_data.dt, field)
-    test = getattr(gdf_data.dt, field).to_pandas().astype("int64")
-    assert_eq(base, test)
+    test = getattr(gdf_data.dt, field)
+    assert_eq(base, test, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -200,7 +207,7 @@ def test_dt_series(data, field):
 def test_dt_index(data, field):
     pd_data = data.copy()
     gdf_data = DatetimeIndex(pd_data)
-    assert_eq(getattr(gdf_data, field), getattr(pd_data, field))
+    assert_eq(getattr(gdf_data, field), getattr(pd_data, field), exact=False)
 
 
 def test_setitem_datetime():
@@ -614,47 +621,23 @@ def test_datetime_dataframe():
     ],
 )
 @pytest.mark.parametrize("dayfirst", [True, False])
-@pytest.mark.parametrize("infer_datetime_format", [True, False])
-def test_cudf_to_datetime(data, dayfirst, infer_datetime_format):
+def test_cudf_to_datetime(data, dayfirst):
     pd_data = data
-    is_string_data = False
     if isinstance(pd_data, (pd.Series, pd.DataFrame, pd.Index)):
         gd_data = cudf.from_pandas(pd_data)
-        is_string_data = (
-            gd_data.ndim == 1
-            and not gd_data.empty
-            and gd_data.dtype.kind == "O"
-        )
     else:
         if type(pd_data).__module__ == np.__name__:
             gd_data = cp.array(pd_data)
         else:
             gd_data = pd_data
-            is_string_data = isinstance(gd_data, list) and isinstance(
-                next(iter(gd_data), None), str
-            )
 
-    if dayfirst and not infer_datetime_format and is_string_data:
-        # Note: pandas<2.0 also does not respect dayfirst=True correctly
-        # for object data
-        with pytest.raises(NotImplementedError):
-            cudf.to_datetime(
-                gd_data,
-                dayfirst=dayfirst,
-                infer_datetime_format=infer_datetime_format,
-            )
+    expected = pd.to_datetime(pd_data, dayfirst=dayfirst)
+    actual = cudf.to_datetime(gd_data, dayfirst=dayfirst)
+
+    if isinstance(expected, pd.Series):
+        assert_eq(actual, expected, check_dtype=False)
     else:
-        expected = pd.to_datetime(
-            pd_data,
-            dayfirst=dayfirst,
-            infer_datetime_format=infer_datetime_format,
-        )
-        actual = cudf.to_datetime(
-            gd_data,
-            dayfirst=dayfirst,
-            infer_datetime_format=infer_datetime_format,
-        )
-        assert_eq(actual, expected)
+        assert_eq(actual, expected, check_exact=False)
 
 
 @pytest.mark.parametrize(
@@ -693,16 +676,17 @@ def test_to_datetime_errors(data):
     else:
         gd_data = pd_data
 
-    assert_exceptions_equal(
-        pd.to_datetime,
-        cudf.to_datetime,
-        ([pd_data],),
-        ([gd_data],),
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert_exceptions_equal(
+            pd.to_datetime,
+            cudf.to_datetime,
+            ([pd_data],),
+            ([gd_data],),
+        )
 
 
 def test_to_datetime_not_implemented():
-
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([], exact=False)
 
@@ -744,7 +728,10 @@ def test_to_datetime_units(data, unit):
     expected = pd.to_datetime(pd_data, unit=unit)
     actual = cudf.to_datetime(gd_data, unit=unit)
 
-    assert_eq(actual, expected)
+    if isinstance(expected, pd.Series):
+        assert_eq(actual, expected, check_dtype=False)
+    else:
+        assert_eq(actual, expected, exact=False, check_exact=False)
 
 
 @pytest.mark.parametrize(
@@ -794,14 +781,19 @@ def test_to_datetime_format(data, format, infer_datetime_format):
     else:
         gd_data = pd_data
 
-    expected = pd.to_datetime(
-        pd_data, format=format, infer_datetime_format=infer_datetime_format
-    )
-    actual = cudf.to_datetime(
-        gd_data, format=format, infer_datetime_format=infer_datetime_format
-    )
+    with expect_warning_if(True, UserWarning):
+        expected = pd.to_datetime(
+            pd_data, format=format, infer_datetime_format=infer_datetime_format
+        )
+    with expect_warning_if(not infer_datetime_format):
+        actual = cudf.to_datetime(
+            gd_data, format=format, infer_datetime_format=infer_datetime_format
+        )
 
-    assert_eq(actual, expected)
+    if isinstance(expected, pd.Series):
+        assert_eq(actual, expected, check_dtype=False)
+    else:
+        assert_eq(actual, expected, check_exact=False)
 
 
 def test_to_datetime_data_out_of_range_for_format():
@@ -815,7 +807,6 @@ def test_to_datetime_different_formats_notimplemented():
 
 
 def test_datetime_can_cast_safely():
-
     sr = cudf.Series(
         ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
     )
@@ -866,7 +857,8 @@ def test_datetime_scalar_timeunit_cast(timeunit):
 
     gs = Series(testscalar)
     ps = pd.Series(testscalar)
-    assert_eq(ps, gs)
+
+    assert_eq(ps, gs, check_dtype=False)
 
     gdf = DataFrame()
     gdf["a"] = np.arange(5)
@@ -876,7 +868,8 @@ def test_datetime_scalar_timeunit_cast(timeunit):
     pdf["a"] = np.arange(5)
     pdf["b"] = testscalar
 
-    assert_eq(pdf, gdf)
+    assert gdf["b"].dtype == cudf.dtype("datetime64[s]")
+    assert_eq(pdf, gdf, check_dtype=True)
 
 
 @pytest.mark.parametrize(
@@ -928,12 +921,12 @@ def test_str_to_datetime_error():
         np.datetime64("2005-02-25"),
         np.datetime64("2005-02-25T03:30"),
         np.datetime64("nat"),
+        # TODO: https://github.com/pandas-dev/pandas/issues/52295
     ],
 )
 @pytest.mark.parametrize("data_dtype", DATETIME_TYPES)
 @pytest.mark.parametrize("other_dtype", DATETIME_TYPES)
 def test_datetime_subtract(data, other, data_dtype, other_dtype):
-
     gsr = cudf.Series(data, dtype=data_dtype)
     psr = gsr.to_pandas()
 
@@ -1298,9 +1291,8 @@ def test_datetime_reductions(data, op, dtype):
 def test_datetime_infer_format(data, timezone, dtype):
     ts_data = np.datetime_as_string(data, timezone=timezone)
     sr = cudf.Series(ts_data)
+    psr = pd.Series(ts_data)
     if timezone == "naive":
-        psr = pd.Series(ts_data)
-
         expected = psr.astype(dtype)
         actual = sr.astype(dtype)
 
@@ -1576,7 +1568,8 @@ def test_date_range_start_end_freq(request, start, end, freq):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                isinstance(freq, dict)
+                not PANDAS_GE_200
+                and isinstance(freq, dict)
                 and freq.get("hours", None) == 10
                 and freq.get("days", None) == 57
                 and freq.get("nanoseconds", None) == 3
@@ -1630,7 +1623,8 @@ def test_date_range_start_freq_periods(request, start, freq, periods):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                isinstance(freq, dict)
+                not PANDAS_GE_200
+                and isinstance(freq, dict)
                 and freq.get("hours", None) == 10
                 and freq.get("days", None) == 57
                 and freq.get("nanoseconds", None) == 3
@@ -1668,7 +1662,8 @@ def test_date_range_end_freq_periods(request, end, freq, periods):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                "nanoseconds" in freq
+                not PANDAS_GE_210
+                and "nanoseconds" in freq
                 and periods != 1
                 and end == "1970-01-01 00:00:00"
             ),
@@ -1984,8 +1979,22 @@ def test_error_values():
 @pytest.mark.parametrize(
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
-def test_ceil(data, time_type, resolution):
-
+def test_ceil(request, data, time_type, resolution):
+    alias_map = {"L": "ms", "U": "us", "N": "ns"}
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                PANDAS_EQ_200
+                and resolution in {"L", "ms", "U", "us", "N"}
+                and np.dtype(
+                    f"datetime64[{alias_map.get(resolution, resolution)}]"
+                )
+                > np.dtype(time_type)
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/52761",
+            strict=True,
+        )
+    )
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -2015,7 +2024,22 @@ def test_ceil(data, time_type, resolution):
 @pytest.mark.parametrize(
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
-def test_floor(data, time_type, resolution):
+def test_floor(request, data, time_type, resolution):
+    alias_map = {"L": "ms", "U": "us", "N": "ns"}
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                PANDAS_EQ_200
+                and resolution in {"L", "ms", "U", "us", "N"}
+                and np.dtype(
+                    f"datetime64[{alias_map.get(resolution, resolution)}]"
+                )
+                > np.dtype(time_type)
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/52761",
+            strict=True,
+        )
+    )
 
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
@@ -2046,7 +2070,22 @@ def test_floor(data, time_type, resolution):
 @pytest.mark.parametrize(
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
-def test_round(data, time_type, resolution):
+def test_round(request, data, time_type, resolution):
+    alias_map = {"L": "ms", "U": "us", "N": "ns"}
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                PANDAS_EQ_200
+                and resolution in {"L", "ms", "U", "us", "N"}
+                and np.dtype(
+                    f"datetime64[{alias_map.get(resolution, resolution)}]"
+                )
+                > np.dtype(time_type)
+            ),
+            reason="https://github.com/pandas-dev/pandas/issues/52761",
+            strict=True,
+        )
+    )
 
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
@@ -2087,8 +2126,10 @@ def test_first(idx, offset):
     p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
-    expect = p.first(offset=offset)
-    got = g.first(offset=offset)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = p.first(offset=offset)
+    with pytest.warns(FutureWarning):
+        got = g.first(offset=offset)
 
     assert_eq(expect, got)
 
@@ -2117,8 +2158,10 @@ def test_first_start_at_end_of_month(idx, offset):
     p = pd.Series(range(len(idx)), index=idx)
     g = cudf.from_pandas(p)
 
-    expect = p.first(offset=offset)
-    got = g.first(offset=offset)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = p.first(offset=offset)
+    with pytest.warns(FutureWarning):
+        got = g.first(offset=offset)
 
     assert_eq(expect, got)
 
@@ -2154,8 +2197,10 @@ def test_last(idx, offset):
     p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
-    expect = p.last(offset=offset)
-    got = g.last(offset=offset)
+    with expect_warning_if(PANDAS_GE_210):
+        expect = p.last(offset=offset)
+    with pytest.warns(FutureWarning):
+        got = g.last(offset=offset)
 
     assert_eq(expect, got)
 
@@ -2312,7 +2357,7 @@ def test_format_timezone_not_implemented(code):
 
 @pytest.mark.parametrize("tz", ["UTC-3", "+01:00"])
 def test_utc_offset_not_implemented(tz):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises((NotImplementedError, ValueError)):
         cudf.to_datetime([f"2020-01-01 00:00:00{tz}"])
 
 
@@ -2429,46 +2474,3 @@ def test_dateimeindex_from_noniso_string():
 def test_to_datetime_errors_non_scalar_not_implemented(errors):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([1, ""], unit="s", errors=errors)
-
-
-@pytest.mark.parametrize(
-    "box", [list, pd.Index, cudf.Index, pd.Series, cudf.Series]
-)
-@pytest.mark.parametrize("dtype", [np.int64, np.uint64, np.float64])
-def test_to_datetime_arraylike_utc_true(box, dtype):
-    pd_data = [1, 2]
-    cudf_data = box(pd_data)
-    if box is not list:
-        cudf_data = cudf_data.astype(dtype)
-    if box is cudf.Series or box is pd.Series:
-        pd_data = pd.Series(pd_data)
-    result = cudf.to_datetime(cudf_data, utc=True)
-    expected = pd.to_datetime(pd_data, utc=True)
-    assert_eq(result, expected)
-
-
-@pytest.mark.xfail(
-    raises=TypeError,
-    reason="libcudf.copying.get_element doesn't understand pd.DatetimeTZDtype",
-)
-def test_to_datetime_scalar_utc_true():
-    data = pd.Timestamp(2020, 1, 1)
-    with cudf.option_context("mode.pandas_compatible", True):
-        result = cudf.to_datetime(data, utc=True)
-    expected = pd.Timestamp(year=2020, month=1, day=1, tz="UTC")
-    assert_eq(result, expected)
-
-
-def test_to_datetime_dataframe_utc_true():
-    data = cudf.DataFrame([[2020, 1, 1]], columns=["year", "month", "day"])
-    result = cudf.to_datetime(data, utc=True)
-    expected = pd.Series([datetime.datetime(2020, 1, 1)]).dt.tz_localize("UTC")
-    assert_eq(result, expected)
-
-
-def test_datetimeindex_dtype_np_dtype():
-    dtype = np.dtype("datetime64[ns]")
-    data = [1]
-    gdti = cudf.DatetimeIndex(data, dtype=dtype)
-    pdti = pd.DatetimeIndex(data, dtype=dtype)
-    assert_eq(gdti, pdti)
