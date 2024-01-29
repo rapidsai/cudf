@@ -549,15 +549,15 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
 
   using hasher_type                             = decltype(d_hasher);
   constexpr size_type empty_node_index_sentinel = -1;
-  auto key_set                                  = cuco::static_set{
-    cuco::extent{compute_hash_table_size(num_fields, 40)},  // 40% occupancy in hash map
-    cuco::empty_key{empty_node_index_sentinel},
-    d_equal,
-    cuco::linear_probing<1, hasher_type>{d_hasher},
-                                     {},
-                                     {},
-    hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value()};
+  auto key_set =
+    cuco::static_set{cuco::extent{compute_hash_table_size(num_fields, 40)},  // 40% occupancy
+                     cuco::empty_key{empty_node_index_sentinel},
+                     d_equal,
+                     cuco::linear_probing<1, hasher_type>{d_hasher},
+                     {},
+                     {},
+                     hash_table_allocator_type{default_allocator<char>{}, stream},
+                     stream.value()};
   key_set.insert_if_async(iter,
                           iter + num_nodes,
                           thrust::counting_iterator<size_type>(0),  // stencil
