@@ -241,7 +241,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
 
-  auto& read_info = _file_itm_data->stream_read_info;
+  auto& read_info                 = _file_itm_data->stream_read_info;
+  auto& stripe_stream_read_chunks = _file_itm_data->stripe_stream_read_chunks;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
@@ -252,6 +253,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   // Get the total number of stripes across all input files.
   std::size_t num_stripes = selected_stripes.size();
+
+  stripe_stream_read_chunks.resize(num_stripes);
 
   // TODO: Check if these data depends on pass and subpass, instead of global pass.
   // Prepare data.
@@ -269,7 +272,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       col_meta.orc_col_map[level][col.id] = col_id++;
     }
 
-    lvl_stripe_data[level].resize(num_stripes);
+    auto& stripe_data = lvl_stripe_data[level];
+    stripe_data.resize(num_stripes);
 
     auto& stream_info      = _file_itm_data->lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
@@ -291,6 +295,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     auto const stripe_footer = stripe.stripe_footer;
 
     std::size_t total_stripe_size{0};
+    auto const last_read_size = static_cast<int64_t>(read_info.size());
     for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
       auto& stream_info  = _file_itm_data->lvl_stream_info[level];
       auto& stripe_sizes = lvl_stripe_sizes[level];
@@ -327,7 +332,13 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       }
     }
     total_stripe_sizes[stripe_idx] = {1, total_stripe_size};
+    stripe_stream_read_chunks[stripe_idx] =
+      chunk{last_read_size, static_cast<int64_t>(read_info.size() - last_read_size)};
   }
+
+  // DEBUG only
+  _file_itm_data->read_size_limit =
+    total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
 
   // Load all chunks if there is no read limit.
   if (_file_itm_data->read_size_limit == 0) {
@@ -381,26 +392,27 @@ void reader::impl::pass_preprocess()
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
 
-  if (_file_itm_data->pass_preprocessed) { return; }
-  _file_itm_data->pass_preprocessed = true;
-
   auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
   auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
   auto& read_info        = _file_itm_data->stream_read_info;
 
-  std::size_t num_stripes = selected_stripes.size();
-
-  // TODO: this is a pass
+  //  std::size_t num_stripes = selected_stripes.size();
+  auto const stripe_chunk =
+    _file_itm_data->load_stripe_chunks[_file_itm_data->curr_load_stripe_chunk++];
+  auto const stripe_start = stripe_chunk.start_idx;
+  auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
 
   // Prepare the buffer to read raw data onto.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& stripe_data  = lvl_stripe_data[level];
     auto& stripe_sizes = lvl_stripe_sizes[level];
-    for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+    for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
       stripe_data[stripe_idx] = rmm::device_buffer(
         cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
     }
   }
+
+  auto const& stripe_stream_read_chunks = _file_itm_data->stripe_stream_read_chunks;
 
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
   // Should not read all, but read stripe by stripe.
@@ -408,24 +420,33 @@ void reader::impl::pass_preprocess()
   // Read level-by-level.
   // TODO: Test with read and parse/decode column by column.
   // This is future work.
-  for (auto const& read : read_info) {
-    auto& stripe_data = lvl_stripe_data[read.level];
-    auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
+  for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
+    auto const read_chunk = stripe_stream_read_chunks[stripe_idx];
+    auto const read_begin = read_chunk.start_idx;
+    auto const read_end   = read_chunk.start_idx + read_chunk.count;
 
-    if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
-          read.length)) {
-      read_tasks.push_back(
-        std::pair(_metadata.per_file_metadata[read.source_idx].source->device_read_async(
-                    read.offset, read.length, dst_base + read.dst_pos, _stream),
-                  read.length));
+    for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
+      auto const& read  = read_info[read_idx];
+      auto& stripe_data = lvl_stripe_data[read.level];
+      auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
 
-    } else {
-      auto const buffer =
-        _metadata.per_file_metadata[read.source_idx].source->host_read(read.offset, read.length);
-      CUDF_EXPECTS(buffer->size() == read.length, "Unexpected discrepancy in bytes read.");
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        dst_base + read.dst_pos, buffer->data(), read.length, cudaMemcpyDefault, _stream.value()));
-      _stream.synchronize();
+      if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
+            read.length)) {
+        read_tasks.push_back(
+          std::pair(_metadata.per_file_metadata[read.source_idx].source->device_read_async(
+                      read.offset, read.length, dst_base + read.dst_pos, _stream),
+                    read.length));
+
+      } else {
+        auto const buffer =
+          _metadata.per_file_metadata[read.source_idx].source->host_read(read.offset, read.length);
+        CUDF_EXPECTS(buffer->size() == read.length, "Unexpected discrepancy in bytes read.");
+        CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read.dst_pos,
+                                      buffer->data(),
+                                      read.length,
+                                      cudaMemcpyDefault,
+                                      _stream.value()));
+        _stream.synchronize();
 
 #if 0
      // This in theory should be faster, but in practice it's slower. Why?
@@ -447,8 +468,10 @@ void reader::impl::pass_preprocess()
                              }),
                   read.length));
 #endif
+      }
     }
   }
+
   for (auto& task : read_tasks) {
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
@@ -460,9 +483,6 @@ void reader::impl::subpass_preprocess()
 
   auto const rows_to_read      = _file_itm_data->rows_to_read;
   auto const& selected_stripes = _file_itm_data->selected_stripes;
-
-  if (_file_itm_data->subpass_preprocessed) { return; }
-  _file_itm_data->subpass_preprocessed = true;
 
   auto& lvl_stripe_data = _file_itm_data->lvl_stripe_data;
 

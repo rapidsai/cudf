@@ -120,6 +120,7 @@ struct file_intermediate_data {
   // Chunks of stripes that can be load such that total of their data size is within a limit.
   std::vector<chunk> load_stripe_chunks;
   std::size_t curr_load_stripe_chunk{0};
+  bool more_stripe_to_load() { return curr_load_stripe_chunk < load_stripe_chunks.size(); }
 
   // Chunks of stripes such that total of their decompression size is within a limit.
   std::vector<chunk> decode_stripe_chunks;
@@ -149,6 +150,7 @@ struct file_intermediate_data {
     std::size_t level;
   };
   std::vector<stream_read_info> stream_read_info;
+  std::vector<chunk> stripe_stream_read_chunks;
 
   int64_t rows_to_skip;
   size_type rows_to_read;
@@ -158,8 +160,6 @@ struct file_intermediate_data {
   std::size_t read_size_limit{0};
 
   bool global_preprocessed{false};
-  bool pass_preprocessed{false};
-  bool subpass_preprocessed{false};
 };
 
 }  // namespace cudf::io::orc::detail
