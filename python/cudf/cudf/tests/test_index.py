@@ -2274,45 +2274,13 @@ def test_range_index_concat(objs):
     [
         (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
         (pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)),
-        pytest.param(
-            pd.RangeIndex(0, 10, 2),
-            pd.RangeIndex(1, 5, 3),
-            marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
-                reason="https://github.com/pandas-dev/pandas/issues/53490",
-                strict=False,
-            ),
-        ),
-        pytest.param(
-            pd.RangeIndex(1, 5, 3),
-            pd.RangeIndex(0, 10, 2),
-            marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
-                reason="https://github.com/pandas-dev/pandas/issues/53490",
-                strict=False,
-            ),
-        ),
-        pytest.param(
-            pd.RangeIndex(1, 10, 3),
-            pd.RangeIndex(1, 5, 2),
-            marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
-                reason="https://github.com/pandas-dev/pandas/issues/53490",
-                strict=False,
-            ),
-        ),
+        (pd.RangeIndex(0, 10, 2), pd.RangeIndex(1, 5, 3)),
+        (pd.RangeIndex(1, 5, 3), pd.RangeIndex(0, 10, 2)),
+        (pd.RangeIndex(1, 10, 3), pd.RangeIndex(1, 5, 2)),
         (pd.RangeIndex(1, 5, 2), pd.RangeIndex(1, 10, 3)),
         (pd.RangeIndex(1, 100, 3), pd.RangeIndex(1, 50, 3)),
         (pd.RangeIndex(1, 100, 3), pd.RangeIndex(1, 50, 6)),
-        pytest.param(
-            pd.RangeIndex(1, 100, 6),
-            pd.RangeIndex(1, 50, 3),
-            marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
-                reason="https://github.com/pandas-dev/pandas/issues/53490",
-                strict=False,
-            ),
-        ),
+        (pd.RangeIndex(1, 100, 6), pd.RangeIndex(1, 50, 3)),
         (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
         (pd.Index([0, 1, 2, 30], name="a"), pd.Index([90, 100])),
         (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),

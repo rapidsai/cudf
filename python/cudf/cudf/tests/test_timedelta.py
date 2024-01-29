@@ -538,13 +538,7 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
         np.timedelta64(4, "s"),
-        pytest.param(
-            np.timedelta64("nat", "s"),
-            marks=pytest.mark.xfail(
-                strict=False,
-                reason="https://github.com/pandas-dev/pandas/issues/52295",
-            ),
-        ),
+        np.timedelta64("nat", "s"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
