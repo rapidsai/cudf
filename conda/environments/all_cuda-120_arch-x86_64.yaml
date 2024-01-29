@@ -71,11 +71,11 @@ dependencies:
 - pyarrow==14.0.1.*
 - pydata-sphinx-theme!=0.14.2
 - pynvjitlink
-- pytest
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
 - pytest-xdist
+- pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
 - python-snappy>=0.6.0
 - python>=3.9,<3.11
