@@ -909,6 +909,9 @@ def test_resample():
     )
     expected = ser.resample("D").max()
     result = xser.resample("D").max()
+    # TODO: See if as_unit can be avoided
+    expected.index = expected.index.as_unit("s")
+    result.index = result.index.as_unit("s")
     tm.assert_series_equal(result, expected)
 
 
