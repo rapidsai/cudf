@@ -58,7 +58,7 @@ cdef class Aggregation:
         """Get the kind of the aggregation."""
         return dereference(self.c_ptr).kind
 
-    cdef unique_ptr[groupby_aggregation] make_groupby_copy(self) except *:
+    cdef unique_ptr[groupby_aggregation] clone_as_groupby(self) except *:
         """Make a copy of the aggregation that can be used in a groupby.
 
         This function will raise an exception if the aggregation is not supported

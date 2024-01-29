@@ -29,7 +29,7 @@ cdef class AggregationRequest:
 
         cdef Aggregation agg
         for agg in self.aggregations:
-            c_obj.aggregations.push_back(move(agg.make_groupby_copy()))
+            c_obj.aggregations.push_back(move(agg.clone_as_groupby()))
         return move(c_obj)
 
 

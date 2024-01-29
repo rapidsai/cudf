@@ -15,7 +15,7 @@ ctypedef groupby_aggregation * gba_ptr
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_ptr
     cpdef kind_t kind(self)
-    cdef unique_ptr[groupby_aggregation] make_groupby_copy(self) except *
+    cdef unique_ptr[groupby_aggregation] clone_as_groupby(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)
