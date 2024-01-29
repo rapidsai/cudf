@@ -424,7 +424,9 @@ void reader::impl::pass_preprocess()
 
   auto const& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
 
+  std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
+
   // Should not read all, but read stripe by stripe.
   // read_info should be limited by stripe.
   // Read level-by-level.
@@ -449,7 +451,7 @@ void reader::impl::pass_preprocess()
                     read.length));
 
       } else {
-        auto const buffer =
+        auto buffer =
           _metadata.per_file_metadata[read.source_idx].source->host_read(read.offset, read.length);
         CUDF_EXPECTS(buffer->size() == read.length, "Unexpected discrepancy in bytes read.");
         CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read.dst_pos,
@@ -457,7 +459,8 @@ void reader::impl::pass_preprocess()
                                       read.length,
                                       cudaMemcpyDefault,
                                       _stream.value()));
-        _stream.synchronize();
+        //        _stream.synchronize();
+        host_read_buffers.emplace_back(std::move(buffer));
 
 #if 0
      // This in theory should be faster, but in practice it's slower. Why?
@@ -482,7 +485,7 @@ void reader::impl::pass_preprocess()
       }
     }
   }
-
+  if (host_read_buffers.size() > 0) { _stream.synchronize(); }
   for (auto& task : read_tasks) {
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
