@@ -22,9 +22,9 @@ from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
 from cudf.core._compat import (
     PANDAS_GE_150,
-    PANDAS_LT_140,
     PANDAS_GE_200,
     PANDAS_GE_210,
+    PANDAS_LT_140,
 )
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES

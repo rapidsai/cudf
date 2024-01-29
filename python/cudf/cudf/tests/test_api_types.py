@@ -6,9 +6,8 @@ import pytest
 from pandas.api import types as pd_types
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_214
 from cudf.api import types
-
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_214
 from cudf.testing._utils import expect_warning_if
 
 

@@ -1,11 +1,10 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 from typing import Optional
 
-import pyarrow as pa
 import pandas as pd
+import pyarrow as pa
 
 import cudf
-
 from cudf.api.types import _is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype

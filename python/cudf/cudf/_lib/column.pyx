@@ -12,7 +12,6 @@ import rmm
 import cudf
 import cudf._lib as libcudf
 from cudf._lib import pylibcudf
-from cudf.api.types import _is_categorical_dtype, _is_datetime64tz_dtype
 from cudf.core.buffer import (
     Buffer,
     ExposureTrackedBuffer,

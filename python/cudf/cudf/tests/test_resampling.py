@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import assert_eq
 from cudf.core._compat import PANDAS_GE_200
+from cudf.testing._utils import assert_eq
 
 
 def assert_resample_results_equal(lhs, rhs, **kwargs):

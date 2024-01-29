@@ -2,11 +2,10 @@
 
 import numpy as np
 import pandas as pd
-import dask
 import pytest
-
 from pandas.testing import assert_series_equal
 
+import dask
 from dask import dataframe as dd
 
 from cudf import DataFrame, Series, date_range

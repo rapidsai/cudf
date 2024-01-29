@@ -5,9 +5,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.testing._utils import assert_eq
-from cudf.core._compat import PANDAS_GE_200
 
 simple_test_data = [
     {},

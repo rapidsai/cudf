@@ -1622,7 +1622,6 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
 
 def test_multifile_parquet_folder(tmpdir):
-
     test_pdf1 = make_pdf(nrows=10, nvalids=10 // 2, dtype="float64")
     test_pdf2 = make_pdf(nrows=20, dtype="float64")
     expect = pd.concat([test_pdf1, test_pdf2])
