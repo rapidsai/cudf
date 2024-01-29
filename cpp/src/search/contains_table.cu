@@ -156,9 +156,9 @@ void dispatch_nan_comparator(
   // Distinguish probing scheme CG sizes between nested and flat types for better performance
   auto const probing_scheme = [&]() {
     if constexpr (HasNested) {
-      return cuco::experimental::linear_probing<4, Hasher>{d_hasher};
+      return cuco::linear_probing<4, Hasher>{d_hasher};
     } else {
-      return cuco::experimental::linear_probing<1, Hasher>{d_hasher};
+      return cuco::linear_probing<1, Hasher>{d_hasher};
     }
   }();
 
@@ -226,11 +226,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
       auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
-      auto set = cuco::experimental::static_set{
-        cuco::experimental::extent{compute_hash_table_size(haystack.num_rows())},
+      auto set = cuco::static_set{
+        cuco::extent{compute_hash_table_size(haystack.num_rows())},
         cuco::empty_key{lhs_index_type{-1}},
         d_equal,
         probing_scheme,
+        {},
+        {},
         detail::hash_table_allocator_type{default_allocator<lhs_index_type>{}, stream},
         stream.value()};
 

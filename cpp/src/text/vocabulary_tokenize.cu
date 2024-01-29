@@ -94,14 +94,16 @@ struct vocab_equal {
 };
 
 using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-using probe_scheme              = cuco::experimental::linear_probing<1, vocab_hasher>;
-using vocabulary_map_type       = cuco::experimental::static_map<cudf::size_type,
-                                                           cudf::size_type,
-                                                           cuco::experimental::extent<std::size_t>,
-                                                           cuda::thread_scope_device,
-                                                           vocab_equal,
-                                                           probe_scheme,
-                                                           hash_table_allocator_type>;
+using probe_scheme              = cuco::linear_probing<1, vocab_hasher>;
+using cuco_storage              = cuco::storage<1>;
+using vocabulary_map_type       = cuco::static_map<cudf::size_type,
+                                             cudf::size_type,
+                                             cuco::extent<std::size_t>,
+                                             cuda::thread_scope_device,
+                                             vocab_equal,
+                                             probe_scheme,
+                                             hash_table_allocator_type,
+                                             cuco_storage>;
 }  // namespace
 }  // namespace detail
 
@@ -116,7 +118,7 @@ struct tokenize_vocabulary::tokenize_vocabulary_impl {
   col_device_view const d_vocabulary;
   std::unique_ptr<detail::vocabulary_map_type> vocabulary_map;
 
-  auto get_map_ref() const { return vocabulary_map->ref(cuco::experimental::op::find); }
+  auto get_map_ref() const { return vocabulary_map->ref(cuco::op::find); }
 
   tokenize_vocabulary_impl(std::unique_ptr<cudf::column>&& vocab,
                            col_device_view&& d_vocab,
@@ -150,6 +152,8 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     cuco::empty_value{-1},
     detail::vocab_equal{*d_vocabulary},
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
+    cuco::thread_scope_device,
+    detail::cuco_storage{},
     detail::hash_table_allocator_type{default_allocator<char>{}, stream},
     stream.value());
 

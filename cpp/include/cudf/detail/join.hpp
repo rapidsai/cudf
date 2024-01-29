@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,7 +63,7 @@ struct hash_join {
                           cudf::size_type,
                           cuda::thread_scope_device,
                           rmm::mr::stream_allocator_adaptor<default_allocator<char>>,
-                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+                          cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;
