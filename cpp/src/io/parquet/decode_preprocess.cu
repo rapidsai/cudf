@@ -378,7 +378,10 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // retrieve total string size.
   // TODO: make this block-based instead of just 1 warp
   if (compute_string_sizes) {
-    if (t < 32) { s->page.str_bytes = gpuDecodeTotalPageStringSize(s, t); }
+    if (t < 32) {
+      auto const str_bytes = gpuDecodeTotalPageStringSize(s, t);
+      if (t == 0) { s->page.str_bytes = str_bytes; }
+    }
   }
 
   // update output results:
