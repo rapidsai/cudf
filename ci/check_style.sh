@@ -22,5 +22,5 @@ mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
 # Run pre-commit checks
-git show --format=oneline branch-24.04
+git show --format=oneline "$RAPIDS_BASE_BRANCH"
 pre-commit run --all-files --show-diff-on-failure
