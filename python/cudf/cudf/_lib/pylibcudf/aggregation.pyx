@@ -46,6 +46,15 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
+from cudf._lib.cpp.aggregation import Kind  # no-cython-lint
+from cudf._lib.cpp.aggregation import \
+    correlation_type as CorrelationType  # no-cython-lint
+from cudf._lib.cpp.aggregation import \
+    rank_method as RankMethod  # no-cython-lint
+from cudf._lib.cpp.aggregation import \
+    rank_percentage as RankPercentage  # no-cython-lint
+from cudf._lib.cpp.aggregation import udf_type as UdfType  # no-cython-lint
+
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef groupby_aggregation * gba_ptr
 
