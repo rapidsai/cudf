@@ -472,6 +472,7 @@ dependencies:
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables
+          - sphinx-remove-toctrees
           - sphinxcontrib-websupport
   notebooks:
     common:
@@ -612,7 +613,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          - pytest<8
           - pytest-cov
           - pytest-xdist
   test_python_cudf:
