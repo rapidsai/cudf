@@ -106,7 +106,6 @@ def test_from_cudf():
 
 
 def test_from_cudf_multiindex_raises():
-
     df = cudf.DataFrame({"x": list("abc"), "y": [1, 2, 3], "z": [1, 2, 3]})
 
     with pytest.raises(NotImplementedError):
@@ -115,7 +114,6 @@ def test_from_cudf_multiindex_raises():
 
 
 def test_from_cudf_with_generic_idx():
-
     cdf = cudf.DataFrame(
         {
             "a": list(range(20)),
@@ -641,7 +639,6 @@ def test_concat(gdf, gddf, series):
 
 
 def test_boolean_index(gdf, gddf):
-
     gdf2 = gdf[gdf.x > 2]
     gddf2 = gddf[gddf.x > 2]
 
@@ -658,7 +655,6 @@ def test_drop(gdf, gddf):
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("index", [True, False])
 def test_memory_usage(gdf, gddf, index, deep):
-
     dd.assert_eq(
         gdf.memory_usage(deep=deep, index=index),
         gddf.memory_usage(deep=deep, index=index),
@@ -710,7 +706,6 @@ def test_hash_object_dispatch(index):
     ],
 )
 def test_make_meta_backends(index):
-
     dtypes = ["int8", "int32", "int64", "float64"]
     df = cudf.DataFrame(
         {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
@@ -734,7 +729,6 @@ def test_make_meta_backends(index):
 
     # Check dask code path if not MultiIndex
     if not isinstance(df.index, cudf.MultiIndex):
-
         ddf = dgd.from_cudf(df, npartitions=1)
 
         # Check "empty" metadata types

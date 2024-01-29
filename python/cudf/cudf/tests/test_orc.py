@@ -1911,3 +1911,25 @@ def test_orc_reader_empty_deeply_nested_level(datadir):
     got = cudf.read_orc(path)
 
     assert_eq(expect, got)
+
+
+def test_orc_chunked_writer_stripe_size(datadir):
+    from pyarrow import orc
+
+    df = cudf.DataFrame({"col": gen_rand_series("int", 100000)})
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_bytes=64 * 1024)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 10)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_rows=20000)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 5)
