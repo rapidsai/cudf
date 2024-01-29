@@ -20,6 +20,8 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
+from .types cimport DataType
+
 
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
@@ -68,11 +70,7 @@ cpdef Aggregation collect_list(null_policy null_handling = *)
 
 cpdef Aggregation collect_set(null_handling = *, nulls_equal = *, nans_equal = *)
 
-# cpdef Aggregation udf(
-#     udf_type type,
-#     string user_defined_aggregator,
-#     data_type output_type
-# )
+cpdef Aggregation udf(str operation, DataType output_type)
 
 cpdef Aggregation correlation(correlation_type type, size_type min_periods)
 

@@ -32,6 +32,7 @@ from cudf._lib.cpp.aggregation cimport (
     make_std_aggregation,
     make_sum_aggregation,
     make_sum_of_squares_aggregation,
+    make_udf_aggregation,
     make_variance_aggregation,
     rank_method,
     rank_percentage,
@@ -54,6 +55,8 @@ from cudf._lib.cpp.aggregation import \
 from cudf._lib.cpp.aggregation import \
     rank_percentage as RankPercentage  # no-cython-lint
 from cudf._lib.cpp.aggregation import udf_type as UdfType  # no-cython-lint
+
+from .types cimport DataType
 
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef groupby_aggregation * gba_ptr
@@ -198,11 +201,16 @@ cpdef Aggregation collect_set(
         )
     )
 
-# cpdef Aggregation udf(
-#     udf_type type,
-#     string user_defined_aggregator,
-#     data_type output_type
-# ):
+cpdef Aggregation udf(str operation, DataType output_type):
+    return Aggregation.from_libcudf(
+        move(
+            make_udf_aggregation[aggregation](
+                UdfType.PTX,
+                operation.encode("utf-8"),
+                output_type.c_obj,
+            )
+        )
+    )
 
 
 cpdef Aggregation correlation(correlation_type type, size_type min_periods):
