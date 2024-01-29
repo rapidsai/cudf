@@ -13,7 +13,6 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
@@ -1706,13 +1705,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
         "minutes",
         "seconds",
         "microseconds",
-        pytest.param(
-            "nanoseconds",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/36589",
-            ),
-        ),
+        "nanoseconds",
     ],
 )
 @pytest.mark.parametrize(
@@ -1758,28 +1751,16 @@ def test_datetime_dateoffset_binaryop(
         {"months": 2, "years": 5},
         {"microseconds": 1, "seconds": 1},
         {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
-        pytest.param(
-            {"milliseconds": 4},
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="Pandas gets the wrong answer for milliseconds",
-            ),
-        ),
-        pytest.param(
-            {"milliseconds": 4, "years": 2},
-            marks=pytest_xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49897"
-            ),
-        ),
-        pytest.param(
-            {"nanoseconds": 12},
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="Pandas gets the wrong answer for nanoseconds",
-            ),
-        ),
+        {"milliseconds": 4},
+        {"milliseconds": 4, "years": 2},
         {"nanoseconds": 12},
     ],
+)
+@pytest.mark.filterwarnings(
+    "ignore:Non-vectorized DateOffset:pandas.errors.PerformanceWarning"
+)
+@pytest.mark.filterwarnings(
+    "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
@@ -1816,13 +1797,7 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
         "minutes",
         "seconds",
         "microseconds",
-        pytest.param(
-            "nanoseconds",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/36589",
-            ),
-        ),
+        "nanoseconds",
     ],
 )
 @pytest.mark.parametrize(

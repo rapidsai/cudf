@@ -15,7 +15,6 @@ import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
 from cudf.core._compat import (
     PANDAS_EQ_200,
-    PANDAS_GE_150,
     PANDAS_GE_200,
     PANDAS_GE_210,
     PANDAS_LT_140,
@@ -1512,14 +1511,7 @@ date_range_test_freq = [
     "17h",
     "-680T",
     "110546s",
-    pytest.param(
-        "110546789L",
-        marks=pytest.mark.xfail(
-            condition=not PANDAS_GE_150,
-            reason="Pandas DateOffset ignores milliseconds. "
-            "https://github.com/pandas-dev/pandas/issues/43371",
-        ),
-    ),
+    "110546789L",
     "110546789248U",
 ]
 
