@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "delta_binary.cuh"
 #include "page_decode.cuh"
 
 #include <io/utilities/column_buffer.hpp>
@@ -38,6 +39,24 @@ constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<preproce
 constexpr int rolling_buf_size = LEVEL_DECODE_BUF_SIZE;
 
 using unused_state_buf = page_state_buffers_s<0, 0, 0>;
+
+/**
+ * @brief Calculate string bytes for DELTA_LENGTH_BYTE_ARRAY encoded pages
+ *
+ * @param s The local page info
+ * @param t Thread index
+ */
+__device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
+{
+  if (t == 0) {
+    // find the beginning of char data
+    delta_binary_decoder string_lengths;
+    auto const* string_start = string_lengths.find_end_of_block(s->data_start, s->data_end);
+    // distance is size of string data
+    return static_cast<size_type>(std::distance(string_start, s->data_end));
+  }
+  return 0;
+}
 
 /**
  *
@@ -74,9 +93,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       break;
 
     case Encoding::DELTA_LENGTH_BYTE_ARRAY:
-      // pretty much the same as PLAIN, but we don't know how big the encoded lengths are, so
-      // just overestimate
-      str_len = s->data_end - s->data_start;
+      str_len = gpuDeltaLengthPageStringSize(s, t);
       break;
 
     case Encoding::DELTA_BYTE_ARRAY:
