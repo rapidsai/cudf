@@ -92,9 +92,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       }
       break;
 
-    case Encoding::DELTA_LENGTH_BYTE_ARRAY:
-      str_len = gpuDeltaLengthPageStringSize(s, t);
-      break;
+    case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
 
     case Encoding::DELTA_BYTE_ARRAY:
       // throw up hands here. otherwise traverse the lengths like we do for string size calc.
