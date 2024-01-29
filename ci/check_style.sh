@@ -22,4 +22,5 @@ mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
 # Run pre-commit checks
+git show --format=oneline "$GITHUB_BASE_REF"
 pre-commit run --all-files --show-diff-on-failure
