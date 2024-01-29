@@ -364,11 +364,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         group_names, offsets, _, grouped_values = self._grouped()
 
-        if len(group_names) > self._MAX_GROUPS_BEFORE_WARN:
-            warnings.warn(
-                f"GroupBy.indices performance scales poorly with "
-                f"number of groups. Got {len(group_names)} groups."
-            )
         return dict(
             zip(
                 group_names.to_pandas(),
