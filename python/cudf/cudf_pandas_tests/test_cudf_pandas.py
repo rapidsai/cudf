@@ -269,7 +269,6 @@ def test_rename_categories():
     tm.assert_series_equal(psr, sr)
 
 
-
 def test_column_rename(dataframe):
     pdf, df = dataframe
     pdf.columns = ["x", "y"]

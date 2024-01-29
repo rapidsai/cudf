@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 
 import cudf
-import pandas as pd
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
     _is_categorical_dtype,

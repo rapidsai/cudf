@@ -9,13 +9,13 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_GE_210
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
     expect_warning_if,
 )
-from cudf.core._compat import PANDAS_GE_210
 
 params_dtypes = [np.int32, np.uint32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -182,7 +182,6 @@ def test_exact_quantiles_int(int_method):
 
 
 def test_approx_quantiles():
-
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
@@ -222,7 +221,6 @@ def test_approx_quantiles_int():
     ],
 )
 def test_misc_quantiles(data, q):
-
     pdf_series = pd.Series(data, dtype="float64" if len(data) == 0 else None)
     gdf_series = cudf.from_pandas(pdf_series)
 
@@ -503,7 +501,6 @@ def test_corr1d(data1, data2, method):
 
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
 def test_df_corr(method):
-
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
     got = gdf.corr(method)

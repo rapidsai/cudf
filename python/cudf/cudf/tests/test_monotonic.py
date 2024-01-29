@@ -10,11 +10,7 @@ import pytest
 
 import cudf
 from cudf import Index, MultiIndex, Series
-from cudf.core.index import (
-    CategoricalIndex,
-    DatetimeIndex,
-    RangeIndex,
-)
+from cudf.core.index import CategoricalIndex, DatetimeIndex, RangeIndex
 from cudf.testing._utils import assert_eq
 
 
@@ -46,7 +42,6 @@ def test_range_index(testrange):
     ],
 )
 def test_generic_index(testlist):
-
     index = Index(testlist)
     index_pd = pd.Index(testlist)
 

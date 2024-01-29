@@ -21,7 +21,6 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
-
     psr = pd.Series(data)
 
     if len(data) > 0:

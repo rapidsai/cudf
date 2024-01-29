@@ -9,9 +9,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
-from cudf.core._compat import PANDAS_GE_200
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],

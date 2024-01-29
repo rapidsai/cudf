@@ -34,8 +34,8 @@ from cudf.core.index import (
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.utils.dtypes import is_column_like
-from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
 
 def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
@@ -726,7 +726,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 [
                     frame,
                     cudf.DataFrame(
-                        {"idx": cudf.Series(column.as_column(range(len(frame))))}
+                        {
+                            "idx": cudf.Series(
+                                column.as_column(range(len(frame)))
+                            )
+                        }
                     ),
                 ],
                 axis=1,
