@@ -67,7 +67,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
     case Encoding::PLAIN:
       // TODO: since this is really just an estimate, we could just return
       // s->dict_size (overestimate) or
-      // s->dict_size - sizeof(int) * s->num_values (underestimate)
+      // s->dict_size - sizeof(int) * s->page.num_input_values (underestimate)
       if ((s->col.data_type & 7) == BYTE_ARRAY) {
         str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
       }
