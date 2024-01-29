@@ -57,5 +57,5 @@ cdef class GroupBy:
                 inner_results.append(
                     Column.from_libcudf(move(c_res.second[i].results[j]))
                 )
-            results.append(inner_results)
+            results.append(Table(inner_results))
         return group_keys, results
