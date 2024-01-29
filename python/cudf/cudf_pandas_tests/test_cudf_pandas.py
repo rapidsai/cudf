@@ -902,12 +902,10 @@ def test_datetime_values_dtype_roundtrip():
 
 def test_resample():
     ser = pd.Series(
-        range(3),
-        index=pd.date_range(pd.Timestamp("2020-01-01"), freq="D", periods=3),
+        range(3), index=pd.date_range("2020-01-01", freq="D", periods=3)
     )
     xser = xpd.Series(
-        range(3),
-        index=xpd.date_range(xpd.Timestamp("2020-01-01"), freq="D", periods=3),
+        range(3), index=xpd.date_range("2020-01-01", freq="D", periods=3)
     )
     expected = ser.resample("D").max()
     result = xser.resample("D").max()
