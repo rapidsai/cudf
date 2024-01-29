@@ -369,14 +369,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 f"GroupBy.indices performance scales poorly with "
                 f"number of groups. Got {len(group_names)} groups."
             )
-
         return dict(
             zip(
                 group_names.to_pandas(),
-                [
-                    part.values
-                    for part in grouped_values.index._split(offsets[1:-1])
-                ],
+                np.split(grouped_values.index.values, offsets[1:-1]),
             )
         )
 
