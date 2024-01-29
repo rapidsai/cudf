@@ -5,7 +5,6 @@ from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-# Have to alias this so that the Pythonic name gets capitalized
 # TODO: Expose the enums to Python
 from cudf._lib.cpp.aggregation cimport (
     Kind as kind_t,
