@@ -19,11 +19,26 @@ from .table cimport Table
 
 
 cdef class AggregationRequest:
+    """A request for a groupby aggregation.
+
+    Parameters
+    ----------
+    values : Column
+        The column to aggregate.
+    aggregations : list
+        The list of aggregations to perform.
+    """
     def __init__(self, Column values, list aggregations):
         self.values = values
         self.aggregations = aggregations
 
     cdef aggregation_request to_libcudf(self) except *:
+        """Convert to a libcudf aggregation_request object.
+
+        This method is for internal use only. It creates a new libcudf
+        :cpp:class:`cudf::groupby::aggregation_request` object each time it is
+        called.
+        """
         cdef aggregation_request c_obj
         c_obj.values = self.values.view()
 
@@ -34,10 +49,33 @@ cdef class AggregationRequest:
 
 
 cdef class GroupBy:
+    """Group values by keys and compute various aggregate quantities.
+
+    Parameters
+    ----------
+    keys : Table
+        The columns to group by.
+    """
     def __init__(self, Table keys):
         self.c_obj.reset(new groupby(keys.view()))
 
     cpdef tuple aggregate(self, list requests):
+        """Compute aggregations on columns.
+
+        Parameters
+        ----------
+        requests : list
+            The list of aggregation requests, each representing a set of
+            aggregations to perform on a given column of values.
+
+        Returns
+        -------
+        Tuple[Table, List[Table, ...]]
+            A tuple whose first element is the unique keys and whose second
+            element is a table of aggregation results. One table is returned
+            for each aggregation request, with the columns corresponding to the
+            sequence of aggregations in the request.
+        """
         cdef AggregationRequest request
         cdef vector[aggregation_request] c_requests
         for request in requests:

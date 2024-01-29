@@ -40,7 +40,7 @@ cpdef Aggregation min()
 
 cpdef Aggregation max()
 
-cpdef Aggregation count(null_policy null_handling)
+cpdef Aggregation count(null_policy null_handling = *)
 
 cpdef Aggregation any()
 
@@ -50,9 +50,9 @@ cpdef Aggregation sum_of_squares()
 
 cpdef Aggregation mean()
 
-cpdef Aggregation variance(size_type ddof)
+cpdef Aggregation variance(size_type ddof = *)
 
-cpdef Aggregation std(size_type ddof)
+cpdef Aggregation std(size_type ddof = *)
 
 cpdef Aggregation median()
 

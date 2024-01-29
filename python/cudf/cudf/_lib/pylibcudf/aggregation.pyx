@@ -5,7 +5,6 @@ from libcpp.cast cimport dynamic_cast
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-# TODO: Expose the enums to Python
 from cudf._lib.cpp.aggregation cimport (
     Kind as kind_t,
     aggregation,
@@ -63,12 +62,13 @@ ctypedef groupby_aggregation * gba_ptr
 
 
 cdef class Aggregation:
-    """A wrapper for aggregations.
+    """A type of aggregation to perform.
 
-    **Neither this class nor any of its subclasses should ever be instantiated
-    using a standard constructor, only using one of its many factories.** The
-    factory approach matches the libcudf approach, which is necessary because
-    some aggregations require additional arguments beyond the kind.
+    Aggregations are passed to APIs like
+    :py:func:`~cudf._lib.pylibcudf.groupby.Groupby.aggregate` to indicate what
+    operations to perform. Using a class for aggregations provides a unified
+    API for handling parametrizable aggregations. This class should never be
+    instantiated directly, only via one of the factory functions.
     """
     def __init__(self):
         raise ValueError(
@@ -103,72 +103,212 @@ cdef class Aggregation:
 
 
 cpdef Aggregation sum():
+    """Create a sum aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The sum aggregation.
+    """
     return Aggregation.from_libcudf(move(make_sum_aggregation[aggregation]()))
 
 
 cpdef Aggregation product():
+    """Create a product aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The product aggregation.
+    """
     return Aggregation.from_libcudf(move(make_product_aggregation[aggregation]()))
 
 
 cpdef Aggregation min():
+    """Create a min aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The min aggregation.
+    """
     return Aggregation.from_libcudf(move(make_min_aggregation[aggregation]()))
 
 
 cpdef Aggregation max():
+    """Create a max aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The max aggregation.
+    """
     return Aggregation.from_libcudf(move(make_max_aggregation[aggregation]()))
 
 
-cpdef Aggregation count(null_policy null_handling):
+cpdef Aggregation count(null_policy null_handling = null_policy.EXCLUDE):
+    """Create a count aggregation.
+
+    Parameters
+    ----------
+    null_handling : null_policy, default EXCLUDE
+        Whether or not nulls should be included.
+
+    Returns
+    -------
+    Aggregation
+        The count aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_count_aggregation[aggregation](null_handling))
     )
 
 
 cpdef Aggregation any():
+    """Create an any aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The any aggregation.
+    """
     return Aggregation.from_libcudf(move(make_any_aggregation[aggregation]()))
 
 
 cpdef Aggregation all():
+    """Create an all aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The all aggregation.
+    """
     return Aggregation.from_libcudf(move(make_all_aggregation[aggregation]()))
 
 
 cpdef Aggregation sum_of_squares():
+    """Create a sum_of_squares aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The sum_of_squares aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_sum_of_squares_aggregation[aggregation]())
     )
 
 
 cpdef Aggregation mean():
+    """Create a mean aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The mean aggregation.
+    """
     return Aggregation.from_libcudf(move(make_mean_aggregation[aggregation]()))
 
 
-cpdef Aggregation variance(size_type ddof):
+cpdef Aggregation variance(size_type ddof=1):
+    """Create a variance aggregation.
+
+    Parameters
+    ----------
+    ddof : int, default 1
+        Delta degrees of freedom.
+
+    Returns
+    -------
+    Aggregation
+        The variance aggregation.
+    """
     return Aggregation.from_libcudf(move(make_variance_aggregation[aggregation](ddof)))
 
 
-cpdef Aggregation std(size_type ddof):
+cpdef Aggregation std(size_type ddof=1):
+    """Create a std aggregation.
+
+    Parameters
+    ----------
+    ddof : int, default 1
+        Delta degrees of freedom. The default value is 1.
+
+    Returns
+    -------
+    Aggregation
+        The std aggregation.
+    """
     return Aggregation.from_libcudf(move(make_std_aggregation[aggregation](ddof)))
 
 
 cpdef Aggregation median():
+    """Create a median aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The median aggregation.
+    """
     return Aggregation.from_libcudf(move(make_median_aggregation[aggregation]()))
 
 
 cpdef Aggregation quantile(list quantiles, interpolation interp = interpolation.LINEAR):
+    """Create a quantile aggregation.
+
+    Parameters
+    ----------
+    quantiles : list
+        List of quantiles to compute, should be between 0 and 1.
+    interp : interpolation, default LINEAR
+        Interpolation technique to use when the desired quantile lies between
+        two data points.
+
+    Returns
+    -------
+    Aggregation
+        The quantile aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_quantile_aggregation[aggregation](quantiles, interp))
     )
 
 
 cpdef Aggregation argmax():
+    """Create an argmax aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The argmax aggregation.
+    """
     return Aggregation.from_libcudf(move(make_argmax_aggregation[aggregation]()))
 
 
 cpdef Aggregation argmin():
+    """Create an argmin aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The argmin aggregation.
+    """
     return Aggregation.from_libcudf(move(make_argmin_aggregation[aggregation]()))
 
 
 cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
+    """Create a nunique aggregation.
+
+    Parameters
+    ----------
+    null_handling : null_policy, default EXCLUDE
+        Whether or not nulls should be included.
+
+    Returns
+    -------
+    Aggregation
+        The nunique aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_nunique_aggregation[aggregation](null_handling))
     )
@@ -177,12 +317,36 @@ cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
 cpdef Aggregation nth_element(
     size_type n, null_policy null_handling = null_policy.INCLUDE
 ):
+    """Create a nth_element aggregation.
+
+    Parameters
+    ----------
+    null_handling : null_policy, default INCLUDE
+        Whether or not nulls should be included.
+
+    Returns
+    -------
+    Aggregation
+        The nth_element aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_nth_element_aggregation[aggregation](n, null_handling))
     )
 
 
 cpdef Aggregation collect_list(null_policy null_handling = null_policy.INCLUDE):
+    """Create a collect_list aggregation.
+
+    Parameters
+    ----------
+    null_handling : null_policy, default INCLUDE
+        Whether or not nulls should be included.
+
+    Returns
+    -------
+    Aggregation
+        The collect_list aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_collect_list_aggregation[aggregation](null_handling))
     )
@@ -193,6 +357,22 @@ cpdef Aggregation collect_set(
     nulls_equal = null_equality.EQUAL,
     nans_equal = nan_equality.ALL_EQUAL,
 ):
+    """Create a collect_set aggregation.
+
+    Parameters
+    ----------
+    null_handling : null_policy, default INCLUDE
+        Whether or not nulls should be included.
+    nulls_equal : null_equality, default EQUAL
+        Whether or not nulls should be considered equal.
+    nans_equal : nan_equality, default ALL_EQUAL
+        Whether or not NaNs should be considered equal.
+
+    Returns
+    -------
+    Aggregation
+        The collect_set aggregation.
+    """
     return Aggregation.from_libcudf(
         move(
             make_collect_set_aggregation[aggregation](
@@ -202,6 +382,20 @@ cpdef Aggregation collect_set(
     )
 
 cpdef Aggregation udf(str operation, DataType output_type):
+    """Create a udf aggregation.
+
+    Parameters
+    ----------
+    operation : str
+        The operation to perform as a string of PTX code.
+    output_type : DataType
+        The output type of the aggregation.
+
+    Returns
+    -------
+    Aggregation
+        The udf aggregation.
+    """
     return Aggregation.from_libcudf(
         move(
             make_udf_aggregation[aggregation](
@@ -214,12 +408,42 @@ cpdef Aggregation udf(str operation, DataType output_type):
 
 
 cpdef Aggregation correlation(correlation_type type, size_type min_periods):
+    """Create a correlation aggregation.
+
+    Parameters
+    ----------
+    type : correlation_type
+        The type of correlation to compute.
+    min_periods : int
+        The minimum number of observations to consider for computing the
+        correlation.
+
+    Returns
+    -------
+    Aggregation
+        The correlation aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_correlation_aggregation[aggregation](type, min_periods))
     )
 
 
 cpdef Aggregation covariance(size_type min_periods, size_type ddof):
+    """Create a covariance aggregation.
+
+    Parameters
+    ----------
+    min_periods : int
+        The minimum number of observations to consider for computing the
+        covariance.
+    ddof : int
+        Delta degrees of freedom.
+
+    Returns
+    -------
+    Aggregation
+        The covariance aggregation.
+    """
     return Aggregation.from_libcudf(
         move(make_covariance_aggregation[aggregation](min_periods, ddof))
     )
@@ -232,6 +456,27 @@ cpdef Aggregation rank(
     null_order null_precedence = null_order.AFTER,
     rank_percentage percentage = rank_percentage.NONE,
 ):
+    """Create a rank aggregation.
+
+    Parameters
+    ----------
+    method : rank_method
+        The method to use for ranking.
+    column_order : order, default ASCENDING
+        The order in which to sort the column.
+    null_handling : null_policy, default EXCLUDE
+        Whether or not nulls should be included.
+    null_precedence : null_order, default AFTER
+        Whether nulls should come before or after non-nulls.
+    percentage : rank_percentage, default NONE
+        Whether or not ranks should be converted to percentages, and if so,
+        the type of normalization to use.
+
+    Returns
+    -------
+    Aggregation
+        The rank aggregation.
+    """
     return Aggregation.from_libcudf(
         move(
             make_rank_aggregation[aggregation](
