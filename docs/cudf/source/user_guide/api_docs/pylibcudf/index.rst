@@ -8,6 +8,7 @@ This page provides API documentation for pylibcudf.
     :maxdepth: 1
     :caption: API Documentation
 
+    binaryop
     column
     copying
     gpumemoryview

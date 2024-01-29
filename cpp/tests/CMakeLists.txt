@@ -58,6 +58,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}

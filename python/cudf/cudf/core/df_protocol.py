@@ -792,7 +792,6 @@ def _set_missing_values(
     cudf_col: cudf.core.column.ColumnBase,
     allow_copy: bool,
 ) -> cudf.core.column.ColumnBase:
-
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         null, invalid = protocol_col.describe_null

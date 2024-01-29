@@ -825,7 +825,6 @@ def date_range(
                 '2023-12-23 08:00:00', '2025-02-23 08:00:00',
                 '2026-04-23 08:00:00'],
                 dtype='datetime64[ns]')
-
     """
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
