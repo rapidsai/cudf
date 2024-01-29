@@ -720,14 +720,14 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int32_t>(0),
+    thrust::counting_iterator<size_type>(0),
     cuda::proclaim_return_type<size_type>([d_strings, d_repl] __device__(size_type idx) {
       return d_strings.is_null(idx) ? d_repl.size_bytes()
                                     : d_strings.element<string_view>(idx).size_bytes();
     }));
-  auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
+  auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = offsets_column->view().data<int32_t>();
+  auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   // build chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
