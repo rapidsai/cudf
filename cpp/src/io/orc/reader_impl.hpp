@@ -86,6 +86,10 @@ class reader::impl {
 
   void subpass_preprocess();
 
+  void decompress_and_decode();
+
+  table_with_metadata make_output_chunk();
+
   /**
    * @brief Create the output table metadata from file metadata.
    *

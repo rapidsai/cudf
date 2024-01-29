@@ -452,27 +452,6 @@ void reader::impl::pass_preprocess()
         dst_base + read.dst_pos, buffer->data(), read.length, cudaMemcpyDefault, _stream.value()));
       //        _stream.synchronize();
       host_read_buffers.emplace_back(std::move(buffer));
-
-#if 0
-     // This in theory should be faster, but in practice it's slower. Why?
-      read_tasks.push_back(
-        std::pair(std::async(std::launch::async,
-                             [&, read = read, dst_base = dst_base] {
-                               auto const buffer =
-                                 _metadata.per_file_metadata[read.source_idx].source->host_read(
-                                   read.offset, read.length);
-                               CUDF_EXPECTS(buffer->size() == read.length,
-                                            "Unexpected discrepancy in bytes read.");
-                               CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read.dst_pos,
-                                                             buffer->data(),
-                                                             read.length,
-                                                             cudaMemcpyDefault,
-                                                             _stream.value()));
-                               _stream.synchronize();
-                               return read.length;
-                             }),
-                  read.length));
-#endif
     }
   }
 
