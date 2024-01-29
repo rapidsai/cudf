@@ -757,19 +757,19 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   global_preprocess(skip_rows, num_rows_opt, stripes);
 
   // TODO: fix this, should be called once
-  while (_file_itm_data->more_stripe_to_load()) {
+  while (_chunk_read_data.more_stripe_to_load()) {
     pass_preprocess();
   }
 
   // Fix this, subpass should be call once
-  _file_itm_data->curr_load_stripe_chunk = 0;
-  while (_file_itm_data->more_stripe_to_load()) {
+  _chunk_read_data.curr_load_stripe_chunk = 0;
+  while (_chunk_read_data.more_stripe_to_load()) {
     subpass_preprocess();
   }
 
-  auto const rows_to_skip      = _file_itm_data->rows_to_skip;
-  auto const rows_to_read      = _file_itm_data->rows_to_read;
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
+  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
+  auto const rows_to_read      = _file_itm_data.rows_to_read;
+  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
   // If no rows or stripes to read, return empty columns
   if (rows_to_read == 0 || selected_stripes.empty()) { return; }
@@ -788,9 +788,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 : std::make_unique<cudf::table>();
   }();
 
-  auto& lvl_stripe_data        = _file_itm_data->lvl_stripe_data;
-  auto& null_count_prefix_sums = _file_itm_data->null_count_prefix_sums;
-  auto& lvl_chunks             = _file_itm_data->lvl_data_chunks;
+  auto& lvl_stripe_data        = _file_itm_data.lvl_stripe_data;
+  auto& null_count_prefix_sums = _file_itm_data.null_count_prefix_sums;
+  auto& lvl_chunks             = _file_itm_data.lvl_data_chunks;
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_chunks.resize(_selected_columns.num_levels());
 
@@ -851,7 +851,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       (rows_to_skip == 0);
 
     // Logically view streams as columns
-    auto const& stream_info = _file_itm_data->lvl_stream_info[level];
+    auto const& stream_info = _file_itm_data.lvl_stream_info[level];
 
     null_count_prefix_sums.emplace_back();
     null_count_prefix_sums.back().reserve(_selected_columns.levels[level].size());
@@ -978,7 +978,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     }
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      auto decomp_data = decompress_stripe_data(_file_itm_data->compinfo_map,
+      auto decomp_data = decompress_stripe_data(_file_itm_data.compinfo_map,
                                                 *_metadata.per_file_metadata[0].decompressor,
                                                 stripe_data,
                                                 stream_info,

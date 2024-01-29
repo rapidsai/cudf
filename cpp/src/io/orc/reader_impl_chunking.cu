@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -220,37 +220,36 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
                                      std::optional<size_type> const& num_rows_opt,
                                      std::vector<std::vector<size_type>> const& stripes)
 {
-  if (_file_itm_data == nullptr) { _file_itm_data = std::make_unique<file_intermediate_data>(); }
-  if (_file_itm_data->global_preprocessed) { return; }
+  if (_file_itm_data.global_preprocessed) { return; }
 
   // TODO: move this to end of func.
-  _file_itm_data->global_preprocessed = true;
+  _file_itm_data.global_preprocessed = true;
 
   // Select only stripes required (aka row groups)
   std::tie(
-    _file_itm_data->rows_to_skip, _file_itm_data->rows_to_read, _file_itm_data->selected_stripes) =
+    _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
     _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
-  if (_file_itm_data->has_no_data()) { return; }
+  if (_file_itm_data.has_no_data()) { return; }
 
-  auto const rows_to_skip      = _file_itm_data->rows_to_skip;
-  auto const rows_to_read      = _file_itm_data->rows_to_read;
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
+  //  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
+  //  auto const rows_to_read      = _file_itm_data.rows_to_read;
+  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
-  auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
-  auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
+  auto& lvl_stripe_data  = _file_itm_data.lvl_stripe_data;
+  auto& lvl_stripe_sizes = _file_itm_data.lvl_stripe_sizes;
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
 
-  auto& read_info                 = _file_itm_data->stream_read_info;
-  auto& stripe_stream_read_chunks = _file_itm_data->stripe_stream_read_chunks;
-  auto& lvl_stripe_stream_chunks  = _file_itm_data->lvl_stripe_stream_chunks;
+  auto& read_info                 = _file_itm_data.stream_read_info;
+  auto& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
+  auto& lvl_stripe_stream_chunks  = _file_itm_data.lvl_stripe_stream_chunks;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
     stream_compinfo_map;
 
   // Logically view streams as columns
-  _file_itm_data->lvl_stream_info.resize(_selected_columns.num_levels());
+  _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
 
   // Get the total number of stripes across all input files.
   std::size_t num_stripes = selected_stripes.size();
@@ -277,7 +276,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     auto& stripe_data = lvl_stripe_data[level];
     stripe_data.resize(num_stripes);
 
-    auto& stream_info      = _file_itm_data->lvl_stream_info[level];
+    auto& stream_info      = _file_itm_data.lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
     auto& stripe_sizes     = lvl_stripe_sizes[level];
     stream_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
@@ -302,7 +301,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     std::size_t total_stripe_size{0};
     auto const last_read_size = static_cast<int64_t>(read_info.size());
     for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-      auto& stream_info  = _file_itm_data->lvl_stream_info[level];
+      auto& stream_info  = _file_itm_data.lvl_stream_info[level];
       auto& stripe_sizes = lvl_stripe_sizes[level];
 
       auto stream_count      = stream_info.size();
@@ -348,12 +347,12 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   }
 
   // DEBUG only
-  _file_itm_data->read_size_limit =
+  _chunk_read_data.read_size_limit =
     total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
 
   // Load all chunks if there is no read limit.
-  if (_file_itm_data->read_size_limit == 0) {
-    _file_itm_data->load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
+  if (_chunk_read_data.read_size_limit == 0) {
+    _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
     return;
   }
 
@@ -371,11 +370,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //    printf("size: %ld, %zu\n", size.count, size.size_bytes);
   //  }
 
-  _file_itm_data->load_stripe_chunks =
-    find_splits(total_stripe_sizes, num_stripes, _file_itm_data->read_size_limit);
+  _chunk_read_data.load_stripe_chunks =
+    find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.read_size_limit);
 
 #ifdef PRINT_DEBUG
-  auto& splits = _file_itm_data->load_stripe_chunks;
+  auto& splits = _file_itm_data.load_stripe_chunks;
   printf("------------\nSplits (/%d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
@@ -391,25 +390,25 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
   //  4. sum(number of stripes in all chunks) == total_num_stripes.
   // TODO: enable only in debug.
-  verify_splits(splits, total_stripe_sizes, num_stripes, _file_itm_data->read_size_limit);
+  verify_splits(splits, total_stripe_sizes, num_stripes, _file_itm_data.read_size_limit);
 #endif
 }
 
 // Load each chunk from `load_stripe_chunks`.
 void reader::impl::pass_preprocess()
 {
-  if (_file_itm_data->has_no_data()) { return; }
+  if (_file_itm_data.has_no_data()) { return; }
 
-  auto const rows_to_read      = _file_itm_data->rows_to_read;
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
+  //  auto const rows_to_read      = _file_itm_data.rows_to_read;
+  //  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
-  auto& lvl_stripe_data  = _file_itm_data->lvl_stripe_data;
-  auto& lvl_stripe_sizes = _file_itm_data->lvl_stripe_sizes;
-  auto& read_info        = _file_itm_data->stream_read_info;
+  auto& lvl_stripe_data  = _file_itm_data.lvl_stripe_data;
+  auto& lvl_stripe_sizes = _file_itm_data.lvl_stripe_sizes;
+  auto& read_info        = _file_itm_data.stream_read_info;
 
   //  std::size_t num_stripes = selected_stripes.size();
   auto const stripe_chunk =
-    _file_itm_data->load_stripe_chunks[_file_itm_data->curr_load_stripe_chunk++];
+    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
   auto const stripe_start = stripe_chunk.start_idx;
   auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
 
@@ -423,7 +422,7 @@ void reader::impl::pass_preprocess()
     }
   }
 
-  auto const& stripe_stream_read_chunks = _file_itm_data->stripe_stream_read_chunks;
+  auto const& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
 
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
   // Should not read all, but read stripe by stripe.
@@ -491,13 +490,13 @@ void reader::impl::pass_preprocess()
 
 void reader::impl::subpass_preprocess()
 {
-  if (_file_itm_data->has_no_data()) { return; }
+  if (_file_itm_data.has_no_data()) { return; }
 
-  auto const rows_to_read      = _file_itm_data->rows_to_read;
-  auto const& selected_stripes = _file_itm_data->selected_stripes;
+  //  auto const rows_to_read      = _file_itm_data.rows_to_read;
+  //  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
-  auto& lvl_stripe_data          = _file_itm_data->lvl_stripe_data;
-  auto& lvl_stripe_stream_chunks = _file_itm_data->lvl_stripe_stream_chunks;
+  auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
+  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
 
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
@@ -506,11 +505,11 @@ void reader::impl::subpass_preprocess()
 
   // TODO: fix this, loop only current chunk
   auto const stripe_chunk =
-    _file_itm_data->load_stripe_chunks[_file_itm_data->curr_load_stripe_chunk++];
+    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
 
   // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    auto& stream_info      = _file_itm_data->lvl_stream_info[level];
+    auto& stream_info      = _file_itm_data.lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
 
     // Tracker for eventually deallocating compressed and uncompressed data
@@ -564,7 +563,7 @@ void reader::impl::subpass_preprocess()
                                        _stream);
         compinfo.device_to_host_sync(_stream);
 
-        auto& compinfo_map = _file_itm_data->compinfo_map;
+        auto& compinfo_map = _file_itm_data.compinfo_map;
         for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
           compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                      stream_compinfo->num_uncompressed_blocks,
@@ -599,7 +598,7 @@ void reader::impl::subpass_preprocess()
   }  // end loop level
 
   // lvl_stripe_data.clear();
-  // _file_itm_data->compinfo_ready = true;
+  // _file_itm_data.compinfo_ready = true;
 }
 
 }  // namespace cudf::io::orc::detail

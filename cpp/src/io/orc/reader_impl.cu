@@ -83,7 +83,7 @@ table_with_metadata reader::impl::read_chunk_internal()
   auto out_metadata = make_output_metadata();
 
   // If no rows or stripes to read, return empty columns
-  if (_file_itm_data->rows_to_read == 0 || _file_itm_data->selected_stripes.empty()) {
+  if (_file_itm_data.has_no_data()) {
     std::transform(_selected_columns.levels[0].begin(),
                    _selected_columns.levels[0].end(),
                    std::back_inserter(out_columns),

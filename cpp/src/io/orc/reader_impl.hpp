@@ -17,6 +17,7 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
+#include "reader_impl_chunking.hpp"
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -33,7 +34,6 @@
 namespace cudf::io::orc::detail {
 
 struct reader_column_meta;
-struct file_intermediate_data;
 
 /**
  * @brief Implementation for ORC reader.
@@ -116,7 +116,8 @@ class reader::impl {
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
   aggregate_orc_metadata _metadata;
   column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it
-  std::unique_ptr<file_intermediate_data> _file_itm_data;
+  file_intermediate_data _file_itm_data;
+  chunk_read_data _chunk_read_data;
   std::unique_ptr<table_metadata> _output_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 };

@@ -100,6 +100,11 @@ struct chunk {
   int64_t count;
 };
 
+struct range {
+  int64_t begin;
+  int64_t end;
+};
+
 /**
  * @brief Struct to store file-level data that remains constant for all chunks being read.
  */
@@ -116,21 +121,6 @@ struct file_intermediate_data {
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
-
-  // Chunks of stripes that can be load such that total of their data size is within a limit.
-  std::vector<chunk> load_stripe_chunks;
-  std::size_t curr_load_stripe_chunk{0};
-  bool more_stripe_to_load() { return curr_load_stripe_chunk < load_stripe_chunks.size(); }
-
-  // Chunks of stripes such that total of their decompression size is within a limit.
-  std::vector<chunk> decode_stripe_chunks;
-  std::size_t curr_decode_stripe_chunk{0};
-  bool more_stripe_to_decode() { return curr_decode_stripe_chunk < decode_stripe_chunks.size(); }
-
-  // Chunk of rows in the internal decoded table to output for each `read_chunk()`.
-  std::vector<chunk> output_table_chunks;
-  std::size_t curr_output_table_chunk{0};
-  bool more_table_chunk_to_output() { return curr_output_table_chunk < output_table_chunks.size(); }
 
   // Each read correspond to one or more consecutive stream combined.
   struct stream_read_info {
@@ -166,10 +156,47 @@ struct file_intermediate_data {
   size_type rows_to_read;
   std::vector<metadata::OrcStripeInfo> selected_stripes;
 
-  // TODO: Change this
-  std::size_t read_size_limit{0};
-
   bool global_preprocessed{false};
+};
+
+/**
+ * @brief Struct to store all data necessary for chunked reading.
+ */
+struct chunk_read_data {
+  explicit chunk_read_data(std::size_t output_size_limit_ = 0, std::size_t read_size_limit_ = 0)
+    : output_size_limit{output_size_limit_}, read_size_limit(read_size_limit_)
+  {
+  }
+
+  std::size_t output_size_limit;  // Maximum size (in bytes) of an output chunk, or 0 for no limit
+  std::size_t read_size_limit;    // Maximum size (in bytes) of an output chunk, or 0 for no limit
+
+  // Chunks of stripes that can be load such that total of their data size is within a limit.
+  std::vector<chunk> load_stripe_chunks;
+  std::size_t curr_load_stripe_chunk{0};
+  bool more_stripe_to_load() const { return curr_load_stripe_chunk < load_stripe_chunks.size(); }
+
+  // Chunks of stripes such that total of their decompression size is within a limit.
+  std::vector<chunk> decode_stripe_chunks;
+  std::size_t curr_decode_stripe_chunk{0};
+  bool more_stripe_to_decode() const
+  {
+    return curr_decode_stripe_chunk < decode_stripe_chunks.size();
+  }
+
+  // Chunk of rows in the internal decoded table to output for each `read_chunk()`.
+  std::vector<chunk> output_table_chunks;
+  std::size_t curr_output_table_chunk{0};
+  bool more_table_chunk_to_output() const
+  {
+    return curr_output_table_chunk < output_table_chunks.size();
+  }
+
+  // Only has more chunk to output if:
+  bool has_next() const
+  {
+    return more_stripe_to_load() || more_stripe_to_decode() || more_table_chunk_to_output();
+  }
 };
 
 }  // namespace cudf::io::orc::detail
