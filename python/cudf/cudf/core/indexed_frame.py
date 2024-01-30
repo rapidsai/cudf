@@ -1243,6 +1243,9 @@ class IndexedFrame(Frame):
     # Alias for isna
     isnull = Frame.isna
 
+    # Alias for notna
+    notnull = Frame.notna
+
     @_cudf_nvtx_annotate
     def sum(
         self,

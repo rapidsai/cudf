@@ -1245,9 +1245,6 @@ class Frame(BinaryOperand, Scannable):
         data_columns = (col.notnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
-    # Alias for notna
-    notnull = notna
-
     @_cudf_nvtx_annotate
     def searchsorted(
         self,
