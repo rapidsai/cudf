@@ -1279,9 +1279,6 @@ class IndexedFrame(Frame):
 
         return self.iloc[-n:]
 
-    # Alias for notna
-    notnull = Frame.notna
-
     @_cudf_nvtx_annotate
     def pipe(self, func, *args, **kwargs):
         """
