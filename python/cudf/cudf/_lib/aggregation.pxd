@@ -1,7 +1,8 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
+from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.aggregation cimport (
     groupby_aggregation,
     groupby_scan_aggregation,
@@ -15,7 +16,7 @@ cdef class RollingAggregation:
     cdef unique_ptr[rolling_aggregation] c_obj
 
 cdef class GroupbyAggregation:
-    cdef unique_ptr[groupby_aggregation] c_obj
+    cdef pylibcudf.aggregation.Aggregation c_obj
 
 cdef class GroupbyScanAggregation:
     cdef unique_ptr[groupby_scan_aggregation] c_obj
