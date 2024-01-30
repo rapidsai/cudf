@@ -117,8 +117,8 @@ struct TransduceToNormalizedWS {
    */
   template <typename StateT, typename SymbolGroupT, typename SymbolT>
   constexpr CUDF_HOST_DEVICE uint32_t operator()(StateT const state_id,
-                                                SymbolGroupT const match_id,
-                                                SymbolT const read_symbol) const
+                                                 SymbolGroupT const match_id,
+                                                 SymbolT const read_symbol) const
   {
     // Case when read symbol is a whitespace or tabspace but is unquoted
     if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
@@ -206,35 +206,35 @@ TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization3)
 TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization4)
 {
   std::string input  = "{\"a\":\t\"b\"}";
-  std::string output  = R"({"a":"b"})";
+  std::string output = R"({"a":"b"})";
   run_test(input, output);
 }
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization5)
 {
   std::string input  = R"({"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": {"c": "d"}})";
-  std::string output  = R"({"a":[1,2,3,4,5,6,7,8],"b":{"c":"d"}})";
+  std::string output = R"({"a":[1,2,3,4,5,6,7,8],"b":{"c":"d"}})";
   run_test(input, output);
 }
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization6)
 {
   std::string input  = R"({" a ":50})";
-  std::string output  = R"({" a ":50})";
+  std::string output = R"({" a ":50})";
   run_test(input, output);
 }
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization7)
 {
   std::string input  = R"( { "a" : 50 })";
-  std::string output  = R"({"a":50})";
+  std::string output = R"({"a":50})";
   run_test(input, output);
 }
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization8)
 {
   std::string input  = R"({"a":50})";
-  std::string output  = R"({"a":50})";
+  std::string output = R"({"a":50})";
   run_test(input, output);
 }
 
