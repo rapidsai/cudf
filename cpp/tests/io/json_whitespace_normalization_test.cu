@@ -44,7 +44,7 @@ enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,   ///< Quote character SG: "
   ESCAPE_CHAR,         ///< Escape character SG: '\\'
   NEWLINE_CHAR,        ///< Newline character SG: '\n'
-  WHITESPACE_SYMBOLS,  ///< Whitespace character SG: ' '
+  WHITESPACE_SYMBOLS,  ///< Whitespace characters SG: '\t' or ' '
   OTHER_SYMBOLS,       ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
 };
