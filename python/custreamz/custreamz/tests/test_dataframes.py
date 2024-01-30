@@ -771,7 +771,7 @@ def test_groupby_aggregate_with_start_state(stream):
     assert assert_eq(output1[0][1].reset_index(), out_df1)
     assert assert_eq(output2[0].reset_index(), out_df2)
 
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example).groupby(["name"])
     output3 = sdf.amount.sum(start=output0[0]).stream.gather().sink_to_list()
     output4 = (
