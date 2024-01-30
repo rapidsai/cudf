@@ -1122,6 +1122,9 @@ class Frame(BinaryOperand, Scannable):
         data_columns = (col.isnull() for col in self._columns)
         return self._from_data_like_self(zip(self._column_names, data_columns))
 
+    # Alias for isna
+    isnull = isna
+
     @_cudf_nvtx_annotate
     def notna(self):
         """

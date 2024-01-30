@@ -1279,9 +1279,6 @@ class IndexedFrame(Frame):
 
         return self.iloc[-n:]
 
-    # Alias for isna
-    isnull = Frame.isna
-
     # Alias for notna
     notnull = Frame.notna
 
