@@ -41,6 +41,7 @@ Modifying and computations
 .. autosummary::
    :toctree: api/
 
+   Index.all
    Index.any
    Index.copy
    Index.drop_duplicates
@@ -60,6 +61,7 @@ Modifying and computations
    Index.where
    Index.take
    Index.unique
+   Index.nunique
 
 Compatibility with MultiIndex
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
