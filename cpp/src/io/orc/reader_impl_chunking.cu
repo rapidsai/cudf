@@ -371,14 +371,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       chunk{last_read_size, static_cast<int64_t>(read_info.size() - last_read_size)};
   }
 
-  // DEBUG only
-  _chunk_read_data.read_size_limit =
-    total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
-
   // Load all chunks if there is no read limit.
   if (_chunk_read_data.read_size_limit == 0) {
     _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
-    return;
+    // TODO: DEBUG only
+    //    return;
   }
 
   // Compute the prefix sum of stripe data sizes.
@@ -391,9 +388,13 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
-  //  for (auto& size : total_stripe_sizes) {
-  //    printf("size: %ld, %zu\n", size.count, size.size_bytes);
-  //  }
+  for (auto& size : total_stripe_sizes) {
+    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+  }
+
+  // DEBUG only
+  _chunk_read_data.read_size_limit =
+    total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
 
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.read_size_limit);
