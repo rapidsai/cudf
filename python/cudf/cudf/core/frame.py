@@ -1550,32 +1550,6 @@ class Frame(BinaryOperand, Scannable):
         )
 
     @_cudf_nvtx_annotate
-    def abs(self):
-        """
-        Return a Series/DataFrame with absolute numeric value of each element.
-
-        This function only applies to elements that are all numeric.
-
-        Returns
-        -------
-        DataFrame/Series
-            Absolute value of each element.
-
-        Examples
-        --------
-        Absolute numeric values in a Series
-
-        >>> s = cudf.Series([-1.10, 2, -3.33, 4])
-        >>> s.abs()
-        0    1.10
-        1    2.00
-        2    3.33
-        3    4.00
-        dtype: float64
-        """
-        return self._unaryop("abs")
-
-    @_cudf_nvtx_annotate
     def _is_sorted(self, ascending=None, null_position=None):
         """
         Returns a boolean indicating whether the data of the Frame are sorted
