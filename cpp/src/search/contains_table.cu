@@ -16,7 +16,9 @@
 
 #include <join/join_common_utils.cuh>
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -226,15 +228,14 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
     [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
       auto const d_equal = comparator_adapter{d_self_equal, d_two_table_equal};
 
-      auto set = cuco::static_set{
-        cuco::extent{compute_hash_table_size(haystack.num_rows())},
-        cuco::empty_key{lhs_index_type{-1}},
-        d_equal,
-        probing_scheme,
-        {},
-        {},
-        detail::hash_table_allocator_type{default_allocator<lhs_index_type>{}, stream},
-        stream.value()};
+      auto set = cuco::static_set{cuco::extent{compute_hash_table_size(haystack.num_rows())},
+                                  cuco::empty_key{lhs_index_type{-1}},
+                                  d_equal,
+                                  probing_scheme,
+                                  {},
+                                  {},
+                                  cudf::detail::cuco_allocator{stream},
+                                  stream.value()};
 
       if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {
         auto const bitmask_buffer_and_ptr = build_row_bitmask(haystack, stream);

@@ -15,12 +15,10 @@
  */
 #pragma once
 
-#include <cudf/hashing/detail/hash_allocator.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 
@@ -29,10 +27,8 @@
 namespace cudf {
 namespace detail {
 
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-
 using hash_map_type = cuco::legacy::
-  static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 }  // namespace detail
 }  // namespace cudf

@@ -20,14 +20,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/hashing/detail/hash_allocator.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 
@@ -45,9 +44,7 @@ namespace detail {
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 using hash_value_type    = string_hasher_type::result_type;
 using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
-
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-using cuco_storage              = cuco::storage<1>;
+using cuco_storage       = cuco::storage<1>;
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
@@ -110,7 +107,7 @@ using merge_pairs_map_type = cuco::static_map<cudf::size_type,
                                               cuda::thread_scope_device,
                                               bpe_equal,
                                               bpe_probe_scheme,
-                                              hash_table_allocator_type,
+                                              cudf::detail::cuco_allocator,
                                               cuco_storage>;
 
 /**
@@ -168,7 +165,7 @@ using mp_table_map_type = cuco::static_map<cudf::size_type,
                                            cuda::thread_scope_device,
                                            mp_equal,
                                            mp_probe_scheme,
-                                           hash_table_allocator_type,
+                                           cudf::detail::cuco_allocator,
                                            cuco_storage>;
 
 }  // namespace detail
