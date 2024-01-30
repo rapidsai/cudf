@@ -2163,4 +2163,46 @@ TEST_F(JsonReaderTest, MixedTypes)
           expected_list);
 }
 
+TEST_F(JsonReaderTest, MapTypes)
+{
+  // Testing function for mixed types in JSON (for spark json reader)
+  auto test_fn = [](std::string_view json_string, bool lines) {
+    std::map<std::string, cudf::io::schema_element> dtype_schema{
+      {"foo1", {data_type{cudf::type_id::STRING}}},
+      {"foo2", {data_type{cudf::type_id::STRING}}},
+      {"bar", {dtype<int32_t>()}},
+    };
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .dtypes(dtype_schema)
+        .mixed_types_as_string(true)
+        .lines(lines);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    for (auto& col : result.tbl->view()) {
+      std::cout << static_cast<int>(col.type().id()) << ",";
+    }
+    std::cout << "\n";
+  };
+
+  // json
+  test_fn(R"([{ "foo1": [1,2,3], "bar": 123 },
+              { "foo2": { "a": 1 }, "bar": 456 }])",
+          false);
+  // jsonl
+  test_fn(R"( { "foo1": [1,2,3], "bar": 123 }
+              { "foo2": { "a": 1 }, "bar": 456 })",
+          true);
+  // jsonl-array
+  test_fn(R"([123, [1,2,3]]
+              [456, { "a": 1 }])",
+          true);
+  // json-array
+  test_fn(R"([[[1,2,3],123],
+              [{ "a": 1 }, 456 ]])",
+          false);
+}
+
 CUDF_TEST_PROGRAM_MAIN()

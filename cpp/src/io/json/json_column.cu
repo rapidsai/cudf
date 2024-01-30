@@ -97,6 +97,77 @@ void print_tree(host_span<SymbolT const> input,
   printf(" (JSON)\n");
 }
 
+std::optional<schema_element> child_schema_element(std::string const& col_name,
+                                                   cudf::io::json_reader_options const& options)
+{
+  return std::visit(
+    cudf::detail::visitor_overload{
+      [col_name](std::vector<data_type> const& user_dtypes) -> std::optional<schema_element> {
+        auto column_index = atol(col_name.data());
+        return (static_cast<std::size_t>(column_index) < user_dtypes.size())
+                 ? std::optional<schema_element>{{user_dtypes[column_index]}}
+                 : std::optional<schema_element>{};
+      },
+      [col_name](
+        std::map<std::string, data_type> const& user_dtypes) -> std::optional<schema_element> {
+        return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                 ? std::optional<schema_element>{{user_dtypes.find(col_name)->second}}
+                 : std::optional<schema_element>{};
+      },
+      [col_name](
+        std::map<std::string, schema_element> const& user_dtypes) -> std::optional<schema_element> {
+        return (user_dtypes.find(col_name) != std::end(user_dtypes))
+                 ? user_dtypes.find(col_name)->second
+                 : std::optional<schema_element>{};
+      }},
+    options.get_dtypes());
+}
+
+// example schema and its path.
+// "a": int             {"a", int}
+// "a": [ int ]         {"a", list}, {"element", int}
+// "a": { "b": int}     {"a", struct}, {"b", int}
+// "a": [ {"b": int }]  {"a", list}, {"element", struct}, {"b", int}
+// "a": [ null]         {"a", list}, {"element", str}
+// back() is root.
+// front() is leaf.
+std::optional<data_type> get_path_data_type(
+  host_span<std::pair<std::string, cudf::io::json::NodeT>> path, schema_element const& root)
+{
+  if (path.empty() || path.size() == 1)
+    return root.type;
+  else {
+    if (path.back().second == NC_STRUCT && root.type.id() == type_id::STRUCT) {
+      auto child_name      = path.first(path.size() - 1).back().first;
+      auto child_schema_it = root.child_types.find(child_name);
+      return (child_schema_it != std::end(root.child_types))
+               ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
+               : std::optional<data_type>{};
+    } else if (path.back().second == NC_LIST && root.type.id() == type_id::LIST) {
+      auto child_schema_it = root.child_types.find(list_child_name);
+      return (child_schema_it != std::end(root.child_types))
+               ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
+               : std::optional<data_type>{};
+    }
+    return std::optional<data_type>{};
+  }
+}
+
+std::optional<data_type> get_path_data_type(
+  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  cudf::io::json_reader_options const& options)
+{
+  if (path.empty()) return {};
+  std::optional<schema_element> col_schema = child_schema_element(path.back().first, options);
+  // check if it has value, then do recursive call and return.
+  if (col_schema.has_value()) {
+    return get_path_data_type(path, col_schema.value());
+    return {};
+  } else {
+    return {};
+  }
+}
+
 /**
  * @brief Reduces node tree representation to column tree representation.
  *
@@ -430,6 +501,7 @@ void make_device_json_column(device_span<SymbolT const> input,
                              bool is_array_of_arrays,
                              bool is_enabled_lines,
                              bool is_enabled_mixed_types_as_string,
+                             cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
@@ -445,7 +517,9 @@ void make_device_json_column(device_span<SymbolT const> input,
     rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id = [&]() {
-    if (!is_array_of_arrays) return parent_node_sentinel;
+    // if (!is_array_of_arrays) return parent_node_sentinel;
+    // if (!is_array_of_arrays) // get row struct id.
+    // return is_enabled_lines ? is_enabled_lines ? 0 : 1;
     auto const list_node_index = is_enabled_lines ? 0 : 1;
     NodeIndexT value;
     CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
@@ -456,6 +530,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     stream.synchronize();
     return value;
   }();
+  std::cout << "row_array_parent_col_id:" << row_array_parent_col_id << "\n";
 
   // 1. gather column information.
   auto [d_column_tree, d_unique_col_ids, d_max_row_offsets] =
@@ -541,6 +616,40 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.column_order.clear();
   };
 
+  // column_categories, column_parent_ids[parent_col_id], column_names[field_name_col_id]
+  // idea: write a memoizer using template and lambda?, then call recursively.
+  auto get_path =
+    [&](auto this_col_id) -> std::vector<std::pair<std::string, cudf::io::json::NodeT>> {
+    std::vector<std::pair<std::string, cudf::io::json::NodeT>> path;
+    // TODO Need to stop at row root. so, how to find row root?
+    while (this_col_id != parent_node_sentinel) {
+      auto type        = column_categories[this_col_id];
+      std::string name = "";
+      // TODO make this ifelse into a separate lambda function, along with parent_col_id.
+      auto parent_col_id = column_parent_ids[this_col_id];
+      if (parent_col_id == parent_node_sentinel || column_categories[parent_col_id] == NC_LIST) {
+        if (is_array_of_arrays && parent_col_id == row_array_parent_col_id) {
+          name = column_names[this_col_id];
+        } else {
+          name = list_child_name;
+        }
+      } else if (column_categories[parent_col_id] == NC_FN) {
+        auto field_name_col_id = parent_col_id;
+        parent_col_id          = column_parent_ids[parent_col_id];
+        name                   = column_names[field_name_col_id];
+      }
+      // "name": type/schema
+      path.emplace_back(name, type);
+      this_col_id = parent_col_id;
+      if (this_col_id == row_array_parent_col_id) return path;
+    }
+    return {};
+  };
+  // auto get_column_type = [&] (auto this_col_id) {
+  //   auto const path = get_path(this_col_id);
+  //   // check the options.dtypes if they are same.
+  // };
+
   // 2. generate nested columns tree and its device_memory
   // reorder unique_col_ids w.r.t. column_range_begin for order of column to be in field order.
   auto h_range_col_id_it =
@@ -585,6 +694,33 @@ void make_device_json_column(device_span<SymbolT const> input,
       ignore_vals[this_col_id]          = 1;
       continue;
     }
+    // TODO - need to test this for all orients. JSON, JSONL, JSON array of arrays, JSONL array of
+    // arrays. (4 types)
+    auto nt                          = get_path(this_col_id);
+    std::optional<data_type> user_dt = get_path_data_type(nt, options);
+    for (auto it = nt.rbegin(); it != nt.rend(); it++) {
+      auto [name, type] = *it;
+      std::cout << ":" << name << "-" << to_cat(type);
+    }
+    if (user_dt.has_value())
+      std::cout << " '" << static_cast<int>(user_dt.value().id()) << "'";
+    else
+      std::cout << " '--'";
+    std::cout << "\n";
+    // for struct schema alone,
+    // create a vector {type, name}, by traversing column_parent_ids too.
+    // use that to compare with schema and check if exists in schema
+    // if yes, check if it is string. then force it to mixed_type_column OR string column.
+    // for other columns, should we check the schema? complexity of creating this vector{type, name}
+    // will be high. or, check only for types which are mixed types, which are forced to be string
+    // columns. or else, treat as non-mixed type. this could be required to make null literals on
+    // list/struct column to be non-mixed type.
+    if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
+        user_dt.value().id() == type_id::STRING) {
+      is_mixed_type_column[this_col_id] = 1;
+      column_categories[this_col_id]    = NC_STR;
+    }
+
     // If the child is already found,
     // replace if this column is a nested column and the existing was a value column
     // ignore this column if this column is a value column and the existing was a nested column
@@ -995,9 +1131,12 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
+    std::cout << "h_node_categories:" << int(h_node_categories[0]) << ","
+              << int(h_node_categories[1]) << "\n";
     if (options.is_enabled_lines()) return h_node_categories[0] == NC_LIST;
     return h_node_categories[0] == NC_LIST and h_node_categories[1] == NC_LIST;
   }();
+  std::cout << "is_array_of_arrays:" << is_array_of_arrays << "\n";
 
   auto [gpu_col_id, gpu_row_offsets] =
     records_orient_tree_traversal(d_input,
@@ -1024,6 +1163,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                           is_array_of_arrays,
                           options.is_enabled_lines(),
                           options.is_enabled_mixed_types_as_string(),
+                          options,
                           stream,
                           mr);
 
