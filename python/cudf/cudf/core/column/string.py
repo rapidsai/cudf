@@ -697,7 +697,7 @@ class StringMethods(ColumnMethods):
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
         >>> idx = cudf.Index(data)
         >>> idx
-        Index(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
+        Index(['Mouse', 'dog', 'house and parrot', '23.0', None], dtype='object')
         >>> idx.str.contains('23', regex=False)
         Index([False, False, False, True, <NA>], dtype='bool')
 
@@ -2805,7 +2805,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        Index(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -2878,7 +2878,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        Index(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 

@@ -15,7 +15,6 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index, as_index
 from cudf.testing._utils import (
@@ -1721,13 +1720,7 @@ def test_strings_filling_tests(data, width, fillchar):
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
         ["³", "⅕", ""],
-        pytest.param(
-            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/20868",
-            ),
-        ),
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],

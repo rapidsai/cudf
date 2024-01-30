@@ -13,6 +13,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from pandas.core.dtypes.dtypes import (
     CategoricalDtype as pd_CategoricalDtype,
     CategoricalDtypeType as pd_CategoricalDtypeType,
@@ -20,15 +21,10 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
-
-if PANDAS_GE_150:
-    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-else:
-    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 
 def dtype(arbitrary):
@@ -1026,7 +1022,7 @@ def _is_categorical_dtype(obj):
 def is_categorical_dtype(obj):
     """Check whether an array-like or dtype is of the Categorical dtype.
 
-    .. deprecated:: 23.12
+    .. deprecated:: 24.04
        Use isinstance(dtype, cudf.CategoricalDtype) instead
 
     Parameters
@@ -1040,6 +1036,7 @@ def is_categorical_dtype(obj):
         Whether or not the array-like or dtype is of a categorical dtype.
     """
     # Do not remove until pandas 3.0 support is added.
+    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
     warnings.warn(
         "is_categorical_dtype is deprecated and will be removed in a future "
         "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",

@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import copyreg
+import importlib
 import pickle
 import sys
 
@@ -45,6 +46,22 @@ from pandas.core.resample import (  # isort: skip
 
 
 cudf.set_option("mode.pandas_compatible", True)
+
+
+def _pandas_util_dir():
+    # In pandas 2.0, pandas.util contains public APIs under
+    # __getattr__ but no __dir__ to find them
+    # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/util/__init__.py
+    return list(importlib.import_module("pandas.util").__dict__.keys()) + [
+        "hash_array",
+        "hash_pandas_object",
+        "Appender",
+        "Substitution",
+        "cache_readonly",
+    ]
+
+
+pd.util.__dir__ = _pandas_util_dir
 
 
 def make_final_proxy_type(

@@ -7,12 +7,10 @@ from functools import reduce
 
 import cupy as cp
 import numpy as np
-import pandas as pd
 import pytest
-from packaging import version
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_300
 from cudf.testing._utils import (
     assert_eq,
     expect_warning_if,
@@ -78,23 +76,13 @@ def test_ufunc_index(request, ufunc):
     fname = ufunc.__name__
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                fname in {"bitwise_and", "bitwise_or", "bitwise_xor"}
-                and not PANDAS_GE_150
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/46769",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
             condition=not hasattr(cp, fname),
             reason=f"cupy has no support for '{fname}'",
         )
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=fname == "matmul"
-            and version.parse(pd.__version__) < version.parse("3.0"),
+            condition=fname == "matmul" and PANDAS_LT_300,
             reason="Fixed by https://github.com/pandas-dev/pandas/pull/57079",
         )
     )

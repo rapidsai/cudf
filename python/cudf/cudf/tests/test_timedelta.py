@@ -696,10 +696,7 @@ def test_timedelta_dt_components(data, dtype):
 
 @pytest.mark.parametrize(
     "data",
-    _TIMEDELTA_DATA_NON_OVERFLOW,
-    # TODO-PANDAS-2.0: Replace above with `_TIMEDELTA_DATA`
-    # after the following issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52386
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):

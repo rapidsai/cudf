@@ -15,6 +15,7 @@ from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.lib import NativeFile
 
+from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 
 try:
@@ -1683,6 +1684,9 @@ def get_reader_filepath_or_buffer(
             if fs is None:
                 if warn_on_raw_text_input:
                     # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
                     warnings.warn(
                         f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                         "deprecated and will be removed in a future version. "
@@ -1704,6 +1708,9 @@ def get_reader_filepath_or_buffer(
                     )
                 elif warn_on_raw_text_input:
                     # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
                     warnings.warn(
                         f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                         "deprecated and will be removed in a future version. "
@@ -1713,6 +1720,9 @@ def get_reader_filepath_or_buffer(
                     )
             elif warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
                 warnings.warn(
                     f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                     "deprecated and will be removed in a future version. "

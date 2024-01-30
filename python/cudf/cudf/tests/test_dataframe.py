@@ -25,14 +25,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import (
-    PANDAS_GE_134,
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_LT_140,
-    PANDAS_LT_203,
-)
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_203
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -347,27 +340,9 @@ def test_concat_index(a, b):
         {"a": [1, None, None], "b": [3, np.nan, np.nan]},
         {1: ["a", "b", "c"], 2: ["q", "w", "u"]},
         {1: ["a", np.nan, "c"], 2: ["q", None, "u"]},
-        pytest.param(
-            {},
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/rapidsai/cudf/issues/11080",
-            ),
-        ),
-        pytest.param(
-            {1: [], 2: [], 3: []},
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/rapidsai/cudf/issues/11080",
-            ),
-        ),
-        pytest.param(
-            [1, 2, 3],
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/rapidsai/cudf/issues/11080",
-            ),
-        ),
+        {},
+        {1: [], 2: [], 3: []},
+        [1, 2, 3],
     ],
 )
 def test_axes(data):
@@ -1884,18 +1859,7 @@ def test_nonmatching_index_setitem(nrows):
     assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int",
-        pytest.param(
-            "int64[pyarrow]",
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="pyarrow support only in >=1.5"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("dtype", ["int", "int64[pyarrow]"])
 def test_from_pandas(dtype):
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
     df.columns.name = "custom_column_name"
@@ -3589,15 +3553,7 @@ def test_dataframe_empty_sort_index():
                 [2, 0, 1],
             ]
         ),
-        pytest.param(
-            pd.RangeIndex(2, -1, -1),
-            marks=[
-                pytest_xfail(
-                    condition=PANDAS_LT_140,
-                    reason="https://github.com/pandas-dev/pandas/issues/43591",
-                )
-            ],
-        ),
+        pd.RangeIndex(2, -1, -1),
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
@@ -7720,14 +7676,7 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     "other",
     [
         pd.Series([10, 11, 23, 234, 13]),
-        pytest.param(
-            pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="pandas bug: "
-                "https://github.com/pandas-dev/pandas/issues/35092",
-            ),
-        ),
+        pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
         {1: 1},
         {0: 10, 1: 100, 2: 102},
     ],
@@ -9584,16 +9533,7 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     pdf = pd.DataFrame(data, index=p_index, columns=labels)
     gdf = cudf.from_pandas(pdf)
 
-    if PANDAS_GE_134:
-        expect = pdf.explode(label_to_explode, ignore_index)
-    else:
-        # https://github.com/pandas-dev/pandas/issues/43314
-        if isinstance(label_to_explode, int):
-            pdlabel_to_explode = [label_to_explode]
-        else:
-            pdlabel_to_explode = label_to_explode
-        expect = pdf.explode(pdlabel_to_explode, ignore_index)
-
+    expect = pdf.explode(label_to_explode, ignore_index)
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)
@@ -10919,7 +10859,7 @@ def test_dataframe_contains(name, contains, other_names):
         assert (contains in pdf) == expectation
         assert (contains in gdf) == expectation
     elif pd.api.types.is_float_dtype(gdf.columns.dtype):
-        # In some cases, the columns are converted to a Index[float] based on
+        # In some cases, the columns are converted to an Index[float] based on
         # the other column names. That casts name values from None to np.nan.
         expectation = contains is np.nan and (name is None or name is np.nan)
         assert (contains in pdf) == expectation

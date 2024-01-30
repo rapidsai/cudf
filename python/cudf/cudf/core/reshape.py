@@ -14,6 +14,7 @@ from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.utils.dtypes import min_unsigned_type
@@ -324,6 +325,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         any_empty = any(obj.empty for obj in objs)
         if any_empty:
             # Do not remove until pandas-3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "

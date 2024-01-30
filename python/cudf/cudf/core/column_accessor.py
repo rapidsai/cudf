@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import itertools
-import warnings
 from collections import abc
 from functools import cached_property, reduce
 from typing import (
@@ -23,7 +22,6 @@ from pandas.api.types import is_bool
 
 import cudf
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_200
 
 if TYPE_CHECKING:
     from cudf._typing import Dtype
@@ -237,28 +235,10 @@ class ColumnAccessor(abc.MutableMapping):
     def to_pandas_index(self) -> pd.Index:
         """Convert the keys of the ColumnAccessor to a Pandas Index object."""
         if self.multiindex and len(self.level_names) > 0:
-            if PANDAS_GE_200:
-                result = pd.MultiIndex.from_tuples(
-                    self.names,
-                    names=self.level_names,
-                )
-            else:
-                # Using `from_frame()` instead of `from_tuples`
-                # prevents coercion of values to a different type
-                # (e.g., ''->NaT)
-                with warnings.catch_warnings():
-                    # Specifying `dtype="object"` here and passing that to
-                    # `from_frame` is deprecated in pandas, but we cannot
-                    # remove that without also losing compatibility with other
-                    # current pandas behaviors like the NaT inference above.
-                    warnings.simplefilter("ignore")
-                    result = pd.MultiIndex.from_frame(
-                        pd.DataFrame(
-                            self.names,
-                            columns=self.level_names,
-                            dtype="object",
-                        ),
-                    )
+            result = pd.MultiIndex.from_tuples(
+                self.names,
+                names=self.level_names,
+            )
         else:
             # Determine if we can return a RangeIndex
             if self.rangeindex:
