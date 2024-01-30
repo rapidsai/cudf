@@ -512,8 +512,8 @@ void reader::impl::subpass_preprocess()
   auto const stripe_chunk =
     _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
 
-  cudf::detail::hostdevice_vector<cumulative_size> stripe_decompression_sizes(stripe_chunk.count,
-                                                                              _stream);
+  cudf::detail::hostdevice_vector<cumulative_size> stripe_decomp_sizes(stripe_chunk.count, _stream);
+  std::fill(stripe_decomp_sizes.begin(), stripe_decomp_sizes.end(), cumulative_size{1, 0});
 
   // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -574,10 +574,8 @@ void reader::impl::subpass_preprocess()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
-        stripe_decompression_sizes[stream_id.stripe_idx - stripe_chunk.start_idx] = {
-          1,
-          stripe_decompression_sizes[stream_id.stripe_idx - stripe_chunk.start_idx].size_bytes +
-            stream_compinfo->max_uncompressed_size};
+        stripe_decomp_sizes[stream_id.stripe_idx - stripe_chunk.start_idx].size_bytes +=
+          stream_compinfo->max_uncompressed_size;
 #ifdef PRINT_DEBUG
         printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
                (int)stream_id.stripe_idx,
@@ -601,10 +599,7 @@ void reader::impl::subpass_preprocess()
       // Set decompression size equal to the input size.
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
-        stripe_decompression_sizes[info.stripe_idx - stripe_chunk.start_idx] = {
-          1,
-          stripe_decompression_sizes[info.stripe_idx - stripe_chunk.start_idx].size_bytes +
-            info.length};
+        stripe_decomp_sizes[info.stripe_idx - stripe_chunk.start_idx].size_bytes += info.length;
       }
     }
 
@@ -620,26 +615,26 @@ void reader::impl::subpass_preprocess()
   }
 
   // Compute the prefix sum of stripe data sizes.
-  stripe_decompression_sizes.host_to_device_async(_stream);
+  stripe_decomp_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),
-                         stripe_decompression_sizes.d_begin(),
-                         stripe_decompression_sizes.d_end(),
-                         stripe_decompression_sizes.d_begin(),
+                         stripe_decomp_sizes.d_begin(),
+                         stripe_decomp_sizes.d_end(),
+                         stripe_decomp_sizes.d_begin(),
                          cumulative_size_sum{});
 
-  stripe_decompression_sizes.device_to_host_sync(_stream);
+  stripe_decomp_sizes.device_to_host_sync(_stream);
 
   // DEBUG only
   //  _chunk_read_data.read_size_limit =
   //    stripe_decompression_sizes[stripe_decompression_sizes.size() - 1].size_bytes / 3;
 
   _chunk_read_data.decode_stripe_chunks =
-    find_splits(stripe_decompression_sizes, stripe_chunk.count, _chunk_read_data.read_size_limit);
+    find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.read_size_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
     chunk.start_idx += stripe_chunk.start_idx;
   }
 
-  for (auto& size : stripe_decompression_sizes) {
+  for (auto& size : stripe_decomp_sizes) {
     printf("decomp size: %ld, %zu\n", size.count, size.size_bytes);
   }
 
