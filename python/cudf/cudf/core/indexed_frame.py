@@ -1287,11 +1287,11 @@ class IndexedFrame(Frame):
         Parameters
         ----------
         func : function
-            Function to apply to the Series/DataFrame/Index.
+            Function to apply to the Series/DataFrame.
             ``args``, and ``kwargs`` are passed into ``func``.
             Alternatively a ``(callable, data_keyword)`` tuple where
             ``data_keyword`` is a string indicating the keyword of
-            ``callable`` that expects the Series/DataFrame/Index.
+            ``callable`` that expects the Series/DataFrame.
         args : iterable, optional
             Positional arguments passed into ``func``.
         kwargs : mapping, optional
