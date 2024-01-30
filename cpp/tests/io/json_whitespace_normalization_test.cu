@@ -39,7 +39,7 @@ using StateT  = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
 using SymbolOffsetT = uint32_t;
 
-enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_DEC, TT_WS, TT_NUM_STATES };
+enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_WS, TT_NUM_STATES };
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
   ESCAPE_CHAR,        ///< Escape character SG: '\\'
@@ -55,7 +55,7 @@ constexpr auto TT_OOS            = dfa_states::TT_OOS;
 constexpr auto TT_DQS            = dfa_states::TT_DQS;
 constexpr auto TT_DEC            = dfa_states::TT_DEC;
 constexpr auto TT_WS             = dfa_states::TT_WS;
-constexpr auto TT_NUM_STATES     = static_cast<char>(dfa_states::TT_NUM_STATES);
+constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
 // The i-th string representing all the characters of a symbol group
@@ -71,7 +71,7 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_s
    /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_WS, TT_OOS}}}};
 
 // The DFA's starting state
-constexpr char start_state = static_cast<char>(TT_OOS);
+constexpr StateT start_state = static_cast<StateT>(TT_OOS);
 
 struct TransduceToNormalizedWS {
   /**
@@ -112,12 +112,11 @@ struct TransduceToNormalizedWS {
 
   /**
    * @brief Returns the number of output characters for a given transition.
-   * During quote normalization, we always emit one output character (i.e., either the input
-   * character or the single quote-input replaced by a double quote), except when we need to escape
-   * a double quote that was previously inside a single-quoted string.
+   * During whitespace normalization, we always emit one output character i.e., the input
+   * character, except when we need to remove the space/tab character
    */
   template <typename StateT, typename SymbolGroupT, typename SymbolT>
-  constexpr CUDF_HOST_DEVICE int32_t operator()(StateT const state_id,
+  constexpr CUDF_HOST_DEVICE uint32_t operator()(StateT const state_id,
                                                 SymbolGroupT const match_id,
                                                 SymbolT const read_symbol) const
   {
@@ -201,6 +200,41 @@ TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization3)
                           { "foo rapids": { "a": 1 }, "bar  rapids": 456 })";
   std::string output = R"({"foo rapids":[1,2,3],"bar  rapids":123}
 {"foo rapids":{"a":1},"bar  rapids":456})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization4)
+{
+  std::string input  = "{\"a\":\t\"b\"}";
+  std::string output  = R"({"a":"b"})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization5)
+{
+  std::string input  = R"({"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": {"c": "d"}})";
+  std::string output  = R"({"a":[1,2,3,4,5,6,7,8],"b":{"c":"d"}})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization6)
+{
+  std::string input  = R"({" a ":50})";
+  std::string output  = R"({" a ":50})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization7)
+{
+  std::string input  = R"( { "a" : 50 })";
+  std::string output  = R"({"a":50})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization8)
+{
+  std::string input  = R"({"a":50})";
+  std::string output  = R"({"a":50})";
   run_test(input, output);
 }
 
