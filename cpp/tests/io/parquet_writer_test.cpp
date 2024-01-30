@@ -1064,7 +1064,6 @@ TEST_F(ParquetWriterTest, DictionaryAdaptiveTest)
   auto const expected = table_view{{col0, col1}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryAdaptiveTest.parquet");
-  // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)
@@ -1116,7 +1115,6 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
   auto const expected = table_view{{col0, col1}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryAlwaysTest.parquet");
-  // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)
@@ -1426,21 +1424,6 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   ASSERT_GT(fmd.row_groups.size(), 0);
   EXPECT_GE(fmd.row_groups[0].total_byte_size,
             static_cast<int64_t>(num_rows * sizeof(column_type)));
-}
-
-// See #14772.
-// zStandard compression cannot currently be used with V2 page headers due to buffer
-// alignment issues.
-// TODO: Remove this test when #14781 is closed.
-TEST_F(ParquetWriterTest, ZstdWithV2Header)
-{
-  auto const expected = table_view{};
-
-  cudf::io::parquet_writer_options const out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{"14772.pq"}, expected)
-      .compression(cudf::io::compression_type::ZSTD)
-      .write_v2_headers(true);
-  EXPECT_THROW(cudf::io::write_parquet(out_opts), cudf::logic_error);
 }
 
 /////////////////////////////////////////////////////////////
