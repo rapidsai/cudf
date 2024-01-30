@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -22,5 +22,4 @@ mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
 # Run pre-commit checks
-git show --format=oneline "$RAPIDS_BASE_BRANCH"
 pre-commit run --all-files --show-diff-on-failure
