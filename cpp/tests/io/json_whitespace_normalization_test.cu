@@ -32,106 +32,105 @@
 #include <string>
 
 namespace {
-  // Type used to represent the atomic symbol type used within the finite-state machine
-  using SymbolT = char;
-  using StateT  = char;
+// Type used to represent the atomic symbol type used within the finite-state machine
+using SymbolT = char;
+using StateT  = char;
 
-  // Type sufficiently large to index symbols within the input and output (may be unsigned)
-  using SymbolOffsetT = uint32_t;
+// Type sufficiently large to index symbols within the input and output (may be unsigned)
+using SymbolOffsetT = uint32_t;
 
-  enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_DEC, TT_WS, TT_NUM_STATES };
-  enum class dfa_symbol_group_id : uint32_t {
-    DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
-    ESCAPE_CHAR,        ///< Escape character SG: '\\'
-    NEWLINE_CHAR,       ///< Newline character SG: '\n'
-    WHITESPACE_CHAR,    ///< Whitespace character SG: ' '
-    TABSPACE_CHAR,      ///< Tabspace character SG: '\t'
-    OTHER_SYMBOLS,      ///< SG implicitly matching all other characters
-    NUM_SYMBOL_GROUPS   ///< Total number of symbol groups
-  };
+enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_DEC, TT_WS, TT_NUM_STATES };
+enum class dfa_symbol_group_id : uint32_t {
+  DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
+  ESCAPE_CHAR,        ///< Escape character SG: '\\'
+  NEWLINE_CHAR,       ///< Newline character SG: '\n'
+  WHITESPACE_CHAR,    ///< Whitespace character SG: ' '
+  TABSPACE_CHAR,      ///< Tabspace character SG: '\t'
+  OTHER_SYMBOLS,      ///< SG implicitly matching all other characters
+  NUM_SYMBOL_GROUPS   ///< Total number of symbol groups
+};
 
-  // Aliases for readability of the transition table
-  constexpr auto TT_OOS            = dfa_states::TT_OOS;
-  constexpr auto TT_DQS            = dfa_states::TT_DQS;
-  constexpr auto TT_DEC            = dfa_states::TT_DEC;
-  constexpr auto TT_WS             = dfa_states::TT_WS;
-  constexpr auto TT_NUM_STATES     = static_cast<char>(dfa_states::TT_NUM_STATES);
-  constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
+// Aliases for readability of the transition table
+constexpr auto TT_OOS            = dfa_states::TT_OOS;
+constexpr auto TT_DQS            = dfa_states::TT_DQS;
+constexpr auto TT_DEC            = dfa_states::TT_DEC;
+constexpr auto TT_WS             = dfa_states::TT_WS;
+constexpr auto TT_NUM_STATES     = static_cast<char>(dfa_states::TT_NUM_STATES);
+constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
-  // The i-th string representing all the characters of a symbol group
-  std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
-    {{'"'}, {'\\'}, {'\n'}, {' '}, {'\t'}}};
+// The i-th string representing all the characters of a symbol group
+std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
+  {{'"'}, {'\\'}, {'\n'}, {' '}, {'\t'}}};
 
-  // Transition table
-  std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{{
-    /* IN_STATE      "       \       \n    <SPC>    \t      OTHER  */
-    /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS,  TT_WS,  TT_OOS}},
-    /* TT_DQS */ {{TT_OOS, TT_DEC, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
-    /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
-    /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS,  TT_WS,  TT_OOS}}
-  }};
+// Transition table
+std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{
+  {/* IN_STATE      "       \       \n    <SPC>    \t      OTHER  */
+   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_WS, TT_OOS}},
+   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
+   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
+   /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_WS, TT_OOS}}}};
 
-  // The DFA's starting state
-  constexpr char start_state = static_cast<char>(TT_OOS);
-  
-  struct TransduceToNormalizedWS {
-    /**
-    * @brief Returns the <relative_offset>-th output symbol on the transition (state_id, match_id).
-    */
-    template <typename StateT, typename SymbolGroupT, typename RelativeOffsetT, typename SymbolT>
-    constexpr CUDF_HOST_DEVICE SymbolT operator()(StateT const state_id,
-                                                  SymbolGroupT const match_id,
-                                                  RelativeOffsetT const relative_offset,
-                                                  SymbolT const read_symbol) const
-    {
-      // -------- TRANSLATION TABLE ------------
-      //      Let the alphabet set be Sigma
-      // ---------------------------------------
-      // ---------- NON-SPECIAL CASES: ----------
-      //      Output symbol same as input symbol <s>
-      // state | read_symbol <s>  -> output_symbol <s>
-      // DQS   | Sigma            -> Sigma
-      // WS    | Sigma\{<SPC>,\t} -> Sigma\{<SPC>,\t}
-      // OOS   | Sigma\{<SPC>,\t} -> Sigma\{<SPC>,\t}
-      // ---------- SPECIAL CASES: --------------
-      //    Input symbol translates to output symbol
-      // OOS   | {<SPC>}          -> <nop>
-      // OOS   | {\t}             -> <nop>
-      // WS    | {<SPC>}          -> <nop>
-      // WS    | {\t}             -> <nop>
-      
-      //Case when read symbol is a whitespace or tabspace but is unquoted
-      if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
-           (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::TABSPACE_CHAR))) &&
-          ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
-           (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
-        return 0;
-      }
-      // In all other cases we simply output the input symbol
-      return read_symbol;
+// The DFA's starting state
+constexpr char start_state = static_cast<char>(TT_OOS);
+
+struct TransduceToNormalizedWS {
+  /**
+   * @brief Returns the <relative_offset>-th output symbol on the transition (state_id, match_id).
+   */
+  template <typename StateT, typename SymbolGroupT, typename RelativeOffsetT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE SymbolT operator()(StateT const state_id,
+                                                SymbolGroupT const match_id,
+                                                RelativeOffsetT const relative_offset,
+                                                SymbolT const read_symbol) const
+  {
+    // -------- TRANSLATION TABLE ------------
+    //      Let the alphabet set be Sigma
+    // ---------------------------------------
+    // ---------- NON-SPECIAL CASES: ----------
+    //      Output symbol same as input symbol <s>
+    // state | read_symbol <s>  -> output_symbol <s>
+    // DQS   | Sigma            -> Sigma
+    // WS    | Sigma\{<SPC>,\t} -> Sigma\{<SPC>,\t}
+    // OOS   | Sigma\{<SPC>,\t} -> Sigma\{<SPC>,\t}
+    // ---------- SPECIAL CASES: --------------
+    //    Input symbol translates to output symbol
+    // OOS   | {<SPC>}          -> <nop>
+    // OOS   | {\t}             -> <nop>
+    // WS    | {<SPC>}          -> <nop>
+    // WS    | {\t}             -> <nop>
+
+    // Case when read symbol is a whitespace or tabspace but is unquoted
+    if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
+         (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::TABSPACE_CHAR))) &&
+        ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
+         (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
+      return 0;
     }
+    // In all other cases we simply output the input symbol
+    return read_symbol;
+  }
 
-    /**
-     * @brief Returns the number of output characters for a given transition. 
-     * During quote normalization, we always emit one output character (i.e., either the input character or the
-     * single quote-input replaced by a double quote), except when we need to escape a double quote
-     * that was previously inside a single-quoted string.
-     */
-    template <typename StateT, typename SymbolGroupT, typename SymbolT>
-    constexpr CUDF_HOST_DEVICE int32_t operator()(StateT const state_id,
-                                                  SymbolGroupT const match_id,
-                                                  SymbolT const read_symbol) const
-    {
-      //Case when read symbol is a whitespace or tabspace but is unquoted
-      if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
-           (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::TABSPACE_CHAR))) &&
-          ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
-           (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
-        return 0;
-      }
-      return 1;
+  /**
+   * @brief Returns the number of output characters for a given transition.
+   * During quote normalization, we always emit one output character (i.e., either the input
+   * character or the single quote-input replaced by a double quote), except when we need to escape
+   * a double quote that was previously inside a single-quoted string.
+   */
+  template <typename StateT, typename SymbolGroupT, typename SymbolT>
+  constexpr CUDF_HOST_DEVICE int32_t operator()(StateT const state_id,
+                                                SymbolGroupT const match_id,
+                                                SymbolT const read_symbol) const
+  {
+    // Case when read symbol is a whitespace or tabspace but is unquoted
+    if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
+         (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::TABSPACE_CHAR))) &&
+        ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
+         (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
+      return 0;
     }
-  };
+    return 1;
+  }
+};
 }  // namespace
 
 // Base test fixture for tests
@@ -156,7 +155,7 @@ void run_test(const std::string& input, const std::string& output)
   constexpr std::size_t single_item = 1;
   cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size() * 2, stream_view);
   cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
-  
+
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
                    static_cast<SymbolOffsetT>(d_input.size()),
@@ -174,7 +173,7 @@ void run_test(const std::string& input, const std::string& output)
   stream.synchronize();
 
   std::cout << "Expected output: " << output << std::endl << "Computed output: ";
-  for(size_t i = 0; i < output_gpu_size[0]; i++)
+  for (size_t i = 0; i < output_gpu_size[0]; i++)
     std::cout << output_gpu[i];
   std::cout << std::endl;
   // Verify results
