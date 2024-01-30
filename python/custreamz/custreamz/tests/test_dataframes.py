@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
@@ -863,7 +863,7 @@ def test_rolling_aggs_with_start_state(stream):
 
 
 def test_window_aggs_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
         sdf.window(2, with_state=True, start=None)
@@ -881,7 +881,7 @@ def test_window_aggs_with_start_state(stream):
     assert output0[-1][1] == 450
 
     stream = Stream()
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output1 = (
         sdf.window(2, with_state=True, start=output0[-1][0])
@@ -895,7 +895,7 @@ def test_window_aggs_with_start_state(stream):
 
 
 def test_windowed_groupby_aggs_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
         sdf.window(5, with_state=True, start=None)
@@ -915,7 +915,7 @@ def test_windowed_groupby_aggs_with_start_state(stream):
     stream.emit(df)
 
     stream = Stream()
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output1 = (
         sdf.window(5, with_state=True, start=output0[-1][0])
