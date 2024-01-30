@@ -108,8 +108,8 @@ std::size_t gather_stream_info(std::size_t stripe_index,
 }
 
 struct cumulative_size {
-  int64_t count;
-  std::size_t size_bytes;
+  int64_t count{0};
+  std::size_t size_bytes{0};
 };
 
 struct cumulative_size_sum {
@@ -214,6 +214,13 @@ void verify_splits(host_span<chunk const> splits,
 }
 #endif
 
+/**
+ * @brief
+ *
+ * @param input_chunks
+ * @param selected_chunks
+ * @return
+ */
 std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
                                       chunk const& selected_chunks)
 {
@@ -391,8 +398,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.read_size_limit);
 
-#ifdef PRINT_DEBUG
-  auto& splits = _file_itm_data.load_stripe_chunks;
+#ifndef PRINT_DEBUG
+  auto& splits = _chunk_read_data.load_stripe_chunks;
   printf("------------\nSplits (/%d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
@@ -408,7 +415,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
   //  4. sum(number of stripes in all chunks) == total_num_stripes.
   // TODO: enable only in debug.
-  verify_splits(splits, total_stripe_sizes, num_stripes, _file_itm_data.read_size_limit);
+//  verify_splits(splits, total_stripe_sizes, num_stripes, _chunk_read_data.read_size_limit);
 #endif
 }
 
@@ -480,7 +487,6 @@ void reader::impl::subpass_preprocess()
   if (_file_itm_data.has_no_data()) { return; }
 
   //  auto const rows_to_read      = _file_itm_data.rows_to_read;
-  //  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
   auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
@@ -493,6 +499,9 @@ void reader::impl::subpass_preprocess()
   // TODO: fix this, loop only current chunk
   auto const stripe_chunk =
     _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
+
+  cudf::detail::hostdevice_vector<cumulative_size> stripe_decompression_sizes(stripe_chunk.count,
+                                                                              _stream);
 
   // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -553,6 +562,10 @@ void reader::impl::subpass_preprocess()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
+        stripe_decompression_sizes[stream_id.stripe_idx - stripe_chunk.start_idx] = {
+          1,
+          stripe_decompression_sizes[stream_id.stripe_idx - stripe_chunk.start_idx].size_bytes +
+            stream_compinfo->max_uncompressed_size};
 #ifdef PRINT_DEBUG
         printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
                (int)stream_id.stripe_idx,
@@ -573,13 +586,64 @@ void reader::impl::subpass_preprocess()
       // printf("no compression \n");
       // fflush(stdout);
 
-      // Set decompressed data size equal to the input size.
-      // TODO
+      // Set decompression size equal to the input size.
+      for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
+        auto const& info = stream_info[stream_idx];
+        stripe_decompression_sizes[info.stripe_idx - stripe_chunk.start_idx] = {
+          1,
+          stripe_decompression_sizes[info.stripe_idx - stripe_chunk.start_idx].size_bytes +
+            info.length};
+      }
     }
 
     // printf("  end level %d\n\n", (int)level);
 
   }  // end loop level
+
+  // Compute the prefix sum of stripe data sizes.
+  stripe_decompression_sizes.host_to_device_async(_stream);
+  thrust::inclusive_scan(rmm::exec_policy(_stream),
+                         stripe_decompression_sizes.d_begin(),
+                         stripe_decompression_sizes.d_end(),
+                         stripe_decompression_sizes.d_begin(),
+                         cumulative_size_sum{});
+
+  stripe_decompression_sizes.device_to_host_sync(_stream);
+
+  // DEBUG only
+  _chunk_read_data.read_size_limit =
+    stripe_decompression_sizes[stripe_decompression_sizes.size() - 1].size_bytes / 3;
+
+  _chunk_read_data.decode_stripe_chunks =
+    find_splits(stripe_decompression_sizes, stripe_chunk.count, _chunk_read_data.read_size_limit);
+  for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
+    chunk.start_idx += stripe_chunk.start_idx;
+  }
+
+  for (auto& size : stripe_decompression_sizes) {
+    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+  }
+
+#ifndef PRINT_DEBUG
+  auto& splits = _chunk_read_data.decode_stripe_chunks;
+  printf("------------\nSplits second level (/%d): \n", (int)stripe_chunk.count);
+  for (size_t idx = 0; idx < splits.size(); idx++) {
+    printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
+  }
+  fflush(stdout);
+
+  //  std::cout << "  total rows: " << _file_itm_data.rows_to_read << std::endl;
+  //  print_cumulative_row_info(stripe_size_bytes, "  ", _chunk_read_info.chunks);
+
+  // We need to verify that:
+  //  1. All chunk must have count > 0
+  //  2. Chunks are continuous.
+  //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
+  //  4. sum(number of stripes in all chunks) == total_num_stripes.
+  // TODO: enable only in debug.
+//  verify_splits(splits, stripe_decompression_sizes, stripe_chunk.count,
+//  _file_itm_data.read_size_limit);
+#endif
 
   // lvl_stripe_data.clear();
   // _file_itm_data.compinfo_ready = true;
