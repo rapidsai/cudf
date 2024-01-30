@@ -544,7 +544,7 @@ class IndexedFrame(Frame):
         >>> df.to_string()
         '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
         """
-        return repr(self)
+        return str(self)
 
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.

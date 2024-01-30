@@ -1895,7 +1895,7 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     def __str__(self):
-        return self.to_string()
+        return repr(self)
 
     @_cudf_nvtx_annotate
     def __deepcopy__(self, memo):
