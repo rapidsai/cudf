@@ -1,14 +1,26 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
+from libcpp.pair cimport pair
+from libcpp.vector cimport vector
 
-from cudf._lib.cpp.aggregation cimport aggregation, groupby_aggregation
-from cudf._lib.cpp.groupby cimport aggregation_request, groupby
+from cudf._lib.cpp.aggregation cimport (
+    aggregation,
+    groupby_aggregation,
+    groupby_scan_aggregation,
+)
+from cudf._lib.cpp.groupby cimport (
+    aggregation_request,
+    aggregation_result,
+    groupby,
+    scan_request,
+)
+from cudf._lib.cpp.table.table cimport table
 
 from .column cimport Column
 
 
-cdef class AggregationRequest:
+cdef class GroupByRequest:
     # The groupby APIs accept vectors of unique_ptrs to aggregation requests.
     # This ownership model means that if AggregationRequest owned the
     # corresponding C++ object, that object would have to be copied by e.g.
@@ -17,9 +29,15 @@ cdef class AggregationRequest:
     # C++ object on the fly as requested.
     cdef Column values
     cdef list aggregations
-    cdef aggregation_request to_libcudf(self) except *
+
+    cdef aggregation_request to_libcudf_agg_request(self) except *
+    cdef scan_request to_libcudf_scan_request(self) except *
 
 
 cdef class GroupBy:
     cdef unique_ptr[groupby] c_obj
     cpdef tuple aggregate(self, list requests)
+    cpdef tuple scan(self, list requests)
+
+    @staticmethod
+    cdef tuple _parse_outputs(pair[unique_ptr[table], vector[aggregation_result]] c_res)

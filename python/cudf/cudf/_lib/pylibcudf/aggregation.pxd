@@ -7,6 +7,7 @@ from cudf._lib.cpp.aggregation cimport (
     aggregation,
     correlation_type,
     groupby_aggregation,
+    groupby_scan_aggregation,
     rank_method,
     rank_percentage,
 )
@@ -27,6 +28,9 @@ cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
     cpdef kind(self)
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *
+    cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
+        self
+    ) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)

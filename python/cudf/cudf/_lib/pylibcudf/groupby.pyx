@@ -10,6 +10,7 @@ from cudf._lib.cpp.groupby cimport (
     aggregation_request,
     aggregation_result,
     groupby,
+    scan_request,
 )
 from cudf._lib.cpp.table.table cimport table
 
@@ -18,7 +19,7 @@ from .column cimport Column
 from .table cimport Table
 
 
-cdef class AggregationRequest:
+cdef class GroupByRequest:
     """A request for a groupby aggregation.
 
     Parameters
@@ -32,7 +33,7 @@ cdef class AggregationRequest:
         self.values = values
         self.aggregations = aggregations
 
-    cdef aggregation_request to_libcudf(self) except *:
+    cdef aggregation_request to_libcudf_agg_request(self) except *:
         """Convert to a libcudf aggregation_request object.
 
         This method is for internal use only. It creates a new libcudf
@@ -47,6 +48,21 @@ cdef class AggregationRequest:
             c_obj.aggregations.push_back(move(agg.clone_underlying_as_groupby()))
         return move(c_obj)
 
+    cdef scan_request to_libcudf_scan_request(self) except *:
+        """Convert to a libcudf scan_request object.
+
+        This method is for internal use only. It creates a new libcudf
+        :cpp:class:`cudf::groupby::scan_request` object each time it is
+        called.
+        """
+        cdef scan_request c_obj
+        c_obj.values = self.values.view()
+
+        cdef Aggregation agg
+        for agg in self.aggregations:
+            c_obj.aggregations.push_back(move(agg.clone_underlying_as_groupby_scan()))
+        return move(c_obj)
+
 
 cdef class GroupBy:
     """Group values by keys and compute various aggregate quantities.
@@ -59,31 +75,10 @@ cdef class GroupBy:
     def __init__(self, Table keys):
         self.c_obj.reset(new groupby(keys.view()))
 
-    cpdef tuple aggregate(self, list requests):
-        """Compute aggregations on columns.
-
-        Parameters
-        ----------
-        requests : list
-            The list of aggregation requests, each representing a set of
-            aggregations to perform on a given column of values.
-
-        Returns
-        -------
-        Tuple[Table, List[Table, ...]]
-            A tuple whose first element is the unique keys and whose second
-            element is a table of aggregation results. One table is returned
-            for each aggregation request, with the columns corresponding to the
-            sequence of aggregations in the request.
-        """
-        cdef AggregationRequest request
-        cdef vector[aggregation_request] c_requests
-        for request in requests:
-            c_requests.push_back(move(request.to_libcudf()))
-
-        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
-            dereference(self.c_obj).aggregate(c_requests)
-        )
+    @staticmethod
+    cdef tuple _parse_outputs(
+        pair[unique_ptr[table], vector[aggregation_result]] c_res
+    ):
         cdef Table group_keys = Table.from_libcudf(move(c_res.first))
 
         cdef int i, j
@@ -97,3 +92,57 @@ cdef class GroupBy:
                 )
             results.append(Table(inner_results))
         return group_keys, results
+
+    cpdef tuple aggregate(self, list requests):
+        """Compute aggregations on columns.
+
+        Parameters
+        ----------
+        requests : List[GroupByRequest]
+            The list of `~.cudf._lib.pylibcudf.groupby.GroupByRequest` , each
+            representing a set of aggregations to perform on a given column of values.
+
+        Returns
+        -------
+        Tuple[Table, List[Table, ...]]
+            A tuple whose first element is the unique keys and whose second
+            element is a table of aggregation results. One table is returned
+            for each aggregation request, with the columns corresponding to the
+            sequence of aggregations in the request.
+        """
+        cdef GroupByRequest request
+        cdef vector[aggregation_request] c_requests
+        for request in requests:
+            c_requests.push_back(move(request.to_libcudf_agg_request()))
+
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
+            dereference(self.c_obj).aggregate(c_requests)
+        )
+        return GroupBy._parse_outputs(move(c_res))
+
+    cpdef tuple scan(self, list requests):
+        """Compute scans on columns.
+
+        Parameters
+        ----------
+        requests : List[GroupByRequest]
+            The list of `~.cudf._lib.pylibcudf.groupby.GroupByRequest` , each
+            representing a set of aggregations to perform on a given column of values.
+
+        Returns
+        -------
+        Tuple[Table, List[Table, ...]]
+            A tuple whose first element is the unique keys and whose second
+            element is a table of aggregation results. One table is returned
+            for each aggregation request, with the columns corresponding to the
+            sequence of aggregations in the request.
+        """
+        cdef GroupByRequest request
+        cdef vector[scan_request] c_requests
+        for request in requests:
+            c_requests.push_back(move(request.to_libcudf_scan_request()))
+
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
+            dereference(self.c_obj).scan(c_requests)
+        )
+        return GroupBy._parse_outputs(move(c_res))
