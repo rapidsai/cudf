@@ -20,7 +20,7 @@ from .table cimport Table
 
 
 cdef class GroupByRequest:
-    """A request for a groupby aggregation.
+    """A request for a groupby aggregation or scan.
 
     Parameters
     ----------

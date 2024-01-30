@@ -22,7 +22,7 @@ from .column cimport Column
 
 cdef class GroupByRequest:
     # The groupby APIs accept vectors of unique_ptrs to aggregation requests.
-    # This ownership model means that if AggregationRequest owned the
+    # This ownership model means that if GroupByRequest owned the
     # corresponding C++ object, that object would have to be copied by e.g.
     # each groupby.aggregate call to avoid invalidating this object. Therefore,
     # this class instead stores only Python/Cython objects and constructs the
