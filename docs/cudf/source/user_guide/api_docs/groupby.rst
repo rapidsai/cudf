@@ -80,7 +80,6 @@ application to columns of a specific data type.
 .. autosummary::
    :toctree: api/
 
-   DataFrameGroupBy.backfill
    DataFrameGroupBy.bfill
    DataFrameGroupBy.count
    DataFrameGroupBy.cumcount
@@ -94,7 +93,6 @@ application to columns of a specific data type.
    DataFrameGroupBy.idxmax
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.nunique
-   DataFrameGroupBy.pad
    DataFrameGroupBy.quantile
    DataFrameGroupBy.shift
    DataFrameGroupBy.size
