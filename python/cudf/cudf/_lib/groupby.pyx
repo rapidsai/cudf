@@ -31,7 +31,6 @@ cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.aggregation cimport (
     GroupbyAggregation,
-    GroupbyScanAggregation,
     make_groupby_aggregation,
     make_groupby_scan_aggregation,
 )
@@ -274,7 +273,7 @@ cdef class GroupBy:
         cdef vector[libcudf_groupby.scan_request] c_agg_requests
         cdef libcudf_groupby.scan_request c_agg_request
         cdef Column col
-        cdef GroupbyScanAggregation agg_obj
+        cdef GroupbyAggregation agg_obj
 
         cdef pair[
             unique_ptr[table],
@@ -298,7 +297,7 @@ cdef class GroupBy:
                         or agg_obj.kind in valid_aggregations):
                     included_aggregations_i.append((agg, agg_obj.kind))
                     c_agg_request.aggregations.push_back(
-                        move(agg_obj.c_obj)
+                        move(agg_obj.c_obj.clone_underlying_as_groupby_scan())
                     )
             included_aggregations.append(included_aggregations_i)
             if not c_agg_request.aggregations.empty():

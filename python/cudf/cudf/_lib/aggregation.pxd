@@ -18,9 +18,6 @@ cdef class RollingAggregation:
 cdef class GroupbyAggregation:
     cdef pylibcudf.aggregation.Aggregation c_obj
 
-cdef class GroupbyScanAggregation:
-    cdef unique_ptr[groupby_scan_aggregation] c_obj
-
 cdef class ReduceAggregation:
     cdef unique_ptr[reduce_aggregation] c_obj
 
@@ -29,6 +26,6 @@ cdef class ScanAggregation:
 
 cdef RollingAggregation make_rolling_aggregation(op, kwargs=*)
 cdef GroupbyAggregation make_groupby_aggregation(op, kwargs=*)
-cdef GroupbyScanAggregation make_groupby_scan_aggregation(op, kwargs=*)
+cdef GroupbyAggregation make_groupby_scan_aggregation(op, kwargs=*)
 cdef ReduceAggregation make_reduce_aggregation(op, kwargs=*)
 cdef ScanAggregation make_scan_aggregation(op, kwargs=*)
