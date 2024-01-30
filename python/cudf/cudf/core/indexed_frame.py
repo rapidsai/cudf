@@ -1360,6 +1360,68 @@ class IndexedFrame(Frame):
             **kwargs,
         )
 
+    @_cudf_nvtx_annotate
+    def mask(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
+        """
+        Replace values where the condition is True.
+
+        Parameters
+        ----------
+        cond : bool Series/DataFrame, array-like
+            Where cond is False, keep the original value.
+            Where True, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
+            Entries where cond is True are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimension as self.
+
+            Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> df.mask(df % 2 == 0, [-1, -1])
+           A  B
+        0  1  3
+        1 -1  5
+        2  5 -1
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.mask(ser > 2, 10)
+        0    10
+        1    10
+        2     2
+        3     1
+        4     0
+        dtype: int64
+        >>> ser.mask(ser > 2)
+        0    <NA>
+        1    <NA>
+        2       2
+        3       1
+        4       0
+        dtype: int64
+        """
+
+        if not hasattr(cond, "__invert__"):
+            # We Invert `cond` below and call `where`, so
+            # making sure the object supports
+            # `~`(inversion) operator or `__invert__` method
+            cond = cp.asarray(cond)
+
+        return self.where(cond=~cond, other=other, inplace=inplace)
+
     def _copy_type_metadata(
         self,
         other: Self,
