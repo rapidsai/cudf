@@ -152,7 +152,6 @@ repos:
     rev: 253ff58a8a842a517995a7cdf6832aff20356b2a
     hooks:
       - id: verify-copyright
-        args: [--fix]
 
 
 default_language_version:
