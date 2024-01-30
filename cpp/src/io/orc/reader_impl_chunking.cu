@@ -214,6 +214,24 @@ void verify_splits(host_span<chunk const> splits,
 }
 #endif
 
+std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
+                                      chunk const& selected_chunks)
+{
+  // Range indices to input_chunks
+  auto const chunk_begin = selected_chunks.start_idx;
+  auto const chunk_end   = selected_chunks.start_idx + selected_chunks.count;
+
+  // The first and last chunk, according to selected_chunk
+  auto const& first_chunk = input_chunks[chunk_begin];
+  auto const& last_chunk  = input_chunks[chunk_end - 1];
+
+  // The range of data covered from the first to the last chunk.
+  auto const begin = first_chunk.start_idx;
+  auto const end   = last_chunk.start_idx + last_chunk.count;
+
+  return {begin, end};
+}
+
 }  // namespace
 
 void reader::impl::global_preprocess(uint64_t skip_rows,
@@ -422,15 +440,11 @@ void reader::impl::pass_preprocess()
     }
   }
 
-  auto const& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
-
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
 
-  auto const stripe_first_chunk = stripe_stream_read_chunks[stripe_start];
-  auto const stripe_last_chunk  = stripe_stream_read_chunks[stripe_end - 1];
-  auto const read_begin         = stripe_first_chunk.start_idx;
-  auto const read_end           = stripe_last_chunk.start_idx + stripe_last_chunk.count;
+  auto const& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
+  auto const [read_begin, read_end]     = get_range(stripe_stream_read_chunks, stripe_chunk);
 
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read  = read_info[read_idx];
@@ -489,14 +503,9 @@ void reader::impl::subpass_preprocess()
     auto& stripe_data = lvl_stripe_data[level];
     if (stripe_data.empty()) { continue; }
 
-    auto const& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
-    auto const stripe_start          = stripe_chunk.start_idx;
-    auto const stripe_end            = stripe_chunk.start_idx + stripe_chunk.count;
-    auto const stripe_first_chunk    = stripe_stream_chunks[stripe_start];
-    auto const stripe_last_chunk     = stripe_stream_chunks[stripe_end - 1];
-    auto const stream_begin          = stripe_first_chunk.start_idx;
-    auto const stream_end            = stripe_last_chunk.start_idx + stripe_last_chunk.count;
-    auto const num_streams           = stream_end - stream_begin;
+    auto const& stripe_stream_chunks      = lvl_stripe_stream_chunks[level];
+    auto const [stream_begin, stream_end] = get_range(stripe_stream_chunks, stripe_chunk);
+    auto const num_streams                = stream_end - stream_begin;
 
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
