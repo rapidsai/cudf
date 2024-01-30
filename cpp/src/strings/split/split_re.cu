@@ -146,7 +146,7 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   auto const begin = cudf::detail::make_counting_transform_iterator(0, map_fn);
   auto const end   = begin + strings_count;
 
-  auto [offsets, total_tokens] = cudf::detail::make_offsets_child_column(
+  auto [offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
     begin, end, stream, rmm::mr::get_current_device_resource());
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
@@ -275,6 +275,9 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =
     generate_tokens(*d_strings, *d_prog, direction, maxsplit, counts->view(), stream);
+  CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   // convert the tokens into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);

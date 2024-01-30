@@ -359,12 +359,11 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   }
 
   // get the positions for every token
-  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  rmm::device_uvector<string_index_pair> tokens(
+    static_cast<int64_t>(columns_count) * static_cast<int64_t>(strings_count), stream);
   string_index_pair* d_tokens = tokens.data();
-  thrust::fill(rmm::exec_policy(stream),
-               d_tokens,
-               d_tokens + (columns_count * strings_count),
-               string_index_pair{nullptr, 0});
+  thrust::fill(
+    rmm::exec_policy(stream), tokens.begin(), tokens.end(), string_index_pair{nullptr, 0});
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
