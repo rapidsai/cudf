@@ -1026,7 +1026,7 @@ def _is_categorical_dtype(obj):
 def is_categorical_dtype(obj):
     """Check whether an array-like or dtype is of the Categorical dtype.
 
-    .. deprecated:: 23.12
+    .. deprecated:: 24.04
        Use isinstance(dtype, cudf.CategoricalDtype) instead
 
     Parameters

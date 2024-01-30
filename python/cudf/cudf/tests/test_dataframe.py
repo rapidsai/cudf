@@ -10900,7 +10900,7 @@ def test_dataframe_contains(name, contains, other_names):
         assert (contains in pdf) == expectation
         assert (contains in gdf) == expectation
     elif pd.api.types.is_float_dtype(gdf.columns.dtype):
-        # In some cases, the columns are converted to a Index[float] based on
+        # In some cases, the columns are converted to an Index[float] based on
         # the other column names. That casts name values from None to np.nan.
         expectation = contains is np.nan and (name is None or name is np.nan)
         assert (contains in pdf) == expectation

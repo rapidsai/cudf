@@ -113,14 +113,12 @@ def infer_format(element: str, **kwargs) -> str:
             raise NotImplementedError(
                 "cuDF does not yet support timezone-aware datetimes"
             )
-        if ".%f" in fmt:
+        if ".%f" not in fmt:
             # For context read:
             # https://github.com/pandas-dev/pandas/issues/52418
             # We cannot rely on format containing only %f
             # c++/libcudf expects .%3f, .%6f, .%9f
             # Logic below handles those cases well.
-            pass
-        else:
             return fmt
 
     element_parts = element.split(".")
@@ -534,7 +532,7 @@ class DatetimeColumn(column.ColumnBase):
     def cov(self, other: DatetimeColumn) -> float:
         if not isinstance(other, DatetimeColumn):
             raise TypeError(
-                f"cannot perform corr with types {self.dtype}, {other.dtype}"
+                f"cannot perform cov with types {self.dtype}, {other.dtype}"
             )
         return self.as_numerical_column("int64").cov(
             other.as_numerical_column("int64")

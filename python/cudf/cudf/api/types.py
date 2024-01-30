@@ -540,8 +540,7 @@ is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
-is_categorical = pd_types.is_categorical_dtype
-# TODO
+is_categorical_dtype = pd_types.is_categorical_dtype
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable

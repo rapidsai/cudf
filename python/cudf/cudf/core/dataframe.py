@@ -7267,14 +7267,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
 
-            .. deprecated:: 23.12
+            .. deprecated:: 24.04
                 All options of `fill_method` are deprecated
                 except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
 
-            .. deprecated:: 23.12
+            .. deprecated:: 24.04
                 `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.

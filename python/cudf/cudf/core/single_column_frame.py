@@ -159,7 +159,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        Index(['a' 'b' None], dtype='object')
+        Index(['a', 'b', None], dtype='object')
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
@@ -273,7 +273,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> codes
         array([0, 0, 1], dtype=int8)
         >>> uniques
-        Index(['a' 'c'], dtype='object')
+        Index(['a', 'c'], dtype='object')
         """
         return cudf.core.algorithms.factorize(
             self,

@@ -748,7 +748,7 @@ class Frame(BinaryOperand, Scannable):
             non-null value. `bfill` propagates backward with the next non-null
             value. Cannot be used with ``value``.
 
-            .. deprecated:: 23.12
+            .. deprecated:: 24.04
                 `method` is deprecated.
 
         Returns
