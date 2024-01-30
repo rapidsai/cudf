@@ -163,9 +163,7 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
     case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
 
     case Encoding::DELTA_BYTE_ARRAY:
-      // this requires the entire threadblock, and adds 2k to shared memory requirements
-      // str_len = gpuDeltaPageStringSize(s, t);
-      // bad estimate
+      // FIXME: this is handled elsewhere, but leaving in the bad estimate for now
       str_len = std::distance(s->data_start, s->data_end);
       break;
 
