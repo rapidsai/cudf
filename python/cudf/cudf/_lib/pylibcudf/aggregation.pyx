@@ -6,7 +6,6 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from cudf._lib.cpp.aggregation cimport (
-    Kind as kind_t,
     aggregation,
     correlation_type,
     groupby_aggregation,
@@ -65,7 +64,7 @@ cdef class Aggregation:
     """A type of aggregation to perform.
 
     Aggregations are passed to APIs like
-    :py:func:`~cudf._lib.pylibcudf.groupby.Groupby.aggregate` to indicate what
+    :py:func:`~cudf._lib.pylibcudf.groupby.GroupBy.aggregate` to indicate what
     operations to perform. Using a class for aggregations provides a unified
     API for handling parametrizable aggregations. This class should never be
     instantiated directly, only via one of the factory functions.
@@ -75,7 +74,10 @@ cdef class Aggregation:
             "Aggregations should not be constructed directly. Use one of the factories."
         )
 
-    cpdef kind_t kind(self):
+    # TODO: Ideally we would include the return type here, but we need to do so
+    # in a way that Sphinx understands (currently have issues due to
+    # https://github.com/cython/cython/issues/5609).
+    cpdef kind(self):
         """Get the kind of the aggregation."""
         return dereference(self.c_obj).kind
 

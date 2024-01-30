@@ -25,7 +25,7 @@ from .types cimport DataType
 
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
-    cpdef kind_t kind(self)
+    cpdef kind(self)
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *
 
     @staticmethod
