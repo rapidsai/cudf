@@ -164,6 +164,17 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
     cur_cumulative_size = sizes[split_pos].size_bytes;
   }
 
+  // If the last chunk has size smaller than `merge_threshold` percent of the second last one,
+  // merge it with the second last one.
+  if (splits.size() > 1) {
+    auto constexpr merge_threshold = 0.15;
+    if (auto const last = splits.back(), second_last = splits[splits.size() - 2];
+        last.count <= static_cast<int64_t>(merge_threshold * second_last.count)) {
+      splits.pop_back();
+      splits.back().count += last.count;
+    }
+  }
+
   return splits;
 }
 #endif
@@ -601,6 +612,13 @@ void reader::impl::subpass_preprocess()
 
   }  // end loop level
 
+  // Decode all chunks if there is no read limit.
+  if (_chunk_read_data.read_size_limit == 0) {
+    _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
+    // TODO: DEBUG only
+    //    return;
+  }
+
   // Compute the prefix sum of stripe data sizes.
   stripe_decompression_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),
@@ -612,8 +630,8 @@ void reader::impl::subpass_preprocess()
   stripe_decompression_sizes.device_to_host_sync(_stream);
 
   // DEBUG only
-  _chunk_read_data.read_size_limit =
-    stripe_decompression_sizes[stripe_decompression_sizes.size() - 1].size_bytes / 3;
+  //  _chunk_read_data.read_size_limit =
+  //    stripe_decompression_sizes[stripe_decompression_sizes.size() - 1].size_bytes / 3;
 
   _chunk_read_data.decode_stripe_chunks =
     find_splits(stripe_decompression_sizes, stripe_chunk.count, _chunk_read_data.read_size_limit);
@@ -622,7 +640,7 @@ void reader::impl::subpass_preprocess()
   }
 
   for (auto& size : stripe_decompression_sizes) {
-    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+    printf("decomp size: %ld, %zu\n", size.count, size.size_bytes);
   }
 
 #ifndef PRINT_DEBUG
