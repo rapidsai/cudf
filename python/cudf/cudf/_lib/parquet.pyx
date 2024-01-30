@@ -324,6 +324,7 @@ def write_parquet(
     object force_nullable_schema=False,
     header_version="1.0",
     use_dictionary=True,
+    prefer_delta_byte_array=False,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -421,6 +422,7 @@ def write_parquet(
         .stats_level(stat_freq)
         .int96_timestamps(_int96_timestamps)
         .write_v2_headers(header_version == "2.0")
+        .prefer_dba(prefer_delta_byte_array)
         .dictionary_policy(dict_policy)
         .utc_timestamps(False)
         .build()

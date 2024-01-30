@@ -504,10 +504,11 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  * Used to control which encode kernels to run.
  */
 enum class encode_kernel_mask {
-  PLAIN           = (1 << 0),  // Run plain encoding kernel
-  DICTIONARY      = (1 << 1),  // Run dictionary encoding kernel
-  DELTA_BINARY    = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
-  DELTA_LENGTH_BA = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
+  PLAIN            = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY       = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY     = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
+  DELTA_LENGTH_BA  = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
+  DELTA_BYTE_ARRAY = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
 };
 
 /**
@@ -917,6 +918,8 @@ void get_dictionary_indices(cudf::detail::device_2dspan<PageFragment const> frag
  * @param[in] page_grstats Setup for page-level stats
  * @param[in] page_align Required alignment for uncompressed pages
  * @param[in] write_v2_headers True if V2 page headers should be written
+ * @param[in] prefer_delta_byte_array True if DELTA_BYTE_ARRAY encoding should be the fallback for
+ * strings columns
  * @param[in] chunk_grstats Setup for chunk-level stats
  * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use
@@ -931,6 +934,7 @@ void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                       size_type max_page_size_rows,
                       uint32_t page_align,
                       bool write_v2_headers,
+                      bool prefer_delta_byte_array,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream);

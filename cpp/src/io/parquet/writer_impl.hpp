@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,6 +159,7 @@ class writer::impl {
   bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
+  bool const _prefer_delta_byte_array;
   int32_t const _column_index_truncate_length;
   std::vector<std::map<std::string, std::string>> const _kv_meta;  // Optional user metadata.
   cudf::io::detail::single_write_mode const

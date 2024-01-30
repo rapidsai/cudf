@@ -563,6 +563,9 @@ class parquet_writer_options {
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // write V2 page headers?
   bool _v2_page_headers = false;
+  // Use DELTA_BYTE_ARRAY when dictionary encoding is not available rather than the default
+  // DELTA_LENGTH_BYTE_ARRAY
+  bool _prefer_delta_byte_array = false;
 
   /**
    * @brief Constructor from sink and table.
@@ -762,6 +765,13 @@ class parquet_writer_options {
   [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
 
   /**
+   * @brief Returns `true` if DELTA_BYTE_ARRAY is the preferred string encoding.
+   *
+   * @return `true` if DELTA_BYTE_ARRAY is the preferred string encoding.
+   */
+  [[nodiscard]] auto is_enabled_prefer_dba() const { return _prefer_delta_byte_array; }
+
+  /**
    * @brief Sets partitions.
    *
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
@@ -892,6 +902,13 @@ class parquet_writer_options {
    * @param val Boolean value to enable/disable writing of V2 page headers.
    */
   void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
+
+  /**
+   * @brief Sets preference for delta encoding.
+   *
+   * @param val Boolean value to enable/disable use of DELTA_BYTE_ARRAY encoding.
+   */
+  void enable_prefer_dba(bool val) { _prefer_delta_byte_array = val; }
 };
 
 /**
@@ -1144,6 +1161,20 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& write_v2_headers(bool enabled);
 
   /**
+   * @brief Set to true if DELTA_BYTE_ARRAY encoding should be used.
+   *
+   * The default encoding for all columns is dictionary encoding. When dictionary encoding
+   * cannot be used (it was disabled, the dictionary is too large), the parquet writer
+   * will usually fall back to PLAIN encoding. If V2 headers are enabled, however, the
+   * choice for fall back is DELTA_LENGTH_BYTE_ARRAY. Setting this to `true` will use
+   * DELTA_BYTE_ARRAY encoding instead. This will apply to all string columns.
+   *
+   * @param enabled Boolean value to enable/disable use of DELTA_BYTE_ARRAY encoding.
+   * @return this for chaining
+   */
+  parquet_writer_options_builder& prefer_dba(bool enabled);
+
+  /**
    * @brief move parquet_writer_options member once it's built.
    */
   operator parquet_writer_options&&() { return std::move(options); }
@@ -1230,6 +1261,9 @@ class chunked_parquet_writer_options {
   std::shared_ptr<writer_compression_statistics> _compression_stats;
   // write V2 page headers?
   bool _v2_page_headers = false;
+  // Use DELTA_BYTE_ARRAY when dictionary encoding is not available rather than the default
+  // DELTA_LENGTH_BYTE_ARRAY
+  bool _prefer_delta_byte_array = false;
 
   /**
    * @brief Constructor from sink.
@@ -1385,6 +1419,13 @@ class chunked_parquet_writer_options {
   [[nodiscard]] auto is_enabled_write_v2_headers() const { return _v2_page_headers; }
 
   /**
+   * @brief Returns `true` if DELTA_BYTE_ARRAY is the preferred string encoding.
+   *
+   * @return `true` if DELTA_BYTE_ARRAY is the preferred string encoding.
+   */
+  [[nodiscard]] auto is_enabled_prefer_dba() const { return _prefer_delta_byte_array; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata
@@ -1502,6 +1543,13 @@ class chunked_parquet_writer_options {
   void enable_write_v2_headers(bool val) { _v2_page_headers = val; }
 
   /**
+   * @brief Sets preference for delta encoding.
+   *
+   * @param val Boolean value to enable/disable use of DELTA_BYTE_ARRAY encoding.
+   */
+  void enable_prefer_dba(bool val) { _prefer_delta_byte_array = val; }
+
+  /**
    * @brief creates builder to build chunked_parquet_writer_options.
    *
    * @param sink sink to use for writer output
@@ -1611,6 +1659,20 @@ class chunked_parquet_writer_options_builder {
    * @return this for chaining
    */
   chunked_parquet_writer_options_builder& write_v2_headers(bool enabled);
+
+  /**
+   * @brief Set to true if DELTA_BYTE_ARRAY encoding should be used.
+   *
+   * The default encoding for all columns is dictionary encoding. When dictionary encoding
+   * cannot be used (it was disabled, the dictionary is too large), the parquet writer
+   * will usually fall back to PLAIN encoding. If V2 headers are enabled, however, the
+   * choice for fall back is DELTA_LENGTH_BYTE_ARRAY. Setting this to `true` will use
+   * DELTA_BYTE_ARRAY encoding instead. This will apply to all string columns.
+   *
+   * @param enabled Boolean value to enable/disable use of DELTA_BYTE_ARRAY encoding.
+   * @return this for chaining
+   */
+  chunked_parquet_writer_options_builder& prefer_dba(bool enabled);
 
   /**
    * @brief Sets the maximum row group size, in bytes.

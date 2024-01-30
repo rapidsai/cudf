@@ -15,6 +15,7 @@
  */
 
 #include "delta_enc.cuh"
+#include "page_string_utils.cuh"
 #include "parquet_gpu.cuh"
 
 #include <io/utilities/block_utils.cuh>
@@ -33,6 +34,7 @@
 #include <cuda/std/chrono>
 
 #include <thrust/binary_search.h>
+#include <thrust/distance.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/reverse_iterator.h>
@@ -499,7 +501,8 @@ CUDF_KERNEL void __launch_bounds__(128)
 __device__ size_t delta_data_len(Type physical_type,
                                  cudf::type_id type_id,
                                  uint32_t num_values,
-                                 size_t page_size)
+                                 size_t page_size,
+                                 bool prefer_delta_byte_array)
 {
   auto const dtype_len_out = physical_type_len(physical_type, type_id);
   auto const dtype_len     = [&]() -> uint32_t {
@@ -519,6 +522,7 @@ __device__ size_t delta_data_len(Type physical_type,
   // divisible by 128 (via static assert on delta::block_size), but do safe division anyway.
   auto const bytes_per_block = cudf::util::div_rounding_up_unsafe(max_bits * vals_per_block, 8);
   auto const block_size      = mini_block_header_size + bytes_per_block;
+  auto const block_mult      = physical_type == BYTE_ARRAY and prefer_delta_byte_array ? 2 : 1;
 
   // delta header is 2 bytes for the block_size, 1 byte for number of mini-blocks,
   // max 5 bytes for number of values, and max dtype_len + 1 for first value.
@@ -530,11 +534,11 @@ __device__ size_t delta_data_len(Type physical_type,
   // data we also need to add size of the char data. `page_size` that is passed in is the
   // plain encoded size (i.e. num_values * sizeof(size_type) + char_data_len), so the char
   // data len is `page_size` minus the first term.
-  // TODO: this will need to change for DELTA_BYTE_ARRAY encoding
+  // `block_mult` takes into account the two delta binary blocks for DELTA_BYTE_ARRAY.
   auto const char_data_len =
     physical_type == BYTE_ARRAY ? page_size - num_values * sizeof(size_type) : 0;
 
-  return header_size + num_blocks * block_size + char_data_len;
+  return header_size + num_blocks * block_mult * block_size + char_data_len;
 }
 
 // blockDim {128,1,1}
@@ -550,7 +554,8 @@ CUDF_KERNEL void __launch_bounds__(128)
                size_t max_page_size_bytes,
                size_type max_page_size_rows,
                uint32_t page_align,
-               bool write_v2_headers)
+               bool write_v2_headers,
+               bool prefer_delta_byte_array)
 {
   // TODO: All writing seems to be done by thread 0. Could be replaced by thrust foreach
   __shared__ __align__(8) parquet_column_device_view col_g;
@@ -753,8 +758,8 @@ CUDF_KERNEL void __launch_bounds__(128)
           }
           // get a different bound if using delta encoding
           if (is_use_delta) {
-            auto const delta_len =
-              delta_data_len(physical_type, type_id, page_g.num_leaf_values, page_size);
+            auto const delta_len = delta_data_len(
+              physical_type, type_id, page_g.num_leaf_values, page_size, prefer_delta_byte_array);
             page_size = max(page_size, delta_len);
           }
           auto const max_data_size =
@@ -770,11 +775,41 @@ CUDF_KERNEL void __launch_bounds__(128)
             // 4-byte length indicator, so subtract that.
             page_g.var_bytes_size = var_bytes_size;
           }
+          // set encoding
+          if (is_use_delta) {
+            // TODO(ets): at some point make a more intelligent decision on this. DELTA_LENGTH_BA
+            // should always be preferred over PLAIN, but DELTA_BINARY is a different matter.
+            // If the delta encoding size is going to be close to 32 bits anyway, then plain
+            // is a better choice.
+            page_g.kernel_mask = physical_type == BYTE_ARRAY
+                                   ? prefer_delta_byte_array ? encode_kernel_mask::DELTA_BYTE_ARRAY
+                                                             : encode_kernel_mask::DELTA_LENGTH_BA
+                                   : encode_kernel_mask::DELTA_BINARY;
+          } else if (ck_g.use_dictionary || physical_type == BOOLEAN) {
+            page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
+          } else {
+            page_g.kernel_mask = encode_kernel_mask::PLAIN;
+          }
           page_g.max_data_size    = static_cast<uint32_t>(max_data_size);
           pagestats_g.start_chunk = ck_g.first_fragment + page_start;
           pagestats_g.num_chunks  = page_g.num_fragments;
           page_offset +=
             util::round_up_unsafe(page_g.max_hdr_size + page_g.max_data_size, page_align);
+          // if encoding delta_byte_array, need to allocate some space for scratch data.
+          // if there are leaf nulls, we need space for a mapping array:
+          //   sizeof(size_type) * num_leaf_values
+          // we always need prefix lengths: sizeof(size_type) * num_valid
+          if (page_g.kernel_mask == encode_kernel_mask::DELTA_BYTE_ARRAY) {
+            // scratch needs to be aligned to a size_type boundary
+            auto const pg_end = reinterpret_cast<uintptr_t>(ck_g.uncompressed_bfr + page_offset);
+            auto scratch      = util::round_up_unsafe(pg_end, sizeof(size_type));
+            if (page_g.num_valid != page_g.num_leaf_values) {
+              scratch += sizeof(size_type) * page_g.num_leaf_values;
+            }
+            scratch += sizeof(size_type) * page_g.num_valid;
+            page_offset =
+              thrust::distance(ck_g.uncompressed_bfr, reinterpret_cast<uint8_t*>(scratch));
+          }
           if (not comp_page_sizes.empty()) {
             // V2 does not include level data in compressed size estimate
             comp_page_offset += page_g.max_hdr_size + page_g.max_lvl_size +
@@ -788,19 +823,6 @@ CUDF_KERNEL void __launch_bounds__(128)
         __syncwarp();
         if (t == 0) {
           if (not pages.empty()) {
-            // set encoding
-            if (is_use_delta) {
-              // TODO(ets): at some point make a more intelligent decision on this. DELTA_LENGTH_BA
-              // should always be preferred over PLAIN, but DELTA_BINARY is a different matter.
-              // If the delta encoding size is going to be close to 32 bits anyway, then plain
-              // is a better choice.
-              page_g.kernel_mask = physical_type == BYTE_ARRAY ? encode_kernel_mask::DELTA_LENGTH_BA
-                                                               : encode_kernel_mask::DELTA_BINARY;
-            } else if (ck_g.use_dictionary || physical_type == BOOLEAN) {
-              page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
-            } else {
-              page_g.kernel_mask = encode_kernel_mask::PLAIN;
-            }
             // need space for the chunk histograms plus data page histograms
             auto const num_histograms = num_pages - ck_g.num_dict_pages();
             if (ck_g.def_histogram_data != nullptr && col_g.max_def_level > 0) {
@@ -2141,6 +2163,293 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     s, output_ptr + string_data_len, pages, comp_in, comp_out, comp_results, true);
 }
 
+// DELTA_BYTE_ARRAY page data encoder
+// blockDim(128, 1, 1)
+template <int block_size>
+__global__ void __launch_bounds__(block_size, 8)
+  gpuEncodeDeltaByteArrayPages(device_span<EncPage> pages,
+                               device_span<device_span<uint8_t const>> comp_in,
+                               device_span<device_span<uint8_t>> comp_out,
+                               device_span<compression_result> comp_results)
+{
+  using cudf::detail::warp_size;
+  // block of shared memory for value storage and bit packing
+  __shared__ uleb128_t delta_shared[delta::buffer_size + delta::block_size];
+  __shared__ __align__(8) page_enc_state_s<0> state_g;
+  __shared__ delta_binary_packer<int32_t> packer;
+  __shared__ uint8_t* scratch_data;
+  __shared__ size_t avg_suffix_len;
+  using block_scan   = cub::BlockScan<size_type, block_size>;
+  using block_reduce = cub::BlockReduce<size_t, block_size>;
+  __shared__ union {
+    typename block_scan::TempStorage scan_storage;
+    typename block_reduce::TempStorage reduce_storage;
+    typename delta_binary_packer<uleb128_t>::index_scan::TempStorage delta_index_tmp;
+    typename delta_binary_packer<uleb128_t>::block_reduce::TempStorage delta_reduce_tmp;
+    typename delta_binary_packer<uleb128_t>::warp_reduce::TempStorage
+      delta_warp_red_tmp[delta::num_mini_blocks];
+  } temp_storage;
+
+  auto* const s = &state_g;
+  uint32_t t    = threadIdx.x;
+
+  if (t == 0) {
+    state_g        = page_enc_state_s<0>{};
+    s->page        = pages[blockIdx.x];
+    s->ck          = *s->page.chunk;
+    s->col         = *s->ck.col_desc;
+    s->rle_len_pos = nullptr;
+    // get s->cur back to where it was at the end of encoding the rep and def level data
+    set_page_data_start(s);
+  }
+  __syncthreads();
+
+  if (BitAnd(s->page.kernel_mask, encode_kernel_mask::DELTA_BYTE_ARRAY) == 0) { return; }
+
+  // Encode data values
+  if (t == 0) {
+    uint8_t* dst       = s->cur;
+    s->rle_run         = 0;
+    s->rle_pos         = 0;
+    s->rle_numvals     = 0;
+    s->rle_out         = dst;
+    s->page.encoding   = Encoding::DELTA_BYTE_ARRAY;
+    s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
+
+    // set pointer to beginning of scratch space (aligned to size_type boundary)
+    auto scratch_start =
+      reinterpret_cast<uintptr_t>(s->page.page_data + s->page.max_hdr_size + s->page.max_data_size);
+    scratch_start = util::round_up_unsafe(scratch_start, sizeof(size_type));
+    scratch_data  = reinterpret_cast<uint8_t*>(scratch_start);
+  }
+  __syncthreads();
+
+  // create offsets map (if needed)
+  // We only encode valid values, and we need to know adjacent valid strings. So first we'll
+  // create a mapping of leaf indexes to valid indexes:
+  //
+  // validity array is_valid:
+  //   1 1 0 1 0 1 1 0
+  //
+  // exclusive scan on is_valid yields mapping of leaf index -> valid index:
+  //   0 1 2 2 3 3 4 5
+  //
+  // Last value should equal page.num_valid. Now we need to transform that into a reverse
+  // lookup that maps valid index -> leaf index (of length num_valid):
+  //   0 1 3 5 6
+  //
+  auto const has_leaf_nulls = s->page.num_valid != s->page.num_leaf_values;
+
+  size_type* const offsets_map =
+    has_leaf_nulls ? reinterpret_cast<size_type*>(scratch_data) : nullptr;
+
+  if (offsets_map != nullptr) {
+    size_type* const forward_map = offsets_map + s->page.num_valid;
+
+    // create the validity array
+    for (int idx = t; idx < s->page.num_leaf_values; idx += block_size) {
+      size_type const idx_in_col = s->page_start_val + idx;
+      bool const is_valid =
+        idx_in_col < s->col.leaf_column->size() and s->col.leaf_column->is_valid(idx_in_col);
+      forward_map[idx] = is_valid ? 1 : 0;
+    }
+    __syncthreads();
+
+    // exclusive scan to get leaf_idx -> valid_idx
+    block_excl_sum<block_size>(forward_map, s->page.num_leaf_values, 0);
+
+    // now reverse map to get valid_idx -> leaf_idx mapping
+    for (int idx = t; idx < s->page.num_leaf_values; idx += block_size) {
+      size_type const idx_in_col = s->page_start_val + idx;
+      bool const is_valid =
+        idx_in_col < s->col.leaf_column->size() and s->col.leaf_column->is_valid(idx_in_col);
+      if (is_valid) { offsets_map[forward_map[idx]] = idx; }
+    }
+    __syncthreads();
+  }
+
+  size_type* const prefix_lengths =
+    has_leaf_nulls ? offsets_map + s->page.num_valid : reinterpret_cast<size_type*>(scratch_data);
+
+  auto const type_id = s->col.leaf_column->type().id();
+
+  auto const get_string_tuple = [type_id, s](int idx) -> thrust::pair<size_type, uint8_t const*> {
+    if (type_id == type_id::STRING) {
+      auto const str = s->col.leaf_column->element<string_view>(idx);
+      return {str.size_bytes(), reinterpret_cast<uint8_t const*>(str.data())};
+    } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
+      auto const str = get_element<statistics::byte_array_view>(*s->col.leaf_column, idx);
+      return {static_cast<size_type>(str.size_bytes()),
+              reinterpret_cast<uint8_t const*>(str.data())};
+    }
+    return {0, nullptr};
+  };
+
+  /*
+    some timing results. remove when done
+
+    flat  mixed file, ints, short and long-ish strings
+    Ns    N char sorted hash
+    Nu    N char unsorted hash
+
+    N N string per thread for prefix and strcopy
+    Y N string per warp for prefix, string per thread for strcopy
+    N Y string per thread for prefix, parallel strcpy
+    Y Y string per warp for prefix, parallel strcpy
+
+    encode times (in ms)
+
+              N N  Y N  N Y  Y Y
+    flat       44  137  236  343
+     64s       15   33   29   36
+     64u       63   45   26   36
+    128s      142   42   23   22
+    128u      332  241   16   21
+    256s      370  289   14   14
+    256u      437  389   12   14
+   */
+
+  // Calculate prefix lengths. The first prefix length is always 0. loop over num_valid since we
+  // only encode valid values.
+  // Note: calculating this on a string-per-thread basis seems bad for large strings with lots
+  // of overlap. But in testing, it was found that the string copy at the end had a much larger
+  // impact on performance, and doing this step on a string-per-warp basis was always slower.
+  if (t == 0) { prefix_lengths[0] = 0; }
+  for (int idx = t + 1; idx < s->page.num_valid; idx += block_size) {
+    // FIXME: for now doing this a string per thread. this will be bad for large
+    // strings with large prefix lengths. for the latter we should take a string per block
+    // or maybe string per warp approach.
+    size_type const leaf_idx  = has_leaf_nulls ? offsets_map[idx] : idx;
+    size_type const pleaf_idx = has_leaf_nulls ? offsets_map[idx - 1] : idx - 1;
+
+    // get this string and the preceding string
+    auto const [len, ptr]     = get_string_tuple(leaf_idx + s->page_start_val);
+    auto const [len_p, ptr_p] = get_string_tuple(pleaf_idx + s->page_start_val);
+
+    // calculate the amount of overlap
+    auto const max_pref_len = min(len, len_p);
+    size_type pref_len      = 0;
+    while (pref_len < max_pref_len and ptr[pref_len] == ptr_p[pref_len]) {
+      pref_len++;
+    }
+    prefix_lengths[idx] = pref_len;
+  }
+
+  // encode prefix lengths
+  if (t == 0) {
+    packer.init(s->cur, s->page.num_valid, reinterpret_cast<int32_t*>(delta_shared), &temp_storage);
+  }
+  __syncthreads();
+
+  // don't start at `t` because all threads must participate in each iteration
+  for (int idx = 0; idx < s->page.num_valid; idx += block_size) {
+    size_type const t_idx = idx + t;
+    auto const in_range   = t_idx < s->page.num_valid;
+    auto const val        = in_range ? prefix_lengths[t_idx] : 0;
+    packer.add_value(val, in_range);
+  }
+
+  auto const suffix_ptr = packer.flush();
+  __syncthreads();
+
+  // encode suffix lengths
+  if (t == 0) {
+    packer.init(
+      suffix_ptr, s->page.num_valid, reinterpret_cast<int32_t*>(delta_shared), &temp_storage);
+  }
+  __syncthreads();
+
+  size_t non_zero     = 0;
+  size_t suffix_bytes = 0;
+
+  for (int idx = 0; idx < s->page.num_valid; idx += block_size) {
+    size_type const t_idx = idx + t;
+    auto const in_range   = t_idx < s->page.num_valid;
+    int32_t val           = 0;
+    if (in_range) {
+      size_type const leaf_idx = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
+      auto const [len, ptr]    = get_string_tuple(leaf_idx + s->page_start_val);
+      val                      = len - prefix_lengths[t_idx];
+      if (val > 0) {
+        non_zero++;
+        suffix_bytes += val;
+      }
+    }
+    packer.add_value(val, in_range);
+  }
+
+  auto const strings_ptr = packer.flush();
+
+  non_zero = block_reduce(temp_storage.reduce_storage).Sum(non_zero);
+  __syncthreads();
+  suffix_bytes = block_reduce(temp_storage.reduce_storage).Sum(suffix_bytes);
+  if (t == 0) { avg_suffix_len = util::div_rounding_up_unsafe(suffix_bytes, non_zero); }
+  __syncthreads();
+
+  // Now copy the byte array data. For shorter suffixes (<= 64 bytes), it is faster to use
+  // memcpy on a string-per-thread basis. For longer suffixes, it's better to use a parallel
+  // approach.
+  // Note: this param still needs tuning.
+  constexpr size_t suffix_cutoff = 64;
+
+  size_t str_data_len = 0;
+  if (avg_suffix_len <= suffix_cutoff) {
+    for (int idx = 0; idx < s->page.num_valid; idx += block_size) {
+      size_type const t_idx = idx + t;
+      size_type s_len = 0, pref_len = 0, suff_len = 0;
+      uint8_t const* s_ptr = nullptr;
+      if (t_idx < s->page.num_valid) {
+        int const leaf_idx    = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
+        auto const [len, ptr] = get_string_tuple(leaf_idx + s->page_start_val);
+        s_len                 = len;
+        s_ptr                 = ptr;
+        pref_len              = prefix_lengths[t_idx];
+        suff_len              = len - pref_len;
+      }
+
+      // calculate offsets into output
+      size_type s_off, total;
+      block_scan(temp_storage.scan_storage)
+        .ExclusiveScan(suff_len, s_off, str_data_len, cub::Sum(), total);
+
+      if (t_idx < s->page.num_valid) {
+        auto const dst = strings_ptr + s_off;
+        memcpy(dst, s_ptr + pref_len, suff_len);
+      }
+      str_data_len += total;
+      __syncthreads();
+    }
+  } else {
+    int t0 = 0;  // thread 0 for each string
+    for (int idx = 0; idx < s->page.num_valid; idx++) {
+      // calculate ids for this string
+      int mytid = t - t0;
+      if (mytid < 0) { mytid += block_size; }
+
+      // fetch string for this iter
+      size_type const leaf_idx = has_leaf_nulls ? offsets_map[idx] : idx;
+      auto const [len, ptr]    = get_string_tuple(leaf_idx + s->page_start_val);
+      size_type const pref_len = prefix_lengths[idx];
+      size_type const suff_len = len - pref_len;
+
+      // now copy the data
+      auto const dst = strings_ptr + str_data_len;
+      for (int i = 0; i < suff_len; i += block_size) {
+        size_type const src_idx = i + mytid;
+        if (src_idx < suff_len) { dst[src_idx] = ptr[pref_len + src_idx]; }
+      }
+
+      str_data_len += suff_len;
+      t0 += suff_len;
+      t0 = t0 % block_size;
+    }
+  }
+
+  finish_page_encode<block_size>(
+    s, strings_ptr + str_data_len, pages, comp_in, comp_out, comp_results, true);
+}
+
 constexpr int decide_compression_warps_in_block = 4;
 constexpr int decide_compression_block_size =
   decide_compression_warps_in_block * cudf::detail::warp_size;
@@ -3049,6 +3358,7 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       size_type max_page_size_rows,
                       uint32_t page_align,
                       bool write_v2_headers,
+                      bool prefer_delta_byte_array,
                       statistics_merge_group* page_grstats,
                       statistics_merge_group* chunk_grstats,
                       rmm::cuda_stream_view stream)
@@ -3066,7 +3376,8 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                                                                    max_page_size_bytes,
                                                                    max_page_size_rows,
                                                                    page_align,
-                                                                   write_v2_headers);
+                                                                   write_v2_headers,
+                                                                   prefer_delta_byte_array);
 }
 
 void EncodePages(device_span<EncPage> pages,
@@ -3110,6 +3421,13 @@ void EncodePages(device_span<EncPage> pages,
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::DELTA_LENGTH_BA);
     gpuEncodeDeltaLengthByteArrayPages<encode_block_size>
+      <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
+  }
+  if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BYTE_ARRAY) != 0) {
+    auto const strm = streams[s_idx++];
+    gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, write_v2_headers, encode_kernel_mask::DELTA_BYTE_ARRAY);
+    gpuEncodeDeltaByteArrayPages<encode_block_size>
       <<<num_pages, encode_block_size, 0, strm.value()>>>(pages, comp_in, comp_out, comp_results);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DICTIONARY) != 0) {

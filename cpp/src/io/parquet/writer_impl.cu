@@ -1046,6 +1046,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                      size_t max_page_size_bytes,
                      size_type max_page_size_rows,
                      bool write_v2_headers,
+                     bool prefer_delta_byte_array,
                      Compression compression_codec,
                      rmm::cuda_stream_view stream)
 {
@@ -1063,6 +1064,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    max_page_size_rows,
                    page_alignment(compression_codec),
                    write_v2_headers,
+                   prefer_delta_byte_array,
                    nullptr,
                    nullptr,
                    stream);
@@ -1088,6 +1090,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    max_page_size_rows,
                    page_alignment(compression_codec),
                    write_v2_headers,
+                   prefer_delta_byte_array,
                    nullptr,
                    nullptr,
                    stream);
@@ -1114,6 +1117,7 @@ auto init_page_sizes(hostdevice_2dvector<EncColumnChunk>& chunks,
                    max_page_size_rows,
                    page_alignment(compression_codec),
                    write_v2_headers,
+                   prefer_delta_byte_array,
                    nullptr,
                    nullptr,
                    stream);
@@ -1266,6 +1270,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                         size_t max_page_size_bytes,
                         size_type max_page_size_rows,
                         bool write_v2_headers,
+                        bool prefer_delta_byte_array,
                         rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<statistics_merge_group> page_stats_mrg(num_stats_bfr, stream);
@@ -1280,6 +1285,7 @@ void init_encoder_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
                    max_page_size_rows,
                    page_alignment(compression),
                    write_v2_headers,
+                   prefer_delta_byte_array,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
                    stream);
@@ -1533,6 +1539,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                                    bool int96_timestamps,
                                    bool utc_timestamps,
                                    bool write_v2_headers,
+                                   bool prefer_delta_byte_array,
                                    host_span<std::unique_ptr<data_sink> const> out_sink,
                                    rmm::cuda_stream_view stream)
 {
@@ -1840,14 +1847,16 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
-  cudf::detail::hostdevice_vector<size_type> comp_page_sizes = init_page_sizes(chunks,
-                                                                               col_desc,
-                                                                               num_columns,
-                                                                               max_page_size_bytes,
-                                                                               max_page_size_rows,
-                                                                               write_v2_headers,
-                                                                               compression,
-                                                                               stream);
+  cudf::detail::hostdevice_vector<size_type> comp_page_sizes =
+    init_page_sizes(chunks,
+                    col_desc,
+                    num_columns,
+                    max_page_size_bytes,
+                    max_page_size_rows,
+                    write_v2_headers,
+                    prefer_delta_byte_array,
+                    compression,
+                    stream);
 
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;
@@ -1995,6 +2004,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
                        max_page_size_bytes,
                        max_page_size_rows,
                        write_v2_headers,
+                       prefer_delta_byte_array,
                        stream);
   }
 
@@ -2175,6 +2185,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _prefer_delta_byte_array(options.is_enabled_prefer_dba()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2204,6 +2215,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _prefer_delta_byte_array(options.is_enabled_prefer_dba()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2282,6 +2294,7 @@ void writer::impl::write(table_view const& input, std::vector<partition_info> co
                                            _int96_timestamps,
                                            _utc_timestamps,
                                            _write_v2_headers,
+                                           _prefer_delta_byte_array,
                                            _out_sink,
                                            _stream);
     } catch (...) {  // catch any exception type

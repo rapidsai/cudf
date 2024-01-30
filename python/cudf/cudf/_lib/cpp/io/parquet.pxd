@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -101,6 +101,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_page_size_bytes(size_t val) except +
         void set_max_page_size_rows(size_type val) except +
         void enable_write_v2_headers(bool val) except +
+        void enable_prefer_dba(bool val) except +
         void set_dictionary_policy(cudf_io_types.dictionary_policy policy)except +
 
         @staticmethod
@@ -155,6 +156,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder& write_v2_headers(
             bool val
         ) except +
+        parquet_writer_options_builder& prefer_dba(
+            bool val
+        ) except +
         parquet_writer_options_builder& dictionary_policy(
             cudf_io_types.dictionary_policy val
         ) except +
@@ -200,6 +204,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         void set_max_page_size_bytes(size_t val) except +
         void set_max_page_size_rows(size_type val) except +
         void enable_write_v2_headers(bool val) except +
+        void enable_prefer_dba(bool val) except +
         void set_dictionary_policy(cudf_io_types.dictionary_policy policy)except +
 
         @staticmethod
@@ -243,6 +248,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_type val
         ) except +
         parquet_writer_options_builder& write_v2_headers(
+            bool val
+        ) except +
+        parquet_writer_options_builder& prefer_dba(
             bool val
         ) except +
         parquet_writer_options_builder& dictionary_policy(
