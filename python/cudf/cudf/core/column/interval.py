@@ -5,6 +5,7 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf.api.types import _is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 
@@ -95,7 +96,7 @@ class IntervalColumn(StructColumn):
             else:
                 # a user can directly input the string `interval` as the dtype
                 # when creating an interval series or interval dataframe
-                if dtype == "interval":
+                if _is_interval_dtype(dtype):
                     dtype = IntervalDtype(
                         self.dtype.subtype, self.dtype.closed
                     )
