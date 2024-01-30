@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,12 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <vector>
+
+using physical_comparator_t = cudf::experimental::row::lexicographic::physical_element_comparator;
+using sorting_comparator_t =
+  cudf::experimental::row::lexicographic::sorting_physical_element_comparator;
+using physical_equality_t = cudf::experimental::row::equality::physical_equality_comparator;
+using nan_equality_t = cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
 
 template <typename PhysicalElementComparator>
 std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,

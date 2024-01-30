@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,14 +42,14 @@ namespace {
 std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto merge_pairs_map = std::make_unique<merge_pairs_map_type>(
-    static_cast<size_t>(input.size()),
-    cuco::empty_key{-1},
-    cuco::empty_value{-1},
-    bpe_equal{input},
-    bpe_probe_scheme{bpe_hasher{input}},
-    hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value());
+  auto merge_pairs_map =
+    std::make_unique<merge_pairs_map_type>(static_cast<size_t>(input.size()),
+                                           cuco::empty_key{-1},
+                                           cuco::empty_value{-1},
+                                           bpe_equal{input},
+                                           bpe_probe_scheme{bpe_hasher{input}},
+                                           cudf::detail::cuco_allocator{stream},
+                                           stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,
@@ -64,14 +64,13 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
 std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
   cudf::column_device_view const& input, rmm::cuda_stream_view stream)
 {
-  auto mp_table_map = std::make_unique<mp_table_map_type>(
-    static_cast<size_t>(input.size()),
-    cuco::empty_key{-1},
-    cuco::empty_value{-1},
-    mp_equal{input},
-    mp_probe_scheme{mp_hasher{input}},
-    hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value());
+  auto mp_table_map = std::make_unique<mp_table_map_type>(static_cast<size_t>(input.size()),
+                                                          cuco::empty_key{-1},
+                                                          cuco::empty_value{-1},
+                                                          mp_equal{input},
+                                                          mp_probe_scheme{mp_hasher{input}},
+                                                          cudf::detail::cuco_allocator{stream},
+                                                          stream.value());
 
   auto iter = cudf::detail::make_counting_transform_iterator(
     0,
