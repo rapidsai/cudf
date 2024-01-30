@@ -1241,6 +1241,125 @@ class IndexedFrame(Frame):
     # Alias for isna
     isnull = Frame.isna
 
+    @_cudf_nvtx_annotate
+    def kurtosis(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+        """
+        Return Fisher's unbiased kurtosis of a sample.
+
+        Kurtosis obtained using Fisher's definition of
+        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
+
+        Parameters
+        ----------
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        Series or scalar
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series.kurtosis()
+        -1.1999999999999904
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.kurt()
+        a   -1.2
+        b   -1.2
+        dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.kurtosis**
+
+            Parameters currently not supported are `level` and `numeric_only`
+        """
+        if axis not in (0, "index", None, no_default):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
+        return self._reduce(
+            "kurtosis",
+            axis=axis,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    # Alias for kurtosis.
+    kurt = kurtosis
+
+    @_cudf_nvtx_annotate
+    def skew(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+        """
+        Return unbiased Fisher-Pearson skew of a sample.
+
+        Parameters
+        ----------
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4, 5, 6, 6])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    6
+        dtype: int64
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 8, 10, 10]})
+        >>> df.skew()
+        a    0.00000
+        b   -0.37037
+        dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.skew, Series.skew, Frame.skew**
+
+            The `axis` parameter is not currently supported.
+        """
+        if axis not in (0, "index", None, no_default):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
+        return self._reduce(
+            "skew",
+            axis=axis,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
     def _copy_type_metadata(
         self,
         other: Self,
