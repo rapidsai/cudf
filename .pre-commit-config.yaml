@@ -152,6 +152,9 @@ repos:
     rev: v0.0.1
     hooks:
       - id: verify-copyright
+        exclude: |
+          (?x)
+              cpp/include/cudf_test/cxxopts[.]hpp$
 
 
 default_language_version:
