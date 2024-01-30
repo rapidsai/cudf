@@ -620,11 +620,6 @@ class ListMethods(ColumnMethods):
         -------
         Series or Index with each list sorted
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: `inplace`, `kind`
-
         Examples
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
@@ -633,6 +628,11 @@ class ListMethods(ColumnMethods):
         1         [2.0, 8.0, 8.0]
         2              [1.0, 2.0]
         dtype: list
+
+        .. pandas-compat::
+            **ListMethods.sort_values**
+
+            The ``inplace`` and ``kind`` arguments are currently not supported.
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")

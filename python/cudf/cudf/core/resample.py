@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION &
-# AFFILIATES. All rights reserved.  SPDX-License-Identifier:
-# Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@ from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
 
 
 class _Resampler(GroupBy):
-
     grouping: "_ResampleGrouping"
 
     def __init__(self, obj, by, axis=None, kind=None):
@@ -118,7 +117,6 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-
     bin_labels: cudf.core.index.Index
 
     def __init__(self, obj, by=None, level=None):

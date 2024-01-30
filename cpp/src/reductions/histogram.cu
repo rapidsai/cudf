@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -163,12 +163,11 @@ compute_row_frequencies(table_view const& input,
                "Nested types are not yet supported in histogram aggregation.",
                std::invalid_argument);
 
-  auto map = cudf::detail::hash_map_type{
-    compute_hash_table_size(input.num_rows()),
-    cuco::empty_key{-1},
-    cuco::empty_value{std::numeric_limits<size_type>::min()},
-    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value()};
+  auto map = cudf::detail::hash_map_type{compute_hash_table_size(input.num_rows()),
+                                         cuco::empty_key{-1},
+                                         cuco::empty_value{std::numeric_limits<size_type>::min()},
+                                         cudf::detail::cuco_allocator{stream},
+                                         stream.value()};
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);

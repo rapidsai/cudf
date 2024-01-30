@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from concurrent.futures import ThreadPoolExecutor
 
@@ -182,7 +182,6 @@ def test_exact_quantiles_int(int_method):
 
 
 def test_approx_quantiles():
-
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
 
@@ -222,7 +221,6 @@ def test_approx_quantiles_int():
     ],
 )
 def test_misc_quantiles(data, q):
-
     pdf_series = _create_pandas_series_float64_default(data)
     gdf_series = _create_cudf_series_float64_default(data)
 
@@ -485,7 +483,6 @@ def test_corr1d(data1, data2, method):
 
 @pytest.mark.parametrize("method", ["spearman", "pearson"])
 def test_df_corr(method):
-
     gdf = randomdata(100, {str(x): float for x in range(50)})
     pdf = gdf.to_pandas()
     got = gdf.corr(method)

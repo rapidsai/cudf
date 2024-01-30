@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -84,7 +84,7 @@ def distinct(Column col, bool nulls_equal, bool nans_all_equal):
         null_equality.EQUAL if nulls_equal else null_equality.UNEQUAL
     )
     cdef nan_equality c_nans_equal = (
-        nan_equality.ALL_EQUAL if nans_all_equal else nan_equality.NANS_UNEQUAL
+        nan_equality.ALL_EQUAL if nans_all_equal else nan_equality.UNEQUAL
     )
 
     cdef unique_ptr[column] c_result

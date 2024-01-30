@@ -97,7 +97,7 @@ struct ngram_builder_fn {
   position_pair const* d_token_positions;              // token positions for each string
   cudf::detail::input_offsetalator d_chars_offsets{};  // offsets for each string's ngrams
   char* d_chars{};                                     // write ngram strings to here
-  cudf::detail::input_offsetalator d_ngram_offsets{};  // offsets for sizes of each string's ngrams
+  cudf::size_type const* d_ngram_offsets{};            // offsets for sizes of each string's ngrams
   cudf::size_type* d_ngram_sizes{};                    // write ngram sizes to here
 
   __device__ cudf::size_type operator()(cudf::size_type idx)
@@ -165,7 +165,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   // Ex. token-counts = [3,2]; token-offsets = [0,3,5]
   auto const count_itr =
     cudf::detail::make_counting_transform_iterator(0, strings_tokenizer{d_strings, d_delimiter});
-  auto [token_offsets, total_tokens] = cudf::detail::make_offsets_child_column(
+  auto [token_offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
     count_itr, count_itr + strings_count, stream, rmm::mr::get_current_device_resource());
   auto d_token_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
@@ -192,8 +192,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
       }));
   auto [ngram_offsets, total_ngrams] = cudf::detail::make_offsets_child_column(
     ngram_counts, ngram_counts + strings_count, stream, rmm::mr::get_current_device_resource());
-  auto d_ngram_offsets =
-    cudf::detail::offsetalator_factory::make_input_iterator(ngram_offsets->view());
+  auto d_ngram_offsets = ngram_offsets->view().begin<cudf::size_type>();
 
   // Compute the total size of the ngrams for each string (not for each ngram)
   // Ex. 2 bigrams in 1st string total to 10 bytes; 1 bigram in 2nd string is 4 bytes
@@ -207,7 +206,7 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   //  First compute the output sizes for each string (this not the final output result)
   auto const sizes_itr = cudf::detail::make_counting_transform_iterator(
     0, ngram_builder_fn{d_strings, d_separator, ngrams, d_token_offsets, d_token_positions});
-  auto [chars_offsets, output_chars_size] = cudf::detail::make_offsets_child_column(
+  auto [chars_offsets, output_chars_size] = cudf::strings::detail::make_offsets_child_column(
     sizes_itr, sizes_itr + strings_count, stream, rmm::mr::get_current_device_resource());
   auto d_chars_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(chars_offsets->view());

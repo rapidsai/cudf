@@ -702,7 +702,6 @@ def test_to_datetime_errors(data):
 
 
 def test_to_datetime_not_implemented():
-
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([], exact=False)
 
@@ -815,7 +814,6 @@ def test_to_datetime_different_formats_notimplemented():
 
 
 def test_datetime_can_cast_safely():
-
     sr = cudf.Series(
         ["1679-01-01", "2000-01-31", "2261-01-01"], dtype="datetime64[ms]"
     )
@@ -933,7 +931,6 @@ def test_str_to_datetime_error():
 @pytest.mark.parametrize("data_dtype", DATETIME_TYPES)
 @pytest.mark.parametrize("other_dtype", DATETIME_TYPES)
 def test_datetime_subtract(data, other, data_dtype, other_dtype):
-
     gsr = cudf.Series(data, dtype=data_dtype)
     psr = gsr.to_pandas()
 
@@ -1985,7 +1982,6 @@ def test_error_values():
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
 def test_ceil(data, time_type, resolution):
-
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -2016,7 +2012,6 @@ def test_ceil(data, time_type, resolution):
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
 def test_floor(data, time_type, resolution):
-
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -2047,7 +2042,6 @@ def test_floor(data, time_type, resolution):
     "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
 )
 def test_round(data, time_type, resolution):
-
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 

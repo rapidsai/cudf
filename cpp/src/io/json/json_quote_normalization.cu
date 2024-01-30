@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,13 @@
  */
 
 #include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/testing_main.hpp>
-
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/strings/repeat_strings.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
@@ -36,17 +30,16 @@
 #include <string>
 #include <vector>
 
-namespace {
+namespace cudf::io::json {
 
-// Type used to represent the atomic symbol type used within the finite-state machine
-// TODO: type aliasing to be declared in a common header for better maintainability and
-//        pre-empt future bugs
-using SymbolT = char;
-using StateT  = char;
+using SymbolT       = char;
+using StateT        = char;
+using SymbolOffsetT = uint32_t;
+
+namespace normalize_quotes {
 
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
-using SymbolOffsetT = uint32_t;
-enum class dfa_states : char { TT_OOS = 0U, TT_DQS, TT_SQS, TT_DEC, TT_SEC, TT_NUM_STATES };
+enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_SQS, TT_DEC, TT_SEC, TT_NUM_STATES };
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
   SINGLE_QUOTE_CHAR,  ///< Quote character SG: '
@@ -62,7 +55,7 @@ constexpr auto TT_DQS            = dfa_states::TT_DQS;
 constexpr auto TT_SQS            = dfa_states::TT_SQS;
 constexpr auto TT_DEC            = dfa_states::TT_DEC;
 constexpr auto TT_SEC            = dfa_states::TT_SEC;
-constexpr auto TT_NUM_STATES     = static_cast<char>(dfa_states::TT_NUM_STATES);
+constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
 // The i-th string representing all the characters of a symbol group
@@ -80,7 +73,7 @@ std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const qna_s
 }};
 
 // The DFA's starting state
-constexpr char start_state = static_cast<char>(TT_OOS);
+constexpr auto start_state = static_cast<StateT>(TT_OOS);
 
 struct TransduceToNormalizedQuotes {
   /**
@@ -112,7 +105,7 @@ struct TransduceToNormalizedQuotes {
     // SEC   | Sigma\{'}       -> {\*}
 
     // Whether this transition translates to the escape sequence: \"
-    const bool outputs_escape_sequence =
+    bool const outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Case when a double quote needs to be replaced by the escape sequence: \"
@@ -156,19 +149,19 @@ struct TransduceToNormalizedQuotes {
                                                 SymbolT const read_symbol) const
   {
     // Whether this transition translates to the escape sequence: \"
-    const bool sqs_outputs_escape_sequence =
+    bool const sqs_outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Number of characters to output on this transition
     if (sqs_outputs_escape_sequence) { return 2; }
     // Whether this transition translates to the escape sequence \<s> or unescaped '
-    const bool sec_outputs_escape_sequence =
+    bool const sec_outputs_escape_sequence =
       (state_id == static_cast<StateT>(dfa_states::TT_SEC)) &&
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR));
     // Number of characters to output on this transition
     if (sec_outputs_escape_sequence) { return 2; }
     // Whether this transition translates to no output <nop>
-    const bool sqs_outputs_nop =
+    bool const sqs_outputs_nop =
       (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR));
     // Number of characters to output on this transition
@@ -177,156 +170,33 @@ struct TransduceToNormalizedQuotes {
   }
 };
 
-}  // namespace
+}  // namespace normalize_quotes
 
-// Base test fixture for tests
-struct FstTest : public cudf::test::BaseFixture {};
+namespace detail {
 
-void run_test(std::string& input, std::string& output)
+rmm::device_uvector<SymbolT> normalize_single_quotes(rmm::device_uvector<SymbolT>&& inbuf,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr)
 {
-  // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
-
-  auto parser = cudf::io::fst::detail::make_fst(
-    cudf::io::fst::detail::make_symbol_group_lut(qna_sgs),
-    cudf::io::fst::detail::make_transition_table(qna_state_tt),
-    cudf::io::fst::detail::make_translation_functor(TransduceToNormalizedQuotes{}),
+  auto parser = fst::detail::make_fst(
+    fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
+    fst::detail::make_transition_table(normalize_quotes::qna_state_tt),
+    fst::detail::make_translation_functor(normalize_quotes::TransduceToNormalizedQuotes{}),
     stream);
 
-  auto d_input_scalar = cudf::make_string_scalar(input, stream_view);
-  auto& d_input       = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_scalar);
-
-  // Prepare input & output buffers
-  constexpr std::size_t single_item = 1;
-  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size() * 2, stream_view);
-  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
-
-  // Allocate device-side temporary storage & run algorithm
-  parser.Transduce(d_input.data(),
-                   static_cast<SymbolOffsetT>(d_input.size()),
-                   output_gpu.device_ptr(),
+  rmm::device_uvector<SymbolT> outbuf(inbuf.size() * 2, stream, mr);
+  rmm::device_scalar<SymbolOffsetT> outbuf_size(stream, mr);
+  parser.Transduce(inbuf.data(),
+                   static_cast<SymbolOffsetT>(inbuf.size()),
+                   outbuf.data(),
                    thrust::make_discard_iterator(),
-                   output_gpu_size.device_ptr(),
-                   start_state,
-                   stream_view);
+                   outbuf_size.data(),
+                   normalize_quotes::start_state,
+                   stream);
 
-  // Async copy results from device to host
-  output_gpu.device_to_host_async(stream_view);
-  output_gpu_size.device_to_host_async(stream_view);
-
-  // Make sure results have been copied back to host
-  stream.synchronize();
-
-  // Verify results
-  ASSERT_EQ(output_gpu_size[0], output.size());
-  CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output, output.size());
+  outbuf.resize(outbuf_size.value(stream), stream);
+  return outbuf;
 }
 
-TEST_F(FstTest, GroundTruth_QuoteNormalization1)
-{
-  std::string input  = R"({"A":'TEST"'})";
-  std::string output = R"({"A":"TEST\""})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization2)
-{
-  std::string input  = R"({'A':"TEST'"} ['OTHER STUFF'])";
-  std::string output = R"({"A":"TEST'"} ["OTHER STUFF"])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization3)
-{
-  std::string input  = R"(['{"A": "B"}',"{'A': 'B'}"])";
-  std::string output = R"(["{\"A\": \"B\"}","{'A': 'B'}"])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization4)
-{
-  std::string input = R"({"ain't ain't a word and you ain't supposed to say it":'"""""""""""'})";
-  std::string output =
-    R"({"ain't ain't a word and you ain't supposed to say it":"\"\"\"\"\"\"\"\"\"\"\""})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization5)
-{
-  std::string input  = R"({"\"'\"'\"'\"'":'"\'"\'"\'"\'"'})";
-  std::string output = R"({"\"'\"'\"'\"'":"\"'\"'\"'\"'\""})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization6)
-{
-  std::string input  = R"([{"ABC':'CBA":'XYZ":"ZXY'}])";
-  std::string output = R"([{"ABC':'CBA":"XYZ\":\"ZXY"}])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization7)
-{
-  std::string input  = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
-  std::string output = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization8)
-{
-  std::string input  = R"(['\t','\\t','\\','\\\"\'\\\\','\n','\b','\u0012'])";
-  std::string output = R"(["\t","\\t","\\","\\\"'\\\\","\n","\b","\u0012"])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid1)
-{
-  std::string input  = R"(["THIS IS A TEST'])";
-  std::string output = R"(["THIS IS A TEST'])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid2)
-{
-  std::string input  = R"(['THIS IS A TEST"])";
-  std::string output = R"(["THIS IS A TEST\"])";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid3)
-{
-  std::string input  = R"({"MORE TEST'N":'RESUL})";
-  std::string output = R"({"MORE TEST'N":"RESUL})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid4)
-{
-  std::string input  = R"({"NUMBER":100'0,'STRING':'SOMETHING'})";
-  std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid5)
-{
-  std::string input  = R"({'NUMBER':100"0,"STRING":"SOMETHING"})";
-  std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid6)
-{
-  std::string input  = R"({'a':'\\''})";
-  std::string output = R"({"a":"\\""})";
-  run_test(input, output);
-}
-
-TEST_F(FstTest, GroundTruth_QuoteNormalization_Invalid7)
-{
-  std::string input  = R"(}'a': 'b'{)";
-  std::string output = R"(}"a": "b"{)";
-  run_test(input, output);
-}
-
-CUDF_TEST_PROGRAM_MAIN()
+}  // namespace detail
+}  // namespace cudf::io::json

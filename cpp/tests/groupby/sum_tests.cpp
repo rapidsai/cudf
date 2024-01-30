@@ -28,10 +28,10 @@ using namespace cudf::test::iterators;
 template <typename V>
 struct groupby_sum_test : public cudf::test::BaseFixture {};
 
-using K               = int32_t;
-using supported_types = cudf::test::Concat<
-  cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double, uint16_t, uint64_t>,
-  cudf::test::DurationTypes>;
+using K = int32_t;
+using supported_types =
+  cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>,
+                     cudf::test::DurationTypes>;
 
 TYPED_TEST_SUITE(groupby_sum_test, supported_types);
 
@@ -39,9 +39,6 @@ TYPED_TEST(groupby_sum_test, basic)
 {
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
-
-  static_assert(std::is_signed_v<R> == std::is_signed_v<V>,
-                "Both Result type and Source type must have same signedness");
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
