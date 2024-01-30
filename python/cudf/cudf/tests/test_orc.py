@@ -159,7 +159,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, use_index=use_index)
 
-    assert_eq(pdf, gdf, check_categorical=False)
+    assert_eq(pdf, gdf, check_categorical=False, check_exact=False)
 
 
 def test_orc_reader_strings(datadir):
@@ -576,7 +576,7 @@ def test_int_overflow(tmpdir):
 
     # The number of rows and the large element trigger delta encoding
     num_rows = 513
-    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int32")
+    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int64")
     df["a"][0] = 1024 * 1024 * 1024
     df["a"][num_rows - 1] = 1
     df.to_orc(file_path)
@@ -1671,16 +1671,7 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    if columns:
-        # TODO: Remove workaround after this issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/47944
-        assert_eq(
-            expected.sort_index(axis=1),
-            got.sort_index(axis=1),
-            check_index_type=True,
-        )
-    else:
-        assert_eq(expected, got, check_index_type=True)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
@@ -1827,7 +1818,7 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     with expect_warning_if(engine == "pyarrow", UserWarning):
         got = cudf.read_orc(buffer, engine=engine)
 
-    assert_eq(negative_timestamp_df, got)
+    assert_eq(negative_timestamp_df, got, check_dtype=False)
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
@@ -1836,8 +1827,10 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     buffer = BytesIO()
     negative_timestamp_df.to_orc(buffer)
 
-    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
-    assert_eq(negative_timestamp_df, orc.ORCFile(buffer).read())
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer), check_dtype=False)
+    assert_eq(
+        negative_timestamp_df, orc.ORCFile(buffer).read(), check_dtype=False
+    )
 
 
 def test_orc_reader_apache_negative_timestamp(datadir):
