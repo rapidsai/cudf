@@ -387,8 +387,8 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   url_decode_char_counter<num_warps_per_threadblock, char_block_size>
     <<<num_threadblocks, threadblock_size, 0, stream.value()>>>(*d_strings, row_sizes.data());
   // performs scan on the sizes and builds the appropriate offsets column
-  auto [offsets_column, out_chars_bytes] =
-    cudf::detail::make_offsets_child_column(row_sizes.begin(), row_sizes.end(), stream, mr);
+  auto [offsets_column, out_chars_bytes] = cudf::strings::detail::make_offsets_child_column(
+    row_sizes.begin(), row_sizes.end(), stream, mr);
 
   // create the chars column
   rmm::device_uvector<char> chars(out_chars_bytes, stream, mr);
