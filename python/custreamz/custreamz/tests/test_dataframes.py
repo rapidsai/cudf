@@ -749,7 +749,7 @@ def test_custom_aggregation():
 
 
 def test_groupby_aggregate_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example).groupby(["name"])
     output0 = sdf.amount.sum(start=None).stream.gather().sink_to_list()
     output1 = (
@@ -817,7 +817,7 @@ def test_reductions_with_start_state(stream):
 
 
 def test_rolling_aggs_with_start_state(stream):
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output0 = (
         sdf.rolling(2, with_state=True, start=())
