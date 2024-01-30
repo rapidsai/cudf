@@ -43,6 +43,8 @@ using unused_state_buf = page_state_buffers_s<0, 0, 0>;
 /**
  * @brief Calculate string bytes for DELTA_LENGTH_BYTE_ARRAY encoded pages
  *
+ * Result is valid only on thread 0.
+ *
  * @param s The local page info
  * @param t Thread index
  */
@@ -61,7 +63,7 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
 /**
  * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
  *
- * This expects all therads in the threadblock (preprocess_block_size).
+ * This expects all threads in the thread block (preprocess_block_size).
  *
  * @param s The local page info
  * @param t Thread index
