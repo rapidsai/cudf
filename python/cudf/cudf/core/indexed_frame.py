@@ -1238,6 +1238,9 @@ class IndexedFrame(Frame):
 
         return self.iloc[-n:]
 
+    # Alias for isna
+    isnull = Frame.isna
+
     def _copy_type_metadata(
         self,
         other: Self,
