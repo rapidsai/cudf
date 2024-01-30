@@ -24,7 +24,6 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
 
 import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
@@ -1363,7 +1362,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     @_cudf_nvtx_annotate
     def __repr__(self):
-        max_seq_items = get_option("max_seq_items") or len(self)
+        max_seq_items = pd.get_option("max_seq_items") or len(self)
         mr = 0
         if 2 * max_seq_items < len(self):
             mr = max_seq_items + 1

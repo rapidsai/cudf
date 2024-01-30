@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -12,10 +12,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
-from pandas.core.dtypes.dtypes import (
-    CategoricalDtype as pd_CategoricalDtype,
-    CategoricalDtypeType as pd_CategoricalDtypeType,
-)
 
 import cudf
 from cudf._typing import Dtype
@@ -985,7 +981,7 @@ def is_categorical_dtype(obj):
     if isinstance(
         obj,
         (
-            pd_CategoricalDtype,
+            pd.CategoricalDtype,
             cudf.CategoricalDtype,
             cudf.core.index.CategoricalIndex,
             cudf.core.column.CategoricalColumn,
@@ -1002,8 +998,8 @@ def is_categorical_dtype(obj):
         obj is t
         for t in (
             cudf.CategoricalDtype,
-            pd_CategoricalDtype,
-            pd_CategoricalDtypeType,
+            pd.CategoricalDtype,
+            pd.CategoricalDtype.type,
         )
     ):
         return True
@@ -1024,7 +1020,7 @@ def is_categorical_dtype(obj):
     ):
         return is_categorical_dtype(obj.dtype)
     if hasattr(obj, "type"):
-        if obj.type is pd_CategoricalDtypeType:
+        if obj.type is pd.CategoricalDtype.type:
             return True
     # TODO: A lot of the above checks are probably redundant and should be
     # farmed out to this function here instead.
