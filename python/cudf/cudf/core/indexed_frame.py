@@ -1013,6 +1013,231 @@ class IndexedFrame(Frame):
         """
         return self._unaryop("abs")
 
+    @_cudf_nvtx_annotate
+    def dot(self, other, reflect=False):
+        """
+        Get dot product of frame and other, (binary operator `dot`).
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
+
+        Parameters
+        ----------
+        other : Sequence, Series, or DataFrame
+            Any multiple element data structure, or list-like object.
+        reflect : bool, default False
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
+
+        Returns
+        -------
+        scalar, Series, or DataFrame
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame([[1, 2, 3, 4],
+        ...                      [5, 6, 7, 8]])
+        >>> df @ df.T
+            0    1
+        0  30   70
+        1  70  174
+        >>> s = cudf.Series([1, 1, 1, 1])
+        >>> df @ s
+        0    10
+        1    26
+        dtype: int64
+        >>> [1, 2, 3, 4] @ s
+        10
+        """
+        # TODO: This function does not currently support nulls.
+        lhs = self.values
+        result_index = None
+        result_cols = None
+        if isinstance(self, cudf.Series) and isinstance(
+            other, (cudf.Series, cudf.DataFrame)
+        ):
+            common = self.index.union(other.index)
+            if len(common) > len(self.index) or len(common) > len(other.index):
+                raise ValueError("matrices are not aligned")
+
+            lhs = self.reindex(index=common, copy=False).values
+            rhs = other.reindex(index=common, copy=False).values
+            if isinstance(other, cudf.DataFrame):
+                result_index = other._data.to_pandas_index()
+        elif isinstance(self, cudf.DataFrame) and isinstance(
+            other, (cudf.Series, cudf.DataFrame)
+        ):
+            common = self._data.to_pandas_index().union(
+                other.index.to_pandas()
+            )
+            if len(common) > len(self._data.names) or len(common) > len(
+                other.index
+            ):
+                raise ValueError("matrices are not aligned")
+
+            lhs = self.reindex(columns=common, copy=False)
+            result_index = lhs.index
+
+            rhs = other.reindex(index=common, copy=False).values
+            lhs = lhs.values
+            if isinstance(other, cudf.DataFrame):
+                result_cols = other._data.to_pandas_index()
+
+        elif isinstance(
+            other, (cp.ndarray, np.ndarray)
+        ) or cudf.utils.dtypes.can_convert_to_column(other):
+            rhs = cp.asarray(other)
+        else:
+            # TODO: This should raise an exception, not return NotImplemented,
+            # but __matmul__ relies on the current behavior. We should either
+            # move this implementation to __matmul__ and call it from here
+            # (checking for NotImplemented and raising NotImplementedError if
+            # that's what's returned), or __matmul__ should catch a
+            # NotImplementedError from here and return NotImplemented. The
+            # latter feels cleaner (putting the implementation in this method
+            # rather than in the operator) but will be slower in the (highly
+            # unlikely) case that we're multiplying a cudf object with another
+            # type of object that somehow supports this behavior.
+            return NotImplemented
+        if reflect:
+            lhs, rhs = rhs, lhs
+
+        result = lhs.dot(rhs)
+        if len(result.shape) == 1:
+            return cudf.Series(
+                result,
+                index=self.index if result_index is None else result_index,
+            )
+        if len(result.shape) == 2:
+            return cudf.DataFrame(
+                result,
+                index=self.index if result_index is None else result_index,
+                columns=result_cols,
+            )
+        return result.item()
+
+    @_cudf_nvtx_annotate
+    def __matmul__(self, other):
+        return self.dot(other)
+
+    @_cudf_nvtx_annotate
+    def __rmatmul__(self, other):
+        return self.dot(other, reflect=True)
+
+    @_cudf_nvtx_annotate
+    def head(self, n=5):
+        """
+        Return the first `n` rows.
+        This function returns the first `n` rows for the object based
+        on position. It is useful for quickly testing if your object
+        has the right type of data in it.
+        For negative values of `n`, this function returns all rows except
+        the last `n` rows, equivalent to ``df[:-n]``.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Number of rows to select.
+
+        Returns
+        -------
+        DataFrame or Series
+            The first `n` rows of the caller object.
+
+        Examples
+        --------
+        **Series**
+
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
+        ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
+        >>> ser
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        6        shark
+        7        whale
+        8        zebra
+        dtype: object
+
+        Viewing the first 5 lines
+
+        >>> ser.head()
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        dtype: object
+
+        Viewing the first `n` lines (three in this case)
+
+        >>> ser.head(3)
+        0    alligator
+        1          bee
+        2       falcon
+        dtype: object
+
+        For negative values of `n`
+
+        >>> ser.head(-3)
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        dtype: object
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.head(2)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        """
+        return self.iloc[:n]
+
+    @_cudf_nvtx_annotate
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new DataFrame or Series
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.tail(2)
+           key   val
+        3    3  13.0
+        4    4  14.0
+
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.tail(2)
+        3    1
+        4    0
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
+
     def _copy_type_metadata(
         self,
         other: Self,
