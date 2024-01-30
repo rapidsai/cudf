@@ -12,7 +12,7 @@ import pytest
 from packaging import version
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
 from cudf.testing._utils import (
     assert_eq,
     expect_warning_if,
@@ -76,15 +76,6 @@ def _hide_ufunc_warnings(ufunc):
 def test_ufunc_index(request, ufunc):
     # Note: This test assumes that all ufuncs are unary or binary.
     fname = ufunc.__name__
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                fname in {"bitwise_and", "bitwise_or", "bitwise_xor"}
-                and not PANDAS_GE_150
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/46769",
-        )
-    )
     request.applymarker(
         pytest.mark.xfail(
             condition=not hasattr(cp, fname),

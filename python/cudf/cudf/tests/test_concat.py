@@ -10,7 +10,7 @@ import pytest
 
 import cudf as gd
 from cudf.api.types import _is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
@@ -828,13 +828,7 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         axis=axis,
     )
 
-    if PANDAS_GE_150:
-        assert_eq(expected, actual, check_index_type=True)
-    else:
-        # special handling of check_index_type below
-        # required because:
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -902,13 +896,7 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
         [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
 
-    if PANDAS_GE_150:
-        assert_eq(expected, actual, check_index_type=True)
-    else:
-        # special handling of check_index_type below
-        # required because:
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -953,13 +941,7 @@ def test_concat_join_no_overlapping_columns(
         axis=axis,
     )
 
-    if PANDAS_GE_150:
-        assert_eq(expected, actual, check_index_type=True)
-    else:
-        # special handling of check_index_type below
-        # required because:
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(expected, actual, check_index_type=not (axis == 1 and sort))
+    assert_eq(expected, actual, check_index_type=True)
 
 
 @pytest.mark.parametrize("ignore_index", [False, True])
@@ -1113,7 +1095,7 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     assert_eq(
         expected,
         actual,
-        check_index_type=PANDAS_GE_150,
+        check_index_type=True,
         check_column_type=not PANDAS_GE_200,
     )
 
@@ -1149,21 +1131,11 @@ def test_concat_join_series(ignore_index, sort, join, axis):
             axis=axis,
         )
 
-    if PANDAS_GE_150:
-        assert_eq(
-            expected,
-            actual,
-            check_index_type=True,
-        )
-    else:
-        # special handling of check_index_type required below:
-        # https://github.com/pandas-dev/pandas/issues/46675
-        # https://github.com/pandas-dev/pandas/issues/47501
-        assert_eq(
-            expected,
-            actual,
-            check_index_type=(axis == 0),
-        )
+    assert_eq(
+        expected,
+        actual,
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -1323,19 +1295,7 @@ def test_concat_join_empty_dataframes(
 )
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
-@pytest.mark.parametrize(
-    "join",
-    [
-        "inner",
-        pytest.param(
-            "outer",
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/37937",
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("join", ["inner", "outer"])
 @pytest.mark.parametrize("axis", [1])
 def test_concat_join_empty_dataframes_axis_1(
     df, other, ignore_index, axis, join, sort

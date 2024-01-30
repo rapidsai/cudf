@@ -4,8 +4,6 @@ import pandas as pd
 from packaging import version
 
 PANDAS_VERSION = version.parse(pd.__version__)
-PANDAS_GE_150 = PANDAS_VERSION >= version.parse("1.5.0")
-PANDAS_LT_153 = PANDAS_VERSION < version.parse("1.5.3")
 PANDAS_EQ_200 = PANDAS_VERSION == version.parse("2.0.0")
 PANDAS_GE_200 = PANDAS_VERSION >= version.parse("2.0.0")
 PANDAS_GE_201 = PANDAS_VERSION >= version.parse("2.0.1")

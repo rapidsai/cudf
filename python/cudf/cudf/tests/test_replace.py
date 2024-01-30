@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -167,18 +167,12 @@ def test_series_replace_with_nulls():
                 "c": ["abc", "def", ".", None, None],
             }
         ),
-        pytest.param(
-            cudf.DataFrame(
-                {
-                    "a": ["one", "two", None, "three"],
-                    "b": ["one", None, "two", "three"],
-                },
-                dtype="category",
-            ),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/46672",
-            ),
+        cudf.DataFrame(
+            {
+                "a": ["one", "two", None, "three"],
+                "b": ["one", None, "two", "three"],
+            },
+            dtype="category",
         ),
         cudf.DataFrame(
             {

@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
@@ -480,7 +480,7 @@ def test_rolling_custom_index_support():
     from pandas.api.indexers import BaseIndexer
 
     class CustomIndexer(BaseIndexer):
-        def custom_get_window_bounds(
+        def get_window_bounds(
             self, num_values, min_periods, center, closed, step=None
         ):
             start = np.empty(num_values, dtype=np.int64)
@@ -495,24 +495,6 @@ def test_rolling_custom_index_support():
                     end[i] = i + self.window_size
 
             return start, end
-
-        if PANDAS_GE_150:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed, step
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed, step
-                )
-
-        else:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed
-                )
 
     use_expanding = [True, False, True, False, True]
     indexer = CustomIndexer(window_size=1, use_expanding=use_expanding)

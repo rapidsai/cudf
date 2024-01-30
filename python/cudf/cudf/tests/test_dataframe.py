@@ -25,12 +25,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import (
-    PANDAS_GE_150,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_LT_203,
-)
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_203
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -345,27 +340,9 @@ def test_concat_index(a, b):
         {"a": [1, None, None], "b": [3, np.nan, np.nan]},
         {1: ["a", "b", "c"], 2: ["q", "w", "u"]},
         {1: ["a", np.nan, "c"], 2: ["q", None, "u"]},
-        pytest.param(
-            {},
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/rapidsai/cudf/issues/11080",
-            ),
-        ),
-        pytest.param(
-            {1: [], 2: [], 3: []},
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/rapidsai/cudf/issues/11080",
-            ),
-        ),
-        pytest.param(
-            [1, 2, 3],
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/rapidsai/cudf/issues/11080",
-            ),
-        ),
+        {},
+        {1: [], 2: [], 3: []},
+        [1, 2, 3],
     ],
 )
 def test_axes(data):
@@ -1882,18 +1859,7 @@ def test_nonmatching_index_setitem(nrows):
     assert_eq(gdf["c"].to_pandas(), gdf_series.to_pandas())
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int",
-        pytest.param(
-            "int64[pyarrow]",
-            marks=pytest.mark.skipif(
-                not PANDAS_GE_150, reason="pyarrow support only in >=1.5"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("dtype", ["int", "int64[pyarrow]"])
 def test_from_pandas(dtype):
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0], dtype=dtype)
     df.columns.name = "custom_column_name"
@@ -7710,14 +7676,7 @@ def test_dataframe_concat_dataframe(df, other, sort, ignore_index):
     "other",
     [
         pd.Series([10, 11, 23, 234, 13]),
-        pytest.param(
-            pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="pandas bug: "
-                "https://github.com/pandas-dev/pandas/issues/35092",
-            ),
-        ),
+        pd.Series([10, 11, 23, 234, 13], index=[11, 12, 13, 44, 33]),
         {1: 1},
         {0: 10, 1: 100, 2: 102},
     ],

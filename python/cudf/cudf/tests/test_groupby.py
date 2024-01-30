@@ -20,7 +20,7 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_150, PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -1190,13 +1190,7 @@ def test_advanced_groupby_levels():
 @pytest.mark.parametrize(
     "func",
     [
-        pytest.param(
-            lambda df: df.groupby(["x", "y", "z"]).sum(),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/32464",
-            ),
-        ),
+        lambda df: df.groupby(["x", "y", "z"]).sum(),
         lambda df: df.groupby(["x", "y"]).sum(),
         lambda df: df.groupby(["x", "y"]).agg("sum"),
         lambda df: df.groupby(["y"]).sum(),
@@ -3294,20 +3288,7 @@ def test_groupby_pct_change_empty_columns():
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "group_keys",
-    [
-        None,
-        pytest.param(
-            True,
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/pull/34998",
-            ),
-        ),
-        False,
-    ],
-)
+@pytest.mark.parametrize("group_keys", [None, True, False])
 @pytest.mark.parametrize("by", ["A", ["A", "B"]])
 def test_groupby_group_keys(group_keys, by):
     gdf = cudf.DataFrame(

@@ -21,7 +21,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_153
+from cudf.core._compat import PANDAS_GE_200
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -2612,43 +2612,37 @@ def test_parquet_writer_list_statistics(tmpdir):
             ]
         },
         # Struct of Lists
-        pytest.param(
-            {
-                "Real estate records": [
-                    None,
-                    {
-                        "Status": "NRI",
-                        "Ownerships": {
-                            "land_unit": [None, 2, None],
-                            "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
-                        },
+        {
+            "Real estate records": [
+                None,
+                {
+                    "Status": "NRI",
+                    "Ownerships": {
+                        "land_unit": [None, 2, None],
+                        "flats": [[1, 2, 3], [], [4, 5], [], [0, 6, 0]],
                     },
-                    {
-                        "Status": None,
-                        "Ownerships": {
-                            "land_unit": [4, 5],
-                            "flats": [[7, 8], []],
-                        },
+                },
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [4, 5],
+                        "flats": [[7, 8], []],
                     },
-                    {
-                        "Status": "RI",
-                        "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {
+                    "Status": "RI",
+                    "Ownerships": {"land_unit": None, "flats": [[]]},
+                },
+                {"Status": "RI", "Ownerships": None},
+                {
+                    "Status": None,
+                    "Ownerships": {
+                        "land_unit": [7, 8, 9],
+                        "flats": [[], [], []],
                     },
-                    {"Status": "RI", "Ownerships": None},
-                    {
-                        "Status": None,
-                        "Ownerships": {
-                            "land_unit": [7, 8, 9],
-                            "flats": [[], [], []],
-                        },
-                    },
-                ]
-            },
-            marks=pytest.mark.xfail(
-                condition=PANDAS_LT_153,
-                reason="pandas assertion fixed in pandas 1.5.3",
-            ),
-        ),
+                },
+            ]
+        },
     ],
 )
 def test_parquet_writer_nested(tmpdir, data):
