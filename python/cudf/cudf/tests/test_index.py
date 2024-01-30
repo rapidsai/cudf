@@ -15,7 +15,7 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
-from cudf.core._compat import PANDAS_GE_133, PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -514,15 +514,11 @@ def test_empty_df_head_tail_index(n):
             None,
         ),
         (pd.Index(range(5)), pd.Index(range(4)) > 0, None, ValueError),
-        pytest.param(
+        (
             pd.Index(range(5)),
             pd.Index(range(5)) > 1,
             10,
             None,
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_133,
-                reason="https://github.com/pandas-dev/pandas/issues/43240",
-            ),
         ),
         (
             pd.Index(np.arange(10)),

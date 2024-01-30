@@ -25,13 +25,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import (
-    PANDAS_GE_134,
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_LT_140,
-    PANDAS_LT_203,
-)
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_203
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -3559,15 +3553,7 @@ def test_dataframe_empty_sort_index():
                 [2, 0, 1],
             ]
         ),
-        pytest.param(
-            pd.RangeIndex(2, -1, -1),
-            marks=[
-                pytest_xfail(
-                    condition=PANDAS_LT_140,
-                    reason="https://github.com/pandas-dev/pandas/issues/43591",
-                )
-            ],
-        ),
+        pd.RangeIndex(2, -1, -1),
     ],
 )
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
@@ -9547,16 +9533,7 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
     pdf = pd.DataFrame(data, index=p_index, columns=labels)
     gdf = cudf.from_pandas(pdf)
 
-    if PANDAS_GE_134:
-        expect = pdf.explode(label_to_explode, ignore_index)
-    else:
-        # https://github.com/pandas-dev/pandas/issues/43314
-        if isinstance(label_to_explode, int):
-            pdlabel_to_explode = [label_to_explode]
-        else:
-            pdlabel_to_explode = label_to_explode
-        expect = pdf.explode(pdlabel_to_explode, ignore_index)
-
+    expect = pdf.explode(label_to_explode, ignore_index)
     got = gdf.explode(label_to_explode, ignore_index)
 
     assert_eq(expect, got, check_dtype=False)
