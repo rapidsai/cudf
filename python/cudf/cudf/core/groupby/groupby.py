@@ -23,6 +23,7 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -2244,6 +2245,9 @@ class GroupBy(Serializable, Reducible, Scannable):
             if method not in {"ffill", "bfill"}:
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
             # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "
@@ -2374,6 +2378,9 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 "The 'fill_method' keyword being not None and the 'limit' "
                 f"keywords in {type(self).__name__}.pct_change are "

@@ -58,7 +58,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -4589,6 +4589,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Transformed DataFrame.
         """
         # Do not remove until pandas 3.0 support is added.
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
         warnings.warn(
             "DataFrame.applymap has been deprecated. Use DataFrame.map "
             "instead.",
@@ -6102,8 +6103,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         source = self
 
         if axis is None:
-            # if op in {"any", "all"}:
-            #     axis = 2
             if op in {"sum", "product", "std", "var"}:
                 # Do not remove until pandas 2.0 support is added.
                 warnings.warn(
@@ -6140,6 +6139,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if axis == 2 and op in ("kurtosis", "kurt", "skew"):
                 # TODO: concat + op can probably be done in the general case
                 # for axis == 2.
+                # https://github.com/rapidsai/cudf/issues/14930
                 return getattr(concat_columns(source._data.columns), op)(
                     **kwargs
                 )
@@ -6323,6 +6323,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return DataFrame()
 
         with warnings.catch_warnings():
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.simplefilter("ignore", FutureWarning)
             df = cudf.concat(mode_results, axis=1)
 
@@ -7303,6 +7306,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "

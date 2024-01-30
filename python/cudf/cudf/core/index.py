@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_signed_integer_dtype,
 )
 from cudf.core._base_index import BaseIndex
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -1107,6 +1107,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
             # Do not remove until pandas-3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "

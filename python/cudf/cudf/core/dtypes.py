@@ -21,6 +21,7 @@ from pandas.core.dtypes.dtypes import (
 
 import cudf
 from cudf._typing import Dtype
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
@@ -1035,6 +1036,7 @@ def is_categorical_dtype(obj):
         Whether or not the array-like or dtype is of a categorical dtype.
     """
     # Do not remove until pandas 3.0 support is added.
+    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
     warnings.warn(
         "is_categorical_dtype is deprecated and will be removed in a future "
         "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",

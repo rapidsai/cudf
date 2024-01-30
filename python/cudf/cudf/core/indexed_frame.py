@@ -48,6 +48,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import ColumnBase, as_column, full
 from cudf.core.column_accessor import ColumnAccessor
@@ -2160,6 +2161,9 @@ class IndexedFrame(Frame):
     ):  # noqa: D102
         if method is not None:
             # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 f"{type(self).__name__}.fillna with 'method' is "
                 "deprecated and will raise in a future version. "
@@ -3389,6 +3393,7 @@ class IndexedFrame(Frame):
         2018-04-11  2
         """
         # Do not remove until pandas 3.0 support is added.
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
         warnings.warn(
             "first is deprecated and will be removed in a future version. "
             "Please create a mask and filter using `.loc` instead",
@@ -3441,6 +3446,7 @@ class IndexedFrame(Frame):
         2018-04-15  4
         """
         # Do not remove until pandas 3.0 support is added.
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
         warnings.warn(
             "last is deprecated and will be removed in a future version. "
             "Please create a mask and filter using `.loc` instead",

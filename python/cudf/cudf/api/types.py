@@ -16,6 +16,7 @@ import pandas as pd
 from pandas.api import types as pd_types
 
 import cudf
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
     _is_categorical_dtype,
@@ -467,11 +468,13 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
 def _is_datetime64tz_dtype(obj):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
         return _wrap_pandas_is_dtype_api(pd_types.is_datetime64tz_dtype)(obj)
 
 
 def is_datetime64tz_dtype(obj):
     # Do not remove until pandas 3.0 support is added.
+    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
     warnings.warn(
         "is_datetime64tz_dtype is deprecated and will be removed in a future "
         "version.",
@@ -540,7 +543,6 @@ is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
-is_categorical_dtype = pd_types.is_categorical_dtype
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable

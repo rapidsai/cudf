@@ -48,6 +48,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core import indexing_utils
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column import (
@@ -278,6 +279,9 @@ class _SeriesIlocIndexer(_FrameIndexer):
             value = value.astype(to_dtype)
             if to_dtype != self._frame._column.dtype:
                 # Do not remove until pandas-3.0 support is added.
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
                 warnings.warn(
                     f"Setting an item of incompatible dtype is deprecated "
                     "and will raise in a future error of pandas. "
@@ -388,10 +392,16 @@ class _SeriesLocIndexer(_FrameIndexer):
                     arg.dtype
                 ):
                     # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
                     warnings.warn(warn_msg, FutureWarning)
                     return arg.value
                 elif is_integer(arg):
                     # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
                     warnings.warn(warn_msg, FutureWarning)
                     return arg
             try:
@@ -3617,6 +3627,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             )
         if fill_method not in (no_default, None) or limit is not no_default:
             # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 "The 'fill_method' and 'limit' keywords in "
                 f"{type(self).__name__}.pct_change are deprecated and will be "

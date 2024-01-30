@@ -91,6 +91,8 @@ repos:
         entry: '(category=|\s)DeprecationWarning[,)]'
         language: pygrep
         types_or: [python, cython]
+        # We need to exclude just the following file because few APIs still need
+        # DeprecationWarning: https://github.com/pandas-dev/pandas/issues/54970
         exclude: |
           (?x)^(
             ^python/cudf/cudf/core/dtypes.py
