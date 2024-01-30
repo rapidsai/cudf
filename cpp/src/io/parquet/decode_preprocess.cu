@@ -58,9 +58,10 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
   return 0;
 }
 
-#if 0
 /**
  * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
+ *
+ * This expects all therads in the threadblock (preprocess_block_size).
  *
  * @param s The local page info
  * @param t Thread index
@@ -116,13 +117,12 @@ __device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
   }
   __syncthreads();
 
-  // now sum up total_bytes from the two warps
+  // now sum up total_bytes from the two warps. result is only valid on thread 0.
   auto const final_bytes =
     cudf::detail::single_lane_block_sum_reduce<preprocess_block_size, 0>(total_bytes);
 
   return static_cast<size_type>(final_bytes);
 }
-#endif
 
 /**
  *
@@ -325,6 +325,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
                       bool is_base_pass,
                       bool compute_string_sizes)
 {
+  using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s* const s = &state_g;
@@ -460,10 +461,15 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   // retrieve total string size.
   // TODO: make this block-based instead of just 1 warp
   if (compute_string_sizes) {
-    if (t < 32) {
-      auto const str_bytes = gpuDecodeTotalPageStringSize(s, t);
-      if (t == 0) { s->page.str_bytes = str_bytes; }
+    size_type str_bytes = 0;
+    if (s->page.encoding == Encoding::DELTA_BYTE_ARRAY) {
+      // this must be called by all threads
+      str_bytes = gpuDeltaPageStringSize(s, t);
+    } else if (t < warp_size) {
+      // single warp
+      str_bytes = gpuDecodeTotalPageStringSize(s, t);
     }
+    if (t == 0) { s->page.str_bytes = str_bytes; }
   }
 
   // update output results:
