@@ -44,8 +44,7 @@ enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
   ESCAPE_CHAR,        ///< Escape character SG: '\\'
   NEWLINE_CHAR,       ///< Newline character SG: '\n'
-  WHITESPACE_CHAR,    ///< Whitespace character SG: ' '
-  TABSPACE_CHAR,      ///< Tabspace character SG: '\t'
+  WHITESPACE_SYMBOLS, ///< Whitespace character SG: ' '
   OTHER_SYMBOLS,      ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS   ///< Total number of symbol groups
 };
@@ -60,15 +59,15 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
 
 // The i-th string representing all the characters of a symbol group
 std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
-  {{'"'}, {'\\'}, {'\n'}, {' '}, {'\t'}}};
+  {{'"'}, {'\\'}, {'\n'}, {' ', '\t'}}};
 
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{
-  {/* IN_STATE      "       \       \n    <SPC>    \t      OTHER  */
-   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_WS, TT_OOS}},
-   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
-   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
-   /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_WS, TT_OOS}}}};
+  {/* IN_STATE      "       \       \n    <SPC>   OTHER  */
+   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_OOS}},
+   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_DQS, TT_DQS, TT_DQS}},
+   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
+   /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_OOS}}}};
 
 // The DFA's starting state
 constexpr StateT start_state = static_cast<StateT>(TT_OOS);
@@ -100,13 +99,13 @@ struct TransduceToNormalizedWS {
     // WS    | {\t}             -> <nop>
 
     // Case when read symbol is a whitespace or tabspace but is unquoted
-    if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
-         (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::TABSPACE_CHAR))) &&
-        ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
-         (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
-      return 0;
-    }
-    // In all other cases we simply output the input symbol
+    // This will be the same condition as in `operator()(state_id, match_id, read_symbol)` function
+    // However, since there is no output in this case i.e. the count returned by 
+    // operator()(state_id, match_id, read_symbol) is zero, this function is never called.
+    // So skipping the check for this case.
+
+    // In all other cases, we have an output symbol for the input symbol.
+    // We simply output the input symbol
     return read_symbol;
   }
 
@@ -121,8 +120,7 @@ struct TransduceToNormalizedWS {
                                                  SymbolT const read_symbol) const
   {
     // Case when read symbol is a whitespace or tabspace but is unquoted
-    if (((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_CHAR)) ||
-         (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::TABSPACE_CHAR))) &&
+    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_SYMBOLS)) &&
         ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
          (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
       return 0;
@@ -171,10 +169,12 @@ void run_test(const std::string& input, const std::string& output)
   // Make sure results have been copied back to host
   stream.synchronize();
 
+  /*
   std::cout << "Expected output: " << output << std::endl << "Computed output: ";
   for (size_t i = 0; i < output_gpu_size[0]; i++)
     std::cout << output_gpu[i];
   std::cout << std::endl;
+  */
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output, output.size());
