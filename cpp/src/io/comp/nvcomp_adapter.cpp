@@ -653,7 +653,7 @@ size_t compress_input_alignment_bits(compression_type compression)
     case compression_type::DEFLATE: return 0;
     case compression_type::SNAPPY: return 0;
     case compression_type::ZSTD: return 2;
-    case compression_type::LZ4: return 0;
+    case compression_type::LZ4: return 2;
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
@@ -664,7 +664,7 @@ size_t compress_output_alignment_bits(compression_type compression)
     case compression_type::DEFLATE: return 3;
     case compression_type::SNAPPY: return 0;
     case compression_type::ZSTD: return 0;
-    case compression_type::LZ4: return 0;
+    case compression_type::LZ4: return 2;
     default: CUDF_FAIL("Unsupported compression type");
   }
 }
