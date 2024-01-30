@@ -233,6 +233,18 @@ def test_read_csv_skipfooter(csv_end_bad_lines):
         dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
 
 
+def test_read_csv_skipfooter_arrow_string_fail(request, csv_end_bad_lines):
+    request.applymarker(
+        pytest.mark.xfail(
+            reason="https://github.com/rapidsai/cudf/issues/14915",
+        )
+    )
+    ddf_cpu = dd.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+    ddf_gpu = dask_cudf.read_csv(csv_end_bad_lines, skipfooter=3).compute()
+
+    dd.assert_eq(ddf_cpu, ddf_gpu, check_dtype=False)
+
+
 def test_read_csv_skipfooter_error(csv_end_bad_lines):
     with pytest.raises(ValueError):
         dask_cudf.read_csv(
