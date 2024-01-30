@@ -41,12 +41,12 @@ using SymbolOffsetT = uint32_t;
 
 enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_WS, TT_NUM_STATES };
 enum class dfa_symbol_group_id : uint32_t {
-  DOUBLE_QUOTE_CHAR,  ///< Quote character SG: "
-  ESCAPE_CHAR,        ///< Escape character SG: '\\'
-  NEWLINE_CHAR,       ///< Newline character SG: '\n'
-  WHITESPACE_SYMBOLS, ///< Whitespace character SG: ' '
-  OTHER_SYMBOLS,      ///< SG implicitly matching all other characters
-  NUM_SYMBOL_GROUPS   ///< Total number of symbol groups
+  DOUBLE_QUOTE_CHAR,   ///< Quote character SG: "
+  ESCAPE_CHAR,         ///< Escape character SG: '\\'
+  NEWLINE_CHAR,        ///< Newline character SG: '\n'
+  WHITESPACE_SYMBOLS,  ///< Whitespace character SG: ' '
+  OTHER_SYMBOLS,       ///< SG implicitly matching all other characters
+  NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
 };
 
 // Aliases for readability of the transition table
@@ -100,7 +100,7 @@ struct TransduceToNormalizedWS {
 
     // Case when read symbol is a whitespace or tabspace but is unquoted
     // This will be the same condition as in `operator()(state_id, match_id, read_symbol)` function
-    // However, since there is no output in this case i.e. the count returned by 
+    // However, since there is no output in this case i.e. the count returned by
     // operator()(state_id, match_id, read_symbol) is zero, this function is never called.
     // So skipping the check for this case.
 
