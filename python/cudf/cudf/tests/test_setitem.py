@@ -1,12 +1,16 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.core._compat import PANDAS_GE_210
+from cudf.testing._utils import (
+    assert_eq,
+    assert_exceptions_equal,
+    expect_warning_if,
+)
 
 
 @pytest.mark.parametrize("df", [pd.DataFrame({"a": [1, 2, 3]})])
@@ -226,22 +230,12 @@ def test_categorical_setitem_invalid():
     ps = pd.Series([1, 2, 3], dtype="category")
     gs = cudf.Series([1, 2, 3], dtype="category")
 
-    if PANDAS_GE_150:
-        assert_exceptions_equal(
-            lfunc=ps.__setitem__,
-            rfunc=gs.__setitem__,
-            lfunc_args_and_kwargs=([0, 5], {}),
-            rfunc_args_and_kwargs=([0, 5], {}),
-        )
-    else:
-        # Following workaround is needed because:
-        # https://github.com/pandas-dev/pandas/issues/46646
-        with pytest.raises(
-            ValueError,
-            match="Cannot setitem on a Categorical with a new category, set "
-            "the categories first",
-        ):
-            gs[0] = 5
+    assert_exceptions_equal(
+        lfunc=ps.__setitem__,
+        rfunc=gs.__setitem__,
+        lfunc_args_and_kwargs=([0, 5], {}),
+        rfunc_args_and_kwargs=([0, 5], {}),
+    )
 
 
 def test_series_slice_setitem_list():
@@ -310,13 +304,12 @@ def test_series_setitem_upcasting(dtype, indices):
     # column dtype.
     new_value = np.float64(np.pi)
     col_ref = cr._column
-    sr[indices] = new_value
-    cr[indices] = new_value
-    if PANDAS_GE_150:
-        assert_eq(sr, cr)
-    else:
-        # pandas bug, incorrectly fails to upcast from float32 to float64
-        assert_eq(sr.values, cr.values)
+    with expect_warning_if(PANDAS_GE_210 and dtype != np.float64):
+        sr[indices] = new_value
+    with expect_warning_if(dtype != np.float64):
+        cr[indices] = new_value
+    assert_eq(sr, cr)
+
     if dtype == np.float64:
         # no-op type cast should not modify backing column
         assert col_ref == cr._column

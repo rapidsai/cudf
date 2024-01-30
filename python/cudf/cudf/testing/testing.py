@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Union
-
 import cupy as cp
 import numpy as np
 import pandas as pd
@@ -11,7 +9,7 @@ import pandas as pd
 import cudf
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
-    is_categorical_dtype,
+    _is_categorical_dtype,
     is_numeric_dtype,
     is_string_dtype,
 )
@@ -65,25 +63,17 @@ def _check_types(
     if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
-            and isinstance(
-                right,
-                (
-                    cudf.Int8Index,
-                    cudf.Int16Index,
-                    cudf.Int32Index,
-                    cudf.Int64Index,
-                ),
+            and (
+                isinstance(right, cudf.Index)
+                and hasattr(right, "dtype")
+                and right.dtype.kind == "i"
             )
         ) or (
             isinstance(right, cudf.RangeIndex)
-            and isinstance(
-                left,
-                (
-                    cudf.Int8Index,
-                    cudf.Int16Index,
-                    cudf.Int32Index,
-                    cudf.Int64Index,
-                ),
+            and (
+                isinstance(left, cudf.Index)
+                and hasattr(left, "dtype")
+                and left.dtype.kind == "i"
             )
         ):
             return
@@ -96,7 +86,7 @@ def _check_types(
     if (
         exact
         and not isinstance(left, cudf.MultiIndex)
-        and is_categorical_dtype(left)
+        and _is_categorical_dtype(left)
     ):
         if left.dtype != right.dtype:
             raise_assert_detail(
@@ -109,7 +99,6 @@ def assert_column_equal(
     right,
     check_dtype=True,
     check_column_type="equiv",
-    check_less_precise=False,
     check_exact=False,
     check_datetimelike_compat=False,
     check_categorical=True,
@@ -137,8 +126,6 @@ def assert_column_equal(
         Whether to check the columns class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_exact : bool, default False
         Whether to compare number exactly.
     check_datetime_like_compat : bool, default False
@@ -157,8 +144,8 @@ def assert_column_equal(
     """
     if check_dtype is True:
         if (
-            is_categorical_dtype(left)
-            and is_categorical_dtype(right)
+            _is_categorical_dtype(left)
+            and _is_categorical_dtype(right)
             and not check_categorical
         ):
             pass
@@ -186,7 +173,7 @@ def assert_column_equal(
             return
 
     if check_exact and check_categorical:
-        if is_categorical_dtype(left) and is_categorical_dtype(right):
+        if _is_categorical_dtype(left) and _is_categorical_dtype(right):
             left_cat = left.categories
             right_cat = right.categories
 
@@ -220,8 +207,8 @@ def assert_column_equal(
 
     if (
         not check_dtype
-        and is_categorical_dtype(left)
-        and is_categorical_dtype(right)
+        and _is_categorical_dtype(left)
+        and _is_categorical_dtype(right)
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
@@ -271,7 +258,7 @@ def assert_column_equal(
                 raise e
             else:
                 columns_equal = False
-            if is_categorical_dtype(left) and is_categorical_dtype(right):
+            if _is_categorical_dtype(left) and _is_categorical_dtype(right):
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
@@ -308,7 +295,6 @@ def assert_index_equal(
     right,
     exact="equiv",
     check_names: bool = True,
-    check_less_precise: Union[bool, int] = False,
     check_exact: bool = True,
     check_categorical: bool = True,
     check_order: bool = True,
@@ -332,11 +318,9 @@ def assert_index_equal(
     exact : bool or {'equiv'}, default 'equiv'
         Whether to check the Index class, dtype and inferred_type
         are identical. If 'equiv', then RangeIndex can be substituted
-        for Int8Index, Int16Index, Int32Index, Int64Index as well.
+        for Index with an int8/int32/int64 dtype as well.
     check_names : bool, default True
         Whether to check the names attribute.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_exact : bool, default False
         Whether to compare number exactly.
     check_categorical : bool, default True
@@ -420,7 +404,6 @@ def assert_index_equal(
                 exact=check_exact,
                 check_names=check_names,
                 check_exact=check_exact,
-                check_less_precise=check_less_precise,
                 check_order=check_order,
                 rtol=rtol,
                 atol=atol,
@@ -449,7 +432,6 @@ def assert_series_equal(
     check_dtype=True,
     check_index_type="equiv",
     check_series_type=True,
-    check_less_precise=False,
     check_names=True,
     check_exact=False,
     check_datetimelike_compat=False,
@@ -481,8 +463,6 @@ def assert_series_equal(
         Whether to check the series class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_names : bool, default True
         Whether to check that the names attribute for both the index
         and column attributes of the Series is identical.
@@ -546,7 +526,6 @@ def assert_series_equal(
         right.index,
         exact=check_index_type,
         check_names=check_names,
-        check_less_precise=check_less_precise,
         check_exact=check_exact,
         check_categorical=check_categorical,
         rtol=rtol,
@@ -559,7 +538,6 @@ def assert_series_equal(
         right._column,
         check_dtype=check_dtype,
         check_column_type=check_series_type,
-        check_less_precise=check_less_precise,
         check_exact=check_exact,
         check_datetimelike_compat=check_datetimelike_compat,
         check_categorical=check_categorical,

@@ -34,7 +34,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from packaging.version import Version
 from pandas._config import get_option
 from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
@@ -59,6 +58,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
+from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
@@ -86,6 +86,7 @@ from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.core.udf.row_function import _get_row_kernel
+from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -805,6 +806,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
                     if columns is not None:
+                        label_dtype = getattr(columns, "dtype", None)
                         data = dict(zip(columns, [data]))
                         rangeindex = isinstance(
                             columns, (range, pd.RangeIndex, cudf.RangeIndex)
@@ -812,6 +814,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     else:
                         data = dict(enumerate([data]))
                         rangeindex = True
+                        label_dtype = None
                     new_df = DataFrame(data=data, index=index)
 
                     self._data = new_df._data
@@ -822,6 +825,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         else self._data._level_names
                     )
                     self._data.rangeindex = rangeindex
+                    self._data.label_dtype = (
+                        cudf.dtype(label_dtype)
+                        if label_dtype is not None
+                        else None
+                    )
                 elif len(data) > 0 and isinstance(data[0], Series):
                     self._init_from_series_list(
                         data=data, columns=columns, index=index
@@ -925,7 +933,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             transpose = self.T
         else:
-            concat_df = cudf.concat(data, axis=1)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                concat_df = cudf.concat(data, axis=1)
 
             cols = concat_df._data.to_pandas_index()
             if cols.dtype == "object":
@@ -1039,7 +1049,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 empty_column = functools.partial(
                     cudf.core.column.column_empty,
                     row_count=(0 if index is None else len(index)),
-                    dtype=None,
                     masked=index is not None,
                 )
 
@@ -1330,13 +1339,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif can_convert_to_column(arg):
             mask = arg
             if is_list_like(mask):
-                # An explicit dtype is needed to avoid pandas warnings from
-                # empty sets of columns. This shouldn't be needed in pandas
-                # 2.0, we don't need to specify a dtype when we know we're not
-                # trying to match any columns so the default is fine.
                 dtype = None
-                if len(mask) == 0:
-                    assert Version(pd.__version__) < Version("2.0.0")
+                if len(mask) == 0 and not PANDAS_GE_200:
+                    # An explicit dtype is needed to avoid pandas
+                    # warnings from empty sets of columns. This
+                    # shouldn't be needed in pandas 2.0, we don't
+                    # need to specify a dtype when we know we're not
+                    # trying to match any columns so the default is fine.
                     dtype = "float64"
                 mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
@@ -1747,7 +1756,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
         elif are_all_range_index and not ignore_index:
-            out._index = cudf.core.index.GenericIndex._concat(
+            out._index = cudf.core.index.Index._concat(
                 [o._index for o in objs]
             )
 
@@ -1942,9 +1951,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             lower_left = self.tail(lower_rows).iloc[:, :left_cols]
             lower_right = self.tail(lower_rows).iloc[:, right_cols:]
 
-            upper = cudf.concat([upper_left, upper_right], axis=1)
-            lower = cudf.concat([lower_left, lower_right], axis=1)
-            output = cudf.concat([upper, lower])
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                upper = cudf.concat([upper_left, upper_right], axis=1)
+                lower = cudf.concat([lower_left, lower_right], axis=1)
+                output = cudf.concat([upper, lower])
 
         output = self._clean_nulls_from_dataframe(output)
         output._index = output._index._clean_nulls_from_index()
@@ -2028,6 +2039,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             rhs = {name: other for name in self._data}
             equal_columns = True
         elif isinstance(other, Series):
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and (
+                    not self._data.to_pandas_index().equals(
+                        other.index.to_pandas()
+                    )
+                )
+            ):
+                raise ValueError(
+                    "Can only compare DataFrame & Series objects "
+                    "whose columns & index are same respectively, "
+                    "please reindex."
+                )
             rhs = dict(zip(other.index.to_pandas(), other.values_host))
             # For keys in right but not left, perform binops between NaN (not
             # NULL!) and the right value (result is NaN).
@@ -3518,7 +3543,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(isinstance(item, str) for item in index.values())
-                and type(self.index) != cudf.StringIndex
+                and type(self.index._values) != cudf.core.column.StringColumn
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
@@ -3606,11 +3631,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             * Not supporting: ``axis``, ``*args``, ``**kwargs``
 
         """
-        # TODO: Remove the typecasting below once issue #6846 is fixed
-        # link <https://github.com/rapidsai/cudf/issues/6846>
         dtypes = [self[col].dtype for col in self._column_names]
         common_dtype = find_common_type(dtypes)
-        df_normalized = self.astype(common_dtype)
+        if not is_bool_dtype(common_dtype) and any(
+            is_bool_dtype(dtype) for dtype in dtypes
+        ):
+            raise MixedTypeError("Cannot create a column with mixed types")
 
         if any(is_string_dtype(dt) for dt in dtypes):
             raise NotImplementedError(
@@ -3628,17 +3654,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
             for agg in aggs:
-                result[agg] = getattr(df_normalized, agg)()
+                result[agg] = getattr(self, agg)()
             return result.T.sort_index(axis=1, ascending=True)
 
         elif isinstance(aggs, str):
-            if not hasattr(df_normalized, aggs):
+            if not hasattr(self, aggs):
                 raise AttributeError(
                     f"{aggs} is not a valid function for "
                     f"'DataFrame' object"
                 )
             result = DataFrame()
-            result[aggs] = getattr(df_normalized, aggs)()
+            result[aggs] = getattr(self, aggs)()
             result = result.iloc[:, 0]
             result.name = None
             return result
@@ -3650,15 +3676,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "callable parameter is not implemented yet"
                 )
             elif all(isinstance(val, str) for val in aggs.values()):
-                result = cudf.Series(index=cols)
+                res = {}
                 for key, value in aggs.items():
-                    col = df_normalized[key]
+                    col = self[key]
                     if not hasattr(col, value):
                         raise AttributeError(
                             f"{value} is not a valid function for "
                             f"'Series' object"
                         )
-                    result[key] = getattr(col, value)()
+                    res[key] = getattr(col, value)()
+                result = cudf.Series(list(res.values()), index=res.keys())
             elif all(isinstance(val, abc.Iterable) for val in aggs.values()):
                 idxs = set()
                 for val in aggs.values():
@@ -3674,7 +3701,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 result = DataFrame(index=idxs, columns=cols)
                 for key in aggs.keys():
-                    col = df_normalized[key]
+                    col = self[key]
                     col_empty = column_empty(
                         len(idxs), dtype=col.dtype, masked=True
                     )
@@ -4561,6 +4588,39 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame
             Transformed DataFrame.
         """
+        # Do not remove until pandas 3.0 support is added.
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+        warnings.warn(
+            "DataFrame.applymap has been deprecated. Use DataFrame.map "
+            "instead.",
+            FutureWarning,
+        )
+        return self.map(func=func, na_action=na_action, **kwargs)
+
+    def map(
+        self,
+        func: Callable[[Any], Any],
+        na_action: Union[str, None] = None,
+        **kwargs,
+    ) -> DataFrame:
+        """
+        Apply a function to a Dataframe elementwise.
+
+        This method applies a function that accepts and returns a scalar
+        to every element of a DataFrame.
+
+        Parameters
+        ----------
+        func : callable
+            Python function, returns a single value from a single value.
+        na_action : {None, 'ignore'}, default None
+            If 'ignore', propagate NaN values, without passing them to func.
+
+        Returns
+        -------
+        DataFrame
+            Transformed DataFrame.
+        """
 
         if kwargs:
             raise NotImplementedError(
@@ -5096,22 +5156,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         percentiles=None,
         include=None,
         exclude=None,
-        datetime_is_numeric=False,
     ):
         """{docstring}"""
 
         if not include and not exclude:
-            default_include = [np.number]
-            if datetime_is_numeric:
-                default_include.append("datetime")
-            else:
-                # Do not remove until pandas 2.0 support is added.
-                warnings.warn(
-                    "`datetime_is_numeric` is deprecated. Specify "
-                    "`datetime_is_numeric=True` to silence this "
-                    "warning and adopt the future behavior now.",
-                    FutureWarning,
-                )
+            default_include = [np.number, "datetime"]
             data_to_describe = self.select_dtypes(include=default_include)
             if data_to_describe._num_columns == 0:
                 data_to_describe = self
@@ -5132,7 +5181,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         describe_series_list = [
             data_to_describe[col].describe(
                 percentiles=percentiles,
-                datetime_is_numeric=datetime_is_numeric,
             )
             for col in data_to_describe._column_names
         ]
@@ -5151,14 +5199,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 None,
             )
 
-            return cudf.concat(
-                [
-                    series.reindex(names, copy=False)
-                    for series in describe_series_list
-                ],
-                axis=1,
-                sort=False,
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                res = cudf.concat(
+                    [
+                        series.reindex(names, copy=False)
+                        for series in describe_series_list
+                    ],
+                    axis=1,
+                    sort=False,
+                )
+            return res
 
     @_cudf_nvtx_annotate
     def to_pandas(self, *, nullable: bool = False) -> pd.DataFrame:
@@ -5938,7 +5989,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     # Stats
     #
     @_cudf_nvtx_annotate
-    def _prepare_for_rowwise_op(self, method, skipna):
+    def _prepare_for_rowwise_op(self, method, skipna, numeric_only):
         """Prepare a DataFrame for CuPy-based row-wise operations."""
 
         if method not in _cupy_nan_methods_map and any(
@@ -5952,26 +6003,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
             raise ValueError(msg)
 
-        is_pure_dt = all(is_datetime_dtype(dt) for dt in self.dtypes)
-
-        if not is_pure_dt:
+        if numeric_only:
             filtered = self.select_dtypes(include=[np.number, np.bool_])
         else:
             filtered = self.copy(deep=False)
 
-        common_dtype = find_common_type(filtered.dtypes)
+        is_pure_dt = all(is_datetime_dtype(dt) for dt in filtered.dtypes)
 
-        if filtered._num_columns < self._num_columns:
-            # When we update our pandas compatibility target to 2.0, pandas
-            # will stop supporting numeric_only=None and users will have to
-            # specify True/False. At that time we should also top our implicit
-            # removal of non-numeric columns here.
-            assert Version(pd.__version__) < Version("2.0.0")
-            msg = (
-                "Row-wise operations currently only support int, float "
-                "and bool dtypes. Non numeric columns are ignored."
+        common_dtype = find_common_type(filtered.dtypes)
+        if (
+            not numeric_only
+            and is_string_dtype(common_dtype)
+            and any(not is_string_dtype(dt) for dt in filtered.dtypes)
+        ):
+            raise TypeError(
+                f"Cannot perform row-wise {method} across mixed-dtype columns,"
+                " try type-casting all the columns to same dtype."
             )
-            warnings.warn(msg)
 
         if not skipna and any(col.nullable for col in filtered._columns):
             mask = DataFrame(
@@ -5993,7 +6041,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return coerced, mask, common_dtype
 
     @_cudf_nvtx_annotate
-    def count(self, axis=0, level=None, numeric_only=False, **kwargs):
+    def count(self, axis=0, numeric_only=False):
         """
         Count ``non-NA`` cells for each column or row.
 
@@ -6021,8 +6069,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         .. pandas-compat::
             **DataFrame.count**
 
-            Parameters currently not supported are `axis`, `level`,
-            `numeric_only`.
+            Parameters currently not supported are `axis` and `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
@@ -6050,28 +6097,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self,
         op,
         axis=None,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
         source = self
-        if numeric_only:
-            numeric_cols = (
-                name
-                for name in self._data.names
-                if is_numeric_dtype(self._data[name].dtype)
-            )
-            source = self._get_columns_by_label(numeric_cols)
-            if source.empty:
-                return Series(index=cudf.Index([], dtype="str"))
 
         if axis is None:
-            if op in {"any", "all"}:
-                axis = 2
-            else:
+            if op in {"sum", "product", "std", "var"}:
                 # Do not remove until pandas 2.0 support is added.
                 warnings.warn(
                     f"In a future version, {type(self).__name__}"
@@ -6082,58 +6114,91 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     FutureWarning,
                 )
                 axis = 0
+            else:
+                axis = 2
         elif axis is no_default:
             axis = 0
         else:
             axis = source._get_axis_from_axis_arg(axis)
 
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name in self._data.names
+                if is_numeric_dtype(self._data[name].dtype)
+            )
+            source = self._get_columns_by_label(numeric_cols)
+            if source.empty:
+                return Series(
+                    index=self._data.to_pandas_index()[:0]
+                    if axis == 0
+                    else source.index,
+                    dtype="float64",
+                )
         if axis in {0, 2}:
+            if axis == 2 and op in ("kurtosis", "kurt", "skew"):
+                # TODO: concat + op can probably be done in the general case
+                # for axis == 2.
+                # https://github.com/rapidsai/cudf/issues/14930
+                return getattr(concat_columns(source._data.columns), op)(
+                    **kwargs
+                )
             try:
                 result = [
                     getattr(source._data[col], op)(**kwargs)
                     for col in source._data.names
                 ]
             except AttributeError:
-                if numeric_only is None and op in _numeric_reduction_ops:
-                    # Do not remove until pandas 2.0 support is added.
-                    warnings.warn(
-                        f"The default value of numeric_only in DataFrame.{op} "
-                        "is deprecated. In a future version, it will default "
-                        "to False. In addition, specifying "
-                        "'numeric_only=None' is deprecated. Select only valid "
-                        "columns or specify the value of numeric_only to "
-                        "silence this warning.",
-                        FutureWarning,
-                    )
-                    numeric_cols = (
-                        name
+                numeric_ops = (
+                    "mean",
+                    "min",
+                    "max",
+                    "sum",
+                    "product",
+                    "prod",
+                    "std",
+                    "var",
+                    "kurtosis",
+                    "kurt",
+                    "skew",
+                )
+
+                if op in numeric_ops:
+                    if numeric_only:
+                        try:
+                            result = [
+                                getattr(source._data[col], op)(**kwargs)
+                                for col in source._data.names
+                            ]
+                        except AttributeError:
+                            raise NotImplementedError(
+                                f"Not all column dtypes support op {op}"
+                            )
+                    elif any(
+                        not is_numeric_dtype(self._data[name].dtype)
                         for name in self._data.names
-                        if is_numeric_dtype(self._data[name].dtype)
-                    )
-                    source = self._get_columns_by_label(numeric_cols)
-                    if source.empty:
-                        if axis == 2:
-                            return getattr(column_empty(0), op)(**kwargs)
-                        else:
-                            return Series(index=cudf.Index([], dtype="str"))
-                    try:
-                        result = [
-                            getattr(source._data[col], op)(**kwargs)
-                            for col in source._data.names
-                        ]
-                    except AttributeError:
+                    ):
                         raise TypeError(
-                            f"Not all column dtypes support op {op}"
+                            "Non numeric columns passed with "
+                            "`numeric_only=False`, pass `numeric_only=True` "
+                            f"to perform DataFrame.{op}"
                         )
                 else:
                     raise
             if axis == 2:
-                return getattr(as_column(result), op)(**kwargs)
+                return getattr(as_column(result, nan_as_null=False), op)(
+                    **kwargs
+                )
             else:
                 source_dtypes = [c.dtype for c in source._data.columns]
                 common_dtype = find_common_type(source_dtypes)
-                if is_object_dtype(common_dtype) and any(
-                    not is_object_dtype(dtype) for dtype in source_dtypes
+                if (
+                    is_object_dtype(common_dtype)
+                    and any(
+                        not is_object_dtype(dtype) for dtype in source_dtypes
+                    )
+                    or not is_bool_dtype(common_dtype)
+                    and any(is_bool_dtype(dtype) for dtype in source_dtypes)
                 ):
                     raise TypeError(
                         "Columns must all have the same dtype to "
@@ -6257,7 +6322,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if len(mode_results) == 0:
             return DataFrame()
 
-        df = cudf.concat(mode_results, axis=1)
+        with warnings.catch_warnings():
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.simplefilter("ignore", FutureWarning)
+            df = cudf.concat(mode_results, axis=1)
+
         if isinstance(df, Series):
             df = df.to_frame()
 
@@ -6266,14 +6337,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df
 
     @_cudf_nvtx_annotate
-    def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def all(self, axis=0, bool_only=None, skipna=True, **kwargs):
         obj = self.select_dtypes(include="bool") if bool_only else self
-        return super(DataFrame, obj).all(axis, skipna, level, **kwargs)
+        return super(DataFrame, obj).all(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
-    def any(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
+    def any(self, axis=0, bool_only=None, skipna=True, **kwargs):
         obj = self.select_dtypes(include="bool") if bool_only else self
-        return super(DataFrame, obj).any(axis, skipna, level, **kwargs)
+        return super(DataFrame, obj).any(axis, skipna, **kwargs)
 
     @_cudf_nvtx_annotate
     def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
@@ -6300,12 +6371,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Row-wise operations currently do not support `level`."
             )
 
-        numeric_only = kwargs.pop("numeric_only", None)
-        if numeric_only not in (None, True):
-            raise NotImplementedError(
-                "Row-wise operations currently do not "
-                "support `numeric_only=False`."
-            )
+        numeric_only = kwargs.pop("numeric_only", False)
 
         min_count = kwargs.pop("min_count", None)
         if min_count not in (None, 0):
@@ -6325,7 +6391,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         kwargs.pop("cast_to_int", None)
 
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
-            method, skipna
+            method, skipna, numeric_only
         )
         for col in prepared._data.names:
             if prepared._data[col].nullable:
@@ -6755,11 +6821,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cat    1.0    2.0
         dog    3.0    4.0
         >>> df_multi_level_cols2.stack()
-            height weight
-        cat kg   <NA>    1.0
-            m     2.0   <NA>
-        dog kg   <NA>    3.0
-            m     4.0   <NA>
+               weight height
+        cat kg    1.0   <NA>
+            m    <NA>    2.0
+        dog kg    3.0   <NA>
+            m    <NA>    4.0
 
         **Prescribing the level(s) to be stacked**
 
@@ -6931,10 +6997,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if unnamed_level_values.nlevels == 1:
                 unnamed_level_values = unnamed_level_values.get_level_values(0)
-            unnamed_level_values = unnamed_level_values.unique().sort_values()
+            unnamed_level_values = unnamed_level_values.unique()
 
             data = ColumnAccessor(
-                dict(zip(unnamed_level_values, stacked)),
+                dict(
+                    zip(
+                        unnamed_level_values,
+                        [
+                            stacked[i]
+                            for i in unnamed_level_values.argsort().argsort()
+                        ],
+                    )
+                ),
                 isinstance(unnamed_level_values, pd.MultiIndex),
                 unnamed_level_values.names,
             )
@@ -7062,7 +7136,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Columns: [0, 1, 2, 3]
         Index: []
         >>> df.keys()
-        Int64Index([0, 1, 2, 3], dtype='int64')
+        Index([0, 1, 2, 3], dtype='int64')
         """
         return self._data.to_pandas_index()
 
@@ -7095,152 +7169,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_cudf_nvtx_annotate
-    def append(
-        self, other, ignore_index=False, verify_integrity=False, sort=False
-    ):
-        """
-        Append rows of `other` to the end of caller, returning a new object.
-        Columns in `other` that are not in the caller are added as new columns.
-
-        Parameters
-        ----------
-        other : DataFrame or Series/dict-like object, or list of these
-            The data to append.
-        ignore_index : bool, default False
-            If True, do not use the index labels.
-        sort : bool, default False
-            Sort columns ordering if the columns of
-            `self` and `other` are not aligned.
-        verify_integrity : bool, default False
-            This Parameter is currently not supported.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Iteratively appending rows to a cudf DataFrame can be more
-        computationally intensive than a single concatenate. A better solution
-        is to append those rows to a list and then concatenate the list with
-        the original DataFrame all at once.
-
-        See Also
-        --------
-        cudf.concat : General function to concatenate DataFrame or
-            objects.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame([[1, 2], [3, 4]], columns=list('AB'))
-        >>> df
-           A  B
-        0  1  2
-        1  3  4
-        >>> df2 = cudf.DataFrame([[5, 6], [7, 8]], columns=list('AB'))
-        >>> df2
-           A  B
-        0  5  6
-        1  7  8
-        >>> df.append(df2)
-           A  B
-        0  1  2
-        1  3  4
-        0  5  6
-        1  7  8
-
-        With `ignore_index` set to True:
-
-        >>> df.append(df2, ignore_index=True)
-           A  B
-        0  1  2
-        1  3  4
-        2  5  6
-        3  7  8
-
-        The following, while not recommended methods for generating DataFrames,
-        show two ways to generate a DataFrame from multiple data sources.
-        Less efficient:
-
-        >>> df = cudf.DataFrame(columns=['A'])
-        >>> for i in range(5):
-        ...     df = df.append({'A': i}, ignore_index=True)
-        >>> df
-           A
-        0  0
-        1  1
-        2  2
-        3  3
-        4  4
-
-        More efficient than above:
-
-        >>> cudf.concat([cudf.DataFrame([i], columns=['A']) for i in range(5)],
-        ...           ignore_index=True)
-           A
-        0  0
-        1  1
-        2  2
-        3  3
-        4  4
-
-        .. pandas-compat::
-            **DataFrame.append**
-
-            * If a list of dict/series is passed and the keys are all contained
-              in the DataFrame's index, the order of the columns in the
-              resulting DataFrame will be unchanged.
-            * The `verify_integrity` parameter is not supported yet.
-        """
-        if isinstance(other, dict):
-            if not ignore_index:
-                raise TypeError("Can only append a dict if ignore_index=True")
-            other = DataFrame(other)
-        elif isinstance(other, Series):
-            if other.name is None and not ignore_index:
-                raise TypeError(
-                    "Can only append a Series if ignore_index=True "
-                    "or if the Series has a name"
-                )
-
-            current_cols = self._data.to_pandas_index()
-            combined_columns = other.index.to_pandas()
-            if len(current_cols):
-                if cudf.utils.dtypes.is_mixed_with_object_dtype(
-                    current_cols, combined_columns
-                ):
-                    raise TypeError(
-                        "cudf does not support mixed types, please type-cast "
-                        "the column index of dataframe and index of series "
-                        "to same dtypes."
-                    )
-
-                combined_columns = current_cols.union(
-                    combined_columns, sort=False
-                )
-
-            if sort:
-                combined_columns = combined_columns.sort_values()
-
-            other = other.reindex(combined_columns, copy=False).to_frame().T
-            if not current_cols.equals(combined_columns):
-                self = self.reindex(columns=combined_columns)
-        elif (
-            isinstance(other, list)
-            and other
-            and not isinstance(other[0], DataFrame)
-        ):
-            other = DataFrame(other)
-            cols = self._data.to_pandas_index()
-            if (cols.get_indexer(other._data.to_pandas_index()) >= 0).all():
-                other = other.reindex(columns=cols)
-
-        return super()._append(other, ignore_index, verify_integrity, sort)
-
-    @_cudf_nvtx_annotate
     @copy_docstring(reshape.pivot)
-    def pivot(self, index, columns, values=None):
+    def pivot(self, *, columns, index=no_default, values=no_default):
         return cudf.core.reshape.pivot(
             self, index=index, columns=columns, values=values
         )
@@ -7327,7 +7257,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return super()._explode(column, ignore_index)
 
     def pct_change(
-        self, periods=1, fill_method="ffill", limit=None, freq=None
+        self, periods=1, fill_method=no_default, limit=no_default, freq=None
     ):
         """
         Calculates the percent change between sequential elements
@@ -7339,9 +7269,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
+
+            .. deprecated:: 24.04
+                All options of `fill_method` are deprecated
+                except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
+
+            .. deprecated:: 24.04
+                `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -7350,17 +7287,44 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        if limit is not None:
+        if limit is not no_default:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+        elif fill_method not in {
+            no_default,
+            None,
+            "ffill",
+            "pad",
+            "bfill",
+            "backfill",
+        }:
             raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
+                "fill_method must be one of None, 'ffill', 'pad', "
                 "'bfill', or 'backfill'."
             )
 
-        data = self.fillna(method=fill_method, limit=limit)
+        if fill_method not in (no_default, None) or limit is not no_default:
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                "The 'fill_method' and 'limit' keywords in "
+                f"{type(self).__name__}.pct_change are deprecated and will be "
+                "removed in a future version. Either fill in any non-leading "
+                "NA values prior to calling pct_change or specify "
+                "'fill_method=None' to not fill NA values.",
+                FutureWarning,
+            )
+        if fill_method is no_default:
+            fill_method = "ffill"
+        if limit is no_default:
+            limit = None
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            data = self.fillna(method=fill_method, limit=limit)
 
         return data.diff(periods=periods) / data.shift(
             periods=periods, freq=freq
@@ -7691,12 +7655,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df = cudf.DataFrame({'num_legs': [2, 4, 4, 6],
         ...                    'num_wings': [2, 0, 0, 0]},
         ...                    index=['falcon', 'dog', 'cat', 'ant'])
+        >>> df
+                num_legs  num_wings
+        falcon         2          2
+        dog            4          0
+        cat            4          0
+        ant            6          0
         >>> df.value_counts()
         num_legs  num_wings
         4         0            2
         2         2            1
         6         0            1
-        dtype: int64
+        Name: count, dtype: int64
         """
         if subset:
             diff = set(subset) - set(self._data)
@@ -7718,6 +7688,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
             result.index = MultiIndex._from_data(result._index._data)
+        result.name = "proportion" if normalize else "count"
         return result
 
 
@@ -7901,14 +7872,14 @@ def from_pandas(obj, nan_as_null=no_default):
 
     >>> pidx = pd.Index([1, 2, 10, 20])
     >>> pidx
-    Int64Index([1, 2, 10, 20], dtype='int64')
+    Index([1, 2, 10, 20], dtype='int64')
     >>> gidx = cudf.from_pandas(pidx)
     >>> gidx
-    Int64Index([1, 2, 10, 20], dtype='int64')
+    Index([1, 2, 10, 20], dtype='int64')
     >>> type(gidx)
-    <class 'cudf.core.index.Int64Index'>
+    <class 'cudf.core.index.Index'>
     >>> type(pidx)
-    <class 'pandas.core.indexes.numeric.Int64Index'>
+    <class 'pandas.core.indexes.base.Index'>
 
     Converting a Pandas MultiIndex to cuDF MultiIndex:
 
@@ -8093,7 +8064,7 @@ def _get_union_of_indices(indexes):
     if len(indexes) == 1:
         return indexes[0]
     else:
-        merged_index = cudf.core.index.GenericIndex._concat(indexes)
+        merged_index = cudf.core.index.Index._concat(indexes)
         return merged_index.drop_duplicates()
 
 

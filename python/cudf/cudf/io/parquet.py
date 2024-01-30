@@ -794,13 +794,15 @@ def _parquet_to_frame(
                         dtype=_dtype,
                     )
 
-    # Concatenate dfs and return.
-    # Assume we can ignore the index if it has no name.
-    return (
-        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
-        if len(dfs) > 1
-        else dfs[0]
-    )
+    if len(dfs) > 1:
+        # Concatenate dfs and return.
+        # Assume we can ignore the index if it has no name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res = cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+        return res
+    else:
+        return dfs[0]
 
 
 @_cudf_nvtx_annotate
