@@ -8,7 +8,7 @@ from .scalar cimport Scalar
 from .table cimport Table
 # TODO: cimport type_id once
 # https://github.com/cython/cython/issues/5609 is resolved
-from .types cimport DataType
+from .types cimport DataType, type_id
 
 __all__ = [
     "Column",
@@ -21,4 +21,5 @@ __all__ = [
     "gpumemoryview",
     "groupby",
     "interop",
+    "types",
 ]

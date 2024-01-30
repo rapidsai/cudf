@@ -19,4 +19,5 @@ __all__ = [
     "gpumemoryview",
     "groupby",
     "interop",
+    "types",
 ]
