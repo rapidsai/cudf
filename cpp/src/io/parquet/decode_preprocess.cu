@@ -127,23 +127,27 @@ __device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
 }
 
 /**
+ * @brief Calculate the number of string bytes in the page.
  *
  * This function expects the dictionary position to be at 0 and will traverse
- * the entire thing.
+ * the entire thing (for plain and dictionary encoding).
  *
- * Operates on a single warp only. Expects t < 32
+ * This expects all threads in the thread block (preprocess_block_size). Result is only
+ * valid on thread 0.
  *
  * @param s The local page info
  * @param t Thread index
  */
 __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
 {
+  using cudf::detail::warp_size;
   size_type target_pos = s->num_input_values;
   size_type str_len    = 0;
   switch (s->page.encoding) {
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE_DICTIONARY:
-      if (s->dict_base) {
+      // TODO: make this block-based instead of just 1 warp
+      if (t < warp_size && s->dict_base) {
         auto const [new_target_pos, len] =
           gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
         target_pos = new_target_pos;
@@ -155,17 +159,14 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       // TODO: since this is really just an estimate, we could just return
       // s->dict_size (overestimate) or
       // s->dict_size - sizeof(int) * s->page.num_input_values (underestimate)
-      if ((s->col.data_type & 7) == BYTE_ARRAY) {
+      if (t < warp_size && (s->col.data_type & 7) == BYTE_ARRAY) {
         str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
       }
       break;
 
     case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
 
-    case Encoding::DELTA_BYTE_ARRAY:
-      // FIXME: this is handled elsewhere, but leaving in the bad estimate for now
-      str_len = std::distance(s->data_start, s->data_end);
-      break;
+    case Encoding::DELTA_BYTE_ARRAY: str_len = gpuDeltaPageStringSize(s, t); break;
 
     default:
       // not a valid string encoding, so just return 0
@@ -325,7 +326,6 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
                       bool is_base_pass,
                       bool compute_string_sizes)
 {
-  using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
 
   page_state_s* const s = &state_g;
@@ -459,16 +459,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   }
 
   // retrieve total string size.
-  // TODO: make this block-based instead of just 1 warp
   if (compute_string_sizes) {
-    size_type str_bytes = 0;
-    if (s->page.encoding == Encoding::DELTA_BYTE_ARRAY) {
-      // this must be called by all threads
-      str_bytes = gpuDeltaPageStringSize(s, t);
-    } else if (t < warp_size) {
-      // single warp
-      str_bytes = gpuDecodeTotalPageStringSize(s, t);
-    }
+    auto const str_bytes = gpuDecodeTotalPageStringSize(s, t);
     if (t == 0) { s->page.str_bytes = str_bytes; }
   }
 
