@@ -225,16 +225,17 @@ struct SkipRowTest {
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
 {
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
+  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
 
-  constexpr auto num_rows = 100;
+  constexpr auto num_rows = 10000000;
   column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(sequence,
                                                                          sequence + num_rows);
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("OrcSingleColumn.orc");
   cudf::io::orc_writer_options out_opts =
-    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::SNAPPY);
   cudf::io::write_orc(out_opts);
 
   cudf::io::orc_reader_options in_opts =
