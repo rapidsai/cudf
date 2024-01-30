@@ -15,7 +15,6 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_LT_140
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -1318,15 +1317,7 @@ def test_series_raises_float16(data):
         pd.RangeIndex(0, 3, 1),
         [3.0, 1.0, np.nan],
         ["a", "z", None],
-        pytest.param(
-            pd.RangeIndex(4, -1, -2),
-            marks=[
-                pytest.mark.xfail(
-                    condition=PANDAS_LT_140,
-                    reason="https://github.com/pandas-dev/pandas/issues/43591",
-                )
-            ],
-        ),
+        pd.RangeIndex(4, -1, -2),
     ],
 )
 @pytest.mark.parametrize("axis", [0, "index"])
