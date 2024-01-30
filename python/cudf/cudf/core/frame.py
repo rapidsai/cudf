@@ -42,9 +42,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.mixins import BinaryOperand, Scannable
-from cudf.core.window import Rolling
 from cudf.utils import ioutils
-from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _array_ufunc, _warn_no_dask_cudf
@@ -1989,20 +1987,6 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def __copy__(self):
         return self.copy(deep=False)
-
-    @_cudf_nvtx_annotate
-    @copy_docstring(Rolling)
-    def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
-    ):
-        return Rolling(
-            self,
-            window,
-            min_periods=min_periods,
-            center=center,
-            axis=axis,
-            win_type=win_type,
-        )
 
     @_cudf_nvtx_annotate
     def __invert__(self):

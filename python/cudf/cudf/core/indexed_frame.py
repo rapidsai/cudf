@@ -66,8 +66,10 @@ from cudf.core.udf.utils import (
     _post_process_output_col,
     _return_arr_from_dtype,
 )
+from cudf.core.window import Rolling
 from cudf.utils import docutils
 from cudf.utils._numba import _CUDFNumbaConfig
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf
 
@@ -1760,6 +1762,20 @@ class IndexedFrame(Frame):
             cond = cp.asarray(cond)
 
         return self.where(cond=~cond, other=other, inplace=inplace)
+
+    @_cudf_nvtx_annotate
+    @copy_docstring(Rolling)
+    def rolling(
+        self, window, min_periods=None, center=False, axis=0, win_type=None
+    ):
+        return Rolling(
+            self,
+            window,
+            min_periods=min_periods,
+            center=center,
+            axis=axis,
+            win_type=win_type,
+        )
 
     @_cudf_nvtx_annotate
     def nans_to_nulls(self):
