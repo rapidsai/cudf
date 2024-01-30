@@ -78,7 +78,9 @@ Missing values
    Index.fillna
    Index.dropna
    Index.isna
+   Index.isnull
    Index.notna
+   Index.notnull
 
 Memory usage
 ~~~~~~~~~~~~
