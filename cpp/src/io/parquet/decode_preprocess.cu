@@ -58,6 +58,7 @@ __device__ size_type gpuDeltaLengthPageStringSize(page_state_s* s, int t)
   return 0;
 }
 
+#if 0
 /**
  * @brief Calculate string bytes for DELTA_BYTE_ARRAY encoded pages
  *
@@ -121,6 +122,7 @@ __device__ size_type gpuDeltaPageStringSize(page_state_s* s, int t)
 
   return static_cast<size_type>(final_bytes);
 }
+#endif
 
 /**
  *
@@ -158,7 +160,12 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
 
     case Encoding::DELTA_LENGTH_BYTE_ARRAY: str_len = gpuDeltaLengthPageStringSize(s, t); break;
 
-    case Encoding::DELTA_BYTE_ARRAY: str_len = gpuDeltaPageStringSize(s, t); break;
+    case Encoding::DELTA_BYTE_ARRAY:
+      // this requires the entire threadblock, and adds 2k to shared memory requirements
+      // str_len = gpuDeltaPageStringSize(s, t);
+      // bad estimate
+      str_len = std::distance(s->data_start, s->data_end);
+      break;
 
     default:
       // not a valid string encoding, so just return 0
