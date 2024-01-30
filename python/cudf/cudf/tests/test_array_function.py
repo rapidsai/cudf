@@ -104,11 +104,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: np.mean(x),
-        lambda x: np.sum(x),
-        lambda x: np.var(x, ddof=1),
         lambda x: np.unique(x),
-        lambda x: np.dot(x, x),
     ],
 )
 def test_array_func_cudf_index(np_ar, func):

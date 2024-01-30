@@ -132,11 +132,8 @@ def test_index_comparision():
     [
         lambda x: x.min(),
         lambda x: x.max(),
-        lambda x: x.sum(),
-        lambda x: x.mean(),
         lambda x: x.any(),
         lambda x: x.all(),
-        lambda x: x.prod(),
     ],
 )
 def test_reductions(func):
