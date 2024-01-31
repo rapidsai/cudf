@@ -11,6 +11,11 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf as dgd
+from dask_cudf.tests.utils import skip_module_dask_expr
+
+# No dask-expr support
+skip_module_dask_expr()
+
 
 param_nrows = [5, 10, 50, 100]
 

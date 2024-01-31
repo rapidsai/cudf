@@ -5,7 +5,10 @@ from pandas import NA
 
 from dask import dataframe as dd
 
-from dask_cudf.tests.utils import _make_random_frame
+from dask_cudf.tests.utils import _make_random_frame, skip_module_dask_expr
+
+# No dask-expr support
+skip_module_dask_expr()
 
 
 @pytest.mark.parametrize(

@@ -13,6 +13,10 @@ from dask.delayed import delayed
 import cudf as gd
 
 import dask_cudf as dgd
+from dask_cudf.tests.utils import skip_module_dask_expr
+
+# No dask-expr support
+skip_module_dask_expr()
 
 
 @delayed

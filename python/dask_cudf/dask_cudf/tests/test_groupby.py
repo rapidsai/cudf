@@ -12,6 +12,10 @@ import cudf
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
+from dask_cudf.tests.utils import skip_module_dask_expr
+
+# No dask-expr support
+skip_module_dask_expr()
 
 
 def assert_cudf_groupby_layers(ddf):

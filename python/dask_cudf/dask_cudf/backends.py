@@ -691,5 +691,4 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
 try:
     import dask_cudf.expr  # noqa: F401
 except ImportError:
-    # Compatible dask_expr version not installed
     pass

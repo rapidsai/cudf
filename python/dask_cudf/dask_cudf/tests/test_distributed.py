@@ -12,6 +12,11 @@ import cudf
 from cudf.testing._utils import assert_eq
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_module_dask_expr
+
+# No dask-expr support
+skip_module_dask_expr()
+
 
 dask_cuda = pytest.importorskip("dask_cuda")
 
