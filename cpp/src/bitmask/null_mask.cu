@@ -33,6 +33,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
@@ -80,7 +81,7 @@ namespace detail {
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    async_resource_ref mr)
+                                    rmm::device_async_resource_ref mr)
 {
   size_type mask_size{0};
 
@@ -158,7 +159,7 @@ void set_null_mask(bitmask_type* bitmask,
 rmm::device_buffer create_null_mask(size_type size,
                                     mask_state state,
                                     rmm::cuda_stream_view stream,
-                                    async_resource_ref mr)
+                                    rmm::device_async_resource_ref mr)
 {
   return detail::create_null_mask(size, state, stream, mr);
 }
