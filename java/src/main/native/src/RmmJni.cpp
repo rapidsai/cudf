@@ -96,8 +96,6 @@ public:
     return scoped_max_total_allocated;
   }
 
-  bool supports_streams() const noexcept override { return resource->supports_streams(); }
-
 private:
   Upstream *const resource;
   std::size_t const size_align;
@@ -206,8 +204,6 @@ public:
   }
 
   device_memory_resource *get_wrapped_resource() { return resource; }
-
-  bool supports_streams() const noexcept override { return resource->supports_streams(); }
 
 private:
   device_memory_resource *const resource;
