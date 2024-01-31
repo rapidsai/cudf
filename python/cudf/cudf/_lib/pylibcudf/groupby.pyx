@@ -17,6 +17,7 @@ from cudf._lib.cpp.table.table cimport table
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .table cimport Table
+from .types cimport null_policy, sorted
 
 
 cdef class GroupByRequest:
@@ -72,8 +73,13 @@ cdef class GroupBy:
     keys : Table
         The columns to group by.
     """
-    def __init__(self, Table keys):
-        self.c_obj.reset(new groupby(keys.view()))
+    def __init__(
+        self,
+        Table keys,
+        null_policy null_handling=null_policy.EXCLUDE,
+        sorted keys_are_sorted=sorted.NO
+    ):
+        self.c_obj.reset(new groupby(keys.view(), null_handling, keys_are_sorted))
 
     @staticmethod
     cdef tuple _parse_outputs(

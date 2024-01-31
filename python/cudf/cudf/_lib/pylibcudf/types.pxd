@@ -11,6 +11,7 @@ from cudf._lib.cpp.types cimport (
     null_order,
     null_policy,
     order,
+    sorted,
     type_id,
 )
 
