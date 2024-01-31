@@ -2166,7 +2166,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 // DELTA_BYTE_ARRAY page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
-__global__ void __launch_bounds__(block_size, 8)
+CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodeDeltaByteArrayPages(device_span<EncPage> pages,
                                device_span<device_span<uint8_t const>> comp_in,
                                device_span<device_span<uint8_t>> comp_out,
