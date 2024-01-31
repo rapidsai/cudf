@@ -41,6 +41,7 @@ cdef class GroupBy:
     cpdef tuple scan(self, list requests)
     cpdef tuple shift(self, Table values, list offset, list fill_values)
     cpdef tuple replace_nulls(self, Table values, list replace_policy)
+    cpdef tuple get_groups(self, Table values=*)
 
     @staticmethod
     cdef tuple _parse_outputs(pair[unique_ptr[table], vector[aggregation_result]] c_res)

@@ -11,6 +11,7 @@ from cudf._lib.cpp.groupby cimport (
     aggregation_request,
     aggregation_result,
     groupby,
+    groups,
     scan_request,
 )
 from cudf._lib.cpp.scalar.scalar cimport scalar
@@ -189,6 +190,21 @@ cdef class GroupBy:
         )
 
     cpdef tuple replace_nulls(self, Table value, list replace_policies):
+        """Replace nulls in columns.
+
+        Parameters
+        ----------
+        values : Table
+            The columns to replace nulls in.
+        replace_policies : List[replace_policy]
+            The policies to use to replace nulls.
+
+        Returns
+        -------
+        Tuple[Table, Table]
+            A tuple whose first element is the group's keys and whose second
+            element is a table of values with nulls replaced.
+        """
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
             dereference(self.c_obj).replace_nulls(value.view(), replace_policies)
         )
@@ -196,4 +212,34 @@ cdef class GroupBy:
         return (
             Table.from_libcudf(move(c_res.first)),
             Table.from_libcudf(move(c_res.second)),
+        )
+
+    cpdef tuple get_groups(self, Table values=None):
+        """Get the grouped keys and values labels for each row.
+
+        Parameters
+        ----------
+        values : Table, optional
+            The columns to get group labels for. If not specified, the group
+            labels for the group keys are returned.
+
+        Returns
+        -------
+        Tuple[Table, Table, List[int]]
+            A tuple of tables containing three items:
+                - A table of group keys
+                - A table of group values
+                - A list of integer offsets into the tables
+        """
+
+        cdef groups c_groups
+        if values:
+            c_groups = dereference(self.c_obj).get_groups(values.view())
+        else:
+            c_groups = dereference(self.c_obj).get_groups()
+
+        return (
+            Table.from_libcudf(move(c_groups.keys)),
+            Table.from_libcudf(move(c_groups.values)),
+            c_groups.offsets,
         )
