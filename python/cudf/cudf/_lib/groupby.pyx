@@ -21,7 +21,11 @@ from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.utils cimport (
+    columns_from_pylibcudf_table,
+    columns_from_unique_ptr,
+    table_view_from_columns,
+)
 
 from cudf._lib.scalar import as_device_scalar
 
@@ -35,6 +39,8 @@ from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
 from cudf._lib.cpp.types cimport size_type
+
+from cudf._lib import pylibcudf
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -106,6 +112,29 @@ def _(dtype: DecimalDtype):
     return _DECIMAL_AGGS
 
 
+cdef _agg_result_from_pylibcudf_tables(
+    pylibcudf_results,
+    set column_included,
+    int n_input_columns
+):
+    """Construct the list of result columns from libcudf result. The result
+    contains the same number of lists as the number of input columns. Result
+    for an input column that has no applicable aggregations is an empty list.
+    """
+    cdef:
+        int i
+        int result_index = 0
+    result_columns = []
+    for i in range(n_input_columns):
+        if i in column_included:
+            result_columns.append(
+                columns_from_pylibcudf_table(pylibcudf_results[result_index])
+            )
+            result_index += 1
+        else:
+            result_columns.append([])
+    return result_columns
+
 cdef _agg_result_from_columns(
     vector[libcudf_groupby.aggregation_result]& c_result_columns,
     set column_included,
@@ -162,6 +191,11 @@ cdef class GroupBy:
     def __init__(self, list keys, bool dropna=True):
         self.keys = keys
         self.dropna = dropna
+        self._groupby = pylibcudf.groupby.GroupBy(
+            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in keys]),
+            pylibcudf.types.NullPolicy.EXCLUDE if dropna
+            else pylibcudf.types.NullPolicy.INCLUDE
+        )
 
     def groups(self, list values):
         """
@@ -203,58 +237,39 @@ cdef class GroupBy:
         results, 2) a list of grouped keys, and 3) a list of list of
         aggregations performed.
         """
-        cdef vector[libcudf_groupby.aggregation_request] c_agg_requests
-        cdef libcudf_groupby.aggregation_request c_agg_request
-        cdef Column col
-        cdef GroupbyAggregation agg_obj
-
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
-
         allow_empty = all(len(v) == 0 for v in aggregations)
 
         included_aggregations = []
         column_included = set()
+        requests = []
         for i, (col, aggs) in enumerate(zip(values, aggregations)):
             dtype = col.dtype
 
             valid_aggregations = get_valid_aggregation(dtype)
             included_aggregations_i = []
 
-            c_agg_request = move(libcudf_groupby.aggregation_request())
+            col_aggregations = []
             for agg in aggs:
                 agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
                     included_aggregations_i.append((agg, agg_obj.kind))
-                    c_agg_request.aggregations.push_back(
-                        move(agg_obj.c_obj.clone_underlying_as_groupby())
-                    )
+                    col_aggregations.append(agg_obj.c_obj)
             included_aggregations.append(included_aggregations_i)
-            if not c_agg_request.aggregations.empty():
-                c_agg_request.values = col.view()
-                c_agg_requests.push_back(
-                    move(c_agg_request)
-                )
+            if col_aggregations:
+                requests.append(pylibcudf.groupby.GroupByRequest(
+                    col.to_pylibcudf(mode="read"), col_aggregations
+                ))
                 column_included.add(i)
-        if c_agg_requests.empty() and not allow_empty:
+        if not requests and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 
-        with nogil:
-            c_result = move(
-                self.c_obj.get()[0].aggregate(
-                    c_agg_requests
-                )
-            )
+        keys, results = self._groupby.aggregate(requests)
 
-        grouped_keys = columns_from_unique_ptr(
-            move(c_result.first)
-        )
+        grouped_keys = columns_from_pylibcudf_table(keys)
 
-        result_columns = _agg_result_from_columns(
-            c_result.second, column_included, len(values)
+        result_columns = _agg_result_from_pylibcudf_tables(
+            results, column_included, len(values)
         )
 
         return result_columns, grouped_keys, included_aggregations
