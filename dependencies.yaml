@@ -661,15 +661,18 @@ dependencies:
         packages:
           - dask-cuda==24.4.*
           - *numba
-      # - output_types: conda
-      #   packages:
-      #     - pip
-      #     - pip:
-      #         # This should eventually move to rapids-dask-dependency
-      #         - &dask_expr_tip git+https://github.com/dask-contrib/dask-expr.git@b588a9e15e90e0567061664ffc01374786686e20
-      # - output_types: [requirements, pyproject]
-      #   packages:
-      #     - *dask_expr_tip
+      - output_types: conda
+        packages:
+          - pip
+          - pip:
+              # This should eventually move to rapids-dask-dependency
+              - &dask_expr_tip git+https://github.com/dask-contrib/dask-expr.git@b588a9e15e90e0567061664ffc01374786686e20
+      - output_types: requirements
+        packages:
+          - *dask_expr_tip
+      - output_types: pyproject
+        packages:
+          - dask-expr@git+https://github.com/dask-contrib/dask-expr.git@b588a9e15e90e0567061664ffc01374786686e20
   depends_on_cudf:
     common:
       - output_types: conda
