@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from tlz import partition_all
 
-from dask import dataframe as dd
+from dask import config, dataframe as dd
 from dask.base import normalize_token, tokenize
 from dask.dataframe.core import (
     Scalar,
@@ -690,13 +690,20 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
             "dask_cudf does not support MultiIndex Dataframes."
         )
 
-    name = name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+    # Dask-expr doesn't support the `name` argument
+    name = {}
+    if not config.get("dataframe.query-planning", False):
+        name = {
+            "name": name
+            or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+        }
+
     return dd.from_pandas(
         data,
         npartitions=npartitions,
         chunksize=chunksize,
         sort=sort,
-        name=name,
+        **name,
     )
 
 
