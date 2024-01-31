@@ -20,7 +20,6 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.stream_compaction import drop_nulls
 from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnBinaryOperand,
@@ -174,7 +173,12 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
-            key = as_column(key)
+            key = as_column(
+                key,
+                dtype="float64"
+                if isinstance(key, list) and len(key) == 0
+                else None,
+            )
             if not isinstance(key, cudf.core.column.NumericalColumn):
                 raise ValueError(f"Invalid scatter map type {key.dtype}.")
             out = self._scatter_by_column(key, device_value)
@@ -340,7 +344,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.string_casting.int2ip(self)
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         if len(self) > 0:
             return string._numeric_to_str_typecast_functions[
@@ -353,7 +357,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
 
     def as_datetime_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.DatetimeColumn":
         return cast(
             "cudf.core.column.DatetimeColumn",
@@ -367,7 +371,7 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_timedelta_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
         return cast(
             "cudf.core.column.TimeDeltaColumn",
@@ -381,11 +385,11 @@ class NumericalColumn(NumericalBaseColumn):
         )
 
     def as_decimal_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> "cudf.core.column.DecimalBaseColumn":
         return libcudf.unary.cast(self, dtype)
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
@@ -420,10 +424,6 @@ class NumericalColumn(NumericalBaseColumn):
             nan_col = libcudf.unary.is_nan(self)
             self._nan_count = nan_col.sum()
         return self._nan_count
-
-    def dropna(self, drop_nan: bool = False) -> NumericalColumn:
-        col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -702,7 +702,7 @@ class NumericalColumn(NumericalBaseColumn):
                 col_dtype if col_dtype.kind == "f" else np.dtype("int64")
             )
         elif reduction_op == "sum_of_squares":
-            col_dtype = np.find_common_type([col_dtype], [np.dtype("uint64")])
+            col_dtype = np.result_dtype(col_dtype, np.dtype("uint64"))
 
         return col_dtype
 

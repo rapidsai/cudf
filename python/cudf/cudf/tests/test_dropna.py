@@ -1,14 +1,11 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import (
-    _create_pandas_series_float64_default,
-    assert_eq,
-)
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -24,8 +21,7 @@ from cudf.testing._utils import (
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
-
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
 
     if len(data) > 0:
         if nulls == "one":

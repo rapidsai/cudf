@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -172,7 +173,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
                            cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                            cuco::empty_value{cudf::detail::JoinNoneValue},
-                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                           cudf::detail::cuco_allocator{stream},
                            stream.value()};
 
   // Create hash table containing all keys found in right table
@@ -433,7 +434,7 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
   semi_map_type hash_table{compute_hash_table_size(build.num_rows()),
                            cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
                            cuco::empty_value{cudf::detail::JoinNoneValue},
-                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                           cudf::detail::cuco_allocator{stream},
                            stream.value()};
 
   // Create hash table containing all keys found in right table

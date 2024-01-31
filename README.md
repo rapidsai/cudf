@@ -56,6 +56,10 @@ print(tips_df.groupby("size").tip_percentage.mean())
 - [libcudf (C++/CUDA) documentation](https://docs.rapids.ai/api/libcudf/stable/)
 - [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
 
+See the [RAPIDS install page](https://docs.rapids.ai/install) for
+the most up-to-date information and commands for installing cuDF
+and other RAPIDS packages.
+
 ## Installation
 
 ### CUDA/GPU requirements
@@ -64,13 +68,31 @@ print(tips_df.groupby("size").tip_percentage.mean())
 * NVIDIA driver 450.80.02+
 * Volta architecture or better (Compute Capability >=7.0)
 
+### Pip
+
+cuDF can be installed via `pip` from the NVIDIA Python Package Index.
+Be sure to select the appropriate cuDF package depending
+on the major version of CUDA available in your environment:
+
+For CUDA 11.x:
+
+```bash
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu11
+```
+
+For CUDA 12.x:
+
+```bash
+pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12
+```
+
 ### Conda
 
 cuDF can be installed with conda (via [miniconda](https://docs.conda.io/projects/miniconda/en/latest/) or the full [Anaconda distribution](https://www.anaconda.com/download) from the `rapidsai` channel:
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=24.02 python=3.10 cuda-version=11.8
+    cudf=24.04 python=3.10 cuda-version=11.8
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

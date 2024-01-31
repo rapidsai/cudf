@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -15,6 +15,7 @@ from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.lib import NativeFile
 
+from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 
 try:
@@ -1666,6 +1667,8 @@ def get_reader_filepath_or_buffer(
     allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    warn_on_raw_text_input=None,
+    warn_meta=None,
 ):
     """{docstring}"""
 
@@ -1679,6 +1682,18 @@ def get_reader_filepath_or_buffer(
                 path_or_data, storage_options
             )
             if fs is None:
+                if warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
                 return path_or_data, compression
 
         if _is_local_filesystem(fs):
@@ -1691,6 +1706,30 @@ def get_reader_filepath_or_buffer(
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )
+                elif warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
+            elif warn_on_raw_text_input:
+                # Do not remove until pandas 3.0 support is added.
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
+                warnings.warn(
+                    f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                    "deprecated and will be removed in a future version. "
+                    "To read from a literal string, wrap it in a "
+                    "'StringIO' object.",
+                    FutureWarning,
+                )
 
         else:
             if len(paths) == 0:
@@ -2028,7 +2067,7 @@ def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
         return new_ranges
 
     offset, size = byte_ranges[0]
-    for (new_offset, new_size) in byte_ranges[1:]:
+    for new_offset, new_size in byte_ranges[1:]:
         gap = new_offset - (offset + size)
         if gap > max_gap or (size + new_size + gap) > max_block:
             # Gap is too large or total read is too large
@@ -2068,7 +2107,7 @@ def _read_byte_ranges(
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf
     workers = []
-    for (offset, nbytes) in ranges:
+    for offset, nbytes in ranges:
         if len(ranges) > 1:
             workers.append(
                 Thread(

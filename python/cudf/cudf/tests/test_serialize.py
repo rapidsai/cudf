@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import itertools
 import pickle
 
 import msgpack
@@ -115,6 +116,7 @@ from cudf.testing._utils import assert_eq
             ]
         ),
     ],
+    ids=itertools.count(),
 )
 @pytest.mark.parametrize("to_host", [True, False])
 def test_serialize(df, to_host):
@@ -193,8 +195,8 @@ def test_serialize_range_index():
 
 
 def test_serialize_generic_index():
-    index = cudf.core.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.core.index.GenericIndex.deserialize(*index.serialize())
+    index = cudf.core.index.Index(cudf.Series(np.arange(10)))
+    outindex = cudf.core.index.Index.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
@@ -368,8 +370,8 @@ def test_serialize_string_check_buffer_sizes():
     assert expect == got
 
 
-def test_deserialize_cudf_0_16(datadir):
-    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_0.16.pkl"
+def test_deserialize_cudf_23_12(datadir):
+    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
 
     expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
     with open(fname, "rb") as f:

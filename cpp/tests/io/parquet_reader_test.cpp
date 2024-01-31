@@ -241,7 +241,7 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsMixedTypes)
 
 TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
 {
-  constexpr int num_rows = 30 * 1000000;
+  constexpr int num_rows = 30 * 10000;
 
   std::mt19937 gen(6747);
   std::bernoulli_distribution bn(0.7f);
@@ -251,21 +251,23 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
 
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 
-  // this file will have row groups of 1,000,000 each
+  // this file will have row groups of 10,000 each
   cudf::table_view tbl({col});
   auto filepath = temp_env->get_temp_filepath("UserBoundsWithNullsLarge.parquet");
   cudf::io::parquet_writer_options out_args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .row_group_size_rows(10000)
+      .max_page_size_rows(1000);
   cudf::io::write_parquet(out_args);
 
   // skip_rows / num_rows
   // clang-format off
-  std::vector<std::pair<int, int>> params{ {-1, -1}, {31, -1}, {32, -1}, {33, -1}, {1613470, -1}, {1999999, -1},
+  std::vector<std::pair<int, int>> params{ {-1, -1}, {31, -1}, {32, -1}, {33, -1}, {16130, -1}, {19999, -1},
                                            {31, 1}, {32, 1}, {33, 1},
                                            // deliberately span some row group boundaries
-                                           {999000, 1001}, {999000, 2000}, {2999999, 2}, {13999997, -1},
-                                           {16785678, 3}, {22996176, 31},
-                                           {24001231, 17}, {29000001, 989999}, {29999999, 1} };
+                                           {9900, 1001}, {9900, 2000}, {29999, 2}, {139997, -1},
+                                           {167878, 3}, {229976, 31},
+                                           {240031, 17}, {290001, 9899}, {299999, 1} };
   // clang-format on
   for (auto p : params) {
     cudf::io::parquet_reader_options read_args =
@@ -285,25 +287,27 @@ TEST_F(ParquetReaderTest, UserBoundsWithNullsLarge)
 
 TEST_F(ParquetReaderTest, ListUserBoundsWithNullsLarge)
 {
-  constexpr int num_rows = 5 * 1000000;
+  constexpr int num_rows = 5 * 10000;
   auto colp              = make_parquet_list_list_col<int>(0, num_rows, 5, 8, true);
   cudf::column_view col  = *colp;
 
-  // this file will have row groups of 1,000,000 each
+  // this file will have row groups of 10,000 each
   cudf::table_view tbl({col});
   auto filepath = temp_env->get_temp_filepath("ListUserBoundsWithNullsLarge.parquet");
   cudf::io::parquet_writer_options out_args =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl);
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .row_group_size_rows(10000)
+      .max_page_size_rows(1000);
   cudf::io::write_parquet(out_args);
 
   // skip_rows / num_rows
   // clang-format off
-  std::vector<std::pair<int, int>> params{ {-1, -1}, {31, -1}, {32, -1}, {33, -1}, {161470, -1}, {4499997, -1},
+  std::vector<std::pair<int, int>> params{ {-1, -1}, {31, -1}, {32, -1}, {33, -1}, {1670, -1}, {44997, -1},
                                            {31, 1}, {32, 1}, {33, 1},
                                            // deliberately span some row group boundaries
-                                           {999000, 1001}, {999000, 2000}, {2999999, 2},
-                                           {1678567, 3}, {4299676, 31},
-                                           {4001231, 17}, {1900000, 989999}, {4999999, 1} };
+                                           {9900, 1001}, {9900, 2000}, {29999, 2},
+                                           {16567, 3}, {42976, 31},
+                                           {40231, 17}, {19000, 9899}, {49999, 1} };
   // clang-format on
   for (auto p : params) {
     cudf::io::parquet_reader_options read_args =
@@ -1951,7 +1955,7 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
 
 TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
 {
-  constexpr int num_rows = 50'000;
+  constexpr int num_rows = 10'000;
   constexpr auto seed    = 21337;
 
   std::mt19937 engine{seed};
@@ -2003,7 +2007,7 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
       .compression(cudf::io::compression_type::NONE)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
-      .max_page_size_rows(20'000)
+      .max_page_size_rows(5'000)
       .write_v2_headers(true)
       .build();
   cudf::io::write_parquet(out_opts);
@@ -2018,7 +2022,7 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
     // skip and truncate
     {1, 32}, {1, 33}, {32, 32}, {33, 139},
     // cross page boundaries
-    {10'000, 20'000}
+    {3'000, 5'000}
   };
 
   // clang-format on
@@ -2044,7 +2048,7 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
         .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
         .compression(cudf::io::compression_type::NONE)
         .dictionary_policy(cudf::io::dictionary_policy::NEVER)
-        .max_page_size_rows(20'000)
+        .max_page_size_rows(5'000)
         .write_v2_headers(true);
     cudf::io::write_parquet(out_opts2);
 
