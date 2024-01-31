@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -68,12 +68,7 @@
 #include <tuple>
 #include <utility>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
-using namespace cudf::io::orc;
-using namespace cudf::io;
+namespace cudf::io::orc::detail {
 
 template <typename T>
 [[nodiscard]] constexpr int varint_size(T val)
@@ -362,10 +357,10 @@ struct string_length_functor {
   statistics_merge_group const* stripe_stat_merge;
 };
 
-__global__ void copy_string_data(char* string_pool,
-                                 size_type* offsets,
-                                 statistics_chunk* chunks,
-                                 statistics_merge_group const* groups)
+CUDF_KERNEL void copy_string_data(char* string_pool,
+                                  size_type* offsets,
+                                  statistics_chunk* chunks,
+                                  statistics_merge_group const* groups)
 {
   auto const idx = blockIdx.x / 2;
   if (groups[idx].stats_dtype == dtype_string) {
@@ -384,11 +379,26 @@ __global__ void copy_string_data(char* string_pool,
 
 }  // namespace
 
+intermediate_statistics::intermediate_statistics(orc_table_view const& table,
+                                                 rmm::cuda_stream_view stream)
+  : stripe_stat_chunks(0, stream)
+{
+  std::transform(
+    table.columns.begin(), table.columns.end(), std::back_inserter(col_types), [](auto const& col) {
+      return col.type();
+    });
+}
+
 void persisted_statistics::persist(int num_table_rows,
                                    single_write_mode write_mode,
                                    intermediate_statistics&& intermediate_stats,
                                    rmm::cuda_stream_view stream)
 {
+  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
+  col_types    = std::move(intermediate_stats.col_types);
+  num_rows     = num_table_rows;
+  if (num_rows == 0) { return; }
+
   if (write_mode == single_write_mode::NO) {
     // persist the strings in the chunks into a string pool and update pointers
     auto const num_chunks = static_cast<int>(intermediate_stats.stripe_stat_chunks.size());
@@ -422,9 +432,6 @@ void persisted_statistics::persist(int num_table_rows,
 
   stripe_stat_chunks.emplace_back(std::move(intermediate_stats.stripe_stat_chunks));
   stripe_stat_merge.emplace_back(std::move(intermediate_stats.stripe_stat_merge));
-  stats_dtypes = std::move(intermediate_stats.stats_dtypes);
-  col_types    = std::move(intermediate_stats.col_types);
-  num_rows     = num_table_rows;
 }
 
 namespace {
@@ -1132,7 +1139,7 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
 
 cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   cudf::detail::hostdevice_vector<statistics_merge_group>& stats_merge_groups,
-  rmm::device_uvector<statistics_chunk>& stat_chunks,
+  device_span<statistics_chunk const> stat_chunks,
   int num_stat_blobs,
   rmm::cuda_stream_view stream)
 {
@@ -1153,6 +1160,24 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   return blobs;
 }
 
+[[nodiscard]] statistics_dtype kind_to_stats_type(TypeKind kind)
+{
+  switch (kind) {
+    case TypeKind::BOOLEAN: return dtype_bool;
+    case TypeKind::BYTE: return dtype_int8;
+    case TypeKind::SHORT: return dtype_int16;
+    case TypeKind::INT: return dtype_int32;
+    case TypeKind::LONG: return dtype_int64;
+    case TypeKind::FLOAT: return dtype_float32;
+    case TypeKind::DOUBLE: return dtype_float64;
+    case TypeKind::STRING: return dtype_string;
+    case TypeKind::DATE: return dtype_int32;
+    case TypeKind::TIMESTAMP: return dtype_timestamp64;
+    case TypeKind::DECIMAL: return dtype_decimal64;
+    default: return dtype_none;
+  }
+}
+
 /**
  * @brief Returns column statistics in an intermediate format.
  *
@@ -1171,7 +1196,7 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
   auto const num_stripe_blobs       = segmentation.num_stripes() * orc_table.num_columns();
   auto const are_statistics_enabled = stats_freq != statistics_freq::STATISTICS_NONE;
   if (not are_statistics_enabled or num_rowgroup_blobs + num_stripe_blobs == 0) {
-    return intermediate_statistics{stream};
+    return intermediate_statistics{orc_table, stream};
   }
 
   cudf::detail::hostdevice_vector<stats_column_desc> stat_desc(orc_table.num_columns(), stream);
@@ -1185,22 +1210,9 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
 
   for (auto const& column : orc_table.columns) {
     stats_column_desc* desc = &stat_desc[column.index()];
-    switch (column.orc_kind()) {
-      case TypeKind::BYTE: desc->stats_dtype = dtype_int8; break;
-      case TypeKind::SHORT: desc->stats_dtype = dtype_int16; break;
-      case TypeKind::INT: desc->stats_dtype = dtype_int32; break;
-      case TypeKind::LONG: desc->stats_dtype = dtype_int64; break;
-      case TypeKind::FLOAT: desc->stats_dtype = dtype_float32; break;
-      case TypeKind::DOUBLE: desc->stats_dtype = dtype_float64; break;
-      case TypeKind::BOOLEAN: desc->stats_dtype = dtype_bool; break;
-      case TypeKind::DATE: desc->stats_dtype = dtype_int32; break;
-      case TypeKind::DECIMAL: desc->stats_dtype = dtype_decimal64; break;
-      case TypeKind::TIMESTAMP: desc->stats_dtype = dtype_timestamp64; break;
-      case TypeKind::STRING: desc->stats_dtype = dtype_string; break;
-      default: desc->stats_dtype = dtype_none; break;
-    }
-    desc->num_rows   = column.size();
-    desc->num_values = column.size();
+    desc->stats_dtype       = kind_to_stats_type(column.orc_kind());
+    desc->num_rows          = column.size();
+    desc->num_values        = column.size();
     if (desc->stats_dtype == dtype_timestamp64) {
       // Timestamp statistics are in milliseconds
       switch (column.scale()) {
@@ -1298,20 +1310,53 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
-encoded_footer_statistics finish_statistic_blobs(int num_stripes,
+encoded_footer_statistics finish_statistic_blobs(FileFooter const& file_footer,
                                                  persisted_statistics& per_chunk_stats,
                                                  rmm::cuda_stream_view stream)
 {
   auto stripe_size_iter = thrust::make_transform_iterator(per_chunk_stats.stripe_stat_merge.begin(),
-                                                          [](auto const& i) { return i.size(); });
+                                                          [](auto const& s) { return s.size(); });
 
-  auto const num_columns = per_chunk_stats.col_types.size();
+  auto const num_columns = file_footer.types.size() - 1;
+  auto const num_stripes = file_footer.stripes.size();
+
   auto const num_stripe_blobs =
     thrust::reduce(stripe_size_iter, stripe_size_iter + per_chunk_stats.stripe_stat_merge.size());
   auto const num_file_blobs = num_columns;
   auto const num_blobs      = static_cast<int>(num_stripe_blobs + num_file_blobs);
 
-  if (num_stripe_blobs == 0) { return {}; }
+  if (num_stripe_blobs == 0) {
+    if (num_file_blobs == 0) { return {}; }
+
+    // Create empty file stats and merge groups
+    std::vector<statistics_chunk> h_stat_chunks(num_file_blobs);
+    cudf::detail::hostdevice_vector<statistics_merge_group> stats_merge(num_file_blobs, stream);
+    // Fill in stats_merge and stat_chunks on the host
+    for (auto i = 0u; i < num_file_blobs; ++i) {
+      stats_merge[i].col_dtype   = per_chunk_stats.col_types[i];
+      stats_merge[i].stats_dtype = kind_to_stats_type(file_footer.types[i + 1].kind);
+      // Write the sum for empty columns, equal to zero
+      h_stat_chunks[i].has_sum = true;
+    }
+    //  Copy to device
+    auto const d_stat_chunks = cudf::detail::make_device_uvector_async<statistics_chunk>(
+      h_stat_chunks, stream, rmm::mr::get_current_device_resource());
+    stats_merge.host_to_device_async(stream);
+
+    // Encode and return
+    cudf::detail::hostdevice_vector<uint8_t> hd_file_blobs =
+      allocate_and_encode_blobs(stats_merge, d_stat_chunks, num_file_blobs, stream);
+
+    // Copy blobs to host (actual size)
+    std::vector<ColStatsBlob> file_blobs(num_file_blobs);
+    for (auto i = 0u; i < num_file_blobs; i++) {
+      auto const stat_begin = hd_file_blobs.host_ptr(stats_merge[i].start_chunk);
+      auto const stat_end   = stat_begin + stats_merge[i].num_chunks;
+      file_blobs[i].assign(stat_begin, stat_end);
+    }
+
+    return {{}, std::move(file_blobs)};
+  }
 
   // merge the stripe persisted data and add file data
   rmm::device_uvector<statistics_chunk> stat_chunks(num_blobs, stream);
@@ -2137,7 +2182,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       }
     }
   }
-  stripe_dicts.host_to_device_async(stream);
+  // Synchronize to ensure the copy is complete before we clear `map_slots`
+  stripe_dicts.host_to_device_sync(stream);
 
   gpu::collect_map_entries(stripe_dicts, stream);
   gpu::get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
@@ -2281,7 +2327,7 @@ auto convert_table_to_orc_data(table_view const& input,
                       rmm::device_uvector<uint8_t>{0, stream},                // compressed_data
                       cudf::detail::hostdevice_vector<compression_result>{},  // comp_results
                       std::move(strm_descs),
-                      intermediate_statistics{stream},
+                      intermediate_statistics{orc_table, stream},
                       std::optional<writer_compression_statistics>{},
                       std::move(streams),
                       std::move(stripes),
@@ -2492,10 +2538,8 @@ void writer::impl::update_statistics(
   intermediate_statistics&& intermediate_stats,
   std::optional<writer_compression_statistics> const& compression_stats)
 {
-  if (intermediate_stats.stripe_stat_chunks.size() > 0) {
-    _persisted_stripe_statistics.persist(
-      num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
-  }
+  _persisted_stripe_statistics.persist(
+    num_rows, _single_write_mode, std::move(intermediate_stats), _stream);
 
   if (compression_stats.has_value() and _compression_statistics != nullptr) {
     *_compression_statistics += compression_stats.value();
@@ -2589,6 +2633,7 @@ void writer::impl::add_table_to_footer_data(orc_table_view const& orc_table,
   if (_ffooter.headerLength == 0) {
     // First call
     _ffooter.headerLength   = std::strlen(MAGIC);
+    _ffooter.writer         = cudf_writer_code;
     _ffooter.rowIndexStride = _row_index_stride;
     _ffooter.types.resize(1 + orc_table.num_columns());
     _ffooter.types[0].kind = STRUCT;
@@ -2640,36 +2685,50 @@ void writer::impl::close()
   _closed = true;
   PostScript ps;
 
-  auto const statistics =
-    finish_statistic_blobs(_ffooter.stripes.size(), _persisted_stripe_statistics, _stream);
+  if (_stats_freq != statistics_freq::STATISTICS_NONE) {
+    // Write column statistics
+    auto statistics = finish_statistic_blobs(_ffooter, _persisted_stripe_statistics, _stream);
 
-  // File-level statistics
-  if (not statistics.file_level.empty()) {
-    ProtobufWriter pbw;
-    pbw.put_uint(encode_field_number<size_type>(1));
-    pbw.put_uint(_persisted_stripe_statistics.num_rows);
-    // First entry contains total number of rows
-    _ffooter.statistics.reserve(_ffooter.types.size());
-    _ffooter.statistics.emplace_back(pbw.release());
-    // Add file stats, stored after stripe stats in `column_stats`
-    _ffooter.statistics.insert(_ffooter.statistics.end(),
-                               std::make_move_iterator(statistics.file_level.begin()),
-                               std::make_move_iterator(statistics.file_level.end()));
-  }
-
-  // Stripe-level statistics
-  if (not statistics.stripe_level.empty()) {
-    _orc_meta.stripeStats.resize(_ffooter.stripes.size());
-    for (size_t stripe_id = 0; stripe_id < _ffooter.stripes.size(); stripe_id++) {
-      _orc_meta.stripeStats[stripe_id].colStats.resize(_ffooter.types.size());
+    // File-level statistics
+    {
+      _ffooter.statistics.reserve(_ffooter.types.size());
       ProtobufWriter pbw;
+
+      // Root column: number of rows
       pbw.put_uint(encode_field_number<size_type>(1));
-      pbw.put_uint(_ffooter.stripes[stripe_id].numberOfRows);
-      _orc_meta.stripeStats[stripe_id].colStats[0] = pbw.release();
-      for (size_t col_idx = 0; col_idx < _ffooter.types.size() - 1; col_idx++) {
-        size_t idx = _ffooter.stripes.size() * col_idx + stripe_id;
-        _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =
-          std::move(statistics.stripe_level[idx]);
+      pbw.put_uint(_persisted_stripe_statistics.num_rows);
+      // Root column: has nulls
+      pbw.put_uint(encode_field_number<size_type>(10));
+      pbw.put_uint(0);
+      _ffooter.statistics.emplace_back(pbw.release());
+
+      // Add file stats, stored after stripe stats in `column_stats`
+      _ffooter.statistics.insert(_ffooter.statistics.end(),
+                                 std::make_move_iterator(statistics.file_level.begin()),
+                                 std::make_move_iterator(statistics.file_level.end()));
+    }
+
+    // Stripe-level statistics
+    if (_stats_freq == statistics_freq::STATISTICS_ROWGROUP or
+        _stats_freq == statistics_freq::STATISTICS_PAGE) {
+      _orc_meta.stripeStats.resize(_ffooter.stripes.size());
+      for (size_t stripe_id = 0; stripe_id < _ffooter.stripes.size(); stripe_id++) {
+        _orc_meta.stripeStats[stripe_id].colStats.resize(_ffooter.types.size());
+        ProtobufWriter pbw;
+
+        // Root column: number of rows
+        pbw.put_uint(encode_field_number<size_type>(1));
+        pbw.put_uint(_ffooter.stripes[stripe_id].numberOfRows);
+        // Root column: has nulls
+        pbw.put_uint(encode_field_number<size_type>(10));
+        pbw.put_uint(0);
+        _orc_meta.stripeStats[stripe_id].colStats[0] = pbw.release();
+
+        for (size_t col_idx = 0; col_idx < _ffooter.types.size() - 1; col_idx++) {
+          size_t idx = _ffooter.stripes.size() * col_idx + stripe_id;
+          _orc_meta.stripeStats[stripe_id].colStats[1 + col_idx] =
+            std::move(statistics.stripe_level[idx]);
+        }
       }
     }
   }
@@ -2702,7 +2761,8 @@ void writer::impl::close()
   ps.footerLength         = pbw.size();
   ps.compression          = _compression_kind;
   ps.compressionBlockSize = _compression_blocksize;
-  ps.version              = {0, 12};
+  ps.version              = {0, 12};  // Hive 0.12
+  ps.writerVersion        = cudf_writer_version;
   ps.magic                = MAGIC;
 
   auto const ps_length = static_cast<uint8_t>(pbw.write(ps));
@@ -2736,9 +2796,9 @@ writer::~writer() = default;
 void writer::write(table_view const& table) { _impl->write(table); }
 
 // Forward to implementation
+void writer::skip_close() { _impl->skip_close(); }
+
+// Forward to implementation
 void writer::close() { _impl->close(); }
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

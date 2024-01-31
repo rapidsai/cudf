@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,9 @@
 
 #include <join/join_common_utils.cuh>
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -27,6 +29,8 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <cuco/static_set.cuh>
+
+#include <cuda/functional>
 
 #include <type_traits>
 
@@ -212,9 +216,13 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
   auto contained = rmm::device_uvector<bool>(needles.num_rows(), stream, mr);
 
   auto const haystack_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(auto idx) { return lhs_index_type{idx}; });
+    size_type{0}, cuda::proclaim_return_type<lhs_index_type>([] __device__(auto idx) {
+      return lhs_index_type{idx};
+    }));
   auto const needles_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(auto idx) { return rhs_index_type{idx}; });
+    size_type{0}, cuda::proclaim_return_type<rhs_index_type>([] __device__(auto idx) {
+      return rhs_index_type{idx};
+    }));
 
   auto const helper_func =
     [&](auto const& d_self_equal, auto const& d_two_table_equal, auto const& probing_scheme) {
@@ -225,7 +233,7 @@ rmm::device_uvector<bool> contains(table_view const& haystack,
         cuco::empty_key{lhs_index_type{-1}},
         d_equal,
         probing_scheme,
-        detail::hash_table_allocator_type{default_allocator<lhs_index_type>{}, stream},
+        cudf::detail::cuco_allocator{stream},
         stream.value()};
 
       if (haystack_has_nulls && compare_nulls == null_equality::UNEQUAL) {

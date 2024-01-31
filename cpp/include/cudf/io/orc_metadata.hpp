@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,11 @@
 
 namespace cudf {
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
 
 /**
  * @brief Holds column names and buffers containing raw file-level and stripe-level statistics.
@@ -58,10 +63,12 @@ struct raw_orc_statistics {
  * @endcode
  *
  * @param src_info Dataset source
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Column names and encoded ORC statistics
  */
-raw_orc_statistics read_raw_orc_statistics(source_info const& src_info);
+raw_orc_statistics read_raw_orc_statistics(
+  source_info const& src_info, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Monostate type alias for the statistics variant.
@@ -147,6 +154,7 @@ struct timestamp_statistics : minmax_statistics<int64_t> {
   std::optional<uint32_t> maximum_nanos;  ///< nanoseconds part of the maximum
 };
 
+//! Orc I/O interfaces
 namespace orc {
 // forward declare the type that ProtobufReader uses. The `cudf::io::column_statistics` objects,
 // returned from `read_parsed_orc_statistics`, are constructed from
@@ -201,10 +209,12 @@ struct parsed_orc_statistics {
  * @ingroup io_readers
  *
  * @param src_info Dataset source
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return Column names and decoded ORC statistics
  */
-parsed_orc_statistics read_parsed_orc_statistics(source_info const& src_info);
+parsed_orc_statistics read_parsed_orc_statistics(
+  source_info const& src_info, rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Schema of an ORC column, including the nested columns.
@@ -362,10 +372,13 @@ class orc_metadata {
  * @ingroup io_readers
  *
  * @param src_info Dataset source
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return orc_metadata with ORC schema, number of rows and number of stripes.
  */
-orc_metadata read_orc_metadata(source_info const& src_info);
+orc_metadata read_orc_metadata(source_info const& src_info,
+                               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,10 +39,7 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
  * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
  */
 template <typename state_buf>
-inline __device__ void gpuOutputString(volatile page_state_s* s,
-                                       volatile state_buf* sb,
-                                       int src_pos,
-                                       void* dstv)
+inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_pos, void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
   // make sure to only hash `BYTE_ARRAY` when specified with the output type size
@@ -69,7 +66,7 @@ inline __device__ void gpuOutputString(volatile page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputBoolean(volatile state_buf* sb, int src_pos, uint8_t* dst)
+inline __device__ void gpuOutputBoolean(state_buf* sb, int src_pos, uint8_t* dst)
 {
   *dst = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
 }
@@ -143,8 +140,8 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  * @param[out] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
-                                               volatile state_buf* sb,
+inline __device__ void gpuOutputInt96Timestamp(page_state_s* s,
+                                               state_buf* sb,
                                                int src_pos,
                                                int64_t* dst)
 {
@@ -218,8 +215,8 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename state_buf>
-inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s,
-                                               volatile state_buf* sb,
+inline __device__ void gpuOutputInt64Timestamp(page_state_s* s,
+                                               state_buf* sb,
                                                int src_pos,
                                                int64_t* dst)
 {
@@ -301,10 +298,7 @@ __device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
  * @param[in] dst Pointer to row output data
  */
 template <typename T, typename state_buf>
-__device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
-                                                volatile state_buf* sb,
-                                                int src_pos,
-                                                T* dst)
+__device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s* s, state_buf* sb, int src_pos, T* dst)
 {
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
@@ -338,10 +332,7 @@ __device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s,
  * @param[in] dst Pointer to row output data
  */
 template <typename T, typename state_buf>
-inline __device__ void gpuOutputFast(volatile page_state_s* s,
-                                     volatile state_buf* sb,
-                                     int src_pos,
-                                     T* dst)
+inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos, T* dst)
 {
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
@@ -371,7 +362,7 @@ inline __device__ void gpuOutputFast(volatile page_state_s* s,
  */
 template <typename state_buf>
 static __device__ void gpuOutputGeneric(
-  volatile page_state_s* s, volatile state_buf* sb, int src_pos, uint8_t* dst8, int len)
+  page_state_s* s, state_buf* sb, int src_pos, uint8_t* dst8, int len)
 {
   uint8_t const* dict;
   uint32_t dict_pos, dict_size = s->dict_size;
@@ -430,12 +421,12 @@ static __device__ void gpuOutputGeneric(
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodePageData(PageInfo* pages,
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,
                     size_t num_rows,
-                    int32_t* error_code)
+                    kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
@@ -455,7 +446,7 @@ __global__ void __launch_bounds__(decode_block_size)
                           min_row,
                           num_rows,
                           mask_filter{decode_kernel_mask::GENERAL},
-                          true)) {
+                          page_processing_stage::DECODE)) {
     return;
   }
 
@@ -491,7 +482,7 @@ __global__ void __launch_bounds__(decode_block_size)
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
       if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // TODO(ets): see if this sync can be removed
+    // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
     __syncthreads();
     if (t < 32) {
       // decode repetition and definition levels.
@@ -504,6 +495,10 @@ __global__ void __launch_bounds__(decode_block_size)
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
       // WARP1: Decode dictionary indices, booleans or string positions
+      // NOTE: racecheck complains of a RAW error involving the s->dict_pos assignment below.
+      // This is likely a false positive in practice, but could be solved by wrapping the next
+      // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
+      // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
       } else if ((s->col.data_type & 7) == BOOLEAN) {
@@ -512,7 +507,7 @@ __global__ void __launch_bounds__(decode_block_size)
                  (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
-      if (t == 32) { *(volatile int32_t*)&s->dict_pos = src_target_pos; }
+      if (t == 32) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int const dtype = s->col.data_type & 7;
@@ -601,7 +596,7 @@ __global__ void __launch_bounds__(decode_block_size)
         }
       }
 
-      if (t == out_thread0) { *(volatile int32_t*)&s->src_pos = target_pos; }
+      if (t == out_thread0) { s->src_pos = target_pos; }
     }
     __syncthreads();
   }
@@ -631,7 +626,7 @@ void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,
-                             int32_t* error_code,
+                             kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(pages.size() > 0, "There is no page to decode");

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <thrust/tuple.h>
 
 #include <cuda/atomic>
+#include <cuda/functional>
 
 #include <optional>
 
@@ -162,12 +163,11 @@ compute_row_frequencies(table_view const& input,
                "Nested types are not yet supported in histogram aggregation.",
                std::invalid_argument);
 
-  auto map = cudf::detail::hash_map_type{
-    compute_hash_table_size(input.num_rows()),
-    cuco::empty_key{-1},
-    cuco::empty_value{std::numeric_limits<size_type>::min()},
-    cudf::detail::hash_table_allocator_type{default_allocator<char>{}, stream},
-    stream.value()};
+  auto map = cudf::detail::hash_map_type{compute_hash_table_size(input.num_rows()),
+                                         cuco::empty_key{-1},
+                                         cuco::empty_value{std::numeric_limits<size_type>::min()},
+                                         cudf::detail::cuco_allocator{stream},
+                                         stream.value()};
 
   auto const preprocessed_input =
     cudf::experimental::row::hash::preprocessed_table::create(input, stream);
@@ -178,7 +178,9 @@ compute_row_frequencies(table_view const& input,
   auto const row_comp   = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const pair_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+    size_type{0},
+    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>(
+      [] __device__(size_type const i) { return cuco::make_pair(i, i); }));
 
   // Always compare NaNs as equal.
   using nan_equal_comparator =

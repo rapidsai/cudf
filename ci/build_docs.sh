@@ -1,17 +1,19 @@
 #!/bin/bash
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -euo pipefail
 
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
+ENV_YAML_DIR="$(mktemp -d)"
+
 rapids-dependency-file-generator \
   --output conda \
   --file_key docs \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f env.yaml -n docs
+rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n docs
 conda activate docs
 
 rapids-print-env
@@ -25,7 +27,7 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   libcudf cudf dask-cudf
 
-export RAPIDS_VERSION_NUMBER="24.02"
+export RAPIDS_VERSION_NUMBER="24.04"
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
 rapids-logger "Build CPP docs"
@@ -39,19 +41,25 @@ popd
 rapids-logger "Build Python docs"
 pushd docs/cudf
 make dirhtml
-make text
-mkdir -p "${RAPIDS_DOCS_DIR}/cudf/"{html,txt}
+mkdir -p "${RAPIDS_DOCS_DIR}/cudf/html"
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
-mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
+  make text
+  mkdir -p "${RAPIDS_DOCS_DIR}/cudf/txt"
+  mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+fi
 popd
 
 rapids-logger "Build dask-cuDF Sphinx docs"
 pushd docs/dask_cudf
 make dirhtml
-make text
-mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/"{html,txt}
+mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/html"
 mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
-mv build/text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
+  make text
+  mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+  mv build/text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+fi
 popd
 
 rapids-upload-docs

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
@@ -279,43 +281,6 @@ TEST_F(ColumnUtilitiesListsTest, DifferingRowCounts)
     cudf::test::detail::expect_columns_equivalent(a, b, cudf::test::debug_output_level::QUIET));
   EXPECT_FALSE(cudf::test::detail::expect_column_properties_equivalent(
     a, b, cudf::test::debug_output_level::QUIET));
-}
-
-TEST_F(ColumnUtilitiesListsTest, UnsanitaryLists)
-{
-  // unsanitary
-  //
-  // List<int32_t>:
-  //  Length : 1
-  //  Offsets : 0, 3
-  //  Null count: 1
-  //  0
-  //    0, 1, 2
-  std::vector<std::unique_ptr<cudf::column>> children;
-  children.emplace_back(
-    std::move(cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3}.release()));
-  children.emplace_back(std::move(cudf::test::fixed_width_column_wrapper<int>{0, 1, 2}.release()));
-
-  auto l0 = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::LIST},
-                                           1,
-                                           rmm::device_buffer{},
-                                           cudf::create_null_mask(1, cudf::mask_state::ALL_NULL),
-                                           1,
-                                           std::move(children));
-
-  // sanitary
-  //
-  // List<int32_t>:
-  //  Length : 1
-  //  Offsets : 0, 0
-  //  Null count: 1
-  //    0
-  auto l1 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column(false);
-
-  // equivalent, but not equal
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*l0, l1);
-  EXPECT_FALSE(
-    cudf::test::detail::expect_columns_equal(*l0, l1, cudf::test::debug_output_level::QUIET));
 }
 
 TEST_F(ColumnUtilitiesListsTest, DifferentPhysicalStructureBeforeConstruction)

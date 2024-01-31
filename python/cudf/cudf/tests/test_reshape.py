@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import re
 from itertools import chain
@@ -76,7 +76,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
     # pandas' melt makes the 'variable' column of 'object' type (string)
     # cuDF's melt makes it Categorical because it doesn't support strings
-    expect["variable"] = expect["variable"].astype("category")
+    expect["variable"] = expect["variable"].astype(
+        got["variable"].dtype.to_pandas()
+    )
 
     assert_eq(expect, got)
 
@@ -253,7 +255,6 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -290,7 +291,6 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 @pytest.mark.parametrize("dtype", ALL_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_tile(nulls, num_cols, num_rows, dtype, count):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -492,14 +492,8 @@ def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
     gdf = cudf.from_pandas(pdf)
 
-    # In pandas 2.0 this will be a failure because pandas will require all of
-    # these as keyword arguments. Matching that check in cudf is a bit
-    # cumbersome and not worth the effort to match the warning, so this code
-    # just catches pandas's warning (rather than updating the signature) so
-    # that when it starts failing we know to update our impl of pivot.
-    with pytest.warns(FutureWarning):
-        expect = pdf.pivot("index", "column")
-    got = gdf.pivot("index", "column")
+    expect = pdf.pivot(columns="column", index="index")
+    got = gdf.pivot(columns="column", index="index")
 
     check_index_and_columns = expect.shape != (0, 0)
     assert_eq(

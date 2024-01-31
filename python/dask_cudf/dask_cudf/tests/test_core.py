@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import random
 
@@ -106,7 +106,6 @@ def test_from_cudf():
 
 
 def test_from_cudf_multiindex_raises():
-
     df = cudf.DataFrame({"x": list("abc"), "y": [1, 2, 3], "z": [1, 2, 3]})
 
     with pytest.raises(NotImplementedError):
@@ -115,7 +114,6 @@ def test_from_cudf_multiindex_raises():
 
 
 def test_from_cudf_with_generic_idx():
-
     cdf = cudf.DataFrame(
         {
             "a": list(range(20)),
@@ -331,10 +329,10 @@ def test_rearrange_by_divisions(nelem, index):
         divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
 
         expect = dd.shuffle.rearrange_by_divisions(
-            ddf1, "x", divisions=divisions, shuffle="tasks"
+            ddf1, "x", divisions=divisions, shuffle_method="tasks"
         )
         result = dd.shuffle.rearrange_by_divisions(
-            gdf1, "x", divisions=divisions, shuffle="tasks"
+            gdf1, "x", divisions=divisions, shuffle_method="tasks"
         )
         dd.assert_eq(expect, result)
 
@@ -641,7 +639,6 @@ def test_concat(gdf, gddf, series):
 
 
 def test_boolean_index(gdf, gddf):
-
     gdf2 = gdf[gdf.x > 2]
     gddf2 = gddf[gddf.x > 2]
 
@@ -658,7 +655,6 @@ def test_drop(gdf, gddf):
 @pytest.mark.parametrize("deep", [True, False])
 @pytest.mark.parametrize("index", [True, False])
 def test_memory_usage(gdf, gddf, index, deep):
-
     dd.assert_eq(
         gdf.memory_usage(deep=deep, index=index),
         gddf.memory_usage(deep=deep, index=index),
@@ -710,7 +706,6 @@ def test_hash_object_dispatch(index):
     ],
 )
 def test_make_meta_backends(index):
-
     dtypes = ["int8", "int32", "int64", "float64"]
     df = cudf.DataFrame(
         {dt: np.arange(start=0, stop=3, dtype=dt) for dt in dtypes}
@@ -734,7 +729,6 @@ def test_make_meta_backends(index):
 
     # Check dask code path if not MultiIndex
     if not isinstance(df.index, cudf.MultiIndex):
-
         ddf = dgd.from_cudf(df, npartitions=1)
 
         # Check "empty" metadata types
@@ -788,14 +782,16 @@ def test_dataframe_set_index():
     df["str"] = list("abcdefghijklmnopqrstuvwxyz")
     pdf = df.to_pandas()
 
-    ddf = dgd.from_cudf(df, npartitions=4)
-    ddf = ddf.set_index("str")
+    with dask.config.set({"dataframe.convert-string": False}):
+        ddf = dgd.from_cudf(df, npartitions=4)
+        ddf = ddf.set_index("str")
 
-    pddf = dd.from_pandas(pdf, npartitions=4)
-    pddf = pddf.set_index("str")
-    from cudf.testing._utils import assert_eq
+        pddf = dd.from_pandas(pdf, npartitions=4)
+        pddf = pddf.set_index("str")
 
-    assert_eq(ddf.compute(), pddf.compute())
+        from cudf.testing._utils import assert_eq
+
+        assert_eq(ddf.compute(), pddf.compute())
 
 
 def test_series_describe():
@@ -809,7 +805,7 @@ def test_series_describe():
     dd.assert_eq(
         dsr.describe(),
         pdsr.describe(),
-        check_less_precise=3,
+        rtol=1e-3,
     )
 
 
@@ -838,7 +834,7 @@ def test_zero_std_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.describe(), pddf.describe(), rtol=1e-3)
 
 
 def test_large_numbers_var():
@@ -853,7 +849,7 @@ def test_large_numbers_var():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
+    dd.assert_eq(ddf.var(), pddf.var(), rtol=1e-3)
 
 
 def test_index_map_partitions():

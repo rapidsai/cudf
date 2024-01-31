@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 # cython: boundscheck = False
 
@@ -18,12 +18,7 @@ import numpy as np
 
 from cython.operator cimport dereference
 
-from cudf.api.types import (
-    is_decimal_dtype,
-    is_list_dtype,
-    is_list_like,
-    is_struct_dtype,
-)
+from cudf.api.types import is_list_like
 
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -110,6 +105,7 @@ cdef class BufferArrayFromVector:
 def _parse_metadata(meta):
     file_is_range_index = False
     file_index_cols = None
+    file_column_dtype = None
 
     if 'index_columns' in meta and len(meta['index_columns']) > 0:
         file_index_cols = meta['index_columns']
@@ -117,7 +113,9 @@ def _parse_metadata(meta):
         if isinstance(file_index_cols[0], dict) and \
                 file_index_cols[0]['kind'] == 'range':
             file_is_range_index = True
-    return file_is_range_index, file_index_cols
+    if 'column_indexes' in meta and len(meta['column_indexes']) == 1:
+        file_column_dtype = meta['column_indexes'][0]["numpy_type"]
+    return file_is_range_index, file_index_cols, file_column_dtype
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
@@ -185,6 +183,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef vector[unordered_map[string, string]] per_file_user_data = \
         c_result.metadata.per_file_user_data
 
+    column_index_type = None
     index_col_names = None
     is_range_index = True
     for single_file in per_file_user_data:
@@ -192,7 +191,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         meta = None
         if json_str != "":
             meta = json.loads(json_str)
-            file_is_range_index, index_col = _parse_metadata(meta)
+            file_is_range_index, index_col, column_index_type = _parse_metadata(meta)
             is_range_index &= file_is_range_index
 
             if not file_is_range_index and index_col is not None \
@@ -220,7 +219,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
         # update the decimal precision of each column
         for col in names:
-            if is_decimal_dtype(df._data[col].dtype):
+            if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
                 )
@@ -302,6 +301,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if use_pandas_metadata:
                 df.index.names = index_col
 
+    # Set column dtype for empty types.
+    if len(df._data.names) == 0 and column_index_type is not None:
+        df._data.label_dtype = cudf.dtype(column_index_type)
     return df
 
 
@@ -360,9 +362,15 @@ def write_parquet(
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         if not isinstance(name, str):
-            raise ValueError("parquet must have string column names")
+            if cudf.get_option("mode.pandas_compatible"):
+                tbl_meta.column_metadata[i].set_name(str(name).encode())
+            else:
+                raise ValueError(
+                    "Writing a Parquet file requires string column names"
+                )
+        else:
+            tbl_meta.column_metadata[i].set_name(name.encode())
 
-        tbl_meta.column_metadata[i].set_name(name.encode())
         _set_col_metadata(
             table[name]._column,
             tbl_meta.column_metadata[i],
@@ -703,7 +711,7 @@ cdef _set_col_metadata(
         # is true.
         col_meta.set_nullability(True)
 
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -713,13 +721,11 @@ cdef _set_col_metadata(
                 col_meta.child(i),
                 force_nullable_schema
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         _set_col_metadata(
             col.children[1],
             col_meta.child(1),
             force_nullable_schema
         )
-    else:
-        if is_decimal_dtype(col):
-            col_meta.set_decimal_precision(col.dtype.precision)
-        return
+    elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
+        col_meta.set_decimal_precision(col.dtype.precision)

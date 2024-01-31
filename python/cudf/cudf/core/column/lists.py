@@ -1,4 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+
+from __future__ import annotations
 
 from functools import cached_property
 from typing import List, Optional, Sequence, Tuple, Union
@@ -24,11 +26,7 @@ from cudf._lib.lists import (
 from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnBinaryOperand, ColumnLike, Dtype, ScalarLike
-from cudf.api.types import (
-    _is_non_decimal_numeric_dtype,
-    is_list_dtype,
-    is_scalar,
-)
+from cudf.api.types import _is_non_decimal_numeric_dtype, is_scalar
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
@@ -247,7 +245,7 @@ class ListColumn(ColumnBase):
         return res
 
     def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
+        self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.StringColumn":
         """
         Create a strings column from a list column
@@ -298,7 +296,7 @@ class ListMethods(ColumnMethods):
     _column: ListColumn
 
     def __init__(self, parent: ParentType):
-        if not is_list_dtype(parent.dtype):
+        if not isinstance(parent.dtype, ListDtype):
             raise AttributeError(
                 "Can only use .list accessor with a 'list' dtype"
             )
@@ -589,7 +587,7 @@ class ListMethods(ColumnMethods):
         dtype: list
         """
 
-        if is_list_dtype(self._column.children[1].dtype):
+        if isinstance(self._column.children[1].dtype, ListDtype):
             raise NotImplementedError("Nested lists unique is not supported.")
 
         return self._return_or_inplace(
@@ -622,11 +620,6 @@ class ListMethods(ColumnMethods):
         -------
         Series or Index with each list sorted
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: `inplace`, `kind`
-
         Examples
         --------
         >>> s = cudf.Series([[4, 2, None, 9], [8, 8, 2], [2, 1]])
@@ -635,6 +628,11 @@ class ListMethods(ColumnMethods):
         1         [2.0, 8.0, 8.0]
         2              [1.0, 2.0]
         dtype: list
+
+        .. pandas-compat::
+            **ListMethods.sort_values**
+
+            The ``inplace`` and ``kind`` arguments are currently not supported.
         """
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
@@ -642,7 +640,7 @@ class ListMethods(ColumnMethods):
             raise NotImplementedError("`kind` not currently implemented.")
         if na_position not in {"first", "last"}:
             raise ValueError(f"Unknown `na_position` value {na_position}")
-        if is_list_dtype(self._column.children[1].dtype):
+        if isinstance(self._column.children[1].dtype, ListDtype):
             raise NotImplementedError("Nested lists sort is not supported.")
 
         return self._return_or_inplace(
