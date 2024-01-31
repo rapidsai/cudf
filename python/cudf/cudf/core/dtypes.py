@@ -261,7 +261,9 @@ class CategoricalDtype(_BaseDtype):
     def _init_categories(self, categories: Any):
         if categories is None:
             return categories
-        if len(categories) == 0 and not _is_interval_dtype(categories):
+        if len(categories) == 0 and not isinstance(
+            categories.dtype, cudf.IntervalDtype
+        ):
             dtype = "object"  # type: Any
         else:
             dtype = None
