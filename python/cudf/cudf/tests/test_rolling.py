@@ -8,17 +8,14 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
-from cudf.testing._utils import (
-    _create_pandas_series_float64_default,
-    assert_eq,
-)
+from cudf.core._compat import PANDAS_GE_200
+from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
 @contextmanager
 def _hide_pandas_rolling_min_periods_warning(agg):
-    if agg == "count":
+    if not PANDAS_GE_200 and agg == "count":
         with pytest.warns(
             FutureWarning,
             match="min_periods=None will default to the size of window "
@@ -58,8 +55,8 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         elif nulls == "all":
             data = [np.nan] * len(data)
 
-    psr = _create_pandas_series_float64_default(data, index=index)
-    gsr = cudf.Series(psr)
+    psr = pd.Series(data, index=index)
+    gsr = cudf.from_pandas(psr)
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
             expect = getattr(
@@ -314,7 +311,7 @@ def test_rolling_getitem_window():
 )
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
-    psr = _create_pandas_series_float64_default(data, index=index)
+    psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
     def some_func(A):
@@ -483,7 +480,7 @@ def test_rolling_custom_index_support():
     from pandas.api.indexers import BaseIndexer
 
     class CustomIndexer(BaseIndexer):
-        def custom_get_window_bounds(
+        def get_window_bounds(
             self, num_values, min_periods, center, closed, step=None
         ):
             start = np.empty(num_values, dtype=np.int64)
@@ -498,24 +495,6 @@ def test_rolling_custom_index_support():
                     end[i] = i + self.window_size
 
             return start, end
-
-        if PANDAS_GE_150:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed, step
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed, step
-                )
-
-        else:
-
-            def get_window_bounds(
-                self, num_values, min_periods, center, closed
-            ):
-                return self.custom_get_window_bounds(
-                    num_values, min_periods, center, closed
-                )
 
     use_expanding = [True, False, True, False, True]
     indexer = CustomIndexer(window_size=1, use_expanding=use_expanding)
