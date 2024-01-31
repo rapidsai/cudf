@@ -29,11 +29,7 @@ from libcpp.functional cimport reference_wrapper
 
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.aggregation cimport (
-    GroupbyAggregation,
-    make_groupby_aggregation,
-    make_groupby_scan_aggregation,
-)
+from cudf._lib.aggregation cimport GroupbyAggregation, make_groupby_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
@@ -292,7 +288,7 @@ cdef class GroupBy:
 
             c_agg_request = move(libcudf_groupby.scan_request())
             for agg in aggs:
-                agg_obj = make_groupby_scan_aggregation(agg)
+                agg_obj = make_groupby_aggregation(agg)
                 if (valid_aggregations == "ALL"
                         or agg_obj.kind in valid_aggregations):
                     included_aggregations_i.append((agg, agg_obj.kind))

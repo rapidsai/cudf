@@ -688,44 +688,6 @@ cdef GroupbyAggregation make_groupby_aggregation(op, kwargs=None):
         raise TypeError(f"Unknown aggregation {op}")
     return agg
 
-cdef GroupbyAggregation make_groupby_scan_aggregation(op, kwargs=None):
-    r"""
-    Parameters
-    ----------
-    op : str or callable
-        If callable, must meet one of the following requirements:
-
-        * Is of the form lambda x: x.agg(*args, **kwargs), where
-          `agg` is the name of a supported aggregation. Used to
-          to specify aggregations that take arguments, e.g.,
-          `lambda x: x.quantile(0.5)`.
-        * Is a user defined aggregation function that operates on
-          grouped, scannable values. In this case, the output dtype must be
-          specified in the `kwargs` dictionary.
-    \*\*kwargs : dict, optional
-        Any keyword arguments to be passed to the op.
-
-    Returns
-    -------
-    GroupbyAggregation
-    """
-    if kwargs is None:
-        kwargs = {}
-
-    cdef GroupbyAggregation agg
-    if isinstance(op, str):
-        agg = getattr(GroupbyAggregation, op)(**kwargs)
-    elif callable(op):
-        if op is list:
-            agg = GroupbyAggregation.collect()
-        elif "dtype" in kwargs:
-            agg = GroupbyAggregation.from_udf(op, **kwargs)
-        else:
-            agg = op(GroupbyAggregation)
-    else:
-        raise TypeError(f"Unknown aggregation {op}")
-    return agg
-
 cdef ReduceAggregation make_reduce_aggregation(op, kwargs=None):
     r"""
     Parameters

@@ -26,6 +26,5 @@ cdef class ScanAggregation:
 
 cdef RollingAggregation make_rolling_aggregation(op, kwargs=*)
 cdef GroupbyAggregation make_groupby_aggregation(op, kwargs=*)
-cdef GroupbyAggregation make_groupby_scan_aggregation(op, kwargs=*)
 cdef ReduceAggregation make_reduce_aggregation(op, kwargs=*)
 cdef ScanAggregation make_scan_aggregation(op, kwargs=*)
