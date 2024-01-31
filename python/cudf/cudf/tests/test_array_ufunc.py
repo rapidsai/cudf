@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import operator
 import warnings
@@ -10,8 +10,12 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
-from cudf.testing._utils import assert_eq, set_random_null_mask_inplace
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_300
+from cudf.testing._utils import (
+    assert_eq,
+    expect_warning_if,
+    set_random_null_mask_inplace,
+)
 
 _UFUNCS = [
     obj
@@ -47,6 +51,21 @@ def _hide_ufunc_warnings(ufunc):
                 category=RuntimeWarning,
             )
             yield
+    elif name in {
+        "bitwise_and",
+        "bitwise_or",
+        "bitwise_xor",
+    }:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                "Operation between non boolean Series with different "
+                "indexes will no longer return a boolean result in "
+                "a future version. Cast both Series to object type "
+                "to maintain the prior behavior.",
+                category=FutureWarning,
+            )
+            yield
     else:
         yield
 
@@ -57,17 +76,14 @@ def test_ufunc_index(request, ufunc):
     fname = ufunc.__name__
     request.applymarker(
         pytest.mark.xfail(
-            condition=(
-                fname in {"bitwise_and", "bitwise_or", "bitwise_xor"}
-                and not PANDAS_GE_150
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/46769",
+            condition=not hasattr(cp, fname),
+            reason=f"cupy has no support for '{fname}'",
         )
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=not hasattr(cp, fname),
-            reason=f"cupy has no support for '{fname}'",
+            condition=fname == "matmul" and PANDAS_LT_300,
+            reason="Fixed by https://github.com/pandas-dev/pandas/pull/57079",
         )
     )
 
@@ -165,6 +181,16 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
         )
     )
 
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_200
+            and fname.startswith("bitwise")
+            and indexed
+            and has_nulls,
+            reason="https://github.com/pandas-dev/pandas/issues/52500",
+        )
+    )
+
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
@@ -207,7 +233,27 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
             assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
-            expect[mask] = np.nan
+            with expect_warning_if(
+                PANDAS_GE_210
+                and fname
+                in (
+                    "isfinite",
+                    "isinf",
+                    "isnan",
+                    "logical_and",
+                    "logical_not",
+                    "logical_or",
+                    "logical_xor",
+                    "signbit",
+                    "equal",
+                    "greater",
+                    "greater_equal",
+                    "less",
+                    "less_equal",
+                    "not_equal",
+                )
+            ):
+                expect[mask] = np.nan
             assert_eq(got, expect, check_exact=False)
 
 
@@ -342,8 +388,8 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                indexed
-                and fname
+                not PANDAS_GE_200
+                and indexed
                 in {
                     "add",
                     "arctan2",
@@ -380,7 +426,7 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
                 }
             ),
             reason=(
-                "pandas does not currently support misaligned "
+                "pandas<2.0 does not currently support misaligned "
                 "indexes in DataFrames"
             ),
         )
@@ -433,5 +479,25 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
             assert_eq(g, e, check_exact=False)
     else:
         if has_nulls:
-            expect[mask] = np.nan
+            with expect_warning_if(
+                PANDAS_GE_210
+                and fname
+                in (
+                    "isfinite",
+                    "isinf",
+                    "isnan",
+                    "logical_and",
+                    "logical_not",
+                    "logical_or",
+                    "logical_xor",
+                    "signbit",
+                    "equal",
+                    "greater",
+                    "greater_equal",
+                    "less",
+                    "less_equal",
+                    "not_equal",
+                )
+            ):
+                expect[mask] = np.nan
         assert_eq(got, expect, check_exact=False)

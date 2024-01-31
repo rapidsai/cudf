@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 from decimal import Decimal
@@ -355,12 +355,14 @@ def test_any_all_axis_none(data, op):
 def test_reductions_axis_none_warning(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
     pdf = df.to_pandas()
-    with pytest.warns(FutureWarning):
+    with expect_warning_if(
+        op in {"sum", "product", "std", "var"},
+        FutureWarning,
+    ):
         actual = getattr(df, op)(axis=None)
     with expect_warning_if(
-        op in {"kurt", "kurtosis", "skew", "min", "max", "mean", "median"},
+        op in {"sum", "product", "std", "var"},
         FutureWarning,
     ):
         expected = getattr(pdf, op)(axis=None)
-
     assert_eq(expected, actual, check_dtype=False)

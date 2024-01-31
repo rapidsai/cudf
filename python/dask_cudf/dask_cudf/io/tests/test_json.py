@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import os
 
@@ -80,7 +80,9 @@ def test_read_json_nested(tmp_path):
         }
     )
     kwargs = dict(orient="records", lines=True)
-    with tmp_path / "data.json" as f:
+    with tmp_path / "data.json" as f, dask.config.set(
+        {"dataframe.convert-string": False}
+    ):
         df.to_json(f, **kwargs)
         # Ensure engine='cudf' is tested.
         actual = dask_cudf.read_json(f, engine="cudf", **kwargs)
