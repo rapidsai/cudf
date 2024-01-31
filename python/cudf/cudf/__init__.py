@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 # _setup_numba _must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling
@@ -41,22 +41,10 @@ from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
     DatetimeIndex,
-    Float32Index,
-    Float64Index,
-    GenericIndex,
     Index,
-    Int8Index,
-    Int16Index,
-    Int32Index,
-    Int64Index,
     IntervalIndex,
     RangeIndex,
-    StringIndex,
     TimedeltaIndex,
-    UInt8Index,
-    UInt16Index,
-    UInt32Index,
-    UInt64Index,
     interval_range,
 )
 from cudf.core.missing import NA, NaT
@@ -109,15 +97,8 @@ __all__ = [
     "DatetimeIndex",
     "Decimal32Dtype",
     "Decimal64Dtype",
-    "Float32Index",
-    "Float64Index",
-    "GenericIndex",
     "Grouper",
     "Index",
-    "Int16Index",
-    "Int32Index",
-    "Int64Index",
-    "Int8Index",
     "IntervalDtype",
     "IntervalIndex",
     "ListDtype",
@@ -127,13 +108,8 @@ __all__ = [
     "RangeIndex",
     "Scalar",
     "Series",
-    "StringIndex",
     "StructDtype",
     "TimedeltaIndex",
-    "UInt16Index",
-    "UInt32Index",
-    "UInt64Index",
-    "UInt8Index",
     "api",
     "concat",
     "crosstab",

@@ -782,14 +782,16 @@ def test_dataframe_set_index():
     df["str"] = list("abcdefghijklmnopqrstuvwxyz")
     pdf = df.to_pandas()
 
-    ddf = dgd.from_cudf(df, npartitions=4)
-    ddf = ddf.set_index("str")
+    with dask.config.set({"dataframe.convert-string": False}):
+        ddf = dgd.from_cudf(df, npartitions=4)
+        ddf = ddf.set_index("str")
 
-    pddf = dd.from_pandas(pdf, npartitions=4)
-    pddf = pddf.set_index("str")
-    from cudf.testing._utils import assert_eq
+        pddf = dd.from_pandas(pdf, npartitions=4)
+        pddf = pddf.set_index("str")
 
-    assert_eq(ddf.compute(), pddf.compute())
+        from cudf.testing._utils import assert_eq
+
+        assert_eq(ddf.compute(), pddf.compute())
 
 
 def test_series_describe():
@@ -803,7 +805,7 @@ def test_series_describe():
     dd.assert_eq(
         dsr.describe(),
         pdsr.describe(),
-        check_less_precise=3,
+        rtol=1e-3,
     )
 
 
@@ -832,7 +834,7 @@ def test_zero_std_describe():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.describe(), pddf.describe(), rtol=1e-3)
 
 
 def test_large_numbers_var():
@@ -847,7 +849,7 @@ def test_large_numbers_var():
     ddf = dgd.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
+    dd.assert_eq(ddf.var(), pddf.var(), rtol=1e-3)
 
 
 def test_index_map_partitions():
