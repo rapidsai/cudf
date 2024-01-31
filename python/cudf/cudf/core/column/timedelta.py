@@ -496,7 +496,7 @@ class TimeDeltaColumn(ColumnBase):
                     _unit_to_nanoseconds_conversion[value[1]], "ns"
                 ).astype(self.dtype)
             )
-            if self._time_unit == value[1]:
+            if self.time_unit == value[1]:
                 break
 
         for name in keys_list:
@@ -588,7 +588,7 @@ class TimeDeltaColumn(ColumnBase):
         # performing division operation to extract the number
         # of nanoseconds.
 
-        if self._time_unit != "ns":
+        if self.time_unit != "ns":
             res_col = cudf.core.column.full(len(self), 0, dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
