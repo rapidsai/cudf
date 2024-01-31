@@ -106,6 +106,6 @@ cdef extern from "cudf/groupby.hpp" \
         groups get_groups(table_view values) except +
 
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
-            const table_view& value,
+            const table_view& values,
             const vector[replace_policy] replace_policy
         ) except +
