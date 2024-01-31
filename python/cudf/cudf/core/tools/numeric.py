@@ -54,13 +54,6 @@ def to_numeric(arg, errors="raise", downcast=None):
         Depending on the input, if series is passed in, series is returned,
         otherwise ndarray
 
-    Notes
-    -----
-    An important difference from pandas is that this function does not accept
-    mixed numeric/non-numeric type sequences. For example ``[1, 'a']``.
-    A ``TypeError`` will be raised when such input is received, regardless of
-    ``errors`` parameter.
-
     Examples
     --------
     >>> s = cudf.Series(['1', '2.0', '3e3'])
@@ -90,6 +83,14 @@ def to_numeric(arg, errors="raise", downcast=None):
     1       1.0
     2    3000.0
     dtype: float64
+
+    .. pandas-compat::
+        **cudf.to_numeric**
+
+        An important difference from pandas is that this function does not
+        accept mixed numeric/non-numeric type sequences.
+        For example ``[1, 'a']``. A ``TypeError`` will be raised when such
+        input is received, regardless of ``errors`` parameter.
     """
 
     if errors not in {"raise", "ignore", "coerce"}:

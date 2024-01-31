@@ -103,6 +103,8 @@ def read_json(
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,
+                warn_on_raw_text_input=True,
+                warn_meta=("json", "read_json"),
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)

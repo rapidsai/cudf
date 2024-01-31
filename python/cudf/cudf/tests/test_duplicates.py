@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import itertools
 import random
@@ -9,11 +9,7 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.testing._utils import (
-    _create_pandas_series_float64_default,
-    assert_eq,
-    assert_exceptions_equal,
-)
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 # TODO: PANDAS 1.0 support
 # Revisit drop_duplicates() tests to update parameters like ignore_index.
@@ -62,7 +58,7 @@ def test_duplicated_with_misspelled_column_name(subset):
     ],
 )
 def test_drop_duplicates_series(data, keep):
-    pds = _create_pandas_series_float64_default(data)
+    pds = pd.Series(data)
     gds = cudf.from_pandas(pds)
 
     assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))
@@ -386,7 +382,6 @@ def test_dataframe_drop_duplicates_method():
 
 
 def test_datetime_drop_duplicates():
-
     date_df = cudf.DataFrame()
     date_df["date"] = pd.date_range("11/20/2018", periods=6, freq="D")
     date_df["value"] = np.random.sample(len(date_df))

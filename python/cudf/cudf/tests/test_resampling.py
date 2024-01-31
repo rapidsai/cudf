@@ -1,10 +1,11 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing._utils import assert_eq
 
 
@@ -14,6 +15,7 @@ def assert_resample_results_equal(lhs, rhs, **kwargs):
         rhs.sort_index(),
         check_dtype=False,
         check_freq=False,
+        check_index_type=not PANDAS_GE_200,
         **kwargs,
     )
 
