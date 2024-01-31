@@ -466,28 +466,33 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   }
 
   // build the offsets column
-  auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, offset_count, mask_state::UNALLOCATED, stream, mr);
-  auto offsets_view     = offsets_column->mutable_view();
-  auto delta_per_target = d_repl.size_bytes() - target_size;
+  auto const delta_per_target = d_repl.size_bytes() - target_size;
+  auto const new_chars_bytes  = chars_bytes + (delta_per_target * target_count);
+  auto const offset_type      = new_chars_bytes < std::numeric_limits<int32_t>::max()
+                                  ? data_type{type_id::INT32}
+                                  : data_type{type_id::INT64};
+  auto offsets_column =
+    make_numeric_column(offset_type, offset_count, mask_state::UNALLOCATED, stream, mr);
+  auto d_output_offsets =
+    cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
   device_span<int64_t const> d_target_positions_span(d_target_positions, target_count);
-  auto offsets_update_fn = cuda::proclaim_return_type<int32_t>(
-    [d_target_positions_span, delta_per_target, chars_start] __device__(auto offset) -> int32_t {
+  auto offsets_update_fn = cuda::proclaim_return_type<int64_t>(
+    [d_target_positions_span, delta_per_target, chars_start] __device__(auto offset) -> int64_t {
       // determine the number of target positions occurring before this offset
       auto const next_target_pos_ptr = thrust::lower_bound(
         thrust::seq, d_target_positions_span.begin(), d_target_positions_span.end(), offset);
       auto const num_prev_targets = static_cast<size_type>(
         thrust::distance(d_target_positions_span.data(), next_target_pos_ptr));
-      return static_cast<int32_t>(offset - chars_start) + delta_per_target * num_prev_targets;
+      return (offset - chars_start) + (delta_per_target * static_cast<int64_t>(num_prev_targets));
     });
   thrust::transform(rmm::exec_policy(stream),
                     d_offsets,
                     d_offsets + offset_count,
-                    offsets_view.begin<int32_t>(),
+                    d_output_offsets,
                     offsets_update_fn);
 
   // build the characters column
-  rmm::device_uvector<char> chars(chars_bytes + (delta_per_target * target_count), stream, mr);
+  rmm::device_uvector<char> chars(new_chars_bytes, stream, mr);
   auto d_out_chars = chars.data();
   thrust::for_each_n(
     rmm::exec_policy(stream),
