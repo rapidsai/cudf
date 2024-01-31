@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -584,7 +584,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-__global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBounds(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -653,7 +653,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBou
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
+CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -725,7 +725,7 @@ __global__ void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPageS
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengthPageStringSizes(
+CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengthPageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   using cudf::detail::warp_size;
@@ -820,7 +820,7 @@ __global__ void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLength
  * @param min_rows crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  */
-__global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
+CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSizes(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -868,14 +868,16 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
         if (col.str_dict_index) {
           // String dictionary: use index
           dict_base = reinterpret_cast<const uint8_t*>(col.str_dict_index);
-          dict_size = col.page_info[0].num_input_values * sizeof(string_index_pair);
+          dict_size = col.dict_page->num_input_values * sizeof(string_index_pair);
         } else {
-          dict_base = col.page_info[0].page_data;  // dictionary is always stored in the first page
-          dict_size = col.page_info[0].uncompressed_page_size;
+          dict_base = col.dict_page->page_data;
+          dict_size = col.dict_page->uncompressed_page_size;
         }
 
         // FIXME: need to return an error condition...this won't actually do anything
-        if (s->dict_bits > 32 || !dict_base) { CUDF_UNREACHABLE("invalid dictionary bit size"); }
+        if (s->dict_bits > 32 || (!dict_base && col.dict_page->num_input_values > 0)) {
+          CUDF_UNREACHABLE("invalid dictionary bit size");
+        }
 
         str_bytes = totalDictEntriesSize(
           data, dict_base, s->dict_bits, dict_size, (end - data), start_value, end_value);
@@ -912,7 +914,7 @@ __global__ void __launch_bounds__(preprocess_block_size) gpuComputePageStringSiz
  * @tparam level_t Type used to store decoded repetition and definition levels
  */
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodeStringPageData(PageInfo* pages,
                           device_span<ColumnChunkDesc const> chunks,
                           size_t min_row,

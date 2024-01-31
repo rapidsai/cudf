@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -114,28 +114,28 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       field_type = c & 0xf;
       if (!(c & 0xf0)) get_i32(bs);
     }
-    switch (field_type) {
-      case ST_FLD_TRUE:
-      case ST_FLD_FALSE: break;
-      case ST_FLD_I16:
-      case ST_FLD_I32:
-      case ST_FLD_I64: get_u32(bs); break;
-      case ST_FLD_BYTE: skip_bytes(bs, 1); break;
-      case ST_FLD_DOUBLE: skip_bytes(bs, 8); break;
-      case ST_FLD_BINARY: skip_bytes(bs, get_u32(bs)); break;
-      case ST_FLD_LIST:
-      case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
+    switch (static_cast<FieldType>(field_type)) {
+      case FieldType::BOOLEAN_TRUE:
+      case FieldType::BOOLEAN_FALSE: break;
+      case FieldType::I16:
+      case FieldType::I32:
+      case FieldType::I64: get_u32(bs); break;
+      case FieldType::I8: skip_bytes(bs, 1); break;
+      case FieldType::DOUBLE: skip_bytes(bs, 8); break;
+      case FieldType::BINARY: skip_bytes(bs, get_u32(bs)); break;
+      case FieldType::LIST:
+      case FieldType::SET: {  // NOTE: skipping a list of lists is not handled
         auto const c = getb(bs);
         int n        = c >> 4;
         if (n == 0xf) { n = get_u32(bs); }
         field_type = c & 0xf;
-        if (field_type == ST_FLD_STRUCT) {
+        if (static_cast<FieldType>(field_type) == FieldType::STRUCT) {
           struct_depth += n;
         } else {
           rep_cnt = n;
         }
       } break;
-      case ST_FLD_STRUCT: struct_depth++; break;
+      case FieldType::STRUCT: struct_depth++; break;
     }
   } while (rep_cnt || struct_depth);
 }
@@ -180,7 +180,7 @@ struct ParquetFieldInt32 {
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = get_i32(bs);
-    return (field_type != ST_FLD_I32);
+    return (static_cast<FieldType>(field_type) != FieldType::I32);
   }
 };
 
@@ -199,7 +199,7 @@ struct ParquetFieldEnum {
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = static_cast<Enum>(get_i32(bs));
-    return (field_type != ST_FLD_I32);
+    return (static_cast<FieldType>(field_type) != FieldType::I32);
   }
 };
 
@@ -218,7 +218,7 @@ struct ParquetFieldStruct {
 
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
-    return ((field_type != ST_FLD_STRUCT) || !op(bs));
+    return ((static_cast<FieldType>(field_type) != FieldType::STRUCT) || !op(bs));
   }
 };
 
@@ -348,9 +348,11 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
-                                                            int32_t num_chunks,
-                                                            kernel_error::pointer error_code)
+CUDF_KERNEL
+void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                 chunk_page_info* chunk_pages,
+                                                 int32_t num_chunks,
+                                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -392,11 +394,10 @@ __global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chu
       bs->page.temp_string_buf     = nullptr;
       bs->page.kernel_mask         = decode_kernel_mask::NONE;
     }
-    num_values     = bs->ck.num_values;
-    page_info      = bs->ck.page_info;
-    num_dict_pages = bs->ck.num_dict_pages;
-    max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
-    values_found   = 0;
+    num_values    = bs->ck.num_values;
+    page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
+    max_num_pages = page_info ? bs->ck.max_num_pages : 0;
+    values_found  = 0;
     __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
@@ -480,7 +481,7 @@ __global__ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chu
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   gpuBuildStringDictionaryIndex(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
   __shared__ ColumnChunkDesc chunk_g[4];
@@ -495,9 +496,9 @@ __global__ void __launch_bounds__(128)
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     string_index_pair* dict_index = ck->str_dict_index;
-    uint8_t const* dict           = ck->page_info[0].page_data;
-    int dict_size                 = ck->page_info[0].uncompressed_page_size;
-    int num_entries               = ck->page_info[0].num_input_values;
+    uint8_t const* dict           = ck->dict_page->page_data;
+    int dict_size                 = ck->dict_page->uncompressed_page_size;
+    int num_entries               = ck->dict_page->num_input_values;
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
@@ -518,13 +519,15 @@ __global__ void __launch_bounds__(128)
 }
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
+                                chunk_page_info* chunk_pages,
                                 int32_t num_chunks,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks, error_code);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, chunk_pages, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,

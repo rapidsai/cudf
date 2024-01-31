@@ -1,8 +1,7 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -22,6 +21,7 @@ from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.utils.dtypes import (
+    find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
@@ -62,7 +62,7 @@ class CategoricalAccessor(ColumnMethods):
     dtype: category
     Categories (3, int64): [1, 2, 3]
     >>> s.cat.categories
-    Int64Index([1, 2, 3], dtype='int64')
+    Index([1, 2, 3], dtype='int64')
     >>> s.cat.reorder_categories([3,2,1])
     0    1
     1    2
@@ -105,7 +105,7 @@ class CategoricalAccessor(ColumnMethods):
         super().__init__(parent=parent)
 
     @property
-    def categories(self) -> "cudf.core.index.GenericIndex":
+    def categories(self) -> "cudf.core.index.Index":
         """
         The categories of this categorical.
         """
@@ -130,28 +130,14 @@ class CategoricalAccessor(ColumnMethods):
         """
         return self._column.ordered
 
-    def as_ordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
+    def as_ordered(self) -> Optional[SeriesOrIndex]:
         """
         Set the Categorical to be ordered.
-
-        Parameters
-        ----------
-        inplace : bool, default False
-            Whether or not to add the categories inplace
-            or return a copy of this categorical with
-            added categories.
-
-            .. deprecated:: 23.02
-
-               The `inplace` parameter is is deprecated and
-               will be removed in a future version of cudf.
-               Setting categories as ordered will always
-               return a new Categorical object.
 
         Returns
         -------
         Categorical
-            Ordered Categorical or None if inplace.
+            Ordered Categorical.
 
         Examples
         --------
@@ -177,47 +163,12 @@ class CategoricalAccessor(ColumnMethods):
         6    10
         dtype: category
         Categories (3, int64): [1 < 2 < 10]
-        >>> s.cat.as_ordered(inplace=True)
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1 < 2 < 10]
         """
-        if inplace:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "The inplace parameter is deprecated and will be removed in a "
-                "future release. set_ordered will always return a new Series "
-                "in the future.",
-                FutureWarning,
-            )
-        return self._return_or_inplace(
-            self._column.as_ordered(), inplace=inplace
-        )
+        return self._return_or_inplace(self._column.as_ordered())
 
-    def as_unordered(self, inplace: bool = False) -> Optional[SeriesOrIndex]:
+    def as_unordered(self) -> Optional[SeriesOrIndex]:
         """
         Set the Categorical to be unordered.
-
-        Parameters
-        ----------
-        inplace : bool, default False
-            Whether or not to set the ordered attribute
-            in-place or return a copy of this
-            categorical with ordered set to False.
-
-            .. deprecated:: 23.02
-
-               The `inplace` parameter is is deprecated and
-               will be removed in a future version of cudf.
-               Setting categories as unordered will always
-               return a new Categorical object.
 
         Returns
         -------
@@ -259,33 +210,11 @@ class CategoricalAccessor(ColumnMethods):
         6    10
         dtype: category
         Categories (3, int64): [1, 2, 10]
-        >>> s.cat.as_unordered(inplace=True)
-        >>> s
-        0    10
-        1     1
-        2     1
-        3     2
-        4    10
-        5     2
-        6    10
-        dtype: category
-        Categories (3, int64): [1, 2, 10]
         """
-        if inplace:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "The inplace parameter is deprecated and will be removed in a "
-                "future release. set_ordered will always return a new Series "
-                "in the future.",
-                FutureWarning,
-            )
-        return self._return_or_inplace(
-            self._column.as_unordered(), inplace=inplace
-        )
 
-    def add_categories(
-        self, new_categories: Any, inplace: bool = False
-    ) -> Optional[SeriesOrIndex]:
+        return self._return_or_inplace(self._column.as_unordered())
+
+    def add_categories(self, new_categories: Any) -> Optional[SeriesOrIndex]:
         """
         Add new categories.
 
@@ -297,23 +226,11 @@ class CategoricalAccessor(ColumnMethods):
         ----------
         new_categories : category or list-like of category
             The new categories to be included.
-        inplace : bool, default False
-            Whether or not to add the categories inplace
-            or return a copy of this categorical with
-            added categories.
-
-            .. deprecated:: 23.04
-
-               The `inplace` parameter is is deprecated and
-               will be removed in a future version of cudf.
-               Adding categories will always return a
-               new Categorical object.
 
         Returns
         -------
         cat
-            Categorical with new categories added or
-            None if inplace.
+            Categorical with new categories added.
 
         Examples
         --------
@@ -334,22 +251,7 @@ class CategoricalAccessor(ColumnMethods):
         1    2
         dtype: category
         Categories (2, int64): [1, 2]
-        >>> s.cat.add_categories([0, 3, 4], inplace=True)
-        >>> s
-        0    1
-        1    2
-        dtype: category
-        Categories (5, int64): [1, 2, 0, 3, 4]
         """
-        if inplace:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "The `inplace` parameter in cudf.Series.cat.add_categories "
-                "is deprecated and will be removed in a future version of "
-                "cudf. Adding categories will always return a new "
-                "Categorical object.",
-                FutureWarning,
-            )
         old_categories = self._column.categories
         new_categories = column.as_column(
             new_categories,
@@ -364,8 +266,8 @@ class CategoricalAccessor(ColumnMethods):
                 f"type-cast new_categories to the same type as "
                 f"existing categories."
             )
-        common_dtype = np.find_common_type(
-            [old_categories.dtype, new_categories.dtype], []
+        common_dtype = find_common_type(
+            [old_categories.dtype, new_categories.dtype]
         )
 
         new_categories = new_categories.astype(common_dtype)
@@ -379,12 +281,11 @@ class CategoricalAccessor(ColumnMethods):
         if not out_col._categories_equal(new_categories):
             out_col = out_col._set_categories(new_categories)
 
-        return self._return_or_inplace(out_col, inplace=inplace)
+        return self._return_or_inplace(out_col)
 
     def remove_categories(
         self,
         removals: Any,
-        inplace: bool = False,
     ) -> Optional[SeriesOrIndex]:
         """
         Remove the specified categories.
@@ -397,23 +298,11 @@ class CategoricalAccessor(ColumnMethods):
         ----------
         removals : category or list-like of category
             The categories which should be removed.
-        inplace : bool, default False
-            Whether or not to remove the categories
-            inplace or return a copy of this categorical
-            with removed categories.
-
-            .. deprecated:: 23.04
-
-               The `inplace` parameter is is deprecated and
-               will be removed in a future version of cudf.
-               Removing categories will always return a
-               new Categorical object.
 
         Returns
         -------
         cat
-            Categorical with removed categories or None
-            if inplace.
+            Categorical with removed categories
 
         Examples
         --------
@@ -449,28 +338,7 @@ class CategoricalAccessor(ColumnMethods):
         6    10
         dtype: category
         Categories (3, int64): [1, 2, 10]
-        >>> s.cat.remove_categories([10], inplace=True)
-        >>> s
-        0    <NA>
-        1       1
-        2       1
-        3       2
-        4    <NA>
-        5       2
-        6    <NA>
-        dtype: category
-        Categories (2, int64): [1, 2]
         """
-        if inplace:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "The `inplace` parameter in "
-                "cudf.Series.cat.remove_categories is deprecated and "
-                "will be removed in a future version of cudf. "
-                "Removing categories will always return a new "
-                "Categorical object.",
-                FutureWarning,
-            )
 
         cats = self.categories.to_series()
         removals = cudf.Series(removals, dtype=cats.dtype)
@@ -487,14 +355,13 @@ class CategoricalAccessor(ColumnMethods):
         if not out_col._categories_equal(new_categories):
             out_col = out_col._set_categories(new_categories)
 
-        return self._return_or_inplace(out_col, inplace=inplace)
+        return self._return_or_inplace(out_col)
 
     def set_categories(
         self,
         new_categories: Any,
         ordered: bool = False,
         rename: bool = False,
-        inplace: bool = False,
     ) -> Optional[SeriesOrIndex]:
         """
         Set the categories to the specified new_categories.
@@ -529,23 +396,11 @@ class CategoricalAccessor(ColumnMethods):
             Whether or not the `new_categories` should be
             considered as a rename of the old categories
             or as reordered categories.
-        inplace : bool, default False
-            Whether or not to reorder the categories in-place
-            or return a copy of this categorical with
-            reordered categories.
-
-            .. deprecated:: 23.04
-
-               The `inplace` parameter is is deprecated and
-               will be removed in a future version of cudf.
-               Setting categories will always return a
-               new Categorical object.
 
         Returns
         -------
         cat
             Categorical with reordered categories
-            or None if inplace.
 
         Examples
         --------
@@ -569,38 +424,17 @@ class CategoricalAccessor(ColumnMethods):
         5      10
         dtype: category
         Categories (2, int64): [1, 10]
-        >>> s.cat.set_categories([1, 10], inplace=True)
-        >>> s
-        0       1
-        1       1
-        2    <NA>
-        3      10
-        4    <NA>
-        5      10
-        dtype: category
-        Categories (2, int64): [1, 10]
         """
-        if inplace:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "The `inplace` parameter in cudf.Series.cat.set_categories is "
-                "deprecated and will be removed in a future version of cudf. "
-                "Setting categories will always return a new Categorical "
-                "object.",
-                FutureWarning,
-            )
         return self._return_or_inplace(
             self._column.set_categories(
                 new_categories=new_categories, ordered=ordered, rename=rename
-            ),
-            inplace=inplace,
+            )
         )
 
     def reorder_categories(
         self,
         new_categories: Any,
         ordered: bool = False,
-        inplace: bool = False,
     ) -> Optional[SeriesOrIndex]:
         """
         Reorder categories as specified in new_categories.
@@ -616,23 +450,11 @@ class CategoricalAccessor(ColumnMethods):
             Whether or not the categorical is treated
             as a ordered categorical. If not given, do
             not change the ordered information.
-        inplace : bool, default False
-            Whether or not to reorder the categories
-            inplace or return a copy of this categorical
-            with reordered categories.
-
-            .. deprecated:: 23.04
-
-               The `inplace` parameter is is deprecated and
-               will be removed in a future version of cudf.
-               Reordering categories will always return a
-               new Categorical object.
 
         Returns
         -------
         cat
-            Categorical with reordered categories or
-            None if inplace.
+            Categorical with reordered categories
 
         Raises
         ------
@@ -669,19 +491,8 @@ class CategoricalAccessor(ColumnMethods):
         ValueError: items in new_categories are not the same as in
         old categories
         """
-        if inplace:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "The `inplace` parameter in "
-                "cudf.Series.cat.reorder_categories is deprecated "
-                "and will be removed in a future version of cudf. "
-                "Reordering categories will always return a new "
-                "Categorical object.",
-                FutureWarning,
-            )
         return self._return_or_inplace(
             self._column.reorder_categories(new_categories, ordered=ordered),
-            inplace=inplace,
         )
 
 
@@ -754,7 +565,7 @@ class CategoricalColumn(column.ColumnBase):
             self._encode(item)
         except ValueError:
             return False
-        return self._encode(item) in self.as_numerical
+        return self._encode(item) in self.codes
 
     def set_base_data(self, value):
         if value is not None:
@@ -800,15 +611,6 @@ class CategoricalColumn(column.ColumnBase):
         return self._children
 
     @property
-    def as_numerical(self) -> NumericalColumn:
-        return cast(
-            cudf.core.column.NumericalColumn,
-            column.build_column(
-                data=self.codes.data, dtype=self.codes.dtype, mask=self.mask
-            ),
-        )
-
-    @property
     def categories(self) -> ColumnBase:
         return self.dtype.categories._values
 
@@ -831,12 +633,6 @@ class CategoricalColumn(column.ColumnBase):
     @ordered.setter
     def ordered(self, value: bool):
         self.dtype.ordered = value
-
-    def unary_operator(self, unaryop: str):
-        raise TypeError(
-            f"Series of dtype `category` cannot perform the operation: "
-            f"{unaryop}"
-        )
 
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
@@ -925,7 +721,7 @@ class CategoricalColumn(column.ColumnBase):
                 "The only binary operations supported by unordered "
                 "categorical columns are equality and inequality."
             )
-        return self.as_numerical._binaryop(other.as_numerical, op)
+        return self.codes._binaryop(other.codes, op)
 
     def normalize_binop_value(self, other: ScalarLike) -> CategoricalColumn:
         if isinstance(other, column.ColumnBase):
@@ -950,7 +746,7 @@ class CategoricalColumn(column.ColumnBase):
     def sort_values(
         self, ascending: bool = True, na_position="last"
     ) -> CategoricalColumn:
-        codes = self.as_numerical.sort_values(ascending, na_position)
+        codes = self.codes.sort_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -961,7 +757,7 @@ class CategoricalColumn(column.ColumnBase):
         return col
 
     def element_indexing(self, index: int) -> ScalarLike:
-        val = self.as_numerical.element_indexing(index)
+        val = self.codes.element_indexing(index)
         return self._decode(int(val)) if val is not None else val
 
     @property
@@ -996,15 +792,17 @@ class CategoricalColumn(column.ColumnBase):
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .values_host
         )
-        if isinstance(col.categories.dtype, IntervalDtype):
+
+        cats = col.categories
+        if cats.dtype.kind in "biuf":
+            cats = cats.nans_to_nulls().dropna()  # type: ignore[attr-defined]
+        elif not isinstance(cats.dtype, IntervalDtype):
             # leaving out dropna because it temporarily changes an interval
             # index into a struct and throws off results.
             # TODO: work on interval index dropna
-            categories = col.categories.to_pandas()
-        else:
-            categories = col.categories.dropna(drop_nan=True).to_pandas()
+            cats = cats.dropna()
         data = pd.Categorical.from_codes(
-            codes, categories=categories, ordered=col.ordered
+            codes, categories=cats.to_pandas(), ordered=col.ordered
         )
         return pd.Series(data, index=index)
 
@@ -1053,7 +851,7 @@ class CategoricalColumn(column.ColumnBase):
         return self.codes.data_array_view(mode=mode)
 
     def unique(self) -> CategoricalColumn:
-        codes = self.as_numerical.unique()
+        codes = self.codes.unique()
         return column.build_categorical_column(
             categories=self.categories,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
@@ -1167,7 +965,7 @@ class CategoricalColumn(column.ColumnBase):
         new_cats_col = new_cats_col.apply_boolean_mask(bmask)
         new_cats = cudf.DataFrame._from_data(
             {
-                "index": cudf.core.column.arange(len(new_cats_col)),
+                "index": column.as_column(range(len(new_cats_col))),
                 "cats": new_cats_col,
             }
         )
@@ -1236,9 +1034,8 @@ class CategoricalColumn(column.ColumnBase):
     def fillna(
         self,
         fill_value: Any = None,
-        method: Any = None,
-        dtype: Optional[Dtype] = None,
-    ) -> CategoricalColumn:
+        method: Optional[str] = None,
+    ) -> Self:
         """
         Fill null values with *fill_value*
         """
@@ -1276,20 +1073,20 @@ class CategoricalColumn(column.ColumnBase):
                     self.codes.dtype
                 )
 
-        return super().fillna(value=fill_value, method=method)
+        return super().fillna(fill_value, method=method)
 
     def indices_of(
         self, value: ScalarLike
     ) -> cudf.core.column.NumericalColumn:
-        return self.as_numerical.indices_of(self._encode(value))
+        return self.codes.indices_of(self._encode(value))
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return bool(self.ordered) and self.as_numerical.is_monotonic_increasing
+        return bool(self.ordered) and self.codes.is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
+        return bool(self.ordered) and self.codes.is_monotonic_decreasing
 
     def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
         if isinstance(dtype, str) and dtype == "category":
@@ -1320,22 +1117,28 @@ class CategoricalColumn(column.ColumnBase):
             new_categories=dtype.categories, ordered=bool(dtype.ordered)
         )
 
-    def as_numerical_column(self, dtype: Dtype, **kwargs) -> NumericalColumn:
+    def as_numerical_column(self, dtype: Dtype) -> NumericalColumn:
         return self._get_decategorized_column().as_numerical_column(dtype)
 
-    def as_string_column(self, dtype, format=None, **kwargs) -> StringColumn:
+    def as_string_column(
+        self, dtype, format: str | None = None
+    ) -> StringColumn:
         return self._get_decategorized_column().as_string_column(
             dtype, format=format
         )
 
-    def as_datetime_column(self, dtype, **kwargs) -> DatetimeColumn:
+    def as_datetime_column(
+        self, dtype, format: str | None = None
+    ) -> DatetimeColumn:
         return self._get_decategorized_column().as_datetime_column(
-            dtype, **kwargs
+            dtype, format
         )
 
-    def as_timedelta_column(self, dtype, **kwargs) -> TimeDeltaColumn:
+    def as_timedelta_column(
+        self, dtype, format: str | None = None
+    ) -> TimeDeltaColumn:
         return self._get_decategorized_column().as_timedelta_column(
-            dtype, **kwargs
+            dtype, format
         )
 
     def _get_decategorized_column(self) -> ColumnBase:
@@ -1382,7 +1185,9 @@ class CategoricalColumn(column.ColumnBase):
         # improved as the concatenation API is solidified.
 
         # Find the first non-null column:
-        head = next((obj for obj in objs if obj.valid_count), objs[0])
+        head = next(
+            (obj for obj in objs if obj.null_count != len(obj)), objs[0]
+        )
 
         # Combine and de-dupe the categories
         cats = column.concat_columns([o.categories for o in objs]).unique()
@@ -1532,9 +1337,13 @@ class CategoricalColumn(column.ColumnBase):
         )
         out_code_dtype = min_unsigned_type(max_cat_size)
 
-        cur_order = column.arange(len(cur_codes))
-        old_codes = column.arange(len(cur_cats), dtype=out_code_dtype)
-        new_codes = column.arange(len(new_cats), dtype=out_code_dtype)
+        cur_order = column.as_column(range(len(cur_codes)))
+        old_codes = column.as_column(
+            range(len(cur_cats)), dtype=out_code_dtype
+        )
+        new_codes = column.as_column(
+            range(len(new_cats)), dtype=out_code_dtype
+        )
 
         new_df = cudf.DataFrame._from_data(
             data={"new_codes": new_codes, "cats": new_cats}

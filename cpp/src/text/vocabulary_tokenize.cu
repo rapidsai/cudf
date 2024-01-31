@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,13 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -35,7 +35,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 
@@ -93,15 +92,14 @@ struct vocab_equal {
   }
 };
 
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-using probe_scheme              = cuco::experimental::linear_probing<1, vocab_hasher>;
-using vocabulary_map_type       = cuco::experimental::static_map<cudf::size_type,
+using probe_scheme        = cuco::experimental::linear_probing<1, vocab_hasher>;
+using vocabulary_map_type = cuco::experimental::static_map<cudf::size_type,
                                                            cudf::size_type,
                                                            cuco::experimental::extent<std::size_t>,
                                                            cuda::thread_scope_device,
                                                            vocab_equal,
                                                            probe_scheme,
-                                                           hash_table_allocator_type>;
+                                                           cudf::detail::cuco_allocator>;
 }  // namespace
 }  // namespace detail
 
@@ -150,7 +148,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     cuco::empty_value{-1},
     detail::vocab_equal{*d_vocabulary},
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
-    detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+    cudf::detail::cuco_allocator{stream},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
@@ -214,10 +212,10 @@ struct mark_delimiters_fn {
   }
 };
 
-__global__ void token_counts_fn(cudf::column_device_view const d_strings,
-                                cudf::string_view const d_delimiter,
-                                cudf::size_type* d_counts,
-                                int8_t* d_results)
+CUDF_KERNEL void token_counts_fn(cudf::column_device_view const d_strings,
+                                 cudf::string_view const d_delimiter,
+                                 cudf::size_type* d_counts,
+                                 int8_t* d_results)
 {
   // string per warp
   auto const idx = static_cast<std::size_t>(threadIdx.x + blockIdx.x * blockDim.x);
@@ -240,10 +238,8 @@ __global__ void token_counts_fn(cudf::column_device_view const d_strings,
 
   auto const offsets =
     d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
-  auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
-  auto const chars_begin =
-    d_strings.child(cudf::strings_column_view::chars_column_index).data<char>() +
-    offsets[d_strings.offset()];
+  auto const offset      = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
+  auto const chars_begin = d_strings.data<char>() + offsets[d_strings.offset()];
 
   auto const begin        = d_str.data();
   auto const end          = begin + d_str.size_bytes();
@@ -372,7 +368,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   auto map_ref           = vocabulary._impl->get_map_ref();
   auto const zero_itr    = thrust::make_counting_iterator<cudf::size_type>(0);
 
-  if ((input.chars_size() / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
+  if ((input.chars_size(stream) / (input.size() - input.null_count())) < AVG_CHAR_BYTES_THRESHOLD) {
     auto const sizes_itr =
       cudf::detail::make_counting_transform_iterator(0, strings_tokenizer{*d_strings, d_delimiter});
     auto [token_offsets, total_count] =
@@ -401,11 +397,11 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                                                    : cudf::detail::get_value<cudf::size_type>(
                                                       input.offsets(), input.offset(), stream);
   auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
-                               ? input.chars().size()
+                               ? input.chars_size(stream)
                                : cudf::detail::get_value<cudf::size_type>(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
-  auto const d_input_chars = input.chars().data<char>() + first_offset;
+  auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
   rmm::device_uvector<cudf::size_type> d_token_counts(input.size(), stream);
   rmm::device_uvector<int8_t> d_marks(chars_size, stream);
@@ -436,9 +432,8 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
 
   auto tmp_offsets =
     std::make_unique<cudf::column>(std::move(d_tmp_offsets), rmm::device_buffer{}, 0);
-  auto tmp_chars = cudf::column_view(input.chars().type(), chars_size, d_input_chars, nullptr, 0);
   auto const tmp_input = cudf::column_view(
-    input.parent().type(), total_count, nullptr, nullptr, 0, 0, {tmp_offsets->view(), tmp_chars});
+    input.parent().type(), total_count, d_input_chars, nullptr, 0, 0, {tmp_offsets->view()});
 
   auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 

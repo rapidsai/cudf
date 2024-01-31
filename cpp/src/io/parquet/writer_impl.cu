@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,10 @@
 #include <numeric>
 #include <utility>
 
+#ifndef CUDF_VERSION
+#error "CUDF_VERSION is not defined"
+#endif
+
 namespace cudf::io::parquet::detail {
 
 using namespace cudf::io::detail;
@@ -108,7 +112,7 @@ struct aggregate_writer_metadata {
     meta.num_rows           = this->files[part].num_rows;
     meta.row_groups         = this->files[part].row_groups;
     meta.key_value_metadata = this->files[part].key_value_metadata;
-    meta.created_by         = this->created_by;
+    meta.created_by         = "cudf version " CUDF_STRINGIFY(CUDF_VERSION);
     meta.column_orders      = this->column_orders;
     return meta;
   }
@@ -171,7 +175,6 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by                                   = "";
   thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
@@ -606,10 +609,10 @@ std::vector<schema_tree_node> construct_schema_tree(
       // column that isn't a single-depth list<int8> the code will throw.
       if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                     "Binary column's corresponding metadata should have zero or two children!");
+                     "Binary column's corresponding metadata should have zero or two children");
         if (col_meta.num_children() > 0) {
           CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.empty(),
-                       "Binary column must not be nested!");
+                       "Binary column must not be nested");
         }
 
         schema_tree_node col_schema{};
@@ -731,8 +734,13 @@ std::vector<schema_tree_node> construct_schema_tree(
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
-          CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                       "String column's corresponding metadata should have zero or two children");
+          if (col_meta.is_enabled_output_as_binary()) {
+            CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                         "Binary column's corresponding metadata should have zero or two children");
+          } else {
+            CUDF_EXPECTS(col_meta.num_children() == 1 or col_meta.num_children() == 0,
+                         "String column's corresponding metadata should have zero or one children");
+          }
         } else {
           CUDF_EXPECTS(col_meta.num_children() == 0,
                        "Leaf column's corresponding metadata cannot have children");
@@ -2066,7 +2074,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           need_sync = true;
         }
 
-        row_group.total_byte_size += ck.compressed_size;
+        row_group.total_byte_size += ck.bfr_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2393,7 +2401,8 @@ void writer::impl::write_parquet_data_to_sink(
             // skip dict pages
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
-            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            int32_t const this_page_size =
+              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }

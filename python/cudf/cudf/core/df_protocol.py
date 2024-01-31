@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import enum
 from collections import abc
@@ -482,7 +482,9 @@ class _CuDFColumn:
             dtype = self._dtype_from_cudfdtype(col_data.dtype)
 
         elif self.dtype[0] == _DtypeKind.STRING:
-            col_data = self._col.children[1]
+            col_data = build_column(
+                data=self._col.data, dtype=np.dtype("int8")
+            )
             dtype = self._dtype_from_cudfdtype(col_data.dtype)
 
         else:
@@ -790,7 +792,6 @@ def _set_missing_values(
     cudf_col: cudf.core.column.ColumnBase,
     allow_copy: bool,
 ) -> cudf.core.column.ColumnBase:
-
     valid_mask = protocol_col.get_buffers()["validity"]
     if valid_mask is not None:
         null, invalid = protocol_col.describe_null

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import decimal
@@ -159,7 +159,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, use_index=use_index)
 
-    assert_eq(pdf, gdf, check_categorical=False)
+    assert_eq(pdf, gdf, check_categorical=False, check_exact=False)
 
 
 def test_orc_reader_strings(datadir):
@@ -576,7 +576,7 @@ def test_int_overflow(tmpdir):
 
     # The number of rows and the large element trigger delta encoding
     num_rows = 513
-    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int32")
+    df = cudf.DataFrame({"a": [None] * num_rows}, dtype="int64")
     df["a"][0] = 1024 * 1024 * 1024
     df["a"][num_rows - 1] = 1
     df.to_orc(file_path)
@@ -812,7 +812,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
 
     if "number_of_values" in file_stats[0][col]:
         stats_valid_count = file_stats[0][col]["number_of_values"]
-        actual_valid_count = gdf[col].valid_count
+        actual_valid_count = len(gdf[col]) - gdf[col].null_count
         assert normalized_equals(actual_valid_count, stats_valid_count)
 
     # compare stripe statistics with actual min/max
@@ -827,7 +827,9 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
             assert normalized_equals(actual_true_count, stats_true_count)
 
         if "number_of_values" in stripes_stats[stripe_idx][col]:
-            actual_valid_count = stripe_df[col].valid_count
+            actual_valid_count = (
+                len(stripe_df[col]) - stripe_df[col].null_count
+            )
             stats_valid_count = stripes_stats[stripe_idx][col][
                 "number_of_values"
             ]
@@ -1669,16 +1671,7 @@ def run_orc_columns_and_index_param(index_obj, index, columns):
     expected = pd.read_orc(buffer, columns=columns)
     got = cudf.read_orc(buffer, columns=columns)
 
-    if columns:
-        # TODO: Remove workaround after this issue is fixed:
-        # https://github.com/pandas-dev/pandas/issues/47944
-        assert_eq(
-            expected.sort_index(axis=1),
-            got.sort_index(axis=1),
-            check_index_type=True,
-        )
-    else:
-        assert_eq(expected, got, check_index_type=True)
+    assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("index_obj", [None, [10, 11, 12], ["x", "y", "z"]])
@@ -1825,7 +1818,7 @@ def test_orc_reader_negative_timestamp(negative_timestamp_df, engine):
     with expect_warning_if(engine == "pyarrow", UserWarning):
         got = cudf.read_orc(buffer, engine=engine)
 
-    assert_eq(negative_timestamp_df, got)
+    assert_eq(negative_timestamp_df, got, check_dtype=False)
 
 
 def test_orc_writer_negative_timestamp(negative_timestamp_df):
@@ -1834,8 +1827,10 @@ def test_orc_writer_negative_timestamp(negative_timestamp_df):
     buffer = BytesIO()
     negative_timestamp_df.to_orc(buffer)
 
-    assert_eq(negative_timestamp_df, pd.read_orc(buffer))
-    assert_eq(negative_timestamp_df, orc.ORCFile(buffer).read())
+    assert_eq(negative_timestamp_df, pd.read_orc(buffer), check_dtype=False)
+    assert_eq(
+        negative_timestamp_df, orc.ORCFile(buffer).read(), check_dtype=False
+    )
 
 
 def test_orc_reader_apache_negative_timestamp(datadir):
@@ -1909,3 +1904,25 @@ def test_orc_reader_empty_deeply_nested_level(datadir):
     got = cudf.read_orc(path)
 
     assert_eq(expect, got)
+
+
+def test_orc_chunked_writer_stripe_size(datadir):
+    from pyarrow import orc
+
+    df = cudf.DataFrame({"col": gen_rand_series("int", 100000)})
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_bytes=64 * 1024)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 10)
+
+    buffer = BytesIO()
+    writer = ORCWriter(buffer, stripe_size_rows=20000)
+    writer.write_table(df)
+    writer.close()
+
+    orc_file = orc.ORCFile(buffer)
+    assert_eq(orc_file.nstripes, 5)

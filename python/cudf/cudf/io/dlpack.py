@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 
 import cudf
@@ -35,12 +35,12 @@ def from_dlpack(pycapsule_obj):
     """
 
     columns = libdlpack.from_dlpack(pycapsule_obj)
-    column_names = range(len(columns))
+    data = dict(enumerate(columns))
 
     if len(columns) == 1:
-        return cudf.Series._from_columns(columns, column_names=column_names)
+        return cudf.Series._from_data(data)
     else:
-        return cudf.DataFrame._from_columns(columns, column_names=column_names)
+        return cudf.DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
@@ -71,7 +71,7 @@ def to_dlpack(cudf_obj):
     if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
         gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf = cudf_obj.as_frame()
+        gdf = cudf.Series._from_data({None: cudf_obj})
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "

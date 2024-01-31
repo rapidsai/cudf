@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -98,6 +98,8 @@ class json_reader_options {
 
   // Read the file as a json object per line
   bool _lines = false;
+  // Parse mixed types as a string column
+  bool _mixed_types_as_string = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -112,6 +114,9 @@ class json_reader_options {
 
   // Whether to keep the quote characters of string values
   bool _keep_quotes = false;
+
+  // Normalize single quotes
+  bool _normalize_single_quotes = false;
 
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
@@ -226,6 +231,13 @@ class json_reader_options {
   bool is_enabled_lines() const { return _lines; }
 
   /**
+   * @brief Whether to parse mixed types as a string column.
+   *
+   * @return `true` if mixed types are parsed as a string column
+   */
+  bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
+
+  /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @returns true if dates are parsed as DD/MM, false if MM/DD
@@ -245,6 +257,13 @@ class json_reader_options {
    * @returns true if the reader should keep quotes, false otherwise
    */
   bool is_enabled_keep_quotes() const { return _keep_quotes; }
+
+  /**
+   * @brief Whether the reader should normalize single quotes around strings
+   *
+   * @returns true if the reader should normalize single quotes, false otherwise
+   */
+  bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
 
   /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
@@ -303,6 +322,13 @@ class json_reader_options {
   void enable_lines(bool val) { _lines = val; }
 
   /**
+   * @brief Set whether to parse mixed types as a string column.
+   *
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
+   */
+  void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -323,6 +349,14 @@ class json_reader_options {
    * of string values
    */
   void enable_keep_quotes(bool val) { _keep_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should enable normalization of single quotes around strings.
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes around
+   * strings
+   */
+  void enable_normalize_single_quotes(bool val) { _normalize_single_quotes = val; }
 
   /**
    * @brief Specifies the JSON reader's behavior on invalid JSON lines.
@@ -438,6 +472,18 @@ class json_reader_options_builder {
   }
 
   /**
+   * @brief Set whether to parse mixed types as a string column.
+   *
+   * @param val Boolean value to enable/disable parsing mixed types as a string column
+   * @return this for chaining
+   */
+  json_reader_options_builder& mixed_types_as_string(bool val)
+  {
+    options._mixed_types_as_string = val;
+    return *this;
+  }
+
+  /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
    *
    * @param val Boolean value to enable/disable day first parsing format
@@ -471,6 +517,19 @@ class json_reader_options_builder {
   json_reader_options_builder& keep_quotes(bool val)
   {
     options._keep_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should normalize single quotes around strings
+   *
+   * @param val Boolean value to indicate whether the reader should normalize single quotes
+   * of strings
+   * @return this for chaining
+   */
+  json_reader_options_builder& normalize_single_quotes(bool val)
+  {
+    options._normalize_single_quotes = val;
     return *this;
   }
 

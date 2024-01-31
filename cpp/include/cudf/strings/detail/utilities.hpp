@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,34 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const strings,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Return the threshold size for a strings column to use int64 offsets
+ *
+ * A computed size above this threshold should using int64 offsets, otherwise
+ * int32 offsets. By default this function will return std::numeric_limits<int32_t>::max().
+ * This value can be overridden at runtime using the environment variable
+ * LIBCUDF_LARGE_STRINGS_THRESHOLD.
+ *
+ * @return size in bytes
+ */
+int64_t get_offset64_threshold();
+
+/**
+ * @brief Return a normalized offset value from a strings offsets column
+ *
+ * The maximum value returned is `std::numeric_limits<int32_t>::max()`.
+ *
+ * @throw std::invalid_argument if `offsets` is neither INT32 nor INT64
+ *
+ * @param offsets Input column of type INT32 or INT64
+ * @param index Row value to retrieve
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Value at `offsets[index]`
+ */
+int64_t get_offset_value(cudf::column_view const& offsets,
+                         size_type index,
+                         rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace strings

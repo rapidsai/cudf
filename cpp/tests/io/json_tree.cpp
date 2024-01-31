@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,10 +26,12 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
+#include <stack>
 #include <string>
 #include <unordered_map>
 
@@ -594,7 +596,7 @@ TEST_F(JsonTest, TreeRepresentation)
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
@@ -682,7 +684,7 @@ TEST_F(JsonTest, TreeRepresentation2)
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
@@ -757,7 +759,7 @@ TEST_F(JsonTest, TreeRepresentation3)
 
   // Get the JSON's tree representation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
   // host tree generation
   auto cpu_tree = get_tree_representation_cpu(tokens_gpu, token_indices_gpu, options, stream);
   compare_trees(cpu_tree, gpu_tree);
@@ -783,9 +785,10 @@ TEST_F(JsonTest, TreeRepresentationError)
 
   // Get the JSON's tree representation
   // This JSON is invalid and will raise an exception.
-  EXPECT_THROW(cuio_json::detail::get_tree_representation(
-                 tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource()),
-               cudf::logic_error);
+  EXPECT_THROW(
+    cuio_json::detail::get_tree_representation(
+      tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource()),
+    cudf::logic_error);
 }
 
 /**
@@ -874,7 +877,7 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
     records_orient_tree_traversal_cpu(input, cpu_tree, is_array_of_arrays, json_lines, stream);
   // gpu tree generation
   auto gpu_tree = cuio_json::detail::get_tree_representation(
-    tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
+    tokens_gpu, token_indices_gpu, false, stream, rmm::mr::get_current_device_resource());
 
 #if LIBCUDF_JSON_DEBUG_DUMP
   printf("BEFORE traversal (gpu_tree):\n");
