@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
+from libcpp.functional cimport reference_wrapper
 from libcpp.memory cimport unique_ptr
 from libcpp.pair cimport pair
 from libcpp.utility cimport move
@@ -12,12 +13,15 @@ from cudf._lib.cpp.groupby cimport (
     groupby,
     scan_request,
 )
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.types cimport size_type
 
 from .aggregation cimport Aggregation
 from .column cimport Column
 from .table cimport Table
 from .types cimport null_policy, sorted
+from .utils cimport _as_vector
 
 
 cdef class GroupByRequest:
@@ -152,3 +156,36 @@ cdef class GroupBy:
             dereference(self.c_obj).scan(c_requests)
         )
         return GroupBy._parse_outputs(move(c_res))
+
+    cpdef tuple shift(self, Table values, list offset, list fill_values):
+        """Compute shifts on columns.
+
+        Parameters
+        ----------
+        values : Table
+            The columns to shift.
+        offset : List[int]
+            The offsets to shift by.
+        fill_values : List[Scalar]
+            The values to use to fill in missing values.
+
+        Returns
+        -------
+        Tuple[Table, Table]
+            A tuple whose first element is the group's keys and whose second
+            element is a table of shifted values.
+        """
+
+        # cdef vector[size_type] c_offset = offset
+        cdef vector[reference_wrapper[const scalar]] c_fill_values = \
+            _as_vector(fill_values)
+
+        cdef vector[size_type] c_offset = offset
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
+            dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
+        )
+
+        return (
+            Table.from_libcudf(move(c_res.first)),
+            Table.from_libcudf(move(c_res.second)),
+        )

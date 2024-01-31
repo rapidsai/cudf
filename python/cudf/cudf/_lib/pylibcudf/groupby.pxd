@@ -18,6 +18,7 @@ from cudf._lib.cpp.groupby cimport (
 from cudf._lib.cpp.table.table cimport table
 
 from .column cimport Column
+from .table cimport Table
 
 
 cdef class GroupByRequest:
@@ -38,6 +39,7 @@ cdef class GroupBy:
     cdef unique_ptr[groupby] c_obj
     cpdef tuple aggregate(self, list requests)
     cpdef tuple scan(self, list requests)
+    cpdef tuple shift(self, Table values, list offset, list fill_values)
 
     @staticmethod
     cdef tuple _parse_outputs(pair[unique_ptr[table], vector[aggregation_result]] c_res)
