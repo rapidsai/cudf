@@ -15,9 +15,7 @@ from cudf.core.dtypes import (
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.pair cimport pair
 from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport (
@@ -28,15 +26,12 @@ from cudf._lib.utils cimport (
 
 from cudf._lib.scalar import as_device_scalar
 
-from libcpp.functional cimport reference_wrapper
-
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.aggregation cimport make_groupby_aggregation
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table, table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.table.table cimport table_view
 
 from cudf._lib import pylibcudf
 
@@ -260,51 +255,29 @@ cdef class GroupBy:
         return result_columns, grouped_keys, included_aggregations
 
     def shift(self, list values, int periods, list fill_values):
-        cdef table_view view = table_view_from_columns(values)
-        cdef size_type num_col = view.num_columns()
-        cdef vector[size_type] offsets = vector[size_type](num_col, periods)
+        keys, shifts = self._groupby.shift(
+            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values]),
+            [periods] * len(values),
+            [
+                (<DeviceScalar> as_device_scalar(val, dtype=col.dtype)).c_value
+                for val, col in zip(fill_values, values)
+            ],
+        )
 
-        cdef vector[reference_wrapper[constscalar]] c_fill_values
-        cdef DeviceScalar d_slr
-        d_slrs = []
-        c_fill_values.reserve(num_col)
-        for val, col in zip(fill_values, values):
-            d_slr = as_device_scalar(val, dtype=col.dtype)
-            d_slrs.append(d_slr)
-            c_fill_values.push_back(
-                reference_wrapper[constscalar](d_slr.get_raw_ptr()[0])
-            )
-
-        cdef pair[unique_ptr[table], unique_ptr[table]] c_result
-
-        with nogil:
-            c_result = move(
-                self.c_obj.get()[0].shift(view, offsets, c_fill_values)
-            )
-
-        grouped_keys = columns_from_unique_ptr(move(c_result.first))
-        shifted = columns_from_unique_ptr(move(c_result.second))
-
-        return shifted, grouped_keys
+        return columns_from_pylibcudf_table(shifts), columns_from_pylibcudf_table(keys)
 
     def replace_nulls(self, list values, object method):
-        cdef table_view val_view = table_view_from_columns(values)
-        cdef pair[unique_ptr[table], unique_ptr[table]] c_result
-        cdef replace_policy policy = (
-            replace_policy.PRECEDING
-            if method == 'ffill' else replace_policy.FOLLOWING
+        # TODO: This is using an enum (replace_policy) that has not been exposed in
+        # pylibcudf yet. We'll want to fix that import once it is in pylibcudf.
+        _, replaced = self._groupby.replace_nulls(
+            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values]),
+            [
+                replace_policy.PRECEDING
+                if method == 'ffill' else replace_policy.FOLLOWING
+            ] * len(values),
         )
-        cdef vector[replace_policy] policies = vector[replace_policy](
-            val_view.num_columns(), policy
-        )
 
-        with nogil:
-            c_result = move(
-                self.c_obj.get()[0].replace_nulls(val_view, policies)
-            )
-
-        return columns_from_unique_ptr(move(c_result.second))
-
+        return columns_from_pylibcudf_table(replaced)
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "rank"}
 
