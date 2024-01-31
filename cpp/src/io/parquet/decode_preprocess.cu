@@ -156,10 +156,14 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
       break;
 
     case Encoding::PLAIN:
-      // TODO: since this is really just an estimate, we could just return
-      // s->dict_size (overestimate) or
-      // s->dict_size - sizeof(int) * s->page.num_input_values (underestimate)
-      if (t < warp_size && (s->col.data_type & 7) == BYTE_ARRAY) {
+      // For V2 headers, we know how many values are present, so can skip an expensive scan.
+      if ((s->page.flags & PAGEINFO_FLAGS_V2) != 0) {
+        auto const num_values = s->page.num_values - s->page.num_nulls;
+        str_len = s->dict_size - sizeof(int) * num_values;
+      }
+      // For V1, the choice is an overestimate (s->dict_size), or an exact number that's
+      // expensive to compute. For now we're going with the latter.
+      else {
         str_len = gpuInitStringDescriptors<true, unused_state_buf>(s, nullptr, target_pos, t);
       }
       break;
