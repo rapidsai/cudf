@@ -30,6 +30,17 @@ pytest \
   .
 popd
 
+# Dask-expr tests should be skipped if dask_expr is not installed
+rapids-logger "pytest dask_cudf + dask-expr"
+pushd python/dask_cudf/dask_cudf/expr
+DASK_DATAFRAME__QUERY_PLANNING=True pytest \
+  --cache-clear \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  .
+popd
+
 rapids-logger "pytest custreamz"
 pushd python/custreamz/custreamz
 pytest \

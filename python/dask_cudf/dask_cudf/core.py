@@ -711,7 +711,9 @@ from_cudf.__doc__ = (
         rather than pandas objects.\n
         """
     )
-    + textwrap.dedent(dd.from_pandas.__doc__)
+    # TODO: `dd.from_pandas.__doc__` is empty when
+    # `DASK_DATAFRAME__QUERY_PLANNING=True`
+    + textwrap.dedent(dd.from_pandas.__doc__ or "")
 )
 
 
