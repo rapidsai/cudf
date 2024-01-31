@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
 from typing import Any, Dict, Optional, Tuple, Union
 
 import cupy
@@ -17,6 +16,7 @@ from cudf.api.types import (
     is_bool_dtype,
     is_integer,
     is_integer_dtype,
+    is_numeric_dtype,
 )
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.frame import Frame
@@ -41,21 +41,16 @@ class SingleColumnFrame(Frame, NotIterable):
         self,
         op,
         axis=no_default,
-        level=None,
-        numeric_only=None,
+        numeric_only=False,
         **kwargs,
     ):
         if axis not in (None, 0, no_default):
             raise NotImplementedError("axis parameter is not implemented yet")
 
-        if level is not None:
-            raise NotImplementedError("level parameter is not implemented yet")
-
-        if numeric_only and not isinstance(
-            self._column, cudf.core.column.numerical_base.NumericalBaseColumn
-        ):
-            raise NotImplementedError(
-                f"Series.{op} does not implement numeric_only."
+        if numeric_only and not is_numeric_dtype(self._column):
+            raise TypeError(
+                f"Series.{op} does not allow numeric_only={numeric_only} "
+                "with non-numeric dtypes."
             )
         try:
             return getattr(self._column, op)(**kwargs)
@@ -164,7 +159,7 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> import cudf
         >>> import pyarrow as pa
         >>> cudf.Index.from_arrow(pa.array(["a", "b", None]))
-        StringIndex(['a' 'b' None], dtype='object')
+        Index(['a', 'b', None], dtype='object')
         >>> cudf.Series.from_arrow(pa.array(["a", "b", None]))
         0       a
         1       b
@@ -206,23 +201,14 @@ class SingleColumnFrame(Frame, NotIterable):
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
-    def is_monotonic(self):
-        """Return boolean if values in the object are monotonically increasing.
-
-        This property is an alias for :attr:`is_monotonic_increasing`.
+    def is_unique(self):
+        """Return boolean if values in the object are unique.
 
         Returns
         -------
         bool
         """
-        # Do not remove until pandas 2.0 support is added.
-        warnings.warn(
-            "is_monotonic is deprecated and will be removed in a future "
-            "version. Use is_monotonic_increasing instead.",
-            FutureWarning,
-        )
-
-        return self.is_monotonic_increasing
+        return self._column.is_unique
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -259,21 +245,13 @@ class SingleColumnFrame(Frame, NotIterable):
             raise AttributeError
 
     @_cudf_nvtx_annotate
-    def factorize(self, sort=False, na_sentinel=None, use_na_sentinel=None):
+    def factorize(self, sort=False, use_na_sentinel=True):
         """Encode the input values as integer labels.
 
         Parameters
         ----------
         sort : bool, default True
             Sort uniques and shuffle codes to maintain the relationship.
-        na_sentinel : number, default -1
-            Value to indicate missing category.
-
-            .. deprecated:: 23.04
-
-               The na_sentinel argument is deprecated and will be removed in
-               a future version of cudf. Specify use_na_sentinel as
-               either True or False.
         use_na_sentinel : bool, default True
             If True, the sentinel -1 will be used for NA values.
             If False, NA values will be encoded as non-negative
@@ -295,12 +273,11 @@ class SingleColumnFrame(Frame, NotIterable):
         >>> codes
         array([0, 0, 1], dtype=int8)
         >>> uniques
-        StringIndex(['a' 'c'], dtype='object')
+        Index(['a', 'c'], dtype='object')
         """
         return cudf.core.algorithms.factorize(
             self,
             sort=sort,
-            na_sentinel=na_sentinel,
             use_na_sentinel=use_na_sentinel,
         )
 

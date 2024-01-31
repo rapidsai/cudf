@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import itertools
 import warnings
@@ -14,6 +14,7 @@ from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 from cudf.utils.dtypes import min_unsigned_type
@@ -35,7 +36,7 @@ def _align_objs(objs, how="outer", sort=None):
     A list of reindexed and aligned objects
     ready for concatenation
     """
-    # Check if multiindex then check if indexes match. GenericIndex
+    # Check if multiindex then check if indexes match. Index
     # returns ndarray tuple of bools requiring additional filter.
     # Then check for duplicate index value.
     i_objs = iter(objs)
@@ -86,7 +87,7 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
     else:
         index = indexes[0]
         if sort is None:
-            sort = not isinstance(index, cudf.StringIndex)
+            sort = not index._is_object()
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
@@ -321,9 +322,23 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
+        any_empty = any(obj.empty for obj in objs)
+        if any_empty:
+            # Do not remove until pandas-3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                "The behavior of array concatenation with empty entries is "
+                "deprecated. In a future version, this will no longer exclude "
+                "empty items when determining the result dtype. "
+                "To retain the old behavior, exclude the empty entries before "
+                "the concat operation.",
+                FutureWarning,
+            )
         # Inner joins involving empty data frames always return empty dfs, but
         # We must delay returning until we have set the column names.
-        empty_inner = any(obj.empty for obj in objs) and join == "inner"
+        empty_inner = any_empty and join == "inner"
 
         objs = [obj for obj in objs if obj.shape != (0, 0)]
 
@@ -418,11 +433,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return result
 
     elif typ is cudf.Series:
-        objs = [obj for obj in objs if len(obj)]
-        if len(objs) == 0:
-            return cudf.Series()
-        elif len(objs) == 1 and not ignore_index:
-            return objs[0]
+        new_objs = [obj for obj in objs if len(obj)]
+        if len(new_objs) == 1 and not ignore_index:
+            return new_objs[0]
         else:
             return cudf.Series._concat(
                 objs, axis=axis, index=None if ignore_index else True
@@ -430,7 +443,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
     elif issubclass(typ, cudf.Index):
-        return cudf.core.index.GenericIndex._concat(objs)
+        return cudf.core.index.Index._concat(objs)
     else:
         raise TypeError(f"cannot concatenate object of type {typ}")
 
@@ -612,7 +625,7 @@ def get_dummies(
     cats=None,
     sparse=False,
     drop_first=False,
-    dtype=no_default,
+    dtype="bool",
 ):
     """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -643,7 +656,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        Output dtype, default 'uint8'
+        Output dtype, default 'bool'
 
     Examples
     --------
@@ -651,15 +664,15 @@ def get_dummies(
     >>> df = cudf.DataFrame({"a": ["value1", "value2", None], "b": [0, 0, 0]})
     >>> cudf.get_dummies(df)
        b  a_value1  a_value2
-    0  0         1         0
-    1  0         0         1
-    2  0         0         0
+    0  0      True     False
+    1  0     False      True
+    2  0     False     False
 
     >>> cudf.get_dummies(df, dummy_na=True)
-       b  a_None  a_value1  a_value2
-    0  0       0         1         0
-    1  0       0         0         1
-    2  0       1         0         0
+       b  a_<NA>  a_value1  a_value2
+    0  0   False      True     False
+    1  0   False     False      True
+    2  0    True     False     False
 
     >>> import numpy as np
     >>> df = cudf.DataFrame({"a":cudf.Series([1, 2, np.nan, None],
@@ -672,11 +685,11 @@ def get_dummies(
     3  <NA>
 
     >>> cudf.get_dummies(df, dummy_na=True, columns=["a"])
-       a_1.0  a_2.0  a_nan  a_null
-    0      1      0      0       0
-    1      0      1      0       0
-    2      0      0      1       0
-    3      0      0      0       1
+       a_<NA>  a_1.0  a_2.0  a_nan
+    0   False   True  False  False
+    1   False  False   True  False
+    2   False  False  False   True
+    3    True  False  False  False
 
     >>> series = cudf.Series([1, 2, None, 2, 4])
     >>> series
@@ -687,12 +700,12 @@ def get_dummies(
     4       4
     dtype: int64
     >>> cudf.get_dummies(series, dummy_na=True)
-       null  1  2  4
-    0     0  1  0  0
-    1     0  0  1  0
-    2     1  0  0  0
-    3     0  0  1  0
-    4     0  0  0  1
+        <NA>      1      2      4
+    0  False   True  False  False
+    1  False  False   True  False
+    2   True  False  False  False
+    3  False  False   True  False
+    4  False  False  False   True
     """
 
     if cats is None:
@@ -702,16 +715,6 @@ def get_dummies(
 
     if drop_first:
         raise NotImplementedError("drop_first is not supported yet")
-
-    if dtype is no_default:
-        # Do not remove until pandas 2.0 support is added.
-        warnings.warn(
-            "Default `dtype` value will be changed to 'bool' in a future "
-            "release, please update `dtype='bool'` to adapt for "
-            "future behavior.",
-            FutureWarning,
-        )
-        dtype = "uint8"
 
     if isinstance(df, cudf.DataFrame):
         encode_fallback_dtypes = ["object", "category"]
@@ -918,7 +921,7 @@ def _pivot(df, index, columns):
     )
 
 
-def pivot(data, index=None, columns=None, values=None):
+def pivot(data, columns=None, index=no_default, values=no_default):
     """
     Return reshaped DataFrame organized by the given index and column values.
 
@@ -928,10 +931,10 @@ def pivot(data, index=None, columns=None, values=None):
 
     Parameters
     ----------
-    index : column name, optional
-        Column used to construct the index of the result.
     columns : column name, optional
         Column used to construct the columns of the result.
+    index : column name, optional
+        Column used to construct the index of the result.
     values : column name or list of column names, optional
         Column(s) whose values are rearranged to produce the result.
         If not specified, all remaining columns of the DataFrame
@@ -970,7 +973,7 @@ def pivot(data, index=None, columns=None, values=None):
     """
     df = data
     values_is_list = True
-    if values is None:
+    if values is no_default:
         values = df._columns_view(
             col for col in df._column_names if col not in (index, columns)
         )
@@ -979,7 +982,7 @@ def pivot(data, index=None, columns=None, values=None):
             values = [values]
             values_is_list = False
         values = df._columns_view(values)
-    if index is None:
+    if index is no_default:
         index = df.index
     else:
         index = cudf.core.index.Index(df.loc[:, index])
