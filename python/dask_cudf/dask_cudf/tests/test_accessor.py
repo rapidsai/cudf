@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 from pandas.testing import assert_series_equal
 
+import dask
 from dask import dataframe as dd
 
 from cudf import DataFrame, Series, date_range
@@ -53,8 +54,8 @@ def test_dt_series(data, field):
     sr = Series(pdsr)
     dsr = dgd.from_cudf(sr, npartitions=5)
     base = getattr(pdsr.dt, field)
-    test = getattr(dsr.dt, field).compute().to_pandas().astype("int64")
-    assert_series_equal(base, test)
+    test = getattr(dsr.dt, field).compute()
+    assert_eq(base, test, check_dtype=False)
 
 
 @pytest.mark.parametrize("data", [data_dt_1()])
@@ -137,30 +138,30 @@ def test_categorical_basic(data):
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    with dask.config.set({"dataframe.convert-string": False}):
+        df = DataFrame()
+        df["a"] = ["xyz", "abc", "def"] * 10
 
-    df = DataFrame()
-    df["a"] = ["xyz", "abc", "def"] * 10
+        pdf = df.to_pandas()
+        cddf = dgd.from_cudf(df, 1)
+        cddf["b"] = cddf["a"].astype("category")
 
-    pdf = df.to_pandas()
-    cddf = dgd.from_cudf(df, 1)
-    cddf["b"] = cddf["a"].astype("category")
+        ddf = dd.from_pandas(pdf, 1)
+        ddf["b"] = ddf["a"].astype("category")
 
-    ddf = dd.from_pandas(pdf, 1)
-    ddf["b"] = ddf["a"].astype("category")
+        assert_eq(ddf._meta_nonempty["b"], cddf._meta_nonempty["b"])
 
-    assert_eq(ddf._meta_nonempty["b"], cddf._meta_nonempty["b"])
+        with pytest.raises(NotImplementedError):
+            cddf["b"].cat.categories
 
-    with pytest.raises(NotImplementedError):
-        cddf["b"].cat.categories
+        with pytest.raises(NotImplementedError):
+            ddf["b"].cat.categories
 
-    with pytest.raises(NotImplementedError):
-        ddf["b"].cat.categories
+        cddf = cddf.categorize()
+        ddf = ddf.categorize()
 
-    cddf = cddf.categorize()
-    ddf = ddf.categorize()
-
-    assert_eq(ddf["b"].cat.categories, cddf["b"].cat.categories)
-    assert_eq(ddf["b"].cat.ordered, cddf["b"].cat.ordered)
+        assert_eq(ddf["b"].cat.categories, cddf["b"].cat.categories)
+        assert_eq(ddf["b"].cat.ordered, cddf["b"].cat.ordered)
 
 
 @pytest.mark.parametrize("data", [data_cat_1()])

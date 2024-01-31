@@ -10,7 +10,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
@@ -217,21 +216,13 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             following_window = None
             window = self.window
         elif isinstance(self.window, BaseIndexer):
-            if PANDAS_GE_150:
-                start, end = self.window.get_window_bounds(
-                    num_values=len(self.obj),
-                    min_periods=self.min_periods,
-                    center=self.center,
-                    closed=None,
-                    step=None,
-                )
-            else:
-                start, end = self.window.get_window_bounds(
-                    num_values=len(self.obj),
-                    min_periods=self.min_periods,
-                    center=self.center,
-                    closed=None,
-                )
+            start, end = self.window.get_window_bounds(
+                num_values=len(self.obj),
+                min_periods=self.min_periods,
+                center=self.center,
+                closed=None,
+                step=None,
+            )
             start = as_column(start, dtype="int32")
             end = as_column(end, dtype="int32")
 
@@ -543,8 +534,6 @@ class RollingGroupby(Rolling):
             )
 
     def _apply_agg(self, agg_name):
-        if agg_name == "count" and not self._time_window:
-            self.min_periods = 0
         index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {
