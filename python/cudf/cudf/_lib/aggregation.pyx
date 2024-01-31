@@ -385,10 +385,6 @@ cdef class GroupbyAggregation:
         ))
 
     # scan aggregations
-    # TODO: Probably want to manage aggregations that are only supported by
-    # groupby scan and not groupby aggregate by putting them in separate
-    # namespaces so that aggregate users don't try and access something like
-    # cumcount.
     @classmethod
     def cumcount(cls):
         return cls.count(False)
