@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 
 static void bench_vocab_tokenize(nvbench::state& state)
 {
+  auto const stream    = cudf::get_default_stream();
   auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
 
@@ -63,16 +64,16 @@ static void bench_vocab_tokenize(nvbench::state& state)
   }();
   auto const vocab = nvtext::load_vocabulary(cudf::strings_column_view(vocab_col->view()));
 
-  auto token_count = [input] {
+  auto token_count = [input, stream] {
     auto const counts = nvtext::count_tokens(input);
     auto const agg    = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
     auto const count  = cudf::reduce(counts->view(), *agg, counts->type());
-    return static_cast<cudf::scalar_type_t<cudf::size_type>*>(count.get())
-      ->value(cudf::get_default_stream());
+    return static_cast<cudf::scalar_type_t<cudf::size_type>*>(count.get())->value(stream);
   }();
 
-  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  auto chars_size = input.chars_size() + cudf::strings_column_view(vocab_col->view()).chars_size();
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto chars_size =
+    input.chars_size(stream) + cudf::strings_column_view(vocab_col->view()).chars_size(stream);
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);
   state.add_global_memory_writes<nvbench::int32_t>(token_count);
 

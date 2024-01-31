@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -204,13 +204,13 @@ extract_code_points_from_utf8(unsigned char const* strings,
  * @param[out] code_points The resulting code point values from normalization.
  * @param[out] chars_per_thread Output number of code point values per string.
  */
-__global__ void kernel_data_normalizer(unsigned char const* strings,
-                                       size_t const total_bytes,
-                                       uint32_t const* cp_metadata,
-                                       uint64_t const* aux_table,
-                                       bool const do_lower_case,
-                                       uint32_t* code_points,
-                                       uint32_t* chars_per_thread)
+CUDF_KERNEL void kernel_data_normalizer(unsigned char const* strings,
+                                        size_t const total_bytes,
+                                        uint32_t const* cp_metadata,
+                                        uint64_t const* aux_table,
+                                        bool const do_lower_case,
+                                        uint32_t* code_points,
+                                        uint32_t* chars_per_thread)
 {
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};

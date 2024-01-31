@@ -158,6 +158,27 @@ module, which allow you to compare values up to a desired precision.
 Unlike Pandas, cuDF does not support duplicate column names.
 It is best to use unique strings for column names.
 
+## Writing a DataFrame to Parquet with non-string column names
+
+When there is a DataFrame with non-string column names, pandas casts each
+column name to `str` before writing to a Parquet file. `cudf` raises an
+error by default if this is attempted. However, to achieve similar behavior
+as pandas you can enable the `mode.pandas_compatible` option, which will
+enable `cudf` to cast the column names to `str` just like pandas.
+
+```python
+>>> import cudf
+>>> df = cudf.DataFrame({1: [1, 2, 3], "1": ["a", "b", "c"]})
+>>> df.to_parquet("df.parquet")
+
+Traceback (most recent call last):
+ValueError: Writing a Parquet file requires string column names
+>>> cudf.set_option("mode.pandas_compatible", True)
+>>> df.to_parquet("df.parquet")
+
+UserWarning: The DataFrame has column names of non-string type. They will be converted to strings on write.
+```
+
 ## No true `"object"` data type
 
 In Pandas and NumPy, the `"object"` data type is used for

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,9 +50,9 @@ namespace detail {
 namespace {
 
 template <bool mark_true, typename MapIterator>
-__global__ void marking_bitmask_kernel(mutable_column_device_view destination,
-                                       MapIterator scatter_map,
-                                       size_type num_scatter_rows)
+CUDF_KERNEL void marking_bitmask_kernel(mutable_column_device_view destination,
+                                        MapIterator scatter_map,
+                                        size_type num_scatter_rows)
 {
   auto row          = cudf::detail::grid_1d::global_thread_id();
   auto const stride = cudf::detail::grid_1d::grid_stride();
