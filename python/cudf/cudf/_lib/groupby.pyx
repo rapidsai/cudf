@@ -13,23 +13,14 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 
-from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport (
-    columns_from_pylibcudf_table,
-    table_view_from_columns,
-)
+from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-cimport cudf._lib.cpp.groupby as libcudf_groupby
-cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.aggregation cimport make_groupby_aggregation
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table_view
 
 from cudf._lib import pylibcudf
 
@@ -128,44 +119,23 @@ cdef _agg_result_from_pylibcudf_tables(
 
 
 cdef class GroupBy:
-    cdef unique_ptr[libcudf_groupby.groupby] c_obj
     cdef dict __dict__
 
-    def __cinit__(self, list keys, bool dropna=True):
-        cdef libcudf_types.null_policy c_null_handling
-        cdef table_view keys_view
-
-        if dropna:
-            c_null_handling = libcudf_types.null_policy.EXCLUDE
-        else:
-            c_null_handling = libcudf_types.null_policy.INCLUDE
-
-        with acquire_spill_lock() as spill_lock:
-            keys_view = table_view_from_columns(keys)
-            # We spill lock the columns while this GroupBy instance is alive.
-            self._spill_lock = spill_lock
-
-        with nogil:
-            self.c_obj.reset(
-                new libcudf_groupby.groupby(
-                    keys_view,
-                    c_null_handling,
-                )
-            )
-
-    def __init__(self, list keys, bool dropna=True):
-        self.keys = keys
-        self.dropna = dropna
+    def __init__(self, keys, dropna=True):
         self._groupby = pylibcudf.groupby.GroupBy(
             pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in keys]),
             pylibcudf.types.NullPolicy.EXCLUDE if dropna
             else pylibcudf.types.NullPolicy.INCLUDE
         )
 
+        with acquire_spill_lock() as spill_lock:
+            # We spill lock the columns while this GroupBy instance is alive.
+            self._spill_lock = spill_lock
+
     def groups(self, list values):
         """
-        Perform a sort groupby, using ``self.keys`` as the key columns
-        and ``values`` as the value columns.
+        Perform a sort groupby, using the keys used to construct the Groupby as the key
+        columns and ``values`` as the value columns.
 
         Parameters
         ----------
