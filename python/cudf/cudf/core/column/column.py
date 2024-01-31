@@ -52,7 +52,6 @@ from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
-    _is_categorical_dtype,
     _is_datetime64tz_dtype,
     _is_interval_dtype,
     _is_non_decimal_numeric_dtype,
@@ -968,7 +967,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             col = self
         if self.dtype == dtype:
             return col
-        if _is_categorical_dtype(dtype):
+        dtype = cudf.dtype(dtype)
+        if isinstance(dtype, cudf.CategoricalDtype):
             return col.as_categorical_column(dtype)
 
         if (
@@ -987,7 +987,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
             return col.as_numerical_column(dtype)
-        elif _is_categorical_dtype(dtype):
+        elif isinstance(dtype, cudf.CategoricalDtype):
             return col.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
             np.str_,
@@ -1396,7 +1396,7 @@ def column_empty_like(
 
     if (
         hasattr(column, "dtype")
-        and _is_categorical_dtype(column.dtype)
+        and isinstance(column.dtype, cudf.CategoricalDtype)
         and dtype == column.dtype
     ):
         catcolumn = cast("cudf.core.column.CategoricalColumn", column)
@@ -2263,7 +2263,10 @@ def as_column(
         np_type = None
         try:
             if dtype is not None:
-                if _is_categorical_dtype(dtype) or _is_interval_dtype(dtype):
+                dtype = cudf.dtype(dtype)
+                if isinstance(
+                    dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)
+                ):
                     raise TypeError
                 if _is_datetime64tz_dtype(dtype):
                     raise NotImplementedError(
@@ -2407,7 +2410,7 @@ def as_column(
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
             if isinstance(e, MixedTypeError):
                 raise TypeError(str(e))
-            if _is_categorical_dtype(dtype):
+            if isinstance(cudf.dtype(dtype), cudf.CategoricalDtype):
                 sr = pd.Series(arbitrary, dtype="category")
                 data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
             elif np_type == np.str_:

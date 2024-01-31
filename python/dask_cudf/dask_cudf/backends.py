@@ -333,7 +333,7 @@ def percentile_cudf(a, q, interpolation="linear"):
     if isinstance(q, Iterator):
         q = list(q)
 
-    if cudf.api.types._is_categorical_dtype(a.dtype):
+    if isinstance(a.dtype, cudf.CategoricalDtype):
         result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
         return (

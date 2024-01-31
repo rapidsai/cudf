@@ -1008,7 +1008,7 @@ def _is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return _is_categorical_dtype(obj.dtype)
+        return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
     if hasattr(obj, "type"):
         if obj.type is pd_CategoricalDtypeType:
             return True
