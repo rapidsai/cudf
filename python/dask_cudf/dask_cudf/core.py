@@ -153,7 +153,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         shuffle_method=None,
         **kwargs,
     ):
-
         pre_sorted = sorted
         del sorted
 
@@ -165,7 +164,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
-
             # Let upstream-dask handle "pre-sorted" case
             if pre_sorted:
                 return dd.shuffle.set_sorted_index(
@@ -283,9 +281,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         dtype=None,
         out=None,
         naive=False,
+        numeric_only=False,
     ):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.var(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -295,6 +296,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         elif naive:

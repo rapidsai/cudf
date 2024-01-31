@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -65,13 +66,12 @@ def test_array_func_cudf_series(np_ar, func):
     [
         lambda x: np.mean(x, axis=0),
         lambda x: np.sum(x, axis=0),
-        lambda x: np.var(x, ddof=1),
+        lambda x: np.var(x, ddof=1, axis=0),
         lambda x: np.dot(x, x.transpose()),
         lambda x: np.all(x),
         lambda x: np.any(x),
-        lambda x: np.product(x),
-        lambda x: np.product(x, axis=0),
-        lambda x: np.product(x, axis=1),
+        lambda x: np.prod(x, axis=0),
+        lambda x: np.prod(x, axis=1),
     ],
 )
 def test_array_func_cudf_dataframe(pd_df, func):
@@ -104,11 +104,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: np.mean(x),
-        lambda x: np.sum(x),
-        lambda x: np.var(x, ddof=1),
         lambda x: np.unique(x),
-        lambda x: np.dot(x, x),
     ],
 )
 def test_array_func_cudf_index(np_ar, func):
