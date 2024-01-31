@@ -16,6 +16,10 @@ import cudf
 from cudf.core._compat import PANDAS_GE_200
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_module_dask_expr
+
+# No dask-expr support
+skip_module_dask_expr()
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
