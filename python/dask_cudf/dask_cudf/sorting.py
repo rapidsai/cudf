@@ -17,7 +17,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
 import cudf as gd
-from cudf.api.types import is_categorical_dtype
+from cudf.api.types import _is_categorical_dtype
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 _SHUFFLE_SUPPORT = ("tasks", "p2p")  # "disk" not supported
@@ -230,7 +230,7 @@ def quantile_divisions(df, by, npartitions):
     if (
         len(columns) == 1
         and df[columns[0]].dtype != "object"
-        and not is_categorical_dtype(df[columns[0]].dtype)
+        and not _is_categorical_dtype(df[columns[0]].dtype)
     ):
         dtype = df[columns[0]].dtype
         divisions = divisions[columns[0]].astype("int64")

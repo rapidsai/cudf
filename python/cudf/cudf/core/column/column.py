@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import pickle
+import warnings
 from collections import abc
 from functools import cached_property
 from itertools import chain
@@ -27,6 +28,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.compute as pc
 from numba import cuda
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from typing_extensions import Self
 
 import rmm
@@ -50,22 +52,22 @@ from cudf._lib.transform import bools_to_mask
 from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
+    _is_categorical_dtype,
+    _is_datetime64tz_dtype,
+    _is_interval_dtype,
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
     is_bool_dtype,
-    is_categorical_dtype,
     is_datetime64_dtype,
-    is_datetime64tz_dtype,
     is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
-    is_interval_dtype,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
 )
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_210
 from cudf.core.abc import Serializable
 from cudf.core.buffer import (
     Buffer,
@@ -85,6 +87,7 @@ from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
     cudf_dtype_from_pa_type,
+    find_common_type,
     get_time_unit,
     is_mixed_with_object_dtype,
     min_scalar_type,
@@ -95,10 +98,10 @@ from cudf.utils.dtypes import (
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
 
-if PANDAS_GE_150:
-    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
+if PANDAS_GE_210:
+    NumpyExtensionArray = pd.arrays.NumpyExtensionArray
 else:
-    from pandas.core.arrays._arrow_utils import ArrowIntervalType
+    NumpyExtensionArray = pd.arrays.PandasArray
 
 
 class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
@@ -965,7 +968,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             col = self
         if self.dtype == dtype:
             return col
-        if is_categorical_dtype(dtype):
+        if _is_categorical_dtype(dtype):
             return col.as_categorical_column(dtype)
 
         if (
@@ -984,7 +987,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
         if _is_non_decimal_numeric_dtype(dtype):
             return col.as_numerical_column(dtype)
-        elif is_categorical_dtype(dtype):
+        elif _is_categorical_dtype(dtype):
             return col.as_categorical_column(dtype)
         elif cudf.dtype(dtype).type in {
             np.str_,
@@ -1393,7 +1396,7 @@ def column_empty_like(
 
     if (
         hasattr(column, "dtype")
-        and is_categorical_dtype(column.dtype)
+        and _is_categorical_dtype(column.dtype)
         and dtype == column.dtype
     ):
         catcolumn = cast("cudf.core.column.CategoricalColumn", column)
@@ -1941,8 +1944,8 @@ def as_column(
                 new_dtype = dtype
             elif len(arbitrary) == 0:
                 # If the column is empty, it has to be
-                # a `float64` dtype.
-                new_dtype = cudf.dtype("float64")
+                # a `str` dtype.
+                new_dtype = cudf.dtype("str")
             else:
                 # If the null column is not empty, it has to
                 # be of `object` dtype.
@@ -2015,13 +2018,13 @@ def as_column(
             )
         elif isinstance(
             arbitrary.dtype, pd.api.extensions.ExtensionDtype
-        ) and not isinstance(arbitrary, pd.arrays.PandasArray):
+        ) and not isinstance(arbitrary, NumpyExtensionArray):
             raise NotImplementedError(
                 "Custom pandas ExtensionDtypes are not supported"
             )
         elif arbitrary.dtype.kind in "fiubmM":
             # numpy dtype like
-            if isinstance(arbitrary, pd.arrays.PandasArray):
+            if isinstance(arbitrary, NumpyExtensionArray):
                 arbitrary = np.array(arbitrary)
             arb_dtype = np.dtype(arbitrary.dtype)
             if arb_dtype.kind == "f" and arb_dtype.itemsize == 2:
@@ -2035,17 +2038,8 @@ def as_column(
                 arbitrary, nan_as_null=nan_as_null, dtype=dtype, length=length
             )
         elif arbitrary.dtype.kind == "O":
-            if len(arbitrary) == 0:
-                # TODO: Can remove once empty constructor default becomes
-                # object instead of float.
-                return as_column(
-                    pa.array([], type=pa.string()),
-                    nan_as_null=nan_as_null,
-                    dtype=dtype,
-                    length=length,
-                )
-            if isinstance(arbitrary, pd.arrays.PandasArray):
-                # infer_dtype does not handle PandasArray
+            if isinstance(arbitrary, NumpyExtensionArray):
+                # infer_dtype does not handle NumpyExtensionArray
                 arbitrary = np.array(arbitrary, dtype=object)
             inferred_dtype = infer_dtype(arbitrary)
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
@@ -2269,9 +2263,9 @@ def as_column(
         np_type = None
         try:
             if dtype is not None:
-                if is_categorical_dtype(dtype) or is_interval_dtype(dtype):
+                if _is_categorical_dtype(dtype) or _is_interval_dtype(dtype):
                     raise TypeError
-                if is_datetime64tz_dtype(dtype):
+                if _is_datetime64tz_dtype(dtype):
                     raise NotImplementedError(
                         "Use `tz_localize()` to construct "
                         "timezone aware data."
@@ -2413,13 +2407,13 @@ def as_column(
         except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError) as e:
             if isinstance(e, MixedTypeError):
                 raise TypeError(str(e))
-            if is_categorical_dtype(dtype):
+            if _is_categorical_dtype(dtype):
                 sr = pd.Series(arbitrary, dtype="category")
                 data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
             elif np_type == np.str_:
                 sr = pd.Series(arbitrary, dtype="str")
                 data = as_column(sr, nan_as_null=nan_as_null)
-            elif is_interval_dtype(dtype):
+            elif _is_interval_dtype(dtype):
                 sr = pd.Series(arbitrary, dtype="interval")
                 data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
             elif (
@@ -2473,7 +2467,11 @@ def _construct_array(
         ):
             # We may have date-like strings with timezones
             try:
-                pd_arbitrary = pd.to_datetime(arbitrary)
+                with warnings.catch_warnings():
+                    # Need to ignore userwarnings when
+                    # datetime format cannot be inferred.
+                    warnings.simplefilter("ignore", UserWarning)
+                    pd_arbitrary = pd.to_datetime(arbitrary)
                 if isinstance(pd_arbitrary.dtype, pd.DatetimeTZDtype):
                     raise NotImplementedError(
                         "cuDF does not yet support timezone-aware datetimes"
@@ -2611,8 +2609,7 @@ def concat_columns(objs: "MutableSequence[ColumnBase]") -> ColumnBase:
         and np.issubdtype(dtyp, np.datetime64)
         for dtyp in not_null_col_dtypes
     ):
-        # Use NumPy to find a common dtype
-        common_dtype = np.find_common_type(not_null_col_dtypes, [])
+        common_dtype = find_common_type(not_null_col_dtypes)
         # Cast all columns to the common dtype
         objs = [obj.astype(common_dtype) for obj in objs]
 
