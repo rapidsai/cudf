@@ -175,14 +175,22 @@ cdef class GroupBy:
             A tuple whose first element is the group's keys and whose second
             element is a table of shifted values.
         """
-
-        # cdef vector[size_type] c_offset = offset
         cdef vector[reference_wrapper[const scalar]] c_fill_values = \
             _as_vector(fill_values)
 
         cdef vector[size_type] c_offset = offset
         cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
             dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
+        )
+
+        return (
+            Table.from_libcudf(move(c_res.first)),
+            Table.from_libcudf(move(c_res.second)),
+        )
+
+    cpdef tuple replace_nulls(self, Table value, list replace_policies):
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
+            dereference(self.c_obj).replace_nulls(value.view(), replace_policies)
         )
 
         return (
