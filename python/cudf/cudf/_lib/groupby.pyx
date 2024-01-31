@@ -15,12 +15,10 @@ from cudf.core.dtypes import (
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
 
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport (
     columns_from_pylibcudf_table,
-    columns_from_unique_ptr,
     table_view_from_columns,
 )
 
@@ -184,18 +182,16 @@ cdef class GroupBy:
             Integer offsets such that offsets[i+1] - offsets[i]
             represents the size of group `i`.
         """
-        cdef table_view values_view = table_view_from_columns(values)
+        grouped_keys, grouped_values, offsets = self._groupby.get_groups(
+            pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values])
+            if values else None
+        )
 
-        with nogil:
-            c_groups = move(self.c_obj.get()[0].get_groups(values_view))
-
-        grouped_key_cols = columns_from_unique_ptr(move(c_groups.keys))
-
-        if values:
-            grouped_value_cols = columns_from_unique_ptr(move(c_groups.values))
-        else:
-            grouped_value_cols = []
-        return grouped_key_cols, grouped_value_cols, c_groups.offsets
+        return (
+            columns_from_pylibcudf_table(grouped_keys),
+            columns_from_pylibcudf_table(grouped_values),
+            offsets,
+        )
 
     def aggregate(self, values, aggregations):
         """
@@ -278,6 +274,7 @@ cdef class GroupBy:
         )
 
         return columns_from_pylibcudf_table(replaced)
+
 
 _GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "rank"}
 
