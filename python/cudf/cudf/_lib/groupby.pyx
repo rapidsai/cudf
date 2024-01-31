@@ -19,7 +19,6 @@ from libcpp.pair cimport pair
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
-from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport (
     columns_from_pylibcudf_table,
@@ -33,8 +32,7 @@ from libcpp.functional cimport reference_wrapper
 
 cimport cudf._lib.cpp.groupby as libcudf_groupby
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.aggregation cimport GroupbyAggregation, make_groupby_aggregation
-from cudf._lib.cpp.column.column cimport column
+from cudf._lib.aggregation cimport make_groupby_aggregation
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table, table_view
@@ -135,32 +133,6 @@ cdef _agg_result_from_pylibcudf_tables(
             result_columns.append([])
     return result_columns
 
-cdef _agg_result_from_columns(
-    vector[libcudf_groupby.aggregation_result]& c_result_columns,
-    set column_included,
-    int n_input_columns
-):
-    """Construct the list of result columns from libcudf result. The result
-    contains the same number of lists as the number of input columns. Result
-    for an input column that has no applicable aggregations is an empty list.
-    """
-    cdef:
-        int i
-        int j
-        int result_index = 0
-        vector[unique_ptr[column]]* c_result
-    result_columns = []
-    for i in range(n_input_columns):
-        if i in column_included:
-            c_result = &c_result_columns[result_index].results
-            result_columns.append([
-                Column.from_unique_ptr(move(c_result[0][j]))
-                for j in range(c_result[0].size())
-            ])
-            result_index += 1
-        else:
-            result_columns.append([])
-    return result_columns
 
 cdef class GroupBy:
     cdef unique_ptr[libcudf_groupby.groupby] c_obj
@@ -230,13 +202,25 @@ cdef class GroupBy:
             grouped_value_cols = []
         return grouped_key_cols, grouped_value_cols, c_groups.offsets
 
-    def aggregate_internal(self, values, aggregations):
-        """`values` is a list of columns and `aggregations` is a list of list
-        of aggregations. `aggregations[i]` is a list of aggregations for
-        `values[i]`. Returns a tuple containing 1) list of list of aggregation
-        results, 2) a list of grouped keys, and 3) a list of list of
-        aggregations performed.
+    def aggregate(self, values, aggregations):
         """
+        Parameters
+        ----------
+        values : Frame
+        aggregations
+            A dict mapping column names in `Frame` to a list of aggregations
+            to perform on that column
+
+            Each aggregation may be specified as:
+            - a string (e.g., "max")
+            - a lambda/function
+
+        Returns
+        -------
+        Frame of aggregated values
+        """
+        alg = "scan" if _is_all_scan_aggregate(aggregations) else "aggregate"
+
         allow_empty = all(len(v) == 0 for v in aggregations)
 
         included_aggregations = []
@@ -264,7 +248,8 @@ cdef class GroupBy:
         if not requests and not allow_empty:
             raise DataError("All requested aggregations are unsupported.")
 
-        keys, results = self._groupby.aggregate(requests)
+        keys, results = self._groupby.aggregate(requests) if alg == "aggregate" \
+            else self._groupby.scan(requests)
 
         grouped_keys = columns_from_pylibcudf_table(keys)
 
@@ -273,91 +258,6 @@ cdef class GroupBy:
         )
 
         return result_columns, grouped_keys, included_aggregations
-
-    def scan_internal(self, values, aggregations):
-        """`values` is a list of columns and `aggregations` is a list of list
-        of aggregations. `aggregations[i]` is a list of aggregations for
-        `values[i]`. Returns a tuple containing 1) list of list of aggregation
-        results, 2) a list of grouped keys, and 3) a list of list of
-        aggregations performed.
-        """
-        cdef vector[libcudf_groupby.scan_request] c_agg_requests
-        cdef libcudf_groupby.scan_request c_agg_request
-        cdef Column col
-        cdef GroupbyAggregation agg_obj
-
-        cdef pair[
-            unique_ptr[table],
-            vector[libcudf_groupby.aggregation_result]
-        ] c_result
-
-        allow_empty = all(len(v) == 0 for v in aggregations)
-
-        included_aggregations = []
-        column_included = set()
-        for i, (col, aggs) in enumerate(zip(values, aggregations)):
-            dtype = col.dtype
-
-            valid_aggregations = get_valid_aggregation(dtype)
-            included_aggregations_i = []
-
-            c_agg_request = move(libcudf_groupby.scan_request())
-            for agg in aggs:
-                agg_obj = make_groupby_aggregation(agg)
-                if (valid_aggregations == "ALL"
-                        or agg_obj.kind in valid_aggregations):
-                    included_aggregations_i.append((agg, agg_obj.kind))
-                    c_agg_request.aggregations.push_back(
-                        move(agg_obj.c_obj.clone_underlying_as_groupby_scan())
-                    )
-            included_aggregations.append(included_aggregations_i)
-            if not c_agg_request.aggregations.empty():
-                c_agg_request.values = col.view()
-                c_agg_requests.push_back(
-                    move(c_agg_request)
-                )
-                column_included.add(i)
-        if c_agg_requests.empty() and not allow_empty:
-            raise DataError("All requested aggregations are unsupported.")
-
-        with nogil:
-            c_result = move(
-                self.c_obj.get()[0].scan(
-                    c_agg_requests
-                )
-            )
-
-        grouped_keys = columns_from_unique_ptr(
-            move(c_result.first)
-        )
-
-        result_columns = _agg_result_from_columns(
-            c_result.second, column_included, len(values)
-        )
-
-        return result_columns, grouped_keys, included_aggregations
-
-    def aggregate(self, values, aggregations):
-        """
-        Parameters
-        ----------
-        values : Frame
-        aggregations
-            A dict mapping column names in `Frame` to a list of aggregations
-            to perform on that column
-
-            Each aggregation may be specified as:
-            - a string (e.g., "max")
-            - a lambda/function
-
-        Returns
-        -------
-        Frame of aggregated values
-        """
-        if _is_all_scan_aggregate(aggregations):
-            return self.scan_internal(values, aggregations)
-
-        return self.aggregate_internal(values, aggregations)
 
     def shift(self, list values, int periods, list fill_values):
         cdef table_view view = table_view_from_columns(values)
