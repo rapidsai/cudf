@@ -1575,11 +1575,14 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
                                     std::unique_ptr<data_sink> const& out_sink,
                                     rmm::cuda_stream_view stream)
 {
-  auto const length                                        = strm_desc.stream_size;
+  auto const length = strm_desc.stream_size;
+  std::cout << "length: " << length << std::endl;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
   if (length == 0) {
     return std::async(std::launch::deferred, [] {});
   }
+
+  stream.synchronize();
 
   auto const* stream_in = (compression_kind == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
                                                      : (compressed_data + strm_desc.bfr_offset);
@@ -1588,6 +1591,9 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
     if (out_sink->is_device_write_preferred(length)) {
       return out_sink->device_write_async(stream_in, length, stream);
     } else {
+      std::cout << "stream_in: " << (long)stream_in << std::endl;
+      std::cout << "stream_out: " << (long)stream_out << std::endl;
+      std::cout << "length: " << length << std::endl;
       CUDF_CUDA_TRY(
         cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
@@ -2346,29 +2352,20 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const padded_block_header_size =
     util::round_up_unsafe<size_t>(block_header_size, compressed_block_align);
 
-  auto bounce_buffer = [&]() {
-    size_t max_stream_size = 0;
-    bool all_device_write  = true;
+  for (auto& ss : strm_descs.host_view().flat_view()) {
+    size_t stream_size = ss.stream_size;
+    if (compression_kind != NONE) {
+      ss.first_block = num_compressed_blocks;
+      ss.bfr_offset  = compressed_bfr_size;
 
-    for (auto& ss : strm_descs.host_view().flat_view()) {
-      if (!out_sink.is_device_write_preferred(ss.stream_size)) { all_device_write = false; }
-      size_t stream_size = ss.stream_size;
-      if (compression_kind != NONE) {
-        ss.first_block = num_compressed_blocks;
-        ss.bfr_offset  = compressed_bfr_size;
-
-        auto num_blocks =
-          std::max<uint32_t>((stream_size + compression_blocksize - 1) / compression_blocksize, 1);
-        stream_size += num_blocks * block_header_size;
-        num_compressed_blocks += num_blocks;
-        compressed_bfr_size +=
-          (padded_block_header_size + padded_max_compressed_block_size) * num_blocks;
-      }
-      max_stream_size = std::max(max_stream_size, stream_size);
+      auto num_blocks =
+        std::max<uint32_t>((stream_size + compression_blocksize - 1) / compression_blocksize, 1);
+      stream_size += num_blocks * block_header_size;
+      num_compressed_blocks += num_blocks;
+      compressed_bfr_size +=
+        (padded_block_header_size + padded_max_compressed_block_size) * num_blocks;
     }
-
-    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_stream_size);
-  }();
+  }
 
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
@@ -2398,6 +2395,18 @@ auto convert_table_to_orc_data(table_view const& input,
     strm_descs.device_to_host_async(stream);
     comp_results.device_to_host_sync(stream);
   }
+  auto bounce_buffer = [&]() {
+    size_t max_stream_size = 0;
+    bool all_device_write  = true;
+
+    for (auto& ss : strm_descs.host_view().flat_view()) {
+      if (!out_sink.is_device_write_preferred(ss.stream_size)) { all_device_write = false; }
+      size_t stream_size = ss.stream_size;
+      max_stream_size    = std::max(max_stream_size, stream_size);
+    }
+
+    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_stream_size);
+  }();
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 
