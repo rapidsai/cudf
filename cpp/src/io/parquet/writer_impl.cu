@@ -1847,16 +1847,15 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
   }
 
   // Build chunk dictionaries and count pages. Sends chunks to device.
-  cudf::detail::hostdevice_vector<size_type> comp_page_sizes =
-    init_page_sizes(chunks,
-                    col_desc,
-                    num_columns,
-                    max_page_size_bytes,
-                    max_page_size_rows,
-                    write_v2_headers,
-                    prefer_delta_byte_array,
-                    compression,
-                    stream);
+  auto comp_page_sizes = init_page_sizes(chunks,
+                                         col_desc,
+                                         num_columns,
+                                         max_page_size_bytes,
+                                         max_page_size_rows,
+                                         write_v2_headers,
+                                         prefer_delta_byte_array,
+                                         compression,
+                                         stream);
 
   // Find which partition a rg belongs to
   std::vector<int> rg_to_part;

@@ -2051,7 +2051,7 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
           .compression(cudf::io::compression_type::NONE)
           .dictionary_policy(cudf::io::dictionary_policy::NEVER)
           .max_page_size_rows(5'000)
-          .prefer_dba(delta_ba)
+          .prefer_dba(prefer_dba)
           .write_v2_headers(true);
       cudf::io::write_parquet(out_opts2);
 
