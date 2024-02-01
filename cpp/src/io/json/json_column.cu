@@ -637,18 +637,14 @@ void make_device_json_column(device_span<SymbolT const> input,
       // If mixed type as string is enabled, make both of them strings and merge them.
       // All child columns will be ignored when parsing.
       if (is_enabled_mixed_types_as_string) {
-        // VAL/STR or STRUCT or LIST
         auto old_col_id    = mapped_columns[{parent_col_id, name}];
-        bool is_mixed_type = false;
-        // check if new or old is STR. if yes, check if they are all null. if no, make it mixed type
-        // column.
+        bool is_mixed_type = true;
+        // If new or old is STR and they are all not null, make it mixed type, else ignore.
         if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
-          // analyse str and check if it is all null.
-          if (!is_str_column_all_nulls[this_col_id]) is_mixed_type = true;
+          if (is_str_column_all_nulls[this_col_id]) is_mixed_type = false;
         }
         if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
-          // analyse str and check if it is all null.
-          if (!is_str_column_all_nulls[old_col_id]) is_mixed_type = true;
+          if (is_str_column_all_nulls[old_col_id]) is_mixed_type = false;
         }
         if (is_mixed_type) {
           is_mixed_type_column[this_col_id] = 1;
