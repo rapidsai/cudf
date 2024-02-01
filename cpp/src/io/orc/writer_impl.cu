@@ -1575,14 +1575,11 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
                                     std::unique_ptr<data_sink> const& out_sink,
                                     rmm::cuda_stream_view stream)
 {
-  auto const length = strm_desc.stream_size;
-  std::cout << "length: " << length << std::endl;
+  auto const length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
   if (length == 0) {
     return std::async(std::launch::deferred, [] {});
   }
-
-  stream.synchronize();
 
   auto const* stream_in = (compression_kind == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
                                                      : (compressed_data + strm_desc.bfr_offset);
@@ -1591,9 +1588,6 @@ std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
     if (out_sink->is_device_write_preferred(length)) {
       return out_sink->device_write_async(stream_in, length, stream);
     } else {
-      std::cout << "stream_in: " << (long)stream_in << std::endl;
-      std::cout << "stream_out: " << (long)stream_out << std::endl;
-      std::cout << "length: " << length << std::endl;
       CUDF_CUDA_TRY(
         cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDefault, stream.value()));
       stream.synchronize();
