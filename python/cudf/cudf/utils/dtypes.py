@@ -171,7 +171,11 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """Given a numpy or pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
-    dtype = cudf.dtype(dtype)
+    try:
+        dtype = cudf.dtype(dtype)
+    except TypeError:
+        return infer_dtype_from_object(dtype)
+
     if isinstance(dtype, cudf.CategoricalDtype):
         return cudf.core.dtypes.CategoricalDtype
     elif cudf.api.types.is_decimal32_dtype(dtype):
