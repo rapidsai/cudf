@@ -77,6 +77,10 @@ cdef class GroupBy:
     ----------
     keys : Table
         The columns to group by.
+    null_handling : null_policy, optional
+        Whether or not to include null rows in ``keys``. Default is null_policy.EXCLUDE.
+    keys_are_sorted : sorted, optional
+        Whether the keys are already sorted. Default is sorted.NO.
     """
     def __init__(
         self,
