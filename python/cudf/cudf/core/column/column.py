@@ -2189,7 +2189,7 @@ def as_column(
         elif (
             arbitrary.size != 0
             and arb_dtype.kind in ("O")
-            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+            and isinstance(arbitrary[0], pd.Interval)
         ):
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
