@@ -32,26 +32,37 @@ def read_parquet(*args, **kwargs):
         return dd.read_parquet(*args, **kwargs)
 
 
+def raise_not_implemented_error(attr_name):
+    def inner_func(*args, **kwargs):
+        raise NotImplementedError(
+            f"Top-level {attr_name} API is not available for dask-expr."
+        )
+
+    return inner_func
+
+
 if DASK_EXPR_ENABLED:
-    __all__ = [
-        "from_cudf",
-        "from_dask_dataframe",
-        "concat",
-        "from_delayed",
-    ]
+    from .expr._collection import DataFrame, Index, Series
+
+    groupby_agg = raise_not_implemented_error("groupby_agg")
+    read_text = raise_not_implemented_error("read_text")
+    to_orc = raise_not_implemented_error("to_orc")
 else:
-    from .core import DataFrame, Series
+    from .core import DataFrame, Index, Series
     from .groupby import groupby_agg
     from .io import read_text, to_orc
 
-    __all__ = [
-        "DataFrame",
-        "Series",
-        "from_cudf",
-        "from_dask_dataframe",
-        "concat",
-        "from_delayed",
-    ]
+
+__all__ = [
+    "DataFrame",
+    "Series",
+    "Index",
+    "from_cudf",
+    "from_dask_dataframe",
+    "concat",
+    "from_delayed",
+]
+
 
 if not hasattr(cudf.DataFrame, "mean"):
     cudf.DataFrame.mean = None

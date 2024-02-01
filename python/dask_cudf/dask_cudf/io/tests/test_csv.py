@@ -14,7 +14,7 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import DASK_EXPR_ENABLED, skip_dask_expr
+from dask_cudf.tests.utils import skip_dask_expr
 
 
 @pytest.fixture
@@ -60,9 +60,7 @@ def test_csv_roundtrip_backend_dispatch(tmp_path):
     csv_path = str(tmp_path / "data-*.csv")
     ddf.to_csv(csv_path, index=False)
     ddf2 = dask_cudf.read_csv(csv_path)
-    if not DASK_EXPR_ENABLED:
-        assert isinstance(ddf2, dask_cudf.DataFrame)
-    assert isinstance(ddf2._meta, cudf.DataFrame)
+    assert isinstance(ddf2, dask_cudf.DataFrame)
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 

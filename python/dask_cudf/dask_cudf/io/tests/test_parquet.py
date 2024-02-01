@@ -16,11 +16,7 @@ import cudf
 from cudf.core._compat import PANDAS_GE_200
 
 import dask_cudf
-from dask_cudf.tests.utils import (
-    DASK_EXPR_ENABLED,
-    skip_dask_expr,
-    xfail_dask_expr,
-)
+from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
@@ -47,9 +43,7 @@ def test_roundtrip_backend_dispatch(tmpdir):
     ddf.to_parquet(tmpdir, engine="pyarrow")
     with dask.config.set({"dataframe.backend": "cudf"}):
         ddf2 = dd.read_parquet(tmpdir, index=False)
-    if not DASK_EXPR_ENABLED:
-        assert isinstance(ddf2, dask_cudf.DataFrame)
-    assert isinstance(ddf2._meta, cudf.DataFrame)
+    assert isinstance(ddf2, dask_cudf.DataFrame)
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
 

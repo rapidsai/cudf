@@ -17,11 +17,7 @@ import cudf
 
 import dask_cudf
 from dask_cudf.backends import hash_object_cudf
-from dask_cudf.tests.utils import (
-    DASK_EXPR_ENABLED,
-    skip_dask_expr,
-    xfail_dask_expr,
-)
+from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
 
 
 def test_from_dict_backend_dispatch():
@@ -34,9 +30,7 @@ def test_from_dict_backend_dispatch():
     expect = cudf.DataFrame(data)
     with dask.config.set({"dataframe.backend": "cudf"}):
         ddf = dd.from_dict(data, npartitions=2)
-    if not DASK_EXPR_ENABLED:
-        assert isinstance(ddf, dask_cudf.DataFrame)
-    assert isinstance(ddf._meta, cudf.DataFrame)
+    assert isinstance(ddf, dask_cudf.DataFrame)
     dd.assert_eq(expect, ddf)
 
 
@@ -51,9 +45,7 @@ def test_to_backend():
         assert isinstance(ddf._meta, pd.DataFrame)
 
         gdf = ddf.to_backend("cudf")
-        if not DASK_EXPR_ENABLED:
-            assert isinstance(gdf, dask_cudf.DataFrame)
-        assert isinstance(gdf._meta, cudf.DataFrame)
+        assert isinstance(gdf, dask_cudf.DataFrame)
         dd.assert_eq(cudf.DataFrame(data), ddf)
 
         assert isinstance(gdf.to_backend()._meta, pd.DataFrame)
@@ -68,17 +60,13 @@ def test_to_backend_kwargs():
         # Using `nan_as_null=False` will result in a cudf-backed
         # Series with a NaN element (ranther than <NA>)
         gser_nan = dser.to_backend("cudf", nan_as_null=False)
-        if not DASK_EXPR_ENABLED:
-            assert isinstance(gser_nan, dask_cudf.Series)
-        assert isinstance(gser_nan._meta, cudf.Series)
+        assert isinstance(gser_nan, dask_cudf.Series)
         assert np.isnan(gser_nan.compute()).sum() == 1
 
         # Using `nan_as_null=True` will result in a cudf-backed
         # Series with a <NA> element (ranther than NaN)
         gser_null = dser.to_backend("cudf", nan_as_null=True)
-        if not DASK_EXPR_ENABLED:
-            assert isinstance(gser_null, dask_cudf.Series)
-        assert isinstance(gser_null._meta, cudf.Series)
+        assert isinstance(gser_null, dask_cudf.Series)
         assert np.isnan(gser_null.compute()).sum() == 0
 
         # Check `nullable` argument for `cudf.Series.to_pandas`
