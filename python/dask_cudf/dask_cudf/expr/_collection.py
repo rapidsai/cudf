@@ -8,6 +8,8 @@ from dask_expr import (
     get_collection_type,
 )
 
+from dask import config
+
 import cudf
 
 ##
@@ -16,6 +18,11 @@ import cudf
 
 
 class DataFrame(DXDataFrame):
+    @classmethod
+    def from_dict(cls, *args, **kwargs):
+        with config.set({"dataframe.backend": "cudf"}):
+            return DXDataFrame.from_dict(*args, **kwargs)
+
     def groupby(
         self,
         by,
