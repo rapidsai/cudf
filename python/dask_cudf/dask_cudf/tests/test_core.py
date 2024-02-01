@@ -6,7 +6,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from packaging import version
 
 import dask
 from dask import dataframe as dd
@@ -597,14 +596,6 @@ def gddf(gdf):
 def test_unary_ops(func, gdf, gddf):
     p = func(gdf)
     g = func(gddf)
-
-    # Fixed in https://github.com/dask/dask/pull/4657
-    if isinstance(p, cudf.Index):
-        if version.parse(dask.__version__) < version.parse("1.1.6"):
-            pytest.skip(
-                "dask.dataframe assert_eq index check hardcoded to "
-                "pandas prior to 1.1.6 release"
-            )
 
     dd.assert_eq(p, g, check_names=False)
 
