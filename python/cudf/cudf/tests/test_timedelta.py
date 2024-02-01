@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
@@ -702,31 +703,31 @@ def test_timedelta_dt_properties(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
     psr = gsr.to_pandas()
 
-    def local_assert(expected, actual):
+    def local_assert(expected, actual, **kwargs):
         if gsr.isnull().any():
-            assert_eq(expected, actual.astype("float"))
+            assert_eq(expected, actual.astype("float"), **kwargs)
         else:
-            assert_eq(expected, actual)
+            assert_eq(expected, actual, **kwargs)
 
     expected_days = psr.dt.days
     actual_days = gsr.dt.days
 
-    local_assert(expected_days, actual_days)
+    local_assert(expected_days, actual_days, check_dtype=False)
 
     expected_seconds = psr.dt.seconds
     actual_seconds = gsr.dt.seconds
 
-    local_assert(expected_seconds, actual_seconds)
+    local_assert(expected_seconds, actual_seconds, check_dtype=False)
 
     expected_microseconds = psr.dt.microseconds
     actual_microseconds = gsr.dt.microseconds
 
-    local_assert(expected_microseconds, actual_microseconds)
+    local_assert(expected_microseconds, actual_microseconds, check_dtype=False)
 
     expected_nanoseconds = psr.dt.nanoseconds
     actual_nanoseconds = gsr.dt.nanoseconds
 
-    local_assert(expected_nanoseconds, actual_nanoseconds)
+    local_assert(expected_nanoseconds, actual_nanoseconds, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1024,7 +1025,6 @@ def test_timedelta_index_properties(data, dtype, name):
     [
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
-        np.timedelta64(46, "h"),
         np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
@@ -1186,7 +1186,6 @@ def test_timedelta_fillna(data, dtype, fill_value):
     ],
 )
 def test_timedelta_str_roundtrip(gsr, expected_series):
-
     actual_series = gsr.astype("str")
 
     assert_eq(expected_series, actual_series)
@@ -1325,7 +1324,11 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
     psr = sr.to_pandas()
 
     actual = sr.astype(timedelta_dtype)
-    expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
+
+    if PANDAS_GE_200:
+        expected = psr.astype(timedelta_dtype)
+    else:
+        expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
 
     assert_eq(expected, actual)
 

@@ -29,25 +29,26 @@
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-void orc_read_common(cudf::io::orc_writer_options const& opts,
+void orc_read_common(cudf::size_type num_rows_to_read,
                      cuio_source_sink_pair& source_sink,
                      nvbench::state& state)
 {
-  cudf::io::write_orc(opts);
-
   cudf::io::orc_reader_options read_opts =
     cudf::io::orc_reader_options::builder(source_sink.make_source_info());
 
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
+      try_drop_l3_cache();
 
-               timer.start();
-               cudf::io::read_orc(read_opts);
-               timer.stop();
-             });
+      timer.start();
+      auto const result = cudf::io::read_orc(read_opts);
+      timer.stop();
+
+      CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+      CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
@@ -63,18 +64,22 @@ void BM_orc_read_data(nvbench::state& state,
   auto const d_type                 = get_type_or_group(static_cast<int32_t>(DataType));
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
-
-  auto const tbl =
-    create_random_table(cycle_dtypes(d_type, num_cols),
-                        table_size_bytes{data_size},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
-
   cuio_source_sink_pair source_sink(IOType);
-  cudf::io::orc_writer_options opts =
-    cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
 
-  orc_read_common(opts, source_sink, state);
+  auto const num_rows_written = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols),
+      table_size_bytes{data_size},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
+
+    cudf::io::orc_writer_options opts =
+      cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view);
+    cudf::io::write_orc(opts);
+    return view.num_rows();
+  }();
+
+  orc_read_common(num_rows_written, source_sink, state);
 }
 
 template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
@@ -92,19 +97,23 @@ void BM_orc_read_io_compression(
 
   cudf::size_type const cardinality = state.get_int64("cardinality");
   cudf::size_type const run_length  = state.get_int64("run_length");
-
-  auto const tbl =
-    create_random_table(cycle_dtypes(d_type, num_cols),
-                        table_size_bytes{data_size},
-                        data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
-  auto const view = tbl->view();
-
   cuio_source_sink_pair source_sink(IOType);
-  cudf::io::orc_writer_options opts =
-    cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
-      .compression(Compression);
 
-  orc_read_common(opts, source_sink, state);
+  auto const num_rows_written = [&]() {
+    auto const tbl = create_random_table(
+      cycle_dtypes(d_type, num_cols),
+      table_size_bytes{data_size},
+      data_profile_builder().cardinality(cardinality).avg_run_length(run_length));
+    auto const view = tbl->view();
+
+    cudf::io::orc_writer_options opts =
+      cudf::io::orc_writer_options::builder(source_sink.make_sink_info(), view)
+        .compression(Compression);
+    cudf::io::write_orc(opts);
+    return view.num_rows();
+  }();
+
+  orc_read_common(num_rows_written, source_sink, state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,

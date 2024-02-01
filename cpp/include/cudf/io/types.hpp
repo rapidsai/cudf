@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -693,6 +693,11 @@ class column_in_metadata {
   column_in_metadata& set_output_as_binary(bool binary) noexcept
   {
     _output_as_binary = binary;
+    if (_output_as_binary and children.size() == 1) {
+      children.emplace_back();
+    } else if (!_output_as_binary and children.size() == 2) {
+      children.pop_back();
+    }
     return *this;
   }
 
@@ -729,8 +734,8 @@ class column_in_metadata {
   /**
    * @brief Gets the explicitly set nullability for this column.
    *
-   * @throws If nullability is not explicitly defined for this column.
-   *         Check using `is_nullability_defined()` first.
+   * @throws std::bad_optional_access If nullability is not explicitly defined
+   *         for this column. Check using `is_nullability_defined()` first.
    * @return Boolean indicating whether this column is nullable
    */
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
@@ -763,8 +768,8 @@ class column_in_metadata {
   /**
    * @brief Get the decimal precision that was set for this column.
    *
-   * @throws If decimal precision was not set for this column.
-   *         Check using `is_decimal_precision_set()` first.
+   * @throws std::bad_optional_access If decimal precision was not set for this
+   *         column. Check using `is_decimal_precision_set()` first.
    * @return The decimal precision that was set for this column
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
@@ -782,8 +787,8 @@ class column_in_metadata {
   /**
    * @brief Get the parquet field id that was set for this column.
    *
-   * @throws If parquet field id was not set for this column.
-   *         Check using `is_parquet_field_id_set()` first.
+   * @throws std::bad_optional_access If parquet field id was not set for this
+   *         column. Check using `is_parquet_field_id_set()` first.
    * @return The parquet field id that was set for this column
    */
   [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }

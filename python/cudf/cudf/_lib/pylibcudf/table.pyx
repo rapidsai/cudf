@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -65,11 +65,37 @@ cdef class Table:
             for i in range(c_columns.size())
         ])
 
+    @staticmethod
+    cdef Table from_table_view(const table_view& tv, Table owner):
+        """Create a Table from a libcudf table.
+
+        This method accepts shared ownership of the underlying data from the
+        owner and relies on the offset from the view.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef int i
+        return Table([
+            Column.from_column_view(tv.column(i), owner.columns()[i])
+            for i in range(tv.num_columns())
+        ])
+
     cpdef list columns(self):
+        """The columns in this table."""
         return self._columns
 
     @staticmethod
     def from_arrow(pa.Table pyarrow_table):
+        """Create a Table from a PyArrow Table.
+
+        Parameters
+        ----------
+        pyarrow_table : pyarrow.Table
+            The PyArrow Table to convert to a Table.
+        """
+
         cdef shared_ptr[pa.CTable] ctable = (
             pa.pyarrow_unwrap_table(pyarrow_table)
         )
@@ -81,6 +107,13 @@ cdef class Table:
         return Table.from_libcudf(move(c_result))
 
     cpdef pa.Table to_arrow(self, list metadata):
+        """Convert to a PyArrow Table.
+
+        Parameters
+        ----------
+        metadata : list
+            The metadata to attach to the columns of the table.
+        """
         cdef shared_ptr[pa.CTable] c_result
         cdef vector[column_metadata] c_metadata
         cdef ColumnMetadata meta

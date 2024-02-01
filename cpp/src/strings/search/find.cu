@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -115,11 +115,11 @@ struct empty_target_fn {
  * @brief String per warp function for find/rfind
  */
 template <typename TargetIterator, bool forward = true>
-__global__ void finder_warp_parallel_fn(column_device_view const d_strings,
-                                        TargetIterator const d_targets,
-                                        size_type const start,
-                                        size_type const stop,
-                                        size_type* d_results)
+CUDF_KERNEL void finder_warp_parallel_fn(column_device_view const d_strings,
+                                         TargetIterator const d_targets,
+                                         size_type const start,
+                                         size_type const stop,
+                                         size_type* d_results)
 {
   size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
 
@@ -186,7 +186,7 @@ void find_utility(strings_column_view const& input,
 {
   auto d_strings = column_device_view::create(input.parent(), stream);
   auto d_results = output.mutable_view().data<size_type>();
-  if ((input.chars_size() / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
+  if ((input.chars_size(stream) / (input.size() - input.null_count())) > AVG_CHAR_BYTES_THRESHOLD) {
     // warp-per-string runs faster for longer strings (but not shorter ones)
     constexpr int block_size = 256;
     cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
@@ -346,9 +346,9 @@ namespace {
  * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
  */
-__global__ void contains_warp_parallel_fn(column_device_view const d_strings,
-                                          string_view const d_target,
-                                          bool* d_results)
+CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
+                                           string_view const d_target,
+                                           bool* d_results)
 {
   size_type const idx = static_cast<size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   using warp_reduce   = cub::WarpReduce<bool>;
@@ -364,7 +364,7 @@ __global__ void contains_warp_parallel_fn(column_device_view const d_strings,
   // each thread of the warp will check just part of the string
   auto found = false;
   for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
-       !found && (i + d_target.size_bytes()) < d_str.size_bytes();
+       !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
        i += cudf::detail::warp_size) {
     // check the target matches this part of the d_str data
     if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { found = true; }
@@ -538,7 +538,7 @@ std::unique_ptr<column> contains(strings_column_view const& input,
 {
   // use warp parallel when the average string width is greater than the threshold
   if ((input.null_count() < input.size()) &&
-      ((input.chars_size() / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
+      ((input.chars_size(stream) / input.size()) > AVG_CHAR_BYTES_THRESHOLD)) {
     return contains_warp_parallel(input, target, stream, mr);
   }
 

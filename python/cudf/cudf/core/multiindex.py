@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from typing import Any, List, MutableMapping, Tuple, Union
 import cupy as cp
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
 
 import cudf
 import cudf._lib as libcudf
@@ -24,9 +23,15 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.extensions import no_default
 from cudf.api.types import is_integer, is_list_like, is_object_dtype
 from cudf.core import column
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.frame import Frame
-from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
+from cudf.core.index import (
+    BaseIndex,
+    _get_indexer_basic,
+    _lexsorted_equal_range,
+    as_index,
+)
+from cudf.core.join._join_helpers import _match_join_keys
+from cudf.utils.dtypes import is_column_like
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import NotIterable, _external_only_api, _is_same_name
 
@@ -223,9 +228,10 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             # to unexpected behavior in some cases. This is
             # definitely buggy, but we can't disallow non-unique
             # names either...
-            self._data = self._data.__class__._create_unsafe(
+            self._data = self._data.__class__(
                 dict(zip(value, self._data.values())),
                 level_names=self._data.level_names,
+                verify=False,
             )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
@@ -354,9 +360,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
     def copy(
         self,
         names=None,
-        dtype=None,
-        levels=None,
-        codes=None,
         deep=False,
         name=None,
     ):
@@ -370,36 +373,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ----------
         names : sequence of objects, optional (default None)
             Names for each of the index levels.
-        dtype : object, optional (default None)
-            MultiIndex dtype, only supports None or object type
-
-            .. deprecated:: 23.02
-
-               The `dtype` parameter is deprecated and will be removed in
-               a future version of cudf. Use the `astype` method instead.
-
-        levels : sequence of arrays, optional (default None)
-            The unique labels for each level. Original values used if None.
-
-            .. deprecated:: 23.02
-
-               The `levels` parameter is deprecated and will be removed in
-               a future version of cudf.
-
-        codes : sequence of arrays, optional (default None)
-            Integers for each level designating which label at each location.
-            Original values used if None.
-
-            .. deprecated:: 23.02
-
-               The `codes` parameter is deprecated and will be removed in
-               a future version of cudf.
-
         deep : Bool (default False)
             If True, `._data`, `._levels`, `._codes` will be copied. Ignored if
             `levels` or `codes` are specified.
         name : object, optional (default None)
-            To keep consistent with `Index.copy`, should not be used.
+            Kept for compatibility with 1-dimensional Index. Should not
+            be used.
 
         Returns
         -------
@@ -413,8 +392,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
         ... names=['Date', 'Symbol'])
         >>> idx2 = idx1.copy(
-        ... levels=[['day1', 'day2'], ['com1', 'com2']],
-        ... codes=[[0, 0, 1, 1], [0, 1, 0, 1]],
         ... names=['col1', 'col2'])
 
         >>> df.index = idx1
@@ -428,57 +405,13 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         >>> df.index = idx2
         >>> df
-                     Close
-        col1 col2
-        day1 com1  3400.00
-             com2   226.58
-        day2 com1  3401.80
-             com2   228.91
-
+                           Close
+        col1       col2
+        2020-08-27 AMZN  3400.00
+                   MSFT   226.58
+        2020-08-28 AMZN  3401.80
+                   MSFT   228.91
         """
-
-        # TODO: Update message when set_levels is implemented.
-        # https://github.com/rapidsai/cudf/issues/12307
-        if levels is not None:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "parameter levels is deprecated and will be removed in a "
-                "future version.",
-                FutureWarning,
-            )
-
-        # TODO: Update message when set_codes is implemented.
-        # https://github.com/rapidsai/cudf/issues/12308
-        if codes is not None:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "parameter codes is deprecated and will be removed in a "
-                "future version.",
-                FutureWarning,
-            )
-
-        if dtype is not None:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "parameter dtype is deprecated and will be removed in a "
-                "future version. Use the astype method instead.",
-                FutureWarning,
-            )
-
-        dtype = object if dtype is None else dtype
-        if not pd.api.types.is_object_dtype(dtype):
-            raise TypeError("Dtype for MultiIndex only supports object type.")
-
-        # ._data needs to be rebuilt
-        if levels is not None or codes is not None:
-            if self._levels is None or self._codes is None:
-                self._compute_levels_and_codes()
-            levels = self._levels if levels is None else levels
-            codes = self._codes if codes is None else codes
-            names = self.names if names is None else names
-
-            mi = MultiIndex(levels=levels, codes=codes, names=names, copy=deep)
-            return mi
 
         mi = MultiIndex._from_data(self._data.copy(deep=deep))
         if self._levels is not None:
@@ -494,16 +427,16 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def __repr__(self):
-        max_seq_items = get_option("display.max_seq_items") or len(self)
+        max_seq_items = pd.get_option("display.max_seq_items") or len(self)
 
         if len(self) > max_seq_items:
             n = int(max_seq_items / 2) + 1
             # TODO: Update the following two arange calls to
             # a single arange call once arange has support for
             # a vector start/end points.
-            indices = column.arange(start=0, stop=n, step=1)
+            indices = column.as_column(range(n))
             indices = indices.append(
-                column.arange(start=len(self) - n, stop=len(self), step=1)
+                column.as_column(range(len(self) - n, len(self), 1))
             )
             preprocess = self.take(indices)
         else:
@@ -534,21 +467,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 )
             )
 
-            if not PANDAS_GE_150:
-                # Need this whole `if` block,
-                # this is a workaround for the following issue:
-                # https://github.com/pandas-dev/pandas/issues/39984
-                preprocess_pdf = pd.DataFrame(
-                    {
-                        name: col.to_pandas(nullable=(col.dtype.kind != "f"))
-                        for name, col in preprocess._data.items()
-                    }
-                )
-
-                preprocess_pdf.columns = preprocess.names
-                preprocess = pd.MultiIndex.from_frame(preprocess_pdf)
-            else:
-                preprocess = preprocess.to_pandas(nullable=True)
+            preprocess = preprocess.to_pandas(nullable=True)
             preprocess.values[:] = tuples_list
         else:
             preprocess = preprocess.to_pandas(nullable=True)
@@ -634,7 +553,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                     (3, 12)],
                 names=['a', 'b'])
         >>> midx.levels
-        [Int64Index([1, 2, 3], dtype='int64', name='a'), Int64Index([10, 11, 12], dtype='int64', name='b')]
+        [Index([1, 2, 3], dtype='int64', name='a'), Index([10, 11, 12], dtype='int64', name='b')]
         """  # noqa: E501
         if self._levels is None:
             self._compute_levels_and_codes()
@@ -768,13 +687,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         codes = {}
         for name, col in self._data.items():
-            with warnings.catch_warnings():
-                # TODO: Remove this filter when
-                # `na_sentinel` is removed from `factorize`.
-                # This is a filter to not let the warnings from
-                # `factorize` show up in other parts of public APIs.
-                warnings.simplefilter("ignore")
-                code, cats = cudf.Series._from_data({None: col}).factorize()
+            code, cats = cudf.Series._from_data({None: col}).factorize()
             cats.name = name
             codes[name] = code.astype(np.int64)
             levels.append(cats)
@@ -791,15 +704,21 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 continue
             lookup[i] = cudf.Series(row)
         frame = cudf.DataFrame(dict(enumerate(index._data.columns)))
-        data_table = cudf.concat(
-            [
-                frame,
-                cudf.DataFrame(
-                    {"idx": cudf.Series(column.arange(len(frame)))}
-                ),
-            ],
-            axis=1,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            data_table = cudf.concat(
+                [
+                    frame,
+                    cudf.DataFrame(
+                        {
+                            "idx": cudf.Series(
+                                column.as_column(range(len(frame)))
+                            )
+                        }
+                    ),
+                ],
+                axis=1,
+            )
         # Sort indices in pandas compatible mode
         # because we want the indices to be fetched
         # in a deterministic order.
@@ -807,7 +726,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # obtain deterministic ordering.
         if cudf.get_option("mode.pandas_compatible"):
             lookup_order = "_" + "_".join(map(str, lookup._data.names))
-            lookup[lookup_order] = column.arange(len(lookup))
+            lookup[lookup_order] = column.as_column(range(len(lookup)))
             postprocess = operator.methodcaller(
                 "sort_values", by=[lookup_order, "idx"]
             )
@@ -840,14 +759,16 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             ):
                 stop = row_tuple.stop or max_length
                 start, stop, step = row_tuple.indices(stop)
-                return column.arange(start, stop, step)
+                return column.as_column(range(start, stop, step))
             start_values = self._compute_validity_mask(
                 index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
                 index, row_tuple.stop, max_length
             )
-            return column.arange(start_values.min(), stop_values.max() + 1)
+            return column.as_column(
+                range(start_values.min(), stop_values.max() + 1)
+            )
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
         return self._compute_validity_mask(index, row_tuple, max_length)
@@ -1024,7 +945,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             index = np.array(index)
         elif isinstance(index, slice):
             start, stop, step = index.indices(len(self))
-            index = column.arange(start, stop, step)
+            index = column.as_column(range(start, stop, step))
         result = MultiIndex.from_frame(
             self.to_frame(index=False, name=range(0, self.nlevels)).take(
                 index
@@ -1096,25 +1017,23 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: Currently this function makes a shallow copy, which is
         # incorrect. We want to make a deep copy, otherwise further
         # modifications of the resulting DataFrame will affect the MultiIndex.
-        if name is None:
-            warnings.warn(
-                "Explicitly passing `name=None` currently preserves the "
-                "Index's name or uses a default name of 0. This behaviour "
-                "is deprecated, and in the future `None` will be used "
-                "as the name of the resulting DataFrame column.",
-                FutureWarning,
-            )
-            name = no_default
-
-        if name is not no_default:
+        if name is no_default:
+            column_names = [
+                level if name is None else name
+                for level, name in enumerate(self.names)
+            ]
+        else:
+            if not is_list_like(name):
+                raise TypeError(
+                    "'name' must be a list / sequence of column names."
+                )
             if len(name) != len(self.levels):
                 raise ValueError(
                     "'name' should have the same length as "
                     "number of levels on index."
                 )
             column_names = name
-        else:
-            column_names = self.names
+
         all_none_names = None
         if not (
             all_none_names := all(x is None for x in column_names)
@@ -1198,11 +1117,11 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 obj.columns = colnames
 
         source_data = cudf.DataFrame._concat(source_data)
-        names = [None] * source_data._num_columns
-        objs = list(filter(lambda o: o.names is not None, objs))
-        for o in range(len(objs)):
-            for i, name in enumerate(objs[o].names):
-                names[i] = names[i] or name
+        try:
+            # Only set names if all objs have the same names
+            (names,) = {o.names for o in objs} - {None}
+        except ValueError:
+            names = [None] * source_data._num_columns
         return cudf.MultiIndex.from_frame(source_data, names=names)
 
     @classmethod
@@ -1224,6 +1143,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         See Also
         --------
+        MultiIndex.from_arrays : Convert list of arrays to MultiIndex.
         MultiIndex.from_product : Make a MultiIndex from cartesian product
                                   of iterables.
         MultiIndex.from_frame : Make a MultiIndex from a DataFrame.
@@ -1333,6 +1253,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         See Also
         --------
+        MultiIndex.from_arrays : Convert list of arrays to MultiIndex.
         MultiIndex.from_tuples : Convert list of tuples to MultiIndex.
         MultiIndex.from_product : Make a MultiIndex from cartesian product
                                   of iterables.
@@ -1426,6 +1347,66 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         return cls.from_pandas(pdi)
+
+    @classmethod
+    @_cudf_nvtx_annotate
+    def from_arrays(
+        cls,
+        arrays,
+        sortorder=None,
+        names=None,
+    ) -> MultiIndex:
+        """
+        Convert arrays to MultiIndex.
+
+        Parameters
+        ----------
+        arrays : list / sequence of array-likes
+            Each array-like gives one level's value for each data point.
+            len(arrays) is the number of levels.
+        sortorder : optional int
+            Not yet supported
+        names : list / sequence of str, optional
+            Names for the levels in the index.
+
+        Returns
+        -------
+        MultiIndex
+
+        See Also
+        --------
+        MultiIndex.from_tuples : Convert list of tuples to MultiIndex.
+        MultiIndex.from_product : Make a MultiIndex from cartesian product
+                                  of iterables.
+        MultiIndex.from_frame : Make a MultiIndex from a DataFrame.
+
+        Examples
+        --------
+        >>> arrays = [[1, 1, 2, 2], ['red', 'blue', 'red', 'blue']]
+        >>> cudf.MultiIndex.from_arrays(arrays, names=('number', 'color'))
+        MultiIndex([(1,  'red'),
+                    (1, 'blue'),
+                    (2,  'red'),
+                    (2, 'blue')],
+                   names=['number', 'color'])
+        """
+        # Imported here due to circular import
+        from cudf.core.algorithms import factorize
+
+        error_msg = "Input must be a list / sequence of array-likes."
+        if not is_list_like(arrays):
+            raise TypeError(error_msg)
+        codes = []
+        levels = []
+        for array in arrays:
+            if not (is_list_like(array) or is_column_like(array)):
+                raise TypeError(error_msg)
+            code, level = factorize(array, sort=True)
+            codes.append(code)
+            levels.append(level)
+        return cls(
+            codes=codes, levels=levels, sortorder=sortorder, names=names
+        )
 
     @_cudf_nvtx_annotate
     def _poplevels(self, level):
@@ -1583,7 +1564,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         Dropping multiple levels:
 
         >>> idx.droplevel(["first", "second"])
-        Int64Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
+        Index([0, 1, 2, 0, 1, 2], dtype='int64', name='third')
         """
         mi = self.copy(deep=False)
         mi._poplevels(level)
@@ -1601,7 +1582,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def from_pandas(cls, multiindex, nan_as_null=no_default):
+    def from_pandas(cls, multiindex: pd.MultiIndex, nan_as_null=no_default):
         """
         Convert from a Pandas MultiIndex
 
@@ -1846,72 +1827,60 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return level
 
     @_cudf_nvtx_annotate
-    def get_loc(self, key, method=None, tolerance=None):
-        """
-        Get location for a label or a tuple of labels.
-
-        The location is returned as an integer/slice or boolean mask.
-
-        Parameters
-        ----------
-        key : label or tuple of labels (one for each level)
-        method : None
-
-        Returns
-        -------
-        loc : int, slice object or boolean mask
-            - If index is unique, search result is unique, return a single int.
-            - If index is monotonic, index is returned as a slice object.
-            - Otherwise, cudf attempts a best effort to convert the search
-              result into a slice object, and will return a boolean mask if
-              failed to do so. Notice this can deviate from Pandas behavior
-              in some situations.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> mi = cudf.MultiIndex.from_tuples(
-        ...     [('a', 'd'), ('b', 'e'), ('b', 'f')])
-        >>> mi.get_loc('b')
-        slice(1, 3, None)
-        >>> mi.get_loc(('b', 'e'))
-        1
-        >>> non_monotonic_non_unique_idx = cudf.MultiIndex.from_tuples(
-        ...     [('c', 'd'), ('b', 'e'), ('a', 'f'), ('b', 'e')])
-        >>> non_monotonic_non_unique_idx.get_loc('b') # differ from pandas
-        slice(1, 4, 2)
-
-        .. pandas-compat::
-            **MultiIndex.get_loc**
-
-            The return types of this function may deviates from the
-            method provided by Pandas. If the index is neither
-            lexicographically sorted nor unique, a best effort attempt is made
-            to coerce the found indices into a slice. For example:
-
-            .. code-block::
-
-                >>> import pandas as pd
-                >>> import cudf
-                >>> x = pd.MultiIndex.from_tuples([
-                ...     (2, 1, 1), (1, 2, 3), (1, 2, 1),
-                ...     (1, 1, 1), (1, 1, 1), (2, 2, 1),
-                ... ])
-                >>> x.get_loc(1)
-                array([False,  True,  True,  True,  True, False])
-                >>> cudf.from_pandas(x).get_loc(1)
-                slice(1, 5, 1)
-        """
+    def get_indexer(self, target, method=None, limit=None, tolerance=None):
         if tolerance is not None:
             raise NotImplementedError(
                 "Parameter tolerance is not supported yet."
             )
-        if method is not None:
+        if method == "nearest":
             raise NotImplementedError(
-                "only the default get_loc method is currently supported for"
-                " MultiIndex"
+                f"{method=} is not supported yet for MultiIndex."
             )
 
+        result = cudf.core.column.full(
+            len(target),
+            fill_value=-1,
+            dtype=libcudf.types.size_type_dtype,
+        )
+        if not len(self):
+            return result.values
+        try:
+            target = cudf.MultiIndex.from_tuples(target)
+        except TypeError:
+            return result.values
+
+        join_keys = [
+            _match_join_keys(lcol, rcol, "inner")
+            for lcol, rcol in zip(target._data.columns, self._data.columns)
+        ]
+        join_keys = map(list, zip(*join_keys))
+        scatter_map, indices = libcudf.join.join(
+            *join_keys,
+            how="inner",
+        )
+        (result,) = libcudf.copying.scatter([indices], scatter_map, [result])
+        result_series = cudf.Series(result)
+
+        if method in {"ffill", "bfill", "pad", "backfill"}:
+            result_series = _get_indexer_basic(
+                index=self,
+                positions=result_series,
+                method=method,
+                target_col=target.to_frame(index=False)[
+                    list(range(0, self.nlevels))
+                ],
+                tolerance=tolerance,
+            )
+        elif method is not None:
+            raise ValueError(
+                f"{method=} is unsupported, only supported values are: "
+                "{['ffill'/'pad', 'bfill'/'backfill', None]}"
+            )
+
+        return result_series.to_cupy()
+
+    @_cudf_nvtx_annotate
+    def get_loc(self, key):
         is_sorted = (
             self.is_monotonic_increasing or self.is_monotonic_decreasing
         )
@@ -2013,7 +1982,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         # TODO: When to_frame is refactored to return a
         # deep copy in future, we should push most of the common
         # logic between MultiIndex._union & BaseIndex._union into
-        # GenericIndex._union.
+        # Index._union.
         other_df = other.copy(deep=True).to_frame(index=False)
         self_df = self.copy(deep=True).to_frame(index=False)
         col_names = list(range(0, self.nlevels))
@@ -2030,7 +1999,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])
         midx.names = self.names if self.names == other.names else None
-        if sort is None and len(other):
+        if sort in {None, True} and len(other):
             return midx.sort_values()
         return midx
 
@@ -2053,7 +2022,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
         result_df = cudf.merge(self_df, other_df, how="inner")
         midx = self.__class__.from_frame(result_df, names=res_name)
-        if sort is None and len(other):
+        if sort in {None, True} and len(other):
             return midx.sort_values()
         return midx
 

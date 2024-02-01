@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -216,6 +216,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
  *
  * @param tokens Vector of token types in the json string
  * @param token_indices The indices within the input string corresponding to each token
+ * @param is_strict_nested_boundaries Whether to extract node end of nested types strictly
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
@@ -223,6 +224,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
  */
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
+                                    bool is_strict_nested_boundaries,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr);
 

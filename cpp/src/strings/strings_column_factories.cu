@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,6 +121,8 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 {
   CUDF_FUNC_RANGE();
 
+  if (num_strings == 0) { return make_empty_column(type_id::STRING); }
+
   if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
   CUDF_EXPECTS(num_strings == offsets_column->size() - 1,
                "Invalid offsets column size for strings column.");
@@ -129,10 +131,33 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 
   std::vector<std::unique_ptr<column>> children;
   children.emplace_back(std::move(offsets_column));
-  children.emplace_back(std::move(chars_column));
   return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,
-                                  rmm::device_buffer{},
+                                  std::move(*(chars_column->release().data.release())),
+                                  std::move(null_mask),
+                                  null_count,
+                                  std::move(children));
+}
+
+std::unique_ptr<column> make_strings_column(size_type num_strings,
+                                            std::unique_ptr<column> offsets_column,
+                                            rmm::device_buffer&& chars_buffer,
+                                            size_type null_count,
+                                            rmm::device_buffer&& null_mask)
+{
+  CUDF_FUNC_RANGE();
+
+  if (null_count > 0) { CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable."); }
+  CUDF_EXPECTS(num_strings == offsets_column->size() - 1,
+               "Invalid offsets column size for strings column.");
+  CUDF_EXPECTS(offsets_column->null_count() == 0, "Offsets column should not contain nulls");
+
+  std::vector<std::unique_ptr<column>> children;
+  children.emplace_back(std::move(offsets_column));
+
+  return std::make_unique<column>(data_type{type_id::STRING},
+                                  num_strings,
+                                  std::move(chars_buffer),
                                   std::move(null_mask),
                                   null_count,
                                   std::move(children));
@@ -146,8 +171,9 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
 {
   CUDF_FUNC_RANGE();
 
+  if (num_strings == 0) { return make_empty_column(type_id::STRING); }
+
   auto const offsets_size = static_cast<size_type>(offsets.size());
-  auto const chars_size   = static_cast<size_type>(chars.size());
 
   if (null_count > 0) CUDF_EXPECTS(null_mask.size() > 0, "Column with nulls must be nullable.");
 
@@ -160,21 +186,13 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
     rmm::device_buffer(),
     0);
 
-  auto chars_column = std::make_unique<column>(  //
-    data_type{type_id::INT8},
-    chars_size,
-    chars.release(),
-    rmm::device_buffer(),
-    0);
-
   auto children = std::vector<std::unique_ptr<column>>();
 
   children.emplace_back(std::move(offsets_column));
-  children.emplace_back(std::move(chars_column));
 
   return std::make_unique<column>(data_type{type_id::STRING},
                                   num_strings,
-                                  rmm::device_buffer{},
+                                  chars.release(),
                                   std::move(null_mask),
                                   null_count,
                                   std::move(children));

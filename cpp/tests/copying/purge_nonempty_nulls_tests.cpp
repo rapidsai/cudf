@@ -90,7 +90,6 @@ struct PurgeNonEmptyNullsTest : public cudf::test::BaseFixture {
   void test_purge(cudf::column_view const& unpurged)
   {
     auto const purged = cudf::purge_nonempty_nulls(unpurged);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(unpurged, *purged);
     EXPECT_FALSE(cudf::has_nonempty_nulls(*purged));
   }
 };

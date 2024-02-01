@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -422,7 +422,7 @@ struct dispatch_from_durations_fn {
 
     return make_strings_column(strings_count,
                                std::move(offsets),
-                               std::move(chars),
+                               std::move(chars->release().data.release()[0]),
                                durations.null_count(),
                                std::move(null_mask));
   }
@@ -697,7 +697,9 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
                                      rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = input.size();
-  if (strings_count == 0) return make_duration_column(duration_type, 0);
+  if (strings_count == 0) {
+    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream);
+  }
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -124,7 +124,6 @@ def test_cudf_factorize_array():
 
 @pytest.mark.parametrize("pandas_compatibility", [True, False])
 def test_factorize_code_pandas_compatibility(pandas_compatibility):
-
     psr = pd.Series([1, 2, 3, 4, 5])
     gsr = cudf.from_pandas(psr)
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -393,6 +393,7 @@ class orc_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -400,6 +401,7 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(
   orc_reader_options const& options,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
@@ -864,8 +866,10 @@ class orc_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void write_orc(orc_writer_options const& options);
+void write_orc(orc_writer_options const& options,
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -1287,8 +1291,10 @@ class orc_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  orc_chunked_writer(chunked_orc_writer_options const& options);
+  orc_chunked_writer(chunked_orc_writer_options const& options,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.
@@ -1304,7 +1310,7 @@ class orc_chunked_writer {
   void close();
 
   /// Unique pointer to impl writer class
-  std::unique_ptr<cudf::io::detail::orc::writer> writer;
+  std::unique_ptr<orc::detail::writer> writer;
 };
 
 /** @} */  // end of group

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -135,12 +135,12 @@ std::unique_ptr<column> url_encode(strings_column_view const& input,
 
   auto d_column = column_device_view::create(input.parent(), stream);
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     url_encoder_fn{*d_column}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -197,8 +197,8 @@ __forceinline__ __device__ char escaped_sequence_to_byte(char const* const ptr)
  * @param[out] out_counts Number of characters in each decode URL.
  */
 template <size_type num_warps_per_threadblock, size_type char_block_size>
-__global__ void url_decode_char_counter(column_device_view const in_strings,
-                                        size_type* const out_counts)
+CUDF_KERNEL void url_decode_char_counter(column_device_view const in_strings,
+                                         size_type* const out_counts)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size];
@@ -280,9 +280,9 @@ __global__ void url_decode_char_counter(column_device_view const in_strings,
  * @param[in] out_offsets Offset value of each string associated with `out_chars`.
  */
 template <size_type num_warps_per_threadblock, size_type char_block_size>
-__global__ void url_decode_char_replacer(column_device_view const in_strings,
-                                         char* const out_chars,
-                                         size_type const* const out_offsets)
+CUDF_KERNEL void url_decode_char_replacer(column_device_view const in_strings,
+                                          char* const out_chars,
+                                          size_type const* const out_offsets)
 {
   constexpr int halo_size = 2;
   __shared__ char temporary_buffer[num_warps_per_threadblock][char_block_size + halo_size * 2];
@@ -409,8 +409,8 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
   auto out_chars_bytes = cudf::detail::get_value<size_type>(offsets_view, offset_count - 1, stream);
 
   // create the chars column
-  auto chars_column = create_chars_child_column(out_chars_bytes, stream, mr);
-  auto d_out_chars  = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(out_chars_bytes, stream, mr);
+  auto d_out_chars = chars.data();
 
   // decode and copy the characters from the input column to the output column
   url_decode_char_replacer<num_warps_per_threadblock, char_block_size>
@@ -422,7 +422,7 @@ std::unique_ptr<column> url_decode(strings_column_view const& strings,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars.release(),
                              strings.null_count(),
                              std::move(null_mask));
 }
