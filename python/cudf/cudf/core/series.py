@@ -23,8 +23,6 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
-from pandas.core.dtypes.common import is_float
 from typing_extensions import Self, assert_never
 
 import cudf
@@ -1405,8 +1403,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         _, height = get_terminal_size()
         max_rows = (
             height
-            if get_option("display.max_rows") == 0
-            else get_option("display.max_rows")
+            if pd.get_option("display.max_rows") == 0
+            else pd.get_option("display.max_rows")
         )
         if max_rows not in (0, None) and len(self) > max_rows:
             top = self.head(int(max_rows / 2 + 1))
@@ -1451,10 +1449,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ):
             min_rows = (
                 height
-                if get_option("display.min_rows") == 0
-                else get_option("display.min_rows")
+                if pd.get_option("display.min_rows") == 0
+                else pd.get_option("display.min_rows")
             )
-            show_dimensions = get_option("display.show_dimensions")
+            show_dimensions = pd.get_option("display.show_dimensions")
             if preprocess._column.categories.dtype.kind == "f":
                 pd_series = (
                     preprocess.astype("str")
@@ -3392,7 +3390,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         if not is_integer(periods):
-            if not (is_float(periods) and periods.is_integer()):
+            if not (isinstance(periods, float) and periods.is_integer()):
                 raise ValueError("periods must be an integer")
             periods = int(periods)
 

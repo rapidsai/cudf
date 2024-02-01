@@ -21,7 +21,6 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
 from typing_extensions import Self
 
 import cudf
@@ -1306,7 +1305,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def __repr__(self):
-        max_seq_items = get_option("max_seq_items") or len(self)
+        max_seq_items = pd.get_option("max_seq_items") or len(self)
         mr = 0
         if 2 * max_seq_items < len(self):
             mr = max_seq_items + 1
