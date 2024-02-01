@@ -32,14 +32,14 @@ cdef class GroupByRequest:
     ----------
     values : Column
         The column to aggregate.
-    aggregations : list
+    aggregations : List[Aggregation]
         The list of aggregations to perform.
     """
     def __init__(self, Column values, list aggregations):
-        self.values = values
-        self.aggregations = aggregations
+        self._values = values
+        self._aggregations = aggregations
 
-    cdef aggregation_request to_libcudf_agg_request(self) except *:
+    cdef aggregation_request _to_libcudf_agg_request(self) except *:
         """Convert to a libcudf aggregation_request object.
 
         This method is for internal use only. It creates a new libcudf
@@ -47,14 +47,14 @@ cdef class GroupByRequest:
         called.
         """
         cdef aggregation_request c_obj
-        c_obj.values = self.values.view()
+        c_obj.values = self._values.view()
 
         cdef Aggregation agg
-        for agg in self.aggregations:
+        for agg in self._aggregations:
             c_obj.aggregations.push_back(move(agg.clone_underlying_as_groupby()))
         return move(c_obj)
 
-    cdef scan_request to_libcudf_scan_request(self) except *:
+    cdef scan_request _to_libcudf_scan_request(self) except *:
         """Convert to a libcudf scan_request object.
 
         This method is for internal use only. It creates a new libcudf
@@ -62,10 +62,10 @@ cdef class GroupByRequest:
         called.
         """
         cdef scan_request c_obj
-        c_obj.values = self.values.view()
+        c_obj.values = self._values.view()
 
         cdef Aggregation agg
-        for agg in self.aggregations:
+        for agg in self._aggregations:
             c_obj.aggregations.push_back(move(agg.clone_underlying_as_groupby_scan()))
         return move(c_obj)
 
@@ -90,6 +90,8 @@ cdef class GroupBy:
     cdef tuple _parse_outputs(
         pair[unique_ptr[table], vector[aggregation_result]] c_res
     ):
+        # Convert libcudf aggregation/scan outputs into pylibcudf objects.
+        # This function is for internal use only.
         cdef Table group_keys = Table.from_libcudf(move(c_res.first))
 
         cdef int i, j
@@ -124,7 +126,7 @@ cdef class GroupBy:
         cdef GroupByRequest request
         cdef vector[aggregation_request] c_requests
         for request in requests:
-            c_requests.push_back(move(request.to_libcudf_agg_request()))
+            c_requests.push_back(move(request._to_libcudf_agg_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
             dereference(self.c_obj).aggregate(c_requests)
@@ -151,7 +153,7 @@ cdef class GroupBy:
         cdef GroupByRequest request
         cdef vector[scan_request] c_requests
         for request in requests:
-            c_requests.push_back(move(request.to_libcudf_scan_request()))
+            c_requests.push_back(move(request._to_libcudf_scan_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
             dereference(self.c_obj).scan(c_requests)

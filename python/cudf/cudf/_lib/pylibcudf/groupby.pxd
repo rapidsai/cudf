@@ -28,11 +28,11 @@ cdef class GroupByRequest:
     # each groupby.aggregate call to avoid invalidating this object. Therefore,
     # this class instead stores only Python/Cython objects and constructs the
     # C++ object on the fly as requested.
-    cdef Column values
-    cdef list aggregations
+    cdef Column _values
+    cdef list _aggregations
 
-    cdef aggregation_request to_libcudf_agg_request(self) except *
-    cdef scan_request to_libcudf_scan_request(self) except *
+    cdef aggregation_request _to_libcudf_agg_request(self) except *
+    cdef scan_request _to_libcudf_scan_request(self) except *
 
 
 cdef class GroupBy:
