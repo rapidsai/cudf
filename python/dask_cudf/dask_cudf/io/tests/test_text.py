@@ -9,10 +9,10 @@ import dask.dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_module_dask_expr
+from dask_cudf.tests.utils import skip_dask_expr
 
 # No dask-expr support
-skip_module_dask_expr()
+pytestmark = skip_dask_expr()
 
 cur_dir = os.path.dirname(__file__)
 text_file = os.path.join(cur_dir, "data/text/sample.pgn")

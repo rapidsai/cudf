@@ -13,10 +13,10 @@ from dask.delayed import delayed
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_module_dask_expr
+from dask_cudf.tests.utils import skip_dask_expr
 
 # No dask-expr support
-skip_module_dask_expr()
+pytestmark = skip_dask_expr()
 
 
 @delayed

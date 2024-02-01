@@ -12,10 +12,10 @@ from dask.dataframe.methods import is_categorical_dtype
 
 import cudf
 
-from dask_cudf.tests.utils import skip_module_dask_expr
+from dask_cudf.tests.utils import skip_dask_expr
 
 # No dask-expr support
-skip_module_dask_expr()
+pytestmark = skip_dask_expr()
 
 
 def test_is_categorical_dispatch():

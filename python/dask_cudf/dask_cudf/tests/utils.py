@@ -27,14 +27,6 @@ def _make_random_frame(nelem, npartitions=2, include_na=False):
 _default_reason = "Not compatible with dask-expr"
 
 
-def skip_module_dask_expr(reason=_default_reason):
-    if DASK_EXPR_ENABLED:
-        pytest.skip(
-            allow_module_level=True,
-            reason=reason,
-        )
-
-
 def skip_dask_expr(reason=_default_reason):
     return pytest.mark.skipif(DASK_EXPR_ENABLED, reason=reason)
 
