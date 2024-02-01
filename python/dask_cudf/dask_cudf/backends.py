@@ -625,15 +625,13 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_hdf(*args, **kwargs):
-        from dask_cudf import from_dask_dataframe
-
         # HDF5 reader not yet implemented in cudf
         warnings.warn(
             "read_hdf is not yet implemented in cudf/dask_cudf. "
             "Moving to cudf from pandas. Expect poor performance!"
         )
-        return from_dask_dataframe(
-            _default_backend(dd.read_hdf, *args, **kwargs)
+        return _default_backend(dd.read_hdf, *args, **kwargs).to_backend(
+            "cudf"
         )
 
 

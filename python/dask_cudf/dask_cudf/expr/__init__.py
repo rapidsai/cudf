@@ -1,11 +1,17 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-# Make sure custom expressions and collections are defined
-try:
-    import dask_cudf.expr._collection
-    import dask_cudf.expr._expr
+from dask import config
 
-    _expr_support = True
-except ImportError:
-    # Dask Expressions not installed
-    _expr_support = False
+DASK_EXPR_ENABLED = False
+if config.get("dataframe.query-planning", False):
+    # Make sure custom expressions and collections are defined
+    try:
+        import dask_cudf.expr._collection
+        import dask_cudf.expr._expr
+
+        DASK_EXPR_ENABLED = True
+    except ImportError:
+        # Dask Expressions not installed.
+        # Dask DataFrame should have already thrown an error
+        # before we got here.
+        pass

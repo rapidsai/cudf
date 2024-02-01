@@ -5,9 +5,10 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask import config
 
 import cudf
+
+from dask_cudf.expr import DASK_EXPR_ENABLED
 
 
 def _make_random_frame(nelem, npartitions=2, include_na=False):
@@ -23,13 +24,6 @@ def _make_random_frame(nelem, npartitions=2, include_na=False):
     return df, dgf
 
 
-def _dask_expr_enabled():
-    from dask_cudf.expr import _expr_support
-
-    return _expr_support and config.get("dataframe.query-planning", False)
-
-
-DASK_EXPR_ENABLED = _dask_expr_enabled()
 _default_reason = "Not compatible with dask-expr"
 
 
