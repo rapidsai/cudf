@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -42,8 +42,8 @@ def timeseries(
 
     Examples
     --------
-    >>> import cudf as gd
-    >>> gdf = gd.datasets.timeseries()
+    >>> import cudf
+    >>> gdf = cudf.datasets.timeseries()
     >>> gdf.head()  # doctest: +SKIP
               timestamp    id     name         x         y
     2000-01-01 00:00:00   967    Jerry -0.031348 -0.040633
@@ -97,8 +97,8 @@ def randomdata(nrows=10, dtypes=None, seed=None):
 
     Examples
     --------
-    >>> import cudf as gd
-    >>> gdf = gd.datasets.randomdata()
+    >>> import cudf
+    >>> gdf = cudf.datasets.randomdata()
     >>> cdf.head()  # doctest: +SKIP
             id                  x                   y
     0  1014 0.28361267466770146 -0.44274170661264334

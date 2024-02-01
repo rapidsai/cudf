@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/hashing/detail/hash_allocator.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -22,7 +22,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -32,9 +31,8 @@
 
 namespace cudf::detail {
 
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
 using hash_map_type =
-  cuco::static_map<size_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  cuco::static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 /**
  * @brief The base struct for customized reduction functor to perform reduce-by-key with keys are
