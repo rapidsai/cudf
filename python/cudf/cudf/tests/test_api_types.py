@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -7,6 +7,8 @@ from pandas.api import types as pd_types
 
 import cudf
 from cudf.api import types
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_214
+from cudf.testing._utils import expect_warning_if
 
 
 @pytest.mark.parametrize(
@@ -115,7 +117,7 @@ from cudf.api import types
     ),
 )
 def test_is_categorical_dtype(obj, expect):
-    assert types.is_categorical_dtype(obj) == expect
+    assert types._is_categorical_dtype(obj) == expect
 
 
 @pytest.mark.parametrize(
@@ -497,8 +499,8 @@ def test_is_integer(obj, expect):
         (pd.Series(dtype="int"), False),
         (pd.Series(dtype="float"), False),
         (pd.Series(dtype="complex"), False),
-        (pd.Series(dtype="str"), True),
-        (pd.Series(dtype="unicode"), True),
+        (pd.Series(dtype="str"), not PANDAS_GE_200),
+        (pd.Series(dtype="unicode"), not PANDAS_GE_200),
         (pd.Series(dtype="datetime64[s]"), False),
         (pd.Series(dtype="timedelta64[s]"), False),
         (pd.Series(dtype="category"), False),
@@ -1035,9 +1037,13 @@ def test_is_decimal_dtype(obj, expect):
     ),
 )
 def test_pandas_agreement(obj):
-    assert types.is_categorical_dtype(obj) == pd_types.is_categorical_dtype(
-        obj
-    )
+    with expect_warning_if(
+        PANDAS_GE_210, DeprecationWarning if PANDAS_GE_214 else FutureWarning
+    ):
+        expected = pd_types.is_categorical_dtype(obj)
+    with pytest.warns(DeprecationWarning):
+        actual = types.is_categorical_dtype(obj)
+    assert expected == actual
     assert types.is_numeric_dtype(obj) == pd_types.is_numeric_dtype(obj)
     assert types.is_integer_dtype(obj) == pd_types.is_integer_dtype(obj)
     assert types.is_integer(obj) == pd_types.is_integer(obj)

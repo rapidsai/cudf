@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from itertools import chain, combinations_with_replacement, product
 
@@ -55,13 +55,18 @@ def test_rank_all_arguments(
     assert_eq(gdf["col1"].rank(**kwargs), pdf["col1"].rank(**kwargs))
     assert_eq(gdf["col2"].rank(**kwargs), pdf["col2"].rank(**kwargs))
     if numeric_only:
-        with pytest.warns(FutureWarning):
-            expect = pdf["str"].rank(**kwargs)
-        got = gdf["str"].rank(**kwargs)
-        assert expect.empty == got.empty
-        expected = pdf.select_dtypes(include=np.number)
-    else:
-        expected = pdf.copy(deep=True)
+        assert_exceptions_equal(
+            lfunc=pdf["str"].rank,
+            rfunc=gdf["str"].rank,
+            lfunc_args_and_kwargs=(
+                [],
+                kwargs,
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                kwargs,
+            ),
+        )
 
     actual = gdf.rank(**kwargs)
     expected = pdf.rank(**kwargs)
