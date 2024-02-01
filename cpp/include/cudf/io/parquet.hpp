@@ -1164,7 +1164,7 @@ class parquet_writer_options_builder {
    * @brief Set to true if DELTA_BYTE_ARRAY encoding should be used.
    *
    * The default encoding for all columns is dictionary encoding. When dictionary encoding
-   * cannot be used (it was disabled, the dictionary is too large), the parquet writer
+   * cannot be used (it was disabled, or the dictionary is too large), the parquet writer
    * will usually fall back to PLAIN encoding. If V2 headers are enabled, however, the
    * choice for fall back is DELTA_LENGTH_BYTE_ARRAY. Setting this to `true` will use
    * DELTA_BYTE_ARRAY encoding instead. This will apply to all string columns.
