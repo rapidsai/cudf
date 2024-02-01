@@ -21,7 +21,9 @@ from cudf._lib.reshape import interleave_columns
 from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
+from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
@@ -276,25 +278,21 @@ class GroupBy(Serializable, Reducible, Scannable):
             self.grouping = _Grouping(obj, self._by, level)
 
     def __iter__(self):
-        if isinstance(self._by, list) and len(self._by) == 1:
-            # Do not remove until pandas 2.0 support is added.
-            warnings.warn(
-                "In a future version of cudf, a length 1 tuple will be "
-                "returned when iterating over a groupby with a grouper equal "
-                "to a list of length 1. To avoid this warning, do not supply "
-                "a list with a single grouper.",
-                FutureWarning,
-            )
         group_names, offsets, _, grouped_values = self._grouped()
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (name,) if isinstance(self._by, list) and len(
+                self._by
+            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
 
     @property
     def dtypes(self):
         """
         Return the dtypes in this group.
+
+        .. deprecated:: 24.04
+           Use `.dtypes` on base object instead.
 
         Returns
         -------
@@ -307,18 +305,24 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df = cudf.DataFrame({'a': [1, 2, 3, 3], 'b': ['x', 'y', 'z', 'a'],
         ...                      'c':[10, 11, 12, 12]})
         >>> df.groupby("a").dtypes
-                b      c
+               a       b      c
         a
-        1  object  int64
-        2  object  int64
-        3  object  int64
+        1  int64  object  int64
+        2  int64  object  int64
+        3  int64  object  int64
         """
+        warnings.warn(
+            f"{type(self).__name__}.dtypes is deprecated and will be "
+            "removed in a future version. Check the dtypes on the "
+            "base object instead",
+            FutureWarning,
+        )
         index = self.grouping.keys.unique().sort_values().to_pandas()
         obj_dtypes = self.obj._dtypes
         return pd.DataFrame(
             {
                 name: [obj_dtypes[name]] * len(index)
-                for name in self.grouping.values._column_names
+                for name in self.obj._data.names
             },
             index=index,
         )
@@ -339,6 +343,33 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return dict(
             zip(group_names.to_pandas(), grouped_index._split(offsets[1:-1]))
+        )
+
+    @cached_property
+    def indices(self):
+        """
+        Dict {group name -> group indices}.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = [[10, 20, 30], [10, 30, 40], [40, 50, 30]]
+        >>> df = cudf.DataFrame(data, columns=["a", "b", "c"])
+        >>> df
+            a   b   c
+        0  10  20  30
+        1  10  30  40
+        2  40  50  30
+        >>> df.groupby(by=["a"]).indices
+        {10: array([0, 1]), 40: array([2])}
+        """
+        group_names, offsets, _, grouped_values = self._grouped()
+
+        return dict(
+            zip(
+                group_names.to_pandas(),
+                np.split(grouped_values.index.values, offsets[1:-1]),
+            )
         )
 
     @_cudf_nvtx_annotate
@@ -376,6 +407,13 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if obj is None:
             obj = self.obj
+        else:
+            warnings.warn(
+                "obj is deprecated and will be removed in a future version. "
+                "Use ``df.iloc[gb.indices.get(name)]`` "
+                "instead of ``gb.get_group(name, obj=df)``.",
+                FutureWarning,
+            )
 
         return obj.loc[self.groups[name].drop_duplicates()]
 
@@ -558,7 +596,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         orig_dtypes = tuple(c.dtype for c in columns)
 
         # Note: When there are no key columns, the below produces
-        # a Float64Index, while Pandas returns an Int64Index
+        # an Index with float64 dtype, while Pandas returns
+        # an Index with int64 dtype.
         # (GH: 6945)
         (
             result_columns,
@@ -592,7 +631,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     # Structs lose their labels which we reconstruct here
                     col = col._with_type_metadata(cudf.ListDtype(orig_dtype))
 
-                if agg_kind in {"COUNT", "SIZE"}:
+                if agg_kind in {"COUNT", "SIZE", "ARGMIN", "ARGMAX"}:
                     data[key] = col.astype("int64")
                 elif (
                     self.obj.empty
@@ -642,15 +681,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     how="left",
                 )
                 result = result.take(indices)
-                if isinstance(result._index, cudf.CategoricalIndex):
-                    # Needs re-ordering the categories in the order
-                    # they are after grouping.
-                    result._index = cudf.Index(
-                        result._index._column.reorder_categories(
-                            result._index._column._get_decategorized_column()
-                        ),
-                        name=result._index.name,
-                    )
 
         if not self._as_index:
             result = result.reset_index()
@@ -882,10 +912,21 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         Return the nth row from each group.
         """
-        result = self.agg(lambda x: x.nth(n)).sort_index()
-        sizes = self.size().sort_index()
 
-        return result[sizes > n]
+        self.obj["__groupbynth_order__"] = range(0, len(self.obj))
+        # We perform another groupby here to have the grouping columns
+        # be a part of dataframe columns.
+        result = self.obj.groupby(self.grouping.keys).agg(lambda x: x.nth(n))
+        sizes = self.size().reindex(result.index)
+
+        result = result[sizes > n]
+
+        result._index = self.obj.index.take(
+            result._data["__groupbynth_order__"]
+        )
+        del result._data["__groupbynth_order__"]
+        del self.obj._data["__groupbynth_order__"]
+        return result
 
     @_cudf_nvtx_annotate
     def ngroup(self, ascending=True):
@@ -1300,13 +1341,17 @@ class GroupBy(Serializable, Reducible, Scannable):
             # group is a row-like "Series" where the index labels
             # are the same as the original calling DataFrame
             if _is_row_of(chunk_results[0], self.obj):
-                result = cudf.concat(chunk_results, axis=1).T
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    result = cudf.concat(chunk_results, axis=1).T
                 result.index = group_names
                 result.index.names = self.grouping.names
             # When the UDF is like df.x + df.y, the result for each
             # group is the same length as the original group
             elif len(self.obj) == sum(len(chk) for chk in chunk_results):
-                result = cudf.concat(chunk_results)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    result = cudf.concat(chunk_results)
                 index_data = group_keys._data.copy(deep=True)
                 index_data[None] = grouped_values.index._column
                 result.index = cudf.MultiIndex._from_data(index_data)
@@ -1317,7 +1362,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                     f"type {type(chunk_results[0])}"
                 )
         else:
-            result = cudf.concat(chunk_results)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                result = cudf.concat(chunk_results)
             if self._group_keys:
                 index_data = group_keys._data.copy(deep=True)
                 index_data[None] = grouped_values.index._column
@@ -1424,9 +1471,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         dtype: int64
 
         """
-
         if self.obj.empty:
-            res = self.obj.copy(deep=True)
+            if function in {"count", "size", "idxmin", "idxmax"}:
+                res = cudf.Series([], dtype="int64")
+            else:
+                res = self.obj.copy(deep=True)
             res.index = self.grouping.keys
             if function in {"sum", "product"}:
                 # For `sum` & `product`, boolean types
@@ -2116,30 +2165,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(values)
 
-    @_cudf_nvtx_annotate
-    def pad(self, limit=None):
-        """Forward fill NA values.
-
-        .. deprecated:: 23.06
-           `pad` is deprecated, use `ffill` instead.
-
-        Parameters
-        ----------
-        limit : int, default None
-            Unsupported
-        """
-
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        # Do not remove until pandas 2.0 support is added.
-        warnings.warn(
-            "pad is deprecated and will be removed in a future version. "
-            "Use ffill instead.",
-            FutureWarning,
-        )
-        return self._scan_fill("ffill", limit)
-
     def ffill(self, limit=None):
         """Forward fill NA values.
 
@@ -2153,29 +2178,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise NotImplementedError("Does not support limit param yet.")
 
         return self._scan_fill("ffill", limit)
-
-    @_cudf_nvtx_annotate
-    def backfill(self, limit=None):
-        """Backward fill NA values.
-
-        .. deprecated:: 23.06
-           `backfill` is deprecated, use `bfill` instead.
-
-        Parameters
-        ----------
-        limit : int, default None
-            Unsupported
-        """
-        if limit is not None:
-            raise NotImplementedError("Does not support limit param yet.")
-
-        # Do not remove until pandas 2.0 support is added.
-        warnings.warn(
-            "backfill is deprecated and will be removed in a future version. "
-            "Use bfill instead.",
-            FutureWarning,
-        )
-        return self._scan_fill("bfill", limit)
 
     def bfill(self, limit=None):
         """Backward fill NA values.
@@ -2206,11 +2208,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ----------
         value : scalar, dict
             Value to use to fill the holes. Cannot be specified with method.
-        method : {'backfill', 'bfill', 'pad', 'ffill', None}, default None
+        method : { 'bfill', 'ffill', None}, default None
             Method to use for filling holes in reindexed Series
 
-            - pad/ffill: propagate last valid observation forward to next valid
-            - backfill/bfill: use next valid observation to fill gap
+            - ffill: propagate last valid observation forward to next valid
+            - bfill: use next valid observation to fill gap
         axis : {0 or 'index', 1 or 'columns'}
             Unsupported
         inplace : bool, default False
@@ -2240,11 +2242,19 @@ class GroupBy(Serializable, Reducible, Scannable):
             raise ValueError("Cannot specify both 'value' and 'method'.")
 
         if method is not None:
-            if method not in {"pad", "ffill", "backfill", "bfill"}:
-                raise ValueError(
-                    "Method can only be of 'pad', 'ffill',"
-                    "'backfill', 'bfill'."
-                )
+            if method not in {"ffill", "bfill"}:
+                raise ValueError("Method can only be of 'ffill', 'bfill'.")
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
+
             return getattr(self, method, limit)()
 
         values = self.obj.__class__._from_data(
@@ -2319,7 +2329,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
     @_cudf_nvtx_annotate
     def pct_change(
-        self, periods=1, fill_method="ffill", axis=0, limit=None, freq=None
+        self,
+        periods=1,
+        fill_method=no_default,
+        axis=0,
+        limit=no_default,
+        freq=None,
     ):
         """
         Calculates the percent change between sequential elements
@@ -2331,9 +2346,16 @@ class GroupBy(Serializable, Reducible, Scannable):
             Periods to shift for forming percent change.
         fill_method : str, default 'ffill'
             How to handle NAs before computing percent changes.
+
+            .. deprecated:: 24.04
+                All options of `fill_method` are deprecated
+                except `fill_method=None`.
         limit : int, optional
             The number of consecutive NAs to fill before stopping.
             Not yet implemented.
+
+            .. deprecated:: 24.04
+                `limit` is deprecated.
         freq : str, optional
             Increment to use from time series API.
             Not yet implemented.
@@ -2345,26 +2367,39 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-        if limit is not None:
+        if limit is not no_default:
             raise NotImplementedError("limit parameter not supported yet.")
         if freq is not None:
             raise NotImplementedError("freq parameter not supported yet.")
-        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+        elif fill_method not in {no_default, None, "ffill", "bfill"}:
             raise ValueError(
-                "fill_method must be one of 'ffill', 'pad', "
-                "'bfill', or 'backfill'."
+                "fill_method must be one of 'ffill', or" "'bfill'."
             )
 
-        if fill_method in ("pad", "backfill"):
-            alternative = "ffill" if fill_method == "pad" else "bfill"
-            # Do not remove until pandas 2.0 support is added.
+        if fill_method not in (no_default, None) or limit is not no_default:
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
             warnings.warn(
-                f"{fill_method} is deprecated and will be removed in a future "
-                f"version. Use f{alternative} instead.",
+                "The 'fill_method' keyword being not None and the 'limit' "
+                f"keywords in {type(self).__name__}.pct_change are "
+                "deprecated and will be removed in a future version. "
+                "Either fill in any non-leading NA values prior "
+                "to calling pct_change or specify 'fill_method=None' "
+                "to not fill NA values.",
                 FutureWarning,
             )
 
-        filled = self.fillna(method=fill_method, limit=limit)
+        if fill_method in (no_default, None):
+            fill_method = "ffill"
+        if limit is no_default:
+            limit = None
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            filled = self.fillna(method=fill_method, limit=limit)
+
         fill_grp = filled.groupby(self.grouping)
         shifted = fill_grp.shift(periods=periods, freq=freq)
         return (filled / shifted) - 1

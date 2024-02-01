@@ -560,30 +560,41 @@ struct EncColumnChunk {
  * @brief Struct describing an encoder data page
  */
 struct EncPage {
-  uint8_t* page_data;        //!< Ptr to uncompressed page
-  uint8_t* compressed_data;  //!< Ptr to compressed page
-  uint16_t num_fragments;    //!< Number of fragments in page
-  PageType page_type;        //!< Page type
-  Encoding encoding;         //!< Encoding used for page data
-  EncColumnChunk* chunk;     //!< Chunk that this page belongs to
+  // all pointers at the top to keep things properly aligned
+  uint8_t* page_data;            //!< Ptr to uncompressed page
+  uint8_t* compressed_data;      //!< Ptr to compressed page
+  EncColumnChunk* chunk;         //!< Chunk that this page belongs to
+  compression_result* comp_res;  //!< Ptr to compression result
+  uint32_t* def_histogram;       //!< Histogram of counts for each definition level
+  uint32_t* rep_histogram;       //!< Histogram of counts for each repetition level
+  // put this here in case it's ever made 64-bit
+  encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
+  // the rest can be 4 byte aligned
   uint32_t chunk_id;         //!< Index in chunk array
-  uint32_t hdr_size;         //!< Size of page header
+  uint32_t hdr_size;         //!< Actual size of encoded page header
   uint32_t max_hdr_size;     //!< Maximum size of page header
-  uint32_t max_data_size;    //!< Maximum size of coded page data (excluding header)
+  uint32_t max_data_size;    //!< Maximum size of encoded page data (excluding header)
+  uint32_t data_size;        //!< Actual size of encoded page data (includes level data)
+  uint32_t comp_data_size;   //!< Actual size of compressed page data
   uint32_t start_row;        //!< First row of page
   uint32_t num_rows;         //!< Rows in page
   uint32_t num_leaf_values;  //!< Values in page. Different from num_rows in case of nested types
   uint32_t num_values;  //!< Number of def/rep level values in page. Includes null/empty elements in
                         //!< non-leaf levels
-  uint32_t def_lvl_bytes;          //!< Number of bytes of encoded definition level data (V2 only)
-  uint32_t rep_lvl_bytes;          //!< Number of bytes of encoded repetition level data (V2 only)
-  compression_result* comp_res;    //!< Ptr to compression result
-  uint32_t num_nulls;              //!< Number of null values (V2 only) (down here for alignment)
-  encode_kernel_mask kernel_mask;  //!< Mask used to control which encoding kernels to run
-  uint32_t* def_histogram;         //!< Histogram of counts for each definition level
-  uint32_t* rep_histogram;         //!< Histogram of counts for each repetition level
-  uint32_t var_bytes_size;  //!< Number of variable length bytes in the page (byte arrays only)
+  uint32_t def_lvl_bytes;   //!< Number of bytes of encoded definition level data
+  uint32_t rep_lvl_bytes;   //!< Number of bytes of encoded repetition level data
+  uint32_t max_lvl_size;    //!< Maximum size of level data (V2 only, 0 for V1)
+  uint32_t num_nulls;       //!< Number of null values
   uint32_t num_valid;       //!< Number of valid leaf values
+  uint32_t var_bytes_size;  //!< Number of variable length bytes in the page (byte arrays only)
+  // enums and smaller stuff down here
+  PageType page_type;      //!< Page type
+  Encoding encoding;       //!< Encoding used for page data
+  uint16_t num_fragments;  //!< Number of fragments in page
+
+  constexpr bool is_v2() const { return page_type == PageType::DATA_PAGE_V2; }
+
+  constexpr auto level_bytes() const { return def_lvl_bytes + rep_lvl_bytes; }
 };
 
 /**

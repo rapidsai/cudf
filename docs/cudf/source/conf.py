@@ -454,12 +454,6 @@ def on_missing_reference(app, env, node, contnode):
                 _prefixed_domain_objects[f"{prefix}{name}"] = name
 
     reftarget = node.get("reftarget")
-    if reftarget == "cudf.core.index.GenericIndex":
-        # We don't exposed docs for `cudf.core.index.GenericIndex`
-        # hence we would want the docstring & mypy references to
-        # use `cudf.Index`
-        node["reftarget"] = "cudf.Index"
-        return contnode
     if "namespacecudf" in reftarget:
         node["reftarget"] = "cudf"
         return contnode
