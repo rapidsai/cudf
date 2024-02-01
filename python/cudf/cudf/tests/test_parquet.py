@@ -1436,7 +1436,7 @@ def test_delta_struct_list(tmpdir, nrows, add_nulls, str_encoding):
     list_size = 4
     num_rows = nrows
     include_validity = add_nulls
-    prefer_dba = True if str_encoding == "DELTA_BYTE_ARRAY" else False
+    prefer_dba = str_encoding == "DELTA_BYTE_ARRAY"
 
     def list_gen_wrapped(x, y):
         return list_row_gen(
