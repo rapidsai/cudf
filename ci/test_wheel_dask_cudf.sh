@@ -30,5 +30,5 @@ python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
-echo "Running dask-cudf tests with dask-expr enabled."
+echo "Running dask-cudf tests with dask-expr enabled..."
 DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest -n 8 ./python/dask_cudf/dask_cudf/

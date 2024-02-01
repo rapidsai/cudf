@@ -9,7 +9,7 @@ from dask import dataframe as dd
 
 import cudf
 
-import dask_cudf as dgd
+import dask_cudf
 from dask_cudf.tests.utils import skip_module_dask_expr
 
 # No dask-expr support
@@ -24,7 +24,7 @@ def _make_random_frame(nelem, npartitions=2):
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
-    dgf = dgd.from_cudf(gdf, npartitions=npartitions)
+    dgf = dask_cudf.from_cudf(gdf, npartitions=npartitions)
     return df, dgf
 
 
@@ -71,7 +71,7 @@ def test_series_reduce(reducer):
     "op", ["max", "min", "sum", "prod", "mean", "var", "std"]
 )
 def test_rowwise_reductions(data, op):
-    gddf = dgd.from_cudf(data, npartitions=10)
+    gddf = dask_cudf.from_cudf(data, npartitions=10)
     pddf = gddf.to_dask_dataframe()
 
     with dask.config.set({"dataframe.convert-string": False}):
