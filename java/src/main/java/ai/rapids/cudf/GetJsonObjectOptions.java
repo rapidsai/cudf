@@ -1,3 +1,21 @@
+/*
+ *
+ *  Copyright (c) 2024, NVIDIA CORPORATION.
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ */
+
 package ai.rapids.cudf;
 
 public class GetJsonObjectOptions {
@@ -5,18 +23,12 @@ public class GetJsonObjectOptions {
     private boolean stripQuotesFromSingleStrings;
     private boolean missingFieldsAsNulls;
 
-    // Constructor with parameters to set boolean values
     public GetJsonObjectOptions(boolean allowSingleQuotes, boolean stripQuotesFromSingleStrings, boolean missingFieldsAsNulls) {
         this.allowSingleQuotes = allowSingleQuotes;
         this.stripQuotesFromSingleStrings = stripQuotesFromSingleStrings;
         this.missingFieldsAsNulls = missingFieldsAsNulls;
     }
 
-    public GetJsonObjectOptions() {
-        this(false, true, false); // Calls parameterized constructor with default values
-    }
-
-    // Getter and setter methods for allowSingleQuotes
     public boolean isAllowSingleQuotes() {
         return allowSingleQuotes;
     }
@@ -25,7 +37,6 @@ public class GetJsonObjectOptions {
         this.allowSingleQuotes = allowSingleQuotes;
     }
 
-    // Getter and setter methods for stripQuotesFromSingleStrings
     public boolean isStripQuotesFromSingleStrings() {
         return stripQuotesFromSingleStrings;
     }
@@ -34,7 +45,6 @@ public class GetJsonObjectOptions {
         this.stripQuotesFromSingleStrings = stripQuotesFromSingleStrings;
     }
 
-    // Getter and setter methods for missingFieldsAsNulls
     public boolean isMissingFieldsAsNulls() {
         return missingFieldsAsNulls;
     }

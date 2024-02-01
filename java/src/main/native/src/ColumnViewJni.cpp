@@ -2448,8 +2448,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(
     cudf::column_view *n_column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
     cudf::strings_column_view n_strings_col_view(*n_column_view);
     cudf::string_scalar *n_scalar_path = reinterpret_cast<cudf::string_scalar *>(j_scalar_handle);
-    const auto options = get_json_object_options{
-        allow_single_quotes, strip_quotes_from_single_strings, missing_fields_as_nulls};
+    auto options = cudf::get_json_object_options{};
+    options.set_allow_single_quotes(allow_single_quotes);
+    options.set_strip_quotes_from_single_strings(strip_quotes_from_single_strings);
+    options.set_missing_fields_as_nulls(missing_fields_as_nulls);
     return release_as_jlong(cudf::get_json_object(n_strings_col_view, *n_scalar_path, options));
   }
   CATCH_STD(env, 0)
