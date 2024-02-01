@@ -2015,7 +2015,7 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
   };
 
   // clang-format on
-  auto const do_test = [&](bool delta_ba) {
+  auto const do_test = [&](bool prefer_dba) {
     auto const filepath = temp_env->get_temp_filepath("DeltaSkipRowsWithNulls.parquet");
     auto const out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
@@ -2024,7 +2024,7 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
         .dictionary_policy(cudf::io::dictionary_policy::NEVER)
         .max_page_size_rows(5'000)
         .write_v2_headers(true)
-        .prefer_dba(delta_ba)
+        .prefer_dba(prefer_dba)
         .build();
     cudf::io::write_parquet(out_opts);
 
