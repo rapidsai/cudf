@@ -98,15 +98,6 @@ void print_tree(host_span<SymbolT const> input,
 }
 
 /**
- * @brief Retrieves the parse_options to be used for type inference and type casting
- *
- * @param options The reader options to influence the relevant type inference and type casting
- * options
- */
-cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
-                                        rmm::cuda_stream_view stream);
-
-/**
  * @brief Reduces node tree representation to column tree representation.
  *
  * @param tree Node tree representation of JSON string
