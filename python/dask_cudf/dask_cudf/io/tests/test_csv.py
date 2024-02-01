@@ -18,8 +18,11 @@ from dask_cudf.tests.utils import DASK_EXPR_ENABLED, skip_dask_expr
 
 
 def _read_csv(*args, **kwargs):
-    with dask.config.set({"dataframe.backend": "cudf"}):
-        return dd.read_csv(*args, **kwargs)
+    if DASK_EXPR_ENABLED:
+        with dask.config.set({"dataframe.backend": "cudf"}):
+            return dd.read_csv(*args, **kwargs)
+    else:
+        return dask_cudf.read_csv(*args, **kwargs)
 
 
 @pytest.fixture
