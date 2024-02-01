@@ -1381,7 +1381,7 @@ def test_delta_byte_array_roundtrip(
     nrows, add_nulls, max_string_length, str_encoding, tmpdir
 ):
     null_frequency = 0.25 if add_nulls else 0
-    prefer_dba = True if str_encoding == "DELTA_BYTE_ARRAY" else False
+    prefer_dba = str_encoding == "DELTA_BYTE_ARRAY"
 
     # Create a pandas dataframe with random data of mixed lengths
     test_pdf = dg.rand_dataframe(
