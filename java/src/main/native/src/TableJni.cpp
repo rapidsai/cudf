@@ -925,11 +925,11 @@ cudf::table_view remove_validity_if_needed(cudf::table_view *input_table_view) {
   return cudf::table_view(views);
 }
 
-cudf::io::schema_element read_schema_element(int & index, 
-        cudf::jni::native_jintArray const & children,
-        cudf::jni::native_jstringArray const & names,
-        cudf::jni::native_jintArray const & types,
-        cudf::jni::native_jintArray const & scales) {
+cudf::io::schema_element read_schema_element(int &index,
+                                             cudf::jni::native_jintArray const &children,
+                                             cudf::jni::native_jstringArray const &names,
+                                             cudf::jni::native_jintArray const &types,
+                                             cudf::jni::native_jintArray const &scales) {
   auto d_type = cudf::data_type{static_cast<cudf::type_id>(types[index]), scales[index]};
   if (d_type.id() == cudf::type_id::STRUCT || d_type.id() == cudf::type_id::LIST) {
     std::map<std::string, cudf::io::schema_element> child_elems;
@@ -937,29 +937,33 @@ cudf::io::schema_element read_schema_element(int & index,
     // go to the next entry, so recursion can parse it.
     index++;
     for (int i = 0; i < num_children; i++) {
-      child_elems.insert(std::pair{names.get(index).get(), cudf::jni::read_schema_element(index, children, names, types, scales)});
+      child_elems.insert(
+          std::pair{names.get(index).get(),
+                    cudf::jni::read_schema_element(index, children, names, types, scales)});
     }
-    return cudf::io::schema_element{d_type,std::move(child_elems)};
+    return cudf::io::schema_element{d_type, std::move(child_elems)};
   } else {
     if (children[index] != 0) {
       throw std::invalid_argument("found children for a type that should have none");
-    }  
+    }
     // go to the next entry before returning...
     index++;
-    return cudf::io::schema_element{d_type,{}};
+    return cudf::io::schema_element{d_type, {}};
   }
 }
- 
-void append_flattened_child_counts(cudf::io::column_name_info const & info, std::vector<int> & counts) {
+
+void append_flattened_child_counts(cudf::io::column_name_info const &info,
+                                   std::vector<int> &counts) {
   counts.push_back(info.children.size());
-  for (cudf::io::column_name_info const & child: info.children) {
+  for (cudf::io::column_name_info const &child : info.children) {
     append_flattened_child_counts(child, counts);
   }
 }
 
-void append_flattened_child_names(cudf::io::column_name_info const & info, std::vector<std::string> & names) {
+void append_flattened_child_names(cudf::io::column_name_info const &info,
+                                  std::vector<std::string> &names) {
   names.push_back(info.name);
-  for (cudf::io::column_name_info const & child: info.children) {
+  for (cudf::io::column_name_info const &child : info.children) {
     append_flattened_child_names(child, names);
   }
 }
@@ -1430,9 +1434,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(
-    JNIEnv *env, jclass, jboolean day_first, jboolean lines,
-    jboolean recover_with_null, jboolean normalize_single_quotes, jboolean mixed_types_as_string,
-    jlong ds_handle) {
+    JNIEnv *env, jclass, jboolean day_first, jboolean lines, jboolean recover_with_null,
+    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1504,8 +1507,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_TableWithMeta_close(JNIEnv *env, jcla
   CATCH_STD(env, );
 }
 
-JNIEXPORT jintArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getFlattenedChildCounts(JNIEnv *env, jclass,
-                                                                                jlong handle) {
+JNIEXPORT jintArray JNICALL
+Java_ai_rapids_cudf_TableWithMeta_getFlattenedChildCounts(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "handle is null", nullptr);
 
   try {
@@ -1513,8 +1516,8 @@ JNIEXPORT jintArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getFlattenedChildC
     auto ptr = reinterpret_cast<cudf::io::table_with_metadata *>(handle);
     std::vector<int> counts;
     counts.push_back(ptr->metadata.schema_info.size());
-    for (cudf::io::column_name_info const & child: ptr->metadata.schema_info) {
-        cudf::jni::append_flattened_child_counts(child, counts);
+    for (cudf::io::column_name_info const &child : ptr->metadata.schema_info) {
+      cudf::jni::append_flattened_child_counts(child, counts);
     }
 
     auto length = counts.size();
@@ -1528,8 +1531,8 @@ JNIEXPORT jintArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getFlattenedChildC
   CATCH_STD(env, nullptr);
 }
 
-JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getFlattenedColumnNames(JNIEnv *env, jclass,
-                                                                                jlong handle) {
+JNIEXPORT jobjectArray JNICALL
+Java_ai_rapids_cudf_TableWithMeta_getFlattenedColumnNames(JNIEnv *env, jclass, jlong handle) {
   JNI_NULL_CHECK(env, handle, "handle is null", nullptr);
 
   try {
@@ -1537,16 +1540,15 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_TableWithMeta_getFlattenedCol
     auto ptr = reinterpret_cast<cudf::io::table_with_metadata *>(handle);
     std::vector<std::string> names;
     names.push_back("ROOT");
-    for (cudf::io::column_name_info const & child: ptr->metadata.schema_info) {
-        cudf::jni::append_flattened_child_names(child, names);
+    for (cudf::io::column_name_info const &child : ptr->metadata.schema_info) {
+      cudf::jni::append_flattened_child_names(child, names);
     }
 
     auto length = names.size();
     auto ret = static_cast<jobjectArray>(
         env->NewObjectArray(length, env->FindClass("java/lang/String"), nullptr));
     for (size_t i = 0; i < length; i++) {
-      env->SetObjectArrayElement(ret, i,
-                                 env->NewStringUTF(names[i].c_str()));
+      env->SetObjectArrayElement(ret, i, env->NewStringUTF(names[i].c_str()));
     }
 
     return ret;
@@ -1571,8 +1573,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
-    JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jboolean day_first, jboolean lines, jboolean recover_with_null,
+    JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types,
+    jintArray j_scales, jboolean day_first, jboolean lines, jboolean recover_with_null,
     jboolean normalize_single_quotes, jboolean mixed_types_as_string, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
@@ -1592,8 +1594,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
                     0);
     }
     if (n_types.is_null() != n_children.is_null()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and num children must match null",
-                    0);
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "types and num children must match null", 0);
     }
 
     auto ds = reinterpret_cast<cudf::io::datasource *>(ds_handle);
@@ -1627,7 +1629,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
       std::map<std::string, cudf::io::schema_element> data_types;
       int at = 0;
       while (at < n_types.size()) {
-        data_types.insert(std::pair{n_col_names.get(at).get(), cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+        data_types.insert(std::pair{
+            n_col_names.get(at).get(),
+            cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
       }
       opts.dtypes(data_types);
     } else {
@@ -1643,9 +1647,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
-    JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types, jintArray j_scales,
-    jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
-    jboolean recover_with_null, jboolean normalize_single_quotes, jboolean mixed_types_as_string) {
+    JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types,
+    jintArray j_scales, jstring inputfilepath, jlong buffer, jlong buffer_length,
+    jboolean day_first, jboolean lines, jboolean recover_with_null,
+    jboolean normalize_single_quotes, jboolean mixed_types_as_string) {
 
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1673,8 +1678,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
                     0);
     }
     if (n_types.is_null() != n_children.is_null()) {
-      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and num children must match null",
-                    0);
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                    "types and num children must match null", 0);
     }
 
     cudf::jni::native_jstring filename(env, inputfilepath);
@@ -1714,7 +1719,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
       std::map<std::string, cudf::io::schema_element> data_types;
       int at = 0;
       while (at < n_types.size()) {
-        data_types.insert(std::pair{n_col_names.get(at).get(), cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
+        data_types.insert(std::pair{
+            n_col_names.get(at).get(),
+            cudf::jni::read_schema_element(at, n_children, n_col_names, n_types, n_scales)});
       }
       opts.dtypes(data_types);
     } else {

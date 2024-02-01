@@ -1073,7 +1073,7 @@ public final class Table implements AutoCloseable {
       return ret;
     }
   }
-  
+
   private static DidViewChange gatherJSONColumns(Schema schema, TableWithMeta.NestedChildren children,
                                               ColumnView cv) {
     // We need to do this recursively to be sure it all matches as expected.
