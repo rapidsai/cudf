@@ -2988,11 +2988,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row
+   * @param path The GetJsonObjectOptions to control get_json_object behaviour
    * @return new strings ColumnVector containing the retrieved json object strings
    */
-  public final ColumnVector getJSONObject(Scalar path) {
+  public final ColumnVector getJSONObject(Scalar path, GetJsonObjectOptions options) {
     assert(type.equals(DType.STRING)) : "column type must be a String";
-    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle()));
+    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle(), options.isAllowSingleQuotes(), options.isStripQuotesFromSingleStrings(), options.isMissingFieldsAsNulls()));
   }
 
   /**
@@ -4194,7 +4195,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     long repeatTimesHandle);
 
 
-  private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long getJSONObject(long viewHandle, long scalarHandle, boolean allowSingleQuotes, boolean stripQuotesFromSingleStrings, boolean missingFieldsAsNulls) throws CudfException;
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
