@@ -298,7 +298,9 @@ header_version : {{'1.0', '2.0'}}, default "1.0"
     use of newer encoding schemes.
 prefer_delta_byte_array : bool, default False
     When ``True``, DELTA_BYTE_ARRAY encoding will be used where normally
-    DELTA_LENGTH_BYTE_ARRAY encoding would be used.
+    DELTA_LENGTH_BYTE_ARRAY encoding would be used. DELTA_BYTE_ARRAY may be
+    preferable when dealing with sorted data, or data with many runs of the
+    same value.
 force_nullable_schema : bool, default False.
     If True, writes all columns as `null` in schema.
     If False, columns are written as `null` if they contain null values,
