@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -50,9 +50,6 @@ xfail_strict = true
 filterwarnings = [
   "error:Sparse:FutureWarning",
   "error:The SparseArray:FutureWarning",
-  # Deprecation gives warning on import during pytest collection
-  "ignore:pandas.core.index is deprecated:FutureWarning:importlib",
-  "ignore:pandas.util.testing is deprecated:FutureWarning:importlib",
   # Will be fixed in numba 0.56: https://github.com/numba/numba/issues/7758
   "ignore:`np.MachAr` is deprecated:DeprecationWarning:numba",
 ]
