@@ -612,7 +612,13 @@ std::optional<std::string> is_decompression_disabled_impl(compression_type compr
       return std::nullopt;
     }
     case compression_type::ZSTD: return is_zstd_decomp_disabled(params);
-    case compression_type::LZ4: return std::nullopt;
+    case compression_type::LZ4: {
+      if (not params.are_stable_integrations_enabled) {
+        return "LZ4 decompression has been disabled through the `LIBCUDF_NVCOMP_POLICY` "
+               "environment variable.";
+      }
+      return std::nullopt;
+    }
     default: return "Unsupported compression type";
   }
   return "Unsupported compression type";
