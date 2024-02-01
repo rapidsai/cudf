@@ -522,7 +522,8 @@ __device__ size_t delta_data_len(Type physical_type,
   // divisible by 128 (via static assert on delta::block_size), but do safe division anyway.
   auto const bytes_per_block = cudf::util::div_rounding_up_unsafe(max_bits * vals_per_block, 8);
   auto const block_size      = mini_block_header_size + bytes_per_block;
-  auto const block_mult      = physical_type == BYTE_ARRAY and prefer_delta_byte_array ? 2 : 1;
+  // the number of DELTA_BINARY_PACKED blocks to encode
+  auto const num_dbp_blocks = physical_type == BYTE_ARRAY and prefer_delta_byte_array ? 2 : 1;
 
   // delta header is 2 bytes for the block_size, 1 byte for number of mini-blocks,
   // max 5 bytes for number of values, and max dtype_len + 1 for first value.
@@ -534,11 +535,11 @@ __device__ size_t delta_data_len(Type physical_type,
   // data we also need to add size of the char data. `page_size` that is passed in is the
   // plain encoded size (i.e. num_values * sizeof(size_type) + char_data_len), so the char
   // data len is `page_size` minus the first term.
-  // `block_mult` takes into account the two delta binary blocks for DELTA_BYTE_ARRAY.
+  // `num_dbp_blocks` takes into account the two delta binary blocks for DELTA_BYTE_ARRAY.
   auto const char_data_len =
     physical_type == BYTE_ARRAY ? page_size - num_values * sizeof(size_type) : 0;
 
-  return header_size + num_blocks * block_mult * block_size + char_data_len;
+  return header_size + num_blocks * num_dbp_blocks * block_size + char_data_len;
 }
 
 // blockDim {128,1,1}
