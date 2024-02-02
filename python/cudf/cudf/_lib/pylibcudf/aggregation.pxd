@@ -10,6 +10,8 @@ from cudf._lib.cpp.aggregation cimport (
     groupby_scan_aggregation,
     rank_method,
     rank_percentage,
+    reduce_aggregation,
+    scan_aggregation,
 )
 from cudf._lib.cpp.types cimport (
     interpolation,
@@ -31,6 +33,8 @@ cdef class Aggregation:
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
     ) except *
+    cdef unique_ptr[reduce_aggregation] clone_underlying_as_reduce(self) except *
+    cdef unique_ptr[scan_aggregation] clone_underlying_as_scan(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)

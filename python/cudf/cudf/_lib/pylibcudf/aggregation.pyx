@@ -35,6 +35,8 @@ from cudf._lib.cpp.aggregation cimport (
     make_variance_aggregation,
     rank_method,
     rank_percentage,
+    reduce_aggregation,
+    scan_aggregation,
 )
 from cudf._lib.cpp.types cimport (
     interpolation,
@@ -60,6 +62,8 @@ from .types cimport DataType
 # workaround for https://github.com/cython/cython/issues/3885
 ctypedef groupby_aggregation * gba_ptr
 ctypedef groupby_scan_aggregation * gbsa_ptr
+ctypedef reduce_aggregation * ra_ptr
+ctypedef scan_aggregation * sa_ptr
 
 
 cdef class Aggregation:
@@ -100,7 +104,7 @@ cdef class Aggregation:
         agg.release()
         return unique_ptr[groupby_aggregation](agg_cast)
 
-    # Ideally this function could reuse the code above, but Cython lacks the
+    # Ideally the below functions could reuse the code above, but Cython lacks the
     # first-class support for type-aliasing and templates that would make it possible.
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
@@ -118,6 +122,36 @@ cdef class Aggregation:
             raise TypeError(f"{agg_repr} scans are not supported by groupby")
         agg.release()
         return unique_ptr[groupby_scan_aggregation](agg_cast)
+
+    cdef unique_ptr[reduce_aggregation] clone_underlying_as_reduce(self) except *:
+        """Make a copy of the underlying aggregation that can be used in a reduction.
+
+        This function will raise an exception if the aggregation is not supported as a
+        reduce aggregation. This failure to cast translates the per-algorithm
+        aggregation logic encoded in libcudf's type hierarchy into Python.
+        """
+        cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
+        cdef reduce_aggregation *agg_cast = dynamic_cast[ra_ptr](agg.get())
+        if agg_cast is NULL:
+            agg_repr = str(self.kind()).split(".")[1].title()
+            raise TypeError(f"{agg_repr} aggregations are not supported by reduce")
+        agg.release()
+        return unique_ptr[reduce_aggregation](agg_cast)
+
+    cdef unique_ptr[scan_aggregation] clone_underlying_as_scan(self) except *:
+        """Make a copy of the underlying aggregation that can be used in a scan.
+
+        This function will raise an exception if the aggregation is not supported as a
+        scan aggregation. This failure to cast translates the per-algorithm
+        aggregation logic encoded in libcudf's type hierarchy into Python.
+        """
+        cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
+        cdef scan_aggregation *agg_cast = dynamic_cast[sa_ptr](agg.get())
+        if agg_cast is NULL:
+            agg_repr = str(self.kind()).split(".")[1].title()
+            raise TypeError(f"{agg_repr} aggregations are not supported by scan")
+        agg.release()
+        return unique_ptr[scan_aggregation](agg_cast)
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg):
