@@ -136,7 +136,8 @@ There are a few known limitations that you should be aware of:
    print(lst) # lst is unchanged, as this specific UDF could not run on the GPU
    [10]
    ```
-- `cudf.pandas` (and cuDF in general) is currently only compatible with pandas 1.5.x.
+- `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
+  24.02 of cudf was the last to support pandas 1.5.x.
 
 ## Can I force running on the CPU?
 

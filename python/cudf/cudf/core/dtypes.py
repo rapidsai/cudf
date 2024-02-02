@@ -14,10 +14,6 @@ import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
 from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-from pandas.core.dtypes.dtypes import (
-    CategoricalDtype as pd_CategoricalDtype,
-    CategoricalDtypeType as pd_CategoricalDtypeType,
-)
 
 import cudf
 from cudf._typing import Dtype
@@ -973,7 +969,7 @@ def _is_categorical_dtype(obj):
     if isinstance(
         obj,
         (
-            pd_CategoricalDtype,
+            pd.CategoricalDtype,
             cudf.CategoricalDtype,
             cudf.core.index.CategoricalIndex,
             cudf.core.column.CategoricalColumn,
@@ -990,8 +986,8 @@ def _is_categorical_dtype(obj):
         obj is t
         for t in (
             cudf.CategoricalDtype,
-            pd_CategoricalDtype,
-            pd_CategoricalDtypeType,
+            pd.CategoricalDtype,
+            pd.CategoricalDtype.type,
         )
     ):
         return True
@@ -1012,7 +1008,7 @@ def _is_categorical_dtype(obj):
     ):
         return _is_categorical_dtype(obj.dtype)
     if hasattr(obj, "type"):
-        if obj.type is pd_CategoricalDtypeType:
+        if obj.type is pd.CategoricalDtype.type:
             return True
     # TODO: A lot of the above checks are probably redundant and should be
     # farmed out to this function here instead.
