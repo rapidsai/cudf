@@ -238,8 +238,8 @@ def test_environment_variables_spill_off(monkeypatch):
     with _get_manager_in_env(
         monkeypatch,
         [("CUDF_SPILL", "off"), ("CUDF_SPILL_ON_DEMAND", "off")],
-    ):
-        assert get_global_manager() is None
+    ) as manager:
+        assert manager is None
 
 
 def test_environment_variables_spill_on(monkeypatch):
