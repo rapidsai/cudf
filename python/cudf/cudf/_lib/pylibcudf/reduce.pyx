@@ -38,12 +38,12 @@ cpdef Scalar reduce(Column col, Aggregation agg, DataType data_type):
         The result of the reduction.
     """
     cdef unique_ptr[scalar] result
-    cdef unique_ptr[reduce_aggregation] c_agg = agg.clone_underlying_as_reduce()
+    cdef const reduce_aggregation *c_agg = agg.view_underlying_as_reduce()
     with nogil:
         result = move(
             cpp_reduce.cpp_reduce(
                 col.view(),
-                dereference(c_agg.get()),
+                dereference(c_agg),
                 data_type.c_obj
             )
         )
@@ -70,12 +70,12 @@ cpdef Column scan(Column col, Aggregation agg, scan_type inclusive):
         The result of the scan.
     """
     cdef unique_ptr[column] result
-    cdef unique_ptr[scan_aggregation] c_agg = agg.clone_underlying_as_scan()
+    cdef const scan_aggregation *c_agg = agg.view_underlying_as_scan()
     with nogil:
         result = move(
             cpp_reduce.cpp_scan(
                 col.view(),
-                dereference(c_agg.get()),
+                dereference(c_agg),
                 inclusive,
             )
         )

@@ -29,12 +29,13 @@ from .types cimport DataType
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
     cpdef kind(self)
+    cdef void _raise_if_null(self, void *ptr, str alg)
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
     ) except *
-    cdef unique_ptr[reduce_aggregation] clone_underlying_as_reduce(self) except *
-    cdef unique_ptr[scan_aggregation] clone_underlying_as_scan(self) except *
+    cdef const reduce_aggregation* view_underlying_as_reduce(self) except *
+    cdef const scan_aggregation* view_underlying_as_scan(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)

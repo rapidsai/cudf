@@ -89,6 +89,11 @@ cdef class Aggregation:
         """Get the kind of the aggregation."""
         return dereference(self.c_obj).kind
 
+    cdef void _raise_if_null(self, void *ptr, str alg):
+        if ptr is NULL:
+            agg_repr = str(self.kind()).split(".")[1].title()
+            raise TypeError(f"{agg_repr} aggregations are not supported by {alg}")
+
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *:
         """Make a copy of the underlying aggregation that can be used in a groupby.
 
@@ -98,9 +103,7 @@ cdef class Aggregation:
         """
         cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
         cdef groupby_aggregation *agg_cast = dynamic_cast[gba_ptr](agg.get())
-        if agg_cast is NULL:
-            agg_repr = str(self.kind()).split(".")[1].title()
-            raise TypeError(f"{agg_repr} aggregations are not supported by groupby")
+        self._raise_if_null(agg_cast, "groupby")
         agg.release()
         return unique_ptr[groupby_aggregation](agg_cast)
 
@@ -117,41 +120,31 @@ cdef class Aggregation:
         """
         cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
         cdef groupby_scan_aggregation *agg_cast = dynamic_cast[gbsa_ptr](agg.get())
-        if agg_cast is NULL:
-            agg_repr = str(self.kind()).split(".")[1].title()
-            raise TypeError(f"{agg_repr} scans are not supported by groupby")
+        self._raise_if_null(agg_cast, "groupby scan")
         agg.release()
         return unique_ptr[groupby_scan_aggregation](agg_cast)
 
-    cdef unique_ptr[reduce_aggregation] clone_underlying_as_reduce(self) except *:
-        """Make a copy of the underlying aggregation that can be used in a reduction.
+    cdef const reduce_aggregation* view_underlying_as_reduce(self) except *:
+        """View the underlying aggregation as a reduce_aggregation.
 
         This function will raise an exception if the aggregation is not supported as a
         reduce aggregation. This failure to cast translates the per-algorithm
         aggregation logic encoded in libcudf's type hierarchy into Python.
         """
-        cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
-        cdef reduce_aggregation *agg_cast = dynamic_cast[ra_ptr](agg.get())
-        if agg_cast is NULL:
-            agg_repr = str(self.kind()).split(".")[1].title()
-            raise TypeError(f"{agg_repr} aggregations are not supported by reduce")
-        agg.release()
-        return unique_ptr[reduce_aggregation](agg_cast)
+        cdef reduce_aggregation *agg_cast = dynamic_cast[ra_ptr](self.c_obj.get())
+        self._raise_if_null(agg_cast, "reduce")
+        return agg_cast
 
-    cdef unique_ptr[scan_aggregation] clone_underlying_as_scan(self) except *:
-        """Make a copy of the underlying aggregation that can be used in a scan.
+    cdef const scan_aggregation* view_underlying_as_scan(self) except *:
+        """View the underlying aggregation as a scan_aggregation.
 
         This function will raise an exception if the aggregation is not supported as a
         scan aggregation. This failure to cast translates the per-algorithm
         aggregation logic encoded in libcudf's type hierarchy into Python.
         """
-        cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
-        cdef scan_aggregation *agg_cast = dynamic_cast[sa_ptr](agg.get())
-        if agg_cast is NULL:
-            agg_repr = str(self.kind()).split(".")[1].title()
-            raise TypeError(f"{agg_repr} aggregations are not supported by scan")
-        agg.release()
-        return unique_ptr[scan_aggregation](agg_cast)
+        cdef scan_aggregation *agg_cast = dynamic_cast[sa_ptr](self.c_obj.get())
+        self._raise_if_null(agg_cast, "scan")
+        return agg_cast
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg):
