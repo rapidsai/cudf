@@ -529,6 +529,10 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert_eq(df1, df2)
 
 
+@pytest.mark.skip(
+    reason="This test is not safe because other tests may have enabled"
+    "spilling and already modified rmm's global state"
+)
 def test_get_rmm_memory_resource_stack():
     mr1 = rmm.mr.get_current_device_resource()
     assert all(
