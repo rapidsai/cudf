@@ -26,23 +26,9 @@ from cudf._lib.cpp.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 
 from .column cimport Column
+from .scalar cimport Scalar
 from .table cimport Table
-
-# This is a workaround for
-# https://github.com/cython/cython/issues/4180
-# when creating reference_wrapper[constscalar] in the constructor
-ctypedef const scalar constscalar
-
-
-cdef vector[reference_wrapper[const scalar]] _as_vector(list source):
-    """Make a vector of reference_wrapper[const scalar] from a list of scalars."""
-    cdef vector[reference_wrapper[const scalar]] c_scalars
-    c_scalars.reserve(len(source))
-    cdef Scalar slr
-    for slr in source:
-        c_scalars.push_back(
-            reference_wrapper[constscalar](dereference((<Scalar?>slr).c_obj)))
-    return c_scalars
+from .utils cimport _as_vector
 
 
 cpdef Table gather(
