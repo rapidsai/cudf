@@ -2067,6 +2067,36 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
   do_test(true);
 }
 
+TEST_F(ParquetReaderTest, DeltaByteArraySkipAllValid)
+{
+  // test that the DELTA_BYTE_ARRAY decoder can handle the case where skip rows skips all valid
+  // values in a page
+  constexpr int num_rows  = 500;
+  constexpr int num_valid = 150;
+
+  auto const ones = thrust::make_constant_iterator("one");
+
+  auto valids = cudf::detail::make_counting_transform_iterator(
+    0, [num_valid](auto i) { return i < num_valid; });
+  auto const col      = cudf::test::strings_column_wrapper{ones, ones + num_rows, valids};
+  auto const expected = table_view({col});
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaByteArraySkipAllValid.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .prefer_dba(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .skip_rows(num_valid + 1);
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::slice(expected, {num_valid + 1, num_rows}),
+                                result.tbl->view());
+}
+
 ///////////////////
 // metadata tests
 
