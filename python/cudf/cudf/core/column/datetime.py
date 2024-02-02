@@ -266,8 +266,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            # TODO(pandas2.0): Change _as_unit to as_unit
-            ts = pd.Timestamp(item)._as_unit(self.time_unit)
+            ts = pd.Timestamp(item).as_unit(self.time_unit)
         except Exception:
             # pandas can raise a variety of errors
             # item cannot exist in self.
