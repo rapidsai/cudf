@@ -4442,7 +4442,7 @@ class IndexedFrame(Frame):
 
         Examples
         --------
-        >>> import cudf as cudf
+        >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3)
            a
