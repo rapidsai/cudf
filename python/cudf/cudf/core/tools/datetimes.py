@@ -9,7 +9,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
-from pandas.core.tools.datetimes import _unit_map
 from typing_extensions import Self
 
 import cudf
@@ -20,6 +19,31 @@ from cudf._lib.strings.convert.convert_integers import (
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.index import as_index
+
+# https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
+_unit_map = {
+    "year": "year",
+    "years": "year",
+    "month": "month",
+    "months": "month",
+    "day": "day",
+    "days": "day",
+    "hour": "h",
+    "hours": "h",
+    "minute": "m",
+    "minutes": "m",
+    "second": "s",
+    "seconds": "s",
+    "ms": "ms",
+    "millisecond": "ms",
+    "milliseconds": "ms",
+    "us": "us",
+    "microsecond": "us",
+    "microseconds": "us",
+    "ns": "ns",
+    "nanosecond": "ns",
+    "nanoseconds": "ns",
+}
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",

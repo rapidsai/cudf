@@ -15,7 +15,6 @@ from typing import Any, List, MutableMapping, Tuple, Union
 import cupy as cp
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
 
 import cudf
 import cudf._lib as libcudf
@@ -428,7 +427,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def __repr__(self):
-        max_seq_items = get_option("display.max_seq_items") or len(self)
+        max_seq_items = pd.get_option("display.max_seq_items") or len(self)
 
         if len(self) > max_seq_items:
             n = int(max_seq_items / 2) + 1

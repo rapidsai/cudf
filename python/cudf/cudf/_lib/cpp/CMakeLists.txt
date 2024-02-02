@@ -12,7 +12,7 @@
 # the License.
 # =============================================================================
 
-set(cython_sources binaryop.pyx copying.pyx types.pyx)
+set(cython_sources aggregation.pyx binaryop.pyx copying.pyx types.pyx)
 
 set(linked_libraries cudf::cudf)
 

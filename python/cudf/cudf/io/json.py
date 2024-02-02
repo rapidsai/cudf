@@ -247,9 +247,8 @@ def to_json(
             pd_value = pd.DataFrame(pd_data)
         else:
             pd_value = maybe_return_nullable_pd_obj(cudf_val)
-        return pd.io.json.to_json(
+        return pd_value.to_json(
             path_or_buf,
-            pd_value,
             orient=orient,
             storage_options=storage_options,
             *args,

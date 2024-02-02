@@ -1705,14 +1705,14 @@ def test_date_range_raise_overflow():
     start = np.datetime64(np.iinfo("int64").max, "ns")
     periods = 2
     freq = cudf.DateOffset(nanoseconds=1)
-    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+    with pytest.raises(pd.errors.OutOfBoundsDatetime):
         cudf.date_range(start=start, periods=periods, freq=freq)
 
     # Non-fixed offset
     start = np.datetime64(np.iinfo("int64").max, "ns")
     periods = 2
     freq = cudf.DateOffset(months=1)
-    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+    with pytest.raises(pd.errors.OutOfBoundsDatetime):
         # Extending beyond the max value will trigger a warning when pandas
         # does an internal conversion to a Python built-in datetime.datetime
         # object, which only supports down to microsecond resolution.
