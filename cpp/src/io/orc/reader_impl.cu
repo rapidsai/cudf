@@ -135,6 +135,7 @@ table_with_metadata reader::impl::read_chunk_internal()
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
 
+// TODO:  move code here
 void reader::impl::decompress_and_decode() {}
 
 table_with_metadata reader::impl::make_output_chunk() { return table_with_metadata{}; }

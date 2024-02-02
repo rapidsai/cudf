@@ -432,7 +432,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 }
 
 // Load each chunk from `load_stripe_chunks`.
-void reader::impl::pass_preprocess()
+void reader::impl::read_data()
 {
   if (_file_itm_data.has_no_data()) { return; }
 
@@ -494,6 +494,7 @@ void reader::impl::pass_preprocess()
   }
 }
 
+// TODO: merge with read_data()
 void reader::impl::subpass_preprocess()
 {
   if (_file_itm_data.has_no_data()) { return; }

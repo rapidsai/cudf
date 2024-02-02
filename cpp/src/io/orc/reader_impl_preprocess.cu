@@ -761,7 +761,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   // TODO: fix this, should be called once
   while (_chunk_read_data.more_stripe_to_load()) {
-    pass_preprocess();
+    read_data();
   }
 
   // Fix this, subpass should be call once
