@@ -37,6 +37,26 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 {
 }
 
+reader::impl::impl(std::size_t output_size_limit,
+                  std::size_t data_read_limit,
+                  std::vector<std::unique_ptr<datasource>>&& sources,
+                   orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : _stream(stream),
+    _mr(mr),
+    _timestamp_type{options.get_timestamp_type()},
+    _use_index{options.is_enabled_use_index()},
+    _use_np_dtypes{options.is_enabled_use_np_dtypes()},
+    _decimal128_columns{options.get_decimal128_columns()},
+    _col_meta{std::make_unique<reader_column_meta>()},
+    _sources(std::move(sources)),
+    _metadata{_sources, stream},
+    _selected_columns{_metadata.select_columns(options.get_columns())},
+    _chunk_read_data{output_size_limit, data_read_limit}
+{
+}
+
 table_with_metadata reader::impl::read(uint64_t skip_rows,
                                        std::optional<size_type> const& num_rows_opt,
                                        std::vector<std::vector<size_type>> const& stripes)

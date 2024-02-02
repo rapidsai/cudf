@@ -383,7 +383,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   }
 
   // Load all chunks if there is no read limit.
-  if (_chunk_read_data.read_size_limit == 0) {
+  if (_chunk_read_data.data_read_limit == 0) {
     _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
     // TODO: DEBUG only
     //    return;
@@ -404,11 +404,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   }
 
   // DEBUG only
-  _chunk_read_data.read_size_limit =
+  _chunk_read_data.data_read_limit =
     total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
 
   _chunk_read_data.load_stripe_chunks =
-    find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.read_size_limit);
+    find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
 
 #ifndef PRINT_DEBUG
   auto& splits = _chunk_read_data.load_stripe_chunks;
@@ -427,7 +427,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   //  3. sum(sizes of stripes in a chunk) < size_limit if chunk has more than 1 stripe
   //  4. sum(number of stripes in all chunks) == total_num_stripes.
   // TODO: enable only in debug.
-//  verify_splits(splits, total_stripe_sizes, num_stripes, _chunk_read_data.read_size_limit);
+//  verify_splits(splits, total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
 #endif
 }
 
@@ -608,7 +608,7 @@ void reader::impl::subpass_preprocess()
   }  // end loop level
 
   // Decode all chunks if there is no read limit.
-  if (_chunk_read_data.read_size_limit == 0) {
+  if (_chunk_read_data.data_read_limit == 0) {
     _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
     // TODO: DEBUG only
     //    return;
@@ -625,11 +625,11 @@ void reader::impl::subpass_preprocess()
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
   // DEBUG only
-  //  _chunk_read_data.read_size_limit =
+  //  _chunk_read_data.data_read_limit =
   //    stripe_decompression_sizes[stripe_decompression_sizes.size() - 1].size_bytes / 3;
 
   _chunk_read_data.decode_stripe_chunks =
-    find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.read_size_limit);
+    find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
     chunk.start_idx += stripe_chunk.start_idx;
   }
@@ -656,7 +656,7 @@ void reader::impl::subpass_preprocess()
   //  4. sum(number of stripes in all chunks) == total_num_stripes.
   // TODO: enable only in debug.
 //  verify_splits(splits, stripe_decompression_sizes, stripe_chunk.count,
-//  _file_itm_data.read_size_limit);
+//  _file_itm_data.data_read_limit);
 #endif
 
   // lvl_stripe_data.clear();

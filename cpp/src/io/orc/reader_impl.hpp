@@ -54,6 +54,25 @@ class reader::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
+   * @brief Constructor from a dataset source with reader options.
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
+   *        of input, or `0` if there is no limit
+   * @param sources Dataset sources
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit impl(std::size_t output_size_limit,
+                std::size_t data_read_limit,
+                std::vector<std::unique_ptr<datasource>>&& sources,
+                orc_reader_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
+
+  /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
    * @param skip_rows Number of rows to skip from the start
@@ -64,6 +83,8 @@ class reader::impl {
   table_with_metadata read(uint64_t skip_rows,
                            std::optional<size_type> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
+
+
 
  private:
   /**
