@@ -46,7 +46,7 @@ source pandas/py-pandas/bin/activate
 pip install --extra-index-url=https://pypi.nvidia.com cudf-cu12  # or cudf-cu11
 ```
 
-5. Modify pandas join/group code to use `cudf.pandas` and be compatible with pandas 1.5 APIs:
+5. Modify pandas join/group code to use `cudf.pandas` and remove the `dtype_backend` keyword argument (not supported):
 
 ```bash
 diff --git a/pandas/groupby-pandas.py b/pandas/groupby-pandas.py
