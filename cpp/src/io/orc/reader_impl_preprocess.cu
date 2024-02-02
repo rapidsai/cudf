@@ -178,27 +178,27 @@ rmm::device_buffer decompress_stripe_data(
   for (auto const& info : stream_info) {
 #ifdef PRINT_DEBUG
     printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-           (int)info.stripe_idx,
-           (int)info.level,
-           (int)info.orc_col_idx,
-           (int)info.kind,
+           (int)info.id.stripe_idx,
+           (int)info.id.level,
+           (int)info.id.orc_cold_idx,
+           (int)info.id.kind,
            info.dst_pos,
            info.length);
     fflush(stdout);
 #endif
 
     compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
+      static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx].data()) + info.dst_pos,
       info.length));
 
     //    printf("line %d\n", __LINE__);
     //    fflush(stdout);
     auto const& cached_comp_info =
-      compinfo_map.at(stream_id_info{info.stripe_idx, info.level, info.orc_col_idx, info.kind});
+      compinfo_map.at(stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx, info.id.kind});
     //    printf("line %d\n", __LINE__);
     //    fflush(stdout);
     // auto const& cached_comp_info =
-    //   compinfo_map[stream_id_info{info.stripe_idx, info.level, info.orc_col_idx, info.kind}];
+    //   compinfo_map[stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx, info.id.kind}];
     auto& stream_comp_info                   = compinfo[compinfo.size() - 1];
     stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
     stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
@@ -228,10 +228,10 @@ rmm::device_buffer decompress_stripe_data(
 
     auto const& info = stream_info[i];
     printf("compute info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-           (int)info.stripe_idx,
-           (int)info.level,
-           (int)info.orc_col_idx,
-           (int)info.kind,
+           (int)info.id.stripe_idx,
+           (int)info.id.level,
+           (int)info.id.orc_cold_idx,
+           (int)info.id.kind,
            (size_t)compinfo[i].num_compressed_blocks,
            (size_t)compinfo[i].num_uncompressed_blocks,
            compinfo[i].max_uncompressed_size);

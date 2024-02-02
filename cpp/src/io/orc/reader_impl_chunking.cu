@@ -95,10 +95,10 @@ std::size_t gather_stream_info(std::size_t stripe_index,
       stream_info.emplace_back(stripeinfo->offset + src_offset,
                                dst_offset,
                                stream.length,
-                               stripe_index,
+                               stream_id_info{stripe_index,
                                level,
                                column_id,
-                               stream.kind);
+                               stream.kind});
       dst_offset += stream.length;
     }
     src_offset += stream.length;
@@ -542,17 +542,17 @@ void reader::impl::subpass_preprocess()
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         compinfo.push_back(gpu::CompressedStreamInfo(
-          static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
+          static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx].data()) + info.dst_pos,
           info.length));
         stream_compinfo_map[stream_id_info{
-          info.stripe_idx, info.level, info.orc_col_idx, info.kind}] =
+          info.id.stripe_idx, info.id.level, info.id.orc_cold_idx, info.id.kind}] =
           &compinfo[compinfo.size() - 1];
 #ifdef PRINT_DEBUG
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-               (int)info.stripe_idx,
-               (int)info.level,
-               (int)info.orc_col_idx,
-               (int)info.kind,
+               (int)info.id.stripe_idx,
+               (int)info.id.level,
+               (int)info.id.orc_cold_idx,
+               (int)info.id.kind,
                info.dst_pos,
                info.length);
         fflush(stdout);
@@ -574,11 +574,11 @@ void reader::impl::subpass_preprocess()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
-        stripe_decomp_sizes[stream_id.stripe_idx - stripe_chunk.start_idx].size_bytes +=
+        stripe_decomp_sizes[stream_id.id.stripe_idx - stripe_chunk.start_idx].size_bytes +=
           stream_compinfo->max_uncompressed_size;
 #ifdef PRINT_DEBUG
         printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-               (int)stream_id.stripe_idx,
+               (int)stream_id.id.stripe_idx,
                (int)stream_id.level,
                (int)stream_id.orc_col_idx,
                (int)stream_id.kind,
@@ -599,7 +599,7 @@ void reader::impl::subpass_preprocess()
       // Set decompression size equal to the input size.
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
-        stripe_decomp_sizes[info.stripe_idx - stripe_chunk.start_idx].size_bytes += info.length;
+        stripe_decomp_sizes[info.id.stripe_idx - stripe_chunk.start_idx].size_bytes += info.length;
       }
     }
 

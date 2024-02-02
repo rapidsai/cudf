@@ -34,19 +34,19 @@ namespace cudf::io::orc::detail {
  * @brief Struct that store identification of an ORC streams
  */
 struct stream_id_info {
-  uint32_t stripe_idx;  // TODO: check if this is correct stripe processing index, not stripe index in source
+  uint32_t stripe_idx;  // global stripe id throughout the data source
   // TODO: change type below
   std::size_t level;    // level of the nested column 
   uint32_t orc_col_idx; // orc column id
   StreamKind kind;      // stream kind
 
   struct hash {
-    std::size_t operator()(stream_id_info const& index) const
+    std::size_t operator()(stream_id_info const& id) const
     {
       auto const hasher = std::hash<size_t>{};
-      return hasher(index.stripe_idx) ^ hasher(index.level) ^
-             hasher(static_cast<std::size_t>(index.orc_col_idx)) ^
-             hasher(static_cast<std::size_t>(index.kind));
+      return hasher(id.stripe_idx) ^ hasher(id.level) ^
+             hasher(static_cast<std::size_t>(id.orc_col_idx)) ^
+             hasher(static_cast<std::size_t>(id.kind));
     }
   };
   struct equal_to {
@@ -73,17 +73,11 @@ struct orc_stream_info {
   explicit orc_stream_info(uint64_t offset_,
                            std::size_t dst_pos_,
                            uint32_t length_,
-                           uint32_t stripe_idx_,
-                           std::size_t level_,
-                           uint32_t orc_col_idx_,
-                           StreamKind kind_)
+                           stream_id_info const& id_)
     : offset(offset_),
       dst_pos(dst_pos_),
       length(length_),
-      stripe_idx(stripe_idx_),
-      level(level_),
-      orc_col_idx(orc_col_idx_),
-      kind(kind_)
+      id(id_)
   {
 #ifdef PRINT_DEBUG
     printf("   construct stripe id [%d, %d, %d, %d]\n",
