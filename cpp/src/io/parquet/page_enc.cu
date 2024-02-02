@@ -2436,7 +2436,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     int t0 = 0;  // thread 0 for each string
     for (int idx = 0; idx < s->page.num_valid; idx++) {
       // calculate ids for this string
-      int const mytid = (t - t0 + block_size) % block_size;
+      int const tid = (t - t0 + block_size) % block_size;
 
       // fetch string for this iter
       size_type const leaf_idx = has_leaf_nulls ? offsets_map[idx] : idx;
@@ -2446,13 +2446,12 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
       // now copy the data
       auto const dst = strings_ptr + str_data_len;
-      for (int src_idx = mytid; src_idx < suff_len; src_idx += block_size) {
+      for (int src_idx = tid; src_idx < suff_len; src_idx += block_size) {
         dst[src_idx] = byte_arr.data[pref_len + src_idx];
       }
 
       str_data_len += suff_len;
-      t0 += suff_len;
-      t0 = t0 % block_size;
+      t0 = (t0 + suff_len) % block_size;
     }
   }
 
