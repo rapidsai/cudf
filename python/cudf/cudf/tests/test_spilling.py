@@ -255,6 +255,7 @@ def test_environment_variables(monkeypatch):
     assert isinstance(manager, SpillManager)
     assert manager.statistics.level == 2
     monkeypatch.delenv("CUDF_SPILL")
+    reload_options()
 
 
 def test_spill_device_memory(manager: SpillManager):
