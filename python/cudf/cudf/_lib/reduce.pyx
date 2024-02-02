@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cython.operator import dereference
 
@@ -8,13 +8,9 @@ from cudf.core.buffer import acquire_spill_lock
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 
-from cudf._lib.aggregation cimport (
-    ReduceAggregation,
-    ScanAggregation,
-    make_reduce_aggregation,
-    make_scan_aggregation,
-)
+from cudf._lib.aggregation cimport GroupbyAggregation, make_groupby_aggregation
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.aggregation cimport reduce_aggregation, scan_aggregation
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.reduce cimport cpp_minmax, cpp_reduce, cpp_scan, scan_type
@@ -47,7 +43,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
-    cdef ReduceAggregation cython_agg = make_reduce_aggregation(
+    cdef GroupbyAggregation cython_agg = make_groupby_aggregation(
         reduction_op, kwargs)
 
     cdef data_type c_out_dtype = dtype_to_data_type(col_dtype)
@@ -63,10 +59,13 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
+    cdef unique_ptr[reduce_aggregation] cpp_agg = move(
+        cython_agg.c_obj.clone_underlying_as_reduce()
+    )
     with nogil:
         c_result = move(cpp_reduce(
             c_incol_view,
-            dereference(cython_agg.c_obj),
+            dereference(cpp_agg),
             c_out_dtype
         ))
 
@@ -97,15 +96,18 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     """
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[column] c_result
-    cdef ScanAggregation cython_agg = make_scan_aggregation(scan_op, kwargs)
+    cdef GroupbyAggregation cython_agg = make_groupby_aggregation(scan_op, kwargs)
 
     cdef scan_type c_inclusive = \
         scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE
 
+    cdef unique_ptr[scan_aggregation] cpp_agg = move(
+        cython_agg.c_obj.clone_underlying_as_scan()
+    )
     with nogil:
         c_result = move(cpp_scan(
             c_incol_view,
-            dereference(cython_agg.c_obj),
+            dereference(cpp_agg),
             c_inclusive
         ))
 
