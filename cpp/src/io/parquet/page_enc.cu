@@ -2169,7 +2169,7 @@ struct byte_array {
   size_type length;
 
   // calculate the amount of overlap with a preceding array
-  __device__ size_type overlap_with(byte_array const& preceding) const
+  __device__ size_type common_prefix_length(byte_array const& preceding) const
   {
     auto const max_pref_len = min(length, preceding.length);
     size_type idx           = 0;
@@ -2345,7 +2345,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     auto const preceding = byte_array_at(pleaf_idx + s->page_start_val);
 
     // calculate the amount of overlap
-    prefix_lengths[idx] = current.overlap_with(preceding);
+    prefix_lengths[idx] = current.common_prefix_length(preceding);
   }
 
   // encode prefix lengths
