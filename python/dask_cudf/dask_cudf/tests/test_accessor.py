@@ -11,7 +11,7 @@ from dask import dataframe as dd
 from cudf import DataFrame, Series, date_range
 from cudf.testing._utils import assert_eq, does_not_raise
 
-import dask_cudf as dgd
+import dask_cudf
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -33,7 +33,7 @@ dt_fields = ["year", "month", "day", "hour", "minute", "second"]
 def test_datetime_accessor_initialization(data):
     pdsr = pd.Series(data.copy())
     sr = Series(pdsr)
-    dsr = dgd.from_cudf(sr, npartitions=5)
+    dsr = dask_cudf.from_cudf(sr, npartitions=5)
     with pytest.raises(AttributeError):
         dsr.dt
 
@@ -42,7 +42,7 @@ def test_datetime_accessor_initialization(data):
 def test_series(data):
     pdsr = pd.Series(data.copy())
     sr = Series(pdsr)
-    dsr = dgd.from_cudf(sr, npartitions=5)
+    dsr = dask_cudf.from_cudf(sr, npartitions=5)
 
     np.testing.assert_equal(np.array(pdsr), dsr.compute().values_host)
 
@@ -52,7 +52,7 @@ def test_series(data):
 def test_dt_series(data, field):
     pdsr = pd.Series(data.copy())
     sr = Series(pdsr)
-    dsr = dgd.from_cudf(sr, npartitions=5)
+    dsr = dask_cudf.from_cudf(sr, npartitions=5)
     base = getattr(pdsr.dt, field)
     test = getattr(dsr.dt, field).compute()
     assert_eq(base, test, check_dtype=False)
@@ -61,7 +61,7 @@ def test_dt_series(data, field):
 @pytest.mark.parametrize("data", [data_dt_1()])
 def test_dt_accessor(data):
     df = DataFrame({"dt_col": data.copy()})
-    ddf = dgd.from_cudf(df, npartitions=5)
+    ddf = dask_cudf.from_cudf(df, npartitions=5)
 
     for i in ["year", "month", "day", "hour", "minute", "second", "weekday"]:
         assert i in dir(ddf.dt_col.dt)
@@ -98,14 +98,14 @@ def data_cat_3():
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_accessor_initialization1(data):
     sr = Series(data.copy())
-    dsr = dgd.from_cudf(sr, npartitions=5)
+    dsr = dask_cudf.from_cudf(sr, npartitions=5)
     dsr.cat
 
 
 @pytest.mark.parametrize("data", [data_cat_2()])
 def test_categorical_accessor_initialization2(data):
     sr = Series(data.copy())
-    dsr = dgd.from_cudf(sr, npartitions=5)
+    dsr = dask_cudf.from_cudf(sr, npartitions=5)
     with pytest.raises(AttributeError):
         dsr.cat
 
@@ -115,7 +115,7 @@ def test_categorical_basic(data):
     cat = data.copy()
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    dsr = dgd.from_cudf(sr, npartitions=2)
+    dsr = dask_cudf.from_cudf(sr, npartitions=2)
     result = dsr.compute()
     np.testing.assert_array_equal(cat.codes, result.cat.codes.values_host)
 
@@ -143,7 +143,7 @@ def test_categorical_basic(data):
         df["a"] = ["xyz", "abc", "def"] * 10
 
         pdf = df.to_pandas()
-        cddf = dgd.from_cudf(df, 1)
+        cddf = dask_cudf.from_cudf(df, 1)
         cddf["b"] = cddf["a"].astype("category")
 
         ddf = dd.from_pandas(pdf, 1)
@@ -169,7 +169,7 @@ def test_categorical_compare_unordered(data):
     cat = data.copy()
     pdsr = pd.Series(cat)
     sr = Series(cat)
-    dsr = dgd.from_cudf(sr, npartitions=2)
+    dsr = dask_cudf.from_cudf(sr, npartitions=2)
 
     # Test equality
     out = dsr == dsr
@@ -209,8 +209,8 @@ def test_categorical_compare_ordered(data):
     pdsr2 = pd.Series(cat2)
     sr1 = Series(cat1)
     sr2 = Series(cat2)
-    dsr1 = dgd.from_cudf(sr1, npartitions=2)
-    dsr2 = dgd.from_cudf(sr2, npartitions=2)
+    dsr1 = dask_cudf.from_cudf(sr1, npartitions=2)
+    dsr2 = dask_cudf.from_cudf(sr2, npartitions=2)
 
     # Test equality
     out = dsr1 == dsr1
@@ -248,7 +248,7 @@ def data_str_1():
 def test_string_slicing(data):
     pdsr = pd.Series(data.copy())
     sr = Series(pdsr)
-    dsr = dgd.from_cudf(sr, npartitions=2)
+    dsr = dask_cudf.from_cudf(sr, npartitions=2)
     base = pdsr.str.slice(0, 4)
     test = dsr.str.slice(0, 4).compute()
     assert_eq(base, test)
@@ -261,7 +261,7 @@ def test_categorical_categories():
     df["a"] = df["a"].astype("category")
     pdf = df.to_pandas(nullable=False)
 
-    ddf = dgd.from_cudf(df, 2)
+    ddf = dask_cudf.from_cudf(df, 2)
     dpdf = dd.from_pandas(pdf, 2)
 
     dd.assert_eq(
@@ -272,7 +272,7 @@ def test_categorical_categories():
 
 
 def test_categorical_as_known():
-    df = dgd.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
+    df = dask_cudf.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     df["col_1"] = df["col_1"].astype("category")
     actual = df["col_1"].cat.as_known()
 
@@ -285,7 +285,7 @@ def test_categorical_as_known():
 def test_str_slice():
     df = DataFrame({"a": ["abc,def,123", "xyz,hi,bye"]})
 
-    ddf = dgd.from_cudf(df, 1)
+    ddf = dask_cudf.from_cudf(df, 1)
     pdf = df.to_pandas()
 
     dd.assert_eq(
@@ -345,7 +345,7 @@ def data_test_sort():
 )
 def test_create_list_series(data):
     expect = pd.Series(data)
-    ds_got = dgd.from_cudf(Series(data), 4)
+    ds_got = dask_cudf.from_cudf(Series(data), 4)
     assert_eq(expect, ds_got.compute())
 
 
@@ -355,7 +355,7 @@ def test_create_list_series(data):
 )
 def test_unique(data):
     expect = Series(data).list.unique()
-    ds = dgd.from_cudf(Series(data), 5)
+    ds = dask_cudf.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.unique().compute())
 
 
@@ -365,7 +365,7 @@ def test_unique(data):
 )
 def test_len(data):
     expect = Series(data).list.len()
-    ds = dgd.from_cudf(Series(data), 5)
+    ds = dask_cudf.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.len().compute())
 
 
@@ -375,7 +375,7 @@ def test_len(data):
 )
 def test_contains(data, search_key):
     expect = Series(data).list.contains(search_key)
-    ds = dgd.from_cudf(Series(data), 5)
+    ds = dask_cudf.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.contains(search_key).compute())
 
 
@@ -388,7 +388,7 @@ def test_contains(data, search_key):
 )
 def test_get(data, index):
     expect = Series(data).list.get(index)
-    ds = dgd.from_cudf(Series(data), 5)
+    ds = dask_cudf.from_cudf(Series(data), 5)
     assert_eq(expect, ds.list.get(index).compute())
 
 
@@ -398,7 +398,7 @@ def test_get(data, index):
 )
 def test_leaves(data):
     expect = Series(data).list.leaves
-    ds = dgd.from_cudf(Series(data), 5)
+    ds = dask_cudf.from_cudf(Series(data), 5)
     got = ds.list.leaves.compute().reset_index(drop=True)
     assert_eq(expect, got)
 
@@ -419,7 +419,7 @@ def test_take(data, list_indices, expectation):
         expect = Series(data).list.take(list_indices)
 
     if expectation == does_not_raise():
-        ds = dgd.from_cudf(Series(data), 5)
+        ds = dask_cudf.from_cudf(Series(data), 5)
         assert_eq(expect, ds.list.take(list_indices).compute())
 
 
@@ -435,7 +435,7 @@ def test_sorting(data, ascending, na_position, ignore_index):
         ascending=ascending, na_position=na_position, ignore_index=ignore_index
     )
     got = (
-        dgd.from_cudf(Series(data), 5)
+        dask_cudf.from_cudf(Series(data), 5)
         .list.sort_values(
             ascending=ascending,
             na_position=na_position,
@@ -464,7 +464,7 @@ struct_accessor_data_params = [
 )
 def test_create_struct_series(data):
     expect = pd.Series(data)
-    ds_got = dgd.from_cudf(Series(data), 2)
+    ds_got = dask_cudf.from_cudf(Series(data), 2)
     assert_eq(expect, ds_got.compute())
 
 
@@ -475,7 +475,7 @@ def test_create_struct_series(data):
 def test_struct_field_str(data):
     for test_key in ["a", "b"]:
         expect = Series(data).struct.field(test_key)
-        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        ds_got = dask_cudf.from_cudf(Series(data), 2).struct.field(test_key)
         assert_eq(expect, ds_got.compute())
 
 
@@ -486,7 +486,7 @@ def test_struct_field_str(data):
 def test_struct_field_integer(data):
     for test_key in [0, 1]:
         expect = Series(data).struct.field(test_key)
-        ds_got = dgd.from_cudf(Series(data), 2).struct.field(test_key)
+        ds_got = dask_cudf.from_cudf(Series(data), 2).struct.field(test_key)
         assert_eq(expect, ds_got.compute())
 
 
@@ -495,7 +495,7 @@ def test_struct_field_integer(data):
     struct_accessor_data_params,
 )
 def test_dask_struct_field_Key_Error(data):
-    got = dgd.from_cudf(Series(data), 2)
+    got = dask_cudf.from_cudf(Series(data), 2)
 
     with pytest.raises(KeyError):
         got.struct.field("notakey").compute()
@@ -507,7 +507,7 @@ def test_dask_struct_field_Key_Error(data):
 )
 def test_dask_struct_field_Int_Error(data):
     # breakpoint()
-    got = dgd.from_cudf(Series(data), 2)
+    got = dask_cudf.from_cudf(Series(data), 2)
 
     with pytest.raises(IndexError):
         got.struct.field(1000).compute()
@@ -523,7 +523,7 @@ def test_dask_struct_field_Int_Error(data):
 )
 def test_struct_explode(data):
     expect = Series(data).struct.explode()
-    got = dgd.from_cudf(Series(data), 2).struct.explode()
+    got = dask_cudf.from_cudf(Series(data), 2).struct.explode()
     # Output index will not agree for >1 partitions
     assert_eq(expect, got.compute().reset_index(drop=True))
 
@@ -533,7 +533,7 @@ def test_tz_localize():
     expect = data.dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
-    got = dgd.from_cudf(data, 2).dt.tz_localize(
+    got = dask_cudf.from_cudf(data, 2).dt.tz_localize(
         "US/Eastern", ambiguous="NaT", nonexistent="NaT"
     )
     dd.assert_eq(expect, got)
@@ -554,5 +554,5 @@ def test_tz_localize():
 )
 def test_tz_convert(data):
     expect = Series(data).dt.tz_convert("US/Pacific")
-    got = dgd.from_cudf(Series(data), 2).dt.tz_convert("US/Pacific")
+    got = dask_cudf.from_cudf(Series(data), 2).dt.tz_convert("US/Pacific")
     dd.assert_eq(expect, got)
