@@ -972,8 +972,7 @@ def test_string_split_re(data, pat, n, expand):
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
 
-    # Pandas does not support the regex parameter until 1.4.0
-    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    expect = ps.str.split(pat=pat, n=n, expand=expand, regex=True)
     got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
 
     assert_eq(expect, got)
