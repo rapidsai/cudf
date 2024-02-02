@@ -40,7 +40,7 @@ cdef class GroupBy:
     cpdef tuple aggregate(self, list requests)
     cpdef tuple scan(self, list requests)
     cpdef tuple shift(self, Table values, list offset, list fill_values)
-    cpdef tuple replace_nulls(self, Table values, list replace_policy)
+    cpdef tuple replace_nulls(self, Table values, list replace_policies)
     cpdef tuple get_groups(self, Table values=*)
 
     @staticmethod

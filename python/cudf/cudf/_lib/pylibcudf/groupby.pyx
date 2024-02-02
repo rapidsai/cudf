@@ -14,6 +14,7 @@ from cudf._lib.cpp.groupby cimport (
     groups,
     scan_request,
 )
+from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
@@ -132,9 +133,9 @@ cdef class GroupBy:
         for request in requests:
             c_requests.push_back(move(request._to_libcudf_agg_request()))
 
-        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
-            dereference(self.c_obj).aggregate(c_requests)
-        )
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        with nogil:
+            c_res = move(dereference(self.c_obj).aggregate(c_requests))
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple scan(self, list requests):
@@ -159,9 +160,9 @@ cdef class GroupBy:
         for request in requests:
             c_requests.push_back(move(request._to_libcudf_scan_request()))
 
-        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
-            dereference(self.c_obj).scan(c_requests)
-        )
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        with nogil:
+            c_res = move(dereference(self.c_obj).scan(c_requests))
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple shift(self, Table values, list offset, list fill_values):
@@ -186,9 +187,11 @@ cdef class GroupBy:
             _as_vector(fill_values)
 
         cdef vector[size_type] c_offset = offset
-        cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
-            dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
-        )
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_res
+        with nogil:
+            c_res = move(
+                dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
+            )
 
         return (
             Table.from_libcudf(move(c_res.first)),
@@ -211,9 +214,12 @@ cdef class GroupBy:
             A tuple whose first element is the group's keys and whose second
             element is a table of values with nulls replaced.
         """
-        cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
-            dereference(self.c_obj).replace_nulls(value.view(), replace_policies)
-        )
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_res
+        cdef vector[replace_policy] c_replace_policies = replace_policies
+        with nogil:
+            c_res = move(
+                dereference(self.c_obj).replace_nulls(value.view(), c_replace_policies)
+            )
 
         return (
             Table.from_libcudf(move(c_res.first)),
