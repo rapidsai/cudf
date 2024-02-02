@@ -3212,7 +3212,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if _is_scalar_or_zero_d_array(value):
             dtype = None
-            if hasattr(value, "ndim"):
+            if isinstance(value, (np.ndarray, cupy.ndarray)):
                 dtype = value.dtype
                 value = value.item()
             if libcudf.scalar._is_null_host_scalar(value):

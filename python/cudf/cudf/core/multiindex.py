@@ -1837,9 +1837,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 f"{method=} is not supported yet for MultiIndex."
             )
 
-        result = cudf.core.column.full(
-            len(target),
-            fill_value=-1,
+        result = column.as_column(
+            -1,
+            length=len(target),
             dtype=libcudf.types.size_type_dtype,
         )
         if not len(self):
