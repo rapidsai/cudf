@@ -2164,6 +2164,22 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     s, output_ptr + string_data_len, pages, comp_in, comp_out, comp_results, true);
 }
 
+struct byte_array {
+  uint8_t const* data;
+  size_type length;
+
+  // calculate the amount of overlap with a preceding array
+  __device__ size_type overlap_with(byte_array const& preceding) const
+  {
+    auto const max_pref_len = min(length, preceding.length);
+    size_type idx           = 0;
+    while (idx < max_pref_len and data[idx] == preceding.data[idx]) {
+      idx++;
+    }
+    return idx;
+  }
+};
+
 // DELTA_BYTE_ARRAY page data encoder
 // blockDim(128, 1, 1)
 template <int block_size>
@@ -2275,16 +2291,16 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
   auto const type_id = s->col.leaf_column->type().id();
 
-  auto const get_string_tuple = [type_id, s](int idx) -> thrust::pair<size_type, uint8_t const*> {
+  auto const get_byte_array = [type_id, s](size_type idx) -> byte_array {
     if (type_id == type_id::STRING) {
       auto const str = s->col.leaf_column->element<string_view>(idx);
-      return {str.size_bytes(), reinterpret_cast<uint8_t const*>(str.data())};
+      return {reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes()};
     } else if (s->col.output_as_byte_array && type_id == type_id::LIST) {
       auto const str = get_element<statistics::byte_array_view>(*s->col.leaf_column, idx);
-      return {static_cast<size_type>(str.size_bytes()),
-              reinterpret_cast<uint8_t const*>(str.data())};
+      return {reinterpret_cast<uint8_t const*>(str.data()),
+              static_cast<size_type>(str.size_bytes())};
     }
-    return {0, nullptr};
+    return {nullptr, 0};
   };
 
   /*
@@ -2325,16 +2341,11 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     size_type const pleaf_idx = has_leaf_nulls ? offsets_map[idx - 1] : idx - 1;
 
     // get this string and the preceding string
-    auto const [len, ptr]     = get_string_tuple(leaf_idx + s->page_start_val);
-    auto const [len_p, ptr_p] = get_string_tuple(pleaf_idx + s->page_start_val);
+    auto const current   = get_byte_array(leaf_idx + s->page_start_val);
+    auto const preceding = get_byte_array(pleaf_idx + s->page_start_val);
 
     // calculate the amount of overlap
-    auto const max_pref_len = min(len, len_p);
-    size_type pref_len      = 0;
-    while (pref_len < max_pref_len and ptr[pref_len] == ptr_p[pref_len]) {
-      pref_len++;
-    }
-    prefix_lengths[idx] = pref_len;
+    prefix_lengths[idx] = current.overlap_with(preceding);
   }
 
   // encode prefix lengths
@@ -2370,8 +2381,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     int32_t val           = 0;
     if (in_range) {
       size_type const leaf_idx = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
-      auto const [len, ptr]    = get_string_tuple(leaf_idx + s->page_start_val);
-      val                      = len - prefix_lengths[t_idx];
+      auto const byte_arr      = get_byte_array(leaf_idx + s->page_start_val);
+      val                      = byte_arr.length - prefix_lengths[t_idx];
       if (val > 0) {
         non_zero++;
         suffix_bytes += val;
@@ -2401,12 +2412,12 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       size_type s_len = 0, pref_len = 0, suff_len = 0;
       uint8_t const* s_ptr = nullptr;
       if (t_idx < s->page.num_valid) {
-        int const leaf_idx    = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
-        auto const [len, ptr] = get_string_tuple(leaf_idx + s->page_start_val);
-        s_len                 = len;
-        s_ptr                 = ptr;
-        pref_len              = prefix_lengths[t_idx];
-        suff_len              = len - pref_len;
+        size_type const leaf_idx = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
+        auto const byte_arr      = get_byte_array(leaf_idx + s->page_start_val);
+        s_len                    = byte_arr.length;
+        s_ptr                    = byte_arr.data;
+        pref_len                 = prefix_lengths[t_idx];
+        suff_len                 = byte_arr.length - pref_len;
       }
 
       // calculate offsets into output
@@ -2430,15 +2441,15 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
       // fetch string for this iter
       size_type const leaf_idx = has_leaf_nulls ? offsets_map[idx] : idx;
-      auto const [len, ptr]    = get_string_tuple(leaf_idx + s->page_start_val);
+      auto const byte_arr      = get_byte_array(leaf_idx + s->page_start_val);
       size_type const pref_len = prefix_lengths[idx];
-      size_type const suff_len = len - pref_len;
+      size_type const suff_len = byte_arr.length - pref_len;
 
       // now copy the data
       auto const dst = strings_ptr + str_data_len;
       for (int i = 0; i < suff_len; i += block_size) {
         size_type const src_idx = i + mytid;
-        if (src_idx < suff_len) { dst[src_idx] = ptr[pref_len + src_idx]; }
+        if (src_idx < suff_len) { dst[src_idx] = byte_arr.data[pref_len + src_idx]; }
       }
 
       str_data_len += suff_len;
