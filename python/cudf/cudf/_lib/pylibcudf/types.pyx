@@ -4,7 +4,14 @@ from libc.stdint cimport int32_t
 
 from cudf._lib.cpp.types cimport data_type, type_id
 
-from cudf._lib.cpp.types import type_id as TypeId  # no-cython-lint
+from cudf._lib.cpp.types import type_id as TypeId  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import null_policy as NullPolicy  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import interpolation as Interpolation  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import nan_equality as NanEquality  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import null_equality as NullEquality  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import null_order as NullOrder  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import order as Order  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import sorted as Sorted  # no-cython-lint, isort:skip
 
 
 cdef class DataType:
