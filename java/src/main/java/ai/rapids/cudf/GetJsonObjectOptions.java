@@ -18,38 +18,58 @@
 
 package ai.rapids.cudf;
 
-public class GetJsonObjectOptions {
-    private boolean allowSingleQuotes;
-    private boolean stripQuotesFromSingleStrings;
-    private boolean missingFieldsAsNulls;
+public final class GetJsonObjectOptions {
 
-    public GetJsonObjectOptions(boolean allowSingleQuotes, boolean stripQuotesFromSingleStrings, boolean missingFieldsAsNulls) {
-        this.allowSingleQuotes = allowSingleQuotes;
-        this.stripQuotesFromSingleStrings = stripQuotesFromSingleStrings;
-        this.missingFieldsAsNulls = missingFieldsAsNulls;
+    public static GetJsonObjectOptions DEFAULT = new GetJsonObjectOptions.Builder().build();
+
+    private final boolean allowSingleQuotes;
+    private final boolean stripQuotesFromSingleStrings;
+    private final boolean missingFieldsAsNulls;
+
+    private GetJsonObjectOptions(Builder builder) {
+        this.allowSingleQuotes = builder.allowSingleQuotes;
+        this.stripQuotesFromSingleStrings = builder.stripQuotesFromSingleStrings;
+        this.missingFieldsAsNulls = builder.missingFieldsAsNulls;
     }
 
     public boolean isAllowSingleQuotes() {
         return allowSingleQuotes;
     }
 
-    public void setAllowSingleQuotes(boolean allowSingleQuotes) {
-        this.allowSingleQuotes = allowSingleQuotes;
-    }
-
     public boolean isStripQuotesFromSingleStrings() {
         return stripQuotesFromSingleStrings;
-    }
-
-    public void setStripQuotesFromSingleStrings(boolean stripQuotesFromSingleStrings) {
-        this.stripQuotesFromSingleStrings = stripQuotesFromSingleStrings;
     }
 
     public boolean isMissingFieldsAsNulls() {
         return missingFieldsAsNulls;
     }
 
-    public void setMissingFieldsAsNulls(boolean missingFieldsAsNulls) {
-        this.missingFieldsAsNulls = missingFieldsAsNulls;
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder {
+        private boolean allowSingleQuotes = false;
+        private boolean stripQuotesFromSingleStrings = true;
+        private boolean missingFieldsAsNulls = false;
+
+        public Builder allowSingleQuotes(boolean allowSingleQuotes) {
+            this.allowSingleQuotes = allowSingleQuotes;
+            return this;
+        }
+
+        public Builder stripQuotesFromSingleStrings(boolean stripQuotesFromSingleStrings) {
+            this.stripQuotesFromSingleStrings = stripQuotesFromSingleStrings;
+            return this;
+        }
+
+        public Builder missingFieldsAsNulls(boolean missingFieldsAsNulls) {
+            this.missingFieldsAsNulls = missingFieldsAsNulls;
+            return this;
+        }
+
+        public GetJsonObjectOptions build() {
+            return new GetJsonObjectOptions(this);
+        }
     }
 }
