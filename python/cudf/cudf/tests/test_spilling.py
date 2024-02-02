@@ -223,38 +223,43 @@ def test_environment_variables(monkeypatch):
         cudf.core.buffer.spill_manager._global_manager_uninitialized = True
         importlib.reload(cudf.options)
 
-    monkeypatch.setenv("CUDF_SPILL_ON_DEMAND", "off")
-    monkeypatch.setenv("CUDF_SPILL", "off")
-    reload_options()
-    assert get_global_manager() is None
-
-    monkeypatch.setenv("CUDF_SPILL", "on")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager._spill_on_demand is False
-    assert manager._device_memory_limit is None
-    assert manager.statistics.level == 0
-
-    monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager._device_memory_limit == 1000
-    assert manager.statistics.level == 0
-
-    monkeypatch.setenv("CUDF_SPILL_STATS", "1")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager.statistics.level == 1
-
-    monkeypatch.setenv("CUDF_SPILL_STATS", "2")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager.statistics.level == 2
-    monkeypatch.delenv("CUDF_SPILL")
+    with monkeypatch.context() as m:
+        monkeypatch.setenv("CUDF_SPILL_ON_DEMAND", "off")
+        monkeypatch.setenv("CUDF_SPILL", "off")
+        reload_options()
+        assert get_global_manager() is None
+    
+        monkeypatch.setenv("CUDF_SPILL", "on")
+        reload_options()
+        manager = get_global_manager()
+        assert isinstance(manager, SpillManager)
+        assert manager._spill_on_demand is False
+        assert manager._device_memory_limit is None
+        assert manager.statistics.level == 0
+    
+        monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
+        reload_options()
+        manager = get_global_manager()
+        assert isinstance(manager, SpillManager)
+        assert manager._device_memory_limit == 1000
+        assert manager.statistics.level == 0
+    
+        monkeypatch.setenv("CUDF_SPILL_STATS", "1")
+        reload_options()
+        manager = get_global_manager()
+        assert isinstance(manager, SpillManager)
+        assert manager.statistics.level == 1
+    
+        monkeypatch.setenv("CUDF_SPILL_STATS", "2")
+        reload_options()
+        manager = get_global_manager()
+        assert isinstance(manager, SpillManager)
+        assert manager.statistics.level == 2
+        monkeypatch.delenv("CUDF_SPILL")
+        monkeypatch.delenv("CUDF_SPILL_ON_DEMAND")
+        monkeypatch.delenv("CUDF_SPILL_DEVICE_LIMIT")
+        monkeypatch.delenv("CUDF_SPILL_STATS")
+        reload_options()
     reload_options()
 
 
