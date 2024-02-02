@@ -67,7 +67,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
 
 table_metadata reader::impl::make_output_metadata()
 {
-  if (_output_metadata) { return table_metadata{*_output_metadata}; }
+  if (_out_metadata) { return table_metadata{*_out_metadata}; }
 
   // Copy user data to the output metadata.
   table_metadata out_metadata;
@@ -88,8 +88,8 @@ table_metadata reader::impl::make_output_metadata()
   out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
                             out_metadata.per_file_user_data[0].end()};
 
-  // Save the output table metadata into `_output_metadata` for reuse next time.
-  _output_metadata = std::make_unique<table_metadata>(out_metadata);
+  // Save the output table metadata into `_out_metadata` for reuse next time.
+  _out_metadata = std::make_unique<table_metadata>(out_metadata);
 
   return out_metadata;
 }

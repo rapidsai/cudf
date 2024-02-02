@@ -180,7 +180,7 @@ class reader::impl {
   column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it
   file_intermediate_data _file_itm_data;
   chunk_read_data _chunk_read_data;
-  std::unique_ptr<table_metadata> _output_metadata;
+  std::unique_ptr<table_metadata> _out_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 };
 
