@@ -29,6 +29,12 @@ from .utils cimport _as_vector
 cdef class GroupByRequest:
     """A request for a groupby aggregation or scan.
 
+    This class is functionally polymorphic and can represent either an
+    aggregation or a scan depending on the algorithm it is used with. For
+    details on the libcudf types it converts to, see
+    :cpp:class:`cudf::groupby::aggregation_request` and
+    :cpp:class:`cudf::groupby::scan_request`.
+
     Parameters
     ----------
     values : Column
@@ -74,6 +80,8 @@ cdef class GroupByRequest:
 cdef class GroupBy:
     """Group values by keys and compute various aggregate quantities.
 
+    For details, see :cpp:class:`cudf::groupby::groupby`.
+
     Parameters
     ----------
     keys : Table
@@ -114,6 +122,8 @@ cdef class GroupBy:
     cpdef tuple aggregate(self, list requests):
         """Compute aggregations on columns.
 
+        For details, see :cpp:func:`cudf::groupby::groupby::aggregate`.
+
         Parameters
         ----------
         requests : List[GroupByRequest]
@@ -141,6 +151,8 @@ cdef class GroupBy:
     cpdef tuple scan(self, list requests):
         """Compute scans on columns.
 
+        For details, see :cpp:func:`cudf::groupby::groupby::scan`.
+
         Parameters
         ----------
         requests : List[GroupByRequest]
@@ -167,6 +179,8 @@ cdef class GroupBy:
 
     cpdef tuple shift(self, Table values, list offset, list fill_values):
         """Compute shifts on columns.
+
+        For details, see :cpp:func:`cudf::groupby::groupby::shift`.
 
         Parameters
         ----------
@@ -201,6 +215,8 @@ cdef class GroupBy:
     cpdef tuple replace_nulls(self, Table value, list replace_policies):
         """Replace nulls in columns.
 
+        For details, see :cpp:func:`cudf::groupby::groupby::replace_nulls`.
+
         Parameters
         ----------
         values : Table
@@ -228,6 +244,8 @@ cdef class GroupBy:
 
     cpdef tuple get_groups(self, Table values=None):
         """Get the grouped keys and values labels for each row.
+
+        For details, see :cpp:func:`cudf::groupby::groupby::get_groups`.
 
         Parameters
         ----------
