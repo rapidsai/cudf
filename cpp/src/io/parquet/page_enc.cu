@@ -2291,7 +2291,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
   auto const type_id = s->col.leaf_column->type().id();
 
-  auto const get_byte_array = [type_id, s](size_type idx) -> byte_array {
+  auto const byte_array_at = [type_id, s](size_type idx) -> byte_array {
     if (type_id == type_id::STRING) {
       auto const str = s->col.leaf_column->element<string_view>(idx);
       return {reinterpret_cast<uint8_t const*>(str.data()), str.size_bytes()};
@@ -2341,8 +2341,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     size_type const pleaf_idx = has_leaf_nulls ? offsets_map[idx - 1] : idx - 1;
 
     // get this string and the preceding string
-    auto const current   = get_byte_array(leaf_idx + s->page_start_val);
-    auto const preceding = get_byte_array(pleaf_idx + s->page_start_val);
+    auto const current   = byte_array_at(leaf_idx + s->page_start_val);
+    auto const preceding = byte_array_at(pleaf_idx + s->page_start_val);
 
     // calculate the amount of overlap
     prefix_lengths[idx] = current.overlap_with(preceding);
@@ -2381,7 +2381,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     int32_t val           = 0;
     if (in_range) {
       size_type const leaf_idx = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
-      auto const byte_arr      = get_byte_array(leaf_idx + s->page_start_val);
+      auto const byte_arr      = byte_array_at(leaf_idx + s->page_start_val);
       val                      = byte_arr.length - prefix_lengths[t_idx];
       if (val > 0) {
         non_zero++;
@@ -2413,7 +2413,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       uint8_t const* s_ptr = nullptr;
       if (t_idx < s->page.num_valid) {
         size_type const leaf_idx = has_leaf_nulls ? offsets_map[t_idx] : t_idx;
-        auto const byte_arr      = get_byte_array(leaf_idx + s->page_start_val);
+        auto const byte_arr      = byte_array_at(leaf_idx + s->page_start_val);
         s_len                    = byte_arr.length;
         s_ptr                    = byte_arr.data;
         pref_len                 = prefix_lengths[t_idx];
@@ -2440,7 +2440,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
       // fetch string for this iter
       size_type const leaf_idx = has_leaf_nulls ? offsets_map[idx] : idx;
-      auto const byte_arr      = get_byte_array(leaf_idx + s->page_start_val);
+      auto const byte_arr      = byte_array_at(leaf_idx + s->page_start_val);
       size_type const pref_len = prefix_lengths[idx];
       size_type const suff_len = byte_arr.length - pref_len;
 
