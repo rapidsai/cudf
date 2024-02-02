@@ -9,7 +9,7 @@ import cudf
 from . import backends
 from ._version import __git_commit__, __version__
 from .core import concat, from_cudf, from_dask_dataframe
-from .expr import DASK_EXPR_ENABLED
+from .expr import QUERY_PLANNING_ON
 
 
 def read_csv(*args, **kwargs):
@@ -41,7 +41,7 @@ def raise_not_implemented_error(attr_name):
     return inner_func
 
 
-if DASK_EXPR_ENABLED:
+if QUERY_PLANNING_ON:
     from .expr._collection import DataFrame, Index, Series
 
     groupby_agg = raise_not_implemented_error("groupby_agg")

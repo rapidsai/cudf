@@ -492,8 +492,14 @@ try:
             else:
                 return cudf.concat(dfs)
 
-        dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-        return partial(partd.Encode, dumps, pickle.loads, join)
+        def _dumps(*args, **kwargs):
+            dumps = partial(pickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+            return dumps(*args, **kwargs)
+
+        def _loads(*args, **kwargs):
+            return pickle.loads(*args, **kwargs)
+
+        return partial(partd.Encode, _dumps, _loads, join)
 
 except ImportError:
     pass
