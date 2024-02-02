@@ -276,8 +276,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
 
-  auto& read_info                 = _file_itm_data.stream_read_info;
-  auto& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
+  auto& read_info                 = _file_itm_data.data_read_info;
+  auto& stripe_data_read_chunks = _file_itm_data.stripe_data_read_chunks;
   auto& lvl_stripe_stream_chunks  = _file_itm_data.lvl_stripe_stream_chunks;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
@@ -290,7 +290,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // Get the total number of stripes across all input files.
   std::size_t num_stripes = selected_stripes.size();
 
-  stripe_stream_read_chunks.resize(num_stripes);
+  stripe_data_read_chunks.resize(num_stripes);
   lvl_stripe_stream_chunks.resize(_selected_columns.num_levels());
 
   // TODO: Check if these data depends on pass and subpass, instead of global pass.
@@ -378,7 +378,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       }
     }
     total_stripe_sizes[stripe_idx] = {1, total_stripe_size};
-    stripe_stream_read_chunks[stripe_idx] =
+    stripe_data_read_chunks[stripe_idx] =
       chunk{last_read_size, static_cast<int64_t>(read_info.size() - last_read_size)};
   }
 
@@ -441,7 +441,7 @@ void reader::impl::pass_preprocess()
 
   auto& lvl_stripe_data  = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_sizes = _file_itm_data.lvl_stripe_sizes;
-  auto& read_info        = _file_itm_data.stream_read_info;
+  auto& read_info        = _file_itm_data.data_read_info;
 
   //  std::size_t num_stripes = selected_stripes.size();
   auto const stripe_chunk =
@@ -462,8 +462,8 @@ void reader::impl::pass_preprocess()
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
 
-  auto const& stripe_stream_read_chunks = _file_itm_data.stripe_stream_read_chunks;
-  auto const [read_begin, read_end]     = get_range(stripe_stream_read_chunks, stripe_chunk);
+  auto const& stripe_data_read_chunks = _file_itm_data.stripe_data_read_chunks;
+  auto const [read_begin, read_end]     = get_range(stripe_data_read_chunks, stripe_chunk);
 
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read  = read_info[read_idx];

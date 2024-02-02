@@ -140,6 +140,7 @@ std::size_t gather_stream_info_and_update_chunks(
   return dst_offset;
 }
 
+// TODO: update
 /**
  * @brief Decompresses the stripe data, at stream granularity.
  *
@@ -155,8 +156,7 @@ std::size_t gather_stream_info_and_update_chunks(
  * @return Device buffer to decompressed page data
  */
 rmm::device_buffer decompress_stripe_data(
-  std::unordered_map<stream_id_info, stripe_level_comp_info, stream_id_hash, stream_id_equal> const&
-    compinfo_map,
+  stream_id_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
   host_span<orc_stream_info const> stream_info,
