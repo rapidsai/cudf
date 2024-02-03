@@ -815,9 +815,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
       auto col_type = to_cudf_type(_metadata.get_col_type(col.id).kind,
-                                   _use_np_dtypes,
-                                   _timestamp_type.id(),
-                                   to_cudf_decimal_type(_decimal128_columns, _metadata, col.id));
+                                   _config.use_np_dtypes,
+                                   _config.timestamp_type.id(),
+                                   to_cudf_decimal_type(_config.decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -843,7 +843,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
     const bool use_index =
-      _use_index &&
+      _config.use_index &&
       // Do stripes have row group index
       _metadata.is_row_grp_idx_present() &&
       // Only use if we don't have much work with complete columns & stripes
@@ -944,7 +944,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 ? sizeof(size_type)
                                 : cudf::size_of(column_types[col_idx]);
         chunk.num_rowgroups = stripe_num_rowgroups;
-        if (chunk.type_kind == orc::TIMESTAMP) { chunk.timestamp_type_id = _timestamp_type.id(); }
+        if (chunk.type_kind == orc::TIMESTAMP) { chunk.timestamp_type_id = _config.timestamp_type.id(); }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
             chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
