@@ -122,8 +122,9 @@ class IntervalColumn(StructColumn):
         # directly is problematic), so we're stuck with this for now.
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
+        pd_type = self.dtype.to_pandas()
         return pd.Series(
-            self.dtype.to_pandas().__from_arrow__(self.to_arrow()), index=index
+            pd_type.__from_arrow__(self.to_arrow()), index=index, dtype=pd_type
         )
 
     def element_indexing(self, index: int):
