@@ -1234,12 +1234,12 @@ constexpr bool is_sum_product_agg(aggregation::Kind k)
          (k == aggregation::SUM_OF_SQUARES);
 }
 
-// Summing/Multiplying integers of any type, always use uint64_t for unsigned and int64_t for signed
+// Summing/Multiplying integers of any type, always use int64_t accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<Source,
                         k,
                         std::enable_if_t<std::is_integral_v<Source> && is_sum_product_agg(k)>> {
-  using type = std::conditional_t<std::is_unsigned_v<Source>, uint64_t, int64_t>;
+  using type = int64_t;
 };
 
 // Summing fixed_point numbers

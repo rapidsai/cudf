@@ -2220,10 +2220,6 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
-  // See issue #14781. Can remove this check once that is fixed.
-  CUDF_EXPECTS(not(_write_v2_headers and _compression == Compression::ZSTD),
-               "V2 page headers cannot be used with ZSTD compression");
-
   _current_chunk_offset.resize(_out_sink.size());
   // Write file header
   file_header_s fhdr;
@@ -2405,7 +2401,8 @@ void writer::impl::write_parquet_data_to_sink(
             // skip dict pages
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
-            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            int32_t const this_page_size =
+              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }

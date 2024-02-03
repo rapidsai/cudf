@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -794,13 +794,15 @@ def _parquet_to_frame(
                         dtype=_dtype,
                     )
 
-    # Concatenate dfs and return.
-    # Assume we can ignore the index if it has no name.
-    return (
-        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
-        if len(dfs) > 1
-        else dfs[0]
-    )
+    if len(dfs) > 1:
+        # Concatenate dfs and return.
+        # Assume we can ignore the index if it has no name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res = cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+        return res
+    else:
+        return dfs[0]
 
 
 @_cudf_nvtx_annotate
@@ -1259,7 +1261,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],

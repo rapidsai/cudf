@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,12 @@
  */
 #pragma once
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/join.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/hashing/detail/hash_allocator.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
-
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
@@ -43,8 +40,6 @@ using pair_type = cuco::pair<hash_value_type, size_type>;
 
 using hash_type = cuco::murmurhash3_32<hash_value_type>;
 
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-
 using multimap_type = cudf::hash_join::impl_type::map_type;
 
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
@@ -53,11 +48,11 @@ using multimap_type = cudf::hash_join::impl_type::map_type;
 using mixed_multimap_type = cuco::static_multimap<hash_value_type,
                                                   size_type,
                                                   cuda::thread_scope_device,
-                                                  hash_table_allocator_type,
+                                                  cudf::detail::cuco_allocator,
                                                   cuco::double_hashing<1, hash_type, hash_type>>;
 
 using semi_map_type = cuco::
-  static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>;
+  static_map<hash_value_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 using row_hash_legacy =
   cudf::row_hasher<cudf::hashing::detail::default_hash, cudf::nullate::DYNAMIC>;

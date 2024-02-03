@@ -348,9 +348,11 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-CUDF_KERNEL void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
-                                                             int32_t num_chunks,
-                                                             kernel_error::pointer error_code)
+CUDF_KERNEL
+void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                 chunk_page_info* chunk_pages,
+                                                 int32_t num_chunks,
+                                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -392,11 +394,10 @@ CUDF_KERNEL void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* ch
       bs->page.temp_string_buf     = nullptr;
       bs->page.kernel_mask         = decode_kernel_mask::NONE;
     }
-    num_values     = bs->ck.num_values;
-    page_info      = bs->ck.page_info;
-    num_dict_pages = bs->ck.num_dict_pages;
-    max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
-    values_found   = 0;
+    num_values    = bs->ck.num_values;
+    page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
+    max_num_pages = page_info ? bs->ck.max_num_pages : 0;
+    values_found  = 0;
     __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
@@ -495,9 +496,9 @@ CUDF_KERNEL void __launch_bounds__(128)
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     string_index_pair* dict_index = ck->str_dict_index;
-    uint8_t const* dict           = ck->page_info[0].page_data;
-    int dict_size                 = ck->page_info[0].uncompressed_page_size;
-    int num_entries               = ck->page_info[0].num_input_values;
+    uint8_t const* dict           = ck->dict_page->page_data;
+    int dict_size                 = ck->dict_page->uncompressed_page_size;
+    int num_entries               = ck->dict_page->num_input_values;
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
@@ -518,13 +519,15 @@ CUDF_KERNEL void __launch_bounds__(128)
 }
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
+                                chunk_page_info* chunk_pages,
                                 int32_t num_chunks,
                                 kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks, error_code);
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, chunk_pages, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,

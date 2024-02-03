@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from functools import singledispatch
 
-from pandas.core.groupby.groupby import DataError
+from pandas.errors import DataError
 
 from cudf.api.types import is_string_dtype
 from cudf.core.buffer import acquire_spill_lock
