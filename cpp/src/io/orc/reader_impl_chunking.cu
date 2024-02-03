@@ -52,61 +52,6 @@ namespace cudf::io::orc::detail {
 
 namespace {
 
-/**
- * @brief Function that populates column descriptors stream/chunk
- */
-std::size_t gather_stream_info(std::size_t stripe_index,
-                               std::size_t level,
-                               orc::StripeInformation const* stripeinfo,
-                               orc::StripeFooter const* stripefooter,
-                               host_span<int const> orc2gdf,
-                               host_span<orc::SchemaType const> types,
-                               bool apply_struct_map,
-                               std::vector<orc_stream_info>& stream_info)
-{
-  uint64_t src_offset = 0;
-  uint64_t dst_offset = 0;
-
-  for (auto const& stream : stripefooter->streams) {
-    if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
-      dst_offset += stream.length;
-      continue;
-    }
-
-    auto const column_id = *stream.column_id;
-    auto col             = orc2gdf[column_id];
-
-    if (col == -1 and apply_struct_map) {
-      // A struct-type column has no data itself, but rather child columns
-      // for each of its fields. There is only a PRESENT stream, which
-      // needs to be included for the reader.
-      auto const schema_type = types[column_id];
-      if (not schema_type.subtypes.empty()) {
-        if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
-          for (auto const& idx : schema_type.subtypes) {
-            auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
-            if (child_idx >= 0) { col = child_idx; }
-          }
-        }
-      }
-    }
-
-    if (col != -1) {
-      stream_info.emplace_back(stripeinfo->offset + src_offset,
-                               dst_offset,
-                               stream.length,
-                               stream_id_info{stripe_index,
-                               level,
-                               column_id,
-                               stream.kind});
-      dst_offset += stream.length;
-    }
-    src_offset += stream.length;
-  }
-
-  return dst_offset;
-}
-
 struct cumulative_size {
   int64_t count{0};
   std::size_t size_bytes{0};
@@ -341,14 +286,19 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       auto& stripe_sizes = lvl_stripe_sizes[level];
 
       auto stream_count      = stream_info.size();
-      auto const stripe_size = gather_stream_info(stripe_idx,
+      auto const stripe_size = gather_stream_info_and_column_desc(stripe_idx,
                                                   level,
                                                   stripe_info,
                                                   stripe_footer,
                                                   col_meta.orc_col_map[level],
                                                   _metadata.get_types(),
+                                                  false, // use_index,
                                                   level == 0,
-                                                  stream_info);
+                                                  nullptr, // num_dictionary_entries
+                                                  nullptr, // stream_idx
+                                                  &stream_info,
+                                                  std::nullopt // chunks
+                                                  );
 
       auto const is_stripe_data_empty = stripe_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,

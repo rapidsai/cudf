@@ -18,6 +18,110 @@
 
 namespace cudf::io::orc::detail {
 
+
+std::size_t gather_stream_info_and_column_desc(
+  std::size_t stripe_index,
+  std::size_t level,
+  orc::StripeInformation const* stripeinfo,
+  orc::StripeFooter const* stripefooter,
+  host_span<int const> orc2gdf,
+  host_span<orc::SchemaType const> types,
+  bool use_index,
+  bool apply_struct_map,
+  std::size_t* num_dictionary_entries,
+  std::size_t* stream_idx,
+  std::optional<std::vector<orc_stream_info>*> const& stream_info,
+  std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks)
+{
+  CUDF_EXPECTS(stream_info.has_value() ^ chunks.has_value(),
+    "Either stream_info or chunks must be provided, but not both.");
+
+  uint64_t src_offset = 0;
+  uint64_t dst_offset = 0;
+
+  auto const get_stream_index_type = [](orc::StreamKind kind) {
+    switch (kind) {
+      case orc::DATA: return gpu::CI_DATA;
+      case orc::LENGTH:
+      case orc::SECONDARY: return gpu::CI_DATA2;
+      case orc::DICTIONARY_DATA: return gpu::CI_DICTIONARY;
+      case orc::PRESENT: return gpu::CI_PRESENT;
+      case orc::ROW_INDEX: return gpu::CI_INDEX;
+      default:
+        // Skip this stream as it's not strictly required
+        return gpu::CI_NUM_STREAMS;
+    }
+  };
+
+  for (auto const& stream : stripefooter->streams) {
+    if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
+      // TODO: fix dst to src
+      src_offset += stream.length;
+      continue;
+    }
+
+    auto const column_id = *stream.column_id;
+    auto col             = orc2gdf[column_id];
+
+    if (col == -1 and apply_struct_map) {
+      // A struct-type column has no data itself, but rather child columns
+      // for each of its fields. There is only a PRESENT stream, which
+      // needs to be included for the reader.
+      auto const schema_type = types[column_id];
+      if (! schema_type.subtypes.empty() && schema_type.kind == orc::STRUCT &&
+          stream.kind == orc::PRESENT) {
+            
+          for (auto const& idx : schema_type.subtypes) {
+            auto const child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
+            if (child_idx >= 0) {
+              col                             = child_idx;
+              if(chunks.has_value()) {
+                auto& chunk                     = (*chunks.value())[stripe_index][col];
+                chunk.strm_id[gpu::CI_PRESENT]  = *stream_idx;
+                chunk.strm_len[gpu::CI_PRESENT] = stream.length;
+              }
+            }
+          }
+        }
+    }
+    if (col != -1) {
+      if (chunks.has_value()) {
+         if (src_offset >= stripeinfo->indexLength || use_index) {
+        auto const index_type = get_stream_index_type(stream.kind);
+        if (index_type < gpu::CI_NUM_STREAMS) {
+          auto& chunk           = (*chunks.value())[stripe_index][col];
+          chunk.strm_id[index_type]  = *stream_idx;
+          chunk.strm_len[index_type] = stream.length;
+          // NOTE: skip_count field is temporarily used to track the presence of index streams
+          chunk.skip_count |= 1 << index_type;
+
+          if (index_type == gpu::CI_DICTIONARY) {
+            chunk.dictionary_start = *num_dictionary_entries;
+            chunk.dict_len         = stripefooter->columns[column_id].dictionarySize;
+            *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
+          }
+        }
+      }
+      (*stream_idx)++;
+      } else { // not chunks.has_value()
+        stream_info.value().emplace_back(stripeinfo->offset + src_offset,
+                               dst_offset,
+                               stream.length,
+                               stream_id_info{stripe_index,
+                               level,
+                               column_id,
+                               stream.kind});
+      }
+
+      
+      dst_offset += stream.length;
+    }
+    src_offset += stream.length;
+  }
+
+  return dst_offset;
+}
+
 std::unique_ptr<column> create_empty_column(size_type orc_col_id,
                                             aggregate_orc_metadata const& metadata,
                                             host_span<std::string const> decimal128_columns,

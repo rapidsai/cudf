@@ -127,6 +127,24 @@ inline std::string get_map_child_col_name(std::size_t const idx)
   return (idx == 0) ? "key" : "value";
 }
 
+
+/**
+ * @brief Function that populates descriptors for either individual streams or chunks of column data, but not both.
+ */
+std::size_t gather_stream_info_and_column_desc(
+  std::size_t stripe_index,
+  std::size_t level,
+  orc::StripeInformation const* stripeinfo,
+  orc::StripeFooter const* stripefooter,
+  host_span<int const> orc2gdf,
+  host_span<orc::SchemaType const> types,
+  bool use_index,
+  bool apply_struct_map,
+  std::size_t* num_dictionary_entries,
+  std::size_t* stream_idx,
+  std::optional<std::vector<orc_stream_info>*> const& stream_info,
+  std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks);
+
 /**
  * @brief Create empty columns and respective schema information from the buffer.
  */
