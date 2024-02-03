@@ -41,6 +41,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -168,7 +169,9 @@ CUDF_KERNEL void replace_strings_first_pass(cudf::column_device_view input,
   // Compute total valid count for this block and add it to global count
   uint32_t block_valid_count = cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
-  if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
+  if (threadIdx.x == 0) {
+    cudf::detail::atomic_add(output_valid_count, static_cast<cudf::size_type>(block_valid_count));
+  }
 }
 
 /**
@@ -295,7 +298,9 @@ CUDF_KERNEL void replace_kernel(cudf::column_device_view input,
     uint32_t block_valid_count =
       cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
     // one thread computes and adds to output_valid_count
-    if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
+    if (threadIdx.x == 0) {
+      cudf::detail::atomic_add(output_valid_count, static_cast<cudf::size_type>(block_valid_count));
+    }
   }
 }
 

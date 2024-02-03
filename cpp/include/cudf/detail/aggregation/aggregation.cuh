@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -242,8 +242,8 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::SUM>;
-    atomicAdd(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    cudf::detail::atomic_add(&target.element<Target>(target_index),
+                             static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -268,8 +268,8 @@ struct update_target_element<
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicAdd(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    cudf::detail::atomic_add(&target.element<DeviceTarget>(target_index),
+                             static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -368,7 +368,7 @@ struct update_target_element<Source,
 
     using Target = target_type_t<Source, aggregation::SUM_OF_SQUARES>;
     auto value   = static_cast<Target>(source.element<Source>(source_index));
-    atomicAdd(&target.element<Target>(target_index), value * value);
+    cudf::detail::atomic_add(&target.element<Target>(target_index), value * value);
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
@@ -408,7 +408,7 @@ struct update_target_element<
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
     using Target = target_type_t<Source, aggregation::COUNT_VALID>;
-    atomicAdd(&target.element<Target>(target_index), Target{1});
+    cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
 
     // It is assumed the output for COUNT_VALID is initialized to be all valid
   }
@@ -427,7 +427,7 @@ struct update_target_element<
                              size_type source_index) const noexcept
   {
     using Target = target_type_t<Source, aggregation::COUNT_ALL>;
-    atomicAdd(&target.element<Target>(target_index), Target{1});
+    cudf::detail::atomic_add(&target.element<Target>(target_index), Target{1});
 
     // It is assumed the output for COUNT_ALL is initialized to be all valid
   }

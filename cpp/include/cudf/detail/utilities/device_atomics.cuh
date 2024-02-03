@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -158,8 +158,8 @@ struct genericAtomicOperationImpl<T, Op, 8> {
 
 // -----------------------------------------------------------------------
 // specialized functions for operators
-// `atomicAdd` supports int32, float, double (signed int64 is not supported.)
-// `atomicMin`, `atomicMax` support int32_t, int64_t
+// `atomicAdd` supports int32_t, uint32_t, uint64_t, float, double (signed int64_t is not
+// supported.) `atomicMin`, `atomicMax` support int32_t, uint32_t, uint64_t, int64_t
 template <>
 struct genericAtomicOperationImpl<float, DeviceSum, 4> {
   using T = float;
@@ -169,8 +169,6 @@ struct genericAtomicOperationImpl<float, DeviceSum, 4> {
   }
 };
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 600)
-// `atomicAdd(double)` is supported after cuda architecture 6.0
 template <>
 struct genericAtomicOperationImpl<double, DeviceSum, 8> {
   using T = double;
@@ -179,7 +177,27 @@ struct genericAtomicOperationImpl<double, DeviceSum, 8> {
     return atomicAdd(addr, update_value);
   }
 };
-#endif
+
+template <>
+struct genericAtomicOperationImpl<uint32_t, DeviceSum, 4> {
+  using T = uint32_t;
+  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceSum op)
+  {
+    return atomicAdd(addr, update_value);
+  }
+};
+
+template <>
+struct genericAtomicOperationImpl<uint64_t, DeviceSum, 8> {
+  using T = uint64_t;
+  __forceinline__ __device__ T operator()(T* addr, T const& update_value, DeviceSum op)
+  {
+    using T_int = unsigned long long int;
+    static_assert(sizeof(T) == sizeof(T_int));
+    T ret = atomicAdd(reinterpret_cast<T_int*>(addr), type_reinterpret<T_int, T>(update_value));
+    return ret;
+  }
+};
 
 template <>
 struct genericAtomicOperationImpl<int32_t, DeviceSum, 4> {
@@ -190,9 +208,9 @@ struct genericAtomicOperationImpl<int32_t, DeviceSum, 4> {
   }
 };
 
-// Cuda natively supports `unsigned long long int` for `atomicAdd`,
-// but doesn't supports `signed long long int`.
-// However, since the signed integer is represented as Two's complement,
+// CUDA natively supports `unsigned long long int` for `atomicAdd`,
+// but doesn't support `signed long long int`.
+// However, since the signed integer is represented as two's complement,
 // the fundamental arithmetic operations of addition are identical to
 // those for unsigned binary numbers.
 // Then, this computes as `unsigned long long int` with `atomicAdd`
@@ -410,15 +428,14 @@ __forceinline__ __device__ bool genericAtomicOperation(bool* address,
   return T(fun(address, update_value, op));
 }
 
-}  // namespace cudf
-
+namespace detail {
 /**
- * @brief Overloads for `atomicAdd`
+ * @brief Overloads for `atomic_add`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (old + val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
  *
- * The supported cudf types for `atomicAdd` are:
+ * The supported cudf types for `atomic_add` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms cudf::timestamp_us,
  * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
@@ -434,10 +451,12 @@ __forceinline__ __device__ bool genericAtomicOperation(bool* address,
  * @returns The old value at `address`
  */
 template <typename T>
-__forceinline__ __device__ T atomicAdd(T* address, T val)
+__forceinline__ __device__ T atomic_add(T* address, T val)
 {
   return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
+}  // namespace detail
+}  // namespace cudf
 
 /**
  * @brief Overloads for `atomicMul`

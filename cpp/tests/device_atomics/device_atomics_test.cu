@@ -37,7 +37,7 @@ CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
   size_t step = blockDim.x * gridDim.x;
 
   for (; id < size; id += step) {
-    atomicAdd(&result[0], data[id]);
+    cudf::detail::atomic_add(&result[0], data[id]);
     atomicMin(&result[1], data[id]);
     atomicMax(&result[2], data[id]);
     cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});

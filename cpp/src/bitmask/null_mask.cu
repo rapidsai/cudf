@@ -19,6 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
@@ -305,7 +306,7 @@ CUDF_KERNEL void count_set_bits_kernel(bitmask_type const* bitmask,
   __shared__ typename BlockReduce::TempStorage temp_storage;
   size_type block_count{BlockReduce(temp_storage).Sum(thread_count)};
 
-  if (threadIdx.x == 0) { atomicAdd(global_count, block_count); }
+  if (threadIdx.x == 0) { cudf::detail::atomic_add(global_count, block_count); }
 }
 
 }  // namespace

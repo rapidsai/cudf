@@ -17,6 +17,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
@@ -107,7 +108,7 @@ CUDF_KERNEL void offset_bitmask_binop(Binop op,
   __shared__ typename BlockReduce::TempStorage temp_storage;
   size_type block_count = BlockReduce(temp_storage).Sum(thread_count);
 
-  if (threadIdx.x == 0) { atomicAdd(count_ptr, block_count); }
+  if (threadIdx.x == 0) { cudf::detail::atomic_add(count_ptr, block_count); }
 }
 
 /**

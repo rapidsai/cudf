@@ -18,6 +18,7 @@
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -65,7 +66,7 @@ CUDF_KERNEL void valid_if_kernel(
   }
 
   size_type block_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
-  if (threadIdx.x == 0) { atomicAdd(valid_count, block_count); }
+  if (threadIdx.x == 0) { cudf::detail::atomic_add(valid_count, block_count); }
 }
 
 /**
@@ -183,7 +184,7 @@ CUDF_KERNEL void valid_if_n_kernel(InputIterator1 begin1,
 
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
 
-    if (threadIdx.x == 0) { atomicAdd(valid_counts + mask_idx, block_valid_count); }
+    if (threadIdx.x == 0) { cudf::detail::atomic_add(valid_counts + mask_idx, block_valid_count); }
   }
 }
 

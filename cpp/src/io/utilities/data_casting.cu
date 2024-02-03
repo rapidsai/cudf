@@ -23,6 +23,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utf8.hpp>
@@ -437,14 +438,14 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
   auto get_next_string = [&]() {
     if constexpr (is_warp) {
       size_type istring;
-      if (lane == 0) { istring = atomicAdd(str_counter, 1); }
+      if (lane == 0) { istring = cudf::detail::atomic_add(str_counter, 1); }
       return __shfl_sync(0xffffffff, istring, 0);
     } else {
       // Ensure lane 0 doesn't update istring before all threads have read the previous iteration's
       // istring value
       __syncthreads();
       __shared__ size_type istring;
-      if (lane == 0) { istring = atomicAdd(str_counter, 1); }
+      if (lane == 0) { istring = cudf::detail::atomic_add(str_counter, 1); }
       __syncthreads();
       return istring;
     }
@@ -474,7 +475,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
       if (is_null_literal && null_mask != nullptr) {
         if (lane == 0) {
           clear_bit(null_mask, istring);
-          atomicAdd(null_count_data, 1);
+          cudf::detail::atomic_add(null_count_data, 1);
           if (!d_chars) d_offsets[istring] = 0;
         }
         continue;  // gride-stride return;
@@ -618,7 +619,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
         if (!d_chars && lane == 0) {
           if (null_mask != nullptr) {
             clear_bit(null_mask, istring);
-            atomicAdd(null_count_data, 1);
+            cudf::detail::atomic_add(null_count_data, 1);
           }
           last_offset        = 0;
           d_offsets[istring] = 0;
@@ -759,7 +760,7 @@ struct string_parse {
         options.trie_na, {in_begin, static_cast<std::size_t>(num_in_chars)});
       if (is_null_literal && null_mask != nullptr) {
         clear_bit(null_mask, idx);
-        atomicAdd(null_count_data, 1);
+        cudf::detail::atomic_add(null_count_data, 1);
         if (!d_chars) d_offsets[idx] = 0;
         return;
       }
@@ -770,7 +771,7 @@ struct string_parse {
     if (str_process_info.result != data_casting_result::PARSING_SUCCESS) {
       if (null_mask != nullptr) {
         clear_bit(null_mask, idx);
-        atomicAdd(null_count_data, 1);
+        cudf::detail::atomic_add(null_count_data, 1);
       }
       if (!d_chars) d_offsets[idx] = 0;
     } else {
@@ -953,7 +954,7 @@ std::unique_ptr<column> parse_data(
 
       if (is_null_literal) {
         col.set_null(row);
-        atomicAdd(null_count_data, 1);
+        cudf::detail::atomic_add(null_count_data, 1);
         return;
       }
 
@@ -971,7 +972,7 @@ std::unique_ptr<column> parse_data(
                                                    false);
       if (not is_parsed) {
         col.set_null(row);
-        atomicAdd(null_count_data, 1);
+        cudf::detail::atomic_add(null_count_data, 1);
       }
     });
 

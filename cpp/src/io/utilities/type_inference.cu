@@ -19,6 +19,7 @@
 #include <io/utilities/trie.cuh>
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_scalar.hpp>
@@ -204,16 +205,16 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
   auto const block_type_histogram =
     BlockReduce(temp_storage).Reduce(thread_type_histogram, custom_sum{});
   if (threadIdx.x == 0) {
-    atomicAdd(&column_info->null_count, block_type_histogram.null_count);
-    atomicAdd(&column_info->float_count, block_type_histogram.float_count);
-    atomicAdd(&column_info->datetime_count, block_type_histogram.datetime_count);
-    atomicAdd(&column_info->string_count, block_type_histogram.string_count);
-    atomicAdd(&column_info->negative_small_int_count,
-              block_type_histogram.negative_small_int_count);
-    atomicAdd(&column_info->positive_small_int_count,
-              block_type_histogram.positive_small_int_count);
-    atomicAdd(&column_info->big_int_count, block_type_histogram.big_int_count);
-    atomicAdd(&column_info->bool_count, block_type_histogram.bool_count);
+    cudf::detail::atomic_add(&column_info->null_count, block_type_histogram.null_count);
+    cudf::detail::atomic_add(&column_info->float_count, block_type_histogram.float_count);
+    cudf::detail::atomic_add(&column_info->datetime_count, block_type_histogram.datetime_count);
+    cudf::detail::atomic_add(&column_info->string_count, block_type_histogram.string_count);
+    cudf::detail::atomic_add(&column_info->negative_small_int_count,
+                             block_type_histogram.negative_small_int_count);
+    cudf::detail::atomic_add(&column_info->positive_small_int_count,
+                             block_type_histogram.positive_small_int_count);
+    cudf::detail::atomic_add(&column_info->big_int_count, block_type_histogram.big_int_count);
+    cudf::detail::atomic_add(&column_info->bool_count, block_type_histogram.bool_count);
   }
 }
 

@@ -18,6 +18,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/exec_policy.hpp>
@@ -175,9 +176,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
-      total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
+      total_num_dict_entries = cudf::detail::atomic_add(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
-      atomicAdd(&chunk->uniq_data_size, uniq_data_size);
+      cudf::detail::atomic_add(&chunk->uniq_data_size, uniq_data_size);
     }
     __syncthreads();
 

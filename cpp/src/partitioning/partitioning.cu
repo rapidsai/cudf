@@ -21,6 +21,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/partitioning.hpp>
@@ -158,7 +159,7 @@ CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
     row_partition_numbers[row_number] = partition_number;
 
     row_partition_offset[row_number] =
-      atomicAdd(&(shared_partition_sizes[partition_number]), size_type(1));
+      cudf::detail::atomic_add(&(shared_partition_sizes[partition_number]), size_type(1));
 
     tid += stride;
   }
@@ -171,7 +172,7 @@ CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
     size_type const block_partition_size = shared_partition_sizes[partition_number];
 
     // Update global size of each partition
-    atomicAdd(&global_partition_sizes[partition_number], block_partition_size);
+    cudf::detail::atomic_add(&global_partition_sizes[partition_number], block_partition_size);
 
     // Record the size of this partition in this block
     size_type const write_location        = partition_number * gridDim.x + blockIdx.x;
@@ -229,7 +230,7 @@ CUDF_KERNEL void compute_row_output_locations(size_type* __restrict__ row_partit
     // Get output location based on partition number by incrementing the
     // corresponding partition offset for this block
     size_type const row_output_location =
-      atomicAdd(&(shared_partition_offsets[partition_number]), size_type(1));
+      cudf::detail::atomic_add(&(shared_partition_offsets[partition_number]), size_type(1));
 
     // Store the row's output location in-place
     row_partition_numbers[row_number] = row_output_location;
@@ -708,7 +709,7 @@ struct dispatch_map_type {
                       partition_map.end<MapType>(),
                       scatter_map.begin(),
                       [offsets = histogram.data()] __device__(auto partition_number) {
-                        return atomicAdd(&offsets[partition_number], 1);
+                        return cudf::detail::atomic_add(&offsets[partition_number], 1);
                       });
 
     // Scatter the rows into their partitions

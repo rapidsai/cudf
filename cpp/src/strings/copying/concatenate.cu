@@ -19,6 +19,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -167,7 +168,7 @@ CUDF_KERNEL void fused_concatenate_string_offset_kernel(
   if (Nullable) {
     using cudf::detail::single_lane_block_sum_reduce;
     auto block_valid_count = single_lane_block_sum_reduce<block_size, 0>(warp_valid_count);
-    if (threadIdx.x == 0) { atomicAdd(out_valid_count, block_valid_count); }
+    if (threadIdx.x == 0) { cudf::detail::atomic_add(out_valid_count, block_valid_count); }
   }
 }
 

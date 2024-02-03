@@ -17,6 +17,8 @@
 
 #include <io/utilities/block_utils.cuh>
 
+#include <cudf/detail/utilities/device_atomics.cuh>
+
 #include <rmm/cuda_stream_view.hpp>
 
 using cudf::device_span;
@@ -145,7 +147,7 @@ avro_decode_row(schemadesc_s const* schema,
       case type_null:
         if (dataptr != nullptr && dst_row >= 0) {
           atomicAnd(static_cast<uint32_t*>(dataptr) + (dst_row >> 5), ~(1 << (dst_row & 0x1f)));
-          atomicAdd(&schema_g[i].count, 1);
+          cudf::detail::atomic_add(&schema_g[i].count, 1U);
           *skipped_row = false;
         }
         break;

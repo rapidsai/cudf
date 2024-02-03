@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include "distinct_helpers.hpp"
 
 #include <cudf/detail/hash_reduce_by_row.cuh>
+#include <cudf/detail/utilities/device_atomics.cuh>
 
 namespace cudf::detail {
 
@@ -53,7 +54,7 @@ struct reduce_fn : reduce_by_row_fn_base<MapView, KeyHasher, KeyEqual, size_type
       atomicMax(out_ptr, idx);
     } else {
       // Count the number of rows in each group of rows that are compared equal.
-      atomicAdd(out_ptr, size_type{1});
+      cudf::detail::atomic_add(out_ptr, size_type{1});
     }
   }
 };
