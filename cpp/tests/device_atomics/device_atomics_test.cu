@@ -40,9 +40,9 @@ CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
     cudf::detail::atomic_add(&result[0], data[id]);
     atomicMin(&result[1], data[id]);
     atomicMax(&result[2], data[id]);
-    cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
-    cudf::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
-    cudf::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
+    cudf::detail::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
+    cudf::detail::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
+    cudf::detail::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
   }
 }
 

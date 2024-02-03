@@ -27,7 +27,8 @@
  * cudf::duration_us, cudf::duration_ns and bool
  * where CUDA atomic operations are, `atomicAdd`, `atomicMin`, `atomicMax`,
  * `atomicCAS`.
- * Also provides `cudf::genericAtomicOperation` which performs atomic operation
+ *
+ * Also provides `cudf::detail::genericAtomicOperation` which performs atomic operation
  * with the given binary operator.
  */
 
@@ -364,8 +365,6 @@ struct typesAtomicCASImpl<T, 8> {
   }
 };
 
-}  // namespace detail
-
 /**
  * @brief compute atomic binary operation
  * reads the `old` located at the `address` in global or shared memory,
@@ -428,7 +427,6 @@ __forceinline__ __device__ bool genericAtomicOperation(bool* address,
   return T(fun(address, update_value, op));
 }
 
-namespace detail {
 /**
  * @brief Overloads for `atomic_add`
  * reads the `old` located at the `address` in global or shared memory,
@@ -441,7 +439,7 @@ namespace detail {
  * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
  * cudf::duration_us, cudf::duration_ns and bool
  *
- * Cuda natively supports `sint32`, `uint32`, `uint64`, `float`, `double.
+ * CUDA natively supports `int32_t`, `uint32_t`, `uint64_t`, `float`, `double.
  * (`double` is supported after Pascal).
  * Other types are implemented by `atomicCAS`.
  *
@@ -453,13 +451,11 @@ namespace detail {
 template <typename T>
 __forceinline__ __device__ T atomic_add(T* address, T val)
 {
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceSum{});
+  return cudf::detail::genericAtomicOperation(address, val, cudf::DeviceSum{});
 }
-}  // namespace detail
-}  // namespace cudf
 
 /**
- * @brief Overloads for `atomicMul`
+ * @brief Overloads for `atomic_mul`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (old * val), and stores the result back to memory at the same
  * address. These three operations are performed in one atomic transaction.
@@ -475,24 +471,25 @@ __forceinline__ __device__ T atomic_add(T* address, T val)
  * @returns The old value at `address`
  */
 template <typename T>
-__forceinline__ __device__ T atomicMul(T* address, T val)
+__forceinline__ __device__ T atomic_mul(T* address, T val)
 {
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceProduct{});
+  return cudf::detail::genericAtomicOperation(address, val, cudf::DeviceProduct{});
 }
 
 /**
- * @brief Overloads for `atomicMin`
+ * @brief Overloads for `atomic_min`
  * reads the `old` located at the `address` in global or shared memory,
  * computes the minimum of old and val, and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
  *
- * The supported cudf types for `atomicMin` are:
+ * The supported cudf types for `atomic_min` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
  * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
  * cudf::duration_us, cudf::duration_ns and bool
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
+ *
+ * CUDA natively supports `int32_t`, `uint32_t`, `int64_t`, `uint64_t`.
  * Other types are implemented by `atomicCAS`.
  *
  * @param[in] address The address of old value in global or shared memory
@@ -501,24 +498,25 @@ __forceinline__ __device__ T atomicMul(T* address, T val)
  * @returns The old value at `address`
  */
 template <typename T>
-__forceinline__ __device__ T atomicMin(T* address, T val)
+__forceinline__ __device__ T atomic_min(T* address, T val)
 {
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceMin{});
+  return cudf::detail::genericAtomicOperation(address, val, cudf::DeviceMin{});
 }
 
 /**
- * @brief Overloads for `atomicMax`
+ * @brief Overloads for `atomic_max`
  * reads the `old` located at the `address` in global or shared memory,
  * computes the maximum of old and val, and stores the result back to memory
  * at the same address.
  * These three operations are performed in one atomic transaction.
  *
- * The supported cudf types for `atomicMax` are:
+ * The supported cudf types for `atomic_max` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
  * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
  * cudf::duration_us, cudf::duration_ns and bool
- * Cuda natively supports `sint32`, `uint32`, `sint64`, `uint64`.
+ *
+ * CUDA natively supports `int32_t`, `uint32_t`, `int64_t`, `uint64_t`.
  * Other types are implemented by `atomicCAS`.
  *
  * @param[in] address The address of old value in global or shared memory
@@ -527,24 +525,24 @@ __forceinline__ __device__ T atomicMin(T* address, T val)
  * @returns The old value at `address`
  */
 template <typename T>
-__forceinline__ __device__ T atomicMax(T* address, T val)
+__forceinline__ __device__ T atomic_max(T* address, T val)
 {
-  return cudf::genericAtomicOperation(address, val, cudf::DeviceMax{});
+  return cudf::detail::genericAtomicOperation(address, val, cudf::DeviceMax{});
 }
 
 /**
- * @brief Overloads for `atomicCAS`
+ * @brief Overloads for `atomic_cas`
  * reads the `old` located at the `address` in global or shared memory,
  * computes (`old` == `compare` ? `val` : `old`),
  * and stores the result back to memory at the same address.
  * These three operations are performed in one atomic transaction.
  *
- * The supported cudf types for `atomicCAS` are:
+ * The supported cudf types for `atomic_cas` are:
  * int8_t, int16_t, int32_t, int64_t, float, double,
  * cudf::timestamp_D, cudf::timestamp_s, cudf::timestamp_ms, cudf::timestamp_us,
  * cudf::timestamp_ns, cudf::duration_D, cudf::duration_s, cudf::duration_ms,
  * cudf::duration_us, cudf::duration_ns and bool
- * Cuda natively supports `sint32`, `uint32`, `uint64`.
+ * CUDA natively supports `int32_t`, `uint32_t`, `uint64_t`.
  * Other types are implemented by `atomicCAS`.
  *
  * @param[in] address The address of old value in global or shared memory
@@ -554,7 +552,10 @@ __forceinline__ __device__ T atomicMax(T* address, T val)
  * @returns The old value at `address`
  */
 template <typename T>
-__forceinline__ __device__ T atomicCAS(T* address, T compare, T val)
+__forceinline__ __device__ T atomic_cas(T* address, T compare, T val)
 {
   return cudf::detail::typesAtomicCASImpl<T>()(address, compare, val);
 }
+
+}  // namespace detail
+}  // namespace cudf
