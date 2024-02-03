@@ -241,19 +241,7 @@ cdef class RollingAggregation:
             ))
         return agg
 
-cdef class GroupbyAggregation:
-    """A Cython wrapper for groupby aggregations.
-
-    **This class should never be instantiated using a standard constructor,
-    only using one of its many factories.** These factories handle mapping
-    different cudf operations to their libcudf analogs, e.g.
-    `cudf.DataFrame.idxmin` -> `libcudf.argmin`. Additionally, they perform
-    any additional configuration needed to translate Python arguments into
-    their corresponding C++ types (for instance, C++ enumerations used for
-    flag arguments). The factory approach is necessary to support operations
-    like `df.agg(lambda x: x.sum())`; such functions are called with this
-    class as an argument to generation the desired aggregation.
-    """
+cdef class Aggregation:
     def __init__(self, pylibcudf.aggregation.Aggregation agg):
         self.c_obj = agg
 
@@ -454,7 +442,7 @@ cdef RollingAggregation make_rolling_aggregation(op, kwargs=None):
         raise TypeError(f"Unknown aggregation {op}")
     return agg
 
-cdef GroupbyAggregation make_groupby_aggregation(op, kwargs=None):
+cdef Aggregation make_aggregation(op, kwargs=None):
     r"""
     Parameters
     ----------
@@ -473,21 +461,21 @@ cdef GroupbyAggregation make_groupby_aggregation(op, kwargs=None):
 
     Returns
     -------
-    GroupbyAggregation
+    Aggregation
     """
     if kwargs is None:
         kwargs = {}
 
-    cdef GroupbyAggregation agg
+    cdef Aggregation agg
     if isinstance(op, str):
-        agg = getattr(GroupbyAggregation, op)(**kwargs)
+        agg = getattr(Aggregation, op)(**kwargs)
     elif callable(op):
         if op is list:
-            agg = GroupbyAggregation.collect()
+            agg = Aggregation.collect()
         elif "dtype" in kwargs:
-            agg = GroupbyAggregation.from_udf(op, **kwargs)
+            agg = Aggregation.from_udf(op, **kwargs)
         else:
-            agg = op(GroupbyAggregation)
+            agg = op(Aggregation)
     else:
         raise TypeError(f"Unknown aggregation {op}")
     return agg

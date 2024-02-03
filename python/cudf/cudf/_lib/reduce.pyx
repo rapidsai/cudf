@@ -3,7 +3,7 @@
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.aggregation cimport GroupbyAggregation, make_groupby_aggregation
+from cudf._lib.aggregation cimport make_aggregation
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types cimport dtype_to_pylibcudf_type, is_decimal_type_id
@@ -43,12 +43,9 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
 
         return cudf.utils.dtypes._get_nan_for_dtype(col_dtype)
 
-    cdef GroupbyAggregation cython_agg = make_groupby_aggregation(
-        reduction_op, kwargs)
-
     result = pylibcudf.reduce.reduce(
         incol.to_pylibcudf(mode="read"),
-        cython_agg.c_obj,
+        make_aggregation(reduction_op, kwargs).c_obj,
         dtype_to_pylibcudf_type(col_dtype),
     )
 
@@ -76,12 +73,10 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     inclusive: bool
         Flag for including nulls in relevant scan
     """
-    cdef GroupbyAggregation cython_agg = make_groupby_aggregation(scan_op, kwargs)
-
     return Column.from_pylibcudf(
         pylibcudf.reduce.scan(
             incol.to_pylibcudf(mode="read"),
-            cython_agg.c_obj,
+            make_aggregation(scan_op, kwargs).c_obj,
             pylibcudf.reduce.ScanType.INCLUSIVE if inclusive
             else pylibcudf.reduce.ScanType.EXCLUSIVE,
         )
