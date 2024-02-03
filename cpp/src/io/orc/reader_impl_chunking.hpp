@@ -232,6 +232,7 @@ struct chunk_read_data {
   // Chunk of rows in the internal decoded table to output for each `read_chunk()`.
   std::vector<chunk> output_table_chunks;
   std::size_t curr_output_table_chunk{0};
+  std::unique_ptr<cudf::table> decoded_table;
   bool more_table_chunk_to_output() const
   {
     return curr_output_table_chunk < output_table_chunks.size();
