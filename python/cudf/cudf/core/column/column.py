@@ -2261,9 +2261,14 @@ def as_column(
         np_type = None
         try:
             if dtype is not None:
-                dtype = cudf.dtype(dtype)
-                if isinstance(
-                    dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)
+                if dtype in {"category", "interval"} or isinstance(
+                    dtype,
+                    (
+                        cudf.CategoricalDtype,
+                        cudf.IntervalDtype,
+                        pd.IntervalDtype,
+                        pd.CategoricalDtype,
+                    ),
                 ):
                     raise TypeError
                 if isinstance(dtype, pd.DatetimeTZDtype):
@@ -2414,7 +2419,9 @@ def as_column(
             elif np_type == np.str_:
                 sr = pd.Series(arbitrary, dtype="str")
                 data = as_column(sr, nan_as_null=nan_as_null)
-            elif isinstance(cudf.dtype(dtype), cudf.IntervalDtype):
+            elif dtype == "interval" or isinstance(
+                dtype, (pd.IntervalDtype, cudf.IntervalDtype)
+            ):
                 sr = pd.Series(arbitrary, dtype="interval")
                 data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
             elif (
