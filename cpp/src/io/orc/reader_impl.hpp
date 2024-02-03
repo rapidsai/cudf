@@ -128,10 +128,6 @@ class reader::impl {
    */
   void read_data();
 
-  /**
-   * TODO: merge with read data.
-  */
-  void subpass_preprocess();
 
   /**
    * @brief Decompress and decode the data in the internal buffers, and store the result into

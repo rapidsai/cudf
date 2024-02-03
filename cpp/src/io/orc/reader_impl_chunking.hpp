@@ -191,7 +191,7 @@ struct file_intermediate_data {
   std::vector<std::vector<chunk>> lvl_stripe_stream_chunks; 
 
 
-// TODO
+// TODO rename
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
 
   // For data processing, decompression, and decoding.

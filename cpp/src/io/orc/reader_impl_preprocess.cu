@@ -796,6 +796,11 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   lvl_chunks.resize(_selected_columns.num_levels());
   _out_buffers.resize(_selected_columns.num_levels());
 
+
+//
+//
+//
+// TODO: move this to reader_impl.cu, decomp and decode step
   std::size_t num_stripes = selected_stripes.size();
 
   // Iterates through levels of nested columns, child column will be one level down

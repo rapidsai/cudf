@@ -62,7 +62,7 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
                                        std::vector<std::vector<size_type>> const& stripes)
 {
   prepare_data(skip_rows, num_rows_opt, stripes);
-  return read_chunk_internal();
+  return make_output_chunk();
 }
 
 table_metadata reader::impl::make_output_metadata()
@@ -94,7 +94,10 @@ table_metadata reader::impl::make_output_metadata()
   return out_metadata;
 }
 
-table_with_metadata reader::impl::read_chunk_internal()
+// TODO:  move code here
+void reader::impl::decompress_and_decode() {}
+
+table_with_metadata reader::impl::make_output_chunk()
 {
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
@@ -134,11 +137,6 @@ table_with_metadata reader::impl::read_chunk_internal()
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
 }
-
-// TODO:  move code here
-void reader::impl::decompress_and_decode() {}
-
-table_with_metadata reader::impl::make_output_chunk() { return table_with_metadata{}; }
 
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
