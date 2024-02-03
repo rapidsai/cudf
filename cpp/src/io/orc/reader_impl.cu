@@ -43,16 +43,11 @@ reader::impl::impl(std::size_t output_size_limit,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _stream(stream),
-    _mr(mr),
-    _config.timestamp_type{options.get_timestamp_type()},
-    _config.use_index{options.is_enabled_use_index()},
-    _config.use_np_dtypes{options.is_enabled_use_np_dtypes()},
-    _config.decimal128_columns{options.get_decimal128_columns()},
-    _col_meta{std::make_unique<reader_column_meta>()},
-    _sources(std::move(sources)),
-    _metadata{_sources, stream},
-    _selected_columns{_metadata.select_columns(options.get_columns())},
+  : 
+  reader::impl::impl(std::move(sources),
+                     options,
+                     stream,
+                     mr   ),
     _chunk_read_data{output_size_limit, data_read_limit}
 {
 }
