@@ -258,7 +258,8 @@ class CategoricalDtype(_BaseDtype):
         if categories is None:
             return categories
         if len(categories) == 0 and not isinstance(
-            categories.dtype, cudf.IntervalDtype
+            getattr(categories, "dtype", None),
+            (cudf.IntervalDtype, pd.IntervalDtype),
         ):
             dtype = "object"  # type: Any
         else:
