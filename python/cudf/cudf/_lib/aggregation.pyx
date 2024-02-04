@@ -1,11 +1,8 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from enum import Enum
-
 import pandas as pd
 from numba.np import numpy_support
 
-cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
 
 import cudf
@@ -13,33 +10,14 @@ from cudf._lib import pylibcudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
 from cudf.utils import cudautils
 
-
-class AggregationKind(Enum):
-    SUM = libcudf_aggregation.aggregation.Kind.SUM
-    PRODUCT = libcudf_aggregation.aggregation.Kind.PRODUCT
-    MIN = libcudf_aggregation.aggregation.Kind.MIN
-    MAX = libcudf_aggregation.aggregation.Kind.MAX
-    COUNT = libcudf_aggregation.aggregation.Kind.COUNT_VALID
-    SIZE = libcudf_aggregation.aggregation.Kind.COUNT_ALL
-    ANY = libcudf_aggregation.aggregation.Kind.ANY
-    ALL = libcudf_aggregation.aggregation.Kind.ALL
-    SUM_OF_SQUARES = libcudf_aggregation.aggregation.Kind.SUM_OF_SQUARES
-    MEAN = libcudf_aggregation.aggregation.Kind.MEAN
-    VAR = libcudf_aggregation.aggregation.Kind.VARIANCE
-    STD = libcudf_aggregation.aggregation.Kind.STD
-    MEDIAN = libcudf_aggregation.aggregation.Kind.MEDIAN
-    QUANTILE = libcudf_aggregation.aggregation.Kind.QUANTILE
-    ARGMAX = libcudf_aggregation.aggregation.Kind.ARGMAX
-    ARGMIN = libcudf_aggregation.aggregation.Kind.ARGMIN
-    NUNIQUE = libcudf_aggregation.aggregation.Kind.NUNIQUE
-    NTH = libcudf_aggregation.aggregation.Kind.NTH_ELEMENT
-    RANK = libcudf_aggregation.aggregation.Kind.RANK
-    COLLECT = libcudf_aggregation.aggregation.Kind.COLLECT_LIST
-    UNIQUE = libcudf_aggregation.aggregation.Kind.COLLECT_SET
-    PTX = libcudf_aggregation.aggregation.Kind.PTX
-    CUDA = libcudf_aggregation.aggregation.Kind.CUDA
-    CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
-    COVARIANCE = libcudf_aggregation.aggregation.Kind.COVARIANCE
+_agg_name_map = {
+    "COUNT_VALID": "COUNT",
+    "COUNT_ALL": "SIZE",
+    "VARIANCE": "VAR",
+    "NTH_ELEMENT": "NTH",
+    "COLLECT_LIST": "COLLECT",
+    "COLLECT_SET": "UNIQUE",
+}
 
 
 class Aggregation:
@@ -48,7 +26,8 @@ class Aggregation:
 
     @property
     def kind(self):
-        return AggregationKind(int(self.c_obj.kind())).name
+        name = self.c_obj.kind().name
+        return _agg_name_map.get(name, name)
 
     @classmethod
     def sum(cls):
