@@ -5,18 +5,14 @@ from enum import Enum, IntEnum
 import pandas as pd
 from numba.np import numpy_support
 
-from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
-from cudf.utils import cudautils
-
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
 
 import cudf
-
-from cudf._lib cimport pylibcudf
-
 from cudf._lib import pylibcudf
+from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
+from cudf.utils import cudautils
 
 
 class AggregationKind(Enum):
@@ -70,8 +66,8 @@ class RankMethod(IntEnum):
     DENSE = libcudf_aggregation.rank_method.DENSE
 
 
-cdef class Aggregation:
-    def __init__(self, pylibcudf.aggregation.Aggregation agg):
+class Aggregation:
+    def __init__(self, agg):
         self.c_obj = agg
 
     @property
@@ -251,7 +247,7 @@ cdef class Aggregation:
         )
 
 
-cdef Aggregation make_aggregation(op, kwargs=None):
+def make_aggregation(op, kwargs=None):
     r"""
     Parameters
     ----------
@@ -275,16 +271,13 @@ cdef Aggregation make_aggregation(op, kwargs=None):
     if kwargs is None:
         kwargs = {}
 
-    cdef Aggregation agg
     if isinstance(op, str):
-        agg = getattr(Aggregation, op)(**kwargs)
+        return getattr(Aggregation, op)(**kwargs)
     elif callable(op):
         if op is list:
-            agg = Aggregation.collect()
+            return Aggregation.collect()
         elif "dtype" in kwargs:
-            agg = Aggregation.from_udf(op, **kwargs)
+            return Aggregation.from_udf(op, **kwargs)
         else:
-            agg = op(Aggregation)
-    else:
-        raise TypeError(f"Unknown aggregation {op}")
-    return agg
+            return op(Aggregation)
+    raise TypeError(f"Unknown aggregation {op}")
