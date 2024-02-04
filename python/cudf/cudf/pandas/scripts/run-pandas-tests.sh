@@ -16,6 +16,7 @@
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
 
+set -euo pipefail
 
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
