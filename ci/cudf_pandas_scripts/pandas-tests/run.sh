@@ -3,6 +3,8 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+set -euo pipefail
+
 PANDAS_TESTS_BRANCH=${1}
 
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch"
