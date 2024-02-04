@@ -34,7 +34,7 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -n 10 \
   --tb=line \
-  --skip-slow \
+  -m "not slow" \
   --max-worker-restart=3 \
   --import-mode=importlib \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
