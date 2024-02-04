@@ -1,13 +1,12 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from enum import Enum, IntEnum
+from enum import Enum
 
 import pandas as pd
 from numba.np import numpy_support
 
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
 
 import cudf
 from cudf._lib import pylibcudf
@@ -41,29 +40,6 @@ class AggregationKind(Enum):
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
     CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
     COVARIANCE = libcudf_aggregation.aggregation.Kind.COVARIANCE
-
-
-class CorrelationType(IntEnum):
-    PEARSON = (
-        <underlying_type_t_correlation_type>
-        libcudf_aggregation.correlation_type.PEARSON
-    )
-    KENDALL = (
-        <underlying_type_t_correlation_type>
-        libcudf_aggregation.correlation_type.KENDALL
-    )
-    SPEARMAN = (
-        <underlying_type_t_correlation_type>
-        libcudf_aggregation.correlation_type.SPEARMAN
-    )
-
-
-class RankMethod(IntEnum):
-    FIRST = libcudf_aggregation.rank_method.FIRST
-    AVERAGE = libcudf_aggregation.rank_method.AVERAGE
-    MIN = libcudf_aggregation.rank_method.MIN
-    MAX = libcudf_aggregation.rank_method.MAX
-    DENSE = libcudf_aggregation.rank_method.DENSE
 
 
 class Aggregation:
