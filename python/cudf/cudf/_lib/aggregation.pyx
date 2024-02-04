@@ -3,8 +3,6 @@
 import pandas as pd
 from numba.np import numpy_support
 
-cimport cudf._lib.cpp.types as libcudf_types
-
 import cudf
 from cudf._lib import pylibcudf
 from cudf._lib.types import SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES
@@ -75,7 +73,7 @@ class Aggregation:
         return cls(pylibcudf.aggregation.nunique(pylibcudf.types.NullPolicy.EXCLUDE))
 
     @classmethod
-    def nth(cls, libcudf_types.size_type size):
+    def nth(cls, size):
         return cls(pylibcudf.aggregation.nth_element(size))
 
     @classmethod
@@ -130,7 +128,7 @@ class Aggregation:
         )
 
     @classmethod
-    def corr(cls, method, libcudf_types.size_type min_periods):
+    def corr(cls, method, min_periods):
         return cls(pylibcudf.aggregation.correlation(
             pylibcudf.aggregation.CorrelationType[method.upper()],
             min_periods
@@ -138,11 +136,7 @@ class Aggregation:
         ))
 
     @classmethod
-    def cov(
-        cls,
-        libcudf_types.size_type min_periods,
-        libcudf_types.size_type ddof=1
-    ):
+    def cov(cls, min_periods, ddof=1):
         return cls(pylibcudf.aggregation.covariance(
             min_periods,
             ddof
