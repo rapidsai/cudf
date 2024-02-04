@@ -1,6 +1,6 @@
 =======
-groupby
+rolling
 =======
 
-.. automodule:: cudf._lib.pylibcudf.groupby
+.. automodule:: cudf._lib.pylibcudf.rolling
    :members:
