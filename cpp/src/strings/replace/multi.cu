@@ -20,7 +20,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -331,7 +330,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                        target_count,
                        [d_string_indices, d_targets_offsets] __device__(size_type idx) {
                          auto const str_idx = d_string_indices[idx] - 1;
-                         cudf::detail::atomic_add(d_targets_offsets + str_idx, 1);
+                         atomicAdd(d_targets_offsets + str_idx, 1);
                        });
     // finally, convert the counts into offsets
     thrust::exclusive_scan(rmm::exec_policy(stream),

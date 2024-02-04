@@ -16,7 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 

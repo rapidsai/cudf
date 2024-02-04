@@ -20,7 +20,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -151,7 +150,7 @@ struct var_functor {
           // fact. (1) is more work than it's worth without benchmarking, and
           // this approach should outperform (2) unless large amounts of the
           // data is null.
-          cudf::detail::atomic_add(d_null_count, 1);
+          atomicAdd(d_null_count, 1);
         } else {
           d_result.set_valid(i);
         }

@@ -19,7 +19,6 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -101,7 +100,7 @@ CUDF_KERNEL void copy_range_kernel(SourceValueIterator source_value_begin,
     auto block_null_change =
       cudf::detail::single_lane_block_sum_reduce<block_size, leader_lane>(warp_null_change);
     if (threadIdx.x == 0) {  // if the first thread in a block
-      cudf::detail::atomic_add(null_count, block_null_change);
+      atomicAdd(null_count, block_null_change);
     }
   }
 }

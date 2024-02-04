@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -104,7 +103,7 @@ void label_segments(InputIterator offsets_begin,
       // In case we have repeated offsets (i.e., we have empty segments), this `atomicAdd` call will
       // make sure the label values corresponding to these empty segments will be skipped in the
       // output.
-      if (dst_idx < num_labels) { cudf::detail::atomic_add(&output[dst_idx], OutputType{1}); }
+      if (dst_idx < num_labels) { atomicAdd(&output[dst_idx], OutputType{1}); }
     });
   thrust::inclusive_scan(rmm::exec_policy(stream), label_begin, label_end, label_begin);
 }

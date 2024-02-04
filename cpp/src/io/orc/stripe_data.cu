@@ -18,7 +18,6 @@
 
 #include <io/utilities/block_utils.cuh>
 
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/io/orc_types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -1402,10 +1401,10 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
       if (s->top.data.index.strm_offset[0] > s->chunk.strm_len[CI_DATA]) {
-        cudf::detail::atomic_add(error_count, 1);
+        atomicAdd(error_count, 1);
       }
       if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
-        cudf::detail::atomic_add(error_count, 1);
+        atomicAdd(error_count, 1);
       }
       uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
       uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
@@ -1826,8 +1825,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     if (num_rowgroups > 0) {
       row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }
-    cudf::detail::atomic_add(&chunks[chunk_id].num_child_rows,
-                             static_cast<uint32_t>(s->num_child_rows));
+    atomicAdd(&chunks[chunk_id].num_child_rows, static_cast<uint32_t>(s->num_child_rows));
   }
 }
 

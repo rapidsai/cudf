@@ -20,7 +20,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -281,7 +280,7 @@ __inline__ __device__ void add_pair_to_cache(size_type const first,
                                              size_type* joined_shared_l,
                                              size_type* joined_shared_r)
 {
-  size_type my_current_idx{cudf::detail::atomic_add(current_idx_shared + warp_id, size_type(1))};
+  size_type my_current_idx{atomicAdd(current_idx_shared + warp_id, size_type(1))};
 
   // its guaranteed to fit into the shared cache
   joined_shared_l[my_current_idx] = first;
@@ -304,9 +303,7 @@ __device__ void flush_output_cache(unsigned int const activemask,
   int num_threads               = __popc(activemask);
   cudf::size_type output_offset = 0;
 
-  if (0 == lane_id) {
-    output_offset = cudf::detail::atomic_add(current_idx, current_idx_shared[warp_id]);
-  }
+  if (0 == lane_id) { output_offset = atomicAdd(current_idx, current_idx_shared[warp_id]); }
 
   // No warp sync is necessary here because we are assuming that ShuffleIndex
   // is internally using post-CUDA 9.0 synchronization-safe primitives

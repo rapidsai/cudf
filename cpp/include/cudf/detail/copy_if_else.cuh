@@ -20,7 +20,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
 #include <rmm/device_scalar.hpp>
@@ -95,7 +94,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
     // block_valid_count will only be valid on thread 0
     if (threadIdx.x == 0) {
       // using an atomic here because there are multiple blocks doing this work
-      cudf::detail::atomic_add(valid_count, block_valid_count);
+      atomicAdd(valid_count, block_valid_count);
     }
   }
 }

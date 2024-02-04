@@ -20,7 +20,6 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -251,7 +250,7 @@ build_string_row_offsets(table_view const& tbl,
                      auto const col = element_idx / num_rows;
                      auto const val =
                        d_offsets_iterators[col][row + 1] - d_offsets_iterators[col][row];
-                     cudf::detail::atomic_add(&d_row_sizes[row], val);
+                     atomicAdd(&d_row_sizes[row], val);
                    });
 
   // transform the row sizes to include fixed width size and alignment

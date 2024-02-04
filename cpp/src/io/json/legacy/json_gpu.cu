@@ -20,7 +20,6 @@
 #include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 #include <cudf/types.hpp>
@@ -283,7 +282,7 @@ CUDF_KERNEL void convert_data_to_columns_kernel(parse_options_view opts,
 
         // set the valid bitmap - all bits were set to 0 to start
         set_bit(valid_fields[desc.column], rec_id);
-        cudf::detail::atomic_add(&num_valid_fields[desc.column], 1);
+        atomicAdd(&num_valid_fields[desc.column], 1);
       } else {
         if (cudf::type_dispatcher(column_types[desc.column],
                                   ConvertFunctor{},
@@ -296,7 +295,7 @@ CUDF_KERNEL void convert_data_to_columns_kernel(parse_options_view opts,
                                   false)) {
           // set the valid bitmap - all bits were set to 0 to start
           set_bit(valid_fields[desc.column], rec_id);
-          cudf::detail::atomic_add(&num_valid_fields[desc.column], 1);
+          atomicAdd(&num_valid_fields[desc.column], 1);
         }
       }
     } else if (column_types[desc.column].id() == type_id::STRING) {
@@ -350,16 +349,16 @@ CUDF_KERNEL void detect_data_types_kernel(
     // Checking if the field is empty/valid
     if (serialized_trie_contains(opts.trie_na, {desc.value_begin, value_len})) {
       // Increase the null count for array rows, where the null count is initialized to zero.
-      if (!are_rows_objects) { cudf::detail::atomic_add(&column_infos[desc.column].null_count, 1); }
+      if (!are_rows_objects) { atomicAdd(&column_infos[desc.column].null_count, 1); }
       continue;
     } else if (are_rows_objects) {
       // For files with object rows, null count is initialized to row count. The value is decreased
       // here for every valid field.
-      cudf::detail::atomic_add(&column_infos[desc.column].null_count, -1);
+      atomicAdd(&column_infos[desc.column].null_count, -1);
     }
     // Don't need counts to detect strings, any field in quotes is deduced to be a string
     if (desc.is_quoted) {
-      cudf::detail::atomic_add(&column_infos[desc.column].string_count, 1);
+      atomicAdd(&column_infos[desc.column].string_count, 1);
       continue;
     }
 
@@ -406,21 +405,21 @@ CUDF_KERNEL void detect_data_types_kernel(
     if (maybe_hex) { --int_req_number_cnt; }
     if (serialized_trie_contains(opts.trie_true, {desc.value_begin, value_len}) ||
         serialized_trie_contains(opts.trie_false, {desc.value_begin, value_len})) {
-      cudf::detail::atomic_add(&column_infos[desc.column].bool_count, 1);
+      atomicAdd(&column_infos[desc.column].bool_count, 1);
     } else if (digit_count == int_req_number_cnt) {
       bool is_negative       = (*desc.value_begin == '-');
       char const* data_begin = desc.value_begin + (is_negative || (*desc.value_begin == '+'));
       cudf::size_type* ptr   = cudf::io::gpu::infer_integral_field_counter(
         data_begin, data_begin + digit_count, is_negative, column_infos[desc.column]);
-      cudf::detail::atomic_add(ptr, 1);
+      atomicAdd(ptr, 1);
     } else if (is_like_float(
                  value_len, digit_count, decimal_count, dash_count + plus_count, exponent_count)) {
-      cudf::detail::atomic_add(&column_infos[desc.column].float_count, 1);
+      atomicAdd(&column_infos[desc.column].float_count, 1);
     }
     // A date-time field cannot have more than 3 non-special characters
     // A number field cannot have more than one decimal point
     else if (other_count > 3 || decimal_count > 1) {
-      cudf::detail::atomic_add(&column_infos[desc.column].string_count, 1);
+      atomicAdd(&column_infos[desc.column].string_count, 1);
     } else {
       // A date field can have either one or two '-' or '\'; A legal combination will only have one
       // of them To simplify the process of auto column detection, we are not covering all the
@@ -428,20 +427,20 @@ CUDF_KERNEL void detect_data_types_kernel(
       if ((dash_count > 0 && dash_count <= 2 && slash_count == 0) ||
           (dash_count == 0 && slash_count > 0 && slash_count <= 2)) {
         if (colon_count <= 2) {
-          cudf::detail::atomic_add(&column_infos[desc.column].datetime_count, 1);
+          atomicAdd(&column_infos[desc.column].datetime_count, 1);
         } else {
-          cudf::detail::atomic_add(&column_infos[desc.column].string_count, 1);
+          atomicAdd(&column_infos[desc.column].string_count, 1);
         }
       } else {
         // Default field type is string
-        cudf::detail::atomic_add(&column_infos[desc.column].string_count, 1);
+        atomicAdd(&column_infos[desc.column].string_count, 1);
       }
     }
   }
   if (!are_rows_objects) {
     // For array rows, mark missing fields as null
     for (; input_field_index < num_columns; ++input_field_index)
-      cudf::detail::atomic_add(&column_infos[input_field_index].null_count, 1);
+      atomicAdd(&column_infos[input_field_index].null_count, 1);
   }
 }
 
@@ -499,7 +498,7 @@ CUDF_KERNEL void collect_keys_info_kernel(parse_options_view const options,
   for (auto field_range = advance(row_data_range.first);
        field_range.key_begin < row_data_range.second;
        field_range = advance(field_range.value_end)) {
-    auto const idx = cudf::detail::atomic_add(keys_cnt, 1ULL);
+    auto const idx = atomicAdd(keys_cnt, 1ULL);
     if (keys_info.has_value()) {
       auto const len                              = field_range.key_end - field_range.key_begin;
       keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data.begin();

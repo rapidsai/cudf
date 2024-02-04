@@ -27,7 +27,6 @@
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/replace/nulls.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/detail/replace.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -110,7 +109,7 @@ CUDF_KERNEL void replace_nulls_strings(cudf::column_device_view input,
   uint32_t block_valid_count = cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
   if (threadIdx.x == 0) {
-    cudf::detail::atomic_add(valid_counter, static_cast<cudf::size_type>(block_valid_count));
+    atomicAdd(valid_counter, static_cast<cudf::size_type>(block_valid_count));
   }
 }
 
@@ -157,7 +156,7 @@ CUDF_KERNEL void replace_nulls(cudf::column_device_view input,
       cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
     // one thread computes and adds to output_valid_count
     if (threadIdx.x == 0) {
-      cudf::detail::atomic_add(output_valid_count, static_cast<cudf::size_type>(block_valid_count));
+      atomicAdd(output_valid_count, static_cast<cudf::size_type>(block_valid_count));
     }
   }
 }

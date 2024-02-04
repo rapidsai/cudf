@@ -15,7 +15,6 @@
  */
 
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -107,7 +106,7 @@ CUDF_KERNEL void count_and_set_positions(char const* data,
   // Process the data
   for (long i = 0; i < byteToProcess; i++) {
     if (raw[i] == key) {
-      auto const idx = cudf::detail::atomic_add(count, static_cast<cudf::size_type>(1));
+      auto const idx = atomicAdd(count, static_cast<cudf::size_type>(1));
       setElement(positions, idx, did + offset + i, key);
     }
   }
