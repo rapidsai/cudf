@@ -270,17 +270,15 @@ metadata::metadata(datasource* source)
   // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
   // Currently the indexes are only used for the string size calculations.
   // Could also just read indexes for string columns, but that would require changes elsewhere
-  // where we're trying to determine if we have the indexes or not. Since this is a short-term
-  // solution, it's probably not worth going down that rabbit hole just yet.
+  // where we're trying to determine if we have the indexes or not.
   // Note: This will have to be modified if there are other uses in the future (e.g. calculating
   // chunk/pass boundaries).
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == BYTE_ARRAY; });
 
   if (has_strings) {
-    // FIXME: there's a more elegant way to do this, for now just trying to get it working.
     // loop through the column chunks and read column and offset index offsets and sizes
-    // find the first offset and the total length (the indexes should be contiguous)
+    // find the first offset and the total length (the indexes are contiguous)
     int64_t min_offset = std::numeric_limits<int>::max();
     int64_t max_offset = 0;
 
