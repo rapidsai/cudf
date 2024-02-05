@@ -99,7 +99,9 @@ class IntervalColumn(StructColumn):
                     mask=self.mask,
                     offset=self.offset,
                     null_count=self.null_count,
-                    children=self.children,
+                    children=tuple(
+                        child.astype(dtype.subtype) for child in self.children
+                    ),
                 )
         else:
             raise ValueError("dtype must be IntervalDtype")
