@@ -1,6 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
-from . import aggregation, binaryop, copying, groupby, interop, unary, reduce
+from . import aggregation, binaryop, copying, groupby, interop, reduce, unary
 from .column import Column
 from .gpumemoryview import gpumemoryview
 from .scalar import Scalar
