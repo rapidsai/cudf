@@ -2226,7 +2226,7 @@ def as_column(
     # Start of arbitrary that's not handed above but dtype provided
     elif isinstance(dtype, pd.DatetimeTZDtype):
         raise NotImplementedError(
-            "Use `tz_localize()` to construct " "timezone aware data."
+            "Use `tz_localize()` to construct timezone aware data."
         )
     elif isinstance(dtype, cudf.core.dtypes.DecimalDtype):
         # Arrow throws a type error if the input is of
