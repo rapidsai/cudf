@@ -586,9 +586,10 @@ void make_device_json_column(device_span<SymbolT const> input,
   });
 
   std::vector<uint8_t> is_str_column_all_nulls{};
-  if (is_enabled_mixed_types_as_string)
+  if (is_enabled_mixed_types_as_string) {
     is_str_column_all_nulls = cudf::detail::make_std_vector_async(
       is_all_nulls_str_column(input, d_column_tree, tree, col_ids, options, stream), stream);
+  }
 
   // use hash map because we may skip field name's col_ids
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>> columns;
@@ -634,10 +635,10 @@ void make_device_json_column(device_span<SymbolT const> input,
     auto& parent_col = it->second.get();
     bool replaced    = false;
     if (mapped_columns.count({parent_col_id, name}) > 0) {
+      auto const old_col_id = mapped_columns[{parent_col_id, name}];
       // If mixed type as string is enabled, make both of them strings and merge them.
       // All child columns will be ignored when parsing.
       if (is_enabled_mixed_types_as_string) {
-        auto old_col_id    = mapped_columns[{parent_col_id, name}];
         bool is_mixed_type = true;
         // If new or old is STR and they are all not null, make it mixed type, else ignore.
         if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
@@ -664,7 +665,6 @@ void make_device_json_column(device_span<SymbolT const> input,
         ignore_vals[this_col_id] = 1;
         continue;
       }
-      auto old_col_id = mapped_columns[{parent_col_id, name}];
       if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
         // remap
         ignore_vals[old_col_id] = 1;
