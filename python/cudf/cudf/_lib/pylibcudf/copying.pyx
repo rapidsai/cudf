@@ -67,15 +67,22 @@ cpdef Table gather(
     return Table.from_libcudf(move(c_result))
 
 
-cpdef Table scatter_table(Table source, Column scatter_map, Table target_table):
-    """Scatter rows from source into target_table according to scatter_map.
+cpdef Table scatter(
+    TableOrListOfScalars source,
+    Column scatter_map,
+    Table target_table
+):
+    """Scatter from source into target_table according to scatter_map.
+
+    If source is a table, it specifies rows to scatter. If source is a list,
+    each scalar is scattered into the corresponding column in the ``target_table``.
 
     For details, see :cpp:func:`scatter`.
 
     Parameters
     ----------
-    source : Table
-        The table object from which to pull data.
+    source : Union[Table, List[Scalar]]
+        The table object or list of scalars from which to pull data.
     scatter_map : Column
         A mapping from rows in source to rows in target_table.
     target_table : Table
@@ -83,107 +90,58 @@ cpdef Table scatter_table(Table source, Column scatter_map, Table target_table):
 
     Returns
     -------
-    pylibcudf.Table
+    Table
         The result of the scatter
     """
     cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source.view(),
-                scatter_map.view(),
-                target_table.view(),
+    cdef vector[reference_wrapper[const scalar]] source_scalars
+    if TableOrListOfScalars is Table:
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source.view(),
+                    scatter_map.view(),
+                    target_table.view(),
+                )
             )
-        )
-
+    else:
+        source_scalars = _as_vector(source)
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_scalars,
+                    scatter_map.view(),
+                    target_table.view(),
+                )
+            )
     return Table.from_libcudf(move(c_result))
 
 
-# TODO: Could generalize list to sequence
-cpdef Table scatter_scalars(list source, Column scatter_map, Table target_table):
-    """Scatter scalars from source into target_table according to scatter_map.
-
-    For details, see :cpp:func:`scatter`.
-
-    Parameters
-    ----------
-    source : List[Scalar]
-        A list of scalars to scatter into target_table.
-    scatter_map : Column
-        A mapping from rows in source to rows in target_table.
-    target_table : Table
-        The table object into which to scatter data.
-
-    Returns
-    -------
-    pylibcudf.Table
-        The result of the scatter
-    """
-    cdef vector[reference_wrapper[const scalar]] source_scalars = \
-        _as_vector(source)
-
-    cdef unique_ptr[table] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_scalars,
-                scatter_map.view(),
-                target_table.view(),
-            )
-        )
-
-    return Table.from_libcudf(move(c_result))
-
-
-cpdef object empty_column_like(Column input):
-    """Create an empty column with the same type as input.
+cpdef ColumnOrTable empty_like(ColumnOrTable input):
+    """Create an empty column or table with the same type as ``input``.
 
     For details, see :cpp:func:`empty_like`.
 
     Parameters
     ----------
-    input : Column
-        The column to use as a template for the output.
+    input : Union[Column, Table]
+        The column or table to use as a template for the output.
 
     Returns
     -------
-    pylibcudf.Column
-        An empty column with the same type as input.
+    Union[Column, Table]
+        An empty column or table with the same type(s) as ``input``.
     """
-    cdef unique_ptr[column] c_column_result
-    with nogil:
-        c_column_result = move(
-            cpp_copying.empty_like(
-                (<Column> input).view(),
-            )
-        )
-    return Column.from_libcudf(move(c_column_result))
-
-
-cpdef object empty_table_like(Table input):
-    """Create an empty table with the same type as input.
-
-    For details, see :cpp:func:`empty_like`.
-
-    Parameters
-    ----------
-    input : Table
-        The table to use as a template for the output.
-
-    Returns
-    -------
-    pylibcudf.Table
-        An empty table with the same type as input.
-    """
-    cdef unique_ptr[table] c_table_result
-    with nogil:
-        c_table_result = move(
-            cpp_copying.empty_like(
-                (<Table> input).view(),
-            )
-        )
-    return Table.from_libcudf(move(c_table_result))
+    cdef unique_ptr[table] c_tbl_result
+    cdef unique_ptr[column] c_col_result
+    if ColumnOrTable is Column:
+        with nogil:
+            c_col_result = move(cpp_copying.empty_like(input.view()))
+        return Column.from_libcudf(move(c_col_result))
+    else:
+        with nogil:
+            c_tbl_result = move(cpp_copying.empty_like(input.view()))
+        return Table.from_libcudf(move(c_tbl_result))
 
 
 cpdef Column allocate_like(
@@ -340,157 +298,100 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
     return Column.from_libcudf(move(c_result))
 
 
-cpdef list column_split(Column input_column, list splits):
-    """Split input_column into multiple columns.
+cpdef list split(ColumnOrTable input, list splits):
+    """Split input into multiple.
 
     For details on the implementation, see :cpp:func:`split`.
 
     Parameters
     ----------
-    input_column : Column
+    input : Union[Column, Table]
         The column to split.
     splits : List[int]
         The indices at which to split the column.
 
     Returns
     -------
-    List[pylibcudf.Column]
-        The result of splitting input_column.
-    """
-    cdef vector[size_type] c_splits
-    cdef int split
-    for split in splits:
-        c_splits.push_back(split)
-
-    cdef vector[column_view] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.split(
-                input_column.view(),
-                c_splits
-            )
-        )
-
-    cdef int i
-    return [
-        Column.from_column_view(c_result[i], input_column)
-        for i in range(c_result.size())
-    ]
-
-
-cpdef list table_split(Table input_table, list splits):
-    """Split input_table into multiple tables.
-
-    For details on the implementation, see :cpp:func:`split`.
-
-    Parameters
-    ----------
-    input_table : Table
-        The table to split.
-    splits : List[int]
-        The indices at which to split the table.
-
-    Returns
-    -------
-    List[pylibcudf.Table]
-        The result of splitting input_table.
+    List[Union[Column, Table]]
+        The result of splitting input.
     """
     cdef vector[size_type] c_splits = splits
-    cdef vector[table_view] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.split(
-                input_table.view(),
-                c_splits
-            )
-        )
-
+    cdef vector[column_view] c_col_result
+    cdef vector[table_view] c_tbl_result
     cdef int i
-    return [
-        Table.from_table_view(c_result[i], input_table)
-        for i in range(c_result.size())
-    ]
+
+    if ColumnOrTable is Column:
+        with nogil:
+            c_col_result = move(cpp_copying.split(input.view(), c_splits))
+
+        return [
+            Column.from_column_view(c_col_result[i], input)
+            for i in range(c_col_result.size())
+        ]
+    else:
+        with nogil:
+            c_tbl_result = move(cpp_copying.split(input.view(), c_splits))
+
+        return [
+            Table.from_table_view(c_tbl_result[i], input)
+            for i in range(c_tbl_result.size())
+        ]
 
 
-cpdef list column_slice(Column input_column, list indices):
-    """Slice input_column according to indices.
+cpdef list slice(ColumnOrTable input, list indices):
+    """Slice input according to indices.
 
     For details on the implementation, see :cpp:func:`slice`.
 
     Parameters
     ----------
-    input_column : Column
-        The column to slice.
+    input_column : Union[Column, Table]
+        The column or table to slice.
     indices : List[int]
-        The indices to select from input_column.
+        The indices to select from input.
 
     Returns
     -------
-    List[pylibcudf.Column]
-        The result of slicing input_column.
+    List[Union[Column, Table]]
+        The result of slicing ``input``.
     """
     cdef vector[size_type] c_indices = indices
-    cdef vector[column_view] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.slice(
-                input_column.view(),
-                c_indices
-            )
-        )
-
+    cdef vector[column_view] c_col_result
+    cdef vector[table_view] c_tbl_result
     cdef int i
-    return [
-        Column.from_column_view(c_result[i], input_column)
-        for i in range(c_result.size())
-    ]
+    if ColumnOrTable is Column:
+        with nogil:
+            c_col_result = move(cpp_copying.slice(input.view(), c_indices))
+
+        return [
+            Column.from_column_view(c_col_result[i], input)
+            for i in range(c_col_result.size())
+        ]
+    else:
+        with nogil:
+            c_tbl_result = move(cpp_copying.slice(input.view(), c_indices))
+
+        return [
+            Table.from_table_view(c_tbl_result[i], input)
+            for i in range(c_tbl_result.size())
+        ]
 
 
-cpdef list table_slice(Table input_table, list indices):
-    """Slice input_table according to indices.
-
-    For details on the implementation, see :cpp:func:`slice`.
-
-    Parameters
-    ----------
-    input_table : Table
-        The table to slice.
-    indices : List[int]
-        The indices to select from input_table.
-
-    Returns
-    -------
-    List[pylibcudf.Table]
-        The result of slicing input_table.
-    """
-    cdef vector[size_type] c_indices = indices
-    cdef vector[table_view] c_result
-    with nogil:
-        c_result = move(
-            cpp_copying.slice(
-                input_table.view(),
-                c_indices
-            )
-        )
-
-    cdef int i
-    return [
-        Table.from_table_view(c_result[i], input_table)
-        for i in range(c_result.size())
-    ]
-
-
-cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
+cpdef Column copy_if_else(
+    LeftCopyIfElseOperand lhs,
+    RightCopyIfElseOperand rhs,
+    Column boolean_mask
+):
     """Copy elements from lhs or rhs into a new column according to boolean_mask.
 
     For details on the implementation, see :cpp:func:`copy_if_else`.
 
     Parameters
     ----------
-    lhs : Column or Scalar
+    lhs : Union[Column, Scalar]
         The column or scalar to copy from if the corresponding element in
         boolean_mask is True.
-    rhs : Column or Scalar
+    rhs : Union[Column, Scalar]
         The column or scalar to copy from if the corresponding element in
         boolean_mask is False.
     boolean_mask : Column
@@ -503,56 +404,51 @@ cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask):
     """
     cdef unique_ptr[column] result
 
-    if isinstance(lhs, Column) and isinstance(rhs, Column):
+    if LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Column:
+        with nogil:
+            result = move(
+                cpp_copying.copy_if_else(lhs.view(), rhs.view(), boolean_mask.view())
+            )
+    elif LeftCopyIfElseOperand is Column and RightCopyIfElseOperand is Scalar:
         with nogil:
             result = move(
                 cpp_copying.copy_if_else(
-                    (<Column> lhs).view(),
-                    (<Column> rhs).view(),
-                    boolean_mask.view()
+                    lhs.view(), dereference(rhs.c_obj), boolean_mask.view()
                 )
             )
-    elif isinstance(lhs, Column) and isinstance(rhs, Scalar):
+    elif LeftCopyIfElseOperand is Scalar and RightCopyIfElseOperand is Column:
         with nogil:
             result = move(
                 cpp_copying.copy_if_else(
-                    (<Column> lhs).view(),
-                    dereference((<Scalar> rhs).c_obj),
-                    boolean_mask.view()
-                )
-            )
-    elif isinstance(lhs, Scalar) and isinstance(rhs, Column):
-        with nogil:
-            result = move(
-                cpp_copying.copy_if_else(
-                    dereference((<Scalar> lhs).c_obj),
-                    (<Column> rhs).view(),
-                    boolean_mask.view()
-                )
-            )
-    elif isinstance(lhs, Scalar) and isinstance(rhs, Scalar):
-        with nogil:
-            result = move(
-                cpp_copying.copy_if_else(
-                    dereference((<Scalar> lhs).c_obj),
-                    dereference((<Scalar> rhs).c_obj),
-                    boolean_mask.view()
+                    dereference(lhs.c_obj), rhs.view(), boolean_mask.view()
                 )
             )
     else:
-        raise ValueError(f"Invalid arguments {lhs} and {rhs}")
+        with nogil:
+            result = move(
+                cpp_copying.copy_if_else(
+                    dereference(lhs.c_obj), dereference(rhs.c_obj), boolean_mask.view()
+                )
+            )
 
     return Column.from_libcudf(move(result))
 
 
-cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask):
+cpdef Table boolean_mask_scatter(
+    TableOrListOfScalars input,
+    Table target,
+    Column boolean_mask
+):
     """Scatter rows from input into target according to boolean_mask.
+
+    If source is a table, it specifies rows to scatter. If source is a list,
+    each scalar is scattered into the corresponding column in the ``target_table``.
 
     For details on the implementation, see :cpp:func:`boolean_mask_scatter`.
 
     Parameters
     ----------
-    input : Table
+    input : Union[Table, List[Scalar]]
         The table object from which to pull data.
     target : Table
         The table object into which to scatter data.
@@ -561,54 +457,31 @@ cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean
 
     Returns
     -------
-    pylibcudf.Table
+    Table
         The result of the scatter
     """
     cdef unique_ptr[table] result
+    cdef vector[reference_wrapper[const scalar]] source_scalars
 
-    with nogil:
-        result = move(
-            cpp_copying.boolean_mask_scatter(
-                (<Table> input).view(),
-                target.view(),
-                boolean_mask.view()
+    if TableOrListOfScalars is Table:
+        with nogil:
+            result = move(
+                cpp_copying.boolean_mask_scatter(
+                    input.view(),
+                    target.view(),
+                    boolean_mask.view()
+                )
             )
-        )
-
-    return Table.from_libcudf(move(result))
-
-
-# TODO: Could generalize list to sequence
-cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolean_mask):
-    """Scatter scalars from input into target according to boolean_mask.
-
-    For details on the implementation, see :cpp:func:`boolean_mask_scatter`.
-
-    Parameters
-    ----------
-    input : List[Scalar]
-        A list of scalars to scatter into target.
-    target : Table
-        The table object into which to scatter data.
-    boolean_mask : Column
-        A mapping from rows in input to rows in target.
-
-    Returns
-    -------
-    pylibcudf.Table
-        The result of the scatter
-    """
-    cdef vector[reference_wrapper[const scalar]] source_scalars = _as_vector(input)
-
-    cdef unique_ptr[table] result
-    with nogil:
-        result = move(
-            cpp_copying.boolean_mask_scatter(
-                source_scalars,
-                target.view(),
-                boolean_mask.view(),
+    else:
+        source_scalars = _as_vector(input)
+        with nogil:
+            result = move(
+                cpp_copying.boolean_mask_scatter(
+                    source_scalars,
+                    target.view(),
+                    boolean_mask.view(),
+                )
             )
-        )
 
     return Table.from_libcudf(move(result))
 
