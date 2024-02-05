@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -87,17 +87,17 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
     if freq == "D":
         freq_val = libcudf_datetime.rounding_frequency.DAY
-    elif freq == "H":
+    elif freq in ("H", "h"):
         freq_val = libcudf_datetime.rounding_frequency.HOUR
     elif freq in ("T", "min"):
         freq_val = libcudf_datetime.rounding_frequency.MINUTE
-    elif freq == "S":
+    elif freq in ("S", "s"):
         freq_val = libcudf_datetime.rounding_frequency.SECOND
     elif freq in ("L", "ms"):
         freq_val = libcudf_datetime.rounding_frequency.MILLISECOND
     elif freq in ("U", "us"):
         freq_val = libcudf_datetime.rounding_frequency.MICROSECOND
-    elif freq == "N":
+    elif freq in ("N", "ns"):
         freq_val = libcudf_datetime.rounding_frequency.NANOSECOND
     else:
         raise ValueError(f"Invalid resolution: '{freq}'")

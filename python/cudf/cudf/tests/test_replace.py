@@ -484,7 +484,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
 @pytest.mark.parametrize(
     "psr_data",
     [
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
+        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1YE")),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
             [
@@ -525,7 +525,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
     "fill_value",
     [
         pd.Timestamp("2010-01-02"),
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1YE"))
         + pd.Timedelta("1d"),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(

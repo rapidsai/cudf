@@ -172,7 +172,7 @@ def test_interval_with_datetime(tz, box):
     dti = pd.date_range(
         start=pd.Timestamp("20180101", tz=tz),
         end=pd.Timestamp("20181231", tz=tz),
-        freq="M",
+        freq="ME",
     )
     pobj = box(pd.IntervalIndex.from_breaks(dti))
     if tz is None:
