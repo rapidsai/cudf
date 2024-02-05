@@ -23,12 +23,13 @@ from cudf._lib.types import Interpolation
 
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
-from cudf._lib.cpp.aggregation cimport (
-    underlying_type_t_correlation_type,
-    underlying_type_t_rank_method,
-)
+from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
 
 import cudf
+
+from cudf._lib cimport pylibcudf
+
+from cudf._lib import pylibcudf
 
 
 class AggregationKind(Enum):
@@ -257,226 +258,120 @@ cdef class GroupbyAggregation:
     like `df.agg(lambda x: x.sum())`; such functions are called with this
     class as an argument to generation the desired aggregation.
     """
+    def __init__(self, pylibcudf.aggregation.Aggregation agg):
+        self.c_obj = agg
+
     @property
     def kind(self):
-        return AggregationKind(self.c_obj.get()[0].kind).name
+        return AggregationKind(int(self.c_obj.kind())).name
 
     @classmethod
     def sum(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_sum_aggregation[groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.sum())
 
     @classmethod
     def min(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_min_aggregation[groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.min())
 
     @classmethod
     def max(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_max_aggregation[groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.max())
 
     @classmethod
     def idxmin(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_argmin_aggregation[
-                groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.argmin())
 
     @classmethod
     def idxmax(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_argmax_aggregation[
-                groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.argmax())
 
     @classmethod
     def mean(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_mean_aggregation[groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.mean())
 
     @classmethod
     def count(cls, dropna=True):
-        cdef libcudf_types.null_policy c_null_handling
-        if dropna:
-            c_null_handling = libcudf_types.null_policy.EXCLUDE
-        else:
-            c_null_handling = libcudf_types.null_policy.INCLUDE
-
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_count_aggregation[groupby_aggregation](
-                c_null_handling
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.count(
+            pylibcudf.types.NullPolicy.EXCLUDE
+            if dropna else pylibcudf.types.NullPolicy.INCLUDE
+        ))
 
     @classmethod
     def size(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.make_count_aggregation[groupby_aggregation](
-                <libcudf_types.null_policy><underlying_type_t_null_policy>(
-                    NullHandling.INCLUDE)
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.count(pylibcudf.types.NullPolicy.INCLUDE))
 
     @classmethod
     def collect(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_collect_list_aggregation[groupby_aggregation](
-                libcudf_types.null_policy.INCLUDE
-            ))
-        return agg
+        return cls(
+            pylibcudf.aggregation.collect_list(pylibcudf.types.NullPolicy.INCLUDE)
+        )
 
     @classmethod
     def nunique(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_nunique_aggregation[groupby_aggregation](
-                libcudf_types.null_policy.EXCLUDE
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.nunique(pylibcudf.types.NullPolicy.EXCLUDE))
 
     @classmethod
     def nth(cls, libcudf_types.size_type size):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_nth_element_aggregation[groupby_aggregation](size))
-        return agg
+        return cls(pylibcudf.aggregation.nth_element(size))
 
     @classmethod
     def product(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_product_aggregation[groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.product())
     prod = product
 
     @classmethod
     def sum_of_squares(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_sum_of_squares_aggregation[groupby_aggregation]()
-        )
-        return agg
+        return cls(pylibcudf.aggregation.sum_of_squares())
 
     @classmethod
     def var(cls, ddof=1):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_variance_aggregation[groupby_aggregation](ddof))
-        return agg
+        return cls(pylibcudf.aggregation.variance(ddof))
 
     @classmethod
     def std(cls, ddof=1):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_std_aggregation[groupby_aggregation](ddof))
-        return agg
+        return cls(pylibcudf.aggregation.std(ddof))
 
     @classmethod
     def median(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_median_aggregation[groupby_aggregation]())
-        return agg
+        return cls(pylibcudf.aggregation.median())
 
     @classmethod
     def quantile(cls, q=0.5, interpolation="linear"):
-        cdef GroupbyAggregation agg = cls()
-
         if not pd.api.types.is_list_like(q):
             q = [q]
 
-        cdef vector[double] c_q = q
-        cdef libcudf_types.interpolation c_interp = (
-            <libcudf_types.interpolation> (
-                <underlying_type_t_interpolation> (
-                    Interpolation[interpolation.upper()]
-                )
-            )
-        )
-        agg.c_obj = move(
-            libcudf_aggregation.make_quantile_aggregation[groupby_aggregation](
-                c_q, c_interp)
-        )
-        return agg
+        return cls(pylibcudf.aggregation.quantile(
+            q, pylibcudf.types.Interpolation[interpolation.upper()]
+        ))
 
     @classmethod
     def unique(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_collect_set_aggregation[groupby_aggregation](
-                libcudf_types.null_policy.INCLUDE,
-                libcudf_types.null_equality.EQUAL,
-                libcudf_types.nan_equality.ALL_EQUAL,
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.collect_set(
+                pylibcudf.types.NullPolicy.INCLUDE,
+                pylibcudf.types.NullEquality.EQUAL,
+                pylibcudf.types.NanEquality.ALL_EQUAL,
+
+        ))
 
     @classmethod
     def first(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_nth_element_aggregation[groupby_aggregation](
-                0,
-                <libcudf_types.null_policy><underlying_type_t_null_policy>(
-                    NullHandling.EXCLUDE
-                )
-            )
+        return cls(
+            pylibcudf.aggregation.nth_element(0, pylibcudf.types.NullPolicy.EXCLUDE)
         )
-        return agg
 
     @classmethod
     def last(cls):
-        cdef GroupbyAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_nth_element_aggregation[groupby_aggregation](
-                -1,
-                <libcudf_types.null_policy><underlying_type_t_null_policy>(
-                    NullHandling.EXCLUDE
-                )
-            )
+        return cls(
+            pylibcudf.aggregation.nth_element(-1, pylibcudf.types.NullPolicy.EXCLUDE)
         )
-        return agg
 
     @classmethod
     def corr(cls, method, libcudf_types.size_type min_periods):
-        cdef GroupbyAggregation agg = cls()
-        cdef libcudf_aggregation.correlation_type c_method = (
-            <libcudf_aggregation.correlation_type> (
-                <underlying_type_t_correlation_type> (
-                    CorrelationType[method.upper()]
-                )
-            )
-        )
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_correlation_aggregation[groupby_aggregation](
-                c_method, min_periods
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.correlation(
+            pylibcudf.aggregation.CorrelationType[method.upper()],
+            min_periods
+
+        ))
 
     @classmethod
     def cov(
@@ -484,125 +379,36 @@ cdef class GroupbyAggregation:
         libcudf_types.size_type min_periods,
         libcudf_types.size_type ddof=1
     ):
-        cdef GroupbyAggregation agg = cls()
-
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_covariance_aggregation[groupby_aggregation](
-                min_periods, ddof
-            ))
-        return agg
-
-
-cdef class GroupbyScanAggregation:
-    """A Cython wrapper for groupby scan aggregations.
-
-    **This class should never be instantiated using a standard constructor,
-    only using one of its many factories.** These factories handle mapping
-    different cudf operations to their libcudf analogs, e.g.
-    `cudf.DataFrame.idxmin` -> `libcudf.argmin`. Additionally, they perform
-    any additional configuration needed to translate Python arguments into
-    their corresponding C++ types (for instance, C++ enumerations used for
-    flag arguments). The factory approach is necessary to support operations
-    like `df.agg(lambda x: x.sum())`; such functions are called with this
-    class as an argument to generation the desired aggregation.
-    """
-    @property
-    def kind(self):
-        return AggregationKind(self.c_obj.get()[0].kind).name
-
-    @classmethod
-    def sum(cls):
-        cdef GroupbyScanAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_sum_aggregation[groupby_scan_aggregation]())
-        return agg
-
-    @classmethod
-    def min(cls):
-        cdef GroupbyScanAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_min_aggregation[groupby_scan_aggregation]())
-        return agg
-
-    @classmethod
-    def max(cls):
-        cdef GroupbyScanAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_max_aggregation[groupby_scan_aggregation]())
-        return agg
-
-    @classmethod
-    def count(cls, dropna=True):
-        cdef libcudf_types.null_policy c_null_handling
-        if dropna:
-            c_null_handling = libcudf_types.null_policy.EXCLUDE
-        else:
-            c_null_handling = libcudf_types.null_policy.INCLUDE
-
-        cdef GroupbyScanAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_count_aggregation[groupby_scan_aggregation](c_null_handling))
-        return agg
-
-    @classmethod
-    def size(cls):
-        cdef GroupbyScanAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_count_aggregation[groupby_scan_aggregation](
-                <libcudf_types.null_policy><underlying_type_t_null_policy>(
-                    NullHandling.INCLUDE)
-            ))
-        return agg
-
-    @classmethod
-    def cumcount(cls):
-        cdef GroupbyScanAggregation agg = cls()
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_count_aggregation[groupby_scan_aggregation](
-                libcudf_types.null_policy.INCLUDE
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.covariance(
+            min_periods,
+            ddof
+        ))
 
     # scan aggregations
-    # TODO: update this after adding per algorithm aggregation derived types
-    # https://github.com/rapidsai/cudf/issues/7106
+    @classmethod
+    def cumcount(cls):
+        return cls.count(False)
+
     cumsum = sum
     cummin = min
     cummax = max
 
     @classmethod
     def rank(cls, method, ascending, na_option, pct):
-        cdef GroupbyScanAggregation agg = cls()
-        cdef libcudf_aggregation.rank_method c_method = (
-            <libcudf_aggregation.rank_method> (
-                <underlying_type_t_rank_method> (
-                    RankMethod[method.upper()]
-                )
-            )
-        )
-        agg.c_obj = move(
-            libcudf_aggregation.
-            make_rank_aggregation[groupby_scan_aggregation](
-                c_method,
-                (libcudf_types.order.ASCENDING if ascending else
-                    libcudf_types.order.DESCENDING),
-                (libcudf_types.null_policy.EXCLUDE if na_option == "keep" else
-                    libcudf_types.null_policy.INCLUDE),
-                (libcudf_types.null_order.BEFORE
-                    if (na_option == "top") == ascending else
-                    libcudf_types.null_order.AFTER),
-                (libcudf_aggregation.rank_percentage.ZERO_NORMALIZED
-                    if pct else
-                    libcudf_aggregation.rank_percentage.NONE)
-            ))
-        return agg
+        return cls(pylibcudf.aggregation.rank(
+            pylibcudf.aggregation.RankMethod[method.upper()],
+            (pylibcudf.types.Order.ASCENDING if ascending else
+                pylibcudf.types.Order.DESCENDING),
+            (pylibcudf.types.NullPolicy.EXCLUDE if na_option == "keep" else
+                pylibcudf.types.NullPolicy.INCLUDE),
+            (pylibcudf.types.NullOrder.BEFORE
+                if (na_option == "top") == ascending else
+                pylibcudf.types.NullOrder.AFTER),
+            (pylibcudf.aggregation.RankPercentage.ZERO_NORMALIZED
+                if pct else
+                pylibcudf.aggregation.RankPercentage.NONE)
+
+        ))
 
 
 cdef class ReduceAggregation:
@@ -874,44 +680,6 @@ cdef GroupbyAggregation make_groupby_aggregation(op, kwargs=None):
             agg = GroupbyAggregation.from_udf(op, **kwargs)
         else:
             agg = op(GroupbyAggregation)
-    else:
-        raise TypeError(f"Unknown aggregation {op}")
-    return agg
-
-cdef GroupbyScanAggregation make_groupby_scan_aggregation(op, kwargs=None):
-    r"""
-    Parameters
-    ----------
-    op : str or callable
-        If callable, must meet one of the following requirements:
-
-        * Is of the form lambda x: x.agg(*args, **kwargs), where
-          `agg` is the name of a supported aggregation. Used to
-          to specify aggregations that take arguments, e.g.,
-          `lambda x: x.quantile(0.5)`.
-        * Is a user defined aggregation function that operates on
-          grouped, scannable values. In this case, the output dtype must be
-          specified in the `kwargs` dictionary.
-    \*\*kwargs : dict, optional
-        Any keyword arguments to be passed to the op.
-
-    Returns
-    -------
-    GroupbyScanAggregation
-    """
-    if kwargs is None:
-        kwargs = {}
-
-    cdef GroupbyScanAggregation agg
-    if isinstance(op, str):
-        agg = getattr(GroupbyScanAggregation, op)(**kwargs)
-    elif callable(op):
-        if op is list:
-            agg = GroupbyScanAggregation.collect()
-        elif "dtype" in kwargs:
-            agg = GroupbyScanAggregation.from_udf(op, **kwargs)
-        else:
-            agg = op(GroupbyScanAggregation)
     else:
         raise TypeError(f"Unknown aggregation {op}")
     return agg
