@@ -6,7 +6,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
-from packaging import version
 
 import dask
 from dask import dataframe as dd
@@ -15,7 +14,7 @@ from dask.utils import M
 
 import cudf
 
-import dask_cudf as dgd
+import dask_cudf
 
 
 def test_from_dict_backend_dispatch():
@@ -28,7 +27,7 @@ def test_from_dict_backend_dispatch():
     expect = cudf.DataFrame(data)
     with dask.config.set({"dataframe.backend": "cudf"}):
         ddf = dd.from_dict(data, npartitions=2)
-    assert isinstance(ddf, dgd.DataFrame)
+    assert isinstance(ddf, dask_cudf.DataFrame)
     dd.assert_eq(expect, ddf)
 
 
@@ -43,7 +42,7 @@ def test_to_backend():
         assert isinstance(ddf._meta, pd.DataFrame)
 
         gdf = ddf.to_backend("cudf")
-        assert isinstance(gdf, dgd.DataFrame)
+        assert isinstance(gdf, dask_cudf.DataFrame)
         dd.assert_eq(cudf.DataFrame(data), ddf)
 
         assert isinstance(gdf.to_backend()._meta, pd.DataFrame)
@@ -58,13 +57,13 @@ def test_to_backend_kwargs():
         # Using `nan_as_null=False` will result in a cudf-backed
         # Series with a NaN element (ranther than <NA>)
         gser_nan = dser.to_backend("cudf", nan_as_null=False)
-        assert isinstance(gser_nan, dgd.Series)
+        assert isinstance(gser_nan, dask_cudf.Series)
         assert np.isnan(gser_nan.compute()).sum() == 1
 
         # Using `nan_as_null=True` will result in a cudf-backed
         # Series with a <NA> element (ranther than NaN)
         gser_null = dser.to_backend("cudf", nan_as_null=True)
-        assert isinstance(gser_null, dgd.Series)
+        assert isinstance(gser_null, dask_cudf.Series)
         assert np.isnan(gser_null.compute()).sum() == 0
 
         # Check `nullable` argument for `cudf.Series.to_pandas`
@@ -110,7 +109,7 @@ def test_from_cudf_multiindex_raises():
 
     with pytest.raises(NotImplementedError):
         # dask_cudf does not support MultiIndex yet
-        dgd.from_cudf(df.set_index(["x", "y"]))
+        dask_cudf.from_cudf(df.set_index(["x", "y"]))
 
 
 def test_from_cudf_with_generic_idx():
@@ -122,7 +121,7 @@ def test_from_cudf_with_generic_idx():
         }
     )
 
-    ddf = dgd.from_cudf(cdf, npartitions=2)
+    ddf = dask_cudf.from_cudf(cdf, npartitions=2)
 
     assert isinstance(ddf.index.compute(), cudf.RangeIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
@@ -164,7 +163,7 @@ def test_query_local_dict():
         {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
     )
     gdf = cudf.DataFrame.from_pandas(df)
-    ddf = dgd.from_cudf(gdf, npartitions=2)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=2)
 
     val = 2
 
@@ -296,7 +295,7 @@ def test_set_index_sorted():
         ddf1 = dd.from_pandas(df1, npartitions=2)
 
         gdf1 = cudf.from_pandas(df1)
-        gddf1 = dgd.from_cudf(gdf1, npartitions=2)
+        gddf1 = dask_cudf.from_cudf(gdf1, npartitions=2)
 
         expect = ddf1.set_index("id", sorted=True)
         got = gddf1.set_index("id", sorted=True)
@@ -323,7 +322,9 @@ def test_rearrange_by_divisions(nelem, index):
         df["z"] = df["z"].astype("category")
 
         ddf1 = dd.from_pandas(df, npartitions=4)
-        gdf1 = dgd.from_cudf(cudf.DataFrame.from_pandas(df), npartitions=4)
+        gdf1 = dask_cudf.from_cudf(
+            cudf.DataFrame.from_pandas(df), npartitions=4
+        )
         ddf1.index.name = index
         gdf1.index.name = index
         divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
@@ -487,7 +488,7 @@ def test_repartition_hash_staged(npartitions):
     # WARNING: Specific npartitions-max_branch combination
     # was specifically chosen to cover changes in #4676
     npartitions_initial = 17
-    ddf = dgd.from_cudf(gdf, npartitions=npartitions_initial)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=npartitions_initial)
     ddf_new = ddf.shuffle(
         on=by, ignore_index=True, npartitions=npartitions, max_branch=4
     )
@@ -527,7 +528,7 @@ def test_repartition_hash(by, npartitions, max_branch):
         }
     )
     gdf.d = gdf.d.astype("datetime64[ms]")
-    ddf = dgd.from_cudf(gdf, npartitions=npartitions_i)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=npartitions_i)
     ddf_new = ddf.shuffle(
         on=by,
         ignore_index=True,
@@ -554,7 +555,7 @@ def test_repartition_hash(by, npartitions, max_branch):
 def test_repartition_no_extra_row():
     # see https://github.com/rapidsai/cudf/issues/11930
     gdf = cudf.DataFrame({"a": [10, 20, 30], "b": [1, 2, 3]}).set_index("a")
-    ddf = dgd.from_cudf(gdf, npartitions=1)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=1)
     ddf_new = ddf.repartition([0, 5, 10, 30], force=True)
     dd.assert_eq(ddf, ddf_new)
     dd.assert_eq(gdf, ddf_new)
@@ -595,14 +596,6 @@ def gddf(gdf):
 def test_unary_ops(func, gdf, gddf):
     p = func(gdf)
     g = func(gddf)
-
-    # Fixed in https://github.com/dask/dask/pull/4657
-    if isinstance(p, cudf.Index):
-        if version.parse(dask.__version__) < version.parse("1.1.6"):
-            pytest.skip(
-                "dask.dataframe assert_eq index check hardcoded to "
-                "pandas prior to 1.1.6 release"
-            )
 
     dd.assert_eq(p, g, check_names=False)
 
@@ -669,20 +662,20 @@ def test_hash_object_dispatch(index):
 
     # DataFrame
     result = dd.core.hash_object_dispatch(obj, index=index)
-    expected = dgd.backends.hash_object_cudf(obj, index=index)
+    expected = dask_cudf.backends.hash_object_cudf(obj, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # Series
     result = dd.core.hash_object_dispatch(obj["x"], index=index)
-    expected = dgd.backends.hash_object_cudf(obj["x"], index=index)
+    expected = dask_cudf.backends.hash_object_cudf(obj["x"], index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
     # DataFrame with MultiIndex
     obj_multi = obj.set_index(["x", "z"], drop=True)
     result = dd.core.hash_object_dispatch(obj_multi, index=index)
-    expected = dgd.backends.hash_object_cudf(obj_multi, index=index)
+    expected = dask_cudf.backends.hash_object_cudf(obj_multi, index=index)
     assert isinstance(result, cudf.Series)
     dd.assert_eq(result, expected)
 
@@ -729,7 +722,7 @@ def test_make_meta_backends(index):
 
     # Check dask code path if not MultiIndex
     if not isinstance(df.index, cudf.MultiIndex):
-        ddf = dgd.from_cudf(df, npartitions=1)
+        ddf = dask_cudf.from_cudf(df, npartitions=1)
 
         # Check "empty" metadata types
         dd.assert_eq(ddf._meta.dtypes, df.dtypes)
@@ -751,7 +744,7 @@ def test_dataframe_series_replace(data):
     pdf = data.copy()
     gdf = cudf.from_pandas(pdf)
 
-    ddf = dgd.from_cudf(gdf, npartitions=5)
+    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     dd.assert_eq(ddf.replace(1, 2), pdf.replace(1, 2))
 
@@ -760,7 +753,7 @@ def test_dataframe_assign_col():
     df = cudf.DataFrame(list(range(100)))
     pdf = pd.DataFrame(list(range(100)))
 
-    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf = dask_cudf.from_cudf(df, npartitions=4)
     ddf["fold"] = 0
     ddf["fold"] = ddf["fold"].map_partitions(
         lambda cudf_df: cp.random.randint(0, 4, len(cudf_df))
@@ -782,14 +775,16 @@ def test_dataframe_set_index():
     df["str"] = list("abcdefghijklmnopqrstuvwxyz")
     pdf = df.to_pandas()
 
-    ddf = dgd.from_cudf(df, npartitions=4)
-    ddf = ddf.set_index("str")
+    with dask.config.set({"dataframe.convert-string": False}):
+        ddf = dask_cudf.from_cudf(df, npartitions=4)
+        ddf = ddf.set_index("str")
 
-    pddf = dd.from_pandas(pdf, npartitions=4)
-    pddf = pddf.set_index("str")
-    from cudf.testing._utils import assert_eq
+        pddf = dd.from_pandas(pdf, npartitions=4)
+        pddf = pddf.set_index("str")
 
-    assert_eq(ddf.compute(), pddf.compute())
+        from cudf.testing._utils import assert_eq
+
+        assert_eq(ddf.compute(), pddf.compute())
 
 
 def test_series_describe():
@@ -797,13 +792,13 @@ def test_series_describe():
     sr = cudf.datasets.randomdata(20)["x"]
     psr = sr.to_pandas()
 
-    dsr = dgd.from_cudf(sr, npartitions=4)
+    dsr = dask_cudf.from_cudf(sr, npartitions=4)
     pdsr = dd.from_pandas(psr, npartitions=4)
 
     dd.assert_eq(
         dsr.describe(),
         pdsr.describe(),
-        check_less_precise=3,
+        rtol=1e-3,
     )
 
 
@@ -812,7 +807,7 @@ def test_dataframe_describe():
     df = cudf.datasets.randomdata(20)
     pdf = df.to_pandas()
 
-    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf = dask_cudf.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
     dd.assert_eq(
@@ -829,10 +824,10 @@ def test_zero_std_describe():
         }
     )
     pdf = df.to_pandas()
-    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf = dask_cudf.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.describe(), pddf.describe(), check_less_precise=3)
+    dd.assert_eq(ddf.describe(), pddf.describe(), rtol=1e-3)
 
 
 def test_large_numbers_var():
@@ -844,10 +839,10 @@ def test_large_numbers_var():
         }
     )
     pdf = df.to_pandas()
-    ddf = dgd.from_cudf(df, npartitions=4)
+    ddf = dask_cudf.from_cudf(df, npartitions=4)
     pddf = dd.from_pandas(pdf, npartitions=4)
 
-    dd.assert_eq(ddf.var(), pddf.var(), check_less_precise=3)
+    dd.assert_eq(ddf.var(), pddf.var(), rtol=1e-3)
 
 
 def test_index_map_partitions():
@@ -856,7 +851,7 @@ def test_index_map_partitions():
     ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
     mins_pd = ddf.index.map_partitions(M.min, meta=ddf.index).compute()
 
-    gddf = dgd.from_cudf(cudf.DataFrame({"a": range(10)}), npartitions=2)
+    gddf = dask_cudf.from_cudf(cudf.DataFrame({"a": range(10)}), npartitions=2)
     mins_gd = gddf.index.map_partitions(M.min, meta=gddf.index).compute()
 
     dd.assert_eq(mins_pd, mins_gd)
@@ -876,7 +871,7 @@ def test_merging_categorical_columns():
         {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
     )
 
-    ddf_1 = dgd.from_cudf(df_1, npartitions=2)
+    ddf_1 = dask_cudf.from_cudf(df_1, npartitions=2)
 
     ddf_1 = dd.categorical.categorize(ddf_1, columns=["cat_col"])
 
@@ -884,7 +879,7 @@ def test_merging_categorical_columns():
         {"id_2": [111, 112, 113], "cat_col": ["g", "h", "f"]}
     )
 
-    ddf_2 = dgd.from_cudf(df_2, npartitions=2)
+    ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
 
     ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
     expected = cudf.DataFrame(
@@ -928,7 +923,7 @@ def test_categorical_dtype_round_trip():
     s = cudf.Series(4 * ["foo"], dtype="category")
     assert s.dtype.ordered is False
 
-    ds = dgd.from_cudf(s, npartitions=2)
+    ds = dask_cudf.from_cudf(s, npartitions=2)
     pds = dd.from_pandas(s.to_pandas(), npartitions=2)
     dd.assert_eq(ds, pds)
     assert ds.dtype.ordered is False

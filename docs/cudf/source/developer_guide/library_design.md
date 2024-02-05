@@ -22,7 +22,7 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class IndexedFrame
 % class SingleColumnFrame
 % class BaseIndex
-% class GenericIndex
+% class Index
 % class MultiIndex
 % class RangeIndex
 % class DataFrame
@@ -42,8 +42,8 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % BaseIndex <|-- MultiIndex
 % Frame <|-- MultiIndex
 %
-% BaseIndex <|-- GenericIndex
-% SingleColumnFrame <|-- GenericIndex
+% BaseIndex <|-- Index
+% SingleColumnFrame <|-- Index
 %
 % @enduml
 
@@ -89,31 +89,26 @@ While we've highlighted some exceptional cases of Indexes before, let's start wi
 In practice, `BaseIndex` does have concrete implementations of a small set of methods.
 However, currently many of these implementations are not applicable to all subclasses and will be eventually be removed.
 
-Almost all indexes are subclasses of `GenericIndex`, a single-columned index with the class hierarchy:
+Almost all indexes are subclasses of `Index`, a single-columned index with the class hierarchy:
 ```python
-class GenericIndex(SingleColumnFrame, BaseIndex)
+class Index(SingleColumnFrame, BaseIndex)
 ```
 Integer, float, or string indexes are all composed of a single column of data.
-Most `GenericIndex` methods are inherited from `Frame`, saving us the trouble of rewriting them.
+Most `Index` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
 We now consider the three main exceptions to this model:
 
 - A `RangeIndex` is not backed by a column of data, so it inherits directly from `BaseIndex` alone.
   Wherever possible, its methods have special implementations designed to avoid materializing columns.
-  Where such an implementation is infeasible, we fall back to converting it to an `Int64Index` first instead.
+  Where such an implementation is infeasible, we fall back to converting it to an `Index` of `int64`
+  dtype first instead.
 - A `MultiIndex` is backed by _multiple_ columns of data.
   Therefore, its inheritance hierarchy looks like `class MultiIndex(Frame, BaseIndex)`.
   Some of its more `Frame`-like methods may be inherited,
   but many others must be reimplemented since in many cases a `MultiIndex` is not expected to behave like a `Frame`.
-- Just like in pandas, `Index` itself can never be instantiated.
-  `pandas.Index` is the parent class for indexes,
-  but its constructor returns an appropriate subclass depending on the input data type and shape.
-  Unfortunately, mimicking this behavior requires overriding `__new__`,
-  which in turn makes shared initialization across inheritance trees much more cumbersome to manage.
-  To enable sharing constructor logic across different index classes,
-  we instead define `BaseIndex` as the parent class of all indexes.
+- To enable sharing constructor logic across different index classes,
+  we define `BaseIndex` as the parent class of all indexes.
   `Index` inherits from `BaseIndex`, but it masquerades as a `BaseIndex` to match pandas.
-  This class should contain no implementations since it is simply a factory for other indexes.
 
 
 ## The Column layer
