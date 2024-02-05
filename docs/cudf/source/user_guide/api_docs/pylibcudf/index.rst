@@ -17,3 +17,4 @@ This page provides API documentation for pylibcudf.
     scalar
     table
     types
+    unary

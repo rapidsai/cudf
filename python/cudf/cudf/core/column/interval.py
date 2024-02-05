@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
-from cudf.api.types import _is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 
@@ -94,20 +93,13 @@ class IntervalColumn(StructColumn):
                 new_struct = self._get_decategorized_column()
                 return IntervalColumn.from_struct_column(new_struct)
             else:
-                # a user can directly input the string `interval` as the dtype
-                # when creating an interval series or interval dataframe
-                if _is_interval_dtype(dtype):
-                    dtype = IntervalDtype(
-                        self.dtype.subtype, self.dtype.closed
-                    )
-                children = self.children
                 return IntervalColumn(
                     size=self.size,
                     dtype=dtype,
                     mask=self.mask,
                     offset=self.offset,
                     null_count=self.null_count,
-                    children=children,
+                    children=self.children,
                 )
         else:
             raise ValueError("dtype must be IntervalDtype")
