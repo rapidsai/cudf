@@ -186,7 +186,6 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -m "not single_cpu and not db" \
     -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
     --durations=50 \
-    --import-mode=importlib \
     -o xfail_strict=True \
     ${PYTEST_IGNORES} $@
 
