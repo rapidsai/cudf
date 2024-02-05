@@ -261,9 +261,10 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
   if (!t) {
     s->page.skipped_values      = -1;
     s->page.skipped_leaf_values = 0;
-    s->page.str_bytes           = 0;
-    s->input_row_count          = 0;
-    s->input_value_count        = 0;
+    // str_bytes_from_index will be 0 if no page stats are present
+    s->page.str_bytes    = s->page.str_bytes_from_index;
+    s->input_row_count   = 0;
+    s->input_value_count = 0;
 
     // in the base pass, we're computing the number of rows, make sure we visit absolutely
     // everything
@@ -349,7 +350,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // retrieve total string size.
   // TODO: make this block-based instead of just 1 warp
-  if (compute_string_sizes) {
+  if (compute_string_sizes && !pp->has_page_index) {
     if (t < 32) { s->page.str_bytes = gpuDecodeTotalPageStringSize(s, t); }
   }
 

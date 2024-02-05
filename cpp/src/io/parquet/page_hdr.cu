@@ -385,14 +385,19 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
-      bs->page.chunk_row           = 0;
-      bs->page.num_rows            = 0;
-      bs->page.skipped_values      = -1;
-      bs->page.skipped_leaf_values = 0;
-      bs->page.str_bytes           = 0;
-      bs->page.temp_string_size    = 0;
-      bs->page.temp_string_buf     = nullptr;
-      bs->page.kernel_mask         = decode_kernel_mask::NONE;
+      bs->page.chunk_row            = 0;
+      bs->page.num_rows             = 0;
+      bs->page.skipped_values       = -1;
+      bs->page.skipped_leaf_values  = 0;
+      bs->page.str_bytes            = 0;
+      bs->page.str_bytes_from_index = 0;
+      bs->page.num_valids           = 0;
+      bs->page.start_val            = 0;
+      bs->page.end_val              = 0;
+      bs->page.has_page_index       = false;
+      bs->page.temp_string_size     = 0;
+      bs->page.temp_string_buf      = nullptr;
+      bs->page.kernel_mask          = decode_kernel_mask::NONE;
     }
     num_values    = bs->ck.num_values;
     page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
