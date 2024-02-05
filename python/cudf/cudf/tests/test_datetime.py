@@ -1545,7 +1545,7 @@ def test_date_range_start_end_freq(request, start, end, freq):
             condition=(
                 start == "1831-05-08 15:23:21"
                 and end == "1996-11-21 04:05:30"
-                and freq == "110546789L"
+                and freq == "110546789ms"
             ),
             reason="https://github.com/rapidsai/cudf/issues/12133",
         )
@@ -1748,7 +1748,15 @@ def test_date_range_raise_overflow():
         "B",
     ],
 )
-def test_date_range_raise_unsupported(freqstr_unsupported):
+def test_date_range_raise_unsupported(request, freqstr_unsupported):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                not PANDAS_GE_220 and freqstr_unsupported.endswith("E")
+            ),
+            reason="TODO: Remove this once pandas-2.2 support is added",
+        )
+    )
     s, e = "2001-01-01", "2008-01-31"
     pd.date_range(start=s, end=e, freq=freqstr_unsupported)
     with pytest.raises(ValueError, match="does not yet support"):
