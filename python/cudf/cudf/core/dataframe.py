@@ -34,8 +34,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from pandas._config import get_option
-from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -1817,12 +1815,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dimensions (rows x columns)
         """
 
-        max_rows = get_option("display.max_rows")
-        min_rows = get_option("display.min_rows")
-        max_cols = get_option("display.max_columns")
-        max_colwidth = get_option("display.max_colwidth")
-        show_dimensions = get_option("display.show_dimensions")
-        if get_option("display.expand_frame_repr"):
+        max_rows = pd.get_option("display.max_rows")
+        min_rows = pd.get_option("display.min_rows")
+        max_cols = pd.get_option("display.max_columns")
+        max_colwidth = pd.get_option("display.max_colwidth")
+        show_dimensions = pd.get_option("display.show_dimensions")
+        if pd.get_option("display.expand_frame_repr"):
             width, _ = console.get_console_size()
         else:
             width = None
@@ -3318,8 +3316,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             Diff currently only supports numeric dtype columns.
         """
-        if not is_integer(periods):
-            if not (is_float(periods) and periods.is_integer()):
+        if not isinstance(periods, int):
+            if not (isinstance(periods, float) and periods.is_integer()):
                 raise ValueError("periods must be an integer")
             periods = int(periods)
 

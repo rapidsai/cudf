@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
-#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/findall.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -34,7 +33,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/pair.h>
-#include <thrust/scan.h>
 
 namespace cudf {
 namespace strings {
@@ -50,7 +48,7 @@ namespace {
  */
 struct findall_fn {
   column_device_view const d_strings;
-  size_type const* d_offsets;
+  cudf::detail::input_offsetalator const d_offsets;
   string_index_pair* d_indices;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -77,8 +75,8 @@ struct findall_fn {
 
 std::unique_ptr<column> findall_util(column_device_view const& d_strings,
                                      reprog_device& d_prog,
-                                     size_type total_matches,
-                                     size_type const* d_offsets,
+                                     int64_t total_matches,
+                                     cudf::detail::input_offsetalator const d_offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
@@ -105,17 +103,12 @@ std::unique_ptr<column> findall(strings_column_view const& input,
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
   // Create lists offsets column
-  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<size_type>();
+  auto const sizes              = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto [offsets, total_matches] = cudf::strings::detail::make_offsets_child_column(
+    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
-  // Convert counts into offsets
-  thrust::exclusive_scan(
-    rmm::exec_policy(stream), d_offsets, d_offsets + strings_count + 1, d_offsets);
-
-  // Create indices vector with the total number of groups that will be extracted
-  auto const total_matches =
-    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
-
+  // Build strings column of the matches
   auto strings_output = findall_util(*d_strings, *d_prog, total_matches, d_offsets, stream, mr);
 
   // Build the lists column from the offsets and the strings

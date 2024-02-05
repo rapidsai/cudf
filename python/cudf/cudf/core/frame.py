@@ -1954,10 +1954,12 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
+        from dask.base import normalize_token
+
         return [
             type(self),
-            self._dtypes,
-            self.to_pandas(),
+            normalize_token(self._dtypes),
+            normalize_token(self.to_pandas()),
         ]
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool as cbool
 
@@ -9,6 +9,26 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 
+ctypedef fused ColumnOrTable:
+    Table
+    Column
+
+
+ctypedef fused TableOrListOfScalars:
+    Table
+    # The contents of the list must be validated as Scalars at runtime.
+    list
+
+
+# Need two separate fused types to generate the cartesian product of signatures.
+ctypedef fused LeftCopyIfElseOperand:
+    Column
+    Scalar
+
+ctypedef fused RightCopyIfElseOperand:
+    Column
+    Scalar
+
 
 cpdef Table gather(
     Table source_table,
@@ -16,13 +36,9 @@ cpdef Table gather(
     out_of_bounds_policy bounds_policy
 )
 
-cpdef Table scatter_table(Table source, Column scatter_map, Table target_table)
+cpdef Table scatter(TableOrListOfScalars source, Column scatter_map, Table target_table)
 
-cpdef Table scatter_scalars(list source, Column scatter_map, Table target_table)
-
-cpdef object empty_column_like(Column input)
-
-cpdef object empty_table_like(Table input)
+cpdef ColumnOrTable empty_like(ColumnOrTable input)
 
 cpdef Column allocate_like(Column input_column, mask_allocation_policy policy, size=*)
 
@@ -44,18 +60,20 @@ cpdef Column copy_range(
 
 cpdef Column shift(Column input, size_type offset, Scalar fill_values)
 
-cpdef list column_split(Column input_column, list splits)
+cpdef list split(ColumnOrTable input, list splits)
 
-cpdef list table_split(Table input_table, list splits)
+cpdef list slice(ColumnOrTable input, list indices)
 
-cpdef list column_slice(Column input_column, list indices)
+cpdef Column copy_if_else(
+    LeftCopyIfElseOperand lhs,
+    RightCopyIfElseOperand rhs,
+    Column boolean_mask
+)
 
-cpdef list table_slice(Table input_table, list indices)
-
-cpdef Column copy_if_else(object lhs, object rhs, Column boolean_mask)
-
-cpdef Table boolean_mask_table_scatter(Table input, Table target, Column boolean_mask)
-
-cpdef Table boolean_mask_scalars_scatter(list input, Table target, Column boolean_mask)
+cpdef Table boolean_mask_scatter(
+    TableOrListOfScalars input,
+    Table target,
+    Column boolean_mask
+)
 
 cpdef Scalar get_element(Column input_column, size_type index)
