@@ -1,5 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
@@ -11,9 +12,9 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 
 cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
 
-    ctypedef enum replace_policy:
-        PRECEDING 'cudf::replace_policy::PRECEDING',
-        FOLLOWING 'cudf::replace_policy::FOLLOWING'
+    cdef enum class replace_policy(bool):
+        PRECEDING
+        FOLLOWING
 
     cdef unique_ptr[column] replace_nulls(
         column_view source_column,

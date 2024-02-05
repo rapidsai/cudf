@@ -4442,7 +4442,7 @@ class IndexedFrame(Frame):
 
         Examples
         --------
-        >>> import cudf as cudf
+        >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3)
            a
@@ -6176,11 +6176,13 @@ class IndexedFrame(Frame):
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
+        from dask.base import normalize_token
+
         return [
             type(self),
-            self._dtypes,
-            self.index,
-            self.hash_values().values_host,
+            normalize_token(self._dtypes),
+            normalize_token(self.index),
+            normalize_token(self.hash_values().values_host),
         ]
 
 
