@@ -14,6 +14,7 @@ from cudf._lib.cpp.groupby cimport (
     groups,
     scan_request,
 )
+from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport size_type
@@ -27,6 +28,12 @@ from .utils cimport _as_vector
 
 cdef class GroupByRequest:
     """A request for a groupby aggregation or scan.
+
+    This class is functionally polymorphic and can represent either an
+    aggregation or a scan depending on the algorithm it is used with. For
+    details on the libcudf types it converts to, see
+    :cpp:class:`cudf::groupby::aggregation_request` and
+    :cpp:class:`cudf::groupby::scan_request`.
 
     Parameters
     ----------
@@ -73,6 +80,8 @@ cdef class GroupByRequest:
 cdef class GroupBy:
     """Group values by keys and compute various aggregate quantities.
 
+    For details, see :cpp:class:`cudf::groupby::groupby`.
+
     Parameters
     ----------
     keys : Table
@@ -113,6 +122,8 @@ cdef class GroupBy:
     cpdef tuple aggregate(self, list requests):
         """Compute aggregations on columns.
 
+        For details, see :cpp:func:`cudf::groupby::groupby::aggregate`.
+
         Parameters
         ----------
         requests : List[GroupByRequest]
@@ -132,13 +143,15 @@ cdef class GroupBy:
         for request in requests:
             c_requests.push_back(move(request._to_libcudf_agg_request()))
 
-        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
-            dereference(self.c_obj).aggregate(c_requests)
-        )
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        with nogil:
+            c_res = move(dereference(self.c_obj).aggregate(c_requests))
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple scan(self, list requests):
         """Compute scans on columns.
+
+        For details, see :cpp:func:`cudf::groupby::groupby::scan`.
 
         Parameters
         ----------
@@ -159,13 +172,15 @@ cdef class GroupBy:
         for request in requests:
             c_requests.push_back(move(request._to_libcudf_scan_request()))
 
-        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res = move(
-            dereference(self.c_obj).scan(c_requests)
-        )
+        cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        with nogil:
+            c_res = move(dereference(self.c_obj).scan(c_requests))
         return GroupBy._parse_outputs(move(c_res))
 
     cpdef tuple shift(self, Table values, list offset, list fill_values):
         """Compute shifts on columns.
+
+        For details, see :cpp:func:`cudf::groupby::groupby::shift`.
 
         Parameters
         ----------
@@ -186,9 +201,11 @@ cdef class GroupBy:
             _as_vector(fill_values)
 
         cdef vector[size_type] c_offset = offset
-        cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
-            dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
-        )
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_res
+        with nogil:
+            c_res = move(
+                dereference(self.c_obj).shift(values.view(), c_offset, c_fill_values)
+            )
 
         return (
             Table.from_libcudf(move(c_res.first)),
@@ -197,6 +214,8 @@ cdef class GroupBy:
 
     cpdef tuple replace_nulls(self, Table value, list replace_policies):
         """Replace nulls in columns.
+
+        For details, see :cpp:func:`cudf::groupby::groupby::replace_nulls`.
 
         Parameters
         ----------
@@ -211,9 +230,12 @@ cdef class GroupBy:
             A tuple whose first element is the group's keys and whose second
             element is a table of values with nulls replaced.
         """
-        cdef pair[unique_ptr[table], unique_ptr[table]] c_res = move(
-            dereference(self.c_obj).replace_nulls(value.view(), replace_policies)
-        )
+        cdef pair[unique_ptr[table], unique_ptr[table]] c_res
+        cdef vector[replace_policy] c_replace_policies = replace_policies
+        with nogil:
+            c_res = move(
+                dereference(self.c_obj).replace_nulls(value.view(), c_replace_policies)
+            )
 
         return (
             Table.from_libcudf(move(c_res.first)),
@@ -222,6 +244,8 @@ cdef class GroupBy:
 
     cpdef tuple get_groups(self, Table values=None):
         """Get the grouped keys and values labels for each row.
+
+        For details, see :cpp:func:`cudf::groupby::groupby::get_groups`.
 
         Parameters
         ----------
