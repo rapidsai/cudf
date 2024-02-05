@@ -12,10 +12,7 @@ import cudf
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
+from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -53,45 +50,42 @@ def pdf(request):
 @pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
+    if QUERY_PLANNING_ON and aggregation == "collect":
+        pytest.skip("Dask-expr does not support 'collect' yet.")
+
     gdf = cudf.DataFrame.from_pandas(pdf)
-    gdf_grouped = gdf.groupby("xx")
-    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("xx")
+    gdf_grouped = gdf.groupby("xx", dropna=True)
+    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby(
+        "xx", dropna=True
+    )
 
     if series:
-        gdf_grouped = gdf_grouped.xx
-        ddf_grouped = ddf_grouped.xx
+        gdf_grouped = gdf_grouped.x
+        ddf_grouped = ddf_grouped.x
 
     check_dtype = aggregation != "count"
 
     expect = getattr(gdf_grouped, aggregation)()
     actual = getattr(ddf_grouped, aggregation)()
 
-    assert_cudf_groupby_layers(actual)
+    if not QUERY_PLANNING_ON:
+        assert_cudf_groupby_layers(actual)
 
     dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
-    expect = gdf_grouped.agg({"xx": aggregation})
-    actual = ddf_grouped.agg({"xx": aggregation})
+    if not series:
+        expect = gdf_grouped.agg({"x": aggregation})
+        actual = ddf_grouped.agg({"x": aggregation})
 
-    assert_cudf_groupby_layers(actual)
+        if not QUERY_PLANNING_ON:
+            assert_cudf_groupby_layers(actual)
 
-    dd.assert_eq(expect, actual, check_dtype=check_dtype)
+        dd.assert_eq(expect, actual, check_dtype=check_dtype)
 
 
 # TODO: explore adding support with `.agg()`
 @pytest.mark.parametrize("series", [True, False])
-@pytest.mark.parametrize(
-    "aggregation",
-    [
-        "cumsum",
-        pytest.param(
-            "cumcount",
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/13390"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
 def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
@@ -113,17 +107,20 @@ def test_groupby_cumulative(aggregation, pdf, series):
 @pytest.mark.parametrize(
     "func",
     [
+        # See: https://github.com/rapidsai/cudf/issues/14957
         lambda df, agg: df.groupby("xx").agg({"y": agg}),
-        lambda df, agg: df.groupby("xx").y.agg({"y": agg}),
+        # lambda df, agg: df.groupby("xx").y.agg({"y": agg}),
         lambda df, agg: df.groupby("xx").agg([agg]),
-        lambda df, agg: df.groupby("xx").y.agg([agg]),
+        # lambda df, agg: df.groupby("xx").y.agg([agg]),
         lambda df, agg: df.groupby("xx").agg(agg),
-        lambda df, agg: df.groupby("xx").y.agg(agg),
+        # lambda df, agg: df.groupby("xx").y.agg(agg),
     ],
 )
 def test_groupby_agg(func, aggregation, pdf):
-    gdf = cudf.DataFrame.from_pandas(pdf)
+    if QUERY_PLANNING_ON and aggregation == "collect":
+        pytest.skip("Dask-expr does not support 'collect' yet.")
 
+    gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 
     actual = func(ddf, aggregation)
@@ -131,11 +128,12 @@ def test_groupby_agg(func, aggregation, pdf):
 
     check_dtype = aggregation != "count"
 
-    assert_cudf_groupby_layers(actual)
+    if not QUERY_PLANNING_ON:
+        assert_cudf_groupby_layers(actual)
 
-    # groupby.agg should add an explicit getitem layer
-    # to improve/enable column projection
-    assert hlg_layer(actual.dask, "getitem")
+        # groupby.agg should add an explicit getitem layer
+        # to improve/enable column projection
+        assert hlg_layer(actual.dask, "getitem")
 
     dd.assert_eq(expect, actual, check_names=False, check_dtype=check_dtype)
 
@@ -797,6 +795,7 @@ def test_groupby_nested_dict(func):
     dd.assert_eq(a, b)
 
 
+@xfail_dask_expr("https://github.com/rapidsai/cudf/issues/14957")
 @pytest.mark.parametrize(
     "func",
     [
