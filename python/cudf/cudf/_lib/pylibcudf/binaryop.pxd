@@ -10,5 +10,5 @@ cpdef Column binary_operation(
     object lhs,
     object rhs,
     binary_operator op,
-    DataType data_type
+    DataType output_type
 )

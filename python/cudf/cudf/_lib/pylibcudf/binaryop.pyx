@@ -21,7 +21,7 @@ cpdef Column binary_operation(
     object lhs,
     object rhs,
     binary_operator op,
-    DataType data_type
+    DataType output_type
 ):
     """Perform a binary operation between a column and another column or scalar.
 
@@ -40,8 +40,8 @@ cpdef Column binary_operation(
         The right hand side argument.
     op : BinaryOperator
         The operation to perform.
-    data_type : DataType
-        The output to use for the output.
+    output_type : DataType
+        The data type to use for the output.
 
     Returns
     -------
@@ -57,7 +57,7 @@ cpdef Column binary_operation(
                     (<Column> lhs).view(),
                     (<Column> rhs).view(),
                     op,
-                    data_type.c_obj
+                    output_type.c_obj
                 )
             )
     elif isinstance(lhs, Column) and isinstance(rhs, Scalar):
@@ -67,7 +67,7 @@ cpdef Column binary_operation(
                     (<Column> lhs).view(),
                     dereference((<Scalar> rhs).c_obj),
                     op,
-                    data_type.c_obj
+                    output_type.c_obj
                 )
             )
     elif isinstance(lhs, Scalar) and isinstance(rhs, Column):
@@ -77,7 +77,7 @@ cpdef Column binary_operation(
                     dereference((<Scalar> lhs).c_obj),
                     (<Column> rhs).view(),
                     op,
-                    data_type.c_obj
+                    output_type.c_obj
                 )
             )
     else:
