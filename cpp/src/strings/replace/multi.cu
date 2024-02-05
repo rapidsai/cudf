@@ -40,6 +40,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/optional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -68,19 +69,13 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 256;
  * @brief Type used for holding the target position (first) and the
  * target index (second).
  */
-using target_pair = thrust::pair<int64_t, size_type>;
+using target_pair = thrust::tuple<int64_t, size_type>;
 
 /**
  * @brief Helper functions for performing character-parallel replace
  */
 struct replace_multi_parallel_fn {
   __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
-
-  __device__ cudf::detail::input_offsetalator get_offsets_ptr() const
-  {
-    auto const offsets = d_strings.child(strings_column_view::offsets_column_index);
-    return cudf::detail::input_offsetalator(offsets.head(), offsets.type(), d_strings.offset());
-  }
 
   __device__ string_view const get_string(size_type idx) const
   {
@@ -101,11 +96,12 @@ struct replace_multi_parallel_fn {
    * @param idx Index of the byte position in the chars column
    * @param chars_bytes Number of bytes in the chars column
    */
-  __device__ thrust::optional<size_type> has_target(int64_t idx, int64_t chars_bytes) const
+  __device__ size_type target_index(int64_t idx, int64_t chars_bytes) const
   {
-    auto const d_offsets = get_offsets_ptr();
+    auto const d_offsets = d_strings_offsets;
     auto const d_chars   = get_base_ptr() + d_offsets[0] + idx;
     size_type str_idx    = -1;
+    string_view d_str{};
     for (std::size_t t = 0; t < d_targets.size(); ++t) {
       auto const d_tgt = d_targets[t];
       if (!d_tgt.empty() && (idx + d_tgt.size_bytes() <= chars_bytes) &&
@@ -114,12 +110,24 @@ struct replace_multi_parallel_fn {
           auto const idx_itr =
             thrust::upper_bound(thrust::seq, d_offsets, d_offsets + d_strings.size(), idx);
           str_idx = thrust::distance(d_offsets, idx_itr) - 1;
+          d_str   = get_string(str_idx - d_offsets[0]);
         }
-        auto const d_str = get_string(str_idx - d_offsets[0]);
         if ((d_chars + d_tgt.size_bytes()) <= (d_str.data() + d_str.size_bytes())) { return t; }
       }
     }
-    return thrust::nullopt;
+    return -1;
+  }
+
+  __device__ bool has_target(int64_t idx, int64_t chars_bytes) const
+  {
+    auto const d_chars = get_base_ptr() + d_strings_offsets[0] + idx;
+    for (auto& d_tgt : d_targets) {
+      if (!d_tgt.empty() && (idx + d_tgt.size_bytes() <= chars_bytes) &&
+          (d_tgt.compare(d_chars, d_tgt.size_bytes()) == 0)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -134,29 +142,32 @@ struct replace_multi_parallel_fn {
    * @return Number of substrings resulting from the replace operations on this row
    */
   __device__ size_type count_strings(size_type idx,
-                                     target_pair const* d_positions,
+                                     int64_t const* d_positions,
+                                     size_type const* d_indices,
                                      cudf::detail::input_offsetalator d_targets_offsets) const
   {
     if (!is_valid(idx)) { return 0; }
 
-    auto const d_str             = get_string(idx);
-    auto const d_str_end         = d_str.data() + d_str.size_bytes();
-    auto const base_ptr          = get_base_ptr();
-    auto const targets_positions = cudf::device_span<target_pair const>(
-      d_positions + d_targets_offsets[idx],
-      static_cast<size_type>(d_targets_offsets[idx + 1] - d_targets_offsets[idx]));
+    auto const d_str     = get_string(idx);
+    auto const d_str_end = d_str.data() + d_str.size_bytes();
+    auto const base_ptr  = get_base_ptr();
+
+    auto const target_offset = d_targets_offsets[idx];
+    auto const targets_size  = static_cast<size_type>(d_targets_offsets[idx + 1] - target_offset);
+    auto const positions     = d_positions + target_offset;
+    auto const indices       = d_indices + target_offset;
 
     size_type count = 1;  // always at least one string
     auto str_ptr    = d_str.data();
-    for (auto d_pair : targets_positions) {
-      auto const d_pos   = d_pair.first;
-      auto const d_tgt   = d_targets[d_pair.second];
-      auto const tgt_ptr = base_ptr + d_pos;
+    for (std::size_t i = 0; i < targets_size; ++i) {
+      auto const tgt_idx = indices[i];
+      auto const d_tgt   = d_targets[tgt_idx];
+      auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
         auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { count++; }  // don't bother counting empty strings
 
-        auto const d_repl = get_replacement_string(d_pair.second);
+        auto const d_repl = get_replacement_string(tgt_idx);
         if (!d_repl.empty()) { count++; }
 
         str_ptr += keep_size + d_tgt.size_bytes();
@@ -185,7 +196,8 @@ struct replace_multi_parallel_fn {
    */
   __device__ size_type get_strings(size_type idx,
                                    cudf::detail::input_offsetalator const d_offsets,
-                                   target_pair const* d_positions,
+                                   int64_t const* d_positions,
+                                   size_type const* d_indices,
                                    cudf::detail::input_offsetalator d_targets_offsets,
                                    string_index_pair* d_all_strings) const
   {
@@ -196,23 +208,24 @@ struct replace_multi_parallel_fn {
     auto const d_str_end = d_str.data() + d_str.size_bytes();
     auto const base_ptr  = get_base_ptr();
 
-    auto const targets_positions = cudf::device_span<target_pair const>(
-      d_positions + d_targets_offsets[idx],
-      static_cast<size_type>(d_targets_offsets[idx + 1] - d_targets_offsets[idx]));
+    auto const target_offset = d_targets_offsets[idx];
+    auto const targets_size  = static_cast<size_type>(d_targets_offsets[idx + 1] - target_offset);
+    auto const positions     = d_positions + target_offset;
+    auto const indices       = d_indices + target_offset;
 
     size_type output_idx  = 0;
     size_type output_size = 0;
     auto str_ptr          = d_str.data();
-    for (auto d_pair : targets_positions) {
-      auto const d_pos   = d_pair.first;
-      auto const d_tgt   = d_targets[d_pair.second];
-      auto const tgt_ptr = base_ptr + d_pos;
+    for (std::size_t i = 0; i < targets_size; ++i) {
+      auto const tgt_idx = indices[i];
+      auto const d_tgt   = d_targets[tgt_idx];
+      auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
         auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { d_output[output_idx++] = string_index_pair{str_ptr, keep_size}; }
         output_size += keep_size;
 
-        auto const d_repl = get_replacement_string(d_pair.second);
+        auto const d_repl = get_replacement_string(tgt_idx);
         if (!d_repl.empty()) {
           d_output[output_idx++] = string_index_pair{d_repl.data(), d_repl.size_bytes()};
         }
@@ -231,14 +244,19 @@ struct replace_multi_parallel_fn {
   }
 
   replace_multi_parallel_fn(column_device_view const& d_strings,
+                            cudf::detail::input_offsetalator d_strings_offsets,
                             device_span<string_view const> d_targets,
                             device_span<string_view const> d_replacements)
-    : d_strings(d_strings), d_targets{d_targets}, d_replacements{d_replacements}
+    : d_strings(d_strings),
+      d_strings_offsets(d_strings_offsets),
+      d_targets{d_targets},
+      d_replacements{d_replacements}
   {
   }
 
  protected:
   column_device_view d_strings;
+  cudf::detail::input_offsetalator d_strings_offsets;
   device_span<string_view const> d_targets;
   device_span<string_view const> d_replacements;
 };
@@ -252,15 +270,14 @@ struct replace_multi_parallel_fn {
 struct pair_generator {
   __device__ target_pair operator()(int64_t idx) const
   {
-    auto pos = fn.has_target(idx, chars_bytes);
-    return target_pair{idx, pos.value_or(-1)};
+    return thrust::make_tuple(idx, fn.target_index(idx, chars_bytes));
   }
   replace_multi_parallel_fn fn;
   int64_t chars_bytes;
 };
 
 struct copy_if_fn {
-  __device__ bool operator()(target_pair pos) { return pos.second >= 0; }
+  __device__ bool operator()(target_pair pos) { return thrust::get<1>(pos) >= 0; }
 };
 
 std::unique_ptr<column> replace_character_parallel(strings_column_view const& input,
@@ -281,51 +298,58 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_replacements =
     create_string_vector_from_column(repls, stream, rmm::mr::get_current_device_resource());
 
-  replace_multi_parallel_fn fn{*d_strings, d_targets, d_replacements};
+  replace_multi_parallel_fn fn{
+    *d_strings,
+    cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset()),
+    d_targets,
+    d_replacements,
+  };
 
   // count the number of targets in the entire column
-  auto const target_count = thrust::count_if(rmm::exec_policy(stream),
-                                             thrust::make_counting_iterator<int64_t>(0),
-                                             thrust::make_counting_iterator<int64_t>(chars_bytes),
-                                             [fn, chars_bytes] __device__(int64_t idx) {
-                                               return fn.has_target(idx, chars_bytes).has_value();
-                                             });
+  auto target_count = thrust::count_if(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<int64_t>(0),
+    thrust::make_counting_iterator<int64_t>(chars_bytes),
+    [fn, chars_bytes] __device__(int64_t idx) { return fn.has_target(idx, chars_bytes); });
+
   // Create a vector of every target position in the chars column.
   // These may include overlapping targets which will be resolved later.
-  auto targets_positions = rmm::device_uvector<target_pair>(target_count, stream);
-  auto d_positions       = targets_positions.data();
+  auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
+  auto targets_indices   = rmm::device_uvector<size_type>(target_count, stream);
 
   // cudf::detail::make_counting_transform_iterator hardcodes size_type
   auto const copy_itr = thrust::make_transform_iterator(thrust::counting_iterator<int64_t>(0),
                                                         pair_generator{fn, chars_bytes});
+  auto const out_itr  = thrust::make_zip_iterator(
+    thrust::make_tuple(targets_positions.begin(), targets_indices.begin()));
   auto const copy_end =
-    cudf::detail::copy_if_safe(copy_itr, copy_itr + chars_bytes, d_positions, copy_if_fn{}, stream);
+    cudf::detail::copy_if_safe(copy_itr, copy_itr + chars_bytes, out_itr, copy_if_fn{}, stream);
+
+  // adjust target count since the copy-if may have eliminated some invalid targets
+  target_count = std::min(std::distance(out_itr, copy_end), target_count);
+  targets_positions.resize(target_count, stream);
+  targets_indices.resize(target_count, stream);
+  auto d_positions       = targets_positions.data();
+  auto d_targets_indices = targets_indices.data();
 
   // create a vector of offsets to each string's set of target positions
   auto const targets_offsets = [&] {
     auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
-
-    auto const pos_itr = cudf::detail::make_counting_transform_iterator(
-      0, cuda::proclaim_return_type<int64_t>([d_positions] __device__(auto idx) -> int64_t {
-        return d_positions[idx].first;
-      }));
-    auto pos_count = std::distance(d_positions, copy_end);
-
     auto const offsets_begin =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
     thrust::upper_bound(rmm::exec_policy(stream),
                         offsets_begin,
                         offsets_begin + input.size() + 1,
-                        pos_itr,
-                        pos_itr + pos_count,
+                        d_positions,
+                        d_positions + target_count,
                         string_indices.begin());
 
     // compute offsets per string
-    auto targets_counts = rmm::device_uvector<size_type>(strings_count + 1, stream);
+    auto targets_counts = rmm::device_uvector<size_type>(strings_count, stream);
     // memset to zero-out the target counts for any null-entries or strings with no targets
     thrust::uninitialized_fill(
-      rmm::exec_policy(stream), targets_counts.begin(), targets_counts.end(), 0L);
+      rmm::exec_policy(stream), targets_counts.begin(), targets_counts.end(), 0);
     auto d_targets_counts = targets_counts.data();
 
     // next, count the number of targets per string
@@ -337,7 +361,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
       [d_string_indices, d_targets_counts] __device__(int64_t idx) {
         auto const str_idx = d_string_indices[idx] - 1;
         cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_targets_counts + str_idx)};
-        ref.fetch_add(1L, cuda::std::memory_order_relaxed);
+        ref.fetch_add(1, cuda::std::memory_order_relaxed);
       });
     // finally, convert the counts into offsets
     return std::get<0>(
@@ -356,8 +380,10 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                     thrust::counting_iterator<size_type>(strings_count),
                     counts.begin(),
                     cuda::proclaim_return_type<size_type>(
-                      [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
-                        return fn.count_strings(idx, d_positions, d_targets_offsets);
+                      [fn, d_positions, d_targets_indices, d_targets_offsets] __device__(
+                        size_type idx) -> size_type {
+                        return fn.count_strings(
+                          idx, d_positions, d_targets_indices, d_targets_offsets);
                       }));
 
   // create offsets from the counts
@@ -374,10 +400,15 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
-    [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
-      size_type idx) {
-      d_sizes[idx] =
-        fn.get_strings(idx, d_strings_offsets, d_positions, d_targets_offsets, d_indices);
+    [fn,
+     d_strings_offsets,
+     d_positions,
+     d_targets_indices,
+     d_targets_offsets,
+     d_indices,
+     d_sizes] __device__(size_type idx) {
+      d_sizes[idx] = fn.get_strings(
+        idx, d_strings_offsets, d_positions, d_targets_indices, d_targets_offsets, d_indices);
     });
 
   // use this utility to gather the string parts into a contiguous chars column
