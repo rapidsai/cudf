@@ -16,7 +16,7 @@ from .table cimport Table
 
 
 cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
-    # help to convert a gather map to a Column
+    # helper to convert a gather map to a Column
     cdef device_buffer c_empty
     cdef size_type size = dereference(gather_map.get()).size()
     return Column.from_libcudf(
