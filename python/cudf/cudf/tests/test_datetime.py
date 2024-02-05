@@ -2448,3 +2448,23 @@ def test_dateimeindex_from_noniso_string():
 def test_to_datetime_errors_non_scalar_not_implemented(errors):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([1, ""], unit="s", errors=errors)
+
+
+@pytest.mark.parametrize(
+    "freqstr",
+    [
+        "H",
+        "N",
+        "T",
+        "L",
+        "U",
+        "S",
+    ],
+)
+def test_datetime_raise_warning(freqstr):
+    t = cudf.Series(
+        ["2001-01-01 00:04:45", "2001-01-01 00:04:58", "2001-01-01 00:05:04"],
+        dtype="datetime64[ns]",
+    )
+    with pytest.warns(FutureWarning):
+        t.dt.ceil(freqstr)

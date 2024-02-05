@@ -1,5 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+import warnings
+
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp.memory cimport unique_ptr
@@ -85,6 +87,21 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
     cdef libcudf_datetime.rounding_frequency freq_val
 
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+    old_to_new_freq_map = {
+        "H": "h",
+        "N": "ns",
+        "T": "min",
+        "L": "ms",
+        "U": "us",
+        "S": "s",
+    }
+    if freq in old_to_new_freq_map:
+        warnings.warn(
+            f"FutureWarning: {freq} is deprecated and will be "
+            "removed in a future version, please use "
+            f"{old_to_new_freq_map[freq]} instead.",
+            FutureWarning
+        )
     if freq == "D":
         freq_val = libcudf_datetime.rounding_frequency.DAY
     elif freq in ("H", "h"):
