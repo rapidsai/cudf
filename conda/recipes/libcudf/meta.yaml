@@ -4,7 +4,6 @@
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
 {% set cuda_major = cuda_version.split('.')[0] %}
-{% set cuda_spec = ">=" + cuda_major ~ ",<" + (cuda_major | int + 1) ~ ".0a0" %} # i.e. >=11,<12.0a0
 {% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
@@ -94,8 +93,10 @@ outputs:
       build:
         - cmake {{ cmake_version }}
       host:
+        - cuda-version ={{ cuda_version }}
         - libarrow {{ libarrow_version }}
       run:
+        - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
         {% if cuda_major == "11" %}
         - cudatoolkit
         - libcufile {{ cuda11_libcufile_run_version }}  # [linux64]
@@ -103,7 +104,6 @@ outputs:
         - cuda-nvrtc
         - libcufile  # [linux64]
         {% endif %}
-        - cuda-version {{ cuda_spec }}
         - nvcomp {{ nvcomp_version }}
         - librmm ={{ minor_version }}
         - libkvikio ={{ minor_version }}
@@ -185,6 +185,7 @@ outputs:
         - cuda-version ={{ cuda_version }}
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
+        - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
@@ -209,7 +210,7 @@ outputs:
       host:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
-        - cuda-version {{ cuda_spec }}
+        - cuda-version ={{ cuda_version }}
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
         {% else %}
@@ -219,9 +220,9 @@ outputs:
         - gtest {{ gtest_version }}
         - gmock {{ gtest_version }}
       run:
+        - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
-        - cuda-version {{ cuda_spec }}
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
         {% endif %}
