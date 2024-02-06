@@ -9,7 +9,6 @@ import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
-from pandas.core.tools.datetimes import _unit_map
 from typing_extensions import Self
 
 import cudf
@@ -20,6 +19,31 @@ from cudf._lib.strings.convert.convert_integers import (
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.index import as_index
+
+# https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/core/tools/datetimes.py#L1112
+_unit_map = {
+    "year": "year",
+    "years": "year",
+    "month": "month",
+    "months": "month",
+    "day": "day",
+    "days": "day",
+    "hour": "h",
+    "hours": "h",
+    "minute": "m",
+    "minutes": "m",
+    "second": "s",
+    "seconds": "s",
+    "ms": "ms",
+    "millisecond": "ms",
+    "milliseconds": "ms",
+    "us": "us",
+    "microsecond": "us",
+    "microseconds": "us",
+    "ns": "ns",
+    "nanosecond": "ns",
+    "nanoseconds": "ns",
+}
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -56,7 +80,7 @@ def to_datetime(
     format: Optional[str] = None,
     exact: bool = True,
     unit: str = "ns",
-    infer_datetime_format: bool = False,
+    infer_datetime_format: bool = True,
     origin="unix",
     cache: bool = True,
 ):
@@ -93,7 +117,7 @@ def to_datetime(
         origin(unix epoch start).
         Example, with unit='ms' and origin='unix' (the default), this
         would calculate the number of milliseconds to the unix epoch start.
-    infer_datetime_format : bool, default False
+    infer_datetime_format : bool, default True
         If True and no `format` is given, attempt to infer the format of the
         datetime strings, and if it can be inferred, switch to a faster
         method of parsing them. In some cases this can increase the parsing
@@ -136,6 +160,13 @@ def to_datetime(
     elif errors in {"ignore", "coerce"} and not is_scalar(arg):
         raise NotImplementedError(
             f"{errors=} is not implemented when arg is not scalar-like"
+        )
+
+    if infer_datetime_format in {None, False}:
+        warnings.warn(
+            "`infer_datetime_format` is deprecated and will "
+            "be removed in a future version of cudf.",
+            FutureWarning,
         )
 
     if arg is None:
@@ -917,10 +948,14 @@ def date_range(
     # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
     # we shouldn't raise but compute the sequence as is. The trailing overflow
     # part should get trimmed at the end.
-    end_estim = (
-        pd.Timestamp(start.value)
-        + periods * offset._maybe_as_fast_pandas_offset()
-    ).to_datetime64()
+    with warnings.catch_warnings():
+        # Need to ignore userwarnings where nonzero nanoseconds
+        # are dropped in conversion during the binops
+        warnings.simplefilter("ignore", UserWarning)
+        end_estim = (
+            pd.Timestamp(start.value)
+            + periods * offset._maybe_as_fast_pandas_offset()
+        ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
         # If `offset` is non-fixed frequency, resort to libcudf.

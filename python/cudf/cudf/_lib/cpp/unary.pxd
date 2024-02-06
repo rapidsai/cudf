@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
@@ -7,34 +7,32 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.types cimport data_type
 
-ctypedef int32_t underlying_type_t_unary_op
-
 
 cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
 
-    ctypedef enum unary_operator:
-        SIN "cudf::unary_operator::SIN"
-        COS "cudf::unary_operator::COS"
-        TAN "cudf::unary_operator::TAN"
-        ARCSIN "cudf::unary_operator::ARCSIN"
-        ARCCOS "cudf::unary_operator::ARCCOS"
-        ARCTAN "cudf::unary_operator::ARCTAN"
-        SINH "cudf::unary_operator::SINH"
-        COSH "cudf::unary_operator::COSH"
-        TANH "cudf::unary_operator::TANH"
-        ARCSINH "cudf::unary_operator::ARCSINH"
-        ARCCOSH "cudf::unary_operator::ARCCOSH"
-        ARCTANH "cudf::unary_operator::ARCTANH"
-        EXP "cudf::unary_operator::EXP"
-        LOG "cudf::unary_operator::LOG"
-        SQRT "cudf::unary_operator::SQRT"
-        CBRT "cudf::unary_operator::CBRT"
-        CEIL "cudf::unary_operator::CEIL"
-        FLOOR "cudf::unary_operator::FLOOR"
-        ABS "cudf::unary_operator::ABS"
-        RINT "cudf::unary_operator::RINT"
-        BIT_INVERT "cudf::unary_operator::BIT_INVERT"
-        NOT "cudf::unary_operator::NOT"
+    cpdef enum class unary_operator(int32_t):
+        SIN
+        COS
+        TAN
+        ARCSIN
+        ARCCOS
+        ARCTAN
+        SINH
+        COSH
+        TANH
+        ARCSINH
+        ARCCOSH
+        ARCTANH
+        EXP
+        LOG
+        SQRT
+        CBRT
+        CEIL
+        FLOOR
+        ABS
+        RINT
+        BIT_INVERT
+        NOT
 
     cdef extern unique_ptr[column] unary_operation(
         column_view input,

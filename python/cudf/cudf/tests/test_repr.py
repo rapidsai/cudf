@@ -294,39 +294,40 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
     [
         (
             cudf.Index([1, 2, 3, None]),
-            "Int64Index([1, 2, 3, <NA>], dtype='int64')",
+            "Index([1, 2, 3, <NA>], dtype='int64')",
         ),
         (
             cudf.Index([None, 2.2, 3.324342, None]),
-            "Float64Index([<NA>, 2.2, 3.324342, <NA>], dtype='float64')",
+            "Index([<NA>, 2.2, 3.324342, <NA>], dtype='float64')",
         ),
         (
             cudf.Index([None, None, None], name="hello"),
-            "StringIndex([None None None], dtype='object', name='hello')",
+            "Index([<NA>, <NA>, <NA>], dtype='object', name='hello')",
         ),
         (
             cudf.Index([None, None, None], dtype="float", name="hello"),
-            "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
+            "Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
         ),
         (
             cudf.Index([None], dtype="float64", name="hello"),
-            "Float64Index([<NA>], dtype='float64', name='hello')",
+            "Index([<NA>], dtype='float64', name='hello')",
         ),
         (
             cudf.Index([None], dtype="int8", name="hello"),
-            "Int8Index([<NA>], dtype='int8', name='hello')",
+            "Index([<NA>], dtype='int8', name='hello')",
         ),
         (
             cudf.Index([None] * 50, dtype="object"),
-            "StringIndex([None None None None None None None None "
-            "None None None None None None\n None None None None None None "
-            "None None None None None None None None\n None None None None "
-            "None None None None None None None None None None\n None None "
-            "None None None None None None], dtype='object')",
+            "Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>"
+            ", <NA>, <NA>,\n       <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>, <NA>, <NA>, <NA>, <NA>,\n       <NA>, <NA>, <NA>, <NA>, "
+            "<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>,\n       <NA>, "
+            "<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "<NA>,\n       <NA>, <NA>],\n      dtype='object')",
         ),
         (
             cudf.Index([None] * 20, dtype="uint32"),
-            "UInt32Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
+            "Index([<NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
             "<NA>,\n       <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, <NA>, "
             "<NA>,\n       <NA>, <NA>],\n      dtype='uint32')",
         ),
@@ -334,7 +335,7 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
             cudf.Index(
                 [None, 111, 22, 33, None, 23, 34, 2343, None], dtype="int16"
             ),
-            "Int16Index([<NA>, 111, 22, 33, <NA>, 23, 34, 2343, <NA>], "
+            "Index([<NA>, 111, 22, 33, <NA>, 23, 34, 2343, <NA>], "
             "dtype='int16')",
         ),
         (
@@ -468,7 +469,7 @@ def test_dataframe_null_index_repr(df, pandas_special_case):
     actual_repr = repr(gdf)
 
     if pandas_special_case:
-        # Pandas inconsistently print StringIndex null values
+        # Pandas inconsistently print Index null values
         # as `None` at some places and `NaN` at few other places
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
@@ -542,7 +543,7 @@ def test_series_null_index_repr(sr, pandas_special_case):
     actual_repr = repr(gsr)
 
     if pandas_special_case:
-        # Pandas inconsistently print StringIndex null values
+        # Pandas inconsistently print Index null values
         # as `None` at some places and `NaN` at few other places
         # Whereas cudf is consistent with strings `null` values
         # to be printed as `None` everywhere.
