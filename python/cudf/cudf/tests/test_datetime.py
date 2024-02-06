@@ -2468,3 +2468,12 @@ def test_datetime_raise_warning(freqstr):
     )
     with pytest.warns(FutureWarning):
         t.dt.ceil(freqstr)
+
+
+def test_timezone_array_notimplemented():
+    pa_array = pa.array(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
+        type=pa.timestamp("ns", "UTC"),
+    )
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pa_array)
