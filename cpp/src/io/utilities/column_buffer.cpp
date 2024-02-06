@@ -26,6 +26,9 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <iomanip>
+#include <sstream>
+
 namespace cudf::io::detail {
 
 void gather_column_buffer::allocate_strings_data(rmm::cuda_stream_view stream)
@@ -68,26 +71,10 @@ std::unique_ptr<column> cudf::io::detail::inline_column_buffer::make_string_colu
   rmm::cuda_stream_view stream)
 {
   // no need for copies, just transfer ownership of the data_buffers to the columns
-  auto const state = mask_state::UNALLOCATED;
-  auto str_col =
-    _string_data.is_empty()
-      ? make_empty_column(data_type{type_id::INT8})
-      : std::make_unique<column>(data_type{type_id::INT8},
-                                 string_size(),
-                                 std::move(_string_data),
-                                 cudf::detail::create_null_mask(size, state, stream, _mr),
-                                 state_null_count(state, size),
-                                 std::vector<std::unique_ptr<column>>{});
-  auto offsets_col =
-    std::make_unique<column>(data_type{type_to_id<size_type>()},
-                             size + 1,
-                             std::move(_data),
-                             cudf::detail::create_null_mask(size + 1, state, stream, _mr),
-                             state_null_count(state, size + 1),
-                             std::vector<std::unique_ptr<column>>{});
-
+  auto offsets_col = std::make_unique<column>(
+    data_type{type_to_id<size_type>()}, size + 1, std::move(_data), rmm::device_buffer{}, 0);
   return make_strings_column(
-    size, std::move(offsets_col), std::move(str_col), null_count(), std::move(_null_mask));
+    size, std::move(offsets_col), std::move(_string_data), null_count(), std::move(_null_mask));
 }
 
 namespace {
@@ -143,6 +130,30 @@ string_policy column_buffer_base<string_policy>::empty_like(string_policy const&
   auto new_buff = string_policy(input.type, input.is_nullable);
   copy_buffer_data(input, new_buff);
   return new_buff;
+}
+
+template <typename string_policy>
+std::string type_to_name(column_buffer_base<string_policy> const& buffer)
+{
+  if (buffer.type.id() == cudf::type_id::LIST) {
+    return "List<" + (type_to_name<string_policy>(buffer.children[0])) + ">";
+  }
+
+  if (buffer.type.id() == cudf::type_id::STRUCT) {
+    std::ostringstream out;
+
+    out << "Struct<";
+    auto iter = thrust::make_counting_iterator(0);
+    std::transform(
+      iter,
+      iter + buffer.children.size(),
+      std::ostream_iterator<std::string>(out, ","),
+      [&buffer](size_type i) { return type_to_name<string_policy>(buffer.children[i]); });
+    out << ">";
+    return out.str();
+  }
+
+  return cudf::type_to_name(buffer.type);
 }
 
 template <class string_policy>
@@ -352,6 +363,10 @@ template std::unique_ptr<column> empty_like<pointer_type>(pointer_column_buffer&
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr);
 
+template std::string type_to_name<string_type>(string_column_buffer const& buffer);
+template std::string type_to_name<pointer_type>(pointer_column_buffer const& buffer);
+
 template class column_buffer_base<pointer_type>;
 template class column_buffer_base<string_type>;
+
 }  // namespace cudf::io::detail

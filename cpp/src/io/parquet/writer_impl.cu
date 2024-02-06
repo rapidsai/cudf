@@ -2074,7 +2074,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           need_sync = true;
         }
 
-        row_group.total_byte_size += ck.compressed_size;
+        row_group.total_byte_size += ck.bfr_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2401,7 +2401,8 @@ void writer::impl::write_parquet_data_to_sink(
             // skip dict pages
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
-            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            int32_t const this_page_size =
+              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }
