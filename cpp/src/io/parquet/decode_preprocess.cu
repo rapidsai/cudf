@@ -146,7 +146,6 @@ __device__ size_type gpuDecodeTotalPageStringSize(page_state_s* s, int t)
   switch (s->page.encoding) {
     case Encoding::PLAIN_DICTIONARY:
     case Encoding::RLE_DICTIONARY:
-      // TODO: make this block-based instead of just 1 warp
       if (t < warp_size && s->dict_base) {
         auto const [new_target_pos, len] =
           gpuDecodeDictionaryIndices<true, unused_state_buf>(s, nullptr, target_pos, t);
