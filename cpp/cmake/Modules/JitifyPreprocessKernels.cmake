@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -16,7 +16,8 @@
 add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
 target_compile_definitions(jitify_preprocess PRIVATE "_FILE_OFFSET_BITS=64")
-target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
+rapids_cuda_set_runtime(jitify_preprocess USE_STATIC ${CUDA_STATIC_RUNTIME})
+target_link_libraries(jitify_preprocess PUBLIC ${CMAKE_DL_LIBS})
 
 # Take a list of files to JIT-compile and run them through jitify_preprocess.
 function(jit_preprocess_files)

@@ -9,6 +9,11 @@
           "fixed_in" : "2.3"
         },
         {
+          "file" : "cccl/hide_kernels.diff",
+          "issue" : "Mark all cub and thrust kernels with hidden visibility [https://github.com/nvidia/cccl/pulls/443]",
+          "fixed_in" : "2.3"
+        },
+        {
           "file" : "cccl/revert_pr_211.diff",
           "issue" : "thrust::copy introduced a change in behavior that causes failures with cudaErrorInvalidValue.",
           "fixed_in" : ""

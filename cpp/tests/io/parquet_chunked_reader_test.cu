@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+#include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -44,14 +46,12 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <fstream>
 #include <type_traits>
 
 namespace {
-// Global environment for temporary files
-auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
-  ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
 using int32s_col       = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col       = cudf::test::fixed_width_column_wrapper<int64_t>;
@@ -953,64 +953,296 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
   } while (reader.has_next());
 }
 
-TEST_F(ParquetChunkedReaderTest, InputLimitSimple)
+constexpr size_t input_limit_expected_file_count = 4;
+
+std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
 {
-  auto const filepath = temp_env->get_temp_filepath("input_limit_10_rowgroups.parquet");
+  return {base_filename + "_a.parquet",
+          base_filename + "_b.parquet",
+          base_filename + "_c.parquet",
+          base_filename + "_d.parquet"};
+}
 
-  // This results in 10 grow groups, at 4001150 bytes per row group
-  constexpr int num_rows = 25'000'000;
-  auto value_iter = cudf::detail::make_counting_transform_iterator(0, [](int i) { return i; });
-  cudf::test::fixed_width_column_wrapper<int> expected(value_iter, value_iter + num_rows);
-  cudf::io::parquet_writer_options opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath},
-                                              cudf::table_view{{expected}})
-      // note: it is unnecessary to force compression to NONE here because the size we are using in
-      // the row group is the uncompressed data size. But forcing the dictionary policy to
-      // dictionary_policy::NEVER is necessary to prevent changes in the
-      // decompressed-but-not-yet-decoded data.
-      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+void input_limit_test_write_one(std::string const& filepath,
+                                cudf::table_view const& t,
+                                cudf::io::compression_type compression,
+                                cudf::io::dictionary_policy dict_policy)
+{
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, t)
+      .compression(compression)
+      .dictionary_policy(dict_policy);
+  cudf::io::write_parquet(out_opts);
+}
 
-  cudf::io::write_parquet(opts);
+void input_limit_test_write(std::vector<std::string> const& test_filenames,
+                            cudf::table_view const& t)
+{
+  CUDF_EXPECTS(test_filenames.size() == 4, "Unexpected count of test filenames");
+  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+               "Unexpected count of test filenames");
 
-  {
-    // no chunking
-    auto const [result, num_chunks] = chunked_read(filepath, 0, 0);
-    EXPECT_EQ(num_chunks, 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
+  // no compression
+  input_limit_test_write_one(
+    test_filenames[0], t, cudf::io::compression_type::NONE, cudf::io::dictionary_policy::NEVER);
+  // compression with a codec that uses a lot of scratch space at decode time (2.5x the total
+  // decompressed buffer size)
+  input_limit_test_write_one(
+    test_filenames[1], t, cudf::io::compression_type::ZSTD, cudf::io::dictionary_policy::NEVER);
+  // compression with a codec that uses no scratch space at decode time
+  input_limit_test_write_one(
+    test_filenames[2], t, cudf::io::compression_type::SNAPPY, cudf::io::dictionary_policy::NEVER);
+  input_limit_test_write_one(
+    test_filenames[3], t, cudf::io::compression_type::SNAPPY, cudf::io::dictionary_policy::ALWAYS);
+}
+
+void input_limit_test_read(std::vector<std::string> const& test_filenames,
+                           cudf::table_view const& t,
+                           size_t output_limit,
+                           size_t input_limit,
+                           int const expected_chunk_counts[input_limit_expected_file_count])
+{
+  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+               "Unexpected count of test filenames");
+
+  for (size_t idx = 0; idx < test_filenames.size(); idx++) {
+    auto result = chunked_read(test_filenames[idx], output_limit, input_limit);
+    CUDF_EXPECTS(result.second == expected_chunk_counts[idx],
+                 "Unexpected number of chunks produced in chunk read");
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, t);
   }
+}
 
-  {
-    // 25 chunks of 100k rows each
-    auto const [result, num_chunks] = chunked_read(filepath, 0, 1);
-    EXPECT_EQ(num_chunks, 25);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
-  }
+struct ParquetChunkedReaderInputLimitConstrainedTest : public cudf::test::BaseFixture {};
 
-  {
-    // 25 chunks of 100k rows each
-    auto const [result, num_chunks] = chunked_read(filepath, 0, 4000000);
-    EXPECT_EQ(num_chunks, 25);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
-  }
+TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, SingleFixedWidthColumn)
+{
+  auto base_path      = temp_env->get_temp_filepath("single_col_fixed_width");
+  auto test_filenames = input_limit_get_test_names(base_path);
 
-  {
-    // 25 chunks of 100k rows each
-    auto const [result, num_chunks] = chunked_read(filepath, 0, 4100000);
-    EXPECT_EQ(num_chunks, 25);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
-  }
+  constexpr auto num_rows = 1'000'000;
+  auto iter1              = thrust::make_constant_iterator(15);
+  cudf::test::fixed_width_column_wrapper<double> col1(iter1, iter1 + num_rows);
+  auto tbl = cudf::table_view{{col1}};
 
-  {
-    // 12 chunks of 200k rows each, plus 1 final chunk of 100k rows.
-    auto const [result, num_chunks] = chunked_read(filepath, 0, 8002301);
-    EXPECT_EQ(num_chunks, 13);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
-  }
+  input_limit_test_write(test_filenames, tbl);
 
+  // semi-reasonable limit
+  constexpr int expected_a[] = {1, 17, 4, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 2 * 1024 * 1024, expected_a);
+  // an unreasonable limit
+  constexpr int expected_b[] = {1, 50, 50, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 1, expected_b);
+}
+
+TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
+{
+  auto base_path      = temp_env->get_temp_filepath("mixed_columns");
+  auto test_filenames = input_limit_get_test_names(base_path);
+
+  constexpr auto num_rows = 1'000'000;
+
+  auto iter1 = thrust::make_counting_iterator<int>(0);
+  cudf::test::fixed_width_column_wrapper<int> col1(iter1, iter1 + num_rows);
+
+  auto iter2 = thrust::make_counting_iterator<double>(0);
+  cudf::test::fixed_width_column_wrapper<double> col2(iter2, iter2 + num_rows);
+
+  auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
+  auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
+    if (i < 250000) { return strings[0]; }
+    if (i < 750000) { return strings[1]; }
+    return strings[2];
+  });
+  auto col3           = strings_col(str_iter, str_iter + num_rows);
+
+  auto tbl = cudf::table_view{{col1, col2, col3}};
+
+  input_limit_test_write(test_filenames, tbl);
+
+  constexpr int expected_a[] = {1, 50, 10, 7};
+  input_limit_test_read(test_filenames, tbl, 0, 2 * 1024 * 1024, expected_a);
+  constexpr int expected_b[] = {1, 50, 50, 50};
+  input_limit_test_read(test_filenames, tbl, 0, 1, expected_b);
+}
+
+struct ParquetChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
+
+struct offset_gen {
+  int const group_size;
+  __device__ int operator()(int i) { return i * group_size; }
+};
+
+template <typename T>
+struct value_gen {
+  __device__ T operator()(int i) { return i % 1024; }
+};
+TEST_F(ParquetChunkedReaderInputLimitTest, List)
+{
+  auto base_path      = temp_env->get_temp_filepath("list");
+  auto test_filenames = input_limit_get_test_names(base_path);
+
+  constexpr int num_rows  = 50'000'000;
+  constexpr int list_size = 4;
+
+  auto const stream = cudf::get_default_stream();
+
+  auto offset_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{list_size});
+  auto offset_col  = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy(stream),
+               offset_iter,
+               offset_iter + num_rows + 1,
+               offset_col->mutable_view().begin<int>());
+
+  // list<int>
+  constexpr int num_ints = num_rows * list_size;
+  auto value_iter        = cudf::detail::make_counting_transform_iterator(0, value_gen<int>{});
+  auto value_col         = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy(stream),
+               value_iter,
+               value_iter + num_ints,
+               value_col->mutable_view().begin<int>());
+  auto col1 =
+    cudf::make_lists_column(num_rows,
+                            std::move(offset_col),
+                            std::move(value_col),
+                            0,
+                            cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED),
+                            stream);
+
+  auto tbl = cudf::table_view{{*col1}};
+
+  input_limit_test_write(test_filenames, tbl);
+
+  // even though we have a very large limit here, there are two cases where we actually produce
+  // splits.
+  // - uncompressed data (with no dict). This happens because the code has to make a guess at how
+  // much
+  //   space to reserve for compressed/uncompressed data prior to reading. It does not know that
+  //   everything it will be reading in this case is uncompressed already, so this guess ends up
+  //   causing it to generate two top level passes. in practice, this shouldn't matter because we
+  //   never really see uncompressed data in the wild.
+  //
+  // - ZSTD (with no dict). In this case, ZSTD simple requires a huge amount of temporary
+  // space: 2.5x the total
+  //   size of the decompressed data. so 2 GB is actually not enough to hold the whole thing at
+  //   once.
+  //
+  // Note that in the dictionary cases, both of these revert down to 1 chunk because the
+  // dictionaries dramatically shrink the size of the uncompressed data.
+  constexpr int expected_a[] = {2, 2, 1, 1};
+  input_limit_test_read(test_filenames, tbl, 0, size_t{2} * 1024 * 1024 * 1024, expected_a);
+  // smaller limit
+  constexpr int expected_b[] = {6, 6, 2, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 512 * 1024 * 1024, expected_b);
+  // include output chunking as well
+  constexpr int expected_c[] = {11, 11, 9, 8};
+  input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
+}
+
+struct char_values {
+  __device__ int8_t operator()(int i)
   {
-    // 1 big chunk
-    auto const [result, num_chunks] = chunked_read(filepath, 0, size_t{1} * 1024 * 1024 * 1024);
-    EXPECT_EQ(num_chunks, 1);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->get_column(0));
+    int const index = (i / 2) % 3;
+    // generate repeating 3-runs of 2 values each. aabbcc
+    return index == 0 ? 'a' : (index == 1 ? 'b' : 'c');
   }
+};
+TEST_F(ParquetChunkedReaderInputLimitTest, Mixed)
+{
+  auto base_path      = temp_env->get_temp_filepath("mixed_types");
+  auto test_filenames = input_limit_get_test_names(base_path);
+
+  constexpr int num_rows  = 50'000'000;
+  constexpr int list_size = 4;
+  constexpr int str_size  = 3;
+
+  auto const stream = cudf::get_default_stream();
+
+  auto offset_iter = cudf::detail::make_counting_transform_iterator(0, offset_gen{list_size});
+  auto offset_col  = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy(stream),
+               offset_iter,
+               offset_iter + num_rows + 1,
+               offset_col->mutable_view().begin<int>());
+
+  // list<int>
+  constexpr int num_ints = num_rows * list_size;
+  auto value_iter        = cudf::detail::make_counting_transform_iterator(0, value_gen<int>{});
+  auto value_col         = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy(stream),
+               value_iter,
+               value_iter + num_ints,
+               value_col->mutable_view().begin<int>());
+  auto col1 =
+    cudf::make_lists_column(num_rows,
+                            std::move(offset_col),
+                            std::move(value_col),
+                            0,
+                            cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED),
+                            stream);
+
+  // strings
+  constexpr int num_chars = num_rows * str_size;
+  auto str_offset_iter    = cudf::detail::make_counting_transform_iterator(0, offset_gen{str_size});
+  auto str_offset_col     = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy(stream),
+               str_offset_iter,
+               str_offset_iter + num_rows + 1,
+               str_offset_col->mutable_view().begin<int>());
+  auto str_iter = cudf::detail::make_counting_transform_iterator(0, char_values{});
+  rmm::device_buffer str_chars(num_chars, stream);
+  thrust::copy(rmm::exec_policy(stream),
+               str_iter,
+               str_iter + num_chars,
+               static_cast<int8_t*>(str_chars.data()));
+  auto col2 =
+    cudf::make_strings_column(num_rows,
+                              std::move(str_offset_col),
+                              std::move(str_chars),
+                              0,
+                              cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED));
+
+  // doubles
+  auto double_iter = cudf::detail::make_counting_transform_iterator(0, value_gen<double>{});
+  auto col3        = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::FLOAT64}, num_rows, cudf::mask_state::UNALLOCATED);
+  thrust::copy(rmm::exec_policy(stream),
+               double_iter,
+               double_iter + num_rows,
+               col3->mutable_view().begin<double>());
+
+  auto tbl = cudf::table_view{{*col1, *col2, *col3}};
+
+  input_limit_test_write(test_filenames, tbl);
+
+  // even though we have a very large limit here, there are two cases where we actually produce
+  // splits.
+  // - uncompressed data (with no dict). This happens because the code has to make a guess at how
+  // much
+  //   space to reserve for compressed/uncompressed data prior to reading. It does not know that
+  //   everything it will be reading in this case is uncompressed already, so this guess ends up
+  //   causing it to generate two top level passes. in practice, this shouldn't matter because we
+  //   never really see uncompressed data in the wild.
+  //
+  // - ZSTD (with no dict). In this case, ZSTD simple requires a huge amount of temporary
+  // space: 2.5x the total
+  //   size of the decompressed data. so 2 GB is actually not enough to hold the whole thing at
+  //   once.
+  //
+  // Note that in the dictionary cases, both of these revert down to 1 chunk because the
+  // dictionaries dramatically shrink the size of the uncompressed data.
+  constexpr int expected_a[] = {3, 3, 1, 1};
+  input_limit_test_read(test_filenames, tbl, 0, size_t{2} * 1024 * 1024 * 1024, expected_a);
+  // smaller limit
+  constexpr int expected_b[] = {10, 11, 4, 1};
+  input_limit_test_read(test_filenames, tbl, 0, 512 * 1024 * 1024, expected_b);
+  // include output chunking as well
+  constexpr int expected_c[] = {20, 21, 15, 14};
+  input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
 }

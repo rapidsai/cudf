@@ -1,12 +1,12 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
@@ -19,11 +19,6 @@ from cudf.core.dtypes import (
 )
 from cudf.testing._utils import assert_eq
 from cudf.utils.dtypes import np_to_pa_dtype
-
-if PANDAS_GE_150:
-    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-else:
-    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 
 def test_cdt_basic():
