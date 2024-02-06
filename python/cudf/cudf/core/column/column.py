@@ -2261,7 +2261,13 @@ def as_column(
         ser = pd.Series(arbitrary, dtype=dtype)
         return as_column(ser, nan_as_null=nan_as_null)
     elif isinstance(dtype, (cudf.StructDtype, cudf.ListDtype)):
-        data = pa.array(arbitrary, type=dtype.to_arrow())
+        try:
+            data = pa.array(arbitrary, type=dtype.to_arrow())
+        except (pa.ArrowInvalid, pa.ArrowTypeError):
+            if isinstance(dtype, cudf.ListDtype):
+                # e.g. test_cudf_list_struct_write
+                return cudf.core.column.ListColumn.from_sequences(arbitrary)
+            raise
         return as_column(data, nan_as_null=nan_as_null)
     else:
         pa_type = None
@@ -2355,6 +2361,9 @@ def as_column(
                     cudf.utils.dtypes.is_column_like(arb) for arb in arbitrary
                 )
             ):
+                # TODO: I think can be removed; covered by
+                # elif isinstance(dtype, (cudf.StructDtype, cudf.ListDtype)):
+                # above
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
             elif isinstance(arbitrary, abc.Iterable) or isinstance(
                 arbitrary, abc.Sequence
