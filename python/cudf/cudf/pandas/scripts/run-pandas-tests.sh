@@ -185,7 +185,6 @@ and not test_numpy_ufuncs_basic[nullable_float-rad2deg]"
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -m "not single_cpu and not db" \
     -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
-    --durations=50 \
     -o xfail_strict=True \
     ${PYTEST_IGNORES} $@
 
