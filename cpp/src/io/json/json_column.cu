@@ -594,27 +594,10 @@ void make_device_json_column(device_span<SymbolT const> input,
       ignore_vals[this_col_id]          = 1;
       continue;
     }
-    // TODO - need to test this for all orients. JSON, JSONL, JSON array of arrays, JSONL array of
-    // arrays. (4 types)
+
+    // get path of this column, check if it is a struct forced as string, and enforce it
     auto nt                          = tree_path.get_path(this_col_id);
     std::optional<data_type> user_dt = get_path_data_type(nt, options);
-    for (auto it = nt.rbegin(); it != nt.rend(); it++) {
-      auto [name, type] = *it;
-      std::cout << ":" << name << "-" << to_cat(type);
-    }
-    if (user_dt.has_value())
-      std::cout << " '" << static_cast<int>(user_dt.value().id()) << "'";
-    else
-      std::cout << " '--'";
-    std::cout << "\n";
-    // for struct schema alone,
-    // create a vector {type, name}, by traversing column_parent_ids too.
-    // use that to compare with schema and check if exists in schema
-    // if yes, check if it is string. then force it to mixed_type_column OR string column.
-    // for other columns, should we check the schema? complexity of creating this vector{type, name}
-    // will be high. or, check only for types which are mixed types, which are forced to be string
-    // columns. or else, treat as non-mixed type. this could be required to make null literals on
-    // list/struct column to be non-mixed type.
     if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
         user_dt.value().id() == type_id::STRING) {
       is_mixed_type_column[this_col_id] = 1;
@@ -1031,12 +1014,9 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                                   cudaMemcpyDefault,
                                   stream.value()));
     stream.synchronize();
-    std::cout << "h_node_categories:" << int(h_node_categories[0]) << ","
-              << int(h_node_categories[1]) << "\n";
     if (options.is_enabled_lines()) return h_node_categories[0] == NC_LIST;
     return h_node_categories[0] == NC_LIST and h_node_categories[1] == NC_LIST;
   }();
-  std::cout << "is_array_of_arrays:" << is_array_of_arrays << "\n";
 
   auto [gpu_col_id, gpu_row_offsets] =
     records_orient_tree_traversal(d_input,
