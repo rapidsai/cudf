@@ -517,17 +517,16 @@ void make_device_json_column(device_span<SymbolT const> input,
     rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id = [&]() {
-    // if (!is_array_of_arrays) return parent_node_sentinel;
-    // if (!is_array_of_arrays) // get row struct id.
-    // return is_enabled_lines ? is_enabled_lines ? 0 : 1;
-    auto const list_node_index = is_enabled_lines ? 0 : 1;
-    NodeIndexT value;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  col_ids.data() + list_node_index,
-                                  sizeof(NodeIndexT),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
+    NodeIndexT value = parent_node_sentinel;
+    if (!col_ids.empty()) {
+      auto const list_node_index = is_enabled_lines ? 0 : 1;
+      CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
+                                    col_ids.data() + list_node_index,
+                                    sizeof(NodeIndexT),
+                                    cudaMemcpyDefault,
+                                    stream.value()));
+      stream.synchronize();
+    }
     return value;
   }();
   std::cout << "row_array_parent_col_id:" << row_array_parent_col_id << "\n";
