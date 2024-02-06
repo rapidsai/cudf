@@ -2640,6 +2640,8 @@ class SeriesGroupBy(GroupBy):
 
         return result
 
+    aggregate = agg
+
     def apply(self, func, *args):
         result = super().apply(func, *args)
 
