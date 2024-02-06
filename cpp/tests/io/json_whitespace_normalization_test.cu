@@ -65,8 +65,8 @@ std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{
   {/* IN_STATE      "       \       \n    <SPC>   OTHER  */
    /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_OOS}},
-   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_DQS, TT_DQS, TT_DQS}},
-   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}},
+   /* TT_DQS */ {{TT_OOS, TT_DEC, TT_OOS, TT_DQS, TT_DQS}},
+   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_OOS, TT_DQS, TT_DQS}},
    /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_OOS}}}};
 
 // The DFA's starting state
@@ -169,69 +169,71 @@ void run_test(const std::string& input, const std::string& output)
   // Make sure results have been copied back to host
   stream.synchronize();
 
-  /*
-  std::cout << "Expected output: " << output << std::endl << "Computed output: ";
-  for (size_t i = 0; i < output_gpu_size[0]; i++)
-    std::cout << output_gpu[i];
-  std::cout << std::endl;
-  */
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(output_gpu, output, output.size());
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization1)
+TEST_F(JsonWSNormalizationTest, GroundTruth_Spaces)
 {
   std::string input  = R"({"A" : "TEST" })";
   std::string output = R"({"A":"TEST"})";
   run_test(input, output);
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization2)
-{
-  std::string input  = R"({"A" :   "TEST" })";
-  std::string output = R"({"A":"TEST"})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization3)
-{
-  std::string input  = R"({ "foo rapids": [1,2,3], "bar  rapids": 123 }
-                          { "foo rapids": { "a": 1 }, "bar  rapids": 456 })";
-  std::string output = R"({"foo rapids":[1,2,3],"bar  rapids":123}
-{"foo rapids":{"a":1},"bar  rapids":456})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization4)
-{
-  std::string input  = "{\"a\":\t\"b\"}";
-  std::string output = R"({"a":"b"})";
-  run_test(input, output);
-}
-
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization5)
+TEST_F(JsonWSNormalizationTest, GroundTruth_MoreSpaces)
 {
   std::string input  = R"({"a": [1, 2, 3, 4, 5, 6, 7, 8], "b": {"c": "d"}})";
   std::string output = R"({"a":[1,2,3,4,5,6,7,8],"b":{"c":"d"}})";
   run_test(input, output);
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization6)
+TEST_F(JsonWSNormalizationTest, GroundTruth_StringSpaces)
 {
   std::string input  = R"({" a ":50})";
   std::string output = R"({" a ":50})";
   run_test(input, output);
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization7)
+TEST_F(JsonWSNormalizationTest, GroundTruth_StillMoreSpaces)
 {
   std::string input  = R"( { "a" : 50 })";
   std::string output = R"({"a":50})";
   run_test(input, output);
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_WSNormalization8)
+TEST_F(JsonWSNormalizationTest, GroundTruth_Tabs)
+{
+  std::string input  = "{\"a\":\t\"b\"}";
+  std::string output = R"({"a":"b"})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_SpacesAndTabs)
+{
+  std::string input  = "{\"A\" : \t\"TEST\" }";
+  std::string output = R"({"A":"TEST"})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_MultilineJSONWithSpacesAndTabs)
+{
+  std::string input =
+    "{ \"foo rapids\": [1,2,3], \"bar\trapids\": 123 }\n\t{ \"foo rapids\": { \"a\": 1 }, "
+    "\"bar\trapids\": 456 }";
+  std::string output =
+    "{\"foo rapids\":[1,2,3],\"bar\trapids\":123}\n{\"foo rapids\":{\"a\":1},\"bar\trapids\":456}";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_PureJSONExample)
+{
+  std::string input  = R"([{"a":50}, {"a" : 60}])";
+  std::string output = R"([{"a":50},{"a":60}])";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_NoNormalizationRequired)
 {
   std::string input  = R"({"a":50})";
   std::string output = R"({"a":50})";
