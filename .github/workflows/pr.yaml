@@ -12,7 +12,7 @@ concurrency:
 jobs:
   pr-builder:
     needs:
-      # - checks
+      - checks
       # - conda-cpp-build
       # - conda-cpp-checks
       # - conda-cpp-tests
@@ -22,7 +22,7 @@ jobs:
       # - conda-java-tests
       # - conda-notebook-tests
       # - docs-build
-      # - wheel-build-cudf
+      - wheel-build-cudf
       # - wheel-tests-cudf
       # - wheel-build-dask-cudf
       # - wheel-tests-dask-cudf
