@@ -42,7 +42,6 @@ cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
         column_view source_column,
         scalar lo, scalar hi) except +
 
-cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] normalize_nans_and_zeros(
         column_view source_column) except +
 

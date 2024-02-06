@@ -17,6 +17,7 @@ This page provides API documentation for pylibcudf.
     join
     reduce
     scalar
+    replace
     table
     types
     unary
