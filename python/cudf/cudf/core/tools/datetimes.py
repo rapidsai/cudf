@@ -869,6 +869,13 @@ def date_range(
             "three must be specified"
         )
 
+    if periods is not None and not cudf.api.types.is_integer(periods):
+        warnings.warn(
+            "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
+            " are deprecated and will raise in a future version.",
+            FutureWarning,
+        )
+
     dtype = np.dtype("<M8[ns]")
 
     if freq is None:
