@@ -687,7 +687,7 @@ std::optional<size_t> compress_max_allowed_chunk_size(compression_type compressi
       CUDF_FAIL("Compression error: " +
                 nvcomp::is_compression_disabled(nvcomp::compression_type::ZSTD).value());
 #endif
-    case compression_type::LZ4: return 1 << 24;
+    case compression_type::LZ4: return 16 * 1024 * 1024;
     default: return std::nullopt;
   }
 }
