@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 {% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -36,6 +36,8 @@ build:
   ignore_run_exports_from:
     {% if cuda_major == "11" %}
     - {{ compiler('cuda11') }}
+    {% else %}
+    - {{ compiler('cuda') }}
     {% endif %}
 
 requirements:
