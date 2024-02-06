@@ -102,19 +102,20 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
             f"{old_to_new_freq_map[freq]} instead.",
             FutureWarning
         )
+        freq = old_to_new_freq_map.get(freq)
     if freq == "D":
         freq_val = libcudf_datetime.rounding_frequency.DAY
-    elif freq in ("H", "h"):
+    elif freq == "h":
         freq_val = libcudf_datetime.rounding_frequency.HOUR
-    elif freq in ("T", "min"):
+    elif freq == "min":
         freq_val = libcudf_datetime.rounding_frequency.MINUTE
-    elif freq in ("S", "s"):
+    elif freq == "s":
         freq_val = libcudf_datetime.rounding_frequency.SECOND
-    elif freq in ("L", "ms"):
+    elif freq == "ms":
         freq_val = libcudf_datetime.rounding_frequency.MILLISECOND
-    elif freq in ("U", "us"):
+    elif freq == "us":
         freq_val = libcudf_datetime.rounding_frequency.MICROSECOND
-    elif freq in ("N", "ns"):
+    elif freq == "ns":
         freq_val = libcudf_datetime.rounding_frequency.NANOSECOND
     else:
         raise ValueError(f"Invalid resolution: '{freq}'")
