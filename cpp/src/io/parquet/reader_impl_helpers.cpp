@@ -276,41 +276,30 @@ metadata::metadata(datasource* source)
   auto const has_strings = std::any_of(
     schema.begin(), schema.end(), [](auto const& elem) { return elem.type == BYTE_ARRAY; });
 
-  if (has_strings) {
-    // loop through the column chunks and read column and offset index offsets and sizes
-    // find the first offset and the total length (the indexes are contiguous)
-    int64_t min_offset = std::numeric_limits<int>::max();
-    int64_t max_offset = 0;
-
-    for (auto const& rg : row_groups) {
-      for (auto const& col : rg.columns) {
-        if (col.column_index_length > 0 && col.column_index_offset > 0) {
-          min_offset = std::min(col.column_index_offset, min_offset);
-          max_offset = std::max(col.column_index_offset + col.column_index_length, max_offset);
-        }
-        if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-          min_offset = std::min(col.offset_index_offset, min_offset);
-          max_offset = std::max(col.offset_index_offset + col.offset_index_length, max_offset);
-        }
-      }
-    }
+  if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
+    // column index and offset index are encoded back to back.
+    // the first column of the first row group will have the first column index, the last
+    // column of the last row group will have the final offset index.
+    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+    auto const& last_col     = row_groups.back().columns.back();
+    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
 
     if (max_offset > 0) {
-      int64_t length     = max_offset - min_offset;
-      auto const idx_buf = source->host_read(min_offset, length);
+      int64_t const length = max_offset - min_offset;
+      auto const idx_buf   = source->host_read(min_offset, length);
 
-      // now loop over row groups again
+      // now loop over row groups
       for (auto& rg : row_groups) {
         for (auto& col : rg.columns) {
           if (col.column_index_length > 0 && col.column_index_offset > 0) {
-            int64_t offset = col.column_index_offset - min_offset;
+            int64_t const offset = col.column_index_offset - min_offset;
             cp.init(idx_buf->data() + offset, col.column_index_length);
             ColumnIndex ci;
             cp.read(&ci);
             col.column_index = std::move(ci);
           }
           if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
-            int64_t offset = col.offset_index_offset - min_offset;
+            int64_t const offset = col.offset_index_offset - min_offset;
             cp.init(idx_buf->data() + offset, col.offset_index_length);
             OffsetIndex oi;
             cp.read(&oi);
