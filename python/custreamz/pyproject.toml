@@ -56,6 +56,7 @@ include = [
     "custreamz",
     "custreamz.*",
 ]
+exclude = ["*tests*"]
 
 [tool.isort]
 line_length = 79
