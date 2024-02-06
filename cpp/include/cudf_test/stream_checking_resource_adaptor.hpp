@@ -64,13 +64,6 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
    */
   Upstream* get_upstream() const noexcept { return upstream_; }
 
-  /**
-   * @brief Checks whether the upstream resource supports streams.
-   *
-   * @return Whether or not the upstream resource supports streams
-   */
-  bool supports_streams() const noexcept override { return upstream_->supports_streams(); }
-
  private:
   /**
    * @brief Allocates memory of size at least `bytes` using the upstream
