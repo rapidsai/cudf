@@ -20,7 +20,7 @@ def test_agg_count_dtype(empty):
 
 @pytest.mark.parametrize("attr", ["agg", "aggregate"])
 def test_series_agg(attr):
-    df = cudf.DataFrame({"a": [1, 2] * 2, "b": [0] * 4})
+    df = cudf.DataFrame({"a": [1, 2, 1, 2], "b": [0, 0, 0, 0]})
     pdf = df.to_pandas()
     agg = getattr(df.groupby("a")["a"], attr)("count")
     pd_agg = getattr(pdf.groupby(["a"])["a"], attr)("count")
