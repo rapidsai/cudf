@@ -393,7 +393,6 @@ cdef class ORCWriter:
                   object statistics="ROWGROUP",
                   object cols_as_map_type=None,
                   object stripe_size_bytes=None,
-                  object stripe_size_rows=None):
                   object stripe_size_rows=None,
                   object row_index_stride=None):
 
