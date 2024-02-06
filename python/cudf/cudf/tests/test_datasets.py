@@ -23,7 +23,7 @@ def test_dataset_timeseries():
     gdf = cudf.datasets.timeseries(
         "2000",
         "2010",
-        freq="2H",
+        freq="2h",
         dtypes={"value": float, "name": "category", "id": int},
         nulls_frequency=0.7,
         seed=1,
