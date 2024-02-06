@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -484,7 +484,13 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
 @pytest.mark.parametrize(
     "psr_data",
     [
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
+        pd.Series(
+            pd.date_range(
+                "2010-01-01",
+                "2020-01-10",
+                freq="1YE" if PANDAS_GE_220 else "1y",
+            )
+        ),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
             [
@@ -525,7 +531,13 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
     "fill_value",
     [
         pd.Timestamp("2010-01-02"),
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+        pd.Series(
+            pd.date_range(
+                "2010-01-01",
+                "2020-01-10",
+                freq="1YE" if PANDAS_GE_220 else "1y",
+            )
+        )
         + pd.Timedelta("1d"),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
