@@ -31,17 +31,11 @@ ctypedef groupby_scan_aggregation * gbsa_ptr
 ctypedef reduce_aggregation * ra_ptr
 ctypedef scan_aggregation * sa_ptr
 
-ctypedef fused agg_ptr:
-    gba_ptr
-    gbsa_ptr
-    ra_ptr
-    sa_ptr
-
 
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
     cpdef kind(self)
-    cdef agg_ptr _raise_if_null(self, agg_ptr ptr, str alg)
+    cdef void _unsupported_agg_error(self, str alg)
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
