@@ -2060,6 +2060,91 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
   }
 }
 
+// test that using page stats is working for full reads and various skip rows
+TEST_F(ParquetReaderTest, StringsWithPageStats)
+{
+  constexpr int num_rows = 10'000;
+  constexpr auto seed    = 21337;
+
+  std::mt19937 engine{seed};
+  auto int32_list_nulls = make_parquet_list_col<int32_t>(engine, num_rows, 5, true);
+  auto int32_list       = make_parquet_list_col<int32_t>(engine, num_rows, 5, false);
+  auto int64_list_nulls = make_parquet_list_col<int64_t>(engine, num_rows, 5, true);
+  auto int64_list       = make_parquet_list_col<int64_t>(engine, num_rows, 5, false);
+  auto int16_list_nulls = make_parquet_list_col<int16_t>(engine, num_rows, 5, true);
+  auto int16_list       = make_parquet_list_col<int16_t>(engine, num_rows, 5, false);
+  auto int8_list_nulls  = make_parquet_list_col<int8_t>(engine, num_rows, 5, true);
+  auto int8_list        = make_parquet_list_col<int8_t>(engine, num_rows, 5, false);
+
+  auto str_list_nulls     = make_parquet_string_list_col(engine, num_rows, 5, 32, true);
+  auto str_list           = make_parquet_string_list_col(engine, num_rows, 5, 32, false);
+  auto big_str_list_nulls = make_parquet_string_list_col(engine, num_rows, 5, 256, true);
+  auto big_str_list       = make_parquet_string_list_col(engine, num_rows, 5, 256, false);
+
+  auto int32_data   = random_values<int32_t>(num_rows);
+  auto int64_data   = random_values<int64_t>(num_rows);
+  auto int16_data   = random_values<int16_t>(num_rows);
+  auto int8_data    = random_values<int8_t>(num_rows);
+  auto str_data     = string_values(engine, num_rows, 32);
+  auto big_str_data = string_values(engine, num_rows, 256);
+
+  auto const validity = random_validity(engine);
+  auto const no_nulls = cudf::test::iterators::no_nulls();
+  column_wrapper<int32_t> int32_nulls_col{int32_data.begin(), int32_data.end(), validity};
+  column_wrapper<int32_t> int32_col{int32_data.begin(), int32_data.end(), no_nulls};
+  column_wrapper<int64_t> int64_nulls_col{int64_data.begin(), int64_data.end(), validity};
+  column_wrapper<int64_t> int64_col{int64_data.begin(), int64_data.end(), no_nulls};
+
+  auto str_col = cudf::test::strings_column_wrapper(str_data.begin(), str_data.end(), no_nulls);
+  auto str_col_nulls = cudf::purge_nonempty_nulls(
+    cudf::test::strings_column_wrapper(str_data.begin(), str_data.end(), validity));
+  auto big_str_col =
+    cudf::test::strings_column_wrapper(big_str_data.begin(), big_str_data.end(), no_nulls);
+  auto big_str_col_nulls = cudf::purge_nonempty_nulls(
+    cudf::test::strings_column_wrapper(big_str_data.begin(), big_str_data.end(), validity));
+
+  cudf::table_view tbl({int32_col,   int32_nulls_col,    *int32_list,   *int32_list_nulls,
+                        int64_col,   int64_nulls_col,    *int64_list,   *int64_list_nulls,
+                        *int16_list, *int16_list_nulls,  *int8_list,    *int8_list_nulls,
+                        str_col,     *str_col_nulls,     *str_list,     *str_list_nulls,
+                        big_str_col, *big_str_col_nulls, *big_str_list, *big_str_list_nulls});
+
+  auto const filepath = temp_env->get_temp_filepath("StringsWithPageStats.parquet");
+  auto const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .max_page_size_rows(5'000)
+      .build();
+  cudf::io::write_parquet(out_opts);
+
+  // skip_rows / num_rows
+  // clang-format off
+  std::vector<std::pair<int, int>> params{
+    // skip and then read rest of file
+    {-1, -1}, {1, -1}, {2, -1}, {32, -1}, {33, -1}, {128, -1}, {1'000, -1},
+    // no skip but truncate
+    {0, 1'000}, {0, 6'000},
+    // cross page boundaries
+    {3'000, 5'000}
+  };
+
+  // clang-format on
+  for (auto p : params) {
+    cudf::io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+    if (p.first >= 0) { read_args.set_skip_rows(p.first); }
+    if (p.second >= 0) { read_args.set_num_rows(p.second); }
+    auto result = cudf::io::read_parquet(read_args);
+
+    p.first  = p.first < 0 ? 0 : p.first;
+    p.second = p.second < 0 ? num_rows - p.first : p.second;
+    std::vector<cudf::size_type> slice_indices{p.first, p.first + p.second};
+    std::vector<cudf::table_view> expected = cudf::slice(tbl, slice_indices);
+
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), expected[0]);
+  }
+}
+
 ///////////////////
 // metadata tests
 
