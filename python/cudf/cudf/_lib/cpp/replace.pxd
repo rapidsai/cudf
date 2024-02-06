@@ -12,7 +12,7 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 
 cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
 
-    cdef enum class replace_policy(bool):
+    cpdef enum class replace_policy(bool):
         PRECEDING
         FOLLOWING
 
