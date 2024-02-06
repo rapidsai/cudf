@@ -103,6 +103,8 @@ def read_json(
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,
+                warn_on_raw_text_input=True,
+                warn_meta=("json", "read_json"),
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)
@@ -245,9 +247,8 @@ def to_json(
             pd_value = pd.DataFrame(pd_data)
         else:
             pd_value = maybe_return_nullable_pd_obj(cudf_val)
-        return pd.io.json.to_json(
+        return pd_value.to_json(
             path_or_buf,
-            pd_value,
             orient=orient,
             storage_options=storage_options,
             *args,

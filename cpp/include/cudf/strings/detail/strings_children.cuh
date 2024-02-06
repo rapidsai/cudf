@@ -165,7 +165,7 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
   auto const total_elements =
-    sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
+    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
 
   // TODO: replace exception with if-statement when enabling creating INT64 offsets
   CUDF_EXPECTS(total_elements <= size_type_max,
