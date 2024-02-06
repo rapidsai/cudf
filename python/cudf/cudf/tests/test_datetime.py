@@ -13,7 +13,12 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_EQ_200, PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import (
+    PANDAS_EQ_200,
+    PANDAS_GE_200,
+    PANDAS_GE_210,
+    PANDAS_GE_220,
+)
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -39,7 +44,7 @@ def data1():
 
 def data2():
     return pd.date_range(
-        "20010101", freq="243434324423423234N", name="times", periods=10
+        "20010101", freq="243434324423423234ns", name="times", periods=10
     )
 
 
@@ -1497,10 +1502,10 @@ date_range_test_freq = [
     {"hours": 10, "days": 57, "nanoseconds": 3},
     "83D",
     "17h",
-    "-680T",
+    "-680min",
     "110546s",
-    "110546789L",
-    "110546789248U",
+    "110546789ms",
+    "110546789248us",
 ]
 
 
@@ -1540,7 +1545,7 @@ def test_date_range_start_end_freq(request, start, end, freq):
             condition=(
                 start == "1831-05-08 15:23:21"
                 and end == "1996-11-21 04:05:30"
-                and freq == "110546789L"
+                and freq == "110546789ms"
             ),
             reason="https://github.com/rapidsai/cudf/issues/12133",
         )
@@ -1653,7 +1658,8 @@ def test_date_range_end_freq_periods(request, end, freq, periods):
     request.applymarker(
         pytest.mark.xfail(
             condition=(
-                isinstance(freq, dict)
+                not PANDAS_GE_220
+                and isinstance(freq, dict)
                 and freq.get("hours", None) == 10
                 and freq.get("days", None) == 57
                 and freq.get("nanoseconds", None) == 3
@@ -1723,30 +1729,34 @@ def test_date_range_raise_overflow():
 @pytest.mark.parametrize(
     "freqstr_unsupported",
     [
-        "1M",
-        "2SM",
+        "1ME",
+        "2SME",
         "3MS",
-        "4BM",
-        "5CBM",
+        "4BME",
+        "5CBME",
         "6SMS",
         "7BMS",
         "8CBMS",
-        "Q",
-        "2BQ",
+        "QE",
+        "2BQE",
         "3BQS",
-        "10A",
-        "10Y",
-        "9BA",
-        "9BY",
-        "8AS",
+        "10YE",
+        "9BYE",
         "8YS",
-        "7BAS",
         "7BYS",
-        "BH",
+        "bh",
         "B",
     ],
 )
-def test_date_range_raise_unsupported(freqstr_unsupported):
+def test_date_range_raise_unsupported(request, freqstr_unsupported):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(
+                not PANDAS_GE_220 and freqstr_unsupported.endswith("E")
+            ),
+            reason="TODO: Remove this once pandas-2.2 support is added",
+        )
+    )
     s, e = "2001-01-01", "2008-01-31"
     pd.date_range(start=s, end=e, freq=freqstr_unsupported)
     with pytest.raises(ValueError, match="does not yet support"):
@@ -1757,9 +1767,9 @@ def test_date_range_raise_unsupported(freqstr_unsupported):
     # is a valid frequency for every 3 milliseconds.
     if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
-        pd.date_range(start=s, end=e, freq=freqstr_unsupported)
         with pytest.raises(ValueError, match="does not yet support"):
-            cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
+            with expect_warning_if(PANDAS_GE_220):
+                cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
 
 ##################################################################
@@ -1957,7 +1967,7 @@ def test_error_values():
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+    "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
 def test_ceil(request, data, time_type, resolution):
     alias_map = {"L": "ms", "U": "us", "N": "ns"}
@@ -2002,7 +2012,7 @@ def test_ceil(request, data, time_type, resolution):
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+    "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
 def test_floor(request, data, time_type, resolution):
     alias_map = {"L": "ms", "U": "us", "N": "ns"}
@@ -2048,25 +2058,9 @@ def test_floor(request, data, time_type, resolution):
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+    "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
-def test_round(request, data, time_type, resolution):
-    alias_map = {"L": "ms", "U": "us", "N": "ns"}
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                PANDAS_EQ_200
-                and resolution in {"L", "ms", "U", "us", "N"}
-                and np.dtype(
-                    f"datetime64[{alias_map.get(resolution, resolution)}]"
-                )
-                > np.dtype(time_type)
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/52761",
-            strict=True,
-        )
-    )
-
+def test_round(data, time_type, resolution):
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -2284,20 +2278,20 @@ def test_daterange_pandas_compatibility():
 @pytest.mark.parametrize(
     "data,dtype,freq",
     [
-        ([10], "datetime64[ns]", "2N"),
-        ([10, 12, 14, 16], "datetime64[ns]", "2N"),
-        ([10, 11, 12, 13], "datetime64[ns]", "1N"),
+        ([10], "datetime64[ns]", "2ns"),
+        ([10, 12, 14, 16], "datetime64[ns]", "2ns"),
+        ([10, 11, 12, 13], "datetime64[ns]", "1ns"),
         ([100, 200, 300, 400], "datetime64[s]", "100s"),
         ([101, 201, 301, 401], "datetime64[ms]", "100ms"),
     ],
 )
 def test_datetime_index_with_freq(request, data, dtype, freq):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(not PANDAS_GE_200 and dtype != "datetime64[ns]"),
-            reason="Pandas < 2.0 lacks non-nano-second dtype support.",
-        )
-    )
+    # request.applymarker(
+    #     pytest.mark.xfail(
+    #         condition=(not PANDAS_GE_200 and dtype != "datetime64[ns]"),
+    #         reason="Pandas < 2.0 lacks non-nano-second dtype support.",
+    #     )
+    # )
     actual = cudf.DatetimeIndex(data, dtype=dtype, freq=freq)
     expected = pd.DatetimeIndex(data, dtype=dtype, freq=freq)
     assert_eq(actual, expected)
@@ -2306,7 +2300,7 @@ def test_datetime_index_with_freq(request, data, dtype, freq):
 @pytest.mark.parametrize(
     "data,dtype,freq",
     [
-        ([10, 1232, 13244, 13426], "datetime64[ns]", "2N"),
+        ([10, 1232, 13244, 13426], "datetime64[ns]", "2ns"),
         ([10, 11, 12, 13], "datetime64[ns]", "1s"),
         ([10000, 200, 300, 400], "datetime64[s]", "100s"),
         ([107871, 201, 301, 401], "datetime64[ms]", "100ns"),
@@ -2454,3 +2448,23 @@ def test_dateimeindex_from_noniso_string():
 def test_to_datetime_errors_non_scalar_not_implemented(errors):
     with pytest.raises(NotImplementedError):
         cudf.to_datetime([1, ""], unit="s", errors=errors)
+
+
+@pytest.mark.parametrize(
+    "freqstr",
+    [
+        "H",
+        "N",
+        "T",
+        "L",
+        "U",
+        "S",
+    ],
+)
+def test_datetime_raise_warning(freqstr):
+    t = cudf.Series(
+        ["2001-01-01 00:04:45", "2001-01-01 00:04:58", "2001-01-01 00:05:04"],
+        dtype="datetime64[ns]",
+    )
+    with pytest.warns(FutureWarning):
+        t.dt.ceil(freqstr)

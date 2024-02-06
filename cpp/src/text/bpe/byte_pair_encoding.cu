@@ -23,9 +23,12 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -76,9 +79,9 @@ constexpr int block_size = 512;
 template <typename MapRefType>
 struct bpe_unpairable_offsets_fn {
   cudf::device_span<char const> d_chars;
-  cudf::size_type offset;
+  int64_t offset;
   MapRefType const d_map;
-  __device__ cudf::size_type operator()(cudf::size_type idx)
+  __device__ int64_t operator()(int64_t idx)
   {
     if (!cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) { return 0; }
 
@@ -86,7 +89,7 @@ struct bpe_unpairable_offsets_fn {
     auto const end  = d_chars.end();
     auto const lhs  = cudf::string_view(itr, cudf::strings::detail::bytes_in_utf8_byte(*itr));
     auto const next = itr + lhs.size_bytes();
-    auto output     = 0;
+    auto output     = 0L;
     if (next < end) {
       auto const rhs = cudf::string_view(next, cudf::strings::detail::bytes_in_utf8_byte(*next));
       // see if both halves exist anywhere in the table, if not these are unpairable
@@ -123,6 +126,7 @@ struct bpe_unpairable_offsets_fn {
  */
 template <typename MapRefType>
 CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
+                                 char const* d_input_chars,
                                  MapRefType const d_map,
                                  int8_t* d_spaces_data,          // working memory
                                  cudf::size_type* d_ranks_data,  // more working memory
@@ -134,10 +138,8 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
     static_cast<cudf::size_type>(cudf::detail::grid_1d::global_thread_id() / block_size);
   auto const lane_idx = static_cast<cudf::size_type>(threadIdx.x);
 
-  auto const d_str = d_strings.element<cudf::string_view>(str_idx);
-  auto const offsets =
-    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
-  auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
+  auto const d_str  = d_strings.element<cudf::string_view>(str_idx);
+  auto const offset = thrust::distance(d_input_chars, d_str.data());
 
   auto const d_spaces   = d_spaces_data + offset;
   auto const end_spaces = d_spaces + d_str.size_bytes();
@@ -292,6 +294,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
  * @param d_sizes Output sizes of each row
  */
 CUDF_KERNEL void bpe_finalize(cudf::column_device_view const d_strings,
+                              char const* d_input_chars,
                               int8_t* d_spaces_data,    // where separators are inserted
                               cudf::size_type* d_sizes  // output sizes of encoded strings
 )
@@ -311,9 +314,7 @@ CUDF_KERNEL void bpe_finalize(cudf::column_device_view const d_strings,
     return;
   }
 
-  auto const offsets =
-    d_strings.child(cudf::strings_column_view::offsets_column_index).data<cudf::size_type>();
-  auto const offset = offsets[str_idx + d_strings.offset()] - offsets[d_strings.offset()];
+  auto const offset = thrust::distance(d_input_chars, d_str.data());
 
   auto const d_spaces   = d_spaces_data + offset;
   auto const end_spaces = d_spaces + d_str.size_bytes();
@@ -352,27 +353,22 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
 
   auto const d_strings = cudf::column_device_view::create(input.parent(), stream);
 
-  auto const first_offset  = (input.offset() == 0) ? 0
-                                                   : cudf::detail::get_value<cudf::size_type>(
+  auto const first_offset  = (input.offset() == 0) ? 0L
+                                                   : cudf::strings::detail::get_offset_value(
                                                       input.offsets(), input.offset(), stream);
   auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
-                               ? input.chars_size(stream)
-                               : cudf::detail::get_value<cudf::size_type>(
+                               ? static_cast<int64_t>(input.chars_size(stream))
+                               : cudf::strings::detail::get_offset_value(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
   auto const d_input_chars = input.chars_begin(stream) + first_offset;
 
-  auto const offset_data_type = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
-  auto offsets                = cudf::make_numeric_column(
-    offset_data_type, input.size() + 1, cudf::mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<cudf::size_type>();
-
   rmm::device_uvector<int8_t> d_spaces(chars_size, stream);  // identifies non-merged pairs
   // used for various purposes below: unpairable-offsets, pair ranks, separator insert positions
-  rmm::device_uvector<cudf::size_type> d_working(chars_size, stream);
+  rmm::device_uvector<int64_t> d_working(chars_size, stream);
 
-  auto const chars_begin = thrust::counting_iterator<cudf::size_type>(0);
-  auto const chars_end   = thrust::counting_iterator<cudf::size_type>(chars_size);
+  auto const chars_begin = thrust::counting_iterator<int64_t>(0);
+  auto const chars_end   = thrust::counting_iterator<int64_t>(chars_size);
 
   {
     // this kernel locates unpairable sections of strings to create artificial string row
@@ -383,14 +379,16 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto up_fn = bpe_unpairable_offsets_fn<decltype(mp_map)>{d_chars_span, first_offset, mp_map};
     thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
     auto const up_end =  // remove all but the unpairable offsets
-      thrust::remove(rmm::exec_policy_nosync(stream), d_up_offsets, d_up_offsets + chars_size, 0);
+      thrust::remove(rmm::exec_policy_nosync(stream), d_up_offsets, d_up_offsets + chars_size, 0L);
     auto const unpairables = thrust::distance(d_up_offsets, up_end);  // number of unpairables
 
     // new string boundaries created by combining unpairable offsets with the existing offsets
-    auto tmp_offsets = rmm::device_uvector<cudf::size_type>(unpairables + input.size() + 1, stream);
+    auto tmp_offsets = rmm::device_uvector<int64_t>(unpairables + input.size() + 1, stream);
+    auto input_offsets =
+      cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
     thrust::merge(rmm::exec_policy_nosync(stream),
-                  input.offsets_begin(),
-                  input.offsets_end(),
+                  input_offsets,
+                  input_offsets + input.size() + 1,
                   d_up_offsets,
                   up_end,
                   tmp_offsets.begin());
@@ -402,31 +400,28 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     tmp_offsets.resize(offsets_total, stream);
 
     // temp column created with the merged offsets and the original chars data
-    auto const col_offsets =
-      cudf::column_view(cudf::device_span<cudf::size_type const>(tmp_offsets));
-    auto const tmp_size  = offsets_total - 1;
-    auto const tmp_input = cudf::column_view(
+    auto const col_offsets = cudf::column_view(cudf::device_span<int64_t const>(tmp_offsets));
+    auto const tmp_size    = offsets_total - 1;
+    auto const tmp_input   = cudf::column_view(
       input.parent().type(), tmp_size, input.chars_begin(stream), nullptr, 0, 0, {col_offsets});
     auto const d_tmp_strings = cudf::column_device_view::create(tmp_input, stream);
 
     // launch the byte-pair-encoding kernel on the temp column
     rmm::device_uvector<int8_t> d_rerank(chars_size, stream);  // more working memory;
-    auto const d_ranks  = d_working.data();                    // store pair ranks here
+    rmm::device_uvector<cudf::size_type> d_ranks(chars_size, stream);
     auto const pair_map = get_bpe_merge_pairs_impl(merge_pairs)->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
-      *d_tmp_strings, pair_map, d_spaces.data(), d_ranks, d_rerank.data());
+      *d_tmp_strings, d_input_chars, pair_map, d_spaces.data(), d_ranks.data(), d_rerank.data());
   }
 
-  // compute the output sizes and store them in the d_offsets vector
+  // compute the output sizes
+  auto output_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
   bpe_finalize<<<input.size(), block_size, 0, stream.value()>>>(
-    *d_strings, d_spaces.data(), d_offsets);
+    *d_strings, d_input_chars, d_spaces.data(), output_sizes.data());
 
   // convert sizes to offsets in-place
-  auto const bytes =
-    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + input.size() + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
-               "Size of output exceeds the column size limit",
-               std::overflow_error);
+  auto [offsets, bytes] = cudf::strings::detail::make_offsets_child_column(
+    output_sizes.begin(), output_sizes.end(), stream, mr);
 
   // build the output: inserting separators to the input character data
   rmm::device_uvector<char> chars(bytes, stream, mr);
@@ -436,8 +431,8 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) {
     return d_spaces[idx] > 0;  // separator to be inserted here
   };
-  auto const copy_end = thrust::copy_if(
-    rmm::exec_policy_nosync(stream), chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero);
+  auto const copy_end =
+    cudf::detail::copy_if_safe(chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero, stream);
 
   // this will insert the single-byte separator into positions specified in d_inserts
   auto const sep_char = thrust::constant_iterator<char>(separator.to_string(stream)[0]);
