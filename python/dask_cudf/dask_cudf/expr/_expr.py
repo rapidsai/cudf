@@ -39,11 +39,18 @@ def _shuffle_group(df, col, _filter, p):
     from dask.dataframe.shuffle import ensure_cleanup_on_exception
 
     with ensure_cleanup_on_exception(p):
-        # import pdb; pdb.set_trace()
-        # _, part_offsets, part_keys, grouped_df = df.groupby(col)._grouped()
-
         g = df.groupby(col)
-        d = {i: g.get_group(i) for i in g.groups if i in _filter}
+        if hasattr(g, "_grouped"):
+            # Avoid `get_group` for cudf data.
+            # See: https://github.com/rapidsai/cudf/issues/14955
+            keys, part_offsets, _, grouped_df = df.groupby(col)._grouped()
+            d = {
+                k: grouped_df.iloc[part_offsets[i] : part_offsets[i + 1]]
+                for i, k in enumerate(keys.to_pandas())
+                if k in _filter
+            }
+        else:
+            d = {i: g.get_group(i) for i in g.groups if i in _filter}
         p.append(d, fsync=True)
 
 

@@ -12,7 +12,11 @@ import cudf
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
-from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
+from dask_cudf.tests.utils import (
+    QUERY_PLANNING_ON,
+    skip_dask_expr,
+    xfail_dask_expr,
+)
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -576,6 +580,7 @@ def test_groupby_categorical_key():
     dd.assert_eq(expect, got)
 
 
+@xfail_dask_expr("as_index not supported in dask-expr")
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize("split_out", ["use_dask_default", 1, 2])
 @pytest.mark.parametrize("split_every", [False, 4])
@@ -664,6 +669,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     dd.assert_eq(gf, pf)
 
 
+@skip_dask_expr("Callable arguments not supported by dask-expr")
 @pytest.mark.parametrize(
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
@@ -752,6 +758,7 @@ def test_groupby_first_last(data, agg):
     )
 
 
+@xfail_dask_expr("Co-alignment check fails in dask-expr")
 def test_groupby_with_list_of_series():
     df = cudf.DataFrame({"a": [1, 2, 3, 4, 5]})
     gdf = dask_cudf.from_cudf(df, npartitions=2)
@@ -766,6 +773,7 @@ def test_groupby_with_list_of_series():
     )
 
 
+@xfail_dask_expr("Nested renamer not supported in dask-expr")
 @pytest.mark.parametrize(
     "func",
     [
@@ -795,7 +803,6 @@ def test_groupby_nested_dict(func):
     dd.assert_eq(a, b)
 
 
-@xfail_dask_expr("https://github.com/rapidsai/cudf/issues/14957")
 @pytest.mark.parametrize(
     "func",
     [
@@ -819,12 +826,12 @@ def test_groupby_all_columns(func):
     )
 
     ddf = dd.from_pandas(pdf, npartitions=5)
-    gddf = ddf.map_partitions(cudf.from_pandas)
+    gddf = ddf.to_backend("cudf")
 
     expect = func(ddf)
     actual = func(gddf)
 
-    dd.assert_eq(expect, actual)
+    dd.assert_eq(expect, actual, check_names=not QUERY_PLANNING_ON)
 
 
 def test_groupby_shuffle():
@@ -862,13 +869,14 @@ def test_groupby_shuffle():
     got = gddf.groupby("a", sort=False).agg(spec, split_out=2)
     dd.assert_eq(expect, got.compute().sort_index())
 
-    # Sorted aggregation fails with split_out>1 when shuffle is False
-    # (sort=True, split_out=2, shuffle_method=False)
-    with pytest.raises(ValueError):
-        gddf.groupby("a", sort=True).agg(
-            spec, shuffle_method=False, split_out=2
-        )
+    if not QUERY_PLANNING_ON:
+        # Sorted aggregation fails with split_out>1 when shuffle is False
+        # (sort=True, split_out=2, shuffle_method=False)
+        with pytest.raises(ValueError):
+            gddf.groupby("a", sort=True).agg(
+                spec, shuffle_method=False, split_out=2
+            )
 
-    # Check shuffle kwarg deprecation
-    with pytest.warns(match="'shuffle' keyword is deprecated"):
-        gddf.groupby("a", sort=True).agg(spec, shuffle=False)
+        # Check shuffle kwarg deprecation
+        with pytest.warns(match="'shuffle' keyword is deprecated"):
+            gddf.groupby("a", sort=True).agg(spec, shuffle=False)
