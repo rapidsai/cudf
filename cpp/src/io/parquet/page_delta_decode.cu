@@ -745,8 +745,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 /**
  * @copydoc cudf::io::parquet::detail::DecodeDeltaBinary
  */
-void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
@@ -770,8 +770,8 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                          cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
+                          cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
@@ -795,8 +795,8 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
+                                cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,

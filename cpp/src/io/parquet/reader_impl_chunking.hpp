@@ -69,9 +69,17 @@ struct subpass_intermediate_data {
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data{};
-  cudf::detail::hostdevice_vector<PageInfo> pages{};
+  cudf::detail::hostdevice_span<PageInfo> pages{};
+
+  // optimization. if the single_subpass flag is set, it means we will only be doing
+  // one subpass for the entire pass. this allows us to skip various pieces of work
+  // during processing. notably, page_buf will not be allocated to hold a compacted
+  // copy of the pages specific to the subpass.
+  bool single_subpass{false};
+  cudf::detail::hostdevice_vector<PageInfo> page_buf{};
+
   // for each page in the subpass, the index of our source page in the pass
-  cudf::detail::hostdevice_vector<size_t> page_src_index{};
+  rmm::device_uvector<size_t> page_src_index{0, cudf::get_default_stream()};
   // for each column in the file (indexed by _input_columns.size())
   // the number of associated pages for this subpass
   std::vector<size_t> column_page_count;

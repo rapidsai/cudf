@@ -1230,12 +1230,16 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
                      _stream);
   }
 
-  // copy our now-correct row counts  back to the base pages stored in the pass.
   auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + subpass.pages.size(),
-                   update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
+
+  // copy our now-correct row counts  back to the base pages stored in the pass.
+  // only need to do this if we are not processing the whole pass in one subpass
+  if (!subpass.single_subpass) {
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
+  }
 
   // computes:
   // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
@@ -1251,14 +1255,17 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
                                 chunk_row_output_iter{pass.pages.device_ptr()});
 
   // copy chunk row into the subpass pages
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + subpass.pages.size(),
-                   update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
+  // only need to do this if we are not processing the whole pass in one subpass
+  if (!subpass.single_subpass) {
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
+  }
 
   // retrieve pages back
   pass.pages.device_to_host_async(_stream);
-  subpass.pages.device_to_host_async(_stream);
+  if (!subpass.single_subpass) { subpass.pages.device_to_host_async(_stream); }
   _stream.synchronize();
 
   // at this point we have an accurate row count so we can compute how many rows we will actually be
@@ -1383,7 +1390,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       thrust::make_counting_iterator<size_type>(num_keys),
       size_input.begin(),
       get_page_nesting_size{
-        d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.d_begin()});
+        d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
     auto const reduction_keys =
       cudf::detail::make_counting_transform_iterator(0, get_reduction_key{subpass.pages.size()});
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
@@ -1403,7 +1410,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       reduction_keys + num_keys,
       size_input.cbegin(),
       start_offset_output_iterator{
-        subpass.pages.d_begin(), 0, d_cols_info.data(), max_depth, subpass.pages.size()});
+        subpass.pages.device_begin(), 0, d_cols_info.data(), max_depth, subpass.pages.size()});
 
     sizes.device_to_host_sync(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
@@ -1443,7 +1450,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
   rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), _stream);
 
   // use page_index to fetch page string sizes in the proper order
-  auto val_iter = thrust::make_transform_iterator(subpass.pages.d_begin(),
+  auto val_iter = thrust::make_transform_iterator(subpass.pages.device_begin(),
                                                   page_to_string_size{pass.chunks.d_begin()});
 
   // do scan by key to calculate string offsets for each page
