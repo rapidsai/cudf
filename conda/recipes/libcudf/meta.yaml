@@ -161,6 +161,7 @@ outputs:
         - {{ compiler('cuda11') }}
         {% else %}
         - {{ compiler('cuda') }}
+        - cuda-nvtx-dev
         {% endif %}
     requirements:
       build:
@@ -186,6 +187,9 @@ outputs:
       run:
         - {{ pin_subpackage('libcudf', exact=True) }}
         - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
+        {% if cuda_major != "11" %}
+        - cuda-nvtx
+        {% endif %}
     about:
       home: https://rapids.ai/
       license: Apache-2.0
@@ -203,6 +207,7 @@ outputs:
         - {{ compiler('cuda11') }}
         {% else %}
         - {{ compiler('cuda') }}
+        - libcurand-dev
         {% endif %}
     requirements:
       build:
@@ -225,6 +230,8 @@ outputs:
         - {{ pin_subpackage('libcudf_kafka', exact=True) }}
         {% if cuda_major == "11" %}
         - libcurand {{ cuda11_libcurand_run_version }}
+        {% else %}
+        - libcurand
         {% endif %}
         - benchmark {{ gbench_version }}
         - gtest {{ gtest_version }}
