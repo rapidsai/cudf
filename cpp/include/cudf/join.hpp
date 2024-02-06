@@ -28,6 +28,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <optional>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -45,11 +46,9 @@ class hash_join;
 template <typename T, typename U>
 class unique_hash_join;
 }  // namespace detail
-namespace experimental::row::lexicographic {
-struct sorting_physical_element_comparator;
-}
-
 namespace experimental::row::equality {
+struct nan_equal_physical_equality_comparator;
+
 template <typename T>
 class strong_index_comparator_adapter;
 
@@ -453,24 +452,22 @@ class hash_join {
 };
 
 /**
+ * @brief Enum to indicate the table has nested columns or not
+ */
+enum class has_nested : bool { YES, NO };
+
+/**
  * @brief Unique hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
- * @note The build table is required to contain unique elements.
- * @note This class enables the hash join scheme that builds hash table once, and probes as many
- * times as needed (possibly in parallel).
+ * @note Behavior is undefined if the build table contains duplicates.
+ * @note All NaNs are considered as equal
+ *
+ * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
+template <has_nested HasNested = has_nested::NO>
 class unique_hash_join {
  public:
-  using key_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
-    cudf::experimental::row::equality::device_row_comparator<
-      false,
-      bool,
-      cudf::experimental::row::lexicographic::sorting_physical_element_comparator>>;  ///< Row equal
-  using impl_type = typename cudf::detail::unique_hash_join<
-    key_equal,
-    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
-
   unique_hash_join() = delete;
   ~unique_hash_join();
   unique_hash_join(unique_hash_join const&)            = delete;
@@ -520,7 +517,21 @@ class unique_hash_join {
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
  private:
-  const std::unique_ptr<impl_type const> _impl;
+  using row_equal = std::conditional_t<
+    HasNested == has_nested::YES,
+    cudf::experimental::row::equality::device_row_comparator<
+      true,
+      bool,
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
+    cudf::experimental::row::equality::device_row_comparator<
+      false,
+      bool,
+      cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>;  ///< Row equal
+  using impl_type = typename cudf::detail::unique_hash_join<
+    row_equal,
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
+
+  std::unique_ptr<impl_type> _impl;
 };
 
 /**
