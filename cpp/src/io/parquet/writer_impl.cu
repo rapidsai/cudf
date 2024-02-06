@@ -191,7 +191,9 @@ Compression to_parquet_compression(compression_type compression)
   switch (compression) {
     case compression_type::AUTO:
     case compression_type::SNAPPY: return Compression::SNAPPY;
-    case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::ZSTD:
+      return Compression::ZSTD;
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
     case compression_type::LZ4: return Compression::LZ4_RAW;
     case compression_type::NONE: return Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
@@ -1021,6 +1023,7 @@ auto to_nvcomp_compression_type(Compression codec)
 {
   if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
   if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
