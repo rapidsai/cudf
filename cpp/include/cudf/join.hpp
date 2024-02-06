@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,21 @@ class MurmurHash3_x86_32;
 namespace detail {
 template <typename T>
 class hash_join;
+
+template <typename T, typename U>
+class unique_hash_join;
 }  // namespace detail
+namespace experimental::row::lexicographic {
+struct sorting_physical_element_comparator;
+}
+
+namespace experimental::row::equality {
+template <typename T>
+class strong_index_comparator_adapter;
+
+template <bool b, typename T, typename U>
+class device_row_comparator;
+}  // namespace experimental::row::equality
 
 /**
  * @addtogroup column_join
@@ -433,6 +447,77 @@ class hash_join {
     cudf::table_view const& probe,
     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+ private:
+  const std::unique_ptr<impl_type const> _impl;
+};
+
+/**
+ * @brief Unique hash join that builds hash table in creation and probes results in subsequent
+ * `*_join` member functions
+ *
+ * @note The build table is required to contain unique elements.
+ * @note This class enables the hash join scheme that builds hash table once, and probes as many
+ * times as needed (possibly in parallel).
+ */
+class unique_hash_join {
+ public:
+  using key_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
+    cudf::experimental::row::equality::device_row_comparator<
+      false,
+      bool,
+      cudf::experimental::row::lexicographic::sorting_physical_element_comparator>>;  ///< Row equal
+  using impl_type = typename cudf::detail::unique_hash_join<
+    key_equal,
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
+
+  unique_hash_join() = delete;
+  ~unique_hash_join();
+  unique_hash_join(unique_hash_join const&)            = delete;
+  unique_hash_join(unique_hash_join&&)                 = delete;
+  unique_hash_join& operator=(unique_hash_join const&) = delete;
+  unique_hash_join& operator=(unique_hash_join&&)      = delete;
+
+  /**
+   * @brief Constructs a unique hash join object for subsequent probe calls
+   *
+   * @note The `unique_hash_join` object must not outlive the table viewed by `build`, else behavior
+   * is undefined.
+   *
+   * @param build The build table that doesn't contain duplicate elements
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  unique_hash_join(cudf::table_view const& build,
+                   null_equality compare_nulls,
+                   rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @copydoc unique_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   *
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
+   *        any `probe` table that will be used later for join
+   */
+  unique_hash_join(cudf::table_view const& build,
+                   nullable_join has_nulls,
+                   null_equality compare_nulls,
+                   rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @copydoc cudf::hash_join::inner_join
+   */
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(cudf::table_view const& probe,
+             std::optional<std::size_t> output_size = {},
+             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
+             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+
+  /**
+   * @copydoc cudf::hash_join::inner_join_size
+   */
+  [[nodiscard]] std::size_t inner_join_size(
+    cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
  private:
   const std::unique_ptr<impl_type const> _impl;
