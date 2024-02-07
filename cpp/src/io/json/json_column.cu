@@ -493,7 +493,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
     return value;
   }();
-  std::cout << "row_array_parent_col_id:" << row_array_parent_col_id << "\n";
 
   // 1. gather column information.
   auto [d_column_tree, d_unique_col_ids, d_max_row_offsets] =
@@ -636,15 +635,6 @@ void make_device_json_column(device_span<SymbolT const> input,
       continue;
     }
 
-    // get path of this column, check if it is a struct forced as string, and enforce it
-    auto nt                          = tree_path.get_path(this_col_id);
-    std::optional<data_type> user_dt = get_path_data_type(nt, options);
-    if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
-        user_dt.value().id() == type_id::STRING) {
-      is_mixed_type_column[this_col_id] = 1;
-      column_categories[this_col_id]    = NC_STR;
-    }
-
     // If the child is already found,
     // replace if this column is a nested column and the existing was a value column
     // ignore this column if this column is a value column and the existing was a nested column
@@ -700,6 +690,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                      "A mix of lists and structs within the same column is not supported");
       }
     }
+    if (is_enabled_mixed_types_as_string) {
+      // get path of this column, check if it is a struct forced as string, and enforce it
+      auto nt                          = tree_path.get_path(this_col_id);
+      std::optional<data_type> user_dt = get_path_data_type(nt, options);
+      if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
+          user_dt.value().id() == type_id::STRING) {
+        is_mixed_type_column[this_col_id] = 1;
+        column_categories[this_col_id]    = NC_STR;
+      }
+    }
+
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name: " + name);
     // move into parent
     device_json_column col(stream, mr);
