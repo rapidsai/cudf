@@ -2227,6 +2227,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         -------
         DataFrame or Series
         """
+        warnings.warn(
+            "groupby fillna is deprecated and "
+            "will be removed in a future version. Use groupby ffill or groupby bfill "
+            "for forward or backward filling instead.",
+            FutureWarning,
+        )
         if inplace:
             raise NotImplementedError("Does not support inplace yet.")
         if limit is not None:
@@ -2244,17 +2250,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         if method is not None:
             if method not in {"ffill", "bfill"}:
                 raise ValueError("Method can only be of 'ffill', 'bfill'.")
-            # Do not remove until pandas 3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
-            warnings.warn(
-                f"{type(self).__name__}.fillna with 'method' is "
-                "deprecated and will raise in a future version. "
-                "Use obj.ffill() or obj.bfill() instead.",
-                FutureWarning,
-            )
-
             return getattr(self, method, limit)()
 
         values = self.obj.__class__._from_data(
