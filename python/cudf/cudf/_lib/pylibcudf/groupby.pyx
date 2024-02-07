@@ -268,11 +268,16 @@ cdef class GroupBy:
         cdef groups c_groups
         if values:
             c_groups = dereference(self.c_obj).get_groups(values.view())
+            return (
+                Table.from_libcudf(move(c_groups.keys)),
+                Table.from_libcudf(move(c_groups.values)),
+                c_groups.offsets,
+            )
         else:
+            # c_groups.values is nullptr
             c_groups = dereference(self.c_obj).get_groups()
-
-        return (
-            Table.from_libcudf(move(c_groups.keys)),
-            Table.from_libcudf(move(c_groups.values)),
-            c_groups.offsets,
-        )
+            return (
+                Table.from_libcudf(move(c_groups.keys)),
+                Table([]),
+                c_groups.offsets,
+            )
