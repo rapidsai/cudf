@@ -38,6 +38,7 @@ build:
     - {{ compiler('cuda11') }}
     {% else %}
     - {{ compiler('cuda') }}
+    - cuda-cudart-dev
     {% endif %}
 
 requirements:
@@ -61,6 +62,9 @@ requirements:
     - libcudf_kafka ={{ version }}
     - scikit-build-core >=0.7.0
     - setuptools
+    {% if cuda_major != "11" %}
+    - cuda-cudart-dev
+    {% endif %}
   run:
     - python
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}

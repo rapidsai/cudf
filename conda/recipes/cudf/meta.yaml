@@ -41,6 +41,7 @@ build:
     - {{ compiler('cuda11') }}
     {% else %}
     - {{ compiler('cuda') }}
+    - cuda-cudart-dev
     - libcufile-dev  # [linux64]
     {% endif %}
 
@@ -70,6 +71,7 @@ requirements:
     {% if cuda_major == "11" %}
     - cudatoolkit
     {% else %}
+    - cuda-cudart-dev
     - cuda-nvrtc
     - libcufile-dev  # [linux64]
     {% endif %}
