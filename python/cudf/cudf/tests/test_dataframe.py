@@ -43,7 +43,15 @@ from cudf.testing._utils import (
 )
 
 pytest_xfail = pytest.mark.xfail
-pytestmark = pytest.mark.spilling
+pytestmark = [
+    pytest.mark.spilling,
+    pytest.mark.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="Passing a BlockManager to DataFrame is deprecated",
+    ),
+]
+
 
 # Use this to "unmark" the module level spilling mark
 pytest_unmark_spilling = pytest.mark.skipif(

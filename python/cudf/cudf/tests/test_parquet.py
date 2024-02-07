@@ -35,6 +35,13 @@ from cudf.testing._utils import (
 )
 
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="Passing a BlockManager to DataFrame is deprecated",
+)
+
+
 @contextmanager
 def _hide_pyarrow_parquet_cpu_warnings(engine):
     if engine == "pyarrow":

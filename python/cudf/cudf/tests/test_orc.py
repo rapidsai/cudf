@@ -22,13 +22,21 @@ from cudf.testing._utils import (
     supported_numpy_dtypes,
 )
 
-# Removal of these deprecated features is no longer imminent. They will not be
-# removed until a suitable alternative has been implemented. As a result, we
-# also do not want to stop testing them yet.
-# https://github.com/rapidsai/cudf/issues/11519
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:(num_rows|skiprows) is deprecated and will be removed."
-)
+
+pytestmark = [
+    # Removal of these deprecated features is no longer imminent. They will not be
+    # removed until a suitable alternative has been implemented. As a result, we
+    # also do not want to stop testing them yet.
+    # https://github.com/rapidsai/cudf/issues/11519
+    pytest.mark.filterwarnings(
+        "ignore:(num_rows|skiprows) is deprecated and will be removed."
+    ),
+    pytest.mark.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="Passing a BlockManager to DataFrame is deprecated",
+    ),
+]
 
 
 @pytest.fixture(scope="module")
@@ -277,6 +285,9 @@ def test_orc_read_stripes(datadir, engine):
     )
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
 @pytest.mark.parametrize("skiprows", [0, 1, 3000])
 def test_orc_read_rows(datadir, skiprows, num_rows):
@@ -293,6 +304,9 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
     assert_eq(pdf, gdf)
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 def test_orc_read_skiprows():
     buff = BytesIO()
     df = pd.DataFrame(
@@ -338,6 +352,9 @@ def test_orc_reader_uncompressed_block(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 def test_orc_reader_nodata_block(datadir):
     path = datadir / "nodata.orc"
 
@@ -940,6 +957,9 @@ def test_orc_writer_decimal(tmpdir, scale, decimal_type):
     assert_eq(expected.to_pandas()["dec_val"], got["dec_val"])
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 @pytest.mark.parametrize("num_rows", [1, 100, 3000])
 def test_orc_reader_multiple_files(datadir, num_rows):
     path = datadir / "TestOrcFile.testSnappy.orc"
@@ -1074,6 +1094,9 @@ def list_struct_buff():
     return generate_list_struct_buff()
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 @pytest.mark.parametrize(
     "columns",
     [
@@ -1108,6 +1131,9 @@ def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
         assert_eq(pyarrow_tbl.to_pandas(), gdf)
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 @pytest.mark.parametrize("columns", [None, ["lvl1_struct"], ["lvl1_list"]])
 def test_skip_rows_for_nested_types(columns, list_struct_buff):
     with pytest.raises(
@@ -1230,6 +1256,9 @@ def gen_map_buff(size=10000):
 map_buff = gen_map_buff(size=100000)
 
 
+# @pytest.mark.filterwarnings(
+#     "ignore:(num_rows|skiprows) is deprecated and will be removed."
+# )
 @pytest.mark.parametrize(
     "columns",
     [None, ["lvl1_map", "lvl2_struct_map"], ["lvl2_struct_map", "lvl2_map"]],

@@ -19,6 +19,11 @@ boto3 = pytest.importorskip("boto3")
 s3fs = pytest.importorskip("s3fs")
 
 ThreadedMotoServer = pytest.importorskip("moto.server").ThreadedMotoServer
+pytestmark = pytest.mark.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="Passing a BlockManager to DataFrame is deprecated",
+)
 
 
 @pytest.fixture(scope="session")

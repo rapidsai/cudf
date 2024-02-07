@@ -95,7 +95,16 @@ repos:
         # DeprecationWarning: https://github.com/pandas-dev/pandas/issues/54970
         exclude: |
           (?x)^(
-            ^python/cudf/cudf/core/dtypes.py
+            ^python/cudf/cudf/core/dtypes.py|
+            ^python/cudf/cudf/tests/test_avro_reader_fastavro_integration.py|
+            ^python/cudf/cudf/tests/test_dataframe.py|
+            ^python/cudf/cudf/tests/test_datetime.py|
+            ^python/cudf/cudf/tests/test_feather.py|
+            ^python/cudf/cudf/tests/test_groupby.py|
+            ^python/cudf/cudf/tests/test_orc.py|
+            ^python/cudf/cudf/tests/test_parquet.py|
+            ^python/cudf/cudf/tests/test_rolling.py|
+            ^python/cudf/cudf/tests/test_s3.py
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail

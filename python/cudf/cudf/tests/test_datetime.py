@@ -37,6 +37,12 @@ _cmpops = [
     operator.ne,
 ]
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="Passing a BlockManager to DataFrame is deprecated",
+)
+
 
 def data1():
     return pd.date_range("20010101", "20020215", freq="400h", name="times")

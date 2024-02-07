@@ -40,6 +40,12 @@ _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 _index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="Passing a BlockManager to DataFrame is deprecated",
+)
+
 
 def assert_groupby_results_equal(
     expect, got, sort=True, as_index=True, by=None, **kwargs

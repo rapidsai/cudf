@@ -26,6 +26,13 @@ from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="Passing a BlockManager to DataFrame is deprecated",
+)
+
+
 def cudf_from_avro_util(schema: dict, records: list) -> cudf.DataFrame:
     schema = [] if schema is None else fastavro.parse_schema(schema)
     buffer = io.BytesIO()

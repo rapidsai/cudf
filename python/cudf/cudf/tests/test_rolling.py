@@ -12,6 +12,12 @@ from cudf.core._compat import PANDAS_GE_200
 from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
+pytestmark = pytest.mark.filterwarnings(
+    "ignore",
+    category=DeprecationWarning,
+    message="Passing a BlockManager to DataFrame is deprecated",
+)
+
 
 @contextmanager
 def _hide_pandas_rolling_min_periods_warning(agg):
