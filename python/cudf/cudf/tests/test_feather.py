@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -9,15 +9,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
-
-if PANDAS_GE_220:
-    pytestmark = pytest.mark.filterwarnings(
-        "ignore",
-        category=DeprecationWarning,
-        message="Passing a BlockManager to DataFrame is deprecated",
-    )
 
 
 @pytest.fixture(params=[0, 1, 10, 100])

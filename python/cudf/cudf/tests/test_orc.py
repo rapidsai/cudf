@@ -13,7 +13,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
@@ -23,24 +22,13 @@ from cudf.testing._utils import (
     supported_numpy_dtypes,
 )
 
-pytestmark = [
-    # Removal of these deprecated features is no longer imminent. They will not be
-    # removed until a suitable alternative has been implemented. As a result, we
-    # also do not want to stop testing them yet.
-    # https://github.com/rapidsai/cudf/issues/11519
-    pytest.mark.filterwarnings(
+# Removal of these deprecated features is no longer imminent. They will not be
+# removed until a suitable alternative has been implemented. As a result, we
+# also do not want to stop testing them yet.
+# https://github.com/rapidsai/cudf/issues/11519
+pytestmark = pytest.mark.filterwarnings(
         "ignore:(num_rows|skiprows) is deprecated and will be removed."
-    )
-]
-
-if PANDAS_GE_220:
-    pytestmark.append(
-        pytest.mark.filterwarnings(
-            "ignore",
-            category=DeprecationWarning,
-            message="Passing a BlockManager to DataFrame is deprecated",
-        )
-    )
+)
 
 
 @pytest.fixture(scope="module")

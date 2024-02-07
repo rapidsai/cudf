@@ -25,12 +25,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import (
-    PANDAS_GE_200,
-    PANDAS_GE_210,
-    PANDAS_GE_220,
-    PANDAS_LT_203,
-)
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_203
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -48,17 +43,7 @@ from cudf.testing._utils import (
 )
 
 pytest_xfail = pytest.mark.xfail
-pytestmark = [pytest.mark.spilling]
-
-if PANDAS_GE_220:
-    pytestmark.append(
-        pytest.mark.filterwarnings(
-            "ignore",
-            category=DeprecationWarning,
-            message="Passing a BlockManager to DataFrame is deprecated",
-        )
-    )
-
+pytestmark = pytest.mark.spilling
 
 # Use this to "unmark" the module level spilling mark
 pytest_unmark_spilling = pytest.mark.skipif(

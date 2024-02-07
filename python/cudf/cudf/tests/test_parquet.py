@@ -21,7 +21,7 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_200
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -33,13 +33,6 @@ from cudf.testing._utils import (
     assert_eq,
     set_random_null_mask_inplace,
 )
-
-if PANDAS_GE_220:
-    pytestmark = pytest.mark.filterwarnings(
-        "ignore",
-        category=DeprecationWarning,
-        message="Passing a BlockManager to DataFrame is deprecated",
-    )
 
 
 @contextmanager

@@ -20,7 +20,7 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -39,13 +39,6 @@ _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 _index_type_aggs = {"count", "idxmin", "idxmax", "cumcount"}
-
-if PANDAS_GE_220:
-    pytestmark = pytest.mark.filterwarnings(
-        "ignore",
-        category=DeprecationWarning,
-        message="Passing a BlockManager to DataFrame is deprecated",
-    )
 
 
 def assert_groupby_results_equal(
