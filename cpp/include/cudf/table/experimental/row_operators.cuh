@@ -35,7 +35,6 @@
 
 #include <cuda/std/tuple>
 #include <cuda/std/utility>
-
 #include <thrust/detail/use_default.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>

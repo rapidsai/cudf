@@ -30,8 +30,9 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <nvbench/nvbench.cuh>
 #include <thrust/iterator/discard_iterator.h>
+
+#include <nvbench/nvbench.cuh>
 
 #include <cstdlib>
 

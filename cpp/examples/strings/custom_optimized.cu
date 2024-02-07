@@ -24,8 +24,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda_runtime.h>
-#include <nvtx3/nvToolsExt.h>
 #include <thrust/scan.h>
+
+#include <nvtx3/nvToolsExt.h>
 
 /**
  * @brief Computes the size of each output row

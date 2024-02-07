@@ -32,7 +32,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>

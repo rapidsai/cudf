@@ -25,7 +25,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/distance.h>
 #include <thrust/scan.h>
 

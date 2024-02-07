@@ -21,7 +21,6 @@
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-
 #include <cuda_runtime.h>
 
 #include <algorithm>

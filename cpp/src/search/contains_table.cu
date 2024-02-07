@@ -27,9 +27,9 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <cuco/static_set.cuh>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <type_traits>
 

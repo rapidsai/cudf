@@ -24,6 +24,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cuda_runtime.h>
+
 #include <zlib.h>  // uncompress
 
 #include <cstring>  // memset

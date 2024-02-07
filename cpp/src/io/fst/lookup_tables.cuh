@@ -21,9 +21,8 @@
 
 #include <cudf/types.hpp>
 
-#include <cuda/std/iterator>
-
 #include <cub/cub.cuh>
+#include <cuda/std/iterator>
 
 #include <algorithm>
 #include <cstdint>

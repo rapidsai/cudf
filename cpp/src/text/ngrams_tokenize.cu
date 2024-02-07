@@ -35,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>

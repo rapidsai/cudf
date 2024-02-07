@@ -28,9 +28,10 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <gtest/gtest-typed-test.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <gtest/gtest-typed-test.h>
 
 #include <memory>
 #include <optional>

@@ -34,7 +34,6 @@
 
 #include <cuda/atomic>
 #include <cuda/functional>
-
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>

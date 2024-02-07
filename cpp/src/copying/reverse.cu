@@ -28,7 +28,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>

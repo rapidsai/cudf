@@ -24,8 +24,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <nvbench/nvbench.cuh>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <nvbench/nvbench.cuh>
 
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput

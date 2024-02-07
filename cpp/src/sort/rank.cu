@@ -33,7 +33,6 @@
 
 #include <cuda/functional>
 #include <cuda/std/type_traits>
-
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>

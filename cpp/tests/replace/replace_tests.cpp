@@ -31,9 +31,10 @@
 #include <cudf/replace.hpp>
 #include <cudf/types.hpp>
 
-#include <gtest/gtest.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <gtest/gtest.h>
 
 #include <cstdlib>
 #include <iostream>

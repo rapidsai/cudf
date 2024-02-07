@@ -33,7 +33,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
-
 #include <cuda_runtime.h>
 
 #include <type_traits>

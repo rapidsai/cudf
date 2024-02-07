@@ -24,7 +24,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 

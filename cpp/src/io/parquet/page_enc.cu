@@ -27,9 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/std/chrono>
-
 #include <cub/cub.cuh>
+#include <cuda/std/chrono>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>

@@ -24,7 +24,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/adjacent_difference.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>

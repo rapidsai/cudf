@@ -31,7 +31,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>

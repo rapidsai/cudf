@@ -27,7 +27,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {

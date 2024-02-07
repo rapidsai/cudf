@@ -34,7 +34,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>

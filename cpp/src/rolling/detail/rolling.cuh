@@ -54,7 +54,6 @@
 
 #include <cuda/std/climits>
 #include <cuda/std/limits>
-
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>

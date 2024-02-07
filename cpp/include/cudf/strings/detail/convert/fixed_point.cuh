@@ -18,7 +18,6 @@
 #include <cudf/fixed_point/temporary.hpp>
 
 #include <cuda/std/type_traits>
-
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 

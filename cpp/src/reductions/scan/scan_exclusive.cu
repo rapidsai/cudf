@@ -28,7 +28,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/scan.h>
 
 namespace cudf {

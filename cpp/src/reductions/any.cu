@@ -20,7 +20,6 @@
 #include <cudf/reduction/detail/reduction_functions.hpp>
 
 #include <cuda/atomic>
-
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>

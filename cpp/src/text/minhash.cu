@@ -35,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/atomic>
-
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 

@@ -16,9 +16,8 @@
 
 #pragma once
 
-#include <cuda/atomic>
-
 #include <cub/block/block_scan.cuh>
+#include <cuda/atomic>
 
 namespace cudf {
 namespace io {

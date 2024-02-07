@@ -49,7 +49,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>

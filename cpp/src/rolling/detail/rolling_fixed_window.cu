@@ -22,7 +22,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/extrema.h>
 
 namespace cudf::detail {

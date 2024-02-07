@@ -21,8 +21,9 @@
 
 #include <cudf/interop.hpp>
 
-#include <dlpack/dlpack.h>
 #include <thrust/host_vector.h>
+
+#include <dlpack/dlpack.h>
 
 struct dlpack_deleter {
   void operator()(DLManagedTensor* tensor) { tensor->deleter(tensor); }

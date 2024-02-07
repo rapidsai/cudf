@@ -32,8 +32,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <nvbench/nvbench.cuh>
 #include <thrust/transform.h>
+
+#include <nvbench/nvbench.cuh>
 
 #include <cstdio>
 #include <fstream>

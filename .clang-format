@@ -87,7 +87,9 @@ IncludeCategories:
     Priority:        6
   - Regex:           '^<rmm/' # RMM includes
     Priority:        7
-  - Regex:           '^<cuda/' # CUDA includes
+  - Regex:           '^<(thrust|cub|cuda)/' # CCCL includes
+    Priority:        8
+  - Regex:           '^<(cuda.h|cuda_runtime|device_types|math_constants|cooperative_groups)' # CUDART includes
     Priority:        8
   - Regex:           '^<.*\..*' # other system includes (e.g. with a '.')
     Priority:        9

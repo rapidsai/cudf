@@ -28,7 +28,6 @@
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuda/atomic>
-
 #include <thrust/pair.h>
 
 #include <iostream>

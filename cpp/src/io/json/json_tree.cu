@@ -32,10 +32,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/functional>
-
 #include <cub/device/device_radix_sort.cuh>
-#include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -53,6 +51,8 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
+
+#include <cuco/static_set.cuh>
 
 #include <limits>
 

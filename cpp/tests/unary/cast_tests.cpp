@@ -28,7 +28,6 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/limits>
-
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 

@@ -27,7 +27,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/random/uniform_int_distribution.h>

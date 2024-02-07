@@ -36,7 +36,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-
 #include <thrust/count.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>

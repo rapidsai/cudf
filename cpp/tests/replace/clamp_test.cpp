@@ -26,8 +26,9 @@
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
-#include <gtest/gtest.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <gtest/gtest.h>
 
 struct ClampErrorTest : public cudf::test::BaseFixture {};
 

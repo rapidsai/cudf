@@ -39,7 +39,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <hash/concurrent_unordered_map.cuh>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/host_vector.h>
@@ -49,6 +48,8 @@
 #include <thrust/pair.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+
+#include <hash/concurrent_unordered_map.cuh>
 
 using cudf::host_span;
 
