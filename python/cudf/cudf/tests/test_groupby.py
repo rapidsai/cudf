@@ -3762,4 +3762,5 @@ def test_groupby_internal_groups_empty(gdf):
     # test that we don't segfault when calling the internal
     # .groups() method with an empty list:
     gb = gdf.groupby("y")._groupby
-    gb.groups([])
+    _, grouped_vals, _ = gb.groups([])
+    assert grouped_vals is None

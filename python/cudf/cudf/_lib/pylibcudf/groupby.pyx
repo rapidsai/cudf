@@ -98,6 +98,9 @@ cdef class GroupBy:
         sorted keys_are_sorted=sorted.NO
     ):
         self.c_obj.reset(new groupby(keys.view(), null_handling, keys_are_sorted))
+        # keep a reference to the keys table so it doesn't get
+        # deallocated from under us:
+        self._keys = keys
 
     @staticmethod
     cdef tuple _parse_outputs(
@@ -254,14 +257,14 @@ cdef class GroupBy:
         ----------
         values : Table, optional
             The columns to get group labels for. If not specified,
-            an empty table is returned for the group values.
+            `None` is returned for the group values.
 
         Returns
         -------
         Tuple[Table, Table, List[int]]
             A tuple of tables containing three items:
                 - A table of group keys
-                - A table of group values
+                - A table of group values or None
                 - A list of integer offsets into the tables
         """
 
@@ -278,6 +281,6 @@ cdef class GroupBy:
             c_groups = dereference(self.c_obj).get_groups()
             return (
                 Table.from_libcudf(move(c_groups.keys)),
-                Table([]),
+                None,
                 c_groups.offsets,
             )
