@@ -10,6 +10,8 @@ from cudf._lib.cpp.aggregation cimport (
     groupby_scan_aggregation,
     rank_method,
     rank_percentage,
+    reduce_aggregation,
+    scan_aggregation,
 )
 from cudf._lib.cpp.types cimport (
     interpolation,
@@ -23,14 +25,23 @@ from cudf._lib.cpp.types cimport (
 
 from .types cimport DataType
 
+# workaround for https://github.com/cython/cython/issues/3885
+ctypedef groupby_aggregation * gba_ptr
+ctypedef groupby_scan_aggregation * gbsa_ptr
+ctypedef reduce_aggregation * ra_ptr
+ctypedef scan_aggregation * sa_ptr
+
 
 cdef class Aggregation:
     cdef unique_ptr[aggregation] c_obj
     cpdef kind(self)
+    cdef void _unsupported_agg_error(self, str alg)
     cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
     ) except *
+    cdef const reduce_aggregation* view_underlying_as_reduce(self) except *
+    cdef const scan_aggregation* view_underlying_as_scan(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)

@@ -144,6 +144,9 @@ cdef class GroupBy:
             c_requests.push_back(move(request._to_libcudf_agg_request()))
 
         cdef pair[unique_ptr[table], vector[aggregation_result]] c_res
+        # TODO: Need to capture C++ exceptions indicating that an invalid type was used.
+        # We rely on libcudf to tell us this rather than checking the types beforehand
+        # ourselves.
         with nogil:
             c_res = move(dereference(self.c_obj).aggregate(c_requests))
         return GroupBy._parse_outputs(move(c_res))
