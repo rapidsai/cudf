@@ -22,12 +22,7 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
-from cudf.api.types import (
-    _is_datetime64tz_dtype,
-    is_datetime64_dtype,
-    is_scalar,
-    is_timedelta64_dtype,
-)
+from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
 from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
@@ -702,7 +697,7 @@ class DatetimeColumn(column.ColumnBase):
             return False
 
     def _with_type_metadata(self, dtype):
-        if _is_datetime64tz_dtype(dtype):
+        if isinstance(dtype, pd.DatetimeTZDtype):
             return DatetimeTZColumn(
                 data=self.base_data,
                 dtype=dtype,
