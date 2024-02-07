@@ -422,3 +422,8 @@ def test_series_to_numeric_preserve_index_name(klass):
     result = cudf.to_numeric(ser)
     expected = cudf.Series([1] * 8, index=range(2, 10), name="name")
     assert_eq(result, expected)
+
+
+def test_to_datetime_errors_ignore_deprecated():
+    with pytest.warns(FutureWarning):
+        cudf.to_datetime("1", errors="ignore")

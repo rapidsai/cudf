@@ -3918,6 +3918,12 @@ class IndexedFrame(Frame):
         """
         import cudf.core.resample
 
+        if kind is not None:
+            warnings.warn(
+                "The 'kind' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
             "start",
