@@ -29,7 +29,11 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuco/static_set_ref.cuh>
+#include <cuco/static_set.cuh>
+
+#include <cub/block/block_scan.cuh>
+
+#include <cooperative_groups.h>
 
 #include <cstddef>
 #include <limits>
@@ -73,12 +77,71 @@ class build_keys_fn {
   Hasher _hash;
 };
 
+template <typename CG>
+__device__ void flush_buffer(CG const& group,
+                             cudf::size_type* block_counter,
+                             cuco::pair<cudf::size_type, cudf::size_type>* buffer,
+                             cudf::size_type* counter,
+                             cudf::size_type* build_indices,
+                             cudf::size_type* probe_indices)
+{
+  auto i       = group.thread_rank();
+  auto const n = *block_counter;
+
+  size_type offset;
+  if (i == 0) { offset = atomicAdd(counter, n); }
+  offset = group.shfl(offset, 0);
+
+  while (i < n) {
+    *(build_indices + offset + i) = buffer[i].first;
+    *(probe_indices + offset + i) = buffer[i].second;
+    i += group.size();
+  }
+  if (group.thread_rank() == 0) { *block_counter = 0; }
+}
+
 template <typename Iter, typename HashTable>
-CUDF_KERNEL void unique_join_probe_kernel(Iter fn,
+CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
                                           cudf::size_type size,
                                           HashTable hash_table,
+                                          cudf::size_type* build_indices,
+                                          cudf::size_type* probe_indices,
                                           cudf::size_type* counter)
 {
+  namespace cg = cooperative_groups;
+
+  auto constexpr cg_size = HashTable::cg_size;
+
+  __shared__ cuco::pair<size_type, size_type> block_buffer[DEFAULT_JOIN_BLOCK_SIZE];
+  __shared__ size_type block_counter;
+
+  auto idx               = cudf::detail::grid_1d::global_thread_id() / cg_size;
+  auto const stride      = cudf::detail::grid_1d::grid_stride() / cg_size;
+  auto const block       = cg::this_thread_block();
+  auto const tile        = cg::tiled_partition<cg_size>(block);
+  auto const thread_rank = block.thread_rank();
+
+  if (thread_rank == 0) { block_counter = 0; }
+  block.sync();
+
+  while ((idx - stride) < size) {
+    if (idx < size) {
+      auto const found = hash_table.find(tile, *(iter + idx));
+      if (thread_rank == 0 and found != hash_table.end()) {
+        auto const offset    = atomicAdd(&block_counter, 1);
+        block_buffer[offset] = cuco::pair{found->second, idx};
+      }
+    }
+    block.sync();
+    if (block_counter > (DEFAULT_JOIN_BLOCK_SIZE / 2)) {
+      flush_buffer(block, &block_counter, block_buffer, counter, build_indices, probe_indices);
+    }
+    idx += stride;
+  }
+  block.sync();
+  if (block_counter > 0) {
+    flush_buffer(block, &block_counter, block_buffer, counter, build_indices, probe_indices);
+  }
 }
 }  // namespace
 
@@ -161,6 +224,8 @@ unique_hash_join<Hasher, HasNested>::inner_join(std::optional<std::size_t> outpu
     iter,
     probe_table_num_rows,
     this->_hash_table.ref(cuco::experimental::op::find),
+    left_indices->data(),
+    right_indices->data(),
     counter.data());
 
   auto const actual_size = counter.value(stream);
