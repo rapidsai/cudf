@@ -27,7 +27,7 @@ from cudf.testing._utils import (
 # also do not want to stop testing them yet.
 # https://github.com/rapidsai/cudf/issues/11519
 pytestmark = pytest.mark.filterwarnings(
-        "ignore:(num_rows|skiprows) is deprecated and will be removed."
+    "ignore:(num_rows|skiprows) is deprecated and will be removed."
 )
 
 
