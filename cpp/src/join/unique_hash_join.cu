@@ -18,11 +18,24 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/unique_hash_join.cuh>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <cuco/static_set_ref.cuh>
+
+#include <cstddef>
+#include <limits>
+#include <memory>
+#include <optional>
+#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -46,19 +59,27 @@ auto prepare_device_equal(
  *
  * @tparam Hasher The type of internal hasher to compute row hash.
  */
-template <typename Hasher>
+template <typename Hasher, typename T>
 class build_keys_fn {
  public:
   CUDF_HOST_DEVICE build_keys_fn(Hasher const& hash) : _hash{hash} {}
 
   __device__ __forceinline__ auto operator()(size_type i) const noexcept
   {
-    return cuco::pair{_hash(i), lhs_index_type{i}};
+    return cuco::pair{_hash(i), T{i}};
   }
 
  private:
   Hasher _hash;
 };
+
+template <typename Iter, typename HashTable>
+CUDF_KERNEL void unique_join_probe_kernel(Iter fn,
+                                          cudf::size_type size,
+                                          HashTable hash_table,
+                                          cudf::size_type* counter)
+{
+}
 }  // namespace
 
 template <typename Hasher, cudf::has_nested HasNested>
@@ -93,7 +114,8 @@ unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& bu
   auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
   auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
 
-  auto const iter = cudf::detail::make_counting_transform_iterator(0, build_keys_fn{d_hasher});
+  auto const iter = cudf::detail::make_counting_transform_iterator(
+    0, build_keys_fn<decltype(d_hasher), lhs_index_type>{d_hasher});
 
   size_type const build_table_num_rows{build.num_rows()};
   if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
@@ -110,13 +132,12 @@ unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& bu
   }
 }
 
-/*
-template <typename Equal, typename Hasher>
+template <typename Hasher, cudf::has_nested HasNested>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-unique_hash_join<Equal, Hasher>::inner_join(std::optional<std::size_t> output_size,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr) const
+unique_hash_join<Hasher, HasNested>::inner_join(std::optional<std::size_t> output_size,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
 
@@ -130,9 +151,26 @@ unique_hash_join<Equal, Hasher>::inner_join(std::optional<std::size_t> output_si
   auto const probe_row_hasher =
     cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
   auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
-  return;
+  auto const iter           = cudf::detail::make_counting_transform_iterator(
+    0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+  auto counter = rmm::device_scalar<cudf::size_type>{stream};
+  counter.set_value_to_zero_async(stream);
+
+  cudf::detail::grid_1d grid{probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE};
+  unique_join_probe_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    iter,
+    probe_table_num_rows,
+    this->_hash_table.ref(cuco::experimental::op::find),
+    counter.data());
+
+  auto const actual_size = counter.value(stream);
+  left_indices->resize(actual_size, stream);
+  right_indices->resize(actual_size, stream);
+
+  return {std::move(left_indices), std::move(right_indices)};
 }
 
+/*
 template <typename Equal, typename Hasher>
 std::size_t unique_hash_join<Equal, Hasher>::inner_join_size(cudf::table_view const& probe,
                                                              rmm::cuda_stream_view stream) const
