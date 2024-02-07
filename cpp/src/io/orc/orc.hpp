@@ -612,9 +612,9 @@ class metadata {
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
-  [[nodiscard]] size_t get_total_rows() const { return ff.numberOfRows; }
-  [[nodiscard]] int get_num_stripes() const { return ff.stripes.size(); }
-  [[nodiscard]] int get_num_columns() const { return ff.types.size(); }
+  [[nodiscard]] uint64_t get_total_rows() const { return ff.numberOfRows; }
+  [[nodiscard]] size_type get_num_stripes() const { return ff.stripes.size(); }
+  [[nodiscard]] size_type get_num_columns() const { return ff.types.size(); }
   /**
    * @brief Returns the name of the column with the given ID.
    *

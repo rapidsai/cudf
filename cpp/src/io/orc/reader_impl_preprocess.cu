@@ -798,8 +798,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       _metadata.is_row_grp_idx_present() &&
       // Only use if we don't have much work with complete columns & stripes
       // TODO: Consider nrows, gpu, and tune the threshold
-      (rows_to_read > _metadata.get_row_index_stride() && !(_metadata.get_row_index_stride() & 7) &&
-       _metadata.get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
+      (static_cast<uint32_t>(rows_to_read) > _metadata.get_row_index_stride() &&
+       !(_metadata.get_row_index_stride() & 7) && _metadata.get_row_index_stride() != 0 &&
+       num_columns * total_num_stripes < 8 * 128) &&
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);

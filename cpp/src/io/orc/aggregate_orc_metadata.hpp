@@ -50,7 +50,7 @@ class aggregate_orc_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] int64_t calc_num_rows() const;
+  [[nodiscard]] uint64_t calc_num_rows() const;
 
   /**
    * @brief Sums up the number of stripes of each source
@@ -59,7 +59,7 @@ class aggregate_orc_metadata {
 
  public:
   std::vector<metadata> per_file_metadata;
-  int64_t const num_rows;
+  uint64_t const num_rows;
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
@@ -79,10 +79,7 @@ class aggregate_orc_metadata {
 
   [[nodiscard]] auto const& get_types() const { return per_file_metadata[0].ff.types; }
 
-  [[nodiscard]] int get_row_index_stride() const
-  {
-    return static_cast<int>(per_file_metadata[0].ff.rowIndexStride);
-  }
+  [[nodiscard]] auto get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
   [[nodiscard]] auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 
