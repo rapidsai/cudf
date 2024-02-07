@@ -323,6 +323,7 @@ class json_reader_options {
 
   /**
    * @brief Set whether to parse mixed types as a string column.
+   * Also enables forcing to read a struct as string column using schema.
    *
    * @param val Boolean value to enable/disable parsing mixed types as a string column
    */
@@ -473,6 +474,7 @@ class json_reader_options_builder {
 
   /**
    * @brief Set whether to parse mixed types as a string column.
+   * Also enables forcing to read a struct as string column using schema.
    *
    * @param val Boolean value to enable/disable parsing mixed types as a string column
    * @return this for chaining
