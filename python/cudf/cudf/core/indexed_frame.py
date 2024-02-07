@@ -2608,14 +2608,14 @@ class IndexedFrame(Frame):
                     and self._data.multiindex
                 ):
                     out._set_column_names_like(self)
-            if ignore_index is True:
+            if ignore_index:
                 out = out.reset_index(drop=True)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
-            if ignore_index is True:
+            if ignore_index:
                 out._data.rangeindex = True
-                out._data.names = list(range(0, len(self._data.names)))
+                out._data.names = list(range(len(self._data.names)))
 
         return self._mimic_inplace(out, inplace=inplace)
 
