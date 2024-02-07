@@ -75,18 +75,24 @@ IncludeBlocks: Regroup
 IncludeCategories:
   - Regex:           '^"' # quoted includes
     Priority:        1
-  - Regex:           '^<cudf/' # cuDF includes
+  - Regex:           '^<(benchmarks|tests)/' # benchmark includes
     Priority:        2
-  - Regex:           '^<(cugraph|cuml|cuspatial|raft)' # Other RAPIDS includes
+  - Regex:           '^<cudf_test/' # cuDF includes
     Priority:        3
-  - Regex:           '^<rmm/' # RMM includes
+  - Regex:           '^<(nvtext|cudf_kafka)' # other libcudf includes
     Priority:        4
-  - Regex:           '^<(thrust|cub)/' # Thrust and CUB includes
+  - Regex:           '^<cudf/' # cuDF includes
     Priority:        5
-  - Regex:           '^<.*\..*' # other system includes (e.g. with a '.')
+  - Regex:           '^<(cugraph|cuml|cuspatial|raft|kvikio)' # Other RAPIDS includes
     Priority:        6
-  - Regex:           '^<[^.]+' # STL includes (no '.')
+  - Regex:           '^<rmm/' # RMM includes
     Priority:        7
+  - Regex:           '^<cuda/' # CUDA includes
+    Priority:        8
+  - Regex:           '^<.*\..*' # other system includes (e.g. with a '.')
+    Priority:        9
+  - Regex:           '^<[^.]+' # STL includes (no '.')
+    Priority:        10
 IndentCaseLabels: true
 IndentPPDirectives: None
 IndentWidth:     2
