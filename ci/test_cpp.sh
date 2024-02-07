@@ -16,7 +16,6 @@ export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 rapids-logger "Run libcudf gtests"
 ./ci/run_cudf_ctests.sh -j20
 SUITEERROR=$?
-popd
 
 if (( ${SUITEERROR} == 0 )); then
     rapids-logger "Run libcudf_kafka gtests"
