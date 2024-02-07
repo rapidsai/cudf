@@ -34,12 +34,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
+
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 
 #include <limits>
-
-#include <cuda/atomic>
 
 namespace nvtext {
 namespace detail {

@@ -17,11 +17,11 @@
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 
+#include <nvtext/normalize.hpp>
+
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
-
-#include <nvtext/normalize.hpp>
 
 #include <nvbench/nvbench.cuh>
 

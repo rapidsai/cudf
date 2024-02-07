@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_common_utils.cuh>
+#include "join/join_common_utils.hpp"
+#include "join/mixed_join_common_utils.cuh"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>

@@ -38,12 +38,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/atomic>
 
 #include <cub/cub.cuh>
-
-#include <cuda/atomic>
+#include <thrust/copy.h>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 

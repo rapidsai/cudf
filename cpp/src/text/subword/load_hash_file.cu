@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/codepoint_metadata.ah>
-#include <text/subword/detail/tokenizer_utils.cuh>
+#include "text/subword/detail/codepoint_metadata.ah"
+#include "text/subword/detail/tokenizer_utils.cuh"
 
 #include <nvtext/detail/load_hash_file.hpp>
 

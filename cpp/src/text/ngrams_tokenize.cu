@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <text/utilities/tokenize_ops.cuh>
+#include "text/utilities/tokenize_ops.cuh"
 
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/ngrams_tokenize.hpp>
@@ -34,12 +34,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
+
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 namespace nvtext {
 namespace detail {

@@ -19,9 +19,9 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cudf/reduction.hpp>
 #include <nvtext/tokenize.hpp>
 
+#include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
 #include <cudf/strings/strings_column_view.hpp>

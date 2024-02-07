@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <text/utilities/tokenize_ops.cuh>
+#include "text/utilities/tokenize_ops.cuh"
 
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/tokenize.hpp>

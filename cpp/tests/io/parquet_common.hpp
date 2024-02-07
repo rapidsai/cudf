@@ -16,6 +16,10 @@
 
 #pragma once
 
+#include "src/io/parquet/compact_protocol_reader.hpp"
+#include "src/io/parquet/parquet.hpp"
+#include "src/io/parquet/parquet_gpu.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -25,10 +29,6 @@
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <src/io/parquet/compact_protocol_reader.hpp>
-#include <src/io/parquet/parquet.hpp>
-#include <src/io/parquet/parquet_gpu.hpp>
 
 #include <random>
 #include <type_traits>

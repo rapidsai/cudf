@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/subword/detail/tokenizer_utils.cuh>
-#include <text/utilities/tokenize_ops.cuh>
+#include "text/subword/detail/data_normalizer.hpp"
+#include "text/subword/detail/tokenizer_utils.cuh"
+#include "text/utilities/tokenize_ops.cuh"
 
 #include <nvtext/normalize.hpp>
 

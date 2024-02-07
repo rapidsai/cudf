@@ -29,7 +29,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/static_map.cuh>
-
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>

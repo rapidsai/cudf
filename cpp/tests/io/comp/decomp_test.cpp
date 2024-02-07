@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-#include <src/io/comp/nvcomp_adapter.hpp>
-
-#include <cudf/utilities/default_stream.hpp>
+// TODO : don't include src from tests!
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+#include "src/io/comp/nvcomp_adapter.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
+
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>

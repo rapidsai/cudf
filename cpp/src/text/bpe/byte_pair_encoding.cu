@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <text/bpe/byte_pair_encoding.cuh>
+#include "text/bpe/byte_pair_encoding.cuh"
 
 #include <nvtext/byte_pair_encoding.hpp>
 

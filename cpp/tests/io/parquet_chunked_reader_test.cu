@@ -15,6 +15,8 @@
  */
 
 #include "parquet_common.hpp"
+#include "src/io/parquet/compact_protocol_reader.hpp"
+#include "src/io/parquet/parquet.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -40,13 +42,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <src/io/parquet/compact_protocol_reader.hpp>
-#include <src/io/parquet/parquet.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <fstream>
 #include <type_traits>

@@ -17,7 +17,6 @@
 #pragma once
 
 #include "error.hpp"
-
 #include "io/comp/gpuinflate.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"

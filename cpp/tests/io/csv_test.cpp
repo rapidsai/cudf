@@ -35,7 +35,6 @@
 #include <cudf/unary.hpp>
 
 #include <arrow/io/api.h>
-
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>

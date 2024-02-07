@@ -16,13 +16,13 @@
 
 #include <benchmarks/common/generate_input.hpp>
 
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <nvtext/edit_distance.hpp>
 
-#include <nvbench/nvbench.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/device_buffer.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 static void bench_edit_distance(nvbench::state& state)
 {

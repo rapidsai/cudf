@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <text/bpe/byte_pair_encoding.cuh>
+#include "text/bpe/byte_pair_encoding.cuh"
 
 #include <nvtext/byte_pair_encoding.hpp>
 
@@ -29,11 +29,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/functional>
+
 #include <fstream>
 #include <iostream>
 #include <vector>
-
-#include <cuda/functional>
 
 namespace nvtext {
 namespace detail {

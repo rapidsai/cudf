@@ -16,13 +16,13 @@
 
 #include <benchmarks/common/generate_input.hpp>
 
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <nvtext/minhash.hpp>
 
-#include <nvbench/nvbench.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/device_buffer.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 static void bench_minhash(nvbench::state& state)
 {

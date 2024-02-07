@@ -29,13 +29,13 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
+#include <cudf/types.hpp>
 
+#include <gtest/gtest.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <cstdlib>
-#include <cudf/types.hpp>
-#include <gtest/gtest.h>
 #include <iostream>
 #include <vector>
 

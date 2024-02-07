@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/subword/detail/tokenizer_utils.cuh>
+#include "text/subword/detail/data_normalizer.hpp"
+#include "text/subword/detail/tokenizer_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>

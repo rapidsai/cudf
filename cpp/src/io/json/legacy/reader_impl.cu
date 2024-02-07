@@ -14,13 +14,10 @@
  * limitations under the License.
  */
 
+#include "io/comp/io_uncomp.hpp"
+#include "io/utilities/column_buffer.hpp"
+#include "io/utilities/parsing_utils.cuh"
 #include "json_gpu.hpp"
-
-#include <hash/concurrent_unordered_map.cuh>
-
-#include <io/comp/io_uncomp.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -42,6 +39,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <hash/concurrent_unordered_map.cuh>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/host_vector.h>
