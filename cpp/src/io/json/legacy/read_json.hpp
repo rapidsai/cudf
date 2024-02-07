@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -26,7 +27,7 @@
 namespace cudf::io::json::detail::legacy {
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
-                              json_reader_options const& reader_opts,
+                              cudf::io::json_reader_options const& reader_opts,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
 
