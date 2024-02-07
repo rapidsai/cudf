@@ -6,4 +6,4 @@ set -euo pipefail
 # Support customizing the ctests' install location
 cd "${INSTALL_PREFIX:-${CONDA_PREFIX:-/usr}}/bin/gtests/libcudf_kafka/";
 
-ctest --output-on-failure "$@"
+ctest --output-on-failure --no-tests=error "$@"
