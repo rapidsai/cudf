@@ -39,7 +39,7 @@ using StateT  = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
 using SymbolOffsetT = uint32_t;
 
-enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_WS, TT_NUM_STATES };
+enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_NUM_STATES };
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,   ///< Quote character SG: "
   ESCAPE_CHAR,         ///< Escape character SG: '\\'
@@ -49,11 +49,25 @@ enum class dfa_symbol_group_id : uint32_t {
   NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
 };
 
+/**
+ * -------- FST states ---------
+ * -----------------------------
+ * TT_OOS | Out-of-string state handling whitespace and non-whitespace chars outside double
+ *        |   quotes as well as any other character not enclosed by a string. Also handles
+ *        |   newline character present within a string
+ * TT_DQS | Double-quoted string state handling all characters within double quotes except
+ *        |   newline character
+ * TT_DEC | State handling escaped characters inside double-quoted string. Note that this
+ *        |   state is necessary to process escaped double-quote characters. Without this
+ *        |   state, whitespaces following escaped double quotes inside strings may be removed.
+ *
+ * NOTE: An important case NOT handled by this FST is that of whitespace following newline
+ * characters within a string. For example, `{"a":"x\n y"}` ---FST--> `{"a":"x\ny"}`
+ */
 // Aliases for readability of the transition table
 constexpr auto TT_OOS            = dfa_states::TT_OOS;
 constexpr auto TT_DQS            = dfa_states::TT_DQS;
 constexpr auto TT_DEC            = dfa_states::TT_DEC;
-constexpr auto TT_WS             = dfa_states::TT_WS;
 constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
 
@@ -64,10 +78,9 @@ std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{
   {/* IN_STATE      "       \       \n    <SPC>   OTHER  */
-   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_OOS}},
+   /* TT_OOS */ {{TT_DQS, TT_OOS, TT_OOS, TT_OOS, TT_OOS}},
    /* TT_DQS */ {{TT_OOS, TT_DEC, TT_OOS, TT_DQS, TT_DQS}},
-   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_OOS, TT_DQS, TT_DQS}},
-   /* TT_WS  */ {{TT_DQS, TT_OOS, TT_OOS, TT_WS, TT_OOS}}}};
+   /* TT_DEC */ {{TT_DQS, TT_DQS, TT_DQS, TT_DQS, TT_DQS}}}};
 
 // The DFA's starting state
 constexpr StateT start_state = static_cast<StateT>(TT_OOS);
@@ -89,14 +102,12 @@ struct TransduceToNormalizedWS {
     //      Output symbol same as input symbol <s>
     // state | read_symbol <s>  -> output_symbol <s>
     // DQS   | Sigma            -> Sigma
-    // WS    | Sigma\{<SPC>,\t} -> Sigma\{<SPC>,\t}
     // OOS   | Sigma\{<SPC>,\t} -> Sigma\{<SPC>,\t}
+    // DEC   | Sigma            -> Sigma
     // ---------- SPECIAL CASES: --------------
     //    Input symbol translates to output symbol
     // OOS   | {<SPC>}          -> <nop>
     // OOS   | {\t}             -> <nop>
-    // WS    | {<SPC>}          -> <nop>
-    // WS    | {\t}             -> <nop>
 
     // Case when read symbol is a whitespace or tabspace but is unquoted
     // This will be the same condition as in `operator()(state_id, match_id, read_symbol)` function
@@ -120,9 +131,8 @@ struct TransduceToNormalizedWS {
                                                  SymbolT const read_symbol) const
   {
     // Case when read symbol is a whitespace or tabspace but is unquoted
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_SYMBOLS)) &&
-        ((state_id == static_cast<StateT>(dfa_states::TT_OOS)) ||
-         (state_id == static_cast<StateT>(dfa_states::TT_WS)))) {
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_SYMBOLS) &&
+        state_id == static_cast<StateT>(dfa_states::TT_OOS)) {
       return 0;
     }
     return 1;
@@ -150,7 +160,7 @@ void run_test(const std::string& input, const std::string& output)
 
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
-  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size() * 2, stream_view);
+  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
   cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
 
   // Allocate device-side temporary storage & run algorithm
@@ -176,7 +186,7 @@ void run_test(const std::string& input, const std::string& output)
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_Spaces)
 {
-  std::string input  = R"({"A" : "TEST" })";
+  std::string input  = R"({ "A" : "TEST" })";
   std::string output = R"({"A":"TEST"})";
   run_test(input, output);
 }
@@ -188,17 +198,17 @@ TEST_F(JsonWSNormalizationTest, GroundTruth_MoreSpaces)
   run_test(input, output);
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_StringSpaces)
+TEST_F(JsonWSNormalizationTest, GroundTruth_SpacesInString)
 {
   std::string input  = R"({" a ":50})";
   std::string output = R"({" a ":50})";
   run_test(input, output);
 }
 
-TEST_F(JsonWSNormalizationTest, GroundTruth_StillMoreSpaces)
+TEST_F(JsonWSNormalizationTest, GroundTruth_NewlineInString)
 {
-  std::string input  = R"( { "a" : 50 })";
-  std::string output = R"({"a":50})";
+  std::string input  = "{\"a\" : \"x\ny\"}\n{\"a\" : \"x\\ny\"}";
+  std::string output = "{\"a\":\"x\ny\"}\n{\"a\":\"x\\ny\"}";
   run_test(input, output);
 }
 
@@ -235,8 +245,15 @@ TEST_F(JsonWSNormalizationTest, GroundTruth_PureJSONExample)
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_NoNormalizationRequired)
 {
-  std::string input  = R"({"a":50})";
-  std::string output = R"({"a":50})";
+  std::string input  = R"({"a\\n\r\a":50})";
+  std::string output = R"({"a\\n\r\a":50})";
+  run_test(input, output);
+}
+
+TEST_F(JsonWSNormalizationTest, GroundTruth_InvalidInput)
+{
+  std::string input  = "{\"a\" : \"b }\n{ \"c\" :\t\"d\"}";
+  std::string output = "{\"a\":\"b }\n{\"c\":\"d\"}";
   run_test(input, output);
 }
 
