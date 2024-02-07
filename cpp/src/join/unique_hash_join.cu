@@ -114,18 +114,28 @@ unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& bu
 template <typename Equal, typename Hasher>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-unique_hash_join<Equal, Hasher>::inner_join(cudf::table_view const& probe,
-                              std::optional<std::size_t> output_size,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr) const
+unique_hash_join<Equal, Hasher>::inner_join(std::optional<std::size_t> output_size,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
-  return ;
+
+  size_type const probe_table_num_rows{this->_probe.num_rows()};
+
+  std::size_t const join_size = output_size ? *output_size : probe_table_num_rows;
+
+  auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+  auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
+
+  auto const probe_row_hasher =
+    cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
+  auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+  return;
 }
 
 template <typename Equal, typename Hasher>
 std::size_t unique_hash_join<Equal, Hasher>::inner_join_size(cudf::table_view const& probe,
-                                               rmm::cuda_stream_view stream) const
+                                                             rmm::cuda_stream_view stream) const
 {
   CUDF_FUNC_RANGE();
 
@@ -140,14 +150,14 @@ std::size_t unique_hash_join<Equal, Hasher>::inner_join_size(cudf::table_view co
 
   return 10;
   cudf::detail::compute_join_output_size(_build,
-                                                probe,
-                                                _preprocessed_build,
-                                                preprocessed_probe,
-                                                _hash_table,
-                                                cudf::detail::join_kind::INNER_JOIN,
-                                                _has_nulls,
-                                                _nulls_equal,
-                                                stream);
+                                         probe,
+                                         _preprocessed_build,
+                                         preprocessed_probe,
+                                         _hash_table,
+                                         cudf::detail::join_kind::INNER_JOIN,
+                                         _has_nulls,
+                                         _nulls_equal,
+                                         stream);
 }
 */
 }  // namespace detail
