@@ -18,7 +18,7 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-from cudf._lib.aggregation cimport make_groupby_aggregation
+from cudf._lib.aggregation cimport make_aggregation
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
@@ -164,7 +164,7 @@ cdef class GroupBy:
             included_aggregations_i = []
             col_aggregations = []
             for agg in aggs:
-                agg_obj = make_groupby_aggregation(agg)
+                agg_obj = make_aggregation(agg)
                 if valid_aggregations == "ALL" or agg_obj.kind in valid_aggregations:
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.c_obj)
