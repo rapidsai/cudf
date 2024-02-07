@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -11,16 +11,15 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.replace cimport (
-    clamp as cpp_clamp,
-    find_and_replace_all as cpp_find_and_replace_all,
-    normalize_nans_and_zeros as cpp_normalize_nans_and_zeros,
     replace_nulls as cpp_replace_nulls,
     replace_policy as cpp_replace_policy,
 )
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
+
+from cudf._lib import pylibcudf
 
 
 @acquire_spill_lock()
@@ -37,17 +36,13 @@ def replace(Column input_col, Column values_to_replace,
     replacement_values : Column with values which will replace
     """
 
-    cdef column_view input_col_view = input_col.view()
-    cdef column_view values_to_replace_view = values_to_replace.view()
-    cdef column_view replacement_values_view = replacement_values.view()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_find_and_replace_all(input_col_view,
-                                                 values_to_replace_view,
-                                                 replacement_values_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.replace.find_and_replace_all(
+            input_col.to_pylibcudf(mode="read"),
+            values_to_replace.to_pylibcudf(mode="read"),
+            replacement_values.to_pylibcudf(mode="read"),
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -151,37 +146,6 @@ def replace_nulls(
 
 
 @acquire_spill_lock()
-def clamp(Column input_col, DeviceScalar lo, DeviceScalar lo_replace,
-          DeviceScalar hi, DeviceScalar hi_replace):
-    """
-    Clip the input_col such that values < lo will be replaced by lo_replace
-    and > hi will be replaced by hi_replace
-
-    Parameters
-    ----------
-    input_col : Column whose value will be updated
-    lo : DeviceScalar value for clipping lower values
-    lo_replace : DeviceScalar value which will replace clipped with lo
-    hi : DeviceScalar value for clipping upper values
-    lo_replace : DeviceScalar value which will replace clipped with hi
-    """
-
-    cdef column_view input_col_view = input_col.view()
-    cdef const scalar* lo_value = lo.get_raw_ptr()
-    cdef const scalar* lo_replace_value = lo_replace.get_raw_ptr()
-    cdef const scalar* hi_value = hi.get_raw_ptr()
-    cdef const scalar* hi_replace_value = hi_replace.get_raw_ptr()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_clamp(
-            input_col_view, lo_value[0],
-            lo_replace_value[0], hi_value[0], hi_replace_value[0]))
-
-    return Column.from_unique_ptr(move(c_result))
-
-
-@acquire_spill_lock()
 def clamp(Column input_col, DeviceScalar lo, DeviceScalar hi):
     """
     Clip the input_col such that values < lo will be replaced by lo
@@ -193,16 +157,13 @@ def clamp(Column input_col, DeviceScalar lo, DeviceScalar hi):
     lo : DeviceScalar value for clipping lower values
     hi : DeviceScalar value for clipping upper values
     """
-
-    cdef column_view input_col_view = input_col.view()
-    cdef const scalar* lo_value = lo.get_raw_ptr()
-    cdef const scalar* hi_value = hi.get_raw_ptr()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_clamp(input_col_view, lo_value[0], hi_value[0]))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.replace.clamp(
+            input_col.to_pylibcudf(mode="read"),
+            lo.c_value,
+            hi.c_value,
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -223,10 +184,9 @@ def normalize_nans_and_zeros_inplace(Column input_col):
     """
     Inplace normalizing
     """
-
-    cdef mutable_column_view input_col_view = input_col.mutable_view()
-    with nogil:
-        cpp_normalize_nans_and_zeros(input_col_view)
+    pylibcudf.replace.normalize_nans_and_zeros(
+        input_col.to_pylibcudf(mode="write"), inplace=True
+    )
 
 
 @acquire_spill_lock()
@@ -234,13 +194,11 @@ def normalize_nans_and_zeros_column(Column input_col):
     """
     Returns a new  normalized Column
     """
-
-    cdef column_view input_col_view = input_col.view()
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_normalize_nans_and_zeros(input_col_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.replace.normalize_nans_and_zeros(
+            input_col.to_pylibcudf(mode="read")
+        )
+    )
 
 
 def normalize_nans_and_zeros(Column input_col, in_place=False):
