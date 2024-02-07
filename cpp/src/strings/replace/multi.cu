@@ -305,7 +305,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     d_replacements,
   };
 
-  // count the number of targets in the entire column
+  // Count the number of targets in the entire column.
+  // Note this may over-count in the case where a target spans adjacent strings.
   auto target_count = thrust::count_if(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<int64_t>(0),
@@ -313,7 +314,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     [fn, chars_bytes] __device__(int64_t idx) { return fn.has_target(idx, chars_bytes); });
 
   // Create a vector of every target position in the chars column.
-  // These may include overlapping targets which will be resolved later.
+  // These may also include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
   auto targets_indices   = rmm::device_uvector<size_type>(target_count, stream);
 

@@ -41,6 +41,24 @@ std::unique_ptr<column> create_chars_child_column(size_type bytes,
                                                   rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Create an offsets column to be a child of a strings column
+ *
+ * This will return the properly sized column and type to be filled in by the caller.
+ * Uses the get_offset64_threshold() value against the `total_bytes` to determine
+ * the output type.
+ *
+ * @param total_bytes Number of bytes in the strings chars data
+ * @param offset_count Row count for creating output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The offsets child column for a strings column
+ */
+std::unique_ptr<column> create_offsets_child_column(int64_t total_bytes,
+                                                    size_type offset_count,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr);
+
+/**
  * @brief Creates a string_view vector from a strings column.
  *
  * @param strings Strings column instance.

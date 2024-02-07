@@ -468,11 +468,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   // build the offsets column
   auto const delta_per_target = d_repl.size_bytes() - target_size;
   auto const new_chars_bytes  = chars_bytes + (delta_per_target * target_count);
-  auto const offset_type      = new_chars_bytes < std::numeric_limits<int32_t>::max()
-                                  ? data_type{type_id::INT32}
-                                  : data_type{type_id::INT64};
-  auto offsets_column =
-    make_numeric_column(offset_type, offset_count, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = create_offsets_child_column(new_chars_bytes, offset_count, stream, mr);
   auto d_output_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
   device_span<int64_t const> d_target_positions_span(d_target_positions, target_count);
