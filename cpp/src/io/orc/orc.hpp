@@ -72,7 +72,7 @@ static constexpr int32_t DEFAULT_MAX_NANOS = 999'999;
 struct PostScript {
   uint64_t footerLength       = 0;        // the length of the footer section in bytes
   CompressionKind compression = NONE;     // the kind of generic compression used
-  uint32_t compressionBlockSize{};        // the maximum size of each compression chunk
+  uint64_t compressionBlockSize{};        // the maximum size of each compression chunk
   std::vector<uint32_t> version;          // the version of the file format [major, minor]
   uint64_t metadataLength = 0;            // the length of the metadata section in bytes
   std::optional<uint32_t> writerVersion;  // The version of the writer that wrote the file
@@ -83,8 +83,8 @@ struct StripeInformation {
   uint64_t offset       = 0;  // the start of the stripe within the file
   uint64_t indexLength  = 0;  // the length of the indexes in bytes
   uint64_t dataLength   = 0;  // the length of the data in bytes
-  uint32_t footerLength = 0;  // the length of the footer in bytes
-  uint32_t numberOfRows = 0;  // the number of rows in the stripe
+  uint64_t footerLength = 0;  // the length of the footer in bytes
+  uint64_t numberOfRows = 0;  // the number of rows in the stripe
 };
 
 struct SchemaType {
@@ -104,7 +104,7 @@ struct UserMetadataItem {
 
 using ColStatsBlob = std::vector<uint8_t>;  // Column statistics blob
 
-struct FileFooter {
+struct Footer {
   uint64_t headerLength  = 0;              // the length of the file header in bytes (always 3)
   uint64_t contentLength = 0;              // the length of the file header and body in bytes
   std::vector<StripeInformation> stripes;  // the information about the stripes
@@ -236,7 +236,7 @@ class ProtobufReader {
     read(s, m_end - m_cur);
   }
   void read(PostScript&, size_t maxlen);
-  void read(FileFooter&, size_t maxlen);
+  void read(Footer&, size_t maxlen);
   void read(StripeInformation&, size_t maxlen);
   void read(SchemaType&, size_t maxlen);
   void read(UserMetadataItem&, size_t maxlen);
@@ -518,7 +518,7 @@ class ProtobufWriter {
 
  public:
   size_t write(PostScript const&);
-  size_t write(FileFooter const&);
+  size_t write(Footer const&);
   size_t write(StripeInformation const&);
   size_t write(SchemaType const&);
   size_t write(UserMetadataItem const&);
@@ -665,7 +665,7 @@ class metadata {
 
  public:
   PostScript ps;
-  FileFooter ff;
+  Footer ff;
   Metadata md;
   std::vector<StripeFooter> stripefooters;
   std::unique_ptr<OrcDecompressor> decompressor;
