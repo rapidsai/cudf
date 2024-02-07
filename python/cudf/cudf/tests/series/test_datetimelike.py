@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import os
 
@@ -130,7 +130,7 @@ def test_delocalize_naive():
     "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
 )
 def test_convert(from_tz, to_tz):
-    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="H"))
+    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
     gs = cudf.from_pandas(ps)
     ps = ps.dt.tz_localize(from_tz)
     gs = gs.dt.tz_localize(from_tz)
@@ -140,7 +140,7 @@ def test_convert(from_tz, to_tz):
 
 
 def test_convert_from_naive():
-    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="H"))
+    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="h"))
     with pytest.raises(TypeError):
         gs.dt.tz_convert("America/New_York")
 

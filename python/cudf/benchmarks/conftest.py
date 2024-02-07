@@ -40,8 +40,8 @@ Series/DataFrame we simply set `classname=index` and rely on the
 In addition to the above fixtures, we also provide the following more
 specialized fixtures:
     - rangeindex: Since RangeIndex always holds int64 data we cannot conflate
-      it with index_dtype_int64 (a true Int64Index), and it cannot hold nulls.
-      As a result, it is provided as a separate fixture.
+      it with index_dtype_int64 (a true Index with int64 dtype), and it
+      cannot hold nulls. As a result, it is provided as a separate fixture.
 """
 
 import os
