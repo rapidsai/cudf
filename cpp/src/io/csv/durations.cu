@@ -190,19 +190,17 @@ struct dispatch_from_durations_fn {
     auto d_new_offsets = offsets_view.template data<int32_t>();
 
     // build chars column
-    auto chars_column = strings::detail::create_chars_child_column(chars_bytes, stream, mr);
-    auto chars_view   = chars_column->mutable_view();
-    auto d_chars      = chars_view.template data<char>();
+    auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
+    auto d_chars    = chars_data.data();
 
     thrust::for_each_n(rmm::exec_policy(stream),
                        thrust::make_counting_iterator<size_type>(0),
                        strings_count,
                        duration_to_string_fn<T>{d_column, d_new_offsets, d_chars});
 
-    //
     return make_strings_column(strings_count,
                                std::move(offsets_column),
-                               std::move(chars_column->release().data.release()[0]),
+                               chars_data.release(),
                                durations.null_count(),
                                std::move(null_mask));
   }
