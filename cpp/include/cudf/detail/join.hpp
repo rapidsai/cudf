@@ -26,7 +26,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuco/static_multimap.cuh>
-#include <cuco/static_set.cuh>
 
 #include <cstddef>
 #include <memory>
@@ -186,76 +185,6 @@ struct hash_join {
                     std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr) const;
-};
-
-/**
- * @brief Unique ash join that builds hash table in creation and probes results in subsequent
- * `*_join` member functions.
- *
- * @tparam Hasher Unary callable type
- * @tparam Equal Row equality callable type
- */
-template <typename Equal, typename Hasher>
-struct unique_hash_join {
- public:
-  using map_type = cuco::experimental::static_set<
-    cuco::pair<hash_value_type, cudf::size_type>,
-    cuco::experimental::extent<std::size_t>,
-    cuda::thread_scope_device,
-    Equal,
-    cuco::experimental::
-      double_hashing<DEFAULT_JOIN_CG_SIZE, thrust::identity<hash_value_type>, Hasher>,
-    cudf::detail::cuco_allocator,
-    cuco::experimental::storage<1>>;
-
-  unique_hash_join()                                   = delete;
-  ~unique_hash_join()                                  = default;
-  unique_hash_join(unique_hash_join const&)            = delete;
-  unique_hash_join(unique_hash_join&&)                 = delete;
-  unique_hash_join& operator=(unique_hash_join const&) = delete;
-  unique_hash_join& operator=(unique_hash_join&&)      = delete;
-
- private:
-  bool const _is_empty;   ///< true if `_hash_table` is empty
-  bool const _has_nulls;  ///< true if nulls are present in either build table or any probe table
-  cudf::null_equality const _nulls_equal;  ///< whether to consider nulls as equal
-  cudf::table_view _build;                 ///< input table to build the hash map
-  std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_build;  ///< input table preprocssed for row operators
-  map_type _hash_table;   ///< hash table built on `_build`
-
- public:
-  /**
-   * @brief Constructor that internally builds the hash table based on the given `build` table.
-   *
-   * @throw cudf::logic_error if the number of columns in `build` table is 0.
-   *
-   * @param build The build table, from which the hash table is built.
-   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
-   *        any `probe` table that will be used later for join.
-   * @param compare_nulls Controls whether null join-key values should match or not.
-   * @param stream CUDA stream used for device memory operations and kernel launches.
-   */
-  unique_hash_join(cudf::table_view const& build,
-                   bool has_nulls,
-                   cudf::null_equality compare_nulls,
-                   rmm::cuda_stream_view stream);
-
-  /**
-   * @copydoc cudf::hash_join::inner_join
-   */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(cudf::table_view const& probe,
-             std::optional<std::size_t> output_size,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr) const;
-
-  /**
-   * @copydoc cudf::hash_join::inner_join_size
-   */
-  [[nodiscard]] std::size_t inner_join_size(cudf::table_view const& probe,
-                                            rmm::cuda_stream_view stream) const;
 };
 }  // namespace detail
 }  // namespace cudf

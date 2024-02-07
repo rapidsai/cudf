@@ -28,7 +28,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <optional>
-#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -43,18 +42,9 @@ namespace detail {
 template <typename T>
 class hash_join;
 
-template <typename T, typename U>
+template <typename T>
 class unique_hash_join;
 }  // namespace detail
-namespace experimental::row::equality {
-struct nan_equal_physical_equality_comparator;
-
-template <typename T>
-class strong_index_comparator_adapter;
-
-template <bool b, typename T, typename U>
-class device_row_comparator;
-}  // namespace experimental::row::equality
 
 /**
  * @addtogroup column_join
@@ -452,11 +442,6 @@ class hash_join {
 };
 
 /**
- * @brief Enum to indicate the table has nested columns or not
- */
-enum class has_nested : bool { YES, NO };
-
-/**
  * @brief Unique hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
@@ -465,7 +450,6 @@ enum class has_nested : bool { YES, NO };
  *
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
-template <has_nested HasNested = has_nested::NO>
 class unique_hash_join {
  public:
   unique_hash_join() = delete;
@@ -481,54 +465,68 @@ class unique_hash_join {
    * @note The `unique_hash_join` object must not outlive the table viewed by `build`, else behavior
    * is undefined.
    *
+   * @throw cudf::logic_error If the input probe table has nulls while this unique_hash_join object
+   * was not constructed with null check.
+   *
    * @param build The build table that doesn't contain duplicate elements
+   * @param probe The probe table, from which the keys are probed
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
   unique_hash_join(cudf::table_view const& build,
+                   cudf::table_view const& probe,
                    null_equality compare_nulls,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @copydoc unique_hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   * @brief Constructs a unique hash join object for subsequent probe calls
    *
+   * @param build The build table that doesn't contain duplicate elements
+   * @param probe The probe table, from which the keys are probed
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param stream CUDA stream used for device memory operations and kernel launches
    */
   unique_hash_join(cudf::table_view const& build,
+                   cudf::table_view const& probe,
                    nullable_join has_nulls,
                    null_equality compare_nulls,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * @copydoc cudf::hash_join::inner_join
+   * Returns the row indices that can be used to construct the result of performing
+   * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
+   * provided `output_size` is smaller than the actual output size.
+   *
+   * @param output_size Optional value which allows users to specify the exact output size
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
+   *
+   * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+   * the result of performing an inner join between two tables with `build` and `probe`
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(cudf::table_view const& probe,
-             std::optional<std::size_t> output_size = {},
+  inner_join(std::optional<std::size_t> output_size = {},
              rmm::cuda_stream_view stream           = cudf::get_default_stream(),
              rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
   /**
-   * @copydoc cudf::hash_join::inner_join_size
+   * Returns the exact number of matches (rows) when performing an inner join
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   * @return The exact number of output when performing an inner join between two tables with
+   * `build` and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
+    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
 
  private:
-  using row_equal = std::conditional_t<
-    HasNested == has_nested::YES,
-    cudf::experimental::row::equality::device_row_comparator<
-      true,
-      bool,
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator>,
-    cudf::experimental::row::equality::device_row_comparator<
-      false,
-      bool,
-      cudf::experimental::row::equality::nan_equal_physical_equality_comparator>>;  ///< Row equal
   using impl_type = typename cudf::detail::unique_hash_join<
-    row_equal,
     cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
 
   std::unique_ptr<impl_type> _impl;
