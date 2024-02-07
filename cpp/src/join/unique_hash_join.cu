@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -26,6 +27,7 @@
 namespace cudf {
 namespace detail {
 namespace {
+
 template <cudf::has_nested HasNested>
 auto prepare_device_equal(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> build,
@@ -38,6 +40,25 @@ auto prepare_device_equal(
   return comparator_adapter{two_table_equal.equal_to<HasNested == cudf::has_nested::YES>(
     nullate::DYNAMIC{has_nulls}, compare_nulls)};
 }
+
+/**
+ * @brief Device functor to create a pair of {hash_value, row_index} for a given row.
+ *
+ * @tparam Hasher The type of internal hasher to compute row hash.
+ */
+template <typename Hasher>
+class build_keys_fn {
+ public:
+  CUDF_HOST_DEVICE build_keys_fn(Hasher const& hash) : _hash{hash} {}
+
+  __device__ __forceinline__ auto operator()(size_type i) const noexcept
+  {
+    return cuco::pair{_hash(i), lhs_index_type{i}};
+  }
+
+ private:
+  Hasher _hash;
+};
 }  // namespace
 
 template <typename Hasher, cudf::has_nested HasNested>
@@ -57,7 +78,7 @@ unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& bu
       cudf::experimental::row::equality::preprocessed_table::create(_probe, stream)},
     _hash_table{::compute_hash_table_size(build.num_rows()),
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
-                                           lhs_index_type{cudf::detail::JoinNoneValue}}},
+                                           lhs_index_type{JoinNoneValue}}},
                 prepare_device_equal<HasNested>(
                   _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
                 {},
@@ -65,7 +86,28 @@ unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& bu
                 stream.value()}
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(not this->_is_empty, "Hash join build table is empty");
+  CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");
+
+  if (this->_is_empty) { return; }
+
+  auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
+  auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+
+  auto const iter = cudf::detail::make_counting_transform_iterator(0, build_keys_fn{d_hasher});
+
+  size_type const build_table_num_rows{build.num_rows()};
+  if (this->_nulls_equal == cudf::null_equality::EQUAL or (not cudf::nullable(this->_build))) {
+    this->_hash_table.insert_async(iter, iter + build_table_num_rows, stream.value());
+  } else {
+    auto stencil = thrust::counting_iterator<size_type>{0};
+    auto const row_bitmask =
+      cudf::detail::bitmask_and(this->_build, stream, rmm::mr::get_current_device_resource()).first;
+    auto const pred = cudf::detail::row_is_valid{row_bitmask};
+
+    // insert valid rows
+    this->_hash_table.insert_if_async(
+      iter, iter + build_table_num_rows, stencil, pred, stream.value());
+  }
 }
 
 /*
