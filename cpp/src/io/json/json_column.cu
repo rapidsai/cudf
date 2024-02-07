@@ -809,6 +809,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
   device_json_column& json_col,
   device_span<SymbolT const> d_input,
   cudf::io::parse_options const& options,
+  bool use_dtypes_as_filter,
   std::optional<schema_element> schema,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
@@ -897,13 +898,16 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       for (auto const& col_name : json_col.column_order) {
         auto const& col = json_col.child_columns.find(col_name);
         column_names.emplace_back(col->first);
-        auto& child_col            = col->second;
-        auto [child_column, names] = device_json_column_to_cudf_column(
-          child_col, d_input, options, get_child_schema(col_name), stream, mr);
-        CUDF_EXPECTS(num_rows == child_column->size(),
-                     "All children columns must have the same size");
-        child_columns.push_back(std::move(child_column));
-        column_names.back().children = names;
+        auto& child_col           = col->second;
+        auto child_schema_element = get_child_schema(col_name);
+        if (!use_dtypes_as_filter or child_schema_element.has_value()) {
+          auto [child_column, names] = device_json_column_to_cudf_column(
+            child_col, d_input, options, use_dtypes_as_filter, child_schema_element, stream, mr);
+          CUDF_EXPECTS(num_rows == child_column->size(),
+                       "All children columns must have the same size");
+          child_columns.push_back(std::move(child_column));
+          column_names.back().children = names;
+        }
       }
       auto [result_bitmask, null_count] = make_validity(json_col);
       // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
@@ -926,8 +930,12 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                                      rmm::device_buffer{},
                                                      0);
       // Create children column
+      auto child_schema_element = json_col.child_columns.empty()
+                                    ? std::optional<schema_element>{}
+                                    : get_child_schema(json_col.child_columns.begin()->first);
       auto [child_column, names] =
-        json_col.child_columns.empty()
+        json_col.child_columns.empty() or
+            (use_dtypes_as_filter and !child_schema_element.has_value())
           ? std::pair<std::unique_ptr<column>,
                       // EMPTY type could not used because gather throws exception on EMPTY type.
                       std::vector<column_name_info>>{std::make_unique<column>(
@@ -937,13 +945,13 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                                        rmm::device_buffer{},
                                                        0),
                                                      std::vector<column_name_info>{}}
-          : device_json_column_to_cudf_column(
-              json_col.child_columns.begin()->second,
-              d_input,
-              options,
-              get_child_schema(json_col.child_columns.begin()->first),
-              stream,
-              mr);
+          : device_json_column_to_cudf_column(json_col.child_columns.begin()->second,
+                                              d_input,
+                                              options,
+                                              use_dtypes_as_filter,
+                                              child_schema_element,
+                                              stream,
+                                              mr);
       column_names.back().children      = names;
       auto [result_bitmask, null_count] = make_validity(json_col);
       auto ret_col                      = make_lists_column(num_rows,
@@ -1056,8 +1064,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
   size_type column_index = 0;
   for (auto const& col_name : root_struct_col.column_order) {
     auto& json_col = root_struct_col.child_columns.find(col_name)->second;
-    // Insert this columns name into the schema
-    out_column_names.emplace_back(col_name);
 
     std::optional<schema_element> child_schema_element = std::visit(
       cudf::detail::visitor_overload{
@@ -1100,18 +1106,28 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     debug_schema_print(child_schema_element);
 #endif
 
-    // Get this JSON column's cudf column and schema info, (modifies json_col)
-    auto [cudf_col, col_name_info] = device_json_column_to_cudf_column(
-      json_col, d_input, parse_opt, child_schema_element, stream, mr);
-    // TODO: RangeIndex as DataFrame.columns names for array of arrays
-    // if (is_array_of_arrays) {
-    //   col_name_info.back().name = "";
-    // }
+    if (!options.is_enabled_use_dtypes_as_filter() or child_schema_element.has_value()) {
+      // Get this JSON column's cudf column and schema info, (modifies json_col)
+      auto [cudf_col, col_name_info] =
+        device_json_column_to_cudf_column(json_col,
+                                          d_input,
+                                          parse_opt,
+                                          options.is_enabled_use_dtypes_as_filter(),
+                                          child_schema_element,
+                                          stream,
+                                          mr);
+      // Insert this columns name into the schema
+      out_column_names.emplace_back(col_name);
+      // TODO: RangeIndex as DataFrame.columns names for array of arrays
+      // if (is_array_of_arrays) {
+      //   col_name_info.back().name = "";
+      // }
 
-    out_column_names.back().children = std::move(col_name_info);
-    out_columns.emplace_back(std::move(cudf_col));
+      out_column_names.back().children = std::move(col_name_info);
+      out_columns.emplace_back(std::move(cudf_col));
 
-    column_index++;
+      column_index++;
+    }
   }
 
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};

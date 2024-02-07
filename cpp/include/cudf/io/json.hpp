@@ -100,6 +100,8 @@ class json_reader_options {
   bool _lines = false;
   // Parse mixed types as a string column
   bool _mixed_types_as_string = false;
+  // Use dtypes as filter instead of type inference suggestion
+  bool _use_dtypes_as_filter = false;
 
   // Bytes to skip from the start
   size_t _byte_range_offset = 0;
@@ -238,6 +240,13 @@ class json_reader_options {
   bool is_enabled_mixed_types_as_string() const { return _mixed_types_as_string; }
 
   /**
+   * @brief Whether to use dtypes as filter instead of type inference suggestion.
+   *
+   * @return `true` if dtypes is used as filter
+   */
+  bool is_enabled_use_dtypes_as_filter() const { return _use_dtypes_as_filter; }
+
+  /**
    * @brief Whether to parse dates as DD/MM versus MM/DD.
    *
    * @returns true if dates are parsed as DD/MM, false if MM/DD
@@ -327,6 +336,13 @@ class json_reader_options {
    * @param val Boolean value to enable/disable parsing mixed types as a string column
    */
   void enable_mixed_types_as_string(bool val) { _mixed_types_as_string = val; }
+
+  /**
+   * @brief Set whether to use dtypes as filter instead of type inference suggestion.
+   *
+   * @param val Boolean value to enable/disable dtypes use as filter
+   */
+  void enable_use_dtypes_as_filter(bool val) { _use_dtypes_as_filter = val; }
 
   /**
    * @brief Set whether to parse dates as DD/MM versus MM/DD.
@@ -480,6 +496,18 @@ class json_reader_options_builder {
   json_reader_options_builder& mixed_types_as_string(bool val)
   {
     options._mixed_types_as_string = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether to use dtypes as filter instead of type inference suggestion.
+   *
+   * @param val Boolean value to enable/disable dtypes use as filter
+   * @return this for chaining
+   */
+  json_reader_options_builder& use_dtypes_as_filter(bool val)
+  {
+    options._use_dtypes_as_filter = val;
     return *this;
   }
 
