@@ -3632,8 +3632,7 @@ def test_dataframe_mulitindex_sort_index(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_GE_220
-            and axis in (1, "columns")
+            condition=axis in (1, "columns")
             and level is None
             and not ascending
             and ignore_index,
