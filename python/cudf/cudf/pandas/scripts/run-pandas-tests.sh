@@ -189,7 +189,8 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
     --durations=50 \
     --import-mode=importlib \
     -o xfail_strict=True \
-    ${PYTEST_IGNORES} $@
+    ${PYTEST_IGNORES} \
+    "$@"
 
 mv *.json ..
 cd ..
