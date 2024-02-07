@@ -3618,10 +3618,21 @@ def test_dataframe_mulitindex_sort_index(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            condition=axis in (1, "columns")
+            condition=not PANDAS_GE_220
+            and axis in (1, "columns")
             and ignore_index
             and not (level is None and not ascending),
             reason="https://github.com/pandas-dev/pandas/issues/56478",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_220
+            and axis in (1, "columns")
+            and level is None
+            and not ascending
+            and ignore_index,
+            reason="https://github.com/pandas-dev/pandas/issues/57293",
         )
     )
     pdf = pd.DataFrame(
