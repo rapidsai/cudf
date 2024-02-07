@@ -31,7 +31,10 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
+rapids-logger "pytest dask_cudf"
+pushd python/dask_cudf/dask_cudf
 python -m pytest
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
-  ./python/dask_cudf/dask_cudf/
+  .
+popd

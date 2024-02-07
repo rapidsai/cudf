@@ -28,12 +28,16 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 
 # Run smoke tests for aarch64 pull requests
 if [[ "$(arch)" == "aarch64" && ${RAPIDS_BUILD_TYPE} == "pull-request" ]]; then
+    rapids-logger "Run smoke tests for cudf"
     python ./ci/wheel_smoke_test_cudf.py
 else
+    rapids-logger "pytest cudf"
+    pushd python/cudf/cudf
     python -m pytest \
       --cache-clear \
       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
       --numprocesses=8 \
       --dist=loadscope \
-      ./python/cudf/cudf/tests
+      ./tests
+    popd
 fi
