@@ -25,7 +25,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_203
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220, PANDAS_LT_203
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
