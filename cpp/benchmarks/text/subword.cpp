@@ -20,9 +20,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/file_utilities.hpp>
 
-#include <cudf/strings/strings_column_view.hpp>
-
 #include <nvtext/subword_tokenize.hpp>
+
+#include <cudf/strings/strings_column_view.hpp>
 
 #include <filesystem>
 #include <fstream>
