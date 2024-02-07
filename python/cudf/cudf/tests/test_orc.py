@@ -684,7 +684,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
     np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Can't write random bool columns until issue #6763 is fixed
+    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
     if nrows == 200000:
         supported_stat_types.remove("bool")
 
