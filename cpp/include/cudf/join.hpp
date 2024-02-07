@@ -33,6 +33,11 @@
 
 namespace cudf {
 
+/**
+ * @brief Enum to indicate whether the unique join table has nested columns or not
+ */
+enum class has_nested : bool { YES, NO };
+
 // forward declaration
 namespace hashing::detail {
 template <typename T>
@@ -42,7 +47,7 @@ namespace detail {
 template <typename T>
 class hash_join;
 
-template <typename T>
+template <typename T, has_nested>
 class unique_hash_join;
 }  // namespace detail
 
@@ -450,6 +455,7 @@ class hash_join {
  *
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
+template <has_nested HasNested = has_nested::NO>
 class unique_hash_join {
  public:
   unique_hash_join() = delete;
@@ -527,7 +533,8 @@ class unique_hash_join {
 
  private:
   using impl_type = typename cudf::detail::unique_hash_join<
-    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>,
+    HasNested>;  ///< Implementation type
 
   std::unique_ptr<impl_type> _impl;
 };

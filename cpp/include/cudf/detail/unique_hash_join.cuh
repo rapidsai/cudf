@@ -20,9 +20,10 @@
 
 #include <cuco/static_set.cuh>
 
-#include <variant>
-
 namespace cudf::detail {
+
+using cudf::experimental::row::lhs_index_type;
+using cudf::experimental::row::rhs_index_type;
 
 /**
  * @brief An comparator adapter wrapping both self comparator and two table comparator
@@ -54,31 +55,34 @@ struct comparator_adapter {
  * @brief Unique ash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions.
  *
- * @tparam Equal Row equality callable type
  * @tparam Hasher Unary callable type
+ * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
-template <typename Hasher>
+template <typename Hasher, has_nested HasNested = has_nested::NO>
 struct unique_hash_join {
  private:
   ///< Row equality type for nested columns
-  using nested_row_equal =
-    cudf::experimental::row::equality::device_row_comparator<true, cudf::nullate::DYNAMIC>;
+  using nested_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
+    cudf::experimental::row::equality::device_row_comparator<true, cudf::nullate::DYNAMIC>>;
   ///< Row equality type for flat columns
-  using flat_row_equal =
-    cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>;
+  using flat_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
+    cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
   ///< Device row equal type
-  using d_equal_type = std::variant<nested_row_equal, flat_row_equal>;
+  using d_equal_type =
+    std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
+  using probing_scheme_type = cuco::experimental::
+    double_hashing<DEFAULT_JOIN_CG_SIZE, thrust::identity<hash_value_type>, Hasher>;
+  using cuco_storge_type = cuco::experimental::storage<1>;
 
-  using map_type = cuco::experimental::static_set<
+  using hash_table_type = cuco::experimental::static_set<
     cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type>,
     cuco::experimental::extent<std::size_t>,
     cuda::thread_scope_device,
     comparator_adapter<d_equal_type>,
-    cuco::experimental::
-      double_hashing<DEFAULT_JOIN_CG_SIZE, thrust::identity<hash_value_type>, Hasher>,
+    probing_scheme_type,
     cudf::detail::cuco_allocator,
-    cuco::experimental::storage<1>>;
+    cuco_storge_type>;
 
   bool _is_empty;   ///< true if `_hash_table` is empty
   bool _has_nulls;  ///< true if nulls are present in either build table or any probe table
@@ -88,8 +92,8 @@ struct unique_hash_join {
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
-    _preprocessed_probe;  ///< input table preprocssed for row operators
-  map_type _hash_table;   ///< hash table built on `_build`
+    _preprocessed_probe;        ///< input table preprocssed for row operators
+  hash_table_type _hash_table;  ///< hash table built on `_build`
 
  public:
   unique_hash_join()                                   = delete;
