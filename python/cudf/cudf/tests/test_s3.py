@@ -12,6 +12,7 @@ import pytest
 from fsspec.core import get_fs_token_paths
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import assert_eq
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
@@ -19,11 +20,12 @@ boto3 = pytest.importorskip("boto3")
 s3fs = pytest.importorskip("s3fs")
 
 ThreadedMotoServer = pytest.importorskip("moto.server").ThreadedMotoServer
-pytestmark = pytest.mark.filterwarnings(
-    "ignore",
-    category=DeprecationWarning,
-    message="Passing a BlockManager to DataFrame is deprecated",
-)
+if PANDAS_GE_220:
+    pytestmark = pytest.mark.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="Passing a BlockManager to DataFrame is deprecated",
+    )
 
 
 @pytest.fixture(scope="session")

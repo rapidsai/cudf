@@ -104,7 +104,8 @@ repos:
             ^python/cudf/cudf/tests/test_orc.py|
             ^python/cudf/cudf/tests/test_parquet.py|
             ^python/cudf/cudf/tests/test_rolling.py|
-            ^python/cudf/cudf/tests/test_s3.py
+            ^python/cudf/cudf/tests/test_s3.py|
+            ^python/cudf/cudf/tests/test_index.py
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail

@@ -15,7 +15,7 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -38,6 +38,13 @@ from cudf.testing._utils import (
     expect_warning_if,
 )
 from cudf.utils.utils import search_range
+
+if PANDAS_GE_220:
+    pytestmark = pytest.mark.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="Passing a BlockManager to DataFrame is deprecated",
+    )
 
 
 def test_df_set_index_from_series():

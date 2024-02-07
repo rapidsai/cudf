@@ -9,13 +9,15 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
-pytestmark = pytest.mark.filterwarnings(
-    "ignore",
-    category=DeprecationWarning,
-    message="Passing a BlockManager to DataFrame is deprecated",
-)
+if PANDAS_GE_220:
+    pytestmark = pytest.mark.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="Passing a BlockManager to DataFrame is deprecated",
+    )
 
 
 @pytest.fixture(params=[0, 1, 10, 100])

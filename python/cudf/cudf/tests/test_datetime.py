@@ -37,11 +37,12 @@ _cmpops = [
     operator.ne,
 ]
 
-pytestmark = pytest.mark.filterwarnings(
-    "ignore",
-    category=DeprecationWarning,
-    message="Passing a BlockManager to DataFrame is deprecated",
-)
+if PANDAS_GE_220:
+    pytestmark = pytest.mark.filterwarnings(
+        "ignore",
+        category=DeprecationWarning,
+        message="Passing a BlockManager to DataFrame is deprecated",
+    )
 
 
 def data1():
