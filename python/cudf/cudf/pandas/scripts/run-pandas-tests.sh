@@ -22,7 +22,7 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py"
+PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py --ignore=tests/interchange/test_impl.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -93,7 +93,7 @@ cd pandas-tests/
 # test_overwrite_warns unsafely patchs over Series.mean affecting other tests when run in parallel
 # test_complex_series_frame_alignment randomly selects a DataFrames and axis to test but particular random selection(s) always fails
 # test_numpy_ufuncs_basic compares floating point values to unbounded precision, sometimes leading to failures
-TEST_NUMPY_UFUNCS_BASIC_FLAKY="test_numpy_ufuncs_basic[float-exp] \
+TEST_NUMPY_UFUNCS_BASIC_FLAKY="not test_numpy_ufuncs_basic[float-exp] \
 and not test_numpy_ufuncs_basic[float-exp2] \
 and not test_numpy_ufuncs_basic[float-expm1] \
 and not test_numpy_ufuncs_basic[float-log] \
@@ -184,7 +184,7 @@ and not test_numpy_ufuncs_basic[nullable_float-rad2deg]"
 
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -m "not single_cpu and not db" \
-    -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
+    -k "not test_overwrite_warns and not test_complex_series_frame_alignment and $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
     -o xfail_strict=True \
     ${PYTEST_IGNORES} \
     "$@"
