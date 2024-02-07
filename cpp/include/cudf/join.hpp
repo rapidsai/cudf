@@ -455,6 +455,7 @@ class hash_join {
  *
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
+// TODO: `HasNested` to be removed via dispatching
 template <has_nested HasNested = has_nested::NO>
 class unique_hash_join {
  public:
