@@ -618,6 +618,9 @@ public final class Table implements AutoCloseable {
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] innerUniqueJoinGatherMaps(long leftKeys, long rightKeys,
+                                                         boolean compareNullsEqual) throws CudfException;
+
   private static native long innerJoinRowCount(long table, long hashJoin) throws CudfException;
 
   private static native long[] innerHashJoinGatherMaps(long table, long hashJoin) throws CudfException;
@@ -3147,6 +3150,28 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys. It is
+   * assumed this table instance holds the key columns from the left table, and the table argument
+   * represents the key columns from the right table. Two {@link GatherMap} instances will be
+   * returned that can be used to gather the left and right tables, respectively, to produce the
+   * result of the inner join.
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerUniqueJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerUniqueJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
     return buildJoinGatherMaps(gatherMapData);
   }
 
