@@ -12,14 +12,14 @@ export GTEST_OUTPUT=xml:${RAPIDS_TESTS_DIR}/
 
 pushd $CONDA_PREFIX/bin/gtests/libcudf/
 rapids-logger "Run libcudf gtests"
-ctest -j20 --output-on-failure
+ctest -j20 --output-on-failure --no-tests=error
 SUITEERROR=$?
 popd
 
 if (( ${SUITEERROR} == 0 )); then
     pushd $CONDA_PREFIX/bin/gtests/libcudf_kafka/
     rapids-logger "Run libcudf_kafka gtests"
-    ctest -j20 --output-on-failure
+    ctest -j20 --output-on-failure --no-tests=error
     SUITEERROR=$?
     popd
 fi
