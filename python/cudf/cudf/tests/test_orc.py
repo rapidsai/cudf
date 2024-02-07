@@ -23,7 +23,6 @@ from cudf.testing._utils import (
     supported_numpy_dtypes,
 )
 
-
 pytestmark = [
     # Removal of these deprecated features is no longer imminent. They will not be
     # removed until a suitable alternative has been implemented. As a result, we

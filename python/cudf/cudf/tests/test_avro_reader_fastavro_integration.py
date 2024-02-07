@@ -26,7 +26,6 @@ from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import assert_eq
 from cudf.testing.dataset_generator import rand_dataframe
 
-
 if PANDAS_GE_220:
     pytestmark = pytest.mark.filterwarnings(
         "ignore",

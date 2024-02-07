@@ -34,7 +34,6 @@ from cudf.testing._utils import (
     set_random_null_mask_inplace,
 )
 
-
 if PANDAS_GE_220:
     pytestmark = pytest.mark.filterwarnings(
         "ignore",
