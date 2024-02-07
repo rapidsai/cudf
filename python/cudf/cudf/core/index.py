@@ -2698,6 +2698,12 @@ def interval_range(
 
     start = cudf.Scalar(start) if start is not None else start
     end = cudf.Scalar(end) if end is not None else end
+    if periods is not None and not cudf.api.types.is_integer(periods):
+        warnings.warn(
+            "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
+            " are deprecated and will raise in a future version.",
+            FutureWarning,
+        )
     periods = cudf.Scalar(int(periods)) if periods is not None else periods
     freq = cudf.Scalar(freq) if freq is not None else freq
 
