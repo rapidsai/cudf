@@ -57,13 +57,24 @@ def test_series_replace_all(gsr, to_replace, value):
     else:
         pd_value = value
 
-    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    if pd_value is None:
-        # TODO: Remove this workaround once cudf
-        # introduces `no_default` values
-        expected = psr.replace(to_replace=pd_to_replace)
-    else:
-        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    with expect_warning_if(
+        isinstance(gsr.dtype, cudf.CategoricalDtype)
+        and isinstance(gd_to_replace, str)
+        and gd_to_replace == "one"
+    ):
+        actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    with expect_warning_if(
+        PANDAS_GE_220
+        and isinstance(gsr.dtype, cudf.CategoricalDtype)
+        and isinstance(gd_to_replace, str)
+        and gd_to_replace == "one"
+    ):
+        if pd_value is None:
+            # TODO: Remove this workaround once cudf
+            # introduces `no_default` values
+            expected = psr.replace(to_replace=pd_to_replace)
+        else:
+            expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(
         expected.sort_values().reset_index(drop=True),
@@ -82,16 +93,19 @@ def test_series_replace():
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
-    psr4 = psr3.replace("one", "two")
+    with expect_warning_if(PANDAS_GE_220):
+        psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
-    sr4 = sr3.replace("one", "two")
+    with pytest.warns(FutureWarning):
+        sr4 = sr3.replace("one", "two")
     assert_eq(
         psr4.sort_values().reset_index(drop=True),
         sr4.sort_values().reset_index(drop=True),
     )
-
-    psr5 = psr3.replace("one", "five")
-    sr5 = sr3.replace("one", "five")
+    with expect_warning_if(PANDAS_GE_220):
+        psr5 = psr3.replace("one", "five")
+    with pytest.warns(FutureWarning):
+        sr5 = sr3.replace("one", "five")
 
     assert_eq(psr5, sr5)
 
