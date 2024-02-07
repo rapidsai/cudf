@@ -1,6 +1,15 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
-from . import aggregation, binaryop, copying, groupby, interop, join, unary
+from . import (
+    aggregation,
+    binaryop,
+    copying,
+    groupby,
+    interop,
+    join,
+    reduce,
+    unary,
+)
 from .column import Column
 from .gpumemoryview import gpumemoryview
 from .scalar import Scalar
@@ -21,5 +30,6 @@ __all__ = [
     "interop",
     "join",
     "unary",
+    "reduce",
     "types",
 ]

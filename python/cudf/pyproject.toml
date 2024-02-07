@@ -168,6 +168,7 @@ build-dir = "build/{wheel_tag}"
 cmake.build-type = "Release"
 cmake.minimum-version = "3.26.4"
 ninja.make-fallback = true
+sdist.exclude = ["*tests*"]
 sdist.reproducible = true
 wheel.packages = ["cudf"]
 
