@@ -250,11 +250,26 @@ def test_dataframe_replace(df, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    if pd_value is None:
-        expected = pdf.replace(to_replace=pd_to_replace)
-    else:
-        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
-    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
+    with expect_warning_if(
+        PANDAS_GE_220
+        and isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        and isinstance(to_replace, str)
+        and to_replace == "two"
+        and isinstance(value, str)
+        and value == "three"
+    ):
+        if pd_value is None:
+            expected = pdf.replace(to_replace=pd_to_replace)
+        else:
+            expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    with expect_warning_if(
+        isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        and isinstance(to_replace, str)
+        and to_replace == "two"
+        and isinstance(value, str)
+        and value == "three"
+    ):
+        actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
@@ -1356,7 +1371,8 @@ def test_series_replace_errors():
     ],
 )
 def test_replace_nulls(gsr, old, new, expected):
-    actual = gsr.replace(old, new)
+    with expect_warning_if(isinstance(gsr.dtype, cudf.CategoricalDtype)):
+        actual = gsr.replace(old, new)
     assert_eq(
         expected.sort_values().reset_index(drop=True),
         actual.sort_values().reset_index(drop=True),
