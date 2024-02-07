@@ -253,8 +253,8 @@ cdef class GroupBy:
         Parameters
         ----------
         values : Table, optional
-            The columns to get group labels for. If not specified, the group
-            labels for the group keys are returned.
+            The columns to get group labels for. If not specified,
+            an empty table is returned for the group values.
 
         Returns
         -------
