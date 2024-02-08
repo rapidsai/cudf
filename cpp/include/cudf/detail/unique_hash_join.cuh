@@ -33,16 +33,16 @@ struct comparator_adapter {
   comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
   __device__ constexpr auto operator()(
-    cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type> const&,
-    cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type> const&) const noexcept
+    cuco::pair<hash_value_type, lhs_index_type> const&,
+    cuco::pair<hash_value_type, lhs_index_type> const&) const noexcept
   {
     // All build table keys are unique thus `false` no matter what
     return false;
   }
 
   __device__ constexpr auto operator()(
-    cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type> const& lhs,
-    cuco::pair<hash_value_type, cudf::experimental::row::rhs_index_type> const& rhs) const noexcept
+    cuco::pair<hash_value_type, lhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, rhs_index_type> const& rhs) const noexcept
   {
     if (lhs.first != rhs.first) { return false; }
     return _d_equal(lhs.second, rhs.second);
@@ -106,7 +106,7 @@ struct unique_hash_join {
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;           ///< input table to build the hash map
-  cudf::table_view _probe;           ///< input table to build the hash map
+  cudf::table_view _probe;           ///< input table to probe the hash map
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
     _preprocessed_build;  ///< input table preprocssed for row operators
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table>
