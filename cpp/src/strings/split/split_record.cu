@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -66,6 +66,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
 
   // builds the offsets and the vector of all tokens
   auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   // build a strings column from the tokens
   auto strings_child = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
