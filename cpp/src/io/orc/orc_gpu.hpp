@@ -102,21 +102,22 @@ struct DictionaryEntry {
 struct ColumnDesc {
   uint8_t const* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
-  uint32_t strm_len[CI_NUM_STREAMS];       // stream length
+  uint32_t strm_len[CI_NUM_STREAMS];       // stream length TODO check for 64
   uint32_t* valid_map_base;                // base pointer of valid bit map for this column
   void* column_data_base;                  // base pointer of column data
-  uint32_t start_row;                      // starting row of the stripe
-  uint32_t num_rows;                       // number of rows in stripe
-  uint32_t column_num_rows;                // number of rows in whole column
-  uint32_t num_child_rows;                 // store number of child rows if it's list column
-  uint32_t num_rowgroups;                  // number of rowgroups in the chunk
-  uint32_t dictionary_start;               // start position in global dictionary
-  uint32_t dict_len;                       // length of local dictionary
-  uint32_t null_count;                     // number of null values in this stripe's column
-  uint32_t skip_count;                     // number of non-null values to skip
-  uint32_t rowgroup_id;                    // row group position
-  ColumnEncodingKind encoding_kind;        // column encoding kind
-  TypeKind type_kind;                      // column data type
+  uint64_t start_row;                      // starting row of the stripe
+  uint64_t num_rows;                       // number of rows in stripe
+  uint64_t column_num_rows;                // number of rows in whole column
+  uint32_t num_child_rows;  // store number of child rows if it's list column (output, 32bit should
+                            // be enough)
+  uint32_t num_rowgroups;   // number of rowgroups in the chunk
+  uint32_t dictionary_start;         // start position in global dictionary
+  uint32_t dict_len;                 // length of local dictionary
+  uint64_t null_count;               // number of null values in this stripe's column
+  uint64_t skip_count;               // number of non-null values to skip
+  uint32_t rowgroup_id;              // row group position
+  ColumnEncodingKind encoding_kind;  // column encoding kind
+  TypeKind type_kind;                // column data type
   uint8_t dtype_len;          // data type length (for types that can be mapped to different sizes)
   type_id dtype_id;           // TODO
   int32_t decimal_scale;      // number of fractional decimal digits for decimal type
@@ -133,7 +134,7 @@ struct RowGroup {
   uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
   uint32_t num_rows;        // number of rows in rowgroup
-  uint32_t start_row;       // starting row of the rowgroup
+  uint64_t start_row;       // starting row of the rowgroup
   uint32_t num_child_rows;  // number of rows of children in rowgroup in case of list type
 };
 
@@ -141,9 +142,9 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  uint32_t start_row;                // start row of this chunk
+  uint64_t start_row;                // start row of this chunk
   uint32_t num_rows;                 // number of rows in this chunk
-  uint32_t null_mask_start_row;      // adjusted to multiple of 8
+  uint64_t null_mask_start_row;      // adjusted to multiple of 8
   uint32_t null_mask_num_rows;       // adjusted to multiple of 8
   ColumnEncodingKind encoding_kind;  // column encoding kind
   TypeKind type_kind;                // column data type

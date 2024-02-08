@@ -608,9 +608,9 @@ void aggregate_child_meta(std::size_t level,
   col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
   col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
 
-  auto child_start_row = cudf::detail::host_2dspan<uint32_t>(
+  auto child_start_row = cudf::detail::host_2dspan<uint64_t>(
     col_meta.child_start_row.data(), num_of_stripes, num_child_cols);
-  auto num_child_rows_per_stripe = cudf::detail::host_2dspan<uint32_t>(
+  auto num_child_rows_per_stripe = cudf::detail::host_2dspan<uint64_t>(
     col_meta.num_child_rows_per_stripe.data(), num_of_stripes, num_child_cols);
   auto rwgrp_meta = cudf::detail::host_2dspan<reader_column_meta::row_group_meta>(
     col_meta.rwgrp_meta.data(), num_of_rowgroups, num_child_cols);
@@ -620,7 +620,7 @@ void aggregate_child_meta(std::size_t level,
   // For each parent column, update its child column meta for each stripe.
   std::for_each(nested_cols.begin(), nested_cols.end(), [&](auto const p_col) {
     auto const parent_col_idx = col_meta.orc_col_map[level][p_col.id];
-    auto start_row            = 0;
+    uint64_t start_row        = 0;
     auto processed_row_groups = 0;
 
     for (std::size_t stripe_id = 0; stripe_id < num_of_stripes; stripe_id++) {

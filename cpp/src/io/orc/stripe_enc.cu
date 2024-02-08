@@ -649,7 +649,8 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
       if (mask == nullptr) return 0xff;
 
       auto const begin_offset = row + offset;
-      auto const end_offset   = min(begin_offset + 8, offset + column.size());
+      uint32_t const end_offset =
+        min(begin_offset + 8, static_cast<uint64_t>(offset + column.size()));
       auto const mask_word = cudf::detail::get_mask_offset_word(mask, 0, begin_offset, end_offset);
       return mask_word & 0xff;
     };

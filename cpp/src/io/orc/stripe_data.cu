@@ -93,8 +93,8 @@ struct orc_strdict_state_s {
 };
 
 struct orc_datadec_state_s {
-  uint32_t cur_row;         // starting row of current batch
-  uint32_t end_row;         // ending row of this chunk (start_row + num_rows)
+  uint64_t cur_row;         // starting row of current batch
+  uint64_t end_row;         // ending row of this chunk (start_row + num_rows)
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
@@ -1131,12 +1131,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         : 0;
     auto const num_elems = s->chunk.num_rows - parent_null_count;
     while (s->top.nulls_desc_row < num_elems) {
-      uint32_t nrows_max = min(num_elems - s->top.nulls_desc_row, blockDim.x * 32);
-      uint32_t nrows;
-      size_t row_in;
+      auto const nrows_max =
+        static_cast<uint32_t>(min(num_elems - s->top.nulls_desc_row, blockDim.x * 32ul));
 
       bytestream_fill(&s->bs, t);
       __syncthreads();
+
+      uint32_t nrows;
       if (s->chunk.strm_len[CI_PRESENT] > 0) {
         uint32_t nbytes = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, (nrows_max + 7) >> 3, t);
         nrows           = min(nrows_max, nbytes * 8u);
@@ -1150,7 +1151,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       }
       __syncthreads();
 
-      row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
+      auto const row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != nullptr) {
         int64_t dst_row   = row_in - first_row;
@@ -1283,7 +1284,10 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
 
   if (t == 0) {
     if (s->chunk.skip_count != 0) {
-      s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), blockDim.x);
+      s->u.rowdec.nz_count =
+        min(static_cast<uint32_t>(
+              min(s->chunk.skip_count, static_cast<uint64_t>(s->top.data.max_vals))),
+            blockDim.x);
       s->chunk.skip_count -= s->u.rowdec.nz_count;
       s->top.data.nrows = s->u.rowdec.nz_count;
     } else {
@@ -1296,11 +1300,12 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
   }
   while (s->u.rowdec.nz_count < s->top.data.max_vals &&
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
-    uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
-                         min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
+    uint32_t const remaining_rows = s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows);
+    uint32_t nrows =
+      min(remaining_rows, min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
     if (s->chunk.valid_map_base != nullptr) {
       // We have a present stream
-      uint32_t rmax       = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
+      uint32_t rmax       = s->top.data.end_row - min(first_row, s->top.data.end_row);
       auto r              = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
       uint32_t valid      = (t < nrows && r < rmax)
                               ? (((uint8_t const*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
@@ -1414,14 +1419,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       s->chunk.strm_len[CI_DATA] -= ofs0;
       s->chunk.streams[CI_DATA2] += ofs1;
       s->chunk.strm_len[CI_DATA2] -= ofs1;
-      rowgroup_rowofs = min(rowgroup_rowofs, s->chunk.num_rows);
+      rowgroup_rowofs = min(static_cast<uint64_t>(rowgroup_rowofs), s->chunk.num_rows);
       s->chunk.start_row += rowgroup_rowofs;
       s->chunk.num_rows -= rowgroup_rowofs;
     }
-    s->is_string = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
+    s->is_string               = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
                     s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR);
-    s->top.data.cur_row =
-      max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
+    s->top.data.cur_row        = max(s->chunk.start_row, max(first_row - s->chunk.skip_count, 0ul));
     s->top.data.end_row        = s->chunk.start_row + s->chunk.num_rows;
     s->top.data.buffered_count = 0;
     if (s->top.data.end_row > first_row + max_num_rows) {
