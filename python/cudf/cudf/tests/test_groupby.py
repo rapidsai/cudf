@@ -20,7 +20,7 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -188,7 +188,10 @@ def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
     gdf = gdf.groupby("y", as_index=as_index).apply(
         lambda df: df["x"].mean(), engine=engine
     )
-    pdf = pdf.groupby("y", as_index=as_index).apply(lambda df: df["x"].mean())
+    kwargs = {"func": lambda df: df["x"].mean()}
+    if PANDAS_GE_220:
+        kwargs["include_groups"] = False
+    pdf = pdf.groupby("y", as_index=as_index).apply(**kwargs)
     assert_groupby_results_equal(pdf, gdf)
 
 
@@ -311,8 +314,12 @@ def test_groupby_apply():
         df["out"] = df["val1"] + df["val2"]
         return df
 
-    expect = expect_grpby.apply(foo)
-    got = got_grpby.apply(foo)
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expect = expect_grpby.apply(foo, **kwargs)
+    got = got_grpby.apply(foo, **kwargs)
     assert_groupby_results_equal(expect, got)
 
 
@@ -346,9 +353,12 @@ def test_groupby_apply_args(func, args):
         ["key1", "key2"], as_index=False, group_keys=False
     )
     got_grpby = df.groupby(["key1", "key2"])
-
-    expect = expect_grpby.apply(func, *args)
-    got = got_grpby.apply(func, *args)
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expect = expect_grpby.apply(func, *args, **kwargs)
+    got = got_grpby.apply(func, *args, **kwargs)
     assert_groupby_results_equal(expect, got)
 
 
@@ -356,14 +366,11 @@ def test_groupby_apply_grouped():
     np.random.seed(0)
     df = DataFrame()
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df["key1"] = range(nelem)
+    df["key2"] = range(nelem)
+    df["val1"] = range(nelem)
+    df["val2"] = range(nelem)
 
-    expect_grpby = df.to_pandas().groupby(
-        ["key1", "key2"], as_index=False, group_keys=False
-    )
     got_grpby = df.groupby(["key1", "key2"])
 
     def foo(key1, val1, com1, com2):
@@ -380,14 +387,11 @@ def test_groupby_apply_grouped():
 
     got = got.to_pandas()
 
-    # Get expected result by emulating the operation in pandas
-    def emulate(df):
-        df["com1"] = df.key1 * 10000 + df.val1
-        df["com2"] = np.arange(len(df), dtype=np.int32)
-        return df
-
-    expect = expect_grpby.apply(emulate)
-    expect = expect.sort_values(["key1", "key2"])
+    expect = df.copy()
+    expect["com1"] = (expect["key1"] * 10000 + expect["key1"]).astype(
+        np.float64
+    )
+    expect["com2"] = np.zeros(nelem, dtype=np.int32)
 
     assert_groupby_results_equal(expect, got)
 
@@ -462,8 +466,14 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     got_groupby_obj = data.groupby(keys)
 
     # compare cuDF jit to pandas
-    cudf_jit_result = got_groupby_obj.apply(func, *args, engine="jit")
-    pandas_result = expect_groupby_obj.apply(func, *args)
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    cudf_jit_result = got_groupby_obj.apply(
+        func, *args, engine="jit", **kwargs
+    )
+    pandas_result = expect_groupby_obj.apply(func, *args, **kwargs)
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
@@ -776,7 +786,7 @@ def test_groupby_apply_jit_block_divergence():
     )
 
     def diverging_block(grp_df):
-        if grp_df["a"].mean() > 0:
+        if grp_df["b"].mean() > 1:
             return grp_df["b"].mean()
         return 0
 
@@ -831,10 +841,12 @@ def test_groupby_apply_no_bytecode_fallback():
         return group.sum()
 
     part = partial(f)
-
-    expect = pdf.groupby("a").apply(part)
-    got = gdf.groupby("a").apply(part, engine="auto")
-
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expect = pdf.groupby("a").apply(part, **kwargs)
+    got = gdf.groupby("a").apply(part, engine="auto", **kwargs)
     assert_groupby_results_equal(expect, got)
 
 
@@ -849,9 +861,12 @@ def test_groupby_apply_return_col_from_df(func):
     def func(df):
         return df.x + df.y
 
-    expect = pdf.groupby("id").apply(func)
-    got = df.groupby("id").apply(func)
-
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expect = pdf.groupby("id").apply(func, **kwargs)
+    got = df.groupby("id").apply(func, **kwargs)
     assert_groupby_results_equal(expect, got)
 
 
@@ -863,8 +878,12 @@ def test_groupby_apply_return_df(func):
     df = cudf.DataFrame({"a": [1, 1, 2, 2], "b": [1, 2, 3, 4]})
     pdf = df.to_pandas()
 
-    expect = pdf.groupby("a").apply(func)
-    got = df.groupby("a").apply(func)
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expect = pdf.groupby("a").apply(func, **kwargs)
+    got = df.groupby("a").apply(func, **kwargs)
     assert_groupby_results_equal(expect, got)
 
 
@@ -1433,7 +1452,7 @@ def test_groupby_nulls_basic(agg):
 
     # TODO: fillna() used here since we don't follow
     # Pandas' null semantics. Should we change it?
-    with expect_warning_if(agg in {"idxmax", "idxmin"}):
+    with expect_warning_if(agg in {"idxmax", "idxmin"} and not PANDAS_GE_220):
         assert_groupby_results_equal(
             getattr(pdf.groupby("a"), agg)().fillna(0),
             getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
@@ -1910,14 +1929,21 @@ def test_groupby_apply_noempty_group():
         {"a": [1, 1, 2, 2], "b": [1, 2, 1, 2], "c": [1, 2, 3, 4]}
     )
     gdf = cudf.from_pandas(pdf)
-    assert_groupby_results_equal(
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expect = (
         pdf.groupby("a", group_keys=False)
-        .apply(lambda x: x.iloc[[0, 1]])
-        .reset_index(drop=True),
-        gdf.groupby("a")
-        .apply(lambda x: x.iloc[[0, 1]])
-        .reset_index(drop=True),
+        .apply(lambda x: x.iloc[[0, 1]], **kwargs)
+        .reset_index(drop=True)
     )
+    got = (
+        gdf.groupby("a")
+        .apply(lambda x: x.iloc[[0, 1]], **kwargs)
+        .reset_index(drop=True)
+    )
+    assert_groupby_results_equal(expect, got)
 
 
 def test_reset_index_after_empty_groupby():
