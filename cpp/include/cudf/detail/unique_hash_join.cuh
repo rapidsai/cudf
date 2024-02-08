@@ -33,22 +33,37 @@ struct comparator_adapter {
   comparator_adapter(Equal const& d_equal) : _d_equal{d_equal} {}
 
   __device__ constexpr auto operator()(
-    cudf::experimental::row::lhs_index_type lhs_index,
-    cudf::experimental::row::lhs_index_type rhs_index) const noexcept
+    cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type> const&,
+    cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type> const&) const noexcept
   {
     // All build table keys are unique thus `false` no matter what
     return false;
   }
 
   __device__ constexpr auto operator()(
-    cudf::experimental::row::lhs_index_type lhs_index,
-    cudf::experimental::row::rhs_index_type rhs_index) const noexcept
+    cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type> const& lhs,
+    cuco::pair<hash_value_type, cudf::experimental::row::rhs_index_type> const& rhs) const noexcept
   {
-    return _d_equal(lhs_index, rhs_index);
+    if (lhs.first != rhs.first) { return false; }
+    return _d_equal(lhs.second, rhs.second);
   }
 
  private:
   Equal _d_equal;
+};
+
+template <typename Hasher>
+struct hasher_adapter {
+  hasher_adapter(Hasher const& d_hasher = {}) : _d_hasher{d_hasher} {}
+
+  template <typename T>
+  __device__ constexpr auto operator()(cuco::pair<hash_value_type, T> const& key) const noexcept
+  {
+    return _d_hasher(key.first);
+  }
+
+ private:
+  Hasher _d_hasher;
 };
 
 /**
@@ -71,8 +86,10 @@ struct unique_hash_join {
   ///< Device row equal type
   using d_equal_type =
     std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
-  using probing_scheme_type = cuco::experimental::
-    double_hashing<DEFAULT_JOIN_CG_SIZE, thrust::identity<hash_value_type>, Hasher>;
+  using first_haser   = hasher_adapter<thrust::identity<hash_value_type>>;
+  using second_hasher = hasher_adapter<Hasher>;
+  using probing_scheme_type =
+    cuco::experimental::double_hashing<DEFAULT_JOIN_CG_SIZE, first_haser, second_hasher>;
   using cuco_storge_type = cuco::experimental::storage<1>;
 
   using hash_table_type = cuco::experimental::static_set<

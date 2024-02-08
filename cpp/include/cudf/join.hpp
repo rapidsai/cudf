@@ -469,25 +469,6 @@ class unique_hash_join {
   /**
    * @brief Constructs a unique hash join object for subsequent probe calls
    *
-   * @note The `unique_hash_join` object must not outlive the table viewed by `build`, else behavior
-   * is undefined.
-   *
-   * @throw cudf::logic_error If the input probe table has nulls while this unique_hash_join object
-   * was not constructed with null check.
-   *
-   * @param build The build table that doesn't contain duplicate elements
-   * @param probe The probe table, from which the keys are probed
-   * @param compare_nulls Controls whether null join-key values should match or not
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   */
-  unique_hash_join(cudf::table_view const& build,
-                   cudf::table_view const& probe,
-                   null_equality compare_nulls,
-                   rmm::cuda_stream_view stream = cudf::get_default_stream());
-
-  /**
-   * @brief Constructs a unique hash join object for subsequent probe calls
-   *
    * @param build The build table that doesn't contain duplicate elements
    * @param probe The probe table, from which the keys are probed
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
@@ -497,8 +478,8 @@ class unique_hash_join {
    */
   unique_hash_join(cudf::table_view const& build,
                    cudf::table_view const& probe,
-                   nullable_join has_nulls,
-                   null_equality compare_nulls,
+                   nullable_join has_nulls      = nullable_join::YES,
+                   null_equality compare_nulls  = null_equality::EQUAL,
                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
