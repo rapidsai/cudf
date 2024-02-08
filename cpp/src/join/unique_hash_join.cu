@@ -212,6 +212,11 @@ unique_hash_join<Hasher, HasNested>::inner_join(std::optional<std::size_t> outpu
   size_type const probe_table_num_rows{this->_probe.num_rows()};
 
   std::size_t const join_size = output_size ? *output_size : probe_table_num_rows;
+  // If output size is zero, return immediately
+  if (join_size == 0) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
