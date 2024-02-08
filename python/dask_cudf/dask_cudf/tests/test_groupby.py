@@ -12,11 +12,7 @@ import cudf
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
-from dask_cudf.tests.utils import (
-    QUERY_PLANNING_ON,
-    skip_dask_expr,
-    xfail_dask_expr,
-)
+from dask_cudf.tests.utils import QUERY_PLANNING_ON, xfail_dask_expr
 
 
 def assert_cudf_groupby_layers(ddf):
@@ -665,7 +661,6 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     dd.assert_eq(gf, pf)
 
 
-@skip_dask_expr("Callable arguments not supported by dask-expr")
 @pytest.mark.parametrize(
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )

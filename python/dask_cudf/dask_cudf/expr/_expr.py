@@ -72,22 +72,6 @@ DiskShuffle._shuffle_group = staticmethod(_shuffle_group)
 
 
 class CudfGroupbyAggregation(GroupbyAggregation):
-    @functools.cached_property
-    def _meta(self):
-        from dask.dataframe.dispatch import make_meta, meta_nonempty
-
-        meta = meta_nonempty(self.frame._meta)
-        meta = meta.groupby(
-            self._by_meta,
-            # **_as_dict("observed", self.observed),
-            # **_as_dict("dropna", self.dropna),
-        )
-        if self._slice is not None:
-            meta = meta[self._slice]
-        meta = meta.aggregate(self.arg)
-        # import pdb; pdb.set_trace()
-        return make_meta(meta)
-
     def _lower(self):
         return DecomposableCudfGroupbyAggregation(
             self.frame,
@@ -108,7 +92,7 @@ class DecomposableCudfGroupbyAggregation(DecomposableGroupbyAggregation):
 
     @property
     def shuffle_by_index(self):
-        return False  # We always group by column(s)
+        return False  # We always group by column(s) in dask-cudf
 
     @functools.cached_property
     def spec_info(self):
@@ -156,6 +140,7 @@ class DecomposableCudfGroupbyAggregation(DecomposableGroupbyAggregation):
 
     @classmethod
     def chunk(cls, df, *by, **kwargs):
+        # `by` columns are already specified in kwargs
         return _groupby_partition_agg(df, **kwargs)
 
     @classmethod
@@ -197,7 +182,7 @@ class DecomposableCudfGroupbyAggregation(DecomposableGroupbyAggregation):
             "aggs": self.spec_info["aggs"],
             "columns": self.spec_info["columns"],
             "final_columns": final_columns,
-            "as_index": True,
+            "as_index": True,  # False not supported in dask-expr
             "dropna": dropna,
             "sort": self.sort,
             "sep": self.sep,

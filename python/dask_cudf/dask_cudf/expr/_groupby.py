@@ -55,7 +55,12 @@ class SeriesGroupBy(DXSeriesGroupBy):
 
 
 def _aggregation(
-    gb, arg=None, split_every=8, split_out=1, shuffle_method=None, **kwargs
+    gb,
+    arg=None,
+    split_every=8,
+    split_out=1,
+    shuffle_method=None,
+    _use_optimized=True,
 ):
     from dask_cudf.groupby import (
         OPTIMIZED_AGGS,
@@ -70,8 +75,10 @@ def _aggregation(
         return gb.size()
 
     arg = _redirect_aggs(arg)
-    if _aggs_optimized(arg, OPTIMIZED_AGGS) and hasattr(
-        gb.obj._meta, "to_pandas"
+    if (
+        _use_optimized
+        and _aggs_optimized(arg, OPTIMIZED_AGGS)
+        and hasattr(gb.obj._meta, "to_pandas")
     ):
         cls = CudfGroupbyAggregation
     else:
