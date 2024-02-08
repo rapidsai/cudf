@@ -32,12 +32,12 @@ if [[ "$(arch)" == "aarch64" && ${RAPIDS_BUILD_TYPE} == "pull-request" ]]; then
     python ./ci/wheel_smoke_test_cudf.py
 else
     rapids-logger "pytest cudf"
-    pushd python/cudf/cudf
+    pushd python/cudf/cudf/tests
     python -m pytest \
       --cache-clear \
       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
       --numprocesses=8 \
       --dist=loadscope \
-      ./tests
+      .
     popd
 fi
