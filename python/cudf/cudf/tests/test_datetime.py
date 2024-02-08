@@ -2468,3 +2468,8 @@ def test_datetime_raise_warning(freqstr):
     )
     with pytest.warns(FutureWarning):
         t.dt.ceil(freqstr)
+
+
+def test_to_datetime_errors_ignore_deprecated():
+    with pytest.warns(FutureWarning):
+        cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")
