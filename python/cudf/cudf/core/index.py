@@ -2402,6 +2402,11 @@ class TimedeltaIndex(Index):
             raise NotImplementedError("freq is not yet supported")
 
         if unit is not None:
+            warnings.warn(
+                "The 'unit' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError(
                 "unit is not yet supported, alternatively "
                 "dtype parameter is supported"
