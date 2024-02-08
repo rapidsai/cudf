@@ -9,6 +9,8 @@ from . import (
     join,
     reduce,
     replace,
+    rolling,
+    types,
     unary,
 )
 from .column import Column
@@ -33,5 +35,6 @@ __all__ = [
     "unary",
     "reduce",
     "replace",
+    "rolling",
     "types",
 ]
