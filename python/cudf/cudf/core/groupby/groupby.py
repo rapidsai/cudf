@@ -1179,7 +1179,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self):
-        grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
+        offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)

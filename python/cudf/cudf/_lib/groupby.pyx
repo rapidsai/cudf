@@ -120,23 +120,23 @@ cdef class GroupBy:
 
         Returns
         -------
+        offsets: list of integers
+            Integer offsets such that offsets[i+1] - offsets[i]
+            represents the size of group `i`.
         grouped_keys: list of Columns
             The grouped key columns
         grouped_values: list of Columns
             The grouped value columns
-        offsets: list of integers
-            Integer offsets such that offsets[i+1] - offsets[i]
-            represents the size of group `i`.
         """
-        grouped_keys, grouped_values, offsets = self._groupby.get_groups(
+        offsets, grouped_keys, grouped_values = self._groupby.get_groups(
             pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values])
             if values else None
         )
 
         return (
+            offsets,
             columns_from_pylibcudf_table(grouped_keys),
             columns_from_pylibcudf_table(grouped_values),
-            offsets,
         )
 
     def aggregate(self, values, aggregations):

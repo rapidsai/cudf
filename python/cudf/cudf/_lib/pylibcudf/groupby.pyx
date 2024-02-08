@@ -261,26 +261,26 @@ cdef class GroupBy:
 
         Returns
         -------
-        Tuple[Table, Table, List[int]]
+        Tuple[List[int], Table, Table]]
             A tuple of tables containing three items:
+                - A list of integer offsets into the group keys/values
                 - A table of group keys
                 - A table of group values or None
-                - A list of integer offsets into the tables
         """
 
         cdef groups c_groups
         if values:
             c_groups = dereference(self.c_obj).get_groups(values.view())
             return (
+                c_groups.offsets,
                 Table.from_libcudf(move(c_groups.keys)),
                 Table.from_libcudf(move(c_groups.values)),
-                c_groups.offsets,
             )
         else:
             # c_groups.values is nullptr
             c_groups = dereference(self.c_obj).get_groups()
             return (
+                c_groups.offsets,
                 Table.from_libcudf(move(c_groups.keys)),
                 None,
-                c_groups.offsets,
             )
