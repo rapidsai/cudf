@@ -1075,7 +1075,7 @@ public final class Table implements AutoCloseable {
   }
 
   private static DidViewChange gatherJSONColumns(Schema schema, TableWithMeta.NestedChildren children,
-                                              ColumnView cv) {
+                                                 ColumnView cv) {
     // We need to do this recursively to be sure it all matches as expected.
     // If we run into problems where the data types don't match, we are not
     // going to fix up the data types. We are only going to reorder the columns.
@@ -1102,7 +1102,7 @@ public final class Table implements AutoCloseable {
             String neededColumnName = neededNames[i];
             Integer index = indices.get(neededColumnName);
             if (index != null) {
-              if (schema.getChild(i).hasStructDescendant()) {
+              if (schema.getChild(i).isStructOrHasStructDescendant()) {
                 ColumnView child = cv.getChildColumnView(index);
                 boolean shouldCloseChild = true;
                 try {
@@ -1153,7 +1153,7 @@ public final class Table implements AutoCloseable {
         }
       }
     } else if (schema.getType() == DType.LIST && cv.getType() == DType.LIST) {
-      if (schema.hasStructDescendant()) {
+      if (schema.isStructOrHasStructDescendant()) {
         String [] childNames = children.getNames();
         if (childNames.length == 2 &&
             "offsets".equals(childNames[0]) &&
@@ -1203,7 +1203,7 @@ public final class Table implements AutoCloseable {
           String neededColumnName = neededColumns[i];
           Integer index = indices.get(neededColumnName);
           if (index != null) {
-            if (schema.getChild(i).hasStructDescendant()) {
+            if (schema.getChild(i).isStructOrHasStructDescendant()) {
               DidViewChange gathered = gatherJSONColumns(schema.getChild(i), twm.getChild(index),
                   tbl.getColumn(index));
               if (gathered.noChangeNeeded) {

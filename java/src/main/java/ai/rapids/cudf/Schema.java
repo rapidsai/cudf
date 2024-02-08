@@ -52,9 +52,15 @@ public class Schema {
     childSchemas = null;
   }
 
+  /**
+   * Get the schema of a child element. Note that an inferred schema will have no children.
+   * @param i the index of the child to read.
+   * @return the new Schema
+   * @throws IndexOutOfBoundsException if the index is not in the range of children.
+   */
   public Schema getChild(int i) {
     if (childSchemas == null) {
-      return null;
+      throw new IndexOutOfBoundsException("There are 0 children in this schema");
     }
     return childSchemas.get(i);
   }
@@ -224,11 +230,15 @@ public class Schema {
     return topLevelType;
   }
 
-  public boolean hasStructDescendant() {
+  /**
+   * Check to see if the schema includes a struct at all.
+   * @return true if this or any one of its descendants contains a struct, else false.
+   */
+  public boolean isStructOrHasStructDescendant() {
     if (DType.STRUCT == topLevelType) {
       return true;
     } else if (DType.LIST == topLevelType) {
-      return childSchemas.stream().anyMatch(Schema::hasStructDescendant);
+      return childSchemas.stream().anyMatch(Schema::isStructOrHasStructDescendant);
     }
     return false;
   }

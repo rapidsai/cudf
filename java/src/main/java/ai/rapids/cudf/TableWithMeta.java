@@ -135,6 +135,7 @@ public class TableWithMeta implements AutoCloseable {
   public NestedChildren getChild(int i) {
     return getChildren().getChild(i);
   }
+
   public boolean isChildNested(int i) {
     return getChildren().isChildNested(i);
   }
