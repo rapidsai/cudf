@@ -2470,6 +2470,15 @@ def test_datetime_raise_warning(freqstr):
         t.dt.ceil(freqstr)
 
 
+def test_timezone_array_notimplemented():
+    pa_array = pa.array(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
+        type=pa.timestamp("ns", "UTC"),
+    )
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pa_array)
+
+
 def test_to_datetime_errors_ignore_deprecated():
     with pytest.warns(FutureWarning):
         cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")
