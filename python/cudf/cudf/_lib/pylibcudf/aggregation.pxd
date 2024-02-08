@@ -11,6 +11,7 @@ from cudf._lib.cpp.aggregation cimport (
     rank_method,
     rank_percentage,
     reduce_aggregation,
+    rolling_aggregation,
     scan_aggregation,
 )
 from cudf._lib.cpp.types cimport (
@@ -30,6 +31,7 @@ ctypedef groupby_aggregation * gba_ptr
 ctypedef groupby_scan_aggregation * gbsa_ptr
 ctypedef reduce_aggregation * ra_ptr
 ctypedef scan_aggregation * sa_ptr
+ctypedef rolling_aggregation * roa_ptr
 
 
 cdef class Aggregation:
@@ -42,6 +44,7 @@ cdef class Aggregation:
     ) except *
     cdef const reduce_aggregation* view_underlying_as_reduce(self) except *
     cdef const scan_aggregation* view_underlying_as_scan(self) except *
+    cdef const rolling_aggregation* view_underlying_as_rolling(self) except *
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg)

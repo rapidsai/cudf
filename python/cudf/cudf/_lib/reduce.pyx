@@ -3,12 +3,12 @@
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
-from cudf._lib.aggregation cimport make_aggregation
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.types cimport dtype_to_pylibcudf_type, is_decimal_type_id
 
 from cudf._lib import pylibcudf
+from cudf._lib.aggregation import make_aggregation
 
 
 @acquire_spill_lock()

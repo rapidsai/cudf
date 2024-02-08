@@ -790,7 +790,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # Can't use _mimic_pandas_order because we need to
             # subsample the gather map from the full input ordering,
             # rather than permuting the gather map of the output.
-            _, (ordering,), _ = self._groupby.groups(
+            _, _, (ordering,) = self._groupby.groups(
                 [as_column(range(0, len(self.obj)))]
             )
             # Invert permutation from original order to groups on the
@@ -1179,7 +1179,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         return cls(obj, grouping, **kwargs)
 
     def _grouped(self):
-        grouped_key_cols, grouped_value_cols, offsets = self._groupby.groups(
+        offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
@@ -2578,7 +2578,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         # result coming back from libcudf has null_count few rows than
         # the input, so we must produce an ordering from the full
         # input range.
-        _, (ordering,), _ = self._groupby.groups(
+        _, _, (ordering,) = self._groupby.groups(
             [as_column(range(0, len(self.obj)))]
         )
         if self._dropna and any(
