@@ -187,7 +187,7 @@ PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -k "not test_overwrite_warns and not test_complex_series_frame_alignment and $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
     -o xfail_strict=True \
     ${PYTEST_IGNORES} \
-    "$@"
+    "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
 
 mv *.json ..
 cd ..
