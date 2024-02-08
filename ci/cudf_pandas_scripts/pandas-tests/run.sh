@@ -8,9 +8,7 @@ set -euo pipefail
 PANDAS_TESTS_BRANCH=${1}
 
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch"
-if [ -n "${RAPIDS_REF_NAME:-""}" ]; then
-    rapids-logger "PR number: $RAPIDS_REF_NAME"
-fi
+rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
 # Set the manylinux version used for downloading the wheels so that we test the
 # newer ABI wheels on the newer images that support their installation.
