@@ -3759,3 +3759,11 @@ def test_group_by_value_counts_with_count_column():
     df = cudf.DataFrame({"a": [1, 5, 3], "count": [2, 5, 2]})
     with pytest.raises(ValueError):
         df.groupby("a", as_index=False).value_counts()
+
+
+def test_groupby_internal_groups_empty(gdf):
+    # test that we don't segfault when calling the internal
+    # .groups() method with an empty list:
+    gb = gdf.groupby("y")._groupby
+    _, _, grouped_vals = gb.groups([])
+    assert grouped_vals == []
