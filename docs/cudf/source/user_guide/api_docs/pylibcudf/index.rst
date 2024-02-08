@@ -18,6 +18,7 @@ This page provides API documentation for pylibcudf.
     reduce
     rolling
     scalar
+    stream_compaction
     replace
     table
     types
