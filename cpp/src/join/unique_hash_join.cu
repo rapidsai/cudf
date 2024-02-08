@@ -87,12 +87,12 @@ __device__ void flush_buffer(CG const& group,
 {
   auto i       = group.thread_rank();
   auto const n = *block_counter;
+  group.sync();
 
-  size_type offset;
+  __shared__ cudf::size_type offset;
+
   if (i == 0) { offset = atomicAdd(counter, n); }
-  /*
-  offset = group.shfl(offset, 0);
-  */
+  group.sync();
 
   while (i < n) {
     *(build_indices + offset + i) = buffer[i].first;
@@ -100,6 +100,7 @@ __device__ void flush_buffer(CG const& group,
     i += group.size();
   }
   if (group.thread_rank() == 0) { *block_counter = 0; }
+  group.sync();
 }
 
 template <typename Iter, typename HashTable>
@@ -129,8 +130,8 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
   while ((idx - stride) < size) {
     if (idx < size) {
       auto const found = hash_table.find(tile, *(iter + idx));
-      if (thread_rank == 0 and found != hash_table.end()) {
-        auto const offset    = atomicAdd(&block_counter, 1);
+      if (tile.thread_rank() == 0 and found != hash_table.end()) {
+        auto const offset    = atomicAdd_block(&block_counter, 1);
         block_buffer[offset] = cuco::pair{static_cast<cudf::size_type>(found->second),
                                           static_cast<cudf::size_type>(idx)};
       }
@@ -268,11 +269,6 @@ std::size_t unique_hash_join<Hasher, HasNested>::inner_join_size(rmm::cuda_strea
                                          */
 }
 }  // namespace detail
-
-/*
-template <cudf::has_nested HasNested>
-unique_hash_join<HasNested>::~unique_hash_join() = default;
-*/
 
 template <>
 unique_hash_join<cudf::has_nested::YES>::~unique_hash_join() = default;
