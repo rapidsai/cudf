@@ -8,6 +8,8 @@ from . import (
     interop,
     join,
     reduce,
+    rolling,
+    types,
     unary,
 )
 from .column import Column
@@ -31,5 +33,6 @@ __all__ = [
     "join",
     "unary",
     "reduce",
+    "rolling",
     "types",
 ]

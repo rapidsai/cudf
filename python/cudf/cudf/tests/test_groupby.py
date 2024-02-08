@@ -2771,10 +2771,10 @@ def test_groupby_fillna_multi_value(nelem):
     }
     # cudf can't fillna with a pandas.Timedelta type
     fill_values["4"] = fill_values["4"].to_numpy()
-
-    expect = pdf.groupby(key_col).fillna(value=fill_values)
-
-    got = gdf.groupby(key_col).fillna(value=fill_values)
+    with expect_warning_if(PANDAS_GE_220):
+        expect = pdf.groupby(key_col).fillna(value=fill_values)
+    with pytest.warns(FutureWarning):
+        got = gdf.groupby(key_col).fillna(value=fill_values)
 
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
@@ -2817,11 +2817,12 @@ def test_groupby_fillna_multi_value_df(nelem):
     # cudf can't fillna with a pandas.Timedelta type
     fill_values["4"] = fill_values["4"].to_numpy()
     fill_values = pd.DataFrame(fill_values, index=pdf.index)
-
-    expect = pdf.groupby(key_col).fillna(value=fill_values)
+    with expect_warning_if(PANDAS_GE_220):
+        expect = pdf.groupby(key_col).fillna(value=fill_values)
 
     fill_values = cudf.from_pandas(fill_values)
-    got = gdf.groupby(key_col).fillna(value=fill_values)
+    with pytest.warns(FutureWarning):
+        got = gdf.groupby(key_col).fillna(value=fill_values)
 
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
@@ -2838,11 +2839,13 @@ def test_groupby_various_by_fillna(by, data, args):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
 
-    with expect_warning_if(PANDAS_GE_210 and "method" in args):
+    with expect_warning_if(
+        (PANDAS_GE_210 and "method" in args) or PANDAS_GE_220
+    ):
         expect = ps.groupby(by).fillna(**args)
     if isinstance(by, pd.Grouper):
         by = cudf.Grouper(level=by.level)
-    with expect_warning_if("method" in args):
+    with pytest.warns(FutureWarning):
         got = gs.groupby(by).fillna(**args)
 
     assert_groupby_results_equal(expect, got, check_dtype=False)
@@ -3782,3 +3785,11 @@ def test_group_by_value_counts_with_count_column():
     df = cudf.DataFrame({"a": [1, 5, 3], "count": [2, 5, 2]})
     with pytest.raises(ValueError):
         df.groupby("a", as_index=False).value_counts()
+
+
+def test_groupby_internal_groups_empty(gdf):
+    # test that we don't segfault when calling the internal
+    # .groups() method with an empty list:
+    gb = gdf.groupby("y")._groupby
+    _, _, grouped_vals = gb.groups([])
+    assert grouped_vals == []
