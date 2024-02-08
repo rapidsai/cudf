@@ -76,14 +76,14 @@ struct hasher_adapter {
 template <typename Hasher, has_nested HasNested = has_nested::NO>
 struct unique_hash_join {
  private:
-  ///< Row equality type for nested columns
+  /// Row equality type for nested columns
   using nested_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
     cudf::experimental::row::equality::device_row_comparator<true, cudf::nullate::DYNAMIC>>;
-  ///< Row equality type for flat columns
+  /// Row equality type for flat columns
   using flat_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
     cudf::experimental::row::equality::device_row_comparator<false, cudf::nullate::DYNAMIC>>;
 
-  ///< Device row equal type
+  /// Device row equal type
   using d_equal_type =
     std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
   using first_hasher  = hasher_adapter<thrust::identity<hash_value_type>>;
@@ -92,6 +92,7 @@ struct unique_hash_join {
     cuco::experimental::double_hashing<DEFAULT_JOIN_CG_SIZE, first_hasher, second_hasher>;
   using cuco_storge_type = cuco::experimental::storage<1>;
 
+  /// Hash table type
   using hash_table_type = cuco::experimental::static_set<
     cuco::pair<hash_value_type, cudf::experimental::row::lhs_index_type>,
     cuco::experimental::extent<std::size_t>,
@@ -102,7 +103,7 @@ struct unique_hash_join {
     cuco_storge_type>;
 
   bool _is_empty;   ///< true if `_hash_table` is empty
-  bool _has_nulls;  ///< true if nulls are present in either build table or any probe table
+  bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;           ///< input table to build the hash map
   cudf::table_view _probe;           ///< input table to build the hash map
