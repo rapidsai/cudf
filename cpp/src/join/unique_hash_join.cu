@@ -239,35 +239,6 @@ unique_hash_join<Hasher, HasNested>::inner_join(std::optional<std::size_t> outpu
 
   return {std::move(left_indices), std::move(right_indices)};
 }
-
-template <typename Hasher, cudf::has_nested HasNested>
-std::size_t unique_hash_join<Hasher, HasNested>::inner_join_size(rmm::cuda_stream_view stream) const
-{
-  CUDF_FUNC_RANGE();
-  return 0;
-  /*
-
-  // Return directly if build table is empty
-  if (_is_empty) { return 0; }
-
-  CUDF_EXPECTS(_has_nulls || !cudf::has_nested_nulls(probe),
-               "Probe table has nulls while build table was not hashed with null check.");
-
-  auto const preprocessed_probe =
-    cudf::experimental::row::equality::preprocessed_table::create(probe, stream);
-
-  return 10;
-  cudf::detail::compute_join_output_size(_build,
-                                         probe,
-                                         _preprocessed_build,
-                                         preprocessed_probe,
-                                         _hash_table,
-                                         cudf::detail::join_kind::INNER_JOIN,
-                                         _has_nulls,
-                                         _nulls_equal,
-                                         stream);
-                                         */
-}
 }  // namespace detail
 
 template <>
@@ -309,13 +280,6 @@ unique_hash_join<cudf::has_nested::YES>::inner_join(std::optional<std::size_t> o
 }
 
 template <>
-std::size_t unique_hash_join<cudf::has_nested::YES>::inner_join_size(
-  rmm::cuda_stream_view stream) const
-{
-  return _impl->inner_join_size(stream);
-}
-
-template <>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 unique_hash_join<cudf::has_nested::NO>::inner_join(std::optional<std::size_t> output_size,
@@ -323,12 +287,5 @@ unique_hash_join<cudf::has_nested::NO>::inner_join(std::optional<std::size_t> ou
                                                    rmm::mr::device_memory_resource* mr) const
 {
   return _impl->inner_join(output_size, stream, mr);
-}
-
-template <>
-std::size_t unique_hash_join<cudf::has_nested::NO>::inner_join_size(
-  rmm::cuda_stream_view stream) const
-{
-  return _impl->inner_join_size(stream);
 }
 }  // namespace cudf

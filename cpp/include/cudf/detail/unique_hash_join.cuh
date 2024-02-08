@@ -147,10 +147,5 @@ struct unique_hash_join {
   inner_join(std::optional<std::size_t> output_size,
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr) const;
-
-  /**
-   * @copydoc cudf::hash_join::inner_join_size
-   */
-  [[nodiscard]] std::size_t inner_join_size(rmm::cuda_stream_view stream) const;
 };
 }  // namespace cudf::detail

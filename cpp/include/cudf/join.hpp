@@ -502,18 +502,6 @@ class unique_hash_join {
              rmm::cuda_stream_view stream           = cudf::get_default_stream(),
              rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
 
-  /**
-   * Returns the exact number of matches (rows) when performing an inner join
-   *
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   *
-   * @return The exact number of output when performing an inner join between two tables with
-   * `build` and `probe` as the join keys .
-   */
-  // TODO: still desired?
-  [[nodiscard]] std::size_t inner_join_size(
-    rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
-
  private:
   using impl_type = typename cudf::detail::unique_hash_join<
     cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>,
