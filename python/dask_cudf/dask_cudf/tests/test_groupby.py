@@ -111,19 +111,15 @@ def test_groupby_cumulative(aggregation, pdf, series):
 @pytest.mark.parametrize(
     "func",
     [
-        # See: https://github.com/rapidsai/cudf/issues/14957
         lambda df, agg: df.groupby("xx").agg({"y": agg}),
-        # lambda df, agg: df.groupby("xx").y.agg({"y": agg}),
+        lambda df, agg: df.groupby("xx").y.agg({"y": agg}),
         lambda df, agg: df.groupby("xx").agg([agg]),
-        # lambda df, agg: df.groupby("xx").y.agg([agg]),
+        lambda df, agg: df.groupby("xx").y.agg([agg]),
         lambda df, agg: df.groupby("xx").agg(agg),
-        # lambda df, agg: df.groupby("xx").y.agg(agg),
+        lambda df, agg: df.groupby("xx").y.agg(agg),
     ],
 )
 def test_groupby_agg(func, aggregation, pdf):
-    if QUERY_PLANNING_ON and aggregation == "collect":
-        pytest.skip("Dask-expr does not support 'collect' yet.")
-
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
 

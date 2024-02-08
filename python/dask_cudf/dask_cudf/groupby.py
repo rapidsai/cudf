@@ -777,6 +777,7 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
     """
 
     agg_dict = {}
+    flatten = []
     for col in df.columns:
         if col in gb_cols:
             continue
@@ -785,6 +786,8 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
             agg_dict[col] = ["sum"]
         elif agg in OPTIMIZED_AGGS:
             agg_dict[col] = [agg]
+            if agg == "collect":
+                flatten.append(col)
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
 
@@ -798,6 +801,11 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
         for name in gb.columns
     ]
     gb.columns = output_columns
+
+    # Avoid nested lists
+    for col in flatten:
+        gb[col] = gb[col].list.concat()
+
     # Return with deterministic column ordering
     return gb[sorted(output_columns)]
 
@@ -873,9 +881,6 @@ def _finalize_gb_agg(
                 gb.drop(columns=[sum_name], inplace=True)
             if "count" not in agg_list:
                 gb.drop(columns=[count_name], inplace=True)
-        if "collect" in agg_list:
-            collect_name = _make_name((col, "collect"), sep=sep)
-            gb[collect_name] = gb[collect_name].list.concat()
 
     # Ensure sorted keys if `sort=True`
     if sort:
