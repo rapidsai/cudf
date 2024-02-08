@@ -35,7 +35,7 @@ INSTANTIATE_TEST_SUITE_P(ParquetV2ReadWriteTest,
 
 TEST_P(ParquetV2Test, MultiColumn)
 {
-  constexpr auto num_rows = 50000;
+  constexpr auto num_rows = 50'000;
   auto const is_v2        = GetParam();
 
   // auto col0_data = random_values<bool>(num_rows);
@@ -84,6 +84,7 @@ TEST_P(ParquetV2Test, MultiColumn)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
@@ -156,6 +157,7 @@ TEST_P(ParquetV2Test, MultiColumnWithNulls)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
 
   cudf::io::write_parquet(out_opts);
@@ -197,6 +199,7 @@ TEST_P(ParquetV2Test, Strings)
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .write_v2_headers(is_v2)
+      .compression(cudf::io::compression_type::ZSTD)
       .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
