@@ -492,7 +492,7 @@ class unique_hash_join {
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
    *
-   * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
+   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
    * as the join keys .
    */
