@@ -47,6 +47,22 @@ cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
         replacement_column.
     """
     cdef unique_ptr[column] c_result
+    cdef replace_policy policy
+    # Due to https://github.com/cython/cython/issues/5984, if this function is
+    # called as a Python function (i.e. without typed inputs, which is always
+    # true in pure Python files), the type of `replacement` will be `object`
+    # instead of `replace_policy`. This is a workaround to handle that case.
+    if ReplacementType is object:
+        if isinstance(replacement, ReplacePolicy):
+            policy = replacement
+            with nogil:
+                c_result = move(
+                    cpp_replace.replace_nulls(source_column.view(), policy)
+                )
+            return Column.from_libcudf(move(c_result))
+        else:
+            raise TypeError("replacement must be a Column, Scalar, or replace_policy")
+
     with nogil:
         if ReplacementType is Column:
             c_result = move(
@@ -58,10 +74,12 @@ cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
                     source_column.view(), dereference(replacement.c_obj)
                 )
             )
-        else:
+        elif ReplacementType is replace_policy:
             c_result = move(
                 cpp_replace.replace_nulls(source_column.view(), replacement)
             )
+        else:
+            assert False, "Internal error. Please contact pylibcudf developers"
     return Column.from_libcudf(move(c_result))
 
 

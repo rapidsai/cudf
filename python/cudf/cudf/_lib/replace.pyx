@@ -1,25 +1,13 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-
 from cudf.api.types import is_scalar
 from cudf.core.buffer import acquire_spill_lock
 
 from cudf._lib.column cimport Column
-
-from cudf._lib.scalar import as_device_scalar
-
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.replace cimport (
-    replace_nulls as cpp_replace_nulls,
-    replace_policy as cpp_replace_policy,
-)
-from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
 
 from cudf._lib import pylibcudf
+from cudf._lib.scalar import as_device_scalar
 
 
 @acquire_spill_lock()
@@ -56,16 +44,12 @@ def replace_nulls_column(Column input_col, Column replacement_values):
     input_col : Column whose value will be updated
     replacement_values : Column with values which will replace nulls
     """
-
-    cdef column_view input_col_view = input_col.view()
-    cdef column_view replacement_values_view = replacement_values.view()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_replace_nulls(input_col_view,
-                                          replacement_values_view))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.replace.replace_nulls(
+            input_col.to_pylibcudf(mode="read"),
+            replacement_values.to_pylibcudf(mode="read"),
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -78,17 +62,12 @@ def replace_nulls_scalar(Column input_col, DeviceScalar replacement_value):
     input_col : Column whose value will be updated
     replacement_value : DeviceScalar with value which will replace nulls
     """
-
-    cdef column_view input_col_view = input_col.view()
-    cdef const scalar* replacement_value_scalar = replacement_value\
-        .get_raw_ptr()
-
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(cpp_replace_nulls(input_col_view,
-                                          replacement_value_scalar[0]))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.replace.replace_nulls(
+            input_col.to_pylibcudf(mode="read"),
+            replacement_value.c_value,
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -101,20 +80,14 @@ def replace_nulls_fill(Column input_col, object method):
     input_col : Column whose value will be updated
     method : 'ffill' or 'bfill'
     """
-
-    cdef column_view input_col_view = input_col.view()
-
-    cdef unique_ptr[column] c_result
-    cdef cpp_replace_policy policy = (
-        cpp_replace_policy.PRECEDING
-        if method == 'ffill'
-        else cpp_replace_policy.FOLLOWING
+    return Column.from_pylibcudf(
+        pylibcudf.replace.replace_nulls(
+            input_col.to_pylibcudf(mode="read"),
+            pylibcudf.replace.ReplacePolicy.PRECEDING
+            if method == 'ffill'
+            else pylibcudf.replace.ReplacePolicy.FOLLOWING,
+        )
     )
-
-    with nogil:
-        c_result = move(cpp_replace_nulls(input_col_view, policy))
-
-    return Column.from_unique_ptr(move(c_result))
 
 
 def replace_nulls(

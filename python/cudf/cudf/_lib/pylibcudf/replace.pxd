@@ -11,6 +11,10 @@ ctypedef fused ReplacementType:
     Column
     Scalar
     replace_policy
+    # Allowing object is a workaround for
+    # https://github.com/cython/cython/issues/5984. See the implementation of
+    # replace_nulls for details.
+    object
 
 
 cpdef Column replace_nulls(Column source_column, ReplacementType replacement)
