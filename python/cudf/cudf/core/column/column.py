@@ -1926,6 +1926,13 @@ def as_column(
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
             )
+        elif (
+            pa.types.is_timestamp(arbitrary.type)
+            and arbitrary.type.tz is not None
+        ):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         elif (nan_as_null is None or nan_as_null) and pa.types.is_floating(
             arbitrary.type
         ):

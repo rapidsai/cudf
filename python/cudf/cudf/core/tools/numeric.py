@@ -95,6 +95,13 @@ def to_numeric(arg, errors="raise", downcast=None):
 
     if errors not in {"raise", "ignore", "coerce"}:
         raise ValueError("invalid error value specified")
+    elif errors == "ignore":
+        warnings.warn(
+            "errors='ignore' is deprecated and will raise in a future version. "
+            "Use to_numeric without passing `errors` and catch exceptions "
+            "explicitly instead",
+            FutureWarning,
+        )
 
     if downcast not in {None, "integer", "signed", "unsigned", "float"}:
         raise ValueError("invalid downcasting method provided")
