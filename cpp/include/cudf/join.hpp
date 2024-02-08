@@ -469,7 +469,7 @@ class unique_hash_join {
   /**
    * @brief Constructs a unique hash join object for subsequent probe calls
    *
-   * @param build The build table that doesn't contain duplicate elements
+   * @param build The build table that contains unique elements
    * @param probe The probe table, from which the keys are probed
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
