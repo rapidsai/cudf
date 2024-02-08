@@ -67,7 +67,7 @@ struct hasher_adapter {
 };
 
 /**
- * @brief Unique ash join that builds hash table in creation and probes results in subsequent
+ * @brief Unique hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions.
  *
  * @tparam Hasher Unary callable type
