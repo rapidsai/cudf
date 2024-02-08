@@ -2477,3 +2477,8 @@ def test_timezone_array_notimplemented():
     )
     with pytest.raises(NotImplementedError):
         cudf.Series(pa_array)
+
+
+def test_to_datetime_errors_ignore_deprecated():
+    with pytest.warns(FutureWarning):
+        cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")
