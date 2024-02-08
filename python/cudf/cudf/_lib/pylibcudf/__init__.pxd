@@ -9,6 +9,8 @@ from . cimport (
     interop,
     join,
     reduce,
+    rolling,
+    types,
     unary,
 )
 from .column cimport Column
@@ -33,5 +35,6 @@ __all__ = [
     "join",
     "unary",
     "reduce",
+    "rolling",
     "types",
 ]
