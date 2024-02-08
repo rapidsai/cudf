@@ -18,11 +18,11 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-from cudf._lib.aggregation cimport make_aggregation
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
 from cudf._lib import pylibcudf
+from cudf._lib.aggregation import make_aggregation
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
