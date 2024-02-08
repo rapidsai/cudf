@@ -2996,6 +2996,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle(), options.isAllowSingleQuotes(), options.isStripQuotesFromSingleStrings(), options.isMissingFieldsAsNulls()));
   }
 
+   /**
+   * Apply a JSONPath string to all rows in an input strings column.
+   *
+   * Applies a JSONPath string to an incoming strings column where each row in the column
+   * is a valid json string.  The output is returned by row as a strings column.
+   *
+   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * Note: Only implements the operators: $ . [] *
+   *
+   * @param path The JSONPath string to be applied to each row
+   * @return new strings ColumnVector containing the retrieved json object strings
+   */
+  public final ColumnVector getJSONObject(Scalar path) {
+    assert(type.equals(DType.STRING)) : "column type must be a String";
+    return getJSONObject(path, GetJsonObjectOptions.DEFAULT);
+  }
+
   /**
    * Returns a new strings column where target string within each string is replaced with the specified
    * replacement string.
