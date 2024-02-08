@@ -2224,8 +2224,12 @@ def test_groupby_apply_return_scalars(func, args):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.groupby("A").apply(func, *args)
-    actual = gdf.groupby("A").apply(func, *args)
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expected = pdf.groupby("A").apply(func, *args, **kwargs)
+    actual = gdf.groupby("A").apply(func, *args, **kwargs)
 
     assert_groupby_results_equal(expected, actual)
 
@@ -2268,8 +2272,14 @@ def test_groupby_apply_return_series_dataframe(func, args):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expected = pdf.groupby(["key"], group_keys=False).apply(func, *args)
-    actual = gdf.groupby(["key"]).apply(func, *args)
+    if PANDAS_GE_220:
+        kwargs = {"include_groups": False}
+    else:
+        kwargs = {}
+    expected = pdf.groupby(["key"], group_keys=False).apply(
+        func, *args, **kwargs
+    )
+    actual = gdf.groupby(["key"]).apply(func, *args, **kwargs)
 
     assert_groupby_results_equal(expected, actual)
 
