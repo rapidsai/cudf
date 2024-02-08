@@ -26,6 +26,7 @@ cpdef Column replace_nulls(Column source_column, ReplacementType replacement):
         - If replacement is a Scalar, the same value is used for all nulls.
         - If replacement is a replace_policy, the policy is used to determine
           the replacement value:
+
             - PRECEDING: The first non-null value that precedes the null is used.
             - FOLLOWING: The first non-null value that follows the null is used.
 
