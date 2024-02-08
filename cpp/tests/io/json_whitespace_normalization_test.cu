@@ -21,6 +21,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <rmm/cuda_stream.hpp>
@@ -39,7 +40,6 @@ using StateT  = char;
 // Type sufficiently large to index symbols within the input and output (may be unsigned)
 using SymbolOffsetT = uint32_t;
 
-enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_NUM_STATES };
 enum class dfa_symbol_group_id : uint32_t {
   DOUBLE_QUOTE_CHAR,   ///< Quote character SG: "
   ESCAPE_CHAR,         ///< Escape character SG: '\\'
@@ -48,6 +48,11 @@ enum class dfa_symbol_group_id : uint32_t {
   OTHER_SYMBOLS,       ///< SG implicitly matching all other characters
   NUM_SYMBOL_GROUPS    ///< Total number of symbol groups
 };
+// Alias for readability of symbol group ids
+constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
+// The i-th string representing all the characters of a symbol group
+std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
+  {{'"'}, {'\\'}, {'\n'}, {' ', '\t'}}};
 
 /**
  * -------- FST states ---------
@@ -62,18 +67,17 @@ enum class dfa_symbol_group_id : uint32_t {
  *        |   state, whitespaces following escaped double quotes inside strings may be removed.
  *
  * NOTE: An important case NOT handled by this FST is that of whitespace following newline
- * characters within a string. For example, `{"a":"x\n y"}` ---FST--> `{"a":"x\ny"}`
+ * characters within a string. Consider the following example
+ * Input:           {"a":"x\n y"}
+ * FST output:      {"a":"x\ny"}
+ * Expected output: {"a":"x\n y"}
  */
+enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_NUM_STATES };
 // Aliases for readability of the transition table
-constexpr auto TT_OOS            = dfa_states::TT_OOS;
-constexpr auto TT_DQS            = dfa_states::TT_DQS;
-constexpr auto TT_DEC            = dfa_states::TT_DEC;
-constexpr auto TT_NUM_STATES     = static_cast<StateT>(dfa_states::TT_NUM_STATES);
-constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NUM_SYMBOL_GROUPS);
-
-// The i-th string representing all the characters of a symbol group
-std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
-  {{'"'}, {'\\'}, {'\n'}, {' ', '\t'}}};
+constexpr auto TT_OOS        = dfa_states::TT_OOS;
+constexpr auto TT_DQS        = dfa_states::TT_DQS;
+constexpr auto TT_DEC        = dfa_states::TT_DEC;
+constexpr auto TT_NUM_STATES = static_cast<StateT>(dfa_states::TT_NUM_STATES);
 
 // Transition table
 std::array<std::array<dfa_states, NUM_SYMBOL_GROUPS>, TT_NUM_STATES> const wna_state_tt{
@@ -109,7 +113,7 @@ struct TransduceToNormalizedWS {
     // OOS   | {<SPC>}          -> <nop>
     // OOS   | {\t}             -> <nop>
 
-    // Case when read symbol is a whitespace or tabspace but is unquoted
+    // Case when read symbol is a space or tab but is unquoted
     // This will be the same condition as in `operator()(state_id, match_id, read_symbol)` function
     // However, since there is no output in this case i.e. the count returned by
     // operator()(state_id, match_id, read_symbol) is zero, this function is never called.
@@ -130,7 +134,7 @@ struct TransduceToNormalizedWS {
                                                  SymbolGroupT const match_id,
                                                  SymbolT const read_symbol) const
   {
-    // Case when read symbol is a whitespace or tabspace but is unquoted
+    // Case when read symbol is a space or tab but is unquoted
     if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::WHITESPACE_SYMBOLS) &&
         state_id == static_cast<StateT>(dfa_states::TT_OOS)) {
       return 0;
@@ -143,25 +147,23 @@ struct TransduceToNormalizedWS {
 // Base test fixture for tests
 struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
-void run_test(const std::string& input, const std::string& output)
+void run_test(std::string const& input, std::string const& output)
 {
-  // Prepare cuda stream for data transfers & kernels
-  rmm::cuda_stream stream{};
-  rmm::cuda_stream_view stream_view(stream);
-
   auto parser = cudf::io::fst::detail::make_fst(
     cudf::io::fst::detail::make_symbol_group_lut(wna_sgs),
     cudf::io::fst::detail::make_transition_table(wna_state_tt),
     cudf::io::fst::detail::make_translation_functor(TransduceToNormalizedWS{}),
-    stream);
+    cudf::test::get_default_stream());
 
-  auto d_input_scalar = cudf::make_string_scalar(input, stream_view);
+  auto d_input_scalar = cudf::make_string_scalar(input, cudf::test::get_default_stream());
   auto& d_input       = static_cast<cudf::scalar_type_t<std::string>&>(*d_input_scalar);
 
   // Prepare input & output buffers
   constexpr std::size_t single_item = 1;
-  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size(), stream_view);
-  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item, stream_view);
+  cudf::detail::hostdevice_vector<SymbolT> output_gpu(input.size(),
+                                                      cudf::test::get_default_stream());
+  cudf::detail::hostdevice_vector<SymbolOffsetT> output_gpu_size(single_item,
+                                                                 cudf::test::get_default_stream());
 
   // Allocate device-side temporary storage & run algorithm
   parser.Transduce(d_input.data(),
@@ -170,14 +172,14 @@ void run_test(const std::string& input, const std::string& output)
                    thrust::make_discard_iterator(),
                    output_gpu_size.device_ptr(),
                    start_state,
-                   stream_view);
+                   cudf::test::get_default_stream());
 
   // Async copy results from device to host
-  output_gpu.device_to_host_async(stream_view);
-  output_gpu_size.device_to_host_async(stream_view);
+  output_gpu.device_to_host_async(cudf::test::get_default_stream());
+  output_gpu_size.device_to_host_async(cudf::test::get_default_stream());
 
   // Make sure results have been copied back to host
-  stream.synchronize();
+  cudf::test::get_default_stream().synchronize();
 
   // Verify results
   ASSERT_EQ(output_gpu_size[0], output.size());
@@ -252,8 +254,8 @@ TEST_F(JsonWSNormalizationTest, GroundTruth_NoNormalizationRequired)
 
 TEST_F(JsonWSNormalizationTest, GroundTruth_InvalidInput)
 {
-  std::string input  = "{\"a\" : \"b }\n{ \"c\" :\t\"d\"}";
-  std::string output = "{\"a\":\"b }\n{\"c\":\"d\"}";
+  std::string input  = "{\"a\" : \"b }\n{ \"c \" :\t\"d\"}";
+  std::string output = "{\"a\":\"b }\n{\"c \":\"d\"}";
   run_test(input, output);
 }
 
