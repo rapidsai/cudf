@@ -136,7 +136,10 @@ cdef class GroupBy:
         return (
             offsets,
             columns_from_pylibcudf_table(grouped_keys),
-            columns_from_pylibcudf_table(grouped_values),
+            (
+                columns_from_pylibcudf_table(grouped_values)
+                if grouped_values is not None else []
+            ),
         )
 
     def aggregate(self, values, aggregations):

@@ -3763,4 +3763,4 @@ def test_groupby_internal_groups_empty(gdf):
     # .groups() method with an empty list:
     gb = gdf.groupby("y")._groupby
     _, _, grouped_vals = gb.groups([])
-    assert grouped_vals is None
+    assert grouped_vals == []
