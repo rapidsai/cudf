@@ -16,6 +16,9 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
+from cudf._lib.cpp.stream_compaction import \
+    duplicate_keep_option as DuplicateKeepOption  # no-cython-lint, isort:skip
+
 from .column cimport Column
 from .table cimport Table
 
