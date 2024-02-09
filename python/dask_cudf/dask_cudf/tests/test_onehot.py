@@ -8,10 +8,10 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
+from dask_cudf.tests.utils import xfail_dask_expr
 
 # No dask-expr support
-pytestmark = skip_dask_expr()
+pytestmark = xfail_dask_expr("limited get_dummy support in dask-expr + cudf")
 
 
 def test_get_dummies_cat():

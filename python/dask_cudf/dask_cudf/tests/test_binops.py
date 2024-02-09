@@ -10,10 +10,7 @@ from dask import dataframe as dd
 
 import cudf
 
-from dask_cudf.tests.utils import _make_random_frame, skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
+from dask_cudf.tests.utils import _make_random_frame
 
 
 def _make_empty_frame(npartitions=2):

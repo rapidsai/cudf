@@ -5,10 +5,7 @@ from pandas import NA
 
 from dask import dataframe as dd
 
-from dask_cudf.tests.utils import _make_random_frame, skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
+from dask_cudf.tests.utils import _make_random_frame
 
 
 @pytest.mark.parametrize(
@@ -27,6 +24,6 @@ def test_applymap_basic(func, has_na):
 
     dpdf = dd.from_pandas(pdf, npartitions=dgdf.npartitions)
 
-    expect = dpdf.applymap(func)
-    got = dgdf.applymap(func)
+    expect = dpdf.map(func)
+    got = dgdf.map(func)
     dd.assert_eq(expect, got, check_dtype=False)
