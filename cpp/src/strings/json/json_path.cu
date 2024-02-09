@@ -21,6 +21,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/json_parser.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/json.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -927,7 +928,15 @@ __launch_bounds__(block_size) __global__
       thrust::tie(result, out) =
         get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size, options);
       output_size = out.output_len.value_or(0);
-      if (out.output_len.has_value() && result == parse_result::SUCCESS) { is_valid = true; }
+
+      // Json validation
+      json_parser_options j_parser_options;
+      j_parser_options.set_allow_single_quotes(true);
+      j_parser_options.set_allow_unescaped_control_chars(true);
+      json_parser j_parser(j_parser_options, str.data(), str.size_bytes());
+      bool validation_result = j_parser.is_valid();
+
+      if (out.output_len.has_value() && result == parse_result::SUCCESS && validation_result) { is_valid = true; }
     }
 
     // filled in only during the precompute step. during the compute step, the offsets
