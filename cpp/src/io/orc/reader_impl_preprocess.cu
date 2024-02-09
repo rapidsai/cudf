@@ -77,7 +77,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
                                host_span<orc::SchemaType const> types,
                                bool use_index,
                                bool apply_struct_map,
-                               std::size_t* num_dictionary_entries,
+                               uint64_t* num_dictionary_entries,
                                std::vector<orc_stream_info>& stream_info,
                                cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
 {
@@ -471,8 +471,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
  * @param mr Device memory resource to use for device memory allocation
  */
 void decode_stream_data(std::size_t num_dicts,
-                        std::size_t skip_rows,
-                        std::size_t row_index_stride,
+                        uint64_t skip_rows,
+                        uint64_t row_index_stride,
                         std::size_t level,
                         table_view const& tz_table,
                         cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
@@ -820,10 +820,10 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     // Tracker for eventually deallocating compressed and uncompressed data
     auto& stripe_data = lvl_stripe_data[level];
 
-    std::size_t stripe_start_row = 0;
-    std::size_t num_dict_entries = 0;
-    std::size_t num_rowgroups    = 0;
-    int stripe_idx               = 0;
+    uint64_t stripe_start_row = 0;
+    uint64_t num_dict_entries = 0;
+    uint64_t num_rowgroups    = 0;
+    size_type stripe_idx      = 0;
 
     std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
     for (auto const& stripe_source_mapping : selected_stripes) {

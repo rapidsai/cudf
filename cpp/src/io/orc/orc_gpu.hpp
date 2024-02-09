@@ -111,7 +111,7 @@ struct ColumnDesc {
   uint32_t num_child_rows;  // store number of child rows if it's list column (output, 32bit should
                             // be enough)
   uint32_t num_rowgroups;   // number of rowgroups in the chunk
-  uint32_t dictionary_start;         // start position in global dictionary
+  uint64_t dictionary_start;         // start position in global dictionary
   uint32_t dict_len;                 // length of local dictionary
   uint64_t null_count;               // number of null values in this stripe's column
   uint64_t skip_count;               // number of non-null values to skip
