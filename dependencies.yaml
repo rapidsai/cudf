@@ -402,17 +402,11 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
-              cuda: "11.*"
               arch: aarch64
             packages:
-              # libcufile requires CUDA 12.2+ on aarch64
-          - matrix:
-              cuda: "12.0"
-              arch: aarch64
-            packages:
-              # libcufile requires CUDA 12.2+ on aarch64
           - matrix:
               cuda: "12.*"
+              arch: x86_64
             packages:
               - libcufile-dev
           - matrix:
