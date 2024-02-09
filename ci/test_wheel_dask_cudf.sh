@@ -26,9 +26,24 @@ python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
+rapids-logger "pytest dask_cudf"
+pushd python/dask_cudf/dask_cudf
+python -m pytest \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
+  --numprocesses=8 \
+  .
+popd
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
-echo "Running dask-cudf tests with dask-expr enabled..."
-DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
+rapids-logger "pytest dask_cudf + dask-expr"
+pushd python/dask_cudf/dask_cudf
+DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
+  --numprocesses=8 \
+  .
+popd
