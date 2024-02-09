@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf import melt as cudf_melt
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -155,6 +155,10 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_210,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
 @pytest.mark.parametrize(
     "columns",
     [
@@ -237,6 +241,10 @@ def test_df_stack_mixed_dtypes():
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_210,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
 @pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
 def test_df_stack_multiindex_column_axis_pd_example(level):
     columns = pd.MultiIndex.from_tuples(
