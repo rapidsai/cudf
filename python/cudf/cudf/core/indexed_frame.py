@@ -2608,12 +2608,15 @@ class IndexedFrame(Frame):
                     and self._data.multiindex
                 ):
                     out._set_column_names_like(self)
+            if ignore_index:
+                out = out.reset_index(drop=True)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
+            if ignore_index:
+                out._data.rangeindex = True
+                out._data.names = list(range(len(self._data.names)))
 
-        if ignore_index is True:
-            out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
 
     def memory_usage(self, index=True, deep=False):
@@ -3918,6 +3921,12 @@ class IndexedFrame(Frame):
         """
         import cudf.core.resample
 
+        if kind is not None:
+            warnings.warn(
+                "The 'kind' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
             "start",
@@ -4442,7 +4451,7 @@ class IndexedFrame(Frame):
 
         Examples
         --------
-        >>> import cudf as cudf
+        >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3)
            a
@@ -6104,7 +6113,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = libcudf.aggregation.RankMethod[method.upper()]
+        method_enum = libcudf.pylibcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
@@ -6176,11 +6185,13 @@ class IndexedFrame(Frame):
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
+        from dask.base import normalize_token
+
         return [
             type(self),
-            self._dtypes,
-            self.index,
-            self.hash_values().values_host,
+            normalize_token(self._dtypes),
+            normalize_token(self.index),
+            normalize_token(self.hash_values().values_host),
         ]
 
 

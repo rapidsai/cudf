@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.functional cimport reference_wrapper
@@ -16,7 +16,13 @@ from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order, size_type
+from cudf._lib.cpp.types cimport (
+    null_order,
+    null_policy,
+    order,
+    size_type,
+    sorted,
+)
 from cudf._lib.cpp.utilities.host_span cimport host_span
 
 # workaround for https://github.com/cython/cython/issues/3885
@@ -55,20 +61,20 @@ cdef extern from "cudf/groupby.hpp" \
         groupby(
             const table_view& keys,
             null_policy include_null_keys,
-            bool keys_are_sorted,
+            sorted keys_are_sorted,
         ) except +
 
         groupby(
             const table_view& keys,
             null_policy include_null_keys,
-            bool keys_are_sorted,
+            sorted keys_are_sorted,
             const vector[order]& column_order,
         ) except +
 
         groupby(
             const table_view& keys,
             null_policy include_null_keys,
-            bool keys_are_sorted,
+            sorted keys_are_sorted,
             const vector[order]& column_order,
             const vector[null_order]& null_precedence
         ) except +
@@ -100,6 +106,6 @@ cdef extern from "cudf/groupby.hpp" \
         groups get_groups(table_view values) except +
 
         pair[unique_ptr[table], unique_ptr[table]] replace_nulls(
-            const table_view& value,
+            const table_view& values,
             const vector[replace_policy] replace_policy
         ) except +

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from functools import partial
 
@@ -10,7 +10,7 @@ from dask import dataframe as dd
 
 import cudf
 
-import dask_cudf as dgd
+import dask_cudf
 
 param_nrows = [5, 10, 50, 100]
 
@@ -44,8 +44,8 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     expect = expect.to_pandas()
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     joined = left.set_index("x").join(
         right.set_index("x"), how="inner", lsuffix="l", rsuffix="r"
@@ -102,8 +102,8 @@ def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
     expect = expect.to_pandas()
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     joined = left.set_index("x").join(
         right.set_index("x"), how=how, lsuffix="l", rsuffix="r"
@@ -173,8 +173,8 @@ def test_merge_left(
         )
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     result = left.merge(right, on=("x", "y"), how=how).compute(
         scheduler="single-threaded"
@@ -216,8 +216,8 @@ def test_merge_1col_left(
     )
 
     # dask_cudf
-    left = dgd.from_cudf(left, chunksize=chunksize)
-    right = dgd.from_cudf(right, chunksize=chunksize)
+    left = dask_cudf.from_cudf(left, chunksize=chunksize)
+    right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
     joined = left.merge(right, on=["x"], how=how)
 
@@ -238,8 +238,8 @@ def test_merge_should_fail():
     df2["a"] = [7, 2, 3, 8, 5, 9] * 2
     df2["c"] = np.random.randint(0, 12, 12)
 
-    left = dgd.from_cudf(df1, 1).groupby("a").b.min().to_frame()
-    right = dgd.from_cudf(df2, 1).groupby("a").c.min().to_frame()
+    left = dask_cudf.from_cudf(df1, 1).groupby("a").b.min().to_frame()
+    right = dask_cudf.from_cudf(df2, 1).groupby("a").c.min().to_frame()
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on=["nonCol"])
@@ -250,7 +250,7 @@ def test_merge_should_fail():
 
     # Same column names
     df2["b"] = np.random.randint(0, 12, 12)
-    right = dgd.from_cudf(df2, 1).groupby("a").b.min().to_frame()
+    right = dask_cudf.from_cudf(df2, 1).groupby("a").b.min().to_frame()
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on="NonCol")

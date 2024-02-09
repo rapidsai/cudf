@@ -21,7 +21,6 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
-from pandas._config import get_option
 from typing_extensions import Self
 
 import cudf
@@ -1306,7 +1305,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def __repr__(self):
-        max_seq_items = get_option("max_seq_items") or len(self)
+        max_seq_items = pd.get_option("max_seq_items") or len(self)
         mr = 0
         if 2 * max_seq_items < len(self):
             mr = max_seq_items + 1
@@ -2403,6 +2402,11 @@ class TimedeltaIndex(Index):
             raise NotImplementedError("freq is not yet supported")
 
         if unit is not None:
+            warnings.warn(
+                "The 'unit' keyword is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
             raise NotImplementedError(
                 "unit is not yet supported, alternatively "
                 "dtype parameter is supported"
@@ -2699,6 +2703,12 @@ def interval_range(
 
     start = cudf.Scalar(start) if start is not None else start
     end = cudf.Scalar(end) if end is not None else end
+    if periods is not None and not cudf.api.types.is_integer(periods):
+        warnings.warn(
+            "Non-integer 'periods' in cudf.date_range, and cudf.interval_range"
+            " are deprecated and will raise in a future version.",
+            FutureWarning,
+        )
     periods = cudf.Scalar(int(periods)) if periods is not None else periods
     freq = cudf.Scalar(freq) if freq is not None else freq
 

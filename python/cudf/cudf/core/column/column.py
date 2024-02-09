@@ -53,8 +53,6 @@ from cudf._lib.types import size_type_dtype
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
     _is_categorical_dtype,
-    _is_datetime64tz_dtype,
-    _is_interval_dtype,
     _is_non_decimal_numeric_dtype,
     _is_pandas_nullable_extension_dtype,
     infer_dtype,
@@ -1928,6 +1926,13 @@ def as_column(
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
             )
+        elif (
+            pa.types.is_timestamp(arbitrary.type)
+            and arbitrary.type.tz is not None
+        ):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         elif (nan_as_null is None or nan_as_null) and pa.types.is_floating(
             arbitrary.type
         ):
@@ -2189,7 +2194,7 @@ def as_column(
         elif (
             arbitrary.size != 0
             and arb_dtype.kind in ("O")
-            and isinstance(arbitrary[0], pd._libs.interval.Interval)
+            and isinstance(arbitrary[0], pd.Interval)
         ):
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
@@ -2263,9 +2268,17 @@ def as_column(
         np_type = None
         try:
             if dtype is not None:
-                if _is_categorical_dtype(dtype) or _is_interval_dtype(dtype):
+                if dtype in {"category", "interval"} or isinstance(
+                    dtype,
+                    (
+                        cudf.CategoricalDtype,
+                        cudf.IntervalDtype,
+                        pd.IntervalDtype,
+                        pd.CategoricalDtype,
+                    ),
+                ):
                     raise TypeError
-                if _is_datetime64tz_dtype(dtype):
+                if isinstance(dtype, pd.DatetimeTZDtype):
                     raise NotImplementedError(
                         "Use `tz_localize()` to construct "
                         "timezone aware data."
@@ -2413,7 +2426,9 @@ def as_column(
             elif np_type == np.str_:
                 sr = pd.Series(arbitrary, dtype="str")
                 data = as_column(sr, nan_as_null=nan_as_null)
-            elif _is_interval_dtype(dtype):
+            elif dtype == "interval" or isinstance(
+                dtype, (pd.IntervalDtype, cudf.IntervalDtype)
+            ):
                 sr = pd.Series(arbitrary, dtype="interval")
                 data = as_column(sr, nan_as_null=nan_as_null, dtype=dtype)
             elif (
