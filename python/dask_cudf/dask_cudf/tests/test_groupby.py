@@ -50,9 +50,6 @@ def pdf(request):
 @pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
 @pytest.mark.parametrize("series", [False, True])
 def test_groupby_basic(series, aggregation, pdf):
-    if QUERY_PLANNING_ON and aggregation == "collect":
-        pytest.skip("Dask-expr does not support 'collect' yet.")
-
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdf_grouped = gdf.groupby("xx", dropna=True)
     ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby(
