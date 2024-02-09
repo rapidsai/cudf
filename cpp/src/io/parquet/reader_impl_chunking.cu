@@ -18,6 +18,7 @@
 #include "reader_impl_chunking.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -738,6 +739,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
   bool dict_pages,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto for_each_codec_page = [&](Compression codec, std::function<void(size_t)> const& f) {
     for (size_t p = 0; p < pages.size(); p++) {
       if (chunks[pages[p].chunk_idx].codec == codec &&
@@ -956,6 +959,8 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   // sum row counts for all non-dictionary, non-list columns. other columns will be indicated as 0
   rmm::device_uvector<size_type> row_counts(pages.size(),
                                             stream);  // worst case:  num keys == num pages

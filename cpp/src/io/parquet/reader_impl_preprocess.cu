@@ -18,6 +18,7 @@
 #include "reader_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -36,6 +37,7 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+#include <thrust/transform_scan.h>
 #include <thrust/unique.h>
 
 #include <cuda/functional>
@@ -351,6 +353,7 @@ std::string encoding_to_string(Encoding encoding)
   }
   return result;
 }
+
 /**
  * @brief Create a readable string for the user that will list out all unsupported encodings found.
  *
@@ -370,6 +373,71 @@ std::string encoding_to_string(Encoding encoding)
 }
 
 /**
+ * @brief Sort pages in chunk/schema order
+ *
+ * @param unsorted_pages The unsorted pages
+ * @param chunks The chunks associated with the pages
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns The sorted vector of pages
+ */
+cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const> unsorted_pages,
+                                                     device_span<ColumnChunkDesc const> chunks,
+                                                     rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  // sort the pages in chunk/schema order. we use chunk.src_col_index instead of
+  // chunk.src_col_schema because the user may have reordered them (reading columns, "a" and "b" but
+  // returning them as "b" and "a")
+  //
+  // ordering of pages is by input column schema, repeated across row groups.  so
+  // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
+  //
+  // 1, 1, 2, 2, 3, 3
+  //
+  // However, if we had more than one row group, the pattern would be
+  //
+  // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
+  // ^ row group 0     |
+  //                   ^ row group 1
+  //
+  // To process pages by key (exclusive_scan_by_key, reduce_by_key, etc), the ordering we actually
+  // want is
+  //
+  // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
+  //
+  // We also need to preserve key-relative page ordering, so we need to use a stable sort.
+  rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    unsorted_pages.begin(),
+                    unsorted_pages.end(),
+                    page_keys.begin(),
+                    [chunks = chunks.begin()] __device__(PageInfo const& page) {
+                      return chunks[page.chunk_idx].src_col_index;
+                    });
+  // we are doing this by sorting indices first and then transforming the output because nvcc
+  // started generating kernels using too much shared memory when trying to sort the pages
+  // directly.
+  rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
+  thrust::sequence(rmm::exec_policy_nosync(stream), sort_indices.begin(), sort_indices.end(), 0);
+  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
+                             page_keys.begin(),
+                             page_keys.end(),
+                             sort_indices.begin(),
+                             thrust::less<int>());
+  auto pass_pages =
+    cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    sort_indices.begin(),
+    sort_indices.end(),
+    pass_pages.d_begin(),
+    [unsorted_pages = unsorted_pages.begin()] __device__(int32_t i) { return unsorted_pages[i]; });
+  stream.synchronize();
+  return pass_pages;
+}
+
+/**
  * @brief Decode the page information for a given pass.
  *
  * @param pass_intermediate_data The struct containing pass information
@@ -378,21 +446,33 @@ void decode_page_headers(pass_intermediate_data& pass,
                          device_span<PageInfo> unsorted_pages,
                          rmm::cuda_stream_view stream)
 {
-  cudf::detail::hostdevice_vector<chunk_page_info> chunk_page_info(pass.chunks.size(), stream);
+  CUDF_FUNC_RANGE();
 
-  // IMPORTANT : if you change how pages are stored within a chunk (dist pages, then data pages),
-  // please update preprocess_nested_columns to reflect this.
-  for (size_t c = 0, page_count = 0; c < pass.chunks.size(); c++) {
-    pass.chunks[c].max_num_pages = pass.chunks[c].num_data_pages + pass.chunks[c].num_dict_pages;
-    chunk_page_info[c].pages     = &unsorted_pages[page_count];
-    page_count += pass.chunks[c].max_num_pages;
-  }
+  auto iter = thrust::make_counting_iterator(0);
+  rmm::device_uvector<size_t> chunk_page_counts(pass.chunks.size() + 1, stream);
+  thrust::transform_exclusive_scan(
+    rmm::exec_policy_nosync(stream),
+    iter,
+    iter + pass.chunks.size() + 1,
+    chunk_page_counts.begin(),
+    [chunks = pass.chunks.d_begin()] __device__(size_t i) {
+      return chunks[i].num_data_pages + chunks[i].num_dict_pages;
+    },
+    0,
+    thrust::plus<size_t>{});
+  rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   iter,
+                   iter + pass.chunks.size(),
+                   [cpi               = d_chunk_page_info.begin(),
+                    chunk_page_counts = chunk_page_counts.begin(),
+                    unsorted_pages    = unsorted_pages.begin()] __device__(size_t i) {
+                     cpi[i].pages = &unsorted_pages[chunk_page_counts[i]];
+                   });
 
   kernel_error error_code(stream);
-  pass.chunks.host_to_device_async(stream);
-  chunk_page_info.host_to_device_async(stream);
-  DecodePageHeaders(pass.chunks.device_ptr(),
-                    chunk_page_info.device_ptr(),
+  DecodePageHeaders(pass.chunks.d_begin(),
+                    d_chunk_page_info.begin(),
                     pass.chunks.size(),
                     error_code.data(),
                     stream);
@@ -422,56 +502,8 @@ void decode_page_headers(pass_intermediate_data& pass,
                                             thrust::maximum<int>());
   pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
 
-  // sort the pages in chunk/schema order. we use chunk.src_col_index instead of
-  // chunk.src_col_schema because the user may have reordered them (reading columns, "a" and "b" but
-  // returning them as "b" and "a")
-  //
-  // ordering of pages is by input column schema, repeated across row groups.  so
-  // if we had 3 columns, each with 2 pages, and 1 row group, our schema values might look like
-  //
-  // 1, 1, 2, 2, 3, 3
-  //
-  // However, if we had more than one row group, the pattern would be
-  //
-  // 1, 1, 2, 2, 3, 3, 1, 1, 2, 2, 3, 3
-  // ^ row group 0     |
-  //                   ^ row group 1
-  //
-  // To process pages by key (exclusive_scan_by_key, reduce_by_key, etc), the ordering we actually
-  // want is
-  //
-  // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
-  //
-  // We also need to preserve key-relative page ordering, so we need to use a stable sort.
-  {
-    rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      unsorted_pages.begin(),
-                      unsorted_pages.end(),
-                      page_keys.begin(),
-                      [chunks = pass.chunks.d_begin()] __device__(PageInfo const& page) {
-                        return chunks[page.chunk_idx].src_col_index;
-                      });
-    // we are doing this by sorting indices first and then transforming the output because nvcc
-    // started generating kernels using too much shared memory when trying to sort the pages
-    // directly.
-    rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
-    thrust::sequence(rmm::exec_policy_nosync(stream), sort_indices.begin(), sort_indices.end(), 0);
-    thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
-                               page_keys.begin(),
-                               page_keys.end(),
-                               sort_indices.begin(),
-                               thrust::less<int>());
-    pass.pages = cudf::detail::hostdevice_vector<PageInfo>(
-      unsorted_pages.size(), unsorted_pages.size(), stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      sort_indices.begin(),
-                      sort_indices.end(),
-                      pass.pages.d_begin(),
-                      [unsorted_pages = unsorted_pages.begin()] __device__(int32_t i) {
-                        return unsorted_pages[i];
-                      });
-  }
+  // sort the pages in chunk/schema order.
+  pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
 
   // compute offsets to each group of input pages.
   // page_keys:   1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
@@ -487,11 +519,11 @@ void decode_page_headers(pass_intermediate_data& pass,
                                                      page_counts.begin())
                                  .second;
   auto const num_page_counts = page_counts_end - page_counts.begin();
-  pass.page_offsets = cudf::detail::hostdevice_vector<size_type>(num_page_counts + 1, stream);
+  pass.page_offsets          = rmm::device_uvector<size_type>(num_page_counts + 1, stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          page_counts.begin(),
                          page_counts.begin() + num_page_counts + 1,
-                         pass.page_offsets.d_begin());
+                         pass.page_offsets.begin());
 
   // setup dict_page for each chunk if necessary
   thrust::for_each(rmm::exec_policy_nosync(stream),
@@ -503,7 +535,6 @@ void decode_page_headers(pass_intermediate_data& pass,
                      }
                    });
 
-  pass.page_offsets.device_to_host_async(stream);
   pass.pages.device_to_host_async(stream);
   pass.chunks.device_to_host_async(stream);
   stream.synchronize();
@@ -590,6 +621,8 @@ struct set_final_row_count {
 
 void reader::impl::build_string_dict_indices()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass = *_pass_itm_data;
 
   // compute number of indices per chunk and a summed total

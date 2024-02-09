@@ -390,7 +390,6 @@ struct ColumnChunkDesc {
       level_bits{def_level_bits_, rep_level_bits_},
       num_data_pages(0),
       num_dict_pages(0),
-      max_num_pages(0),
       dict_page(nullptr),
       str_dict_index(nullptr),
       valid_map_base{nullptr},
@@ -419,7 +418,6 @@ struct ColumnChunkDesc {
     level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
   int32_t num_data_pages{};                     // number of data pages
   int32_t num_dict_pages{};                     // number of dictionary pages
-  int32_t max_num_pages{};                      // size of page_info array
   PageInfo const* dict_page{};
   string_index_pair* str_dict_index{};           // index for string dictionary
   bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
