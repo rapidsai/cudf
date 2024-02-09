@@ -306,9 +306,9 @@ void ParseRowGroupIndex(RowGroup* row_groups,
  */
 void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
-                                      uint32_t num_columns,
+                                      size_type num_columns,
                                       uint32_t num_stripes,
-                                      size_t first_row,
+                                      uint64_t first_row,
                                       rmm::cuda_stream_view stream);
 
 /**
@@ -331,12 +331,12 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
 void DecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
                          device_2dspan<RowGroup> row_groups,
-                         uint32_t num_columns,
+                         size_type num_columns,
                          uint32_t num_stripes,
-                         size_t first_row,
+                         uint64_t first_row,
                          table_device_view tz_table,
-                         uint32_t num_rowgroups,
-                         uint32_t rowidx_stride,
+                         uint64_t num_rowgroups,
+                         uint64_t rowidx_stride,
                          size_t level,
                          size_type* error_count,
                          rmm::cuda_stream_view stream);
