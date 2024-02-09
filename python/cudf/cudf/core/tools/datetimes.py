@@ -765,11 +765,13 @@ def _isin_datetimelike(
         Column of booleans indicating if each element is in values.
     """
     rhs = None
+    actual_rhs_dtype = None
     try:
         rhs = cudf.core.column.as_column(values)
 
         if rhs.dtype.kind in {"f", "i", "u"}:
             return cudf.core.column.full(len(lhs), False, dtype="bool")
+        actual_rhs_dtype = rhs.dtype
         rhs = rhs.astype(lhs.dtype)
         res = lhs._isin_earlystop(rhs)
         if res is not None:
@@ -780,6 +782,19 @@ def _isin_datetimelike(
         return cudf.core.column.full(len(lhs), False, dtype="bool")
 
     res = lhs._obtain_isin_result(rhs)
+    if (
+        actual_rhs_dtype is not None
+        and lhs.dtype != actual_rhs_dtype
+        and actual_rhs_dtype == cudf.dtype("str")
+    ):
+        warnings.warn(
+            f"The behavior of 'isin' with dtype={lhs.dtype} and "
+            "castable values (e.g. strings) is deprecated. In a "
+            "future version, these will not be considered matching "
+            "by isin. Explicitly cast to the appropriate dtype before "
+            "calling isin instead.",
+            FutureWarning,
+        )
     return res
 
 

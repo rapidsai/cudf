@@ -15,7 +15,7 @@ import pytest
 import cudf
 from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
@@ -2508,8 +2508,16 @@ def test_isin_index(data, values):
     psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
-    got = gsr.index.isin(values)
-    expected = psr.index.isin(values)
+    with expect_warning_if(
+        gsr.index.dtype == "datetime64[ns]" and "2019-01-01 04:00:00" in values
+    ):
+        got = gsr.index.isin(values)
+    with expect_warning_if(
+        PANDAS_GE_220
+        and psr.index.dtype == "datetime64[ns]"
+        and "2019-01-01 04:00:00" in values
+    ):
+        expected = psr.index.isin(values)
 
     assert_eq(got, expected)
 

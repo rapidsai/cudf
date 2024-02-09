@@ -14,6 +14,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.api.extensions import no_default
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
@@ -1795,8 +1796,19 @@ def test_isin_datetime(data, values):
     psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
-    got = gsr.isin(values)
-    expected = psr.isin(values)
+    with expect_warning_if(
+        len(gsr)
+        and gsr.dtype == "datetime64[ns]"
+        and (len(values) == 0 or "2019-04-03" in values)
+    ):
+        got = gsr.isin(values)
+    with expect_warning_if(
+        PANDAS_GE_220
+        and len(psr)
+        and psr.dtype == "datetime64[ns]"
+        and "2019-04-03" in values
+    ):
+        expected = psr.isin(values)
     assert_eq(got, expected)
 
 
