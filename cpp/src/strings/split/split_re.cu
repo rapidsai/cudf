@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
@@ -36,7 +35,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform_reduce.h>
-#include <thrust/transform_scan.h>
 
 namespace cudf {
 namespace strings {
@@ -60,7 +58,7 @@ enum class split_direction {
 struct token_reader_fn {
   column_device_view const d_strings;
   split_direction const direction;
-  size_type const* d_token_offsets;
+  cudf::detail::input_offsetalator const d_token_offsets;
   string_index_pair* d_tokens;
 
   __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
@@ -73,9 +71,9 @@ struct token_reader_fn {
     auto const token_count  = d_token_offsets[idx + 1] - token_offset;
     auto const d_result     = d_tokens + token_offset;  // store tokens here
 
-    size_type token_idx = 0;
-    auto itr            = d_str.begin();
-    auto last_pos       = itr;
+    int64_t token_idx = 0;
+    auto itr          = d_str.begin();
+    auto last_pos     = itr;
     while (itr.position() <= nchars) {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
@@ -90,7 +88,7 @@ struct token_reader_fn {
         d_result[token_idx++] = token;
       } else {
         if (direction == split_direction::FORWARD) { break; }  // we are done
-        for (auto l = 0; l < token_idx - 1; ++l) {
+        for (auto l = 0L; l < token_idx - 1; ++l) {
           d_result[l] = d_result[l + 1];  // shift left
         }
         d_result[token_idx - 1] = token;
@@ -120,50 +118,45 @@ struct token_reader_fn {
 /**
  * @brief Call regex to split each input string into tokens.
  *
- * This will also convert the `offsets` values from counts to offsets.
- *
  * @param d_strings Strings to split
  * @param d_prog Regex to evaluate against each string
  * @param direction Whether tokens are generated forwards or backwards.
  * @param max_tokens The maximum number of tokens for each split.
- * @param offsets The number of matches on input.
- *                The offsets for each token in each string on output.
+ * @param counts The number of tokens in each string
  * @param stream CUDA stream used for kernel launches.
  */
-rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const& d_strings,
-                                                       reprog_device& d_prog,
-                                                       split_direction direction,
-                                                       size_type maxsplit,
-                                                       mutable_column_view& offsets,
-                                                       rmm::cuda_stream_view stream)
+std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> generate_tokens(
+  column_device_view const& d_strings,
+  reprog_device& d_prog,
+  split_direction direction,
+  size_type maxsplit,
+  column_view const& counts,
+  rmm::cuda_stream_view stream)
 {
   auto const strings_count = d_strings.size();
-
-  auto const max_tokens = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
-
-  auto const begin     = thrust::make_counting_iterator<size_type>(0);
-  auto const end       = thrust::make_counting_iterator<size_type>(strings_count);
-  auto const d_offsets = offsets.data<size_type>();
+  auto const max_tokens    = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
+  auto const d_counts      = counts.data<size_type>();
 
   // convert match counts to token offsets
-  auto map_fn = [d_strings, d_offsets, max_tokens] __device__(auto idx) {
-    return d_strings.is_null(idx) ? 0 : std::min(d_offsets[idx], max_tokens) + 1;
-  };
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream), begin, end + 1, d_offsets, map_fn, 0, thrust::plus<size_type>{});
+  auto map_fn = cuda::proclaim_return_type<size_type>(
+    [d_strings, d_counts, max_tokens] __device__(auto idx) -> size_type {
+      return d_strings.is_null(idx) ? 0 : std::min(d_counts[idx], max_tokens) + 1;
+    });
 
-  // the last offset entry is the total number of tokens to be generated
-  auto const total_tokens = cudf::detail::get_value<size_type>(offsets, strings_count, stream);
+  auto const begin = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  auto const end   = begin + strings_count;
 
+  auto [offsets, total_tokens] = cudf::strings::detail::make_offsets_child_column(
+    begin, end, stream, rmm::mr::get_current_device_resource());
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
+
+  // build a vector of tokens
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
-  if (total_tokens == 0) { return tokens; }
-
-  launch_for_each_kernel(token_reader_fn{d_strings, direction, d_offsets, tokens.data()},
-                         d_prog,
-                         d_strings.size(),
-                         stream);
-
-  return tokens;
+  if (total_tokens > 0) {
+    auto tr_fn = token_reader_fn{d_strings, direction, d_offsets, tokens.data()};
+    launch_for_each_kernel(tr_fn, d_prog, d_strings.size(), stream);
+  }
+  return std::pair(std::move(tokens), std::move(offsets));
 }
 
 /**
@@ -176,13 +169,13 @@ rmm::device_uvector<string_index_pair> generate_tokens(column_device_view const&
 struct tokens_transform_fn {
   column_device_view const d_strings;
   string_index_pair const* d_tokens;
-  size_type const* d_token_offsets;
+  cudf::detail::input_offsetalator const d_token_offsets;
   size_type const column_index;
 
   __device__ string_index_pair operator()(size_type idx) const
   {
     auto const offset      = d_token_offsets[idx];
-    auto const token_count = d_token_offsets[idx + 1] - offset;
+    auto const token_count = static_cast<size_type>(d_token_offsets[idx + 1] - offset);
     return (column_index >= token_count) || d_strings.is_null(idx)
              ? string_index_pair{nullptr, 0}
              : d_tokens[offset + column_index];
@@ -212,13 +205,13 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto offsets = count_matches(
-    *d_strings, *d_prog, strings_count + 1, stream, rmm::mr::get_current_device_resource());
-  auto offsets_view = offsets->mutable_view();
-  auto d_offsets    = offsets_view.data<size_type>();
+  auto const counts = count_matches(
+    *d_strings, *d_prog, strings_count, stream, rmm::mr::get_current_device_resource());
 
   // get the split tokens from the input column; this also converts the counts into offsets
-  auto tokens = generate_tokens(*d_strings, *d_prog, direction, maxsplit, offsets_view, stream);
+  auto [tokens, offsets] =
+    generate_tokens(*d_strings, *d_prog, direction, maxsplit, counts->view(), stream);
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
@@ -226,7 +219,7 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(strings_count),
     [d_offsets] __device__(auto const idx) -> size_type {
-      return d_offsets[idx + 1] - d_offsets[idx];
+      return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     },
     0,
     thrust::maximum<size_type>{});
@@ -243,10 +236,11 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
   }
 
   // convert the tokens into multiple strings columns
+  auto d_tokens            = tokens.data();
   auto make_strings_lambda = [&](size_type column_index) {
     // returns appropriate token for each row/column
     auto indices_itr = cudf::detail::make_counting_transform_iterator(
-      0, tokens_transform_fn{*d_strings, tokens.data(), d_offsets, column_index});
+      0, tokens_transform_fn{*d_strings, d_tokens, d_offsets, column_index});
     return make_strings_column(indices_itr, indices_itr + strings_count, stream, mr);
   };
   // build a vector of columns
@@ -276,11 +270,14 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto offsets      = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto offsets_view = offsets->mutable_view();
+  auto counts = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
 
   // get the split tokens from the input column; this also converts the counts into offsets
-  auto tokens = generate_tokens(*d_strings, *d_prog, direction, maxsplit, offsets_view, stream);
+  auto [tokens, offsets] =
+    generate_tokens(*d_strings, *d_prog, direction, maxsplit, counts->view(), stream);
+  CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   // convert the tokens into one big strings column
   auto strings_output = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
