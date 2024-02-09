@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from itertools import repeat
 
@@ -10,10 +10,7 @@ from libcpp.utility cimport move, pair
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.aggregation cimport (
-    rank_method,
-    underlying_type_t_rank_method,
-)
+from cudf._lib.cpp.aggregation cimport rank_method
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.search cimport lower_bound, upper_bound
@@ -414,16 +411,12 @@ def digitize(list source_columns, list bins, bool right=False):
 
 
 @acquire_spill_lock()
-def rank_columns(list source_columns, object method, str na_option,
+def rank_columns(list source_columns, rank_method method, str na_option,
                  bool ascending, bool pct
                  ):
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef rank_method c_rank_method = < rank_method > (
-        < underlying_type_t_rank_method > method
-    )
-
     cdef cpp_order column_order = (
         cpp_order.ASCENDING
         if ascending
@@ -464,7 +457,7 @@ def rank_columns(list source_columns, object method, str na_option,
             c_results.push_back(move(
                 rank(
                     c_view,
-                    c_rank_method,
+                    method,
                     column_order,
                     c_null_handling,
                     null_precedence,

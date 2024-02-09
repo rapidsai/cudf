@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -990,7 +991,7 @@ class CategoricalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-        return column.build_categorical_column(
+        result = column.build_categorical_column(
             categories=new_cats["cats"],
             codes=column.build_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
@@ -998,6 +999,16 @@ class CategoricalColumn(column.ColumnBase):
             size=output.size,
             ordered=self.dtype.ordered,
         )
+        if result.dtype != self.dtype:
+            warnings.warn(
+                "The behavior of replace with "
+                "CategoricalDtype is deprecated. In a future version, replace "
+                "will only be used for cases that preserve the categories. "
+                "To change the categories, use ser.cat.rename_categories "
+                "instead.",
+                FutureWarning,
+            )
+        return result
 
     def isnull(self) -> ColumnBase:
         """
