@@ -86,11 +86,10 @@ struct unique_hash_join {
   /// Device row equal type
   using d_equal_type =
     std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
-  using first_hasher  = hasher_adapter<thrust::identity<hash_value_type>>;
-  using second_hasher = hasher_adapter<Hasher>;
-  using probing_scheme_type =
-    cuco::experimental::double_hashing<DEFAULT_JOIN_CG_SIZE, first_hasher, second_hasher>;
-  using cuco_storge_type = cuco::experimental::storage<1>;
+  using first_hasher        = hasher_adapter<thrust::identity<hash_value_type>>;
+  using second_hasher       = hasher_adapter<Hasher>;
+  using probing_scheme_type = cuco::experimental::linear_probing<1, first_hasher>;
+  using cuco_storge_type    = cuco::experimental::storage<1>;
 
   /// Hash table type
   using hash_table_type =

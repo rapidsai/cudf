@@ -97,6 +97,28 @@ __device__ void flush_buffer(Tile const& tile,
   }
 }
 
+__device__ void flush_buffer(cooperative_groups::thread_block const& block,
+                             cudf::size_type buffer_size,
+                             cuco::pair<cudf::size_type, cudf::size_type>* buffer,
+                             cudf::size_type* counter,
+                             cudf::size_type* build_indices,
+                             cudf::size_type* probe_indices)
+{
+  auto i = block.thread_rank();
+  __shared__ cudf::size_type offset;
+
+  if (i == 0) { offset = atomicAdd(counter, buffer_size); }
+  block.sync();
+
+  while (i < buffer_size) {
+    auto const& [build_idx, probe_idx] = buffer[i];
+    *(build_indices + offset + i)      = build_idx;
+    *(probe_indices + offset + i)      = probe_idx;
+
+    i += block.size();
+  }
+}
+
 template <typename Iter, typename HashTable>
 CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
                                           cudf::size_type n,
@@ -110,65 +132,110 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
   auto constexpr tile_size   = HashTable::cg_size;
   auto constexpr window_size = HashTable::window_size;
 
-  auto idx               = cudf::detail::grid_1d::global_thread_id() / tile_size;
-  auto const stride      = cudf::detail::grid_1d::grid_stride() / tile_size;
-  auto const block       = cg::this_thread_block();
-  auto const tile        = cg::tiled_partition<tile_size>(block);
-  auto const thread_rank = block.thread_rank();
+  auto idx          = cudf::detail::grid_1d::global_thread_id() / tile_size;
+  auto const stride = cudf::detail::grid_1d::grid_stride() / tile_size;
+  auto const block  = cg::this_thread_block();
 
-  auto constexpr flushing_tile_size = cudf::detail::warp_size / window_size;
-  // random choice to tune
-  auto constexpr flushing_buffer_size = 2 * flushing_tile_size;
-  auto constexpr num_flushing_tiles   = DEFAULT_JOIN_BLOCK_SIZE / flushing_tile_size;
-  auto constexpr max_matches          = flushing_tile_size / tile_size;
+  // CG-based probing algorithm
+  if constexpr (tile_size != 1) {
+    auto const tile = cg::tiled_partition<tile_size>(block);
 
-  auto const flushing_tile    = cg::tiled_partition<flushing_tile_size>(block);
-  auto const flushing_tile_id = thread_rank / flushing_tile_size;
+    auto constexpr flushing_tile_size = cudf::detail::warp_size / window_size;
+    // random choice to tune
+    auto constexpr flushing_buffer_size = 2 * flushing_tile_size;
+    auto constexpr num_flushing_tiles   = DEFAULT_JOIN_BLOCK_SIZE / flushing_tile_size;
+    auto constexpr max_matches          = flushing_tile_size / tile_size;
 
-  __shared__ cuco::pair<cudf::size_type, cudf::size_type> flushing_tile_buffer[num_flushing_tiles]
-                                                                              [flushing_tile_size];
-  // per flushing-tile counter to track number of filled elements
-  __shared__ cudf::size_type flushing_counter[num_flushing_tiles];
+    auto const flushing_tile    = cg::tiled_partition<flushing_tile_size>(block);
+    auto const flushing_tile_id = block.thread_rank() / flushing_tile_size;
 
-  if (flushing_tile.thread_rank() == 0) { flushing_counter[flushing_tile_id] = 0; }
-  flushing_tile.sync();  // sync still needed since cg.any doesn't imply a memory barrier
+    __shared__ cuco::pair<cudf::size_type, cudf::size_type>
+      flushing_tile_buffer[num_flushing_tiles][flushing_tile_size];
+    // per flushing-tile counter to track number of filled elements
+    __shared__ cudf::size_type flushing_counter[num_flushing_tiles];
 
-  while (flushing_tile.any(idx < n)) {
-    bool active_flag = idx < n;
-    auto const active_flushing_tile =
-      cg::binary_partition<flushing_tile_size>(flushing_tile, active_flag);
-    if (active_flag) {
-      auto const found = hash_table.find(tile, *(iter + idx));
-      if (tile.thread_rank() == 0 and found != hash_table.end()) {
-        auto const offset = atomicAdd_block(&flushing_counter[flushing_tile_id], 1);
-        flushing_tile_buffer[flushing_tile_id][offset] = cuco::pair{
-          static_cast<cudf::size_type>(found->second), static_cast<cudf::size_type>(idx)};
+    if (flushing_tile.thread_rank() == 0) { flushing_counter[flushing_tile_id] = 0; }
+    flushing_tile.sync();  // sync still needed since cg.any doesn't imply a memory barrier
+
+    while (flushing_tile.any(idx < n)) {
+      bool active_flag = idx < n;
+      auto const active_flushing_tile =
+        cg::binary_partition<flushing_tile_size>(flushing_tile, active_flag);
+      if (active_flag) {
+        auto const found = hash_table.find(tile, *(iter + idx));
+        if (tile.thread_rank() == 0 and found != hash_table.end()) {
+          auto const offset = atomicAdd_block(&flushing_counter[flushing_tile_id], 1);
+          flushing_tile_buffer[flushing_tile_id][offset] = cuco::pair{
+            static_cast<cudf::size_type>(found->second), static_cast<cudf::size_type>(idx)};
+        }
       }
-    }
+      flushing_tile.sync();
+      if (flushing_counter[flushing_tile_id] + max_matches > flushing_buffer_size) {
+        flush_buffer(flushing_tile,
+                     flushing_counter[flushing_tile_id],
+                     flushing_tile_buffer[flushing_tile_id],
+                     counter,
+                     build_indices,
+                     probe_indices);
+        flushing_tile.sync();
+        if (flushing_tile.thread_rank() == 0) { flushing_counter[flushing_tile_id] = 0; }
+        flushing_tile.sync();
+      }
+
+      idx += stride;
+    }  // while
+
     flushing_tile.sync();
-    if (flushing_counter[flushing_tile_id] + max_matches > flushing_buffer_size) {
+    if (flushing_counter[flushing_tile_id] > 0) {
       flush_buffer(flushing_tile,
                    flushing_counter[flushing_tile_id],
                    flushing_tile_buffer[flushing_tile_id],
                    counter,
                    build_indices,
                    probe_indices);
-      flushing_tile.sync();
-      if (flushing_tile.thread_rank() == 0) { flushing_counter[flushing_tile_id] = 0; }
-      flushing_tile.sync();
     }
+  }
+  // Scalar probing
+  else {
+    using block_scan = cub::BlockScan<cudf::size_type, DEFAULT_JOIN_BLOCK_SIZE>;
+    __shared__ typename block_scan::TempStorage block_scan_temp_storage;
 
-    idx += stride;
-  }  // while
+    auto constexpr buffer_capacity = 2 * DEFAULT_JOIN_BLOCK_SIZE;
+    __shared__ cuco::pair<cudf::size_type, cudf::size_type> buffer[buffer_capacity];
+    cudf::size_type buffer_size = 0;
 
-  flushing_tile.sync();
-  if (flushing_counter[flushing_tile_id] > 0) {
-    flush_buffer(flushing_tile,
-                 flushing_counter[flushing_tile_id],
-                 flushing_tile_buffer[flushing_tile_id],
-                 counter,
-                 build_indices,
-                 probe_indices);
+    while (idx - block.thread_rank() < n) {  // the whole thread block falls into the same iteration
+      cudf::size_type thread_count{0};
+      cudf::size_type build_idx{0};
+      if (idx < n) {
+        auto const found = hash_table.find(*(iter + idx));
+        thread_count     = found != hash_table.end();
+        build_idx        = static_cast<cudf::size_type>(found->second);
+      }
+
+      // Use a whole-block scan to calculate the output location
+      cudf::size_type offset;
+      cudf::size_type block_count;
+      block_scan(block_scan_temp_storage).ExclusiveSum(thread_count, offset, block_count);
+
+      if (buffer_size + block_count > buffer_capacity) {
+        flush_buffer(block, buffer_size, buffer, counter, build_indices, probe_indices);
+        block.sync();
+        buffer_size = 0;
+      }
+
+      if (thread_count == 1) {
+        buffer[buffer_size + offset] = cuco::pair{build_idx, static_cast<cudf::size_type>(idx)};
+      }
+      buffer_size += block_count;
+      block.sync();
+
+      idx += stride;
+    }  // while
+
+    if (buffer_size > 0) {
+      flush_buffer(block, buffer_size, buffer, counter, build_indices, probe_indices);
+    }
   }
 }
 }  // namespace
