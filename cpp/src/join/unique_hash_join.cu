@@ -45,6 +45,8 @@ namespace cudf {
 namespace detail {
 namespace {
 
+static auto constexpr UNIQUE_JOIN_BLOCK_SIZE = 256;
+
 template <cudf::has_nested HasNested>
 auto prepare_device_equal(
   std::shared_ptr<cudf::experimental::row::equality::preprocessed_table> build,
@@ -143,7 +145,7 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
     auto constexpr flushing_tile_size = cudf::detail::warp_size / window_size;
     // random choice to tune
     auto constexpr flushing_buffer_size = 2 * flushing_tile_size;
-    auto constexpr num_flushing_tiles   = DEFAULT_JOIN_BLOCK_SIZE / flushing_tile_size;
+    auto constexpr num_flushing_tiles   = UNIQUE_JOIN_BLOCK_SIZE / flushing_tile_size;
     auto constexpr max_matches          = flushing_tile_size / tile_size;
 
     auto const flushing_tile    = cg::tiled_partition<flushing_tile_size>(block);
@@ -197,10 +199,10 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
   }
   // Scalar probing
   else {
-    using block_scan = cub::BlockScan<cudf::size_type, DEFAULT_JOIN_BLOCK_SIZE>;
+    using block_scan = cub::BlockScan<cudf::size_type, UNIQUE_JOIN_BLOCK_SIZE>;
     __shared__ typename block_scan::TempStorage block_scan_temp_storage;
 
-    auto constexpr buffer_capacity = 2 * DEFAULT_JOIN_BLOCK_SIZE;
+    auto constexpr buffer_capacity = 2 * UNIQUE_JOIN_BLOCK_SIZE;
     __shared__ cuco::pair<cudf::size_type, cudf::size_type> buffer[buffer_capacity];
     cudf::size_type buffer_size = 0;
 
@@ -320,7 +322,7 @@ unique_hash_join<Hasher, HasNested>::inner_join(std::optional<std::size_t> outpu
   auto counter = rmm::device_scalar<cudf::size_type>{stream};
   counter.set_value_to_zero_async(stream);
 
-  cudf::detail::grid_1d grid{probe_table_num_rows, DEFAULT_JOIN_BLOCK_SIZE};
+  cudf::detail::grid_1d grid{probe_table_num_rows, UNIQUE_JOIN_BLOCK_SIZE};
   unique_join_probe_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     iter,
     probe_table_num_rows,
