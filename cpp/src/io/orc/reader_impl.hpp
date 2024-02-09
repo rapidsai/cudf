@@ -106,7 +106,7 @@ class reader::impl {
    * In this step, the metadata of all stripes in the data source is parsed, and information about
    * data streams for all selected columns in alls tripes are generated. If the reader has a data
    * read limit, data size of all stripes are used to determine the chunks of consecutive
-   * stripes for reading each time using the `read_data()` step. This is to ensure that loading
+   * stripes for reading each time using the `load_data()` step. This is to ensure that loading
    * these stripes will not exceed a fixed portion the data read limit.
    */
   void global_preprocess(uint64_t skip_rows,
@@ -114,7 +114,7 @@ class reader::impl {
                          std::vector<std::vector<size_type>> const& stripes);
 
   /**
-   * @brief Read stripes from the input source and store the data in the internal buffers.
+   * @brief Load stripes from the input source and store the data in the internal buffers.
    *
    * If there is a data read limit, only a chunk of stripes are read at a time such that
    * their total data size does not exceed a fixed portion of the limit. Then, the data is
@@ -124,7 +124,7 @@ class reader::impl {
    * This is to ensure that loading data together with decompression and decoding will not exceed
    * the data read limit.
    */
-  void read_data();
+  void load_data();
 
   /**
    * @brief Decompress and decode the data in the internal buffers, and store the result into

@@ -487,7 +487,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 }
 
 // Load each chunk from `load_stripe_chunks`.
-void reader::impl::read_data()
+void reader::impl::load_data()
 {
   if (_file_itm_data.has_no_data()) { return; }
 
