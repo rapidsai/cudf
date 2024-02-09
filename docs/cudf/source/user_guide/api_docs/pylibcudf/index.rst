@@ -14,7 +14,11 @@ This page provides API documentation for pylibcudf.
     copying
     gpumemoryview
     groupby
+    join
+    reduce
+    rolling
     scalar
+    replace
     table
     types
     unary
