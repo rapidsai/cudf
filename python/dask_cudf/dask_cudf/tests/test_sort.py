@@ -10,14 +10,26 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
+from dask_cudf.tests.utils import xfail_dask_expr
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
+@pytest.mark.parametrize(
+    "by",
+    [
+        "a",
+        "b",
+        "c",
+        pytest.param(
+            "d",
+            marks=xfail_dask_expr(
+                "Dask-expr fails to sort by categorical column."
+            ),
+        ),
+        ["a", "b"],
+        ["c", "d"],
+    ],
+)
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
@@ -60,6 +72,7 @@ def test_sort_repartition():
     dd.assert_eq(len(new_ddf), len(ddf))
 
 
+@xfail_dask_expr("dask-expr code path fails with nulls")
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
