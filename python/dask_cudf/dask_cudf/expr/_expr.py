@@ -7,6 +7,7 @@ from dask_expr._groupby import (
     DecomposableGroupbyAggregation,
     GroupbyAggregation,
 )
+from dask_expr._reductions import Var
 from dask_expr._shuffle import DiskShuffle
 
 from dask.dataframe.core import _concat
@@ -47,6 +48,19 @@ def _takelast(a, skipna=True):
 
 
 TakeLast.operation = staticmethod(_takelast)
+
+
+_dx_reduction_aggregate = Var.reduction_aggregate
+
+
+def _reduction_aggregate(*args, **kwargs):
+    result = _dx_reduction_aggregate(*args, **kwargs)
+    if result.ndim == 0:
+        return result.tolist()
+    return result
+
+
+Var.reduction_aggregate = staticmethod(_reduction_aggregate)
 
 
 def _shuffle_group(df, col, _filter, p):

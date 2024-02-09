@@ -10,10 +10,6 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -72,7 +68,7 @@ def test_series_reduce(reducer):
 )
 def test_rowwise_reductions(data, op):
     gddf = dask_cudf.from_cudf(data, npartitions=10)
-    pddf = gddf.to_dask_dataframe()
+    pddf = gddf.to_backend("pandas")
 
     with dask.config.set({"dataframe.convert-string": False}):
         if op in ("var", "std"):

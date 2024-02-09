@@ -11,11 +11,6 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
-
 
 param_nrows = [5, 10, 50, 100]
 
@@ -168,7 +163,7 @@ def test_merge_left(
         }
     )
 
-    expect = left.merge(right, on=("x", "y"), how=how)
+    expect = left.merge(right, on=["x", "y"], how=how)
 
     def normalize(df):
         return (
@@ -181,7 +176,7 @@ def test_merge_left(
     left = dask_cudf.from_cudf(left, chunksize=chunksize)
     right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
-    result = left.merge(right, on=("x", "y"), how=how).compute(
+    result = left.merge(right, on=["x", "y"], how=how).compute(
         scheduler="single-threaded"
     )
 
