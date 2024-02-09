@@ -57,6 +57,9 @@ license-files = ["LICENSE"]
 [tool.setuptools.dynamic]
 version = {file = "dask_cudf/VERSION"}
 
+[tool.setuptools.packages.find]
+exclude = ["*tests*"]
+
 [tool.isort]
 line_length = 79
 multi_line_output = 3
