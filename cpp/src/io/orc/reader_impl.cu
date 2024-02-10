@@ -687,7 +687,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   global_preprocess(skip_rows, num_rows_opt, stripes);
 
-
   // TODO: fix this, should be called once
   _chunk_read_data.curr_load_stripe_chunk = 0;
   while (_chunk_read_data.more_stripe_to_load()) {

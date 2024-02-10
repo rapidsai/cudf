@@ -152,11 +152,17 @@ std::size_t gather_stream_info_and_column_desc(
 
 namespace {
 
+/**
+ * @brief Struct to accummulate sizes of chunks of some data such as stripe or rows.
+ */
 struct cumulative_size {
   int64_t count{0};
   std::size_t size_bytes{0};
 };
 
+/**
+ * @brief Functor to sum up cummulative sizes.
+ */
 struct cumulative_size_sum {
   __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
   {
@@ -165,6 +171,10 @@ struct cumulative_size_sum {
 };
 
 #if 1
+/**
+ * @brief Find the splits of the input data such that each split has cummulative size less than a
+ * given `size_limit`.
+ */
 std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
                                int64_t total_count,
                                size_t size_limit)
@@ -225,6 +235,15 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 #endif
 
 #ifdef PRINT_DEBUG
+/**
+ * @brief Verify the splits, checking if they are correct.
+ *
+ * We need to verify that:
+ *  1. All chunk must have count > 0
+ *  2. Chunks are continuous.
+ *  3. sum(all sizes in a chunk) < size_limit
+ *  4. sum(all counts in all chunks) == total_count.
+ */
 void verify_splits(host_span<chunk const> splits,
                    host_span<cumulative_size const> sizes,
                    size_type total_count,
@@ -271,11 +290,11 @@ void verify_splits(host_span<chunk const> splits,
 #endif
 
 /**
- * @brief
+ * @brief Find range of the data span by a given chunk of chunks.
  *
- * @param input_chunks
- * @param selected_chunks
- * @return
+ * @param input_chunks The list of all data chunks
+ * @param selected_chunks A chunk of chunks in the input_chunks
+ * @return The range of data span by the selected chunk of given chunks
  */
 std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
                                       chunk const& selected_chunks)
@@ -284,7 +303,7 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
   auto const chunk_begin = selected_chunks.start_idx;
   auto const chunk_end   = selected_chunks.start_idx + selected_chunks.count;
 
-  // The first and last chunk, according to selected_chunk
+  // The first and last chunk, according to selected_chunk.
   auto const& first_chunk = input_chunks[chunk_begin];
   auto const& last_chunk  = input_chunks[chunk_end - 1];
 
@@ -462,7 +481,6 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // TODO: use 0.3 constant
   _chunk_read_data.data_read_limit =
     total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
-
 
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
