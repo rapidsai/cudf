@@ -1409,8 +1409,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
         atomicAdd(error_count, 1);
       }
-      uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
-      uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
+      auto const ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
+      auto const ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
       uint32_t rowgroup_rowofs =
         (level == 0) ? (blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride
                      : s->top.data.index.start_row;

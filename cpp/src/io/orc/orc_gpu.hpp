@@ -102,7 +102,7 @@ struct DictionaryEntry {
 struct ColumnDesc {
   uint8_t const* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
-  uint32_t strm_len[CI_NUM_STREAMS];       // stream length TODO check for 64
+  uint64_t strm_len[CI_NUM_STREAMS];       // stream length
   uint32_t* valid_map_base;                // base pointer of valid bit map for this column
   void* column_data_base;                  // base pointer of column data
   uint64_t start_row;                      // starting row of the stripe
@@ -131,7 +131,7 @@ struct ColumnDesc {
  */
 struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
-  uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
+  uint64_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
   uint32_t num_rows;        // number of rows in rowgroup
   uint64_t start_row;       // starting row of the rowgroup
