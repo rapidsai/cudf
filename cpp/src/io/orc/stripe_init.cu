@@ -445,10 +445,9 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
 CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_groups,
                                                                  CompressedStreamInfo* strm_info,
                                                                  ColumnDesc* chunks,
-                                                                 uint32_t num_columns,
-                                                                 uint32_t num_stripes,
-                                                                 uint32_t num_rowgroups,
-                                                                 uint32_t rowidx_stride,
+                                                                 size_type num_columns,
+                                                                 size_type num_stripes,
+                                                                 uint64_t rowidx_stride,
                                                                  bool use_base_stride)
 {
   __shared__ __align__(16) rowindex_state_s state_g;
@@ -576,23 +575,16 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
 void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                  CompressedStreamInfo* strm_info,
                                  ColumnDesc* chunks,
-                                 uint32_t num_columns,
-                                 uint32_t num_stripes,
-                                 uint32_t num_rowgroups,
-                                 uint32_t rowidx_stride,
+                                 size_type num_columns,
+                                 size_type num_stripes,
+                                 uint64_t rowidx_stride,
                                  bool use_base_stride,
                                  rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid(num_columns, num_stripes);  // 1 column chunk per block
-  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(row_groups,
-                                                                    strm_info,
-                                                                    chunks,
-                                                                    num_columns,
-                                                                    num_stripes,
-                                                                    num_rowgroups,
-                                                                    rowidx_stride,
-                                                                    use_base_stride);
+  gpuParseRowGroupIndex<<<dim_grid, dim_block, 0, stream.value()>>>(
+    row_groups, strm_info, chunks, num_columns, num_stripes, rowidx_stride, use_base_stride);
 }
 
 void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> columns,

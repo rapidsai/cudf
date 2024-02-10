@@ -363,7 +363,6 @@ rmm::device_buffer decompress_stripe_data(
                             chunks.base_device_ptr(),
                             num_columns,
                             num_stripes,
-                            row_groups.size().first,
                             row_index_stride,
                             use_base_stride,
                             stream);
@@ -990,7 +989,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 chunks.base_device_ptr(),
                                 num_columns,
                                 total_num_stripes,
-                                num_rowgroups,
                                 _metadata.get_row_index_stride(),
                                 level == 0,
                                 _stream);

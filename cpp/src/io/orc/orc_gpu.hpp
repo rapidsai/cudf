@@ -278,7 +278,6 @@ void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
  * @param[in] chunks ColumnDesc device array [stripe][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] num_rowgroups Number of row groups
  * @param[in] rowidx_stride Row index stride
  * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
  * value
@@ -287,10 +286,9 @@ void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
 void ParseRowGroupIndex(RowGroup* row_groups,
                         CompressedStreamInfo* strm_info,
                         ColumnDesc* chunks,
-                        uint32_t num_columns,
-                        uint32_t num_stripes,
-                        uint32_t num_rowgroups,
-                        uint32_t rowidx_stride,
+                        size_type num_columns,
+                        size_type num_stripes,
+                        uint64_t rowidx_stride,
                         bool use_base_stride,
                         rmm::cuda_stream_view stream);
 
