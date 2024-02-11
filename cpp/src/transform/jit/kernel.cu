@@ -15,6 +15,10 @@
  */
 
 // Include Jitify's cstddef header first
+// clang-format off
+#include <cstddef>
+// clang-format on
+
 #include "transform/jit/operation-udf.hpp"
 
 #include <cudf/types.hpp>
@@ -25,8 +29,6 @@
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-
-#include <cstddef>
 
 namespace cudf {
 namespace transformation {
