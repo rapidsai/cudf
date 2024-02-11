@@ -79,9 +79,9 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^<cudf_test/' # cuDF includes
     Priority:        3
-  - Regex:           '^<(nvtext|cudf_kafka)' # other libcudf includes
-    Priority:        4
   - Regex:           '^<cudf/' # cuDF includes
+    Priority:        4
+    - Regex:           '^<(nvtext|cudf_kafka)' # other libcudf includes
     Priority:        5
   - Regex:           '^<(cugraph|cuml|cuspatial|raft|kvikio)' # Other RAPIDS includes
     Priority:        6
