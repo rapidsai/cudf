@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "hash/concurrent_unordered_map.cuh"
 #include "io/comp/io_uncomp.hpp"
 #include "io/utilities/column_buffer.hpp"
 #include "io/utilities/parsing_utils.cuh"
@@ -48,8 +49,6 @@
 #include <thrust/pair.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
-
-#include <hash/concurrent_unordered_map.cuh>
 
 using cudf::host_span;
 
