@@ -19,10 +19,10 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 
-#include <nvtext/byte_pair_encoding.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/byte_pair_encoding.hpp>
 
 struct TextBytePairEncoding : public cudf::test::BaseFixture {};
 

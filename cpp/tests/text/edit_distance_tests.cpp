@@ -18,10 +18,10 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <nvtext/edit_distance.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/edit_distance.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 

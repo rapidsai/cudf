@@ -19,10 +19,10 @@
 #include <benchmarks/string/string_bench_args.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <nvtext/generate_ngrams.hpp>
-
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/generate_ngrams.hpp>
 
 class TextNGrams : public cudf::benchmark {};
 

@@ -17,13 +17,13 @@
 #include "text/subword/detail/codepoint_metadata.ah"
 #include "text/subword/detail/tokenizer_utils.cuh"
 
-#include <nvtext/detail/load_hash_file.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <nvtext/detail/load_hash_file.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>

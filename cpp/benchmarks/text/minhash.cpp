@@ -16,9 +16,9 @@
 
 #include <benchmarks/common/generate_input.hpp>
 
-#include <nvtext/minhash.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/minhash.hpp>
 
 #include <rmm/device_buffer.hpp>
 

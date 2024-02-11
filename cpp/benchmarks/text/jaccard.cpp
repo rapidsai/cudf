@@ -16,10 +16,10 @@
 
 #include <benchmarks/common/generate_input.hpp>
 
-#include <nvtext/jaccard.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <nvtext/jaccard.hpp>
 
 #include <rmm/device_buffer.hpp>
 

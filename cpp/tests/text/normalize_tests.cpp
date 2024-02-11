@@ -18,12 +18,12 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <nvtext/normalize.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/normalize.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 

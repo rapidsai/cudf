@@ -18,9 +18,9 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <nvtext/replace.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/replace.hpp>
 
 #include <nvbench/nvbench.cuh>
 

@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <cudf_kafka/kafka_consumer.hpp>
-
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+
+#include <cudf_kafka/kafka_consumer.hpp>
 
 #include <gtest/gtest.h>
 

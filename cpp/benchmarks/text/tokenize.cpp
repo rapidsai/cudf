@@ -19,12 +19,12 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <nvtext/ngrams_tokenize.hpp>
-#include <nvtext/tokenize.hpp>
-
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <nvtext/ngrams_tokenize.hpp>
+#include <nvtext/tokenize.hpp>
 
 #include <nvbench/nvbench.cuh>
 

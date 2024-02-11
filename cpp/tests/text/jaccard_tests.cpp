@@ -18,9 +18,9 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <nvtext/jaccard.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/jaccard.hpp>
 
 struct JaccardTest : public cudf::test::BaseFixture {};
 

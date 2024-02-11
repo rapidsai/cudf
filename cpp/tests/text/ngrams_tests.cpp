@@ -19,11 +19,11 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/testing_main.hpp>
 
-#include <nvtext/generate_ngrams.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/generate_ngrams.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 

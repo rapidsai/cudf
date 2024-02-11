@@ -16,8 +16,6 @@
 
 #include "text/bpe/byte_pair_encoding.cuh"
 
-#include <nvtext/byte_pair_encoding.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -25,6 +23,8 @@
 #include <cudf/strings/split/split.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <nvtext/byte_pair_encoding.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>

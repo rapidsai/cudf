@@ -25,7 +25,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <cuda_runtime.h>
-
 #include <nvtx3/nvToolsExt.h>
 
 /**

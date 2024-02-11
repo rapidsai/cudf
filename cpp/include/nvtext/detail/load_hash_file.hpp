@@ -15,9 +15,9 @@
  */
 #pragma once
 
-#include <nvtext/subword_tokenize.hpp>
-
 #include <cudf/column/column.hpp>
+
+#include <nvtext/subword_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
