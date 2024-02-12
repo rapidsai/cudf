@@ -98,6 +98,9 @@ cdef class GroupBy:
         sorted keys_are_sorted=sorted.NO
     ):
         self.c_obj.reset(new groupby(keys.view(), null_handling, keys_are_sorted))
+        # keep a reference to the keys table so it doesn't get
+        # deallocated from under us:
+        self._keys = keys
 
     @staticmethod
     cdef tuple _parse_outputs(
@@ -253,26 +256,31 @@ cdef class GroupBy:
         Parameters
         ----------
         values : Table, optional
-            The columns to get group labels for. If not specified, the group
-            labels for the group keys are returned.
+            The columns to get group labels for. If not specified,
+            `None` is returned for the group values.
 
         Returns
         -------
-        Tuple[Table, Table, List[int]]
+        Tuple[List[int], Table, Table]]
             A tuple of tables containing three items:
+                - A list of integer offsets into the group keys/values
                 - A table of group keys
-                - A table of group values
-                - A list of integer offsets into the tables
+                - A table of group values or None
         """
 
         cdef groups c_groups
         if values:
             c_groups = dereference(self.c_obj).get_groups(values.view())
+            return (
+                c_groups.offsets,
+                Table.from_libcudf(move(c_groups.keys)),
+                Table.from_libcudf(move(c_groups.values)),
+            )
         else:
+            # c_groups.values is nullptr
             c_groups = dereference(self.c_obj).get_groups()
-
-        return (
-            Table.from_libcudf(move(c_groups.keys)),
-            Table.from_libcudf(move(c_groups.values)),
-            c_groups.offsets,
-        )
+            return (
+                c_groups.offsets,
+                Table.from_libcudf(move(c_groups.keys)),
+                None,
+            )

@@ -7,7 +7,7 @@ from pandas.api import types as pd_types
 
 import cudf
 from cudf.api import types
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_214
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_214, PANDAS_GE_220
 from cudf.testing._utils import expect_warning_if
 
 
@@ -499,8 +499,8 @@ def test_is_integer(obj, expect):
         (pd.Series(dtype="int"), False),
         (pd.Series(dtype="float"), False),
         (pd.Series(dtype="complex"), False),
-        (pd.Series(dtype="str"), not PANDAS_GE_200),
-        (pd.Series(dtype="unicode"), not PANDAS_GE_200),
+        (pd.Series(dtype="str"), PANDAS_GE_220),
+        (pd.Series(dtype="unicode"), PANDAS_GE_220),
         (pd.Series(dtype="datetime64[s]"), False),
         (pd.Series(dtype="timedelta64[s]"), False),
         (pd.Series(dtype="category"), False),

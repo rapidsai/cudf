@@ -180,10 +180,11 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
 
     auto p_offsets =
       thrust::device_pointer_cast(p_offsets_column->view().template data<size_type>());
-    auto p_chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
-    auto p_chars      = p_chars_data.data();
+    auto p_chars_column = strings::detail::create_chars_child_column(chars_bytes, stream, mr);
 
     // copy to the chars column
+
+    auto p_chars = (p_chars_column->mutable_view()).template data<char>();
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(target.size()),
@@ -204,7 +205,7 @@ std::unique_ptr<column> copy_range(SourceValueIterator source_value_begin,
 
     return make_strings_column(target.size(),
                                std::move(p_offsets_column),
-                               p_chars_data.release(),
+                               std::move(p_chars_column->release().data.release()[0]),
                                null_count,
                                std::move(null_mask));
   }

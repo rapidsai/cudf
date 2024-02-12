@@ -93,8 +93,8 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
   auto d_offsets = offsets_column->view().template data<int32_t>();
 
   // build chars column
-  auto chars_data = rmm::device_uvector<char>(bytes, stream, mr);
-  auto d_chars    = chars_data.data();
+  auto chars_column = create_chars_child_column(bytes, stream, mr);
+  auto d_chars      = chars_column->mutable_view().template data<char>();
   // fill in chars
   thrust::for_each_n(
     rmm::exec_policy(stream),
@@ -109,7 +109,7 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             chars_data.release(),
+                             std::move(chars_column->release().data.release()[0]),
                              null_count,
                              std::move(null_mask));
 }
