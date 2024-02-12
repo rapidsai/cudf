@@ -16,6 +16,7 @@ set(cython_sources
     aggregation.pyx
     binaryop.pyx
     column.pyx
+    concatenate.pyx
     copying.pyx
     gpumemoryview.pyx
     groupby.pyx

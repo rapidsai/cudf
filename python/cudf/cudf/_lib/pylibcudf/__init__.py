@@ -3,6 +3,7 @@
 from . import (
     aggregation,
     binaryop,
+    concatenate,
     copying,
     groupby,
     interop,
@@ -30,6 +31,7 @@ __all__ = [
     "TypeId",
     "aggregation",
     "binaryop",
+    "concatenate",
     "copying",
     "gpumemoryview",
     "groupby",

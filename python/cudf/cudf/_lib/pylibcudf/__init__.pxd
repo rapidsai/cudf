@@ -4,6 +4,7 @@
 from . cimport (
     aggregation,
     binaryop,
+    concatenate,
     copying,
     groupby,
     interop,
@@ -32,6 +33,7 @@ __all__ = [
     "Table",
     "aggregation",
     "binaryop",
+    "concatenate",
     "copying",
     "gpumemoryview",
     "groupby",

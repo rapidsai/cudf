@@ -11,6 +11,7 @@ This page provides API documentation for pylibcudf.
     aggregation
     binaryop
     column
+    concatenate
     copying
     gpumemoryview
     groupby
