@@ -88,7 +88,7 @@ static void release_host_memory_buffer_jni(JNIEnv *env) {
 
 jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned) {
   jobject ret = env->CallStaticObjectMethod(Host_memory_buffer_jclass, Host_buffer_allocate, amount,
-                                        prefer_pinned);
+                                            prefer_pinned);
   if (env->ExceptionCheck()) {
     throw std::runtime_error("allocateHostBuffer threw an exception");
   }
