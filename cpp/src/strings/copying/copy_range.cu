@@ -65,7 +65,6 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                                    size_type source_begin,
                                    size_type source_end,
                                    size_type target_begin,
-                                   // size_type target_end,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
