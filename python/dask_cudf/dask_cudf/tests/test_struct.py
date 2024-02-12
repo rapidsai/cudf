@@ -5,10 +5,6 @@ import pytest
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
 
 
 @pytest.mark.parametrize(
