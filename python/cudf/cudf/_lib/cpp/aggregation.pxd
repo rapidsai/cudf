@@ -16,8 +16,6 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
-ctypedef int32_t underlying_type_t_correlation_type
-ctypedef int32_t underlying_type_t_rank_method
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 

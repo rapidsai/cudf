@@ -16,7 +16,9 @@ This page provides API documentation for pylibcudf.
     groupby
     join
     reduce
+    rolling
     scalar
+    replace
     table
     types
     unary

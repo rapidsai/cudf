@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import random
 
@@ -216,7 +216,7 @@ def pandas_to_avro(df, file_name=None, file_io_obj=None):
     schema = get_avro_schema(df)
     avro_schema = fastavro.parse_schema(schema)
 
-    records = df.to_dict("records")
+    records = df.to_dict(orient="records")
     records = convert_nulls_to_none(records, df)
 
     if file_name is not None:
