@@ -120,9 +120,7 @@ See Also
 --------
 cudf.read_parquet
 """
-doc_read_parquet_metadata = docfmt_partial(
-    docstring=_docstring_read_parquet_metadata
-)
+doc_read_parquet_metadata = docfmt_partial(docstring=_docstring_read_parquet_metadata)
 
 _docstring_read_parquet = """
 Load a Parquet dataset into a DataFrame
@@ -229,8 +227,9 @@ path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset. Use list of str with partition_offsets
     to write parts of the dataframe to different files.
-compression : {{'snappy', 'ZSTD', 'lz4', None}}, default 'snappy'
-    Name of the compression to use. Use ``None`` for no compression.
+compression : {{'snappy', 'ZSTD', 'LZ4', None}}, default 'snappy'
+    Name of the compression to use; case insensitive.
+    Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output.
     If ``False``, they will not be written to the file.
@@ -395,9 +394,7 @@ See Also
 --------
 cudf.read_orc
 """
-doc_read_orc_statistics = docfmt_partial(
-    docstring=_docstring_read_orc_statistics
-)
+doc_read_orc_statistics = docfmt_partial(docstring=_docstring_read_orc_statistics)
 
 _docstring_read_orc = """
 Load an ORC dataset into a DataFrame
@@ -491,8 +488,9 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZSTD', 'lz4', None }}, default 'snappy'
-    Name of the compression to use. Use None for no compression.
+compression : {{ 'snappy', 'ZSTD', 'ZLIB', 'LZ4', None }}, default 'snappy'
+    Name of the compression to use; case insensitive.
+    Use ``None`` for no compression.
 statistics: str {{ "ROWGROUP", "STRIPE", None }}, default "ROWGROUP"
     The granularity with which column statistics must
     be written to the file.
@@ -1619,9 +1617,7 @@ def _open_remote_files(
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.
-        row_groups = precache_options.pop("row_groups", None) or (
-            [None] * len(paths)
-        )
+        row_groups = precache_options.pop("row_groups", None) or ([None] * len(paths))
         return [
             ArrowPythonFile(
                 _set_context(
@@ -1650,8 +1646,7 @@ def _open_remote_files(
     # Default open - Use pyarrow filesystem API
     pa_fs = PyFileSystem(FSSpecHandler(fs))
     return [
-        _set_context(pa_fs.open_input_file(fpath), context_stack)
-        for fpath in paths
+        _set_context(pa_fs.open_input_file(fpath), context_stack) for fpath in paths
     ]
 
 
@@ -1678,9 +1673,7 @@ def get_reader_filepath_or_buffer(
         # Get a filesystem object if one isn't already available
         paths = [path_or_data]
         if fs is None:
-            fs, paths = _get_filesystem_and_paths(
-                path_or_data, storage_options
-            )
+            fs, paths = _get_filesystem_and_paths(path_or_data, storage_options)
             if fs is None:
                 if warn_on_raw_text_input:
                     # Do not remove until pandas 3.0 support is added.
@@ -1720,9 +1713,7 @@ def get_reader_filepath_or_buffer(
                     )
             elif warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
-                assert (
-                    PANDAS_LT_300
-                ), "Need to drop after pandas-3.0 support is added."
+                assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
                 warnings.warn(
                     f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                     "deprecated and will be removed in a future version. "
@@ -1977,10 +1968,7 @@ def _apply_predicate(op, val, col_stats):
 
 def _apply_filters(filters, stats):
     for conjunction in filters:
-        if all(
-            _apply_predicate(op, val, stats[col])
-            for col, op, val in conjunction
-        ):
+        if all(_apply_predicate(op, val, stats[col]) for col, op, val in conjunction):
             return True
     return False
 
@@ -2021,9 +2009,7 @@ def _fsspec_data_transfer(
     # Require `fs` if `path_or_fob` is not file-like
     file_like = is_file_like(path_or_fob)
     if fs is None and not file_like:
-        raise ValueError(
-            "fs must be defined if `path_or_fob` is not file-like"
-        )
+        raise ValueError("fs must be defined if `path_or_fob` is not file-like")
 
     # Calculate total file size
     if file_like:
