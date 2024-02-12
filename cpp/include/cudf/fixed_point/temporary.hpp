@@ -15,13 +15,11 @@
  */
 
 #pragma once
-// To avoid https://github.com/NVIDIA/libcudacxx/issues/460
-// in libcudacxx with CTK 12.0/12.1
+
 #include <cudf/types.hpp>
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-#include <cuda_runtime.h>
 
 #include <algorithm>
 #include <string>
