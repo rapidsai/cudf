@@ -1,5 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from functools import cached_property
+
 from dask_expr import (
     DataFrame as DXDataFrame,
     FrameBase,
@@ -83,6 +85,18 @@ class Series(CudfMixin, DXSeries):
         from dask_cudf.expr._groupby import SeriesGroupBy
 
         return SeriesGroupBy(self, by, **kwargs)
+
+    @cached_property
+    def list(self):
+        from dask_cudf.accessors import ListMethods
+
+        return ListMethods(self)
+
+    @cached_property
+    def struct(self):
+        from dask_cudf.accessors import StructMethods
+
+        return StructMethods(self)
 
 
 class Index(DXIndex):
