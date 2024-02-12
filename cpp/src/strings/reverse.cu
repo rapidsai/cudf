@@ -17,6 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/strings/reverse.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -37,7 +38,7 @@ namespace {
  */
 struct reverse_characters_fn {
   column_device_view const d_strings;
-  size_type const* d_offsets;
+  cudf::detail::input_offsetalator d_offsets;
   char* d_chars;
 
   __device__ void operator()(size_type idx)
@@ -62,10 +63,10 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
   if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   // copy the column; replace data in the chars column
-  auto result = std::make_unique<column>(input.parent(), stream, mr);
-  auto const d_offsets =
-    result->view().child(strings_column_view::offsets_column_index).data<size_type>();
-  auto d_chars = result->mutable_view().head<char>();
+  auto result          = std::make_unique<column>(input.parent(), stream, mr);
+  auto sv              = strings_column_view(result->view());
+  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(sv.offsets());
+  auto d_chars         = result->mutable_view().head<char>();
 
   auto const d_column = column_device_view::create(input.parent(), stream);
   thrust::for_each_n(rmm::exec_policy(stream),
