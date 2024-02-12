@@ -797,9 +797,26 @@ def test_index_to_series(data):
     "name_data,name_other",
     [("abc", "c"), (None, "abc"), ("abc", pd.NA), ("abc", "abc")],
 )
-def test_index_difference(data, other, sort, name_data, name_other):
+def test_index_difference(request, data, other, sort, name_data, name_other):
     pd_data = pd.Index(data, name=name_data)
     pd_other = pd.Index(other, name=name_other)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=PANDAS_GE_220
+            and isinstance(pd_data.dtype, pd.CategoricalDtype)
+            and not isinstance(pd_other.dtype, pd.CategoricalDtype)
+            and pd_other.isnull().any(),
+            reason="https://github.com/pandas-dev/pandas/issues/57318",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_220
+            and len(pd_other) == 0
+            and len(pd_data) != len(pd_data.unique()),
+            reason="Bug fixed in pandas-2.2+",
+        )
+    )
 
     gd_data = cudf.from_pandas(pd_data)
     gd_other = cudf.from_pandas(pd_other)
