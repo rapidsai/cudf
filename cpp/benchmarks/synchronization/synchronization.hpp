@@ -61,7 +61,6 @@
 
 #pragma once
 
-// Google Benchmark library
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
