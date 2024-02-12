@@ -21,6 +21,7 @@ set(cython_sources
     groupby.pyx
     interop.pyx
     join.pyx
+    merge.pyx
     reduce.pyx
     replace.pyx
     rolling.pyx
