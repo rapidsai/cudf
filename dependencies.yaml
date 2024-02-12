@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.0"]
+      cuda: ["11.8", "12.2"]
       arch: [x86_64]
     includes:
       - build_all
@@ -231,14 +231,6 @@ dependencies:
               cuda: "11.8"
             packages:
               - nvcc_linux-aarch64=11.8
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
   build_cpp:
     common:
       - output_types: conda
@@ -359,6 +351,10 @@ dependencies:
               cuda: "12.0"
             packages:
               - cuda-version=12.0
+          - matrix:
+              cuda: "12.2"
+            packages:
+              - cuda-version=12.2
   cuda:
     specific:
       - output_types: conda
@@ -406,6 +402,9 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              arch: aarch64
+            packages:
+          - matrix:
               cuda: "12.*"
               arch: x86_64
             packages:
@@ -436,9 +435,6 @@ dependencies:
               # so 11.2 uses 11.4 packages (the oldest available).
               - *libcufile_114
               - *libcufile_dev114
-          # Fallback matrix for aarch64, which doesn't support libcufile.
-          - matrix:
-            packages:
   develop:
     common:
       - output_types: [conda, requirements]
@@ -587,19 +583,11 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-sanitizer-api
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-sanitizer-api=11.8.86
-          - matrix:
+          - matrix:  # Fallback for CUDA 11 or no matrix
             packages:
   test_java:
     common:
