@@ -8,6 +8,7 @@ from . import (
     interop,
     join,
     reduce,
+    replace,
     rolling,
     types,
     unary,
@@ -33,6 +34,7 @@ __all__ = [
     "join",
     "unary",
     "reduce",
+    "replace",
     "rolling",
     "types",
 ]
