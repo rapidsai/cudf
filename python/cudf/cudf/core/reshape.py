@@ -1120,7 +1120,7 @@ def unstack(df, level, fill_value=None):
                     "Calling unstack() on single index dataframe"
                     " with different column datatype is not supported."
                 )
-        res = df.T.stack(dropna=False)
+        res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
             tuple(df._data.to_pandas_index().names) + df.index.names

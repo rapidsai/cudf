@@ -604,13 +604,13 @@ def normalized_equals(value1, value2):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [1, 100, 6000000])
+@pytest.mark.parametrize("nrows", [1, 100, 100000])
 def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Can't write random bool columns until issue #6763 is fixed
-    if nrows == 6000000:
+    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
+    if nrows == 100000:
         supported_stat_types.remove("bool")
 
     # Make a dataframe
@@ -623,7 +623,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath, statistics=stats_freq)
+    gdf.to_orc(fname.strpath, statistics=stats_freq, stripe_size_rows=30000)
 
     # Read back written ORC's statistics
     orc_file = orc.ORCFile(fname)
@@ -678,20 +678,22 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
 
 @pytest.mark.parametrize("stats_freq", ["STRIPE", "ROWGROUP"])
-@pytest.mark.parametrize("nrows", [2, 100, 6000000])
+@pytest.mark.parametrize("nrows", [2, 100, 200000])
 def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Can't write random bool columns until issue #6763 is fixed
-    if nrows == 6000000:
+    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
+    if nrows == 200000:
         supported_stat_types.remove("bool")
 
     gdf_fname = tmpdir.join("chunked_stats.orc")
-    writer = ORCWriter(gdf_fname)
+    writer = ORCWriter(
+        gdf_fname, statistics=stats_freq, stripe_size_rows=30000
+    )
 
-    max_char_length = 1000 if nrows < 10000 else 100
+    max_char_length = 100 if nrows < 10000 else 10
 
     # Make a dataframe
     gdf = cudf.DataFrame(
@@ -699,7 +701,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
             "col_"
             + str(dtype): gen_rand_series(
                 dtype,
-                int(nrows / 2),
+                nrows // 2,
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
@@ -718,7 +720,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
             "col_"
             + str(dtype): gen_rand_series(
                 dtype,
-                int(nrows / 2),
+                nrows // 2,
                 has_nulls=True,
                 low=0,
                 high=max_char_length,
@@ -785,7 +787,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
                     assert stats_num_vals == actual_num_vals
 
 
-@pytest.mark.parametrize("nrows", [1, 100, 6000000])
+@pytest.mark.parametrize("nrows", [1, 100, 100000])
 def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     from pyarrow import orc
 
@@ -794,7 +796,7 @@ def test_orc_write_bool_statistics(tmpdir, datadir, nrows):
     fname = tmpdir.join("gdf.orc")
 
     # Write said dataframe to ORC with cuDF
-    gdf.to_orc(fname.strpath)
+    gdf.to_orc(fname.strpath, stripe_size_rows=30000)
 
     # Read back written ORC's statistics
     orc_file = orc.ORCFile(fname)
@@ -848,21 +850,20 @@ def test_orc_bool_encode_fail():
     np.random.seed(0)
     buffer = BytesIO()
 
-    # Generate a boolean column longer than a single stripe
-    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 600000)})
-    # Invalidate the first row in the second stripe to break encoding
-    fail_df["col"][500000] = None
+    # Generate a boolean column longer than a single row group
+    fail_df = cudf.DataFrame({"col": gen_rand_series("bool", 20000)})
+    # Invalidate a row in the first row group
+    fail_df["col"][5000] = None
 
     # Should throw instead of generating a file that is incompatible
     # with other readers (see issue #6763)
     with pytest.raises(RuntimeError):
         fail_df.to_orc(buffer)
 
-    # Generate a boolean column that fits into a single stripe
-    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 500000)})
-    okay_df["col"][500000 - 1] = None
-    # Invalid row is in the last row group of the stripe;
-    # encoding is assumed to be correct
+    # Generate a boolean column longer than a single row group
+    okay_df = cudf.DataFrame({"col": gen_rand_series("bool", 20000)})
+    okay_df["col"][15000] = None
+    # Invalid row is in the last row group; encoding is assumed to be correct
     okay_df.to_orc(buffer)
 
     # Also validate data
@@ -1130,7 +1131,7 @@ def test_pyspark_struct(datadir):
     assert_eq(pdf, gdf)
 
 
-def gen_map_buff(size=10000):
+def gen_map_buff(size):
     from string import ascii_letters as al
 
     from pyarrow import orc
