@@ -1,7 +1,7 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
-from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -9,7 +9,6 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.concatenate cimport (
     concatenate_columns as libcudf_concatenate_columns,
-    concatenate_masks as libcudf_concatenate_masks,
     concatenate_tables as libcudf_concatenate_tables,
 )
 from cudf._lib.cpp.table.table cimport table, table_view
@@ -19,21 +18,7 @@ from cudf._lib.utils cimport (
     table_view_from_table,
 )
 
-from cudf.core.buffer import acquire_spill_lock, as_buffer
-
-from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
-
-
-cpdef concat_masks(object columns):
-    cdef device_buffer c_result
-    cdef unique_ptr[device_buffer] c_unique_result
-    cdef vector[column_view] c_views = make_column_views(columns)
-    with nogil:
-        c_result = move(libcudf_concatenate_masks(c_views))
-        c_unique_result = move(make_unique[device_buffer](move(c_result)))
-    return as_buffer(
-        DeviceBuffer.c_from_unique_ptr(move(c_unique_result))
-    )
+from cudf.core.buffer import acquire_spill_lock
 
 
 @acquire_spill_lock()
