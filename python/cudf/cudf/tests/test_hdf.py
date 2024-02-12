@@ -63,7 +63,7 @@ def hdf_files(request, tmp_path_factory, pdf):
         pdf = pdf.drop("col_category", axis=1)
 
     fname_df = tmp_path_factory.mktemp("hdf") / "test_df.hdf"
-    pdf.to_hdf(fname_df, "hdf_df_tests", format=request.param)
+    pdf.to_hdf(fname_df, key="hdf_df_tests", format=request.param)
 
     fname_series = {}
     for column in pdf.columns:
@@ -71,7 +71,7 @@ def hdf_files(request, tmp_path_factory, pdf):
             tmp_path_factory.mktemp("hdf") / "test_series.hdf"
         )
         pdf[column].to_hdf(
-            fname_series[column], "hdf_series_tests", format=request.param
+            fname_series[column], key="hdf_series_tests", format=request.param
         )
     return (fname_df, fname_series, request.param, nrows)
 
@@ -116,8 +116,8 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
     pdf_df_fname = tmpdir.join("pdf_df.hdf")
     gdf_df_fname = tmpdir.join("gdf_df.hdf")
 
-    pdf.to_hdf(pdf_df_fname, "hdf_tests", format=format, complib=complib)
-    gdf.to_hdf(gdf_df_fname, "hdf_tests", format=format, complib=complib)
+    pdf.to_hdf(pdf_df_fname, key="hdf_tests", format=format, complib=complib)
+    gdf.to_hdf(gdf_df_fname, key="hdf_tests", format=format, complib=complib)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
@@ -135,10 +135,10 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
         gdf_series_fname = tmpdir.join(column + "_" + "gdf_series.hdf")
 
         pdf[column].to_hdf(
-            pdf_series_fname, "hdf_tests", format=format, complib=complib
+            pdf_series_fname, key="hdf_tests", format=format, complib=complib
         )
         gdf[column].to_hdf(
-            gdf_series_fname, "hdf_tests", format=format, complib=complib
+            gdf_series_fname, key="hdf_tests", format=format, complib=complib
         )
 
         assert os.path.exists(pdf_series_fname)
