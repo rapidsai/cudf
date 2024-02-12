@@ -3,9 +3,9 @@
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
+from libc.stdint cimport uint64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
-from libc.stdint cimport uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -318,13 +318,13 @@ def write_orc(
 cdef uint64_t get_skiprows_arg(object arg) except*:
     arg = 0 if arg is None else arg
     if not isinstance(arg, int) or arg < 0:
-        raise TypeError(f"skiprows must be an int >= 0")
+        raise TypeError("skiprows must be an int >= 0")
     return <uint64_t> arg
 
 cdef size_type get_num_rows_arg(object arg) except*:
     arg = -1 if arg is None else arg
     if not isinstance(arg, int) or arg < -1:
-        raise TypeError(f"num_rows must be an int >= -1")
+        raise TypeError("num_rows must be an int >= -1")
     return <size_type> arg
 
 
