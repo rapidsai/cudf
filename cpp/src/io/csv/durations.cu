@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/convert/int_to_string.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -88,12 +89,12 @@ struct duration_to_string_size_fn {
 
 template <typename T>
 struct duration_to_string_fn : public duration_to_string_size_fn<T> {
-  int32_t const* d_offsets;
+  cudf::detail::input_offsetalator d_offsets;
   char* d_chars;
   using duration_to_string_size_fn<T>::d_durations;
 
   duration_to_string_fn(column_device_view const d_durations,
-                        int32_t const* d_offsets,
+                        cudf::detail::input_offsetalator d_offsets,
                         char* d_chars)
     : duration_to_string_size_fn<T>{d_durations}, d_offsets(d_offsets), d_chars(d_chars)
   {
@@ -181,13 +182,14 @@ struct dispatch_from_durations_fn {
 
     // copy null mask
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
+
     // build offsets column
     auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<int32_t>(0), duration_to_string_size_fn<T>{d_column});
-    auto [offsets_column, chars_bytes] = cudf::detail::make_offsets_child_column(
+      thrust::make_counting_iterator<size_type>(0), duration_to_string_size_fn<T>{d_column});
+    auto [offsets_column, chars_bytes] = cudf::strings::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-    auto offsets_view  = offsets_column->view();
-    auto d_new_offsets = offsets_view.template data<int32_t>();
+    auto d_new_offsets =
+      cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
     // build chars column
     auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);

@@ -231,7 +231,7 @@ rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
-  if (output_count == 0) { return rmm::device_uvector<char>(0, stream, mr); }
+  if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();

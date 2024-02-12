@@ -135,7 +135,6 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             // std::move(chars_column->release().data.release()[0]),
                              chars_data.release(),
                              null_count,
                              std::move(null_mask));
