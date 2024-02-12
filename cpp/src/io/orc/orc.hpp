@@ -539,7 +539,7 @@ class ProtobufWriter {
 
 class OrcDecompressor {
  public:
-  OrcDecompressor(CompressionKind kind, uint32_t blockSize);
+  OrcDecompressor(CompressionKind kind, uint64_t blockSize);
 
   /**
    * @brief ORC block decompression
@@ -552,17 +552,17 @@ class OrcDecompressor {
   host_span<uint8_t const> decompress_blocks(host_span<uint8_t const> src,
                                              rmm::cuda_stream_view stream);
   [[nodiscard]] uint32_t GetLog2MaxCompressionRatio() const { return m_log2MaxRatio; }
-  [[nodiscard]] uint32_t GetMaxUncompressedBlockSize(uint32_t block_len) const
+  [[nodiscard]] uint64_t GetMaxUncompressedBlockSize(uint32_t block_len) const
   {
-    return std::min(block_len << m_log2MaxRatio, m_blockSize);
+    return std::min(static_cast<uint64_t>(block_len) << m_log2MaxRatio, m_blockSize);
   }
   [[nodiscard]] compression_type compression() const { return _compression; }
-  [[nodiscard]] uint32_t GetBlockSize() const { return m_blockSize; }
+  [[nodiscard]] auto GetBlockSize() const { return m_blockSize; }
 
  protected:
   compression_type _compression;
   uint32_t m_log2MaxRatio = 24;  // log2 of maximum compression ratio
-  uint32_t m_blockSize;
+  uint64_t m_blockSize;
   std::vector<uint8_t> m_buf;
 };
 

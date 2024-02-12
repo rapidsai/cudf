@@ -255,7 +255,7 @@ constexpr uint32_t encode_block_size = 512;
  */
 void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
-                               uint32_t compression_block_size,
+                               uint64_t compression_block_size,
                                uint32_t log2maxcr,
                                rmm::cuda_stream_view stream);
 
