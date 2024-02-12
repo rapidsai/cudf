@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ struct compressed_stream_s {
 };
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
+CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
   CompressedStreamInfo* strm_info, int32_t num_streams, uint32_t block_size, uint32_t log2maxcr)
 {
   __shared__ compressed_stream_s strm_g[4];
@@ -138,7 +138,7 @@ __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeData(
 }
 
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128, 8)
+CUDF_KERNEL void __launch_bounds__(128, 8)
   gpuPostDecompressionReassemble(CompressedStreamInfo* strm_info, int32_t num_streams)
 {
   __shared__ compressed_stream_s strm_g[4];
@@ -442,14 +442,14 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
  * value
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_groups,
-                                                                CompressedStreamInfo* strm_info,
-                                                                ColumnDesc* chunks,
-                                                                uint32_t num_columns,
-                                                                uint32_t num_stripes,
-                                                                uint32_t num_rowgroups,
-                                                                uint32_t rowidx_stride,
-                                                                bool use_base_stride)
+CUDF_KERNEL void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_groups,
+                                                                 CompressedStreamInfo* strm_info,
+                                                                 ColumnDesc* chunks,
+                                                                 uint32_t num_columns,
+                                                                 uint32_t num_stripes,
+                                                                 uint32_t num_rowgroups,
+                                                                 uint32_t rowidx_stride,
+                                                                 bool use_base_stride)
 {
   __shared__ __align__(16) rowindex_state_s state_g;
   rowindex_state_s* const s = &state_g;
@@ -513,7 +513,7 @@ __global__ void __launch_bounds__(128, 8) gpuParseRowGroupIndex(RowGroup* row_gr
 }
 
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpu_reduce_pushdown_masks(device_span<orc_column_device_view const> orc_columns,
                             device_2dspan<rowgroup_rows const> rowgroup_bounds,
                             device_2dspan<size_type> set_counts)

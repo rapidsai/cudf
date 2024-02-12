@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -16,12 +16,12 @@ from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 cdef class Column:
     """A container of nullable device data as a column of elements.
 
-    This class is an implementation of [Arrow columnar data
-    specification](https://arrow.apache.org/docs/format/Columnar.html) for data
-    stored on GPUs. It relies on Python memoryview-like semantics to maintain
-    shared ownership of the data it is constructed with, so any input data may
-    also be co-owned by other data structures. The Column is designed to be
-    operated on using algorithms backed by libcudf.
+    This class is an implementation of `Arrow columnar data specification
+    <https://arrow.apache.org/docs/format/Columnar.html>`__ for data stored on
+    GPUs. It relies on Python memoryview-like semantics to maintain shared
+    ownership of the data it is constructed with, so any input data may also be
+    co-owned by other data structures. The Column is designed to be operated on
+    using algorithms backed by libcudf.
 
     Parameters
     ----------
@@ -91,6 +91,33 @@ cdef class Column:
             self._null_count, self._offset, c_children
         )
 
+    cdef mutable_column_view mutable_view(self) nogil:
+        """Generate a libcudf mutable_column_view to pass to libcudf algorithms.
+
+        This method is for pylibcudf's functions to use to generate inputs when
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef void * data = NULL
+        cdef bitmask_type * null_mask = NULL
+
+        if self._data is not None:
+            data = int_to_void_ptr(self._data.ptr)
+        if self._mask is not None:
+            null_mask = int_to_bitmask_ptr(self._mask.ptr)
+
+        cdef vector[mutable_column_view] c_children
+        with gil:
+            if self._children is not None:
+                for child in self._children:
+                    # See the view method for why this needs to be cast.
+                    c_children.push_back((<Column> child).mutable_view())
+
+        return mutable_column_view(
+            self._data_type.c_obj, self._size, data, null_mask,
+            self._null_count, self._offset, c_children
+        )
+
     @staticmethod
     cdef Column from_libcudf(unique_ptr[column] libcudf_col):
         """Create a Column from a libcudf column.
@@ -135,6 +162,38 @@ cdef class Column:
             children,
         )
 
+    @staticmethod
+    cdef Column from_column_view(const column_view& cv, Column owner):
+        """Create a Column from a libcudf column_view.
+
+        This method accepts shared ownership of the underlying data from the
+        owner and relies on the offset from the view.
+
+        This method is for pylibcudf's functions to use to ingest outputs of
+        calling libcudf algorithms, and should generally not be needed by users
+        (even direct pylibcudf Cython users).
+        """
+        cdef DataType dtype = DataType.from_libcudf(cv.type())
+        cdef size_type size = cv.size()
+        cdef size_type null_count = cv.null_count()
+
+        children = []
+        if cv.num_children() != 0:
+            for i in range(cv.num_children()):
+                children.append(
+                    Column.from_column_view(cv.child(i), owner.child(i))
+                )
+
+        return Column(
+            dtype,
+            size,
+            owner._data,
+            owner._mask,
+            null_count,
+            cv.offset(),
+            children,
+        )
+
     cpdef DataType type(self):
         """The type of data in the column."""
         return self._data_type
@@ -158,25 +217,32 @@ cdef class Column:
         """The number of children of this column."""
         return self._num_children
 
-    cpdef list_view(self):
+    cpdef ListColumnView list_view(self):
+        """Accessor for methods of a Column that are specific to lists."""
         return ListColumnView(self)
 
     cpdef gpumemoryview data(self):
+        """The data buffer of the column."""
         return self._data
 
     cpdef gpumemoryview null_mask(self):
+        """The null mask of the column."""
         return self._mask
 
     cpdef size_type size(self):
+        """The number of elements in the column."""
         return self._size
 
     cpdef size_type offset(self):
+        """The offset of the column."""
         return self._offset
 
     cpdef size_type null_count(self):
+        """The number of null elements in the column."""
         return self._null_count
 
     cpdef list children(self):
+        """The children of the column."""
         return self._children
 
 
@@ -188,7 +254,9 @@ cdef class ListColumnView:
         self._column = col
 
     cpdef child(self):
+        """The data column of the underlying list column."""
         return self._column.child(1)
 
     cpdef offsets(self):
+        """The offsets column of the underlying list column."""
         return self._column.child(1)

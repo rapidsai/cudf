@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2023, NVIDIA CORPORATION &
+# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION &
 # AFFILIATES. All rights reserved.  SPDX-License-Identifier:
 # Apache-2.0
 #
@@ -121,6 +121,10 @@ class _ResampleGrouping(_Grouping):
 
     bin_labels: cudf.core.index.Index
 
+    def __init__(self, obj, by=None, level=None):
+        self._freq = getattr(by, "freq", None)
+        super().__init__(obj, by, level)
+
     def copy(self, deep=True):
         out = super().copy(deep=deep)
         result = _ResampleGrouping.__new__(_ResampleGrouping)
@@ -128,13 +132,22 @@ class _ResampleGrouping(_Grouping):
         result._named_columns = out._named_columns
         result._key_columns = out._key_columns
         result.bin_labels = self.bin_labels.copy(deep=deep)
+        result._freq = self._freq
         return result
+
+    @property
+    def keys(self):
+        index = super().keys
+        if self._freq is not None and isinstance(index, cudf.DatetimeIndex):
+            return cudf.DatetimeIndex._from_data(index._data, freq=self._freq)
+        return index
 
     def serialize(self):
         header, frames = super().serialize()
         labels_head, labels_frames = self.bin_labels.serialize()
         header["__bin_labels"] = labels_head
         header["__bin_labels_count"] = len(labels_frames)
+        header["_freq"] = self._freq
         frames.extend(labels_frames)
         return header, frames
 
@@ -152,6 +165,7 @@ class _ResampleGrouping(_Grouping):
         out.bin_labels = cudf.core.index.Index.deserialize(
             header["__bin_labels"], frames[-header["__bin_labels_count"] :]
         )
+        out._freq = header["_freq"]
         return out
 
     def _handle_frequency_grouper(self, by):
@@ -203,10 +217,11 @@ class _ResampleGrouping(_Grouping):
 
         # get the start and end values that will be used to generate
         # the bin labels
-        min_date, max_date = key_column._minmax()
+        min_date = key_column._reduce("min")
+        max_date = key_column._reduce("max")
         start, end = _get_timestamp_range_edges(
-            pd.Timestamp(min_date.value),
-            pd.Timestamp(max_date.value),
+            pd.Timestamp(min_date),
+            pd.Timestamp(max_date),
             offset,
             closed=closed,
         )

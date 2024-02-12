@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Test related to Index
@@ -6,6 +6,7 @@ Test related to Index
 import operator
 import re
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -682,7 +683,7 @@ def test_index_where(data, condition, other, error):
         gs_other = other
 
     if error is None:
-        if pd.api.types.is_categorical_dtype(ps):
+        if isinstance(ps.dtype, pd.CategoricalDtype):
             expect = ps.where(ps_condition, other=ps_other)
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
@@ -802,6 +803,7 @@ def test_index_to_series(data):
         pd.Series(["1", "2", "a", "3", None], dtype="category"),
         range(0, 10),
         [],
+        [1, 1, 2, 2],
     ],
 )
 @pytest.mark.parametrize(
@@ -818,6 +820,7 @@ def test_index_to_series(data):
         range(2, 4),
         pd.Series(["1", "a", "3", None], dtype="category"),
         [],
+        [2],
     ],
 )
 @pytest.mark.parametrize("sort", [None, False])
@@ -2750,11 +2753,14 @@ def test_index_error_list_index():
 )
 def test_index_hasnans(data):
     gs = cudf.Index(data, nan_as_null=False)
-    ps = gs.to_pandas(nullable=True)
-
-    # Check type to avoid mixing Python bool and NumPy bool
-    assert isinstance(gs.hasnans, bool)
-    assert gs.hasnans == ps.hasnans
+    if isinstance(gs, cudf.RangeIndex):
+        with pytest.raises(NotImplementedError):
+            gs.to_pandas(nullable=True)
+    else:
+        ps = gs.to_pandas(nullable=True)
+        # Check type to avoid mixing Python bool and NumPy bool
+        assert isinstance(gs.hasnans, bool)
+        assert gs.hasnans == ps.hasnans
 
 
 @pytest.mark.parametrize(
@@ -2949,3 +2955,42 @@ def test_index_getitem_from_int(idx):
 def test_index_getitem_from_nonint_raises(idx):
     with pytest.raises(ValueError):
         cudf.Index([1, 2])[idx]
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        cp.ones(5, dtype=cp.float16),
+        np.ones(5, dtype="float16"),
+        pd.Series([0.1, 1.2, 3.3], dtype="float16"),
+        pytest.param(
+            pa.array(np.ones(5, dtype="float16")),
+            marks=pytest.mark.xfail(
+                reason="https://issues.apache.org/jira/browse/ARROW-13762"
+            ),
+        ),
+    ],
+)
+def test_index_raises_float16(data):
+    with pytest.raises(TypeError):
+        cudf.Index(data)
+
+
+def test_from_pandas_rangeindex_return_rangeindex():
+    pidx = pd.RangeIndex(start=3, stop=9, step=3, name="a")
+    result = cudf.Index.from_pandas(pidx)
+    expected = cudf.RangeIndex(start=3, stop=9, step=3, name="a")
+    assert_eq(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.RangeIndex(1),
+        cudf.DatetimeIndex(np.array([1, 2], dtype="datetime64[ns]")),
+        cudf.TimedeltaIndex(np.array([1, 2], dtype="timedelta64[ns]")),
+    ],
+)
+def test_index_to_pandas_nullable_notimplemented(idx):
+    with pytest.raises(NotImplementedError):
+        idx.to_pandas(nullable=True)

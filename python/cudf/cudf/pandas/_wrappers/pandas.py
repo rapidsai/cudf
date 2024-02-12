@@ -1,7 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-
+import copyreg
+import pickle
 import sys
 
 import pandas as pd
@@ -706,6 +707,14 @@ Resampler = make_intermediate_proxy_type(
     "Resampler", cudf.core.resample._Resampler, pd_Resampler
 )
 
+DataFrameResampler = make_intermediate_proxy_type(
+    "DataFrameResampler", cudf.core.resample.DataFrameResampler, pd_Resampler
+)
+
+SeriesResampler = make_intermediate_proxy_type(
+    "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+)
+
 StataReader = make_intermediate_proxy_type(
     "StataReader",
     _Unusable,
@@ -1027,6 +1036,15 @@ DateOffset = make_final_proxy_type(
     additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
 )
 
+BaseOffset = make_final_proxy_type(
+    "BaseOffset",
+    _Unusable,
+    pd.offsets.BaseOffset,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+)
+
 Day = make_final_proxy_type(
     "Day",
     _Unusable,
@@ -1304,3 +1322,31 @@ for typ in _PANDAS_OBJ_INTERMEDIATE_TYPES:
         _Unusable,
         typ,
     )
+
+# timestamps and timedeltas are not proxied, but non-proxied
+# pandas types are currently not picklable. Thus, we define
+# custom reducer/unpicker functions for these types:
+def _reduce_obj(obj):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        # args can contain objects that are unpicklable
+        # when the module accelerator is disabled
+        # (freq is of a proxy type):
+        pickled_args = pickle.dumps(obj.__reduce__())
+
+    return _unpickle_obj, (pickled_args,)
+
+
+def _unpickle_obj(pickled_args):
+    from cudf.pandas.module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        unpickler, args = pickle.loads(pickled_args)
+    obj = unpickler(*args)
+    return obj
+
+
+copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
+# same reducer/unpickler can be used for Timedelta:
+copyreg.dispatch_table[pd.Timedelta] = _reduce_obj

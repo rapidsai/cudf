@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -217,7 +217,7 @@ def test_categorical_masking():
     got_masked = sr[got_matches]
 
     assert len(expect_masked) == len(got_masked)
-    assert len(expect_masked) == got_masked.valid_count
+    assert got_masked.null_count == 0
     assert_eq(got_masked, expect_masked)
 
 
@@ -227,7 +227,7 @@ def test_df_cat_set_index():
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
 
-    pddf = df.to_pandas(nullable_pd_dtype=False)
+    pddf = df.to_pandas()
     expect = pddf.set_index("a")
 
     assert_eq(got, expect)
@@ -239,7 +239,7 @@ def test_df_cat_sort_index():
     df["b"] = np.arange(len(df))
 
     got = df.set_index("a").sort_index()
-    expect = df.to_pandas(nullable_pd_dtype=False).set_index("a").sort_index()
+    expect = df.to_pandas().set_index("a").sort_index()
 
     assert_eq(got, expect)
 

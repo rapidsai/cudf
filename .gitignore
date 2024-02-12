@@ -95,6 +95,7 @@ cpp/thirdparty/googletest/
 
 ## Doxygen
 cpp/doxygen/html
+cpp/doxygen/xml
 
 #Java
 target
@@ -173,3 +174,7 @@ jupyter_execute
 
 # cibuildwheel
 /wheelhouse
+
+# clang tooling
+compile_commands.json
+.clangd/

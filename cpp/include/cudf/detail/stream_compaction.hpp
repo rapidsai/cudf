@@ -99,25 +99,16 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
                                        rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Create a column of indices of all distinct rows in the input table.
+ * @copydoc cudf::distinct_indices
  *
- * Given an `input` table_view, an output vector of all row indices of the distinct rows is
- * generated. If there are duplicate rows, which index is kept depends on the `keep` parameter.
- *
- * @param input The input table
- * @param keep Get index of any, first, last, or none of the found duplicates
- * @param nulls_equal Flag to specify whether null elements should be considered as equal
- * @param nans_equal Flag to specify whether NaN elements should be considered as equal
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned vector
  * @return A device_uvector containing the result indices
  */
-rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
-                                                    duplicate_keep_option keep,
-                                                    null_equality nulls_equal,
-                                                    nan_equality nans_equal,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr);
+rmm::device_uvector<size_type> distinct_indices(table_view const& input,
+                                                duplicate_keep_option keep,
+                                                null_equality nulls_equal,
+                                                nan_equality nans_equal,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::unique_count(column_view const&, null_policy, nan_policy)

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -169,6 +169,11 @@ ConfigureTest(
   hashing/md5_test.cpp
   hashing/murmurhash3_x86_32_test.cpp
   hashing/murmurhash3_x64_128_test.cpp
+  hashing/sha1_test.cpp
+  hashing/sha224_test.cpp
+  hashing/sha256_test.cpp
+  hashing/sha384_test.cpp
+  hashing/sha512_test.cpp
   hashing/spark_murmurhash3_x86_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
@@ -257,6 +262,8 @@ ConfigureTest(
   transform/one_hot_encode_tests.cpp
 )
 
+ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
+
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
@@ -284,7 +291,15 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp
+  PARQUET_TEST
+  io/parquet_test.cpp
+  io/parquet_chunked_reader_test.cu
+  io/parquet_chunked_writer_test.cpp
+  io/parquet_common.cpp
+  io/parquet_misc_test.cpp
+  io/parquet_reader_test.cpp
+  io/parquet_writer_test.cpp
+  io/parquet_v2_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -298,6 +313,7 @@ ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(JSON_QUOTE_NORMALIZATION io/json_quote_normalization_test.cpp)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
@@ -642,8 +658,12 @@ ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
 ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
 ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
@@ -664,8 +684,14 @@ ConfigureTest(
   testing
 )
 ConfigureTest(
-  STREAM_TEXT_TEST streams/text/ngrams_test.cpp streams/text/replace_test.cpp
-  streams/text/tokenize_test.cpp STREAM_MODE testing
+  STREAM_TEXT_TEST
+  streams/text/edit_distance_test.cpp
+  streams/text/ngrams_test.cpp
+  streams/text/replace_test.cpp
+  streams/text/stemmer_test.cpp
+  streams/text/tokenize_test.cpp
+  STREAM_MODE
+  testing
 )
 ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 

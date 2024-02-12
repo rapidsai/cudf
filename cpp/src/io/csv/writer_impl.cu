@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,11 +154,6 @@ struct column_to_strings_fn {
 
   // Note: `null` replacement with `na_rep` deferred to `concatenate()`
   // instead of column-wise; might be faster
-  //
-  // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
-  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep,
-  // stream, mr) is declared and defined in combine.cu); Possible solution: declare `extern`, or
-  // just declare a prototype inside `namespace cudf::strings::detail`;
 
   // bools:
   //
@@ -186,11 +181,12 @@ struct column_to_strings_fn {
 
     auto d_column = column_device_view::create(column_v, stream_);
     escape_strings_fn fn{*d_column, delimiter.value(stream_)};
-    auto children = cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
+    auto [offsets_column, chars_column] =
+      cudf::strings::detail::make_strings_children(fn, column_v.size(), stream_, mr_);
 
     return make_strings_column(column_v.size(),
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets_column),
+                               std::move(chars_column->release().data.release()[0]),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream_, mr_));
   }
@@ -382,8 +378,8 @@ void write_chunked(data_sink* out_sink,
                                                             rmm::mr::get_current_device_resource());
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
-  auto total_num_bytes      = strings_column.chars_size();
-  char const* ptr_all_bytes = strings_column.chars_begin();
+  auto total_num_bytes      = strings_column.chars_size(stream);
+  char const* ptr_all_bytes = strings_column.chars_begin(stream);
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory

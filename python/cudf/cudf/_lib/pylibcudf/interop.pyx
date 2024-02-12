@@ -1,9 +1,20 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cudf._lib.cpp.interop cimport column_metadata
 
 
 cdef class ColumnMetadata:
+    """Metadata associated with a column.
+
+    This is the Cython representation of :cpp:class:`cudf::column_metadata`.
+
+    Parameters
+    ----------
+    id : TypeId
+        The type's identifier
+    scale : int
+        The scale associated with the data. Only used for decimal data types.
+    """
     def __init__(self, name):
         self.name = name
         self.children_meta = []

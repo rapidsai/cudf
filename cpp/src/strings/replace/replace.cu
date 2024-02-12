@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,8 @@
 #include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -353,11 +355,12 @@ size_type filter_maxrepl_target_positions(size_type* d_target_positions,
                                           size_type max_repl_per_row,
                                           rmm::cuda_stream_view stream)
 {
-  auto pos_to_row_fn = [d_offsets_span] __device__(size_type target_pos) -> size_type {
-    auto upper_bound =
-      thrust::upper_bound(thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
-    return thrust::distance(d_offsets_span.begin(), upper_bound);
-  };
+  auto pos_to_row_fn = cuda::proclaim_return_type<size_type>(
+    [d_offsets_span] __device__(size_type target_pos) -> size_type {
+      auto upper_bound =
+        thrust::upper_bound(thrust::seq, d_offsets_span.begin(), d_offsets_span.end(), target_pos);
+      return thrust::distance(d_offsets_span.begin(), upper_bound);
+    });
 
   // compute the match count per row for each target position
   rmm::device_uvector<size_type> match_counts(target_count, stream);
@@ -412,7 +415,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
   auto const d_offsets     = strings.offsets_begin();
-  auto const d_in_chars    = strings.chars_begin();
+  auto const d_in_chars    = strings.chars_begin(stream);
   auto const chars_bytes   = chars_end - chars_start;
   auto const target_size   = d_target.size_bytes();
 
@@ -467,15 +470,15 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
   auto offsets_view     = offsets_column->mutable_view();
   auto delta_per_target = d_repl.size_bytes() - target_size;
   device_span<size_type const> d_target_positions_span(d_target_positions, target_count);
-  auto offsets_update_fn =
+  auto offsets_update_fn = cuda::proclaim_return_type<int32_t>(
     [d_target_positions_span, delta_per_target, chars_start] __device__(int32_t offset) -> int32_t {
-    // determine the number of target positions occurring before this offset
-    size_type const* next_target_pos_ptr = thrust::lower_bound(
-      thrust::seq, d_target_positions_span.begin(), d_target_positions_span.end(), offset);
-    size_type num_prev_targets =
-      thrust::distance(d_target_positions_span.data(), next_target_pos_ptr);
-    return offset - chars_start + delta_per_target * num_prev_targets;
-  };
+      // determine the number of target positions occurring before this offset
+      size_type const* next_target_pos_ptr = thrust::lower_bound(
+        thrust::seq, d_target_positions_span.begin(), d_target_positions_span.end(), offset);
+      size_type num_prev_targets =
+        thrust::distance(d_target_positions_span.data(), next_target_pos_ptr);
+      return offset - chars_start + delta_per_target * num_prev_targets;
+    });
   thrust::transform(rmm::exec_policy(stream),
                     d_offsets_span.begin(),
                     d_offsets_span.end(),
@@ -483,9 +486,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
                     offsets_update_fn);
 
   // build the characters column
-  auto chars_column =
-    create_chars_child_column(chars_bytes + (delta_per_target * target_count), stream, mr);
-  auto d_out_chars = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(chars_bytes + (delta_per_target * target_count), stream, mr);
+  auto d_out_chars = chars.data();
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(chars_start),
@@ -498,7 +500,7 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             chars.release(),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -529,12 +531,12 @@ std::unique_ptr<column> replace_row_parallel(strings_column_view const& strings,
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     replace_row_parallel_fn{*d_strings, d_target, d_repl, maxrepl}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -571,7 +573,7 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
       ? 0
       : cudf::detail::get_value<int32_t>(strings.offsets(), strings.offset(), stream);
   size_type const chars_end   = (offset_count == strings.offsets().size())
-                                  ? strings.chars_size()
+                                  ? strings.chars_size(stream)
                                   : cudf::detail::get_value<int32_t>(
                                     strings.offsets(), strings.offset() + strings_count, stream);
   size_type const chars_bytes = chars_end - chars_start;
@@ -609,7 +611,7 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
                                                      : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
   size_type chars_end      = (offset_count == strings.offsets().size())
-                               ? strings.chars_size()
+                               ? strings.chars_size(stream)
                                : cudf::detail::get_value<int32_t>(
                               strings.offsets(), strings.offset() + strings_count, stream);
   return replace_char_parallel(
@@ -694,12 +696,12 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     replace_slice_fn{*d_strings, d_repl, start, stop}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -720,17 +722,18 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 
   // build offsets column
   auto offsets_transformer_itr = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<int32_t>(0), [d_strings, d_repl] __device__(size_type idx) {
+    thrust::make_counting_iterator<int32_t>(0),
+    cuda::proclaim_return_type<size_type>([d_strings, d_repl] __device__(size_type idx) {
       return d_strings.is_null(idx) ? d_repl.size_bytes()
                                     : d_strings.element<string_view>(idx).size_bytes();
-    });
+    }));
   auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().data<int32_t>();
 
   // build chars column
-  auto chars_column = create_chars_child_column(bytes, stream, mr);
-  auto d_chars      = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
@@ -741,7 +744,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                      });
 
   return make_strings_column(
-    strings_count, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    strings_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

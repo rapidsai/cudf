@@ -39,7 +39,6 @@ ignore_missing_imports = true
 follow_imports = "skip"
 exclude = [
     "cudf/_lib/",
-    "cudf/cudf/benchmarks/",
     "cudf/cudf/tests/",
     "cudf/cudf/utils/metadata/orc_column_statistics_pb2.py",
     "custreamz/custreamz/tests/",
@@ -67,7 +66,7 @@ exclude = [
     # TODO: Remove this in a follow-up where we fix __all__.
     "__init__.py",
 ]
-line-length = 79
+line-length = 88
 
 [tool.ruff.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py

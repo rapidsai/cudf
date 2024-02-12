@@ -1,12 +1,11 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
-import builtins
 import pickle
 import warnings
 from functools import cached_property
-from typing import Any, Set, Tuple
+from typing import Any, Literal, Set, Tuple
 
 import pandas as pd
 from typing_extensions import Self
@@ -850,7 +849,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self, nullable=False):
+    def to_pandas(self, *, nullable: bool = False):
         """
         Convert to a Pandas Index.
 
@@ -1041,11 +1040,11 @@ class BaseIndex(Serializable):
         res_name = _get_result_name(self.name, other.name)
 
         if is_mixed_with_object_dtype(self, other):
-            difference = self.copy()
+            difference = self.copy().unique()
         else:
             other = other.copy(deep=False)
             difference = cudf.core.index._index_from_data(
-                cudf.DataFrame._from_data({"None": self._column})
+                cudf.DataFrame._from_data({"None": self._column.unique()})
                 .merge(
                     cudf.DataFrame._from_data({"None": other._column}),
                     how="leftanti",
@@ -1702,6 +1701,8 @@ class BaseIndex(Serializable):
         start = loc.start
         stop = loc.stop
         step = 1 if loc.step is None else loc.step
+        start_side: Literal["left", "right"]
+        stop_side: Literal["left", "right"]
         if step < 0:
             start_side, stop_side = "right", "left"
         else:
@@ -1725,9 +1726,9 @@ class BaseIndex(Serializable):
     def searchsorted(
         self,
         value,
-        side: builtins.str = "left",
+        side: Literal["left", "right"] = "left",
         ascending: bool = True,
-        na_position: builtins.str = "last",
+        na_position: Literal["first", "last"] = "last",
     ):
         """Find index where elements should be inserted to maintain order
 
@@ -1754,7 +1755,12 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def get_slice_bound(self, label, side: builtins.str, kind=None) -> int:
+    def get_slice_bound(
+        self,
+        label,
+        side: Literal["left", "right"],
+        kind: Literal["ix", "loc", "getitem", None] = None,
+    ) -> int:
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
@@ -1836,7 +1842,7 @@ class BaseIndex(Serializable):
             return NotImplemented
 
     @classmethod
-    def from_pandas(cls, index, nan_as_null=no_default):
+    def from_pandas(cls, index: pd.Index, nan_as_null=no_default):
         """
         Convert from a Pandas Index.
 
@@ -1873,10 +1879,18 @@ class BaseIndex(Serializable):
 
         if not isinstance(index, pd.Index):
             raise TypeError("not a pandas.Index")
-
-        ind = cudf.Index(column.as_column(index, nan_as_null=nan_as_null))
-        ind.name = index.name
-        return ind
+        if isinstance(index, pd.RangeIndex):
+            return cudf.RangeIndex(
+                start=index.start,
+                stop=index.stop,
+                step=index.step,
+                name=index.name,
+            )
+        else:
+            return cudf.Index(
+                column.as_column(index, nan_as_null=nan_as_null),
+                name=index.name,
+            )
 
     @property
     def _constructor_expanddim(self):

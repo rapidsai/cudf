@@ -57,10 +57,6 @@ constexpr int buffer_size           = 2 * block_size;
 static_assert(block_size % 128 == 0);
 static_assert(values_per_mini_block % 32 == 0);
 
-using block_reduce = cub::BlockReduce<zigzag128_t, block_size>;
-using warp_reduce  = cub::WarpReduce<uleb128_t>;
-using index_scan   = cub::BlockScan<size_type, block_size>;
-
 constexpr int rolling_idx(int index) { return rolling_index<buffer_size>(index); }
 
 // Version of bit packer that can handle up to 64 bits values.
@@ -128,9 +124,15 @@ inline __device__ void bitpack_mini_block(
 // Object used to turn a stream of integers into a DELTA_BINARY_PACKED stream. This takes as input
 // 128 values with validity at a time, saving them until there are enough values for a block
 // to be written.
-// T is the input data type (either zigzag128_t or uleb128_t).
+// T is the input data type (either int32_t or int64_t).
 template <typename T>
 class delta_binary_packer {
+ public:
+  using U            = std::make_unsigned_t<T>;
+  using block_reduce = cub::BlockReduce<T, delta::block_size>;
+  using warp_reduce  = cub::WarpReduce<U>;
+  using index_scan   = cub::BlockScan<size_type, delta::block_size>;
+
  private:
   uint8_t* _dst;                             // sink to dump encoded values to
   T* _buffer;                                // buffer to store values to be encoded
@@ -140,9 +142,9 @@ class delta_binary_packer {
   uint8_t _mb_bits[delta::num_mini_blocks];  // bitwidth for each mini-block
 
   // pointers to shared scratch memory for the warp and block scans/reduces
-  delta::index_scan::TempStorage* _scan_tmp;
-  delta::warp_reduce::TempStorage* _warp_tmp;
-  delta::block_reduce::TempStorage* _block_tmp;
+  index_scan::TempStorage* _scan_tmp;
+  typename warp_reduce::TempStorage* _warp_tmp;
+  typename block_reduce::TempStorage* _block_tmp;
 
   void* _bitpack_tmp;  // pointer to shared scratch memory used in bitpacking
 
@@ -164,9 +166,9 @@ class delta_binary_packer {
   }
 
   // Signed subtraction with defined wrapping behavior.
-  inline __device__ zigzag128_t subtract(zigzag128_t a, zigzag128_t b)
+  inline __device__ T subtract(T a, T b)
   {
-    return static_cast<zigzag128_t>(static_cast<uleb128_t>(a) - static_cast<uleb128_t>(b));
+    return static_cast<T>(static_cast<U>(a) - static_cast<U>(b));
   }
 
  public:
@@ -178,12 +180,13 @@ class delta_binary_packer {
     _dst              = dest;
     _num_values       = num_values;
     _buffer           = buffer;
-    _scan_tmp         = reinterpret_cast<delta::index_scan::TempStorage*>(temp_storage);
-    _warp_tmp         = reinterpret_cast<delta::warp_reduce::TempStorage*>(temp_storage);
-    _block_tmp        = reinterpret_cast<delta::block_reduce::TempStorage*>(temp_storage);
+    _scan_tmp         = reinterpret_cast<index_scan::TempStorage*>(temp_storage);
+    _warp_tmp         = reinterpret_cast<typename warp_reduce::TempStorage*>(temp_storage);
+    _block_tmp        = reinterpret_cast<typename block_reduce::TempStorage*>(temp_storage);
     _bitpack_tmp      = _buffer + delta::buffer_size;
     _current_idx      = 0;
     _values_in_buffer = 0;
+    _buffer[0]        = 0;
   }
 
   // Each thread calls this to add its current value.
@@ -193,7 +196,7 @@ class delta_binary_packer {
     size_type const valid = is_valid;
     size_type pos;
     size_type num_valid;
-    delta::index_scan(*_scan_tmp).ExclusiveSum(valid, pos, num_valid);
+    index_scan(*_scan_tmp).ExclusiveSum(valid, pos, num_valid);
 
     if (is_valid) { _buffer[delta::rolling_idx(pos + _current_idx + _values_in_buffer)] = value; }
     __syncthreads();
@@ -213,39 +216,42 @@ class delta_binary_packer {
   }
 
   // Called by each thread to flush data to the sink.
-  inline __device__ uint8_t const* flush()
+  inline __device__ uint8_t* flush()
   {
     using cudf::detail::warp_size;
-    __shared__ zigzag128_t block_min;
+    __shared__ T block_min;
 
     int const t       = threadIdx.x;
     int const warp_id = t / warp_size;
     int const lane_id = t % warp_size;
 
+    // if no values have been written, still need to write the header
+    if (t == 0 && _current_idx == 0) { write_header(); }
+
+    // if there are no values to write, just return
     if (_values_in_buffer <= 0) { return _dst; }
 
     // Calculate delta for this thread.
-    size_type const idx     = _current_idx + t;
-    zigzag128_t const delta = idx < _num_values ? subtract(_buffer[delta::rolling_idx(idx)],
-                                                           _buffer[delta::rolling_idx(idx - 1)])
-                                                : std::numeric_limits<zigzag128_t>::max();
+    size_type const idx = _current_idx + t;
+    T const delta       = idx < _num_values ? subtract(_buffer[delta::rolling_idx(idx)],
+                                                 _buffer[delta::rolling_idx(idx - 1)])
+                                            : std::numeric_limits<T>::max();
 
     // Find min delta for the block.
-    auto const min_delta = delta::block_reduce(*_block_tmp).Reduce(delta, cub::Min());
+    auto const min_delta = block_reduce(*_block_tmp).Reduce(delta, cub::Min());
 
     if (t == 0) { block_min = min_delta; }
     __syncthreads();
 
     // Compute frame of reference for the block.
-    uleb128_t const norm_delta = idx < _num_values ? subtract(delta, block_min) : 0;
+    U const norm_delta = idx < _num_values ? subtract(delta, block_min) : 0;
 
     // Get max normalized delta for each warp, and use that to determine how many bits to use
     // for the bitpacking of this warp.
-    zigzag128_t const warp_max =
-      delta::warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cub::Max());
+    U const warp_max = warp_reduce(_warp_tmp[warp_id]).Reduce(norm_delta, cub::Max());
     __syncwarp();
 
-    if (lane_id == 0) { _mb_bits[warp_id] = sizeof(zigzag128_t) * 8 - __clzll(warp_max); }
+    if (lane_id == 0) { _mb_bits[warp_id] = sizeof(long long) * 8 - __clzll(warp_max); }
     __syncthreads();
 
     // write block header

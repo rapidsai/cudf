@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/for_each.h>
@@ -111,8 +112,11 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
   auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy
   auto d_new_offsets  = offsets_column->view().template data<int32_t>();
 
-  auto chars_column = std::make_unique<column>(strings.chars(), stream, mr);  // makes a copy
-  auto d_chars      = chars_column->mutable_view().data<char>();
+  auto chars_buffer = rmm::device_buffer{strings.chars_begin(stream),
+                                         static_cast<std::size_t>(strings.chars_size(stream)),
+                                         stream,
+                                         mr};  // makes a copy
+  auto d_chars      = static_cast<char*>(chars_buffer.data());
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};
 
@@ -123,7 +127,7 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_buffer),
                              null_count,
                              std::move(null_mask));
 }
