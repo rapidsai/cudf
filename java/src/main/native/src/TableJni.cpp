@@ -1363,8 +1363,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_startWriteCSVToBuffer(
   try {
     cudf::jni::auto_set_device(env);
 
-    auto data_sink =
-        std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer);
+    auto data_sink = std::make_unique<cudf::jni::jni_writer_data_sink>(env, j_buffer);
 
     auto const n_column_names = cudf::jni::native_jstringArray{env, j_column_names};
     auto const column_names = n_column_names.as_cpp_vector();
@@ -2234,8 +2233,9 @@ JNIEXPORT jdoubleArray JNICALL Java_ai_rapids_cudf_TableWriter_getWriteStatistic
   CATCH_STD(env, nullptr)
 }
 
-JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(
-    JNIEnv *env, jclass, jobjectArray j_col_names, jobject consumer) {
+JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeArrowIPCBufferBegin(JNIEnv *env, jclass,
+                                                                          jobjectArray j_col_names,
+                                                                          jobject consumer) {
   JNI_NULL_CHECK(env, j_col_names, "null columns", 0);
   JNI_NULL_CHECK(env, consumer, "null consumer", 0);
   try {
