@@ -960,7 +960,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
-        return (type(self), self.start, self.stop, self.step)
+        return (str(type(self)), self.start, self.stop, self.step)
 
 
 class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
