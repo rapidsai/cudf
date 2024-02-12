@@ -11,6 +11,7 @@ from . cimport (
     reduce,
     replace,
     rolling,
+    sorting,
     stream_compaction,
     types,
     unary,
@@ -39,6 +40,7 @@ __all__ = [
     "replace",
     "rolling",
     "stream_compaction",
+    "sorting",
     "types",
     "unary",
 ]

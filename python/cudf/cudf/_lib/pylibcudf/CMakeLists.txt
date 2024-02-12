@@ -26,6 +26,7 @@ set(cython_sources
     rolling.pyx
     scalar.pyx
     stream_compaction.pyx
+    sorting.pyx
     table.pyx
     types.pyx
     unary.pyx
