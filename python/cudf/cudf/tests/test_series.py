@@ -14,8 +14,8 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_GE_220
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
