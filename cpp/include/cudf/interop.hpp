@@ -24,6 +24,8 @@
 #pragma nv_diag_suppress 2810
 #endif
 #include <arrow/api.h>
+#include <cudf/interop/nanoarrow/nanoarrow.hpp>
+#include <cudf/interop/nanoarrow/nanoarrow_device.h>
 #ifdef __CUDACC__
 #pragma nv_diag_default 611
 #pragma nv_diag_default 2810
@@ -162,6 +164,49 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         column_metadata const& metadata = {},
                                         rmm::cuda_stream_view stream = cudf::get_default_stream(),
                                         arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
+
+/**
+ * @brief Create ArrowSchema from cudf table and metadata
+ *
+ * Populates and returns an ArrowSchema C struct using a table and metadata.
+ *
+ * @param input table_view to create a schema from
+ * @param metadata Contains the hierarchy of names of columns and children
+ * @return ArrowSchema generated from `input`
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf,
+ * it will be converted to an Arrow decimal128 that has the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
+ */
+nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
+                                        std::vector<column_metadata> const& metadata);
+
+/**
+ * @brief Create `ArrowDeviceArray` from cudf table and metadata
+ *
+ * Populates the C struct ArrowDeviceArray without performing if possible.
+ * This maintains the data on the GPU device and gives ownership of the table
+ * and its buffers to the ArrowDeviceArray struct.
+ *
+ * After calling this function, the release callback on the returned ArrowDeviceArray
+ * must be called to clean up the memory.
+ *
+ * @note For decimals, since the precision is not stored for them in libcudf
+ * it will be converted to an Arrow decimal128 with the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
+ *
+ * @note Copies will be performed in the cases where cudf differs from Arrow
+ * such as in the representation of bools (Arrow uses a bitmap, cudf uses 1-byte per value).
+ */
+struct ArrowDeviceArray to_arrow_device(
+  cudf::table& table,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Create `cudf::table` from given arrow Table input
  *

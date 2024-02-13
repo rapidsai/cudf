@@ -355,7 +355,10 @@ add_library(
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
+  src/interop/to_arrow_device.cu
   src/interop/detail/arrow_allocator.cpp
+  src/interop/vendor/nanoarrow/nanoarrow.c
+  src/interop/vendor/nanoarrow/nanoarrow_device.c
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
@@ -725,7 +728,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
-  PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+  PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"          
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
