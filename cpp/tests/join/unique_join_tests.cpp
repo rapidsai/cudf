@@ -95,7 +95,7 @@ TEST_F(UniqueJoinTest, IntegerInnerJoin)
   this->compare_to_reference(build_table, probe_table, result, cudf::table_view{{gold->view()}});
 }
 
-TEST_F(UniqueJoinTest, InnerJoinNestedNoNulls)
+TEST_F(UniqueJoinTest, InnerJoinNoNulls)
 {
   column_wrapper<int32_t> col0_0{{1, 2, 3, 4, 5}};
   strcol_wrapper col0_1({"s0", "s0", "s3", "s4", "s5"});
@@ -135,4 +135,174 @@ TEST_F(UniqueJoinTest, InnerJoinNestedNoNulls)
   Table gold(std::move(cols_gold));
 
   this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+}
+
+TEST_F(UniqueJoinTest, InnerJoinWithNulls)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  column_wrapper<int32_t> col0_2{{1, 1, 2, 4, 1}};
+
+  column_wrapper<int32_t> col1_0{{1, 2, 0, 2, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s0", "s1"});
+  column_wrapper<int32_t> col1_2{{1, 1, 1, 1, 1}, {0, 1, 1, 0, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  auto unique_join = cudf::unique_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
+  auto result      = unique_join.inner_join();
+
+  column_wrapper<int32_t> col_gold_0{{3, 2}};
+  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
+  column_wrapper<int32_t> col_gold_2{{1, 1}};
+  column_wrapper<int32_t> col_gold_3{{3, 2}};
+  strcol_wrapper col_gold_4({"s1", "s0"}, {1, 1});
+  column_wrapper<int32_t> col_gold_5{{1, 1}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+}
+
+TEST_F(UniqueJoinTest, InnerJoinWithStructsAndNulls)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strcol_wrapper col0_1({"s1", "s1", "s0", "s4", "s0"}, {1, 1, 0, 1, 1});
+  column_wrapper<int32_t> col0_2{{0, 1, 2, 4, 4}, {1, 1, 1, 1, 0}};
+  std::initializer_list<std::string> col0_names = {
+    "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
+  auto col0_names_col = strcol_wrapper{col0_names.begin(), col0_names.end()};
+  auto col0_ages_col  = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
+
+  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+
+  auto col0_3 =
+    cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
+  column_wrapper<int32_t> col1_2{{1, 1, 1, 2, 0}, {1, 0, 1, 1, 1}};
+  std::initializer_list<std::string> col1_names = {"Carrot Ironfoundersson",
+                                                   "Angua von Überwald",
+                                                   "Detritus",
+                                                   "Carrot Ironfoundersson",
+                                                   "Samuel Vimes"};
+  auto col1_names_col = strcol_wrapper{col1_names.begin(), col1_names.end()};
+  auto col1_ages_col  = column_wrapper<int32_t>{{31, 25, 351, 27, 48}};
+
+  auto col1_is_human_col = column_wrapper<bool>{{true, false, false, false, true}, {1, 0, 0, 1, 1}};
+
+  auto col1_3 =
+    cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols0.push_back(col0_2.release());
+  cols0.push_back(col0_3.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+  cols1.push_back(col1_2.release());
+  cols1.push_back(col1_3.release());
+
+  Table probe(std::move(cols0));
+  Table build(std::move(cols1));
+
+  auto unique_join = cudf::unique_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
+  auto result      = unique_join.inner_join();
+
+  column_wrapper<int32_t> col_gold_0{{3, 2}};
+  strcol_wrapper col_gold_1({"s1", "s0"}, {1, 1});
+  column_wrapper<int32_t> col_gold_2{{0, 4}, {1, 0}};
+  auto col_gold_3_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
+  auto col_gold_3_ages_col  = column_wrapper<int32_t>{{48, 25}};
+
+  auto col_gold_3_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+
+  auto col_gold_3 = cudf::test::structs_column_wrapper{
+    {col_gold_3_names_col, col_gold_3_ages_col, col_gold_3_is_human_col}};
+
+  column_wrapper<int32_t> col_gold_4{{3, 2}};
+  strcol_wrapper col_gold_5({"s1", "s0"}, {1, 1});
+  column_wrapper<int32_t> col_gold_6{{0, -1}, {1, 0}};
+  auto col_gold_7_names_col = strcol_wrapper{"Samuel Vimes", "Angua von Überwald"};
+  auto col_gold_7_ages_col  = column_wrapper<int32_t>{{48, 25}};
+
+  auto col_gold_7_is_human_col = column_wrapper<bool>{{true, false}, {1, 0}};
+
+  auto col_gold_7 = cudf::test::structs_column_wrapper{
+    {col_gold_7_names_col, col_gold_7_ages_col, col_gold_7_is_human_col}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  cols_gold.push_back(col_gold_4.release());
+  cols_gold.push_back(col_gold_5.release());
+  cols_gold.push_back(col_gold_6.release());
+  cols_gold.push_back(col_gold_7.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
+}
+
+TEST_F(UniqueJoinTest, EmptyBuildTableInnerJoin)
+{
+  column_wrapper<int32_t> col0_0;
+  column_wrapper<int32_t> col0_1;
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  auto unique_join = cudf::unique_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result      = unique_join.inner_join();
+
+  this->compare_to_reference(build.view(), probe.view(), result, build.view());
+}
+
+TEST_F(UniqueJoinTest, EmptyProbeTableInnerJoin)
+{
+  column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  column_wrapper<int32_t> col1_0;
+  column_wrapper<int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  auto unique_join = cudf::unique_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result      = unique_join.inner_join();
+
+  this->compare_to_reference(build.view(), probe.view(), result, probe.view());
 }
