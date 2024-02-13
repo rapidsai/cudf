@@ -728,7 +728,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
-  PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"          
+  PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
