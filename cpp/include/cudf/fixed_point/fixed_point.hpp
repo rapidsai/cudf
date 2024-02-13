@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <limits>
 #include <string>
 
 /// `fixed_point` and supporting types
@@ -98,7 +99,8 @@ template <typename Rep,
           Radix Base,
           typename T,
           typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
-                                           is_supported_representation_type<Rep>())>* = nullptr>
+                                           cuda::std::is_integral<Rep>()
+                                           )>* = nullptr>
 CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
@@ -172,6 +174,362 @@ CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
   return left_shift<Rep, Rad>(val, scale);
 }
 
+/** @brief Performs (nearly) lossless bit/base-10-digit shifting for floating-point -> integral conversion
+ *
+ * Note: Intended to only be called by convert_floating_to_integral_base10()
+ * Note: Losses will occur if chosen scale factor truncates values
+ *
+ * @tparam FloatingType The type of floating point object we are converting from
+ * @param integer_rep The initial (unsigned) integer representation of the floating point value
+ * @param exponent2 The number of powers of 2 to apply to convert from floating point
+ * @param exponent10 The number of powers of 10 to apply to reach the desired scale factor
+ * @return Shifted integral representation of the floating point value
+ */
+template <typename FloatingType, typename cuda::std::enable_if_t<
+  cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE __uint128_t floating_to_integral_shifting(__uint128_t integer_rep, int exponent2, int exponent10)
+{
+  // Adapted and modified from: https://github.com/apache/arrow/blob/main/cpp/src/arrow/util/decimal.cc#L90
+  // exponent2:  the scale of the float.   Floating value = input value    *  2^exponent2
+  // exponent10: the scale of the decimal. Decimal  value = returned value * 10^exponent10
+
+  // To finish converting the input "float" to a base-10 integer, we need to multiply it by 2^exponent2
+  // And to represent our number with the desired scale factor, we need to divide it by 10^exponent10
+
+  // However, if we apply these powers all at once, we may under/overflow, or otherwise lose precision
+  // Instead apply the powers iteratively: we have up to 53 (double) bits of precision on our input, and
+  // 128 bits of space (in __uint128_t) to play with
+
+  // This code is branchy, but all data in a given data column frequently tends to have similar scales:
+  // Much of the time all of the threads will take the same branches
+
+  //Test for shortcuts (exponent10 == 0) checked prior to input
+  if (exponent2 == 0) {
+    //Apply the scale and we're done
+    return shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10));
+  }
+
+  if ((exponent2 > 0) == (exponent10 < 0)) {
+    //These shifts are in the same direction: order doesn't matter, no need to iterate
+    //Bit shift first
+    (exponent2 >= 0) ? (integer_rep <<= exponent2) : (integer_rep >>= -exponent2);
+    
+    //Apply the scale and we're done
+    return shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10));
+  }
+
+  // To uniquely represent double/float need 17 / 9 digits 
+  // To represent 10^17 / 10^9, you need 57 / 30 bits
+  // +1 decimal digit (4 bits) buffer: cushion for shifting (see below): 61 / 34 bits to represent #
+  static constexpr auto num_representation_bits = std::is_same_v<FloatingType, double> ? 61 : 34;
+
+  // Calculate max amount of decimal places we can safely shift at once
+  // double/float: 128 bits of room - 61 / 34 for rep = 67 / 94 bits remaining
+  // 2^67 / 2^94 is approximately 1.4*10^20 / 2*10^28
+  // Thus we can shift up to 20 / 28 decimal places at a time (for double/float) without losing precision
+
+  // It's important to keep these 2^N and 10^M shifts about as equal in magnitude as possible, 
+  // or else we can lose precision by overflow or truncation of our bits outside of the 128 bit range
+  // 2^10 = ~10^3, so we want to shift by 10 bits for every 3 decimal places we shift
+  
+  // To simplify the math, round the double/float max-decimal-place shift of 20 / 28 down to 18 / 27
+  // 10^18 = ~2^60, and 10^27 = ~2^90, so our max bit shifts 60 / 90 bits for double/float
+  static constexpr int max_digits_shift = std::is_same_v<FloatingType, double> ? 18 : 27;
+  static constexpr int max_bits_shift = max_digits_shift * 10 / 3; //60, 90
+
+  // Shift input bits so our data is lined up to the top of the lower num_representation_bits bit range
+  // Starting with the data at a predefined position simplifies the logic later
+  // Why line-up to the top of the range?: Truncate minimal info on intermediary right-shifts
+  static constexpr int init_shift = num_representation_bits - std::numeric_limits<FloatingType>::digits; //8, 11
+  integer_rep <<= init_shift;
+  exponent2 -= init_shift; // We need to apply these powers of 2 later to get our base-10 value
+
+  if (exponent2 > 0) { //exponent10 > 0
+    //Alternately multiply by 2's and divide by 10's until both all factors of 2 and 10 are applied
+    while (exponent2 > max_bits_shift) {
+      //We need to shift more bits than we have room: iterate
+
+      //First shift the max number of bits left (our data is in the low bits): Multiply by 2s
+      integer_rep <<= max_bits_shift;
+      exponent2 -= max_bits_shift;
+
+      //Then tens-shift our data right: Divide by 10s
+      if(exponent10 <= max_digits_shift) {
+        //Last 10s-shift: Shift all remaining decimal places, shift all remaining bits, then bail
+        integer_rep = right_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10));
+        return integer_rep << exponent2;
+      }
+
+      //More decimal places to shift than we have room: Shift the max number of 10s
+      integer_rep = right_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(max_digits_shift));
+      exponent10 -= max_digits_shift;
+    }
+
+    //Last bit-shift: Shift all remaining bits, apply the remaining scale, then bail
+    integer_rep <<= exponent2;
+    //NOTE: If you don't want to truncate information, round here (user-supplied scale may be too high)
+    return right_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10));
+
+  } else { //exponent2 < 0 & exponent10 < 0
+    //Alternately multiply by 10s and divide by 2s until both all factors of 2 and 10 are applied
+    int exponent2_magnitude = -exponent2;
+    while (-exponent10 > max_digits_shift) {
+      //We need to shift more tens than we have room: iterate
+
+      //First shift the max number of tens left (our data is in the low bits): Multiply by 10s
+      integer_rep = left_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(-max_digits_shift));
+      exponent10 += max_digits_shift;
+
+      //Then bit shift our data right: Divide by 2s
+      if(exponent2_magnitude <= max_bits_shift) {
+        //Last bit-shift: Shift all remaining bits, apply the remaining scale, then bail
+        integer_rep >>= exponent2_magnitude;
+        return left_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10));
+      }
+
+      //More bits to shift than we have room: Shift the max number of 2s
+      integer_rep >>= max_bits_shift;
+      exponent2_magnitude -= max_bits_shift;
+    }
+
+    //Last 10s-shift: Shift all remaining decimal places, shift all remaining bits, then bail
+    integer_rep = left_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10));
+    //NOTE: If you don't want to truncate information, round here (user-supplied scale may be too high)
+    return (integer_rep >> exponent2_magnitude);
+  }
+}
+
+/** @brief Performs (nearly) lossless bit/base-10-digit shifting for floating-point -> integral conversion
+ *
+ * Note: Intended to only be called by convert_floating_to_integral()
+ * Note: Losses will occur if chosen scale factor truncates values
+ *
+ * @tparam Rep The type of integer we are converting to to store the value
+ * @tparam FloatingType The type of floating point object we are converting from
+ * @param input The floating point value to convert
+ * @param scale The desired base-10 scale factor for the resulting integer: value = returned-int * 10^scale
+ * @return Integral representation of the floating point value, given the desired scale. 
+ */
+template <typename Rep, typename FloatingType, typename cuda::std::enable_if_t<
+  cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE Rep convert_floating_to_integral_base10(FloatingType const& input, scale_type const& scale)
+{
+  //Shortcut: If no scale to apply, then cast and bail
+  auto const casted_input = static_cast<Rep>(input);
+  if(scale == 0) {
+    return casted_input;
+  }
+
+  //Shortcut: If input is whole number representable by an int (magnitude not too large): scale and bail
+  if(static_cast<FloatingType>(casted_input) == input) {
+    return shift<Rep, Radix::BASE_10>(casted_input, scale);
+  }
+
+  //Extract mantissa and exponent from floating point value
+  int exponent2 = 0;
+  FloatingType significand; //magnitude btw 0.5 & 1
+  if constexpr (std::is_same_v<FloatingType, float>) {
+    significand = frexpf(input, &exponent2);
+  } else {
+    significand = frexp(input, &exponent2);
+  }
+  
+  //If scale is such that we lose precision anyway, no need for exact result: fall back on old algorithm
+  //However, old algorithm only works if 10^scale is representable in Rep
+  auto const approximate_input_scale = exponent2 * 3/10; //2^10 = ~10^3
+  static constexpr auto shortcut_precision_limit = std::numeric_limits<FloatingType>::digits10 - 1; //5, 14
+  auto const int_scale = static_cast<int32_t>(scale);
+  bool const is_conversion_safe = (numeric::detail::abs(int_scale) < std::numeric_limits<Rep>::digits10);
+  if(is_conversion_safe && (approximate_input_scale - int_scale <= shortcut_precision_limit)) {
+    return shift<Rep, Radix::BASE_10>(input, scale);
+  }
+
+  // Multiply significand by 2^M (M = #mantissa_bits) to get an exact (unsigned) integer.
+  // Ignoring sign for now due to following bit shifts
+  static constexpr auto num_mantissa_bits = std::numeric_limits<FloatingType>::digits; //significand bits + 1
+  FloatingType shifted_mantissa;
+  if constexpr (std::is_same_v<FloatingType, float>) {
+    shifted_mantissa = ldexpf(significand, num_mantissa_bits);
+  } else {
+    shifted_mantissa = ldexp(significand, num_mantissa_bits);
+  }
+  auto const sign_term = (input < 0) ? -1 : 1;
+  auto const integer_rep = static_cast<__uint128_t>(sign_term * shifted_mantissa); 
+  
+  // Figure out how many remaining powers of 2 need to be applied
+  int const remaining_powers2 = exponent2 - num_mantissa_bits;
+
+  // Shift data by powers of 2 and 10 as needed
+  auto const magnitude = floating_to_integral_shifting<FloatingType>(integer_rep, remaining_powers2, int_scale);
+
+  // Reapply the sign and return
+  return sign_term * static_cast<Rep>(magnitude);
+}
+
+/** @brief Converts floating point -> integral, given the desired scale factor
+ *
+ * Note: For base-10, uses the new (nearly) lossless conversion routine, else falls back on older routine
+ *
+ * @tparam Rep The type of integer we are converting to to store the value
+ * @tparam Rad The base of the scale factor
+ * @tparam FloatingType The type of floating point object we are converting from
+ * @param value The floating point value to convert
+ * @param scale The desired scale factor for the resulting integer: value = returned-int * Rad^scale
+ * @return Integral representation of the floating point value, given the desired scale. 
+ */
+template <typename Rep, Radix Rad, typename FloatingType, typename cuda::std::enable_if_t<
+  cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline Rep convert_floating_to_integral(FloatingType const& value, scale_type const& scale)
+{
+  if constexpr (Rad == Radix::BASE_10) {
+    return static_cast<Rep>(convert_floating_to_integral_base10<Rep, FloatingType>(value, scale));
+  } else { //Fall back on old algorithm
+    return static_cast<Rep>(shift<Rep, Rad>(value, scale));
+  }
+}
+
+/** @brief Determine the number of leading zeroes for 128bit unsigned integers
+ *
+ * @param value The (unsigned) integer whose bits are being counted
+ * @return The number of leading zeroes in the integer, with range from 0 -> 128 inclusive
+ */
+CUDF_HOST_DEVICE inline int count_leading_zeroes(__uint128_t value)
+{
+#ifdef __CUDA_ARCH__
+  auto const high_bits = static_cast<int64_t>(value >> 64);
+  return __clzll(high_bits) + (high_bits == 0) * __clzll(static_cast<int64_t>(value));
+#else
+  //Undefined behavior to call __builtin_clzll() with zero in gcc and clang
+  if(value == 0)
+    return 128;
+
+  auto const high_bits = static_cast<uint64_t>(value >> 64);
+  if (high_bits == 0)
+    return 64 + __builtin_clzll(static_cast<uint64_t>(value)); //low bits
+  else
+    return __builtin_clzll(high_bits);
+#endif
+}
+
+/** @brief Performs lossless bit/base-10-digit shifting for integral -> floating-point conversion
+ *
+ * Note: Intended to only be called by convert_integral_to_floating()
+ *
+ * @tparam FloatingType The type of floating point object we are converting to
+ * @param integer_rep The integer to convert
+ * @param exponent10 The number of powers of 10 to apply to undo the scale factor
+ * @return Floating-point representation of the scaled integral value
+ */
+template <typename FloatingType, typename cuda::std::enable_if_t<
+  cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE FloatingType integral_to_floating_shifting(__uint128_t integer_rep, int exponent10)
+{
+  //This is the reverse algorithm of floating_to_integral_shifting(), see discussion there for more details
+
+  //Shortcut: If can losslessly apply 10s, do that, cast to float, and bail
+  if(numeric::detail::abs(exponent10) <= std::numeric_limits<__uint128_t>::digits10) { //guard against overflow
+    if(exponent10 > 0) {
+      //Lossless if (integer_rep * n) / n == integer_rep
+      auto const n = ipow<__uint128_t, Radix::BASE_10>(exponent10);
+      auto const shifted = integer_rep * n;
+      if(integer_rep == (shifted / n))
+        return static_cast<FloatingType>(shifted);
+    } else {
+      //Lossless if (integer_rep / n) * n == integer_rep
+      auto const n = ipow<__uint128_t, Radix::BASE_10>(-exponent10);
+      auto const shifted = integer_rep / n;
+      if(integer_rep == (shifted * n))
+        return static_cast<FloatingType>(shifted);
+    }
+  }
+
+  //Control variables (see discussion in floating_to_integral_shifting())
+  static constexpr auto num_representation_bits = std::is_same_v<FloatingType, double> ? 61 : 34;
+  static constexpr int max_digits_shift = std::is_same_v<FloatingType, double> ? 18 : 27;
+  static constexpr int max_bits_shift = max_digits_shift * 10 / 3; //60, 90
+
+  //Shift input so that our data is lined up to the top of the lower num_representation_bits bit range
+  //Starting with the data at a predefined position simplifies the logic later
+  //If this truncates bits, it was more than we could store in our floating point value anyway
+  //Why line-up to the top of the range: don't truncate info on right-shifts
+  int const num_leading_zeros = count_leading_zeroes(integer_rep);
+  int exponent2 = 128 - num_representation_bits - num_leading_zeros;
+  (exponent2 >= 0) ? (integer_rep >>= exponent2) : (integer_rep <<= -exponent2);
+
+  if (exponent10 > 0) {
+    //Alternately multiply by 10s and divide by 2s until all factors of 10 are applied
+    while(exponent10 > max_digits_shift) {
+      //We need to shift more tens than we have room: iterate
+
+      //First shift the max number of tens left (our data is in the low bits): Multiply by 10s
+      integer_rep = left_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(-max_digits_shift));
+      exponent10 -= max_digits_shift;
+
+      //Then bit shift our data right: Divide by max # of 2s
+      integer_rep >>= max_bits_shift;
+      exponent2 += max_bits_shift;
+    }
+
+    //Last 10s-shift: Shift all remaining decimal places
+    integer_rep = left_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(-exponent10));
+
+  } else { //exponent10 < 0
+    //Alternately divide by 10s and multiply by 2s until all factors of 10 are applied
+    int exponent10_magnitude = -exponent10;
+    do {
+      //Max bit shift left to give us the most room for shifting 10s: Multiply by 2s
+      integer_rep <<= max_bits_shift;
+      exponent2 -= max_bits_shift;
+
+      //Now tens-shift our data right: Divide by 10s
+      if(exponent10_magnitude <= max_digits_shift) {
+        //Last 10s-shift: Shift all remaining decimal places
+        integer_rep = right_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(exponent10_magnitude));
+        break;
+      }
+
+      //More decimal places to shift than we have room: Shift the max number of 10s
+      integer_rep = right_shift<__uint128_t, Radix::BASE_10>(integer_rep, scale_type(max_digits_shift));
+      exponent10_magnitude -= max_digits_shift;
+    } while (true);
+  }
+
+  //Done with applying scale factor: cast to floating point
+  auto const floating = static_cast<FloatingType>(integer_rep); //IEEE-754 rounds to even
+
+  //Apply the remaining powers of 2 and return
+  if constexpr (std::is_same_v<FloatingType, float>) {
+    return ldexpf(floating, exponent2);
+  } else {
+    return ldexp(floating, exponent2);
+  }
+}
+
+/** @brief Performs lossless bit/base-10-digit shifting for integral -> floating-point conversion
+ *
+ * @tparam FloatingType The type of floating point object we are converting to
+ * @tparam Rep The type of integer we are converting from
+ * @param value The integer to convert
+ * @param scale The base-10 scale factor for the input integer
+ * @return Floating-point representation of the scaled integral value
+ */
+template <typename FloatingType, typename Rep, typename cuda::std::enable_if_t<
+  cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& value, scale_type const& scale)
+{
+  //Shortcut: If no scale to apply, cast and we're done
+  if (scale == 0) {
+    return static_cast<FloatingType>(value);
+  }
+
+  //Convert to unsigned for bit shifting
+  auto const sign_term = (value >= 0) ? 1 : -1;
+  auto const unsigned_value = static_cast<__uint128_t>(sign_term*value);
+
+  //Shift by powers of 2 and 10, cast to float, reapply sign
+  return sign_term * integral_to_floating_shifting<FloatingType>(unsigned_value, static_cast<int32_t>(scale));
+}
+
 }  // namespace detail
 
 /**
@@ -235,7 +593,7 @@ class fixed_point {
             typename cuda::std::enable_if_t<cuda::std::is_floating_point<T>() &&
                                             is_supported_representation_type<Rep>()>* = nullptr>
   CUDF_HOST_DEVICE inline explicit fixed_point(T const& value, scale_type const& scale)
-    : _value{static_cast<Rep>(detail::shift<Rep, Rad>(value, scale))}, _scale{scale}
+    : _value{detail::convert_floating_to_integral<Rep, Rad>(value, scale)}, _scale{scale}
   {
   }
 
@@ -297,7 +655,10 @@ class fixed_point {
             typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<U>>* = nullptr>
   explicit constexpr operator U() const
   {
-    return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
+    if constexpr (Rad == Radix::BASE_10)
+      return detail::convert_integral_to_floating<U>(_value, _scale);
+    else
+      return detail::shift<Rep, Rad>(static_cast<U>(_value), scale_type{-_scale});
   }
 
   /**

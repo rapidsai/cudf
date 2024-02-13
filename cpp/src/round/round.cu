@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,6 +184,7 @@ struct half_even_negative {
   template <typename U = T, std::enable_if_t<cuda::std::is_integral_v<U>>* = nullptr>
   __device__ U operator()(U e)
   {
+    cudf_assert(n > 1 && "Doesn't work for n=1, but is never called with it.");
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
     auto const down        = down_over_n * n;  // result from rounding down
     auto const diff        = generic_abs(e - down);
