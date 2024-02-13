@@ -1883,17 +1883,15 @@ inline void mark(event_attributes const& attr) noexcept
  * the entry point of a function to its exit. It is intended to be the first
  * line of the function.
  *
- * Constructs a static `registered_message` using the name of the immediately
- * enclosing function returned by `__func__` and constructs a
- * `nvtx3::thread_range` using the registered function name as the range's
- * message.
+ * Constructs a static `registered_message` using the given function name constructs a
+ * `nvtx3::thread_range` using the registered function name as the range's message.
  *
  * Example:
  * ```
  * struct my_domain{static constexpr char const* name{"my_domain"};};
  *
  * void foo(...){
- *    NVTX3_FUNC_RANGE_IN(my_domain); // Range begins on entry to foo()
+ *    NVTX3_FUNC_RANGE_IN(my_domain, "foo"); // Range begins on entry to foo()
  *    // do stuff
  *    ...
  * } // Range ends on return from foo()
@@ -1902,6 +1900,7 @@ inline void mark(event_attributes const& attr) noexcept
  * @param[in] D Type containing `name` member used to identify the
  * `domain` to which the `registered_message` belongs. Else,
  * `domain::global` to  indicate that the global NVTX domain should be used.
+ * @param[in] F The given function name
  */
 #define NVTX3_FUNC_RANGE_IN(D, F)                                              \
   static ::nvtx3::registered_message<D> const nvtx3_func_name__{F};            \

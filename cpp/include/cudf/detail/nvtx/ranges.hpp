@@ -37,13 +37,14 @@ using thread_range = ::nvtx3::domain_thread_range<libcudf_domain>;
  * @brief Convenience macro for generating an NVTX range in the `libcudf` domain
  * from the lifetime of a function.
  *
- * Uses the name of the immediately enclosing function returned by `__func__` to
- * name the range.
+ * Uses the given name or the name of the immediately enclosing function returned
+ * by `__func__` to name the range.
  *
  * Example:
  * ```
  * void some_function(){
  *    CUDF_FUNC_RANGE();
+ *    CUDF_FUNC_RANGE("custom_name"); // Or use a custom name
  *    ...
  * }
  * ```
