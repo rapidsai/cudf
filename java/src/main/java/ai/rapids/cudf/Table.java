@@ -252,6 +252,7 @@ public final class Table implements AutoCloseable {
                                         boolean dayFirst, boolean lines,
                                         boolean recoverWithNulls,
                                         boolean normalizeSingleQuotes,
+                                        boolean normalizeWhitespace,
                                         boolean mixedTypesAsStrings) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
@@ -259,16 +260,18 @@ public final class Table implements AutoCloseable {
                                       boolean dayFirst, boolean lines,
                                       boolean recoverWithNulls,
                                       boolean normalizeSingleQuotes,
+                                      boolean normalizeWhitespace,
                                       boolean mixedTypesAsStrings,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
                                       boolean recoverWithNulls,
                                       boolean normalizeSingleQuotes,
+                                      boolean normalizeWhitespace,
                                       boolean mixedTypesAsStrings,
                                       long dsHandle) throws CudfException;
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines, boolean recoverWithNulls, boolean normalizeSingleQuotes, boolean mixedTypesAsStrings) throws CudfException;
+      boolean dayFirst, boolean lines, boolean recoverWithNulls, boolean normalizeSingleQuotes, boolean normalizeWhitespace, boolean mixedTypesAsStrings) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -1246,6 +1249,7 @@ public final class Table implements AutoCloseable {
                     0, 0,
                     opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
                     opts.isNormalizeSingleQuotes(),
+                    opts.isNormalizeWhitespace(),
                     opts.isMixedTypesAsStrings()))) {
 
       return gatherJSONColumns(schema, twm);
@@ -1300,6 +1304,7 @@ public final class Table implements AutoCloseable {
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
         opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
         opts.isNormalizeSingleQuotes(),
+        opts.isNormalizeWhitespace(),
         opts.isMixedTypesAsStrings()));
   }
 
@@ -1315,6 +1320,7 @@ public final class Table implements AutoCloseable {
           opts.isLines(),
           opts.isRecoverWithNull(),
           opts.isNormalizeSingleQuotes(),
+          opts.isNormalizeWhitespace(),
           opts.isMixedTypesAsStrings(),
           dsHandle));
         return twm;
@@ -1345,6 +1351,7 @@ public final class Table implements AutoCloseable {
             schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
             buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
             opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+            opts.isNormalizeWhitespace(),
             opts.isMixedTypesAsStrings()))) {
       return gatherJSONColumns(schema, twm);
     }
@@ -1362,6 +1369,7 @@ public final class Table implements AutoCloseable {
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
         schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
         opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+        opts.isNormalizeWhitespace(),
         opts.isMixedTypesAsStrings(), dsHandle))) {
       return gatherJSONColumns(schema, twm);
     } finally {
