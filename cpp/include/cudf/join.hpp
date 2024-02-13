@@ -484,8 +484,7 @@ class unique_hash_join {
 
   /**
    * Returns the row indices that can be used to construct the result of performing
-   * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
-   * provided `output_size` is smaller than the actual output size.
+   * an inner join between two tables. @see cudf::inner_join().
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
@@ -503,7 +502,7 @@ class unique_hash_join {
  private:
   using impl_type = typename cudf::detail::unique_hash_join<HasNested>;  ///< Implementation type
 
-  std::unique_ptr<impl_type> _impl;
+  std::unique_ptr<impl_type> _impl;  ///< Unique hash join implementation
 };
 
 /**
