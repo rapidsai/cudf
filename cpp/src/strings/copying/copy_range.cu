@@ -28,7 +28,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -101,8 +100,8 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   }();
 
   // create offsets
-  auto sizes_begin = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+  auto sizes_begin = cudf::detail::make_counting_transform_iterator(
+    0,
     compute_element_size{
       d_source, d_target, source_begin, target_begin, target_end, check_source, check_target});
   auto [offsets_column, chars_bytes] = cudf::strings::detail::make_offsets_child_column(
