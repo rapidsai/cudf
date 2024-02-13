@@ -2988,11 +2988,29 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Note: Only implements the operators: $ . [] *
    *
    * @param path The JSONPath string to be applied to each row
+   * @param path The GetJsonObjectOptions to control get_json_object behaviour
+   * @return new strings ColumnVector containing the retrieved json object strings
+   */
+  public final ColumnVector getJSONObject(Scalar path, GetJsonObjectOptions options) {
+    assert(type.equals(DType.STRING)) : "column type must be a String";
+    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle(), options.isAllowSingleQuotes(), options.isStripQuotesFromSingleStrings(), options.isMissingFieldsAsNulls()));
+  }
+
+   /**
+   * Apply a JSONPath string to all rows in an input strings column.
+   *
+   * Applies a JSONPath string to an incoming strings column where each row in the column
+   * is a valid json string.  The output is returned by row as a strings column.
+   *
+   * For reference, https://tools.ietf.org/id/draft-goessner-dispatch-jsonpath-00.html
+   * Note: Only implements the operators: $ . [] *
+   *
+   * @param path The JSONPath string to be applied to each row
    * @return new strings ColumnVector containing the retrieved json object strings
    */
   public final ColumnVector getJSONObject(Scalar path) {
     assert(type.equals(DType.STRING)) : "column type must be a String";
-    return new ColumnVector(getJSONObject(getNativeView(), path.getScalarHandle()));
+    return getJSONObject(path, GetJsonObjectOptions.DEFAULT);
   }
 
   /**
@@ -4194,7 +4212,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     long repeatTimesHandle);
 
 
-  private static native long getJSONObject(long viewHandle, long scalarHandle) throws CudfException;
+  private static native long getJSONObject(long viewHandle, long scalarHandle, boolean allowSingleQuotes, boolean stripQuotesFromSingleStrings, boolean missingFieldsAsNulls) throws CudfException;
 
   /**
    * Native method to parse and convert a timestamp column vector to string column vector. A unix
