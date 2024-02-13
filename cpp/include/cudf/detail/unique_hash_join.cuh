@@ -99,7 +99,6 @@ struct unique_hash_join {
                                    cudf::detail::cuco_allocator,
                                    cuco_storge_type>;
 
-  bool _is_empty;   ///< true if `_hash_table` is empty
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal
   cudf::table_view _build;           ///< input table to build the hash map

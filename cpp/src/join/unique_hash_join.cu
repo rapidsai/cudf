@@ -250,7 +250,6 @@ unique_hash_join<HasNested>::unique_hash_join(cudf::table_view const& build,
                                               cudf::null_equality compare_nulls,
                                               rmm::cuda_stream_view stream)
   : _has_nulls{has_nulls},
-    _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
     _build{build},
     _probe{probe},
@@ -270,7 +269,7 @@ unique_hash_join<HasNested>::unique_hash_join(cudf::table_view const& build,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != this->_build.num_columns(), "Hash join build table is empty");
 
-  if (this->_is_empty) { return; }
+  if (this->_build.num_rows() == 0) { return; }
 
   auto const row_hasher = experimental::row::hash::row_hasher{this->_preprocessed_build};
   auto const d_hasher   = row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
