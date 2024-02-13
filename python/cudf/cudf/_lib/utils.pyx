@@ -7,7 +7,6 @@ import cudf
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -53,30 +52,6 @@ cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
         if not ignore_index and tbl._index is not None
         else tbl._data.columns
     )
-
-
-cdef vector[column_view] make_column_views(object columns):
-    cdef vector[column_view] views
-    views.reserve(len(columns))
-    for col in columns:
-        views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[string] get_column_names(object tbl, object index):
-    cdef vector[string] column_names
-    if index is not False:
-        if isinstance(tbl._index, cudf.core.multiindex.MultiIndex):
-            for idx_name in tbl._index.names:
-                column_names.push_back(str.encode(idx_name))
-        else:
-            if tbl._index.name is not None:
-                column_names.push_back(str.encode(tbl._index.name))
-
-    for col_name in tbl._column_names:
-        column_names.push_back(str.encode(col_name))
-
-    return column_names
 
 
 cpdef generate_pandas_metadata(table, index):
