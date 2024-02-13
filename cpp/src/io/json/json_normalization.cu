@@ -207,8 +207,9 @@ std::array<std::vector<SymbolT>, NUM_SYMBOL_GROUPS - 1> const wna_sgs{
  * Input:           {"a":"x\n y"}
  * FST output:      {"a":"x\ny"}
  * Expected output: {"a":"x\n y"}
- * This is not an issue for Spark compatibility since newline can only be present at the end
- * of a record in valid JSON lines input.
+ * Such strings are not part of the JSON standard (characters allowed within quotes should
+ * have ASCII at least 0x20 i.e. space character and above) but may be encountered while
+ * reading JSON files
  */
 enum class dfa_states : StateT { TT_OOS = 0U, TT_DQS, TT_DEC, TT_NUM_STATES };
 // Aliases for readability of the transition table
