@@ -1464,15 +1464,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ...     'c': [1, 2, 3, 4],
                 ... })
                 >>> gdf = cudf.from_pandas(df)
-                >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
-                     a  b  c
+                >>> df.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                     b  c
                 a
-                1 0  1  1  1
-                2 2  2  1  3
-                >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
-                   a  b  c
-                0  1  1  1
-                2  2  1  3
+                1 0  1  1
+                2 2  1  3
+                >>> gdf.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                   b  c
+                0  1  1
+                2  1  3
 
         ``engine='jit'`` may be used to accelerate certain functions,
         initially those that contain reductions and arithmetic operations
