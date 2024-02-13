@@ -117,7 +117,6 @@ struct unique_hash_join {
   unique_hash_join& operator=(unique_hash_join const&) = delete;
   unique_hash_join& operator=(unique_hash_join&&)      = delete;
 
-  /// Row equality type for nested columns
   /**
    * @brief Constructor that internally builds the hash table based on the given `build` table.
    *
