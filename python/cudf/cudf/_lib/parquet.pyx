@@ -179,6 +179,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
+    # Filters don't handle the range index correctly
+    allow_range_index &= filters is None
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_result
