@@ -38,7 +38,6 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
-#include <optional>
 #include <utility>
 
 namespace cudf {

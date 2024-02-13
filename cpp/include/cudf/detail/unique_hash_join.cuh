@@ -15,10 +15,19 @@
  */
 #pragma once
 
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
 #include <cuco/static_set.cuh>
+
+#include <cstddef>
+#include <memory>
+#include <type_traits>
+#include <utility>
 
 namespace cudf::detail {
 
