@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2020, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,26 +37,15 @@ using thread_range = ::nvtx3::domain_thread_range<libcudf_domain>;
  * @brief Convenience macro for generating an NVTX range in the `libcudf` domain
  * from the lifetime of a function.
  *
- * Uses the given name or the name of the immediately enclosing function returned
- * by `__func__` to name the range.
+ * Uses the name of the immediately enclosing function returned by `__func__` to
+ * name the range.
  *
  * Example:
  * ```
  * void some_function(){
  *    CUDF_FUNC_RANGE();
- *    CUDF_FUNC_RANGE("custom_name"); // Or use a custom name
  *    ...
  * }
  * ```
  */
-#define CUDF_FUNC_RANGE_1(F) NVTX3_FUNC_RANGE_IN(cudf::libcudf_domain, F)
-#define CUDF_FUNC_RANGE_0()  CUDF_FUNC_RANGE_1(__func__)
-
-#define CUDF_FUNC_RANGE_CHOOSER(_1, NAME, ...) NAME
-#define CUDF_FUNC_RANGE_RECOMPOSER(ARGS)       CUDF_FUNC_RANGE_CHOOSER ARGS
-#define CUDF_FUNC_RANGE_FROM_ARG_COUNT(...) \
-  CUDF_FUNC_RANGE_RECOMPOSER((__VA_ARGS__, CUDF_FUNC_RANGE_1, ))
-#define CUDF_FUNC_RANGE_EXPANDER() , CUDF_FUNC_RANGE_0
-#define GET_CUDF_FUNC_RANGE_MACRO(...) \
-  CUDF_FUNC_RANGE_FROM_ARG_COUNT(CUDF_FUNC_RANGE_EXPANDER __VA_ARGS__())
-#define CUDF_FUNC_RANGE(...) GET_CUDF_FUNC_RANGE_MACRO(__VA_ARGS__)(__VA_ARGS__)
+#define CUDF_FUNC_RANGE() NVTX3_FUNC_RANGE_IN(cudf::libcudf_domain)
