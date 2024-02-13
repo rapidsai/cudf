@@ -145,7 +145,7 @@ struct unique_hash_join {
                    rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::hash_join::inner_join
+   * @copydoc cudf::unique_hash_join::inner_join
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
