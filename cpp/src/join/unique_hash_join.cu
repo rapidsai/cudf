@@ -242,12 +242,12 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
 }
 }  // namespace
 
-template <typename Hasher, cudf::has_nested HasNested>
-unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& build,
-                                                      cudf::table_view const& probe,
-                                                      bool has_nulls,
-                                                      cudf::null_equality compare_nulls,
-                                                      rmm::cuda_stream_view stream)
+template <cudf::has_nested HasNested>
+unique_hash_join<HasNested>::unique_hash_join(cudf::table_view const& build,
+                                              cudf::table_view const& probe,
+                                              bool has_nulls,
+                                              cudf::null_equality compare_nulls,
+                                              rmm::cuda_stream_view stream)
   : _has_nulls{has_nulls},
     _is_empty{build.num_rows() == 0},
     _nulls_equal{compare_nulls},
@@ -293,11 +293,11 @@ unique_hash_join<Hasher, HasNested>::unique_hash_join(cudf::table_view const& bu
   }
 }
 
-template <typename Hasher, cudf::has_nested HasNested>
+template <cudf::has_nested HasNested>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-unique_hash_join<Hasher, HasNested>::inner_join(rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr) const
+unique_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
 

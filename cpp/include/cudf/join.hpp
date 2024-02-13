@@ -47,7 +47,7 @@ namespace detail {
 template <typename T>
 class hash_join;
 
-template <typename T, has_nested>
+template <has_nested>
 class unique_hash_join;
 }  // namespace detail
 
@@ -501,9 +501,7 @@ class unique_hash_join {
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  using impl_type = typename cudf::detail::unique_hash_join<
-    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>,
-    HasNested>;  ///< Implementation type
+  using impl_type = typename cudf::detail::unique_hash_join<HasNested>;  ///< Implementation type
 
   std::unique_ptr<impl_type> _impl;
 };

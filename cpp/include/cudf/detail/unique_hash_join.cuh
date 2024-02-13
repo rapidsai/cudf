@@ -70,10 +70,9 @@ struct hasher_adapter {
  * @brief Unique hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions.
  *
- * @tparam Hasher Unary callable type
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
-template <typename Hasher, has_nested HasNested = has_nested::NO>
+template <has_nested HasNested = has_nested::NO>
 struct unique_hash_join {
  private:
   /// Row equality type for nested columns
@@ -86,9 +85,8 @@ struct unique_hash_join {
   /// Device row equal type
   using d_equal_type =
     std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
-  using first_hasher        = hasher_adapter<thrust::identity<hash_value_type>>;
-  using second_hasher       = hasher_adapter<Hasher>;
-  using probing_scheme_type = cuco::experimental::linear_probing<1, first_hasher>;
+  using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
+  using probing_scheme_type = cuco::experimental::linear_probing<1, hasher>;
   using cuco_storge_type    = cuco::experimental::storage<1>;
 
   /// Hash table type
