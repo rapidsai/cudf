@@ -31,7 +31,7 @@ cpdef concatenate(list objects):
             c_tables.push_back(tbl.view())
 
         with nogil:
-            c_tbl_result = move(cpp_concatenate.concatenate_tables(c_tables))
+            c_tbl_result = move(cpp_concatenate.concatenate(c_tables))
         return Table.from_libcudf(move(c_tbl_result))
     elif isinstance(objects[0], Column):
         for i in range(len(objects)):
@@ -39,7 +39,7 @@ cpdef concatenate(list objects):
             c_columns.push_back(col.view())
 
         with nogil:
-            c_col_result = move(cpp_concatenate.concatenate_columns(c_columns))
+            c_col_result = move(cpp_concatenate.concatenate(c_columns))
         return Column.from_libcudf(move(c_col_result))
     else:
         raise ValueError("input must be a list of Columns or Tables")
