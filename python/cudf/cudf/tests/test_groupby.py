@@ -855,7 +855,13 @@ def test_groupby_apply_return_col_from_df(func):
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
-    df = cudf.datasets.randomdata()
+    df = cudf.DataFrame(
+        {
+            "id": range(10),
+            "x": range(10),
+            "y": range(10),
+        }
+    )
     pdf = df.to_pandas()
 
     def func(df):
@@ -866,6 +872,9 @@ def test_groupby_apply_return_col_from_df(func):
     else:
         kwargs = {}
     expect = pdf.groupby("id").apply(func, **kwargs)
+    if PANDAS_GE_220:
+        # pandas seems to erroneously add an extra MI level of ids
+        expect = pd.DataFrame(expect.droplevel(1), columns=["x"])
     got = df.groupby("id").apply(func, **kwargs)
     assert_groupby_results_equal(expect, got)
 

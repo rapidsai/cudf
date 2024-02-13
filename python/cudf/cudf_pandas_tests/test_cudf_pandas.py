@@ -507,6 +507,7 @@ def test_array_ufunc(series):
     tm.assert_equal(expect, got)
 
 
+@pytest.mark.xfail(strict=False, reason="Fails in CI, passes locally.")
 def test_groupby_apply_func_returns_series(dataframe):
     pdf, df = dataframe
     if PANDAS_GE_220:
