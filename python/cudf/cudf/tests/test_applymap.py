@@ -43,10 +43,12 @@ def test_applymap_dataframe(data, func, na_action, request):
     )
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
+
     with utils.expect_warning_if(PANDAS_GE_210):
         expect = pdf.applymap(func, na_action=na_action)
     with pytest.warns(FutureWarning):
         got = gdf.applymap(func, na_action=na_action)
+
     utils.assert_eq(expect, got, check_dtype=False)
 
 
