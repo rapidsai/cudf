@@ -38,25 +38,61 @@ using strcol_wrapper = cudf::test::strings_column_wrapper;
 using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
-struct UniqueJoinTest : public cudf::test::BaseFixture {};
+struct UniqueJoinTest : public cudf::test::BaseFixture {
+  void compare_to_reference(
+    cudf::table_view const& build_table,
+    cudf::table_view const& probe_table,
+    std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+              std::unique_ptr<rmm::device_uvector<cudf::size_type>>> const& result,
+    cudf::table_view const& expected_table)
+  {
+    auto const& [build_join_indices, probe_join_indices] = result;
+
+    auto build_indices_span = cudf::device_span<cudf::size_type const>{*build_join_indices};
+    auto probe_indices_span = cudf::device_span<cudf::size_type const>{*probe_join_indices};
+
+    auto build_indices_col = cudf::column_view{build_indices_span};
+    auto probe_indices_col = cudf::column_view{probe_indices_span};
+
+    auto constexpr oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
+    auto build_result         = cudf::gather(build_table, build_indices_col, oob_policy);
+    auto probe_result         = cudf::gather(probe_table, probe_indices_col, oob_policy);
+
+    auto joined_cols = build_result->release();
+    auto right_cols  = probe_result->release();
+    joined_cols.insert(joined_cols.end(),
+                       std::make_move_iterator(right_cols.begin()),
+                       std::make_move_iterator(right_cols.end()));
+    auto joined_table        = std::make_unique<cudf::table>(std::move(joined_cols));
+    auto result_sort_order   = cudf::sorted_order(joined_table->view());
+    auto sorted_joined_table = cudf::gather(joined_table->view(), *result_sort_order);
+
+    auto expected_sort_order = cudf::sorted_order(expected_table);
+    auto sorted_expected     = cudf::gather(expected_table, *expected_sort_order);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_expected, *sorted_joined_table);
+  }
+};
 
 TEST_F(UniqueJoinTest, IntegerInnerJoin)
 {
-  auto constexpr num = 2024;
+  auto constexpr size = 2024;
 
   auto const init = cudf::numeric_scalar<int32_t>{0};
 
-  auto build = cudf::sequence(num, init, cudf::numeric_scalar<int32_t>{1});
-  auto probe = cudf::sequence(num, init, cudf::numeric_scalar<int32_t>{2});
+  auto build = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{1});
+  auto probe = cudf::sequence(size, init, cudf::numeric_scalar<int32_t>{2});
 
-  auto unique_join = cudf::unique_hash_join<cudf::has_nested::NO>{
-    cudf::table_view{{build->view()}}, cudf::table_view{{probe->view()}}, cudf::nullable_join::NO};
+  auto build_table = cudf::table_view{{build->view()}};
+  auto probe_table = cudf::table_view{{probe->view()}};
+
+  auto unique_join =
+    cudf::unique_hash_join<cudf::has_nested::NO>{build_table, probe_table, cudf::nullable_join::NO};
 
   auto result = unique_join.inner_join();
 
-  auto constexpr gold_size = num / 2;
-  EXPECT_EQ(result.first->size(), gold_size);
-  EXPECT_EQ(result.second->size(), gold_size);
+  auto constexpr gold_size = size / 2;
+  auto gold                = cudf::sequence(gold_size, init, cudf::numeric_scalar<int32_t>{2});
+  this->compare_to_reference(build_table, probe_table, result, cudf::table_view{{gold->view()}});
 }
 
 TEST_F(UniqueJoinTest, InnerJoinNestedNoNulls)
@@ -81,31 +117,7 @@ TEST_F(UniqueJoinTest, InnerJoinNestedNoNulls)
   Table probe(std::move(cols1));
 
   auto unique_join = cudf::unique_hash_join<cudf::has_nested::YES>{build.view(), probe.view()};
-  auto [left_join_indices, right_join_indices] = unique_join.inner_join();
-
-  auto constexpr gold_size = 2;
-
-  EXPECT_EQ(left_join_indices->size(), gold_size);
-  EXPECT_EQ(right_join_indices->size(), gold_size);
-
-  auto left_indices_span  = cudf::device_span<cudf::size_type const>{*left_join_indices};
-  auto right_indices_span = cudf::device_span<cudf::size_type const>{*right_join_indices};
-
-  auto left_indices_col  = cudf::column_view{left_indices_span};
-  auto right_indices_col = cudf::column_view{right_indices_span};
-
-  auto constexpr oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
-  auto left_result          = cudf::gather(build.view(), left_indices_col, oob_policy);
-  auto right_result         = cudf::gather(probe.view(), right_indices_col, oob_policy);
-
-  auto joined_cols = left_result->release();
-  auto right_cols  = right_result->release();
-  joined_cols.insert(joined_cols.end(),
-                     std::make_move_iterator(right_cols.begin()),
-                     std::make_move_iterator(right_cols.end()));
-  auto joined_table        = std::make_unique<cudf::table>(std::move(joined_cols));
-  auto result_sort_order   = cudf::sorted_order(joined_table->view());
-  auto sorted_joined_table = cudf::gather(joined_table->view(), *result_sort_order);
+  auto result      = unique_join.inner_join();
 
   column_wrapper<int32_t> col_gold_0{{1, 2}};
   strcol_wrapper col_gold_1({"s0", "s0"});
@@ -122,7 +134,5 @@ TEST_F(UniqueJoinTest, InnerJoinNestedNoNulls)
   cols_gold.push_back(col_gold_5.release());
   Table gold(std::move(cols_gold));
 
-  auto gold_sort_order = cudf::sorted_order(gold.view());
-  auto sorted_gold     = cudf::gather(gold.view(), *gold_sort_order);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_gold, *sorted_joined_table);
+  this->compare_to_reference(build.view(), probe.view(), result, gold.view());
 }
