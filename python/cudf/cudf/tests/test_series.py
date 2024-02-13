@@ -1796,10 +1796,10 @@ def test_isin_datetime(data, values):
     psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
-    is_str = isinstance(next(iter(values), None), str)
-    with expect_warning_if(is_str and len(data)):
+    is_len_str = isinstance(next(iter(values), None), str) and len(data)
+    with expect_warning_if(is_len_str):
         got = gsr.isin(values)
-    with expect_warning_if(PANDAS_GE_220 and is_str and len(data)):
+    with expect_warning_if(PANDAS_GE_220 and is_len_str):
         expected = psr.isin(values)
     assert_eq(got, expected)
 
