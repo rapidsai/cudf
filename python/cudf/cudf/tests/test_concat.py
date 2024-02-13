@@ -467,7 +467,10 @@ def test_concat_mixed_input():
                 ),
                 pd.DataFrame({"a": [1, 2]}),
             ],
-            marks=pytest.mark.xfail(not PANDAS_GE_220),
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            ),
         ),
         pytest.param(
             [
@@ -476,7 +479,10 @@ def test_concat_mixed_input():
                 ),
                 pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
             ],
-            marks=pytest.mark.xfail(not PANDAS_GE_220),
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            ),
         ),
         pytest.param(
             [
@@ -490,7 +496,10 @@ def test_concat_mixed_input():
                     index=["a", "b", "c", "d", "e", "f"],
                 ),
             ],
-            marks=pytest.mark.xfail(not PANDAS_GE_220),
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            ),
         ),
         pytest.param(
             [
@@ -505,7 +514,10 @@ def test_concat_mixed_input():
                 ),
             ]
             * 7,
-            marks=pytest.mark.xfail(not PANDAS_GE_220),
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            ),
         ),
     ],
 )
