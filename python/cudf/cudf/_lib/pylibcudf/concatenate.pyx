@@ -15,6 +15,18 @@ from .table cimport Table
 
 
 cpdef concatenate(list objects):
+    """Concatenate columns or tables.
+
+    Parameters
+    ----------
+    objects : List[Union[Column, Table]]
+        The list of Columns or Tables to concatenate.
+
+    Returns
+    -------
+    Union[Column, Table]
+        The concatenated Column or Table.
+    """
     cdef vector[column_view] c_columns
     cdef vector[table_view] c_tables
 

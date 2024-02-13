@@ -24,6 +24,22 @@ from .table cimport Table
 
 
 cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
+    """Filters out rows from the input table based on the presence of nulls.
+
+    Parameters
+    ----------
+    source_table : Table
+        The input table to filter.
+    keys : List[size_type]
+        The list of column indexes to consider for null filtering.
+    keep_threshold : size_type
+        The minimum number of non-nulls required to keep a row.
+
+    Returns
+    -------
+    Table
+        A new table with rows removed based on the null count.
+    """
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
@@ -36,6 +52,20 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
 
 
 cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
+    """Filters out rows from the input table based on a boolean mask.
+
+    Parameters
+    ----------
+    source_table : Table
+        The input table to filter.
+    boolean_mask : Column
+        The boolean mask to apply to the input table.
+
+    Returns
+    -------
+    Table
+        A new table with rows removed based on the boolean mask.
+    """
     cdef unique_ptr[table] c_result
     with nogil:
         c_result = move(
@@ -51,6 +81,22 @@ cpdef size_type distinct_count(
     null_policy null_handling,
     nan_policy nan_handling
 ):
+    """Returns the number of unique elements in the input column.
+
+    Parameters
+    ----------
+    source_table : Column
+        The input column to count the unique elements of.
+    null_handling : null_policy
+        Flag to include or exclude nulls from the count.
+    nan_handling : nan_policy
+        Flag to include or exclude NaNs from the count.
+
+    Returns
+    -------
+    size_type
+        The number of unique elements in the input column.
+    """
     return cpp_stream_compaction.distinct_count(
         source_table.view(), null_handling, nan_handling
     )
@@ -62,6 +108,24 @@ cpdef Table stable_distinct(
     duplicate_keep_option keep,
     null_equality nulls_equal,
 ):
+    """Get the distinct rows from the input table, preserving input order.
+
+    Parameters
+    ----------
+    input : Table
+        The input table to filter.
+    keys : list
+        The list of column indexes to consider for distinct filtering.
+    keep : duplicate_keep_option
+        The option to specify which rows to keep in the case of duplicates.
+    nulls_equal : null_equality
+        The option to specify how nulls are handled in the comparison.
+
+    Returns
+    -------
+    Table
+        A new table with distinct rows from the input table.
+    """
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
@@ -79,6 +143,24 @@ cpdef Column distinct_indices(
     null_equality nulls_equal,
     nan_equality nans_equal,
 ):
+    """Get the indices of the distinct rows from the input table.
+
+    Parameters
+    ----------
+    input : Table
+        The input table to filter.
+    keep : duplicate_keep_option
+        The option to specify which rows to keep in the case of duplicates.
+    nulls_equal : null_equality
+        The option to specify how nulls are handled in the comparison.
+    nans_equal : nan_equality
+        The option to specify how NaNs are handled in the comparison.
+
+    Returns
+    -------
+    Column
+        A new column with the indices of the distinct rows from the input table.
+    """
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(

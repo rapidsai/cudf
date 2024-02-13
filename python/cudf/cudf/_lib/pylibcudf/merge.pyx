@@ -18,6 +18,24 @@ cpdef Table merge (
     list column_order,
     list null_precedence,
 ):
+    """Merge a set of sorted tables.
+
+    Parameters
+    ----------
+    tables_to_merge : list
+        List of tables to merge.
+    key_cols : list
+        List of column indexes to merge on.
+    column_order : List[ColumnOrder]
+        Whether each column should be sorted in ascending or descending order.
+    null_precedence : List[NullOrder]
+        Whether nulls should come before or after non-nulls.
+
+    Returns
+    -------
+    Table
+        The merged table.
+    """
     cdef vector[size_type] c_key_cols = key_cols
     cdef vector[order] c_column_order = column_order
     cdef vector[null_order] c_null_precedence = null_precedence

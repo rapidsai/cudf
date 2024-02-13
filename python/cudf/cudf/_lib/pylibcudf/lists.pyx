@@ -11,6 +11,20 @@ from .table cimport Table
 
 
 cpdef Table explode_outer(Table input, size_type explode_column_idx):
+    """Explode a column of lists into rows, duplicating the index.
+
+    Parameters
+    ----------
+    input : Table
+        The input table
+    explode_column_idx : int
+        The index of the column to explode
+
+    Returns
+    -------
+    Table
+        A new table with the exploded column
+    """
     cdef unique_ptr[table] c_result
 
     with nogil:
