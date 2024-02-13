@@ -487,7 +487,6 @@ class unique_hash_join {
    * an inner join between two tables. @see cudf::inner_join(). Behavior is undefined if the
    * provided `output_size` is smaller than the actual output size.
    *
-   * @param output_size Optional value which allows users to specify the exact output size
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned table and columns' device
    * memory.
@@ -498,9 +497,8 @@ class unique_hash_join {
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
-  inner_join(std::optional<std::size_t> output_size = {},
-             rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-             rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource()) const;
+  inner_join(rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   using impl_type = typename cudf::detail::unique_hash_join<

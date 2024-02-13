@@ -31,7 +31,7 @@ void unique_inner_join(nvbench::state& state,
                              : cudf::nullable_join::NO;
     auto hj_obj          = cudf::unique_hash_join<cudf::has_nested::NO>{
       left_input, right_input, has_nulls, compare_nulls, stream};
-    return hj_obj.inner_join(std::nullopt, stream);
+    return hj_obj.inner_join(stream);
   };
 
   BM_join<key_type, payload_type, Nullable>(state, join);
