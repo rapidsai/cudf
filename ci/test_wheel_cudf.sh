@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -eou pipefail
 
@@ -22,9 +22,22 @@ RAPIDS_PY_WHEEL_NAME="cudf_${manylinux}_${RAPIDS_PY_CUDA_SUFFIX}" rapids-downloa
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/cudf*.whl)[test]
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 # Run smoke tests for aarch64 pull requests
 if [[ "$(arch)" == "aarch64" && ${RAPIDS_BUILD_TYPE} == "pull-request" ]]; then
+    rapids-logger "Run smoke tests for cudf"
     python ./ci/wheel_smoke_test_cudf.py
 else
-    python -m pytest -n 8 ./python/cudf/cudf/tests
+    rapids-logger "pytest cudf"
+    pushd python/cudf/cudf/tests
+    python -m pytest \
+      --cache-clear \
+      --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
+      --numprocesses=8 \
+      --dist=loadscope \
+      .
+    popd
 fi
