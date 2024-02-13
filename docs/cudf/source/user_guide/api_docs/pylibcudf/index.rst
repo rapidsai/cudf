@@ -16,6 +16,7 @@ This page provides API documentation for pylibcudf.
     gpumemoryview
     groupby
     join
+    lists
     merge
     reduce
     rolling
