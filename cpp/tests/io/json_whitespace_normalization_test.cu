@@ -32,7 +32,7 @@
 // Base test fixture for tests
 struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
-void run_test(const std::string& host_input, const std::string& expected_host_output)
+void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
   // RMM memory resource
   std::shared_ptr<rmm::mr::device_memory_resource> rsc =
