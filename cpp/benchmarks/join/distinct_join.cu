@@ -17,8 +17,8 @@
 #include "join_common.hpp"
 
 template <typename key_type, typename payload_type, bool Nullable>
-void unique_inner_join(nvbench::state& state,
-                       nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
+void distinct_inner_join(nvbench::state& state,
+                         nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
 {
   skip_helper(state);
 
@@ -29,7 +29,7 @@ void unique_inner_join(nvbench::state& state,
     auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
                              ? cudf::nullable_join::YES
                              : cudf::nullable_join::NO;
-    auto hj_obj          = cudf::unique_hash_join<cudf::has_nested::NO>{
+    auto hj_obj          = cudf::distinct_hash_join<cudf::has_nested::NO>{
       left_input, right_input, has_nulls, compare_nulls, stream};
     return hj_obj.inner_join(stream);
   };
@@ -38,40 +38,40 @@ void unique_inner_join(nvbench::state& state,
 }
 
 // inner join -----------------------------------------------------------------------
-NVBENCH_BENCH_TYPES(unique_inner_join,
+NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
                                       nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<false>))
-  .set_name("unique_inner_join_32bit")
+  .set_name("distinct_inner_join_32bit")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("Probe Table Size",
                   {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
 
-NVBENCH_BENCH_TYPES(unique_inner_join,
+NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
                                       nvbench::type_list<nvbench::int64_t>,
                                       nvbench::enum_type_list<false>))
-  .set_name("unique_inner_join_64bit")
+  .set_name("distinct_inner_join_64bit")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {40'000'000, 50'000'000})
   .add_int64_axis("Probe Table Size", {50'000'000, 120'000'000});
 
-NVBENCH_BENCH_TYPES(unique_inner_join,
+NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int32_t>,
                                       nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<true>))
-  .set_name("unique_inner_join_32bit_nulls")
+  .set_name("distinct_inner_join_32bit_nulls")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("Probe Table Size",
                   {100'000, 400'000, 10'000'000, 40'000'000, 100'000'000, 240'000'000});
 
-NVBENCH_BENCH_TYPES(unique_inner_join,
+NVBENCH_BENCH_TYPES(distinct_inner_join,
                     NVBENCH_TYPE_AXES(nvbench::type_list<nvbench::int64_t>,
                                       nvbench::type_list<nvbench::int64_t>,
                                       nvbench::enum_type_list<true>))
-  .set_name("unique_inner_join_64bit_nulls")
+  .set_name("distinct_inner_join_64bit_nulls")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {40'000'000, 50'000'000})
   .add_int64_axis("Probe Table Size", {50'000'000, 120'000'000});

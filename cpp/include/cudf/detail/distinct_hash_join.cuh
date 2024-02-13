@@ -45,7 +45,7 @@ struct comparator_adapter {
     cuco::pair<hash_value_type, lhs_index_type> const&,
     cuco::pair<hash_value_type, lhs_index_type> const&) const noexcept
   {
-    // All build table keys are unique thus `false` no matter what
+    // All build table keys are distinct thus `false` no matter what
     return false;
   }
 
@@ -76,13 +76,13 @@ struct hasher_adapter {
 };
 
 /**
- * @brief Unique hash join that builds hash table in creation and probes results in subsequent
+ * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions.
  *
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
 template <has_nested HasNested = has_nested::NO>
-struct unique_hash_join {
+struct distinct_hash_join {
  private:
   /// Row equality type for nested columns
   using nested_row_equal = cudf::experimental::row::equality::strong_index_comparator_adapter<
@@ -119,12 +119,12 @@ struct unique_hash_join {
   hash_table_type _hash_table;  ///< hash table built on `_build`
 
  public:
-  unique_hash_join()                                   = delete;
-  ~unique_hash_join()                                  = default;
-  unique_hash_join(unique_hash_join const&)            = delete;
-  unique_hash_join(unique_hash_join&&)                 = delete;
-  unique_hash_join& operator=(unique_hash_join const&) = delete;
-  unique_hash_join& operator=(unique_hash_join&&)      = delete;
+  distinct_hash_join()                                     = delete;
+  ~distinct_hash_join()                                    = default;
+  distinct_hash_join(distinct_hash_join const&)            = delete;
+  distinct_hash_join(distinct_hash_join&&)                 = delete;
+  distinct_hash_join& operator=(distinct_hash_join const&) = delete;
+  distinct_hash_join& operator=(distinct_hash_join&&)      = delete;
 
   /**
    * @brief Constructor that internally builds the hash table based on the given `build` table.
@@ -138,14 +138,14 @@ struct unique_hash_join {
    * @param compare_nulls Controls whether null join-key values should match or not.
    * @param stream CUDA stream used for device memory operations and kernel launches.
    */
-  unique_hash_join(cudf::table_view const& build,
-                   cudf::table_view const& probe,
-                   bool has_nulls,
-                   cudf::null_equality compare_nulls,
-                   rmm::cuda_stream_view stream);
+  distinct_hash_join(cudf::table_view const& build,
+                     cudf::table_view const& probe,
+                     bool has_nulls,
+                     cudf::null_equality compare_nulls,
+                     rmm::cuda_stream_view stream);
 
   /**
-   * @copydoc cudf::unique_hash_join::inner_join
+   * @copydoc cudf::distinct_hash_join::inner_join
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>

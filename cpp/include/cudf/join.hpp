@@ -34,7 +34,7 @@
 namespace cudf {
 
 /**
- * @brief Enum to indicate whether the unique join table has nested columns or not
+ * @brief Enum to indicate whether the distinct join table has nested columns or not
  */
 enum class has_nested : bool { YES, NO };
 
@@ -48,7 +48,7 @@ template <typename T>
 class hash_join;
 
 template <has_nested>
-class unique_hash_join;
+class distinct_hash_join;
 }  // namespace detail
 
 /**
@@ -447,7 +447,7 @@ class hash_join {
 };
 
 /**
- * @brief Unique hash join that builds hash table in creation and probes results in subsequent
+ * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
  * `*_join` member functions
  *
  * @note Behavior is undefined if the build table contains duplicates.
@@ -457,30 +457,30 @@ class hash_join {
  */
 // TODO: `HasNested` to be removed via dispatching
 template <has_nested HasNested = has_nested::NO>
-class unique_hash_join {
+class distinct_hash_join {
  public:
-  unique_hash_join() = delete;
-  ~unique_hash_join();
-  unique_hash_join(unique_hash_join const&)            = delete;
-  unique_hash_join(unique_hash_join&&)                 = delete;
-  unique_hash_join& operator=(unique_hash_join const&) = delete;
-  unique_hash_join& operator=(unique_hash_join&&)      = delete;
+  distinct_hash_join() = delete;
+  ~distinct_hash_join();
+  distinct_hash_join(distinct_hash_join const&)            = delete;
+  distinct_hash_join(distinct_hash_join&&)                 = delete;
+  distinct_hash_join& operator=(distinct_hash_join const&) = delete;
+  distinct_hash_join& operator=(distinct_hash_join&&)      = delete;
 
   /**
-   * @brief Constructs a unique hash join object for subsequent probe calls
+   * @brief Constructs a distinct hash join object for subsequent probe calls
    *
-   * @param build The build table that contains unique elements
+   * @param build The build table that contains distinct elements
    * @param probe The probe table, from which the keys are probed
    * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
    */
-  unique_hash_join(cudf::table_view const& build,
-                   cudf::table_view const& probe,
-                   nullable_join has_nulls      = nullable_join::YES,
-                   null_equality compare_nulls  = null_equality::EQUAL,
-                   rmm::cuda_stream_view stream = cudf::get_default_stream());
+  distinct_hash_join(cudf::table_view const& build,
+                     cudf::table_view const& probe,
+                     nullable_join has_nulls      = nullable_join::YES,
+                     null_equality compare_nulls  = null_equality::EQUAL,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * Returns the row indices that can be used to construct the result of performing
@@ -499,9 +499,9 @@ class unique_hash_join {
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  using impl_type = typename cudf::detail::unique_hash_join<HasNested>;  ///< Implementation type
+  using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type
 
-  std::unique_ptr<impl_type> _impl;  ///< Unique hash join implementation
+  std::unique_ptr<impl_type> _impl;  ///< Distinct hash join implementation
 };
 
 /**

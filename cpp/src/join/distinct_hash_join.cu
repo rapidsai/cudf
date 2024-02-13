@@ -16,8 +16,8 @@
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 
+#include <cudf/detail/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/unique_hash_join.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
@@ -44,7 +44,7 @@ namespace cudf {
 namespace detail {
 namespace {
 
-static auto constexpr UNIQUE_JOIN_BLOCK_SIZE = 256;
+static auto constexpr DISTINCT_JOIN_BLOCK_SIZE = 256;
 
 template <cudf::has_nested HasNested>
 auto prepare_device_equal(
@@ -122,12 +122,12 @@ __device__ void flush_buffer(cooperative_groups::thread_block const& block,
 
 // TODO: custom kernel to be replaced by cuco::static_set::retrieve
 template <typename Iter, typename HashTable>
-CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
-                                          cudf::size_type n,
-                                          HashTable hash_table,
-                                          cudf::size_type* counter,
-                                          cudf::size_type* build_indices,
-                                          cudf::size_type* probe_indices)
+CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
+                                            cudf::size_type n,
+                                            HashTable hash_table,
+                                            cudf::size_type* counter,
+                                            cudf::size_type* build_indices,
+                                            cudf::size_type* probe_indices)
 {
   namespace cg = cooperative_groups;
 
@@ -145,7 +145,7 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
     auto constexpr flushing_tile_size = cudf::detail::warp_size / window_size;
     // random choice to tune
     auto constexpr flushing_buffer_size = 2 * flushing_tile_size;
-    auto constexpr num_flushing_tiles   = UNIQUE_JOIN_BLOCK_SIZE / flushing_tile_size;
+    auto constexpr num_flushing_tiles   = DISTINCT_JOIN_BLOCK_SIZE / flushing_tile_size;
     auto constexpr max_matches          = flushing_tile_size / tile_size;
 
     auto const flushing_tile    = cg::tiled_partition<flushing_tile_size>(block);
@@ -199,10 +199,10 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
   }
   // Scalar probing
   else {
-    using block_scan = cub::BlockScan<cudf::size_type, UNIQUE_JOIN_BLOCK_SIZE>;
+    using block_scan = cub::BlockScan<cudf::size_type, DISTINCT_JOIN_BLOCK_SIZE>;
     __shared__ typename block_scan::TempStorage block_scan_temp_storage;
 
-    auto constexpr buffer_capacity = 2 * UNIQUE_JOIN_BLOCK_SIZE;
+    auto constexpr buffer_capacity = 2 * DISTINCT_JOIN_BLOCK_SIZE;
     __shared__ cuco::pair<cudf::size_type, cudf::size_type> buffer[buffer_capacity];
     cudf::size_type buffer_size = 0;
 
@@ -243,11 +243,11 @@ CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
 }  // namespace
 
 template <cudf::has_nested HasNested>
-unique_hash_join<HasNested>::unique_hash_join(cudf::table_view const& build,
-                                              cudf::table_view const& probe,
-                                              bool has_nulls,
-                                              cudf::null_equality compare_nulls,
-                                              rmm::cuda_stream_view stream)
+distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
+                                                  cudf::table_view const& probe,
+                                                  bool has_nulls,
+                                                  cudf::null_equality compare_nulls,
+                                                  rmm::cuda_stream_view stream)
   : _has_nulls{has_nulls},
     _nulls_equal{compare_nulls},
     _build{build},
@@ -295,8 +295,8 @@ unique_hash_join<HasNested>::unique_hash_join(cudf::table_view const& build,
 template <cudf::has_nested HasNested>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-unique_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr) const
+distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr) const
 {
   CUDF_FUNC_RANGE();
 
@@ -321,8 +321,8 @@ unique_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
   auto counter = rmm::device_scalar<cudf::size_type>{stream};
   counter.set_value_to_zero_async(stream);
 
-  cudf::detail::grid_1d grid{probe_table_num_rows, UNIQUE_JOIN_BLOCK_SIZE};
-  unique_join_probe_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+  cudf::detail::grid_1d grid{probe_table_num_rows, DISTINCT_JOIN_BLOCK_SIZE};
+  distinct_join_probe_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     iter,
     probe_table_num_rows,
     this->_hash_table.ref(cuco::experimental::op::find),
@@ -339,28 +339,28 @@ unique_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
 }  // namespace detail
 
 template <>
-unique_hash_join<cudf::has_nested::YES>::~unique_hash_join() = default;
+distinct_hash_join<cudf::has_nested::YES>::~distinct_hash_join() = default;
 
 template <>
-unique_hash_join<cudf::has_nested::NO>::~unique_hash_join() = default;
+distinct_hash_join<cudf::has_nested::NO>::~distinct_hash_join() = default;
 
 template <>
-unique_hash_join<cudf::has_nested::YES>::unique_hash_join(cudf::table_view const& build,
-                                                          cudf::table_view const& probe,
-                                                          nullable_join has_nulls,
-                                                          null_equality compare_nulls,
-                                                          rmm::cuda_stream_view stream)
+distinct_hash_join<cudf::has_nested::YES>::distinct_hash_join(cudf::table_view const& build,
+                                                              cudf::table_view const& probe,
+                                                              nullable_join has_nulls,
+                                                              null_equality compare_nulls,
+                                                              rmm::cuda_stream_view stream)
   : _impl{std::make_unique<impl_type>(
       build, probe, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
 }
 
 template <>
-unique_hash_join<cudf::has_nested::NO>::unique_hash_join(cudf::table_view const& build,
-                                                         cudf::table_view const& probe,
-                                                         nullable_join has_nulls,
-                                                         null_equality compare_nulls,
-                                                         rmm::cuda_stream_view stream)
+distinct_hash_join<cudf::has_nested::NO>::distinct_hash_join(cudf::table_view const& build,
+                                                             cudf::table_view const& probe,
+                                                             nullable_join has_nulls,
+                                                             null_equality compare_nulls,
+                                                             rmm::cuda_stream_view stream)
   : _impl{std::make_unique<impl_type>(
       build, probe, has_nulls == nullable_join::YES, compare_nulls, stream)}
 {
@@ -369,8 +369,8 @@ unique_hash_join<cudf::has_nested::NO>::unique_hash_join(cudf::table_view const&
 template <>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-unique_hash_join<cudf::has_nested::YES>::inner_join(rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr) const
+distinct_hash_join<cudf::has_nested::YES>::inner_join(rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr) const
 {
   return _impl->inner_join(stream, mr);
 }
@@ -378,8 +378,8 @@ unique_hash_join<cudf::has_nested::YES>::inner_join(rmm::cuda_stream_view stream
 template <>
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-unique_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr) const
+distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr) const
 {
   return _impl->inner_join(stream, mr);
 }
