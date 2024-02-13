@@ -121,6 +121,7 @@ __device__ void flush_buffer(cooperative_groups::thread_block const& block,
   }
 }
 
+// TODO: custom kernel to be replaced by cuco::static_set::retrieve
 template <typename Iter, typename HashTable>
 CUDF_KERNEL void unique_join_probe_kernel(Iter iter,
                                           cudf::size_type n,
