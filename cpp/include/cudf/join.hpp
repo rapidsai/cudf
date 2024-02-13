@@ -487,12 +487,11 @@ class unique_hash_join {
    * an inner join between two tables. @see cudf::inner_join().
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the returned table and columns' device
-   * memory.
+   * @param mr Device memory resource used to allocate the returned indices' device memory.
    *
    * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
-   * as the join keys .
+   * as the join keys.
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
