@@ -1899,7 +1899,7 @@ inline void mark(event_attributes const& attr) noexcept
  *
  * @param[in] D Type containing `name` member used to identify the
  * `domain` to which the `registered_message` belongs. Else,
- * `domain::global` to  indicate that the global NVTX domain should be used.
+ * `domain::global` to indicate that the global NVTX domain should be used.
  * @param[in] F The given function name
  */
 #define NVTX3_FUNC_RANGE_IN(D, F)                                              \
