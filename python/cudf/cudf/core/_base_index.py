@@ -1096,12 +1096,12 @@ class BaseIndex(Serializable):
         other = cudf.Index(other, name=getattr(other, "name", self.name))
 
         if not len(other):
-            res = self._get_reconciled_name_object(other)
+            res = self._get_reconciled_name_object(other).unique()
             if sort:
                 return res.sort_values()
             return res
         elif self.equals(other):
-            res = self[:0]._get_reconciled_name_object(other)
+            res = self[:0]._get_reconciled_name_object(other).unique()
             if sort:
                 return res.sort_values()
             return res

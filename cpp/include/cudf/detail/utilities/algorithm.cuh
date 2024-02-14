@@ -91,7 +91,8 @@ OutputIterator copy_if_safe(InputIterator first,
 {
   auto const copy_size = std::min(static_cast<std::size_t>(std::distance(first, last)),
                                   static_cast<std::size_t>(std::numeric_limits<int>::max()));
-  auto itr             = first;
+
+  auto itr = first;
   while (itr != last) {
     auto const copy_end =
       static_cast<std::size_t>(std::distance(itr, last)) <= copy_size ? last : itr + copy_size;
