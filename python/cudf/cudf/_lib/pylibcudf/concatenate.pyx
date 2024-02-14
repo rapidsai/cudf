@@ -37,8 +37,8 @@ cpdef concatenate(list objects):
     cdef unique_ptr[table] c_tbl_result
 
     if isinstance(objects[0], Table):
-        for table in objects:
-            c_tables.push_back((<Table?>table).view())
+        for tbl in objects:
+            c_tables.push_back((<Table?>tbl).view())
 
         with nogil:
             c_tbl_result = move(cpp_concatenate.concatenate(c_tables))

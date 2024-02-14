@@ -41,7 +41,7 @@ cpdef Table merge (
     cdef vector[null_order] c_null_precedence = null_precedence
     cdef vector[table_view] c_tables_to_merge
 
-    for table in tables_to_merge:
+    for tbl in tables_to_merge:
         c_tables_to_merge.push_back((<Table?> tbl).view())
 
     cdef unique_ptr[table] c_result
