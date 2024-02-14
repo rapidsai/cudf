@@ -82,8 +82,7 @@ requirements:
     - typing_extensions >=4.0.0
     - pandas >=2.0,<2.1.5dev0
     - cupy >=12.0.0
-    # TODO: Pin to numba<0.58 until #14160 is resolved
-    - numba >=0.57,<0.58
+    - numba >=0.57
     - numpy >=1.21
     - {{ pin_compatible('pyarrow', max_pin='x') }}
     - libcudf ={{ version }}
