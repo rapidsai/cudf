@@ -19,7 +19,7 @@ cpdef concatenate(list objects):
 
     Parameters
     ----------
-    objects : List[Union[Column, Table]]
+    objects : Union[List[Column], List[Table]]
         The list of Columns or Tables to concatenate.
 
     Returns
@@ -30,25 +30,19 @@ cpdef concatenate(list objects):
     cdef vector[column_view] c_columns
     cdef vector[table_view] c_tables
 
-    cdef Column col
-    cdef Table tbl
-
     cdef unique_ptr[column] c_col_result
     cdef unique_ptr[table] c_tbl_result
 
-    cdef int i
     if isinstance(objects[0], Table):
-        for i in range(len(objects)):
-            tbl = objects[i]
-            c_tables.push_back(tbl.view())
+        for table in objects:
+            c_tables.push_back((<Table?>table).view())
 
         with nogil:
             c_tbl_result = move(cpp_concatenate.concatenate(c_tables))
         return Table.from_libcudf(move(c_tbl_result))
     elif isinstance(objects[0], Column):
-        for i in range(len(objects)):
-            col = objects[i]
-            c_columns.push_back(col.view())
+        for column in objects:
+            c_columns.push_back((<Column?>column).view())
 
         with nogil:
             c_col_result = move(cpp_concatenate.concatenate(c_columns))

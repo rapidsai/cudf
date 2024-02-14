@@ -133,9 +133,9 @@ cpdef bool is_sorted(Table tbl, list column_order, list null_precedence):
     tbl : Table
         The table to check.
     column_order : List[ColumnOrder]
-        Whether each column should be sorted in ascending or descending order.
+        Whether each column is expected to be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
-        Whether nulls should come before or after non-nulls.
+        Whether nulls are expected before or after non-nulls.
 
     Returns
     -------
