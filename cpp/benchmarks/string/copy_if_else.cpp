@@ -34,7 +34,6 @@ static void bench_copy(nvbench::state& state)
 
   data_profile const str_profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
-  //.no_validity();
   auto const source_table =
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, str_profile);
   auto const target_table =
@@ -53,7 +52,7 @@ static void bench_copy(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // both columns are similar size
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = cudf::copy_if_else(source, target, left_right);
+    [[maybe_unused]] auto result = cudf::copy_if_else(source, target, left_right);
   });
 }
 

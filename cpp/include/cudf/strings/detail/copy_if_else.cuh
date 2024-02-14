@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> copy_if_else(StringIterLeft lhs_begin,
 
   // build vector of strings
   rmm::device_uvector<string_index_pair> indices(strings_count, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     indices.begin(),
