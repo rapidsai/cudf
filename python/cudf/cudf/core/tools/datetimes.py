@@ -767,7 +767,12 @@ def _isin_datetimelike(
     rhs = None
     try:
         rhs = cudf.core.column.as_column(values)
-        if len(rhs) and rhs.dtype.kind == "O":
+        was_string = len(rhs) and rhs.dtype.kind == "O"
+
+        if rhs.dtype.kind in {"f", "i", "u"}:
+            return cudf.core.column.full(len(lhs), False, dtype="bool")
+        rhs = rhs.astype(lhs.dtype)
+        if was_string:
             warnings.warn(
                 f"The behavior of 'isin' with dtype={lhs.dtype} and "
                 "castable values (e.g. strings) is deprecated. In a "
@@ -776,10 +781,6 @@ def _isin_datetimelike(
                 "calling isin instead.",
                 FutureWarning,
             )
-
-        if rhs.dtype.kind in {"f", "i", "u"}:
-            return cudf.core.column.full(len(lhs), False, dtype="bool")
-        rhs = rhs.astype(lhs.dtype)
         res = lhs._isin_earlystop(rhs)
         if res is not None:
             return res
