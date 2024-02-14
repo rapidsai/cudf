@@ -197,7 +197,7 @@ CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
                    probe_indices);
     }
   }
-  // Scalar probing
+  // Scalar probing for CG size 1
   else {
     using block_scan = cub::BlockScan<cudf::size_type, DISTINCT_JOIN_BLOCK_SIZE>;
     __shared__ typename block_scan::TempStorage block_scan_temp_storage;
