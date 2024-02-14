@@ -38,7 +38,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 #include <cuda/atomic>
@@ -272,9 +271,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // Create a vector of every target position in the chars column.
   // These may also include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
-  nvtxRangePushA("copy_if");
-  auto const copy_itr = thrust::counting_iterator<int64_t>(chars_offset);
-  auto const copy_end = cudf::detail::copy_if_safe(copy_itr,
+  auto const copy_itr    = thrust::counting_iterator<int64_t>(chars_offset);
+  auto const copy_end    = cudf::detail::copy_if_safe(copy_itr,
                                                    copy_itr + chars_bytes + chars_offset,
                                                    targets_positions.begin(),
                                                    copy_if_fn{fn, chars_bytes},
@@ -284,61 +282,44 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   target_count = std::min(std::distance(targets_positions.begin(), copy_end), target_count);
   targets_positions.resize(target_count, stream);
   auto d_positions = targets_positions.data();
-  stream.synchronize();
-  nvtxRangePop();
 
   // create a vector of offsets to each string's set of target positions
   auto const targets_offsets = [&] {
     auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
 
-    nvtxRangePushA("upper_bound");
     thrust::upper_bound(rmm::exec_policy(stream),
                         offsets_begin,
                         offsets_begin + input.size() + 1,
                         d_positions,
                         d_positions + target_count,
                         string_indices.begin());
-    stream.synchronize();
-    nvtxRangePop();
 
     // compute offsets per string
-    auto targets_counts = rmm::device_uvector<size_type>(strings_count, stream);
+    auto counts = rmm::device_uvector<size_type>(strings_count, stream);
     // memset to zero-out the target counts for any null-entries or strings with no targets
-    nvtxRangePushA("uninit_fill");
-    // cudaMemsetAsync(targets_counts.data(), 0, strings_count * sizeof(size_type), stream.value());
-    thrust::uninitialized_fill(
-      rmm::exec_policy(stream), targets_counts.begin(), targets_counts.end(), 0);
-    auto d_targets_counts = targets_counts.data();
-    stream.synchronize();
-    nvtxRangePop();
+    thrust::uninitialized_fill(rmm::exec_policy(stream), counts.begin(), counts.end(), 0);
+    auto d_counts = counts.data();
 
     // next, count the number of targets per string
-    nvtxRangePushA("count_targets");
     auto d_string_indices = string_indices.data();
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<int64_t>(0),
       target_count,
-      [d_string_indices, d_targets_counts] __device__(int64_t idx) {
+      [d_string_indices, d_counts] __device__(int64_t idx) {
         auto const str_idx = d_string_indices[idx] - 1;
-        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_targets_counts + str_idx)};
+        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_counts + str_idx)};
         ref.fetch_add(1, cuda::std::memory_order_relaxed);
       });
-    stream.synchronize();
-    nvtxRangePop();
     // finally, convert the counts into offsets
-    return std::get<0>(
-      cudf::strings::detail::make_offsets_child_column(targets_counts.begin(),
-                                                       targets_counts.end(),
-                                                       stream,
-                                                       rmm::mr::get_current_device_resource()));
+    return std::get<0>(cudf::strings::detail::make_offsets_child_column(
+      counts.begin(), counts.end(), stream, rmm::mr::get_current_device_resource()));
   }();
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 
   // compute the number of string segments produced by replace in each string
   auto counts = rmm::device_uvector<size_type>(strings_count, stream);
-  nvtxRangePushA("count_strings");
   thrust::transform(rmm::exec_policy(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(strings_count),
@@ -347,8 +328,6 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
                       [fn, d_positions, d_targets_offsets] __device__(size_type idx) -> size_type {
                         return fn.count_strings(idx, d_positions, d_targets_offsets);
                       }));
-  stream.synchronize();
-  nvtxRangePop();
 
   // create offsets from the counts
   auto [offsets, total_strings] =
@@ -360,7 +339,6 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto indices   = rmm::device_uvector<string_index_pair>(total_strings, stream);
   auto d_indices = indices.data();
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
-  nvtxRangePushA("get_strings");
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
@@ -370,15 +348,10 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
       d_sizes[idx] =
         fn.get_strings(idx, d_strings_offsets, d_positions, d_targets_offsets, d_indices);
     });
-  stream.synchronize();
-  nvtxRangePop();
 
   // use this utility to gather the string parts into a contiguous chars column
-  nvtxRangePushA("make_strings_column");
   auto chars      = make_strings_column(indices.begin(), indices.end(), stream, mr);
   auto chars_data = chars->release().data;
-  stream.synchronize();
-  nvtxRangePop();
 
   // create offsets from the sizes
   offsets = std::get<0>(
@@ -466,59 +439,6 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
 }
 
 }  // namespace
-
-template <>
-std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
-  strings_column_view const& input,
-  string_scalar const& target,
-  string_scalar const& repl,
-  int32_t maxrepl,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
-  if (maxrepl == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
-  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
-  CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
-
-  string_view d_target(target.data(), target.size());
-  string_view d_repl(repl.data(), repl.size());
-
-  return replace_character_parallel(input, d_target, d_repl, maxrepl, stream, mr);
-}
-
-template <>
-std::unique_ptr<column> replace<replace_algorithm::ROW_PARALLEL>(
-  strings_column_view const& input,
-  string_scalar const& target,
-  string_scalar const& repl,
-  int32_t maxrepl,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
-  if (maxrepl == 0) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
-  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
-  CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
-
-  string_view d_target(target.data(), target.size());
-  string_view d_repl(repl.data(), repl.size());
-
-  return replace_string_parallel(input, d_target, d_repl, maxrepl, stream, mr);
-}
-
-template <>
-std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view const&,
-                                                         string_scalar const&,
-                                                         string_scalar const&,
-                                                         cudf::size_type,
-                                                         rmm::cuda_stream_view,
-                                                         rmm::mr::device_memory_resource*)
-{
-  CUDF_FAIL("not implemented");
-}
 
 std::unique_ptr<column> replace(strings_column_view const& input,
                                 string_scalar const& target,
