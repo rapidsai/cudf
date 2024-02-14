@@ -693,10 +693,14 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
 cdef cudf_io_types.compression_type _get_comp_type(object compression):
     if compression is None:
         return cudf_io_types.compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return cudf_io_types.compression_type.SNAPPY
     elif compression == "ZSTD":
         return cudf_io_types.compression_type.ZSTD
+    elif compression == "LZ4":
+        return cudf_io_types.compression_type.LZ4
     else:
         raise ValueError("Unsupported `compression` type")
 
