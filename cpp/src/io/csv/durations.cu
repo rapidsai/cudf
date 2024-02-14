@@ -184,8 +184,8 @@ struct dispatch_from_durations_fn {
     rmm::device_buffer null_mask = cudf::detail::copy_bitmask(durations, stream, mr);
 
     // build offsets column
-    auto offsets_transformer_itr = thrust::make_transform_iterator(
-      thrust::make_counting_iterator<size_type>(0), duration_to_string_size_fn<T>{d_column});
+    auto offsets_transformer_itr =
+      cudf::detail::make_counting_transform_iterator(0, duration_to_string_size_fn<T>{d_column});
     auto [offsets_column, chars_bytes] = cudf::strings::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
     auto d_new_offsets =
