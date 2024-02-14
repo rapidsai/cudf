@@ -665,6 +665,7 @@ for declaring NVTX ranges in the current scope:
 NVTX range
 - Use `cudf::thread_range rng{"custom_name"}`; to provide a custom name for the current scope's
 NVTX range
+
 For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
