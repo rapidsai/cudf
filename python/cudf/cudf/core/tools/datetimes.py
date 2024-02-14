@@ -162,6 +162,14 @@ def to_datetime(
             f"{errors=} is not implemented when arg is not scalar-like"
         )
 
+    if errors == "ignore":
+        warnings.warn(
+            "errors='ignore' is deprecated and will raise in a future version. "
+            "Use to_datetime without passing `errors` and catch exceptions "
+            "explicitly instead",
+            FutureWarning,
+        )
+
     if infer_datetime_format in {None, False}:
         warnings.warn(
             "`infer_datetime_format` is deprecated and will "

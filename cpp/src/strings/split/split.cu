@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
@@ -123,7 +122,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
 
   // builds the offsets and the vector of all tokens
   auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
-  auto const d_offsets   = offsets->view().template data<size_type>();
+  auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   auto const d_tokens    = tokens.data();
 
   // compute the maximum number of tokens for any string
@@ -132,7 +131,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
     cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto idx) -> size_type {
-      return d_offsets[idx + 1] - d_offsets[idx];
+      return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
     }),
     0,
     thrust::maximum{});
@@ -144,7 +143,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
       cuda::proclaim_return_type<string_index_pair>(
         [d_tokens, d_offsets, col] __device__(size_type idx) {
           auto const offset      = d_offsets[idx];
-          auto const token_count = d_offsets[idx + 1] - offset;
+          auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
           return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
         }));
     results.emplace_back(make_strings_column(itr, itr + input.size(), stream, mr));
@@ -360,12 +359,11 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   }
 
   // get the positions for every token
-  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  rmm::device_uvector<string_index_pair> tokens(
+    static_cast<int64_t>(columns_count) * static_cast<int64_t>(strings_count), stream);
   string_index_pair* d_tokens = tokens.data();
-  thrust::fill(rmm::exec_policy(stream),
-               d_tokens,
-               d_tokens + (columns_count * strings_count),
-               string_index_pair{nullptr, 0});
+  thrust::fill(
+    rmm::exec_policy(stream), tokens.begin(), tokens.end(), string_index_pair{nullptr, 0});
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,

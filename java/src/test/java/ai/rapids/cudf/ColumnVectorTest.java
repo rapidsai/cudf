@@ -6379,6 +6379,7 @@ public class ColumnVectorTest extends CudfTestBase {
         "  }\n" +
         "}";
 
+
     try (ColumnVector json = ColumnVector.fromStrings(jsonString, jsonString);
          ColumnVector expectedAuthors = ColumnVector.fromStrings("[\"Nigel Rees\",\"Evelyn " +
              "Waugh\",\"Herman Melville\",\"J. R. R. Tolkien\"]", "[\"Nigel Rees\",\"Evelyn " +
@@ -6388,6 +6389,21 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expectedAuthors, gotAuthors);
     }
   }
+
+  @Test
+  void testGetJSONObjectWithSingleQuotes() {
+    String jsonString =  "{" +
+          "\'a\': \'A\"\'" +
+        "}";
+
+    GetJsonObjectOptions options = GetJsonObjectOptions.builder().allowSingleQuotes(true).build();
+    try (ColumnVector json = ColumnVector.fromStrings(jsonString, jsonString);
+         ColumnVector expectedAuthors = ColumnVector.fromStrings("A\"", "A\"");
+         Scalar path = Scalar.fromString("$.a");
+         ColumnVector gotAuthors = json.getJSONObject(path, options)) {
+      assertColumnsAreEqual(expectedAuthors, gotAuthors);
+  }
+}
 
   @Test
   void testMakeStructEmpty() {
