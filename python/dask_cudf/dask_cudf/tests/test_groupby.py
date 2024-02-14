@@ -696,6 +696,7 @@ def test_is_supported(arg, supported):
     assert _aggs_optimized(arg, OPTIMIZED_AGGS) is supported
 
 
+@xfail_dask_expr("Fails on older versions of dask-expr")
 def test_groupby_unique_lists():
     df = pd.DataFrame({"a": [0, 0, 0, 1, 1, 1], "b": [10, 10, 10, 7, 8, 9]})
     ddf = dd.from_pandas(df, 2)
