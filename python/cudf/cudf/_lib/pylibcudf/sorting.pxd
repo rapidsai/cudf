@@ -9,12 +9,12 @@ from .column cimport Column
 from .table cimport Table
 
 
-cpdef Column sorted_order(Table source_table, list column_order, list null_precedence)
-
-cpdef Column stable_sorted_order(
+cpdef Column sorted_order(
     Table source_table,
     list column_order,
     list null_precedence,
+    *,
+    bool stable,
 )
 
 cpdef Column rank(
@@ -34,14 +34,8 @@ cpdef Table segmented_sort_by_key(
     Column segment_offsets,
     list column_order,
     list null_precedence,
-)
-
-cpdef Table stable_segmented_sort_by_key(
-    Table values,
-    Table keys,
-    Column segment_offsets,
-    list column_order,
-    list null_precedence,
+    *,
+    bool stable,
 )
 
 cpdef Table sort_by_key(
@@ -49,13 +43,8 @@ cpdef Table sort_by_key(
     Table keys,
     list column_order,
     list null_precedence,
-)
-
-cpdef Table stable_sort_by_key(
-    Table values,
-    Table keys,
-    list column_order,
-    list null_precedence,
+    *,
+    bool stable,
 )
 
 cpdef Table sort(Table source_table, list column_order, list null_precedence)

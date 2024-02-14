@@ -1,5 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -14,41 +15,12 @@ from .column cimport Column
 from .table cimport Table
 
 
-cpdef Column sorted_order(Table source_table, list column_order, list null_precedence):
-    """Computes the row indices required to sort the table.
-
-    Parameters
-    ----------
-    source_table : Table
-        The table to sort.
-    column_order : List[ColumnOrder]
-        Whether each column should be sorted in ascending or descending order.
-    null_precedence : List[NullOrder]
-        Whether nulls should come before or after non-nulls.
-
-    Returns
-    -------
-    Column
-        The row indices required to sort the table.
-    """
-    cdef unique_ptr[column] c_result
-    cdef vector[order] c_orders = column_order
-    cdef vector[null_order] c_null_precedence = null_precedence
-    with nogil:
-        c_result = move(
-            cpp_sorting.sorted_order(
-                source_table.view(),
-                c_orders,
-                c_null_precedence,
-            )
-        )
-    return Column.from_libcudf(move(c_result))
-
-
-cpdef Column stable_sorted_order(
+cpdef Column sorted_order(
     Table source_table,
     list column_order,
     list null_precedence,
+    *,
+    bool stable,
 ):
     """Computes the row indices required to sort the table, maintaining input order.
 
@@ -60,6 +32,8 @@ cpdef Column stable_sorted_order(
         Whether each column should be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
         Whether nulls should come before or after non-nulls.
+    stable : bool
+        Whether to maintain input order for equal elements.
 
     Returns
     -------
@@ -70,13 +44,22 @@ cpdef Column stable_sorted_order(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_sorted_order(
-                source_table.view(),
-                c_orders,
-                c_null_precedence,
+        if stable:
+            c_result = move(
+                cpp_sorting.stable_sorted_order(
+                    source_table.view(),
+                    c_orders,
+                    c_null_precedence,
+                )
             )
-        )
+        else:
+            c_result = move(
+                cpp_sorting.sorted_order(
+                    source_table.view(),
+                    c_orders,
+                    c_null_precedence,
+                )
+            )
     return Column.from_libcudf(move(c_result))
 
 
@@ -199,12 +182,14 @@ cpdef Table segmented_sort_by_key(
     return Table.from_libcudf(move(c_result))
 
 
-cpdef Table stable_segmented_sort_by_key(
+cpdef Table segmented_sort_by_key(
     Table values,
     Table keys,
     Column segment_offsets,
     list column_order,
     list null_precedence,
+    *,
+    bool stable,
 ):
     """Sorts the table by key, within segments, maintaining input order.
 
@@ -220,6 +205,8 @@ cpdef Table stable_segmented_sort_by_key(
         Whether each column should be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
         Whether nulls should come before or after non-nulls.
+    stable : bool
+        Whether to maintain input order for equal elements.
 
     Returns
     -------
@@ -230,15 +217,26 @@ cpdef Table stable_segmented_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_segmented_sort_by_key(
-                values.view(),
-                keys.view(),
-                segment_offsets.view(),
-                c_orders,
-                c_null_precedence,
+        if stable:
+            c_result = move(
+                cpp_sorting.stable_segmented_sort_by_key(
+                    values.view(),
+                    keys.view(),
+                    segment_offsets.view(),
+                    c_orders,
+                    c_null_precedence,
+                )
             )
-        )
+        else:
+            c_result = move(
+                cpp_sorting.segmented_sort_by_key(
+                    values.view(),
+                    keys.view(),
+                    segment_offsets.view(),
+                    c_orders,
+                    c_null_precedence,
+                )
+            )
     return Table.from_libcudf(move(c_result))
 
 
@@ -247,45 +245,8 @@ cpdef Table sort_by_key(
     Table keys,
     list column_order,
     list null_precedence,
-):
-    """Sorts the table by key.
-
-    Parameters
-    ----------
-    values : Table
-        The table to sort.
-    keys : Table
-        The table to sort by.
-    column_order : List[ColumnOrder]
-        Whether each column should be sorted in ascending or descending order.
-    null_precedence : List[NullOrder]
-        Whether nulls should come before or after non-nulls.
-
-    Returns
-    -------
-    Table
-        The sorted table.
-    """
-    cdef unique_ptr[table] c_result
-    cdef vector[order] c_orders = column_order
-    cdef vector[null_order] c_null_precedence = null_precedence
-    with nogil:
-        c_result = move(
-            cpp_sorting.sort_by_key(
-                values.view(),
-                keys.view(),
-                c_orders,
-                c_null_precedence,
-            )
-        )
-    return Table.from_libcudf(move(c_result))
-
-
-cpdef Table stable_sort_by_key(
-    Table values,
-    Table keys,
-    list column_order,
-    list null_precedence,
+    *,
+    bool stable,
 ):
     """Sorts the table by key, maintaining input order.
 
@@ -299,6 +260,8 @@ cpdef Table stable_sort_by_key(
         Whether each column should be sorted in ascending or descending order.
     null_precedence : List[NullOrder]
         Whether nulls should come before or after non-nulls.
+    stable : bool
+        Whether to maintain input order for equal elements.
 
     Returns
     -------
@@ -309,14 +272,24 @@ cpdef Table stable_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
     with nogil:
-        c_result = move(
-            cpp_sorting.stable_sort_by_key(
-                values.view(),
-                keys.view(),
-                c_orders,
-                c_null_precedence,
+        if stable:
+            c_result = move(
+                cpp_sorting.stable_sort_by_key(
+                    values.view(),
+                    keys.view(),
+                    c_orders,
+                    c_null_precedence,
+                )
             )
-        )
+        else:
+            c_result = move(
+                cpp_sorting.sort_by_key(
+                    values.view(),
+                    keys.view(),
+                    c_orders,
+                    c_null_precedence,
+                )
+            )
     return Table.from_libcudf(move(c_result))
 
 

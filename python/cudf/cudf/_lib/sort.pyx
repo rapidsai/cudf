@@ -149,15 +149,15 @@ def order_by(
     Column of indices that sorts the table
     """
     order = ordering(ascending, repeat(na_position))
-    func = getattr(pylibcudf.sorting, f"{'stable_' if stable else ''}sorted_order")
 
     return Column.from_pylibcudf(
-        func(
+        pylibcudf.sorting.sorted_order(
             pylibcudf.Table(
                 [c.to_pylibcudf(mode="read") for c in columns_from_table],
             ),
             order[0],
             order[1],
+            stable=stable
         )
     )
 
@@ -231,13 +231,13 @@ def sort_by_key(
         list of value columns sorted by keys
     """
     order = ordering(ascending, na_position)
-    func = getattr(pylibcudf.sorting, f"{'stable_' if stable else ''}sort_by_key")
     return columns_from_pylibcudf_table(
-        func(
+        pylibcudf.sorting.sort_by_key(
             pylibcudf.Table([c.to_pylibcudf(mode="read") for c in values]),
             pylibcudf.Table([c.to_pylibcudf(mode="read") for c in keys]),
             order[0],
             order[1],
+            stable=stable,
         )
     )
 
@@ -283,17 +283,14 @@ def segmented_sort_by_key(
         column_order or repeat(True, ncol),
         null_precedence or repeat("first", ncol),
     )
-    func = getattr(
-        pylibcudf.sorting,
-        f"{'stable_' if stable else ''}segmented_sort_by_key"
-    )
     return columns_from_pylibcudf_table(
-        func(
+        pylibcudf.sorting.segmented_sort_by_key(
             pylibcudf.Table([c.to_pylibcudf(mode="read") for c in values]),
             pylibcudf.Table([c.to_pylibcudf(mode="read") for c in keys]),
             segment_offsets.to_pylibcudf(mode="read"),
             order[0],
             order[1],
+            stable=stable,
         )
     )
 
