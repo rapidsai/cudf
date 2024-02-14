@@ -459,7 +459,16 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
+        pytest.param(
+            [
+                pd.Series([1, 2, 3.0, 1.2], name="abc"),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
+            ),
+        ),
         pytest.param(
             [
                 pd.Series(
