@@ -9,12 +9,14 @@ import pytest
 
 import cudf
 from cudf import melt as cudf_melt
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
     DATETIME_TYPES,
     NUMERIC_TYPES,
     assert_eq,
+    expect_warning_if,
 )
 
 pytest_xfail = pytest.mark.xfail
@@ -153,6 +155,10 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_210,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
 @pytest.mark.parametrize(
     "columns",
     [
@@ -206,8 +212,15 @@ def test_df_stack_multiindex_column_axis(columns, index, level, dropna):
     )
     gdf = cudf.from_pandas(pdf)
 
-    got = gdf.stack(level=level, dropna=dropna)
-    expect = pdf.stack(level=level, dropna=dropna)
+    with pytest.warns(FutureWarning):
+        got = gdf.stack(level=level, dropna=dropna, future_stack=False)
+    with expect_warning_if(PANDAS_GE_220):
+        expect = pdf.stack(level=level, dropna=dropna, future_stack=False)
+
+    assert_eq(expect, got, check_dtype=False)
+
+    got = gdf.stack(level=level, future_stack=True)
+    expect = pdf.stack(level=level, future_stack=True)
 
     assert_eq(expect, got, check_dtype=False)
 
@@ -228,6 +241,10 @@ def test_df_stack_mixed_dtypes():
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GE_210,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
 @pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
 def test_df_stack_multiindex_column_axis_pd_example(level):
     columns = pd.MultiIndex.from_tuples(
@@ -242,8 +259,16 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
 
     df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
 
-    expect = df.stack(level=level)
-    got = cudf.from_pandas(df).stack(level=level)
+    with expect_warning_if(PANDAS_GE_220):
+        expect = df.stack(level=level, future_stack=False)
+    gdf = cudf.from_pandas(df)
+    with pytest.warns(FutureWarning):
+        got = gdf.stack(level=level, future_stack=False)
+
+    assert_eq(expect, got)
+
+    expect = df.stack(level=level, future_stack=True)
+    got = gdf.stack(level=level, future_stack=True)
 
     assert_eq(expect, got)
 

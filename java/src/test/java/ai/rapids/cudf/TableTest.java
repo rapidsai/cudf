@@ -33,6 +33,7 @@ import ai.rapids.cudf.ast.TableReference;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.apache.avro.SchemaBuilder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -53,7 +54,6 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialColumnsAreEqual;
@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
+
   private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
 
   private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
@@ -343,6 +344,139 @@ public class TableTest extends CudfTestBase {
             .column("TEST\"", "TESTER'")
             .build();
          MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  private static final byte[] NESTED_JSON_DATA_BUFFER = ("{\"a\":{\"c\":\"C1\"}}\n" +
+      "{\"a\":{\"c\":\"C2\", \"b\":\"B2\"}}\n" +
+      "{\"d\":[1,2,3]}\n" +
+      "{\"e\": [{\"g\": 1}, {\"f\": 2}, {\"f\": 3, \"g\": 4}], \"d\":[]}").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadJSONNestedTypes() {
+    Schema.Builder root = Schema.builder();
+    Schema.Builder a = root.addColumn(DType.STRUCT, "a");
+    a.addColumn(DType.STRING, "b");
+    a.addColumn(DType.STRING, "c");
+    a.addColumn(DType.STRING, "missing");
+    Schema.Builder d = root.addColumn(DType.LIST, "d");
+    d.addColumn(DType.INT64, "ignored");
+    root.addColumn(DType.INT64, "also_missing");
+    Schema.Builder e = root.addColumn(DType.LIST, "e");
+    Schema.Builder eChild = e.addColumn(DType.STRUCT, "ignored");
+    eChild.addColumn(DType.INT64, "f");
+    eChild.addColumn(DType.STRING, "missing_in_list");
+    eChild.addColumn(DType.INT64, "g");
+    Schema schema = root.build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    StructType aStruct = new StructType(true,
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.STRING));
+    ListType dList = new ListType(true, new BasicType(true, DType.INT64));
+    StructType eChildStruct = new StructType(true,
+        new BasicType(true, DType.INT64),
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.INT64));
+    ListType eList = new ListType(true, eChildStruct);
+    try (Table expected = new Table.TestBuilder()
+        .column(aStruct,
+            new StructData(null, "C1", null),
+            new StructData("B2", "C2", null),
+            null,
+            null)
+        .column(dList,
+            null,
+            null,
+            Arrays.asList(1L,2L,3L),
+            new ArrayList<Long>())
+        .column((Long)null, null, null, null) // also_missing
+        .column(eList,
+            null,
+            null,
+            null,
+            Arrays.asList(new StructData(null, null, 1L), new StructData(2L, null, null), new StructData(3L, null, 4L)))
+        .build();
+        Table table = Table.readJSON(schema, opts, NESTED_JSON_DATA_BUFFER)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONNestedTypesVerySmallChanges() {
+    Schema.Builder root = Schema.builder();
+    Schema.Builder e = root.addColumn(DType.LIST, "e");
+    Schema.Builder eChild = e.addColumn(DType.STRUCT, "ignored");
+    eChild.addColumn(DType.INT64, "g");
+    eChild.addColumn(DType.INT64, "f");
+    Schema schema = root.build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    StructType eChildStruct = new StructType(true,
+        new BasicType(true, DType.INT64),
+        new BasicType(true, DType.INT64));
+    ListType eList = new ListType(true, eChildStruct);
+    try (Table expected = new Table.TestBuilder()
+        .column(eList,
+            null,
+            null,
+            null,
+            Arrays.asList(new StructData(1L, null), new StructData(null, 2L), new StructData(4L, 3L)))
+        .build();
+         Table table = Table.readJSON(schema, opts, NESTED_JSON_DATA_BUFFER)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONNestedTypesDataSource() {
+    Schema.Builder root = Schema.builder();
+    Schema.Builder a = root.addColumn(DType.STRUCT, "a");
+    a.addColumn(DType.STRING, "b");
+    a.addColumn(DType.STRING, "c");
+    a.addColumn(DType.STRING, "missing");
+    Schema.Builder d = root.addColumn(DType.LIST, "d");
+    d.addColumn(DType.INT64, "ignored");
+    root.addColumn(DType.INT64, "also_missing");
+    Schema.Builder e = root.addColumn(DType.LIST, "e");
+    Schema.Builder eChild = e.addColumn(DType.STRUCT, "ignored");
+    eChild.addColumn(DType.INT64, "g");
+    Schema schema = root.build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    StructType aStruct = new StructType(true,
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.STRING));
+    ListType dList = new ListType(true, new BasicType(true, DType.INT64));
+    StructType eChildStruct = new StructType(true,
+        new BasicType(true, DType.INT64));
+    ListType eList = new ListType(true, eChildStruct);
+    try (Table expected = new Table.TestBuilder()
+        .column(aStruct,
+            new StructData(null, "C1", null),
+            new StructData("B2", "C2", null),
+            null,
+            null)
+        .column(dList,
+            null,
+            null,
+            Arrays.asList(1L,2L,3L),
+            new ArrayList<Long>())
+        .column((Long)null, null, null, null) // also_missing
+        .column(eList,
+            null,
+            null,
+            null,
+            Arrays.asList(new StructData(1L), new StructData((Long)null), new StructData(4L)))
+        .build();
+         MultiBufferDataSource source = sourceFrom(NESTED_JSON_DATA_BUFFER);
          Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
@@ -870,7 +1004,7 @@ public class TableTest extends CudfTestBase {
                           .column(DType.STRING, "str")
                           .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
-                                               .withColumnNames(schema.getColumnNames())
+                                               .withColumnNames(schema.getFlattenedColumnNames())
                                                .withIncludeHeader(includeHeader)
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
@@ -922,7 +1056,7 @@ public class TableTest extends CudfTestBase {
                           .column(DType.STRING, "str")
                           .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
-                                               .withColumnNames(schema.getColumnNames())
+                                               .withColumnNames(schema.getFlattenedColumnNames())
                                                .withIncludeHeader(false)
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
@@ -966,7 +1100,7 @@ public class TableTest extends CudfTestBase {
                           .column(DType.STRING, "str")
                           .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
-                                               .withColumnNames(schema.getColumnNames())
+                                               .withColumnNames(schema.getFlattenedColumnNames())
                                                .withIncludeHeader(false)
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
@@ -1020,7 +1154,7 @@ public class TableTest extends CudfTestBase {
                           .column(DType.STRING, "str")
                           .build();
     CSVWriterOptions writeOptions = CSVWriterOptions.builder()
-                                               .withColumnNames(schema.getColumnNames())
+                                               .withColumnNames(schema.getFlattenedColumnNames())
                                                .withIncludeHeader(includeHeader)
                                                .withFieldDelimiter((byte)fieldDelim)
                                                .withRowDelimiter("\n")
