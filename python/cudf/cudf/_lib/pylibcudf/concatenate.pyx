@@ -27,6 +27,9 @@ cpdef concatenate(list objects):
     Union[Column, Table]
         The concatenated Column or Table.
     """
+    if len(objects) == 0:
+        raise ValueError("input list may not be empty")
+
     cdef vector[column_view] c_columns
     cdef vector[table_view] c_tables
 
