@@ -2084,9 +2084,9 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private void checkInnerUniqueJoin(Table leftKeys, Table rightKeys, Table expected,
-                                    boolean compareNullsEqual) {
-    GatherMap[] maps = leftKeys.innerUniqueJoinGatherMaps(rightKeys, compareNullsEqual);
+  private void checkInnerDistinctJoin(Table leftKeys, Table rightKeys, Table expected,
+                                      boolean compareNullsEqual) {
+    GatherMap[] maps = leftKeys.innerDistinctJoinGatherMaps(rightKeys, compareNullsEqual);
     try {
       verifyJoinGatherMaps(maps, expected);
     } finally {
@@ -2097,19 +2097,19 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testInnerUniqueJoinGatherMaps() {
+  void testInnerDistinctJoinGatherMaps() {
     try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8, 6).build();
          Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
          Table expected = new Table.TestBuilder()
              .column(2, 7, 8, 9, 10) // left
              .column(2, 0, 1, 3, 0) // right
              .build()) {
-      checkInnerUniqueJoin(leftKeys, rightKeys, expected, false);
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, false);
     }
   }
 
   @Test
-  void testInnerUniqueJoinGatherMapsWithNested() {
+  void testInnerDistinctJoinGatherMapsWithNested() {
     StructType structType = new StructType(false,
         new BasicType(false, DType.STRING),
         new BasicType(false, DType.INT32));
@@ -2134,12 +2134,12 @@ public class TableTest extends CudfTestBase {
              .column(0, 3, 4)
              .column(0, 2, 0)
              .build()) {
-      checkInnerUniqueJoin(leftKeys, rightKeys, expected, false);
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, false);
     }
   }
 
   @Test
-  void testInnerUniqueJoinGatherMapsNullsEqual() {
+  void testInnerDistinctJoinGatherMapsNullsEqual() {
     try (Table leftKeys = new Table.TestBuilder()
         .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
         .build();
@@ -2150,12 +2150,12 @@ public class TableTest extends CudfTestBase {
              .column(2, 7, 8, 9) // left
              .column(1, 0, 0, 2) // right
              .build()) {
-      checkInnerUniqueJoin(leftKeys, rightKeys, expected, true);
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, true);
     }
   }
 
   @Test
-  void testInnerUniqueJoinGatherMapsWithNestedNullsEqual() {
+  void testInnerDistinctJoinGatherMapsWithNestedNullsEqual() {
     StructType structType = new StructType(true,
         new BasicType(true, DType.STRING),
         new BasicType(true, DType.INT32));
@@ -2190,7 +2190,7 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 4, 5, 6, 9, 10)
              .column(1, 0, 7, 0, 1, 4, 6)
              .build()) {
-      checkInnerUniqueJoin(leftKeys, rightKeys, expected, true);
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, true);
     }
   }
 
