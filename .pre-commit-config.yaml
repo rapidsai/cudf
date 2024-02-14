@@ -95,7 +95,8 @@ repos:
         # DeprecationWarning: https://github.com/pandas-dev/pandas/issues/54970
         exclude: |
           (?x)^(
-            ^python/cudf/cudf/core/dtypes.py
+            ^python/cudf/cudf/core/dtypes.py|
+            ^python/cudf/cudf/tests/pytest.ini
           )
       - id: no-programmatic-xfail
         name: no-programmatic-xfail
