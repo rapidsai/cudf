@@ -548,13 +548,14 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   using hasher_type                             = decltype(d_hasher);
   constexpr size_type empty_node_index_sentinel = -1;
   auto key_set =
-    cuco::experimental::static_set{cuco::experimental::extent{compute_hash_table_size(
-                                     num_fields, 40)},  // 40% occupancy in hash map
-                                   cuco::empty_key{empty_node_index_sentinel},
-                                   d_equal,
-                                   cuco::experimental::linear_probing<1, hasher_type>{d_hasher},
-                                   cudf::detail::cuco_allocator{stream},
-                                   stream.value()};
+    cuco::static_set{cuco::extent{compute_hash_table_size(num_fields, 40)},  // 40% occupancy
+                     cuco::empty_key{empty_node_index_sentinel},
+                     d_equal,
+                     cuco::linear_probing<1, hasher_type>{d_hasher},
+                     {},
+                     {},
+                     cudf::detail::cuco_allocator{stream},
+                     stream.value()};
   key_set.insert_if_async(iter,
                           iter + num_nodes,
                           thrust::counting_iterator<size_type>(0),  // stencil
@@ -562,7 +563,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
                           stream.value());
 
   auto const get_hash_value =
-    [key_set = key_set.ref(cuco::experimental::op::find)] __device__(auto node_id) -> size_type {
+    [key_set = key_set.ref(cuco::op::find)] __device__(auto node_id) -> size_type {
     auto const it = key_set.find(node_id);
     return (it == key_set.end()) ? size_type{0} : *it;
   };
@@ -735,13 +736,14 @@ std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<size_type>> hash_n
   constexpr size_type empty_node_index_sentinel = -1;
   using hasher_type                             = decltype(d_hashed_cache);
 
-  auto key_set = cuco::experimental::static_set{
-    cuco::experimental::extent{compute_hash_table_size(num_nodes)},
-    cuco::empty_key<cudf::size_type>{empty_node_index_sentinel},
-    d_equal,
-    cuco::experimental::linear_probing<1, hasher_type>{d_hashed_cache},
-    cudf::detail::cuco_allocator{stream},
-    stream.value()};
+  auto key_set = cuco::static_set{cuco::extent{compute_hash_table_size(num_nodes)},
+                                  cuco::empty_key<cudf::size_type>{empty_node_index_sentinel},
+                                  d_equal,
+                                  cuco::linear_probing<1, hasher_type>{d_hashed_cache},
+                                  {},
+                                  {},
+                                  cudf::detail::cuco_allocator{stream},
+                                  stream.value()};
 
   // insert and convert node ids to unique set ids
   auto nodes_itr         = thrust::make_counting_iterator<size_type>(0);
