@@ -96,7 +96,7 @@ struct distinct_hash_join {
     std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
   using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
   using probing_scheme_type = cuco::experimental::linear_probing<1, hasher>;
-  using cuco_storge_type    = cuco::experimental::storage<1>;
+  using cuco_storage_type   = cuco::experimental::storage<1>;
 
   /// Hash table type
   using hash_table_type =
@@ -106,7 +106,7 @@ struct distinct_hash_join {
                                    comparator_adapter<d_equal_type>,
                                    probing_scheme_type,
                                    cudf::detail::cuco_allocator,
-                                   cuco_storge_type>;
+                                   cuco_storage_type>;
 
   bool _has_nulls;  ///< true if nulls are present in either build table or probe table
   cudf::null_equality _nulls_equal;  ///< whether to consider nulls as equal
