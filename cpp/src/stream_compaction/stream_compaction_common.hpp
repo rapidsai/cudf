@@ -27,8 +27,8 @@
 namespace cudf {
 namespace detail {
 
-using hash_map_type =
-  cuco::static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
+using hash_map_type = cuco::legacy::
+  static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 }  // namespace detail
 }  // namespace cudf
