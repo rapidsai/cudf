@@ -3,31 +3,11 @@
 from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
-from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move
-from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.stream_compaction cimport (
-    apply_boolean_mask as cpp_apply_boolean_mask,
-    distinct_count as cpp_distinct_count,
-    distinct_indices as cpp_distinct_indices,
-    drop_nulls as cpp_drop_nulls,
-    duplicate_keep_option,
-    stable_distinct as cpp_stable_distinct,
-)
-from cudf._lib.cpp.table.table cimport table
-from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport (
-    nan_equality,
-    nan_policy,
-    null_equality,
-    null_policy,
-    size_type,
-)
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.utils cimport columns_from_pylibcudf_table
+
+from cudf._lib import pylibcudf
 
 
 @acquire_spill_lock()
@@ -48,32 +28,26 @@ def drop_nulls(list columns, how="any", keys=None, thresh=None):
     -------
     columns with null rows dropped
     """
-
-    cdef vector[size_type] cpp_keys = (
-        keys if keys is not None else range(len(columns))
-    )
-
-    cdef size_type c_keep_threshold = cpp_keys.size()
-    if thresh is not None:
-        c_keep_threshold = thresh
-    elif how == "all":
-        c_keep_threshold = 1
-
-    cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
-
     if how not in {"any", "all"}:
         raise ValueError("how must be 'any' or 'all'")
-    with nogil:
-        c_result = move(
-            cpp_drop_nulls(
-                source_table_view,
-                cpp_keys,
-                c_keep_threshold
-            )
-        )
 
-    return columns_from_unique_ptr(move(c_result))
+    keys = list(keys if keys is not None else range(len(columns)))
+
+    # Note: If how == "all" and thresh is specified this prioritizes thresh
+    if thresh is not None:
+        keep_threshold = thresh
+    elif how == "all":
+        keep_threshold = 1
+    else:
+        keep_threshold = len(keys)
+
+    return columns_from_pylibcudf_table(
+        pylibcudf.stream_compaction.drop_nulls(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            keys,
+            keep_threshold,
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -90,20 +64,19 @@ def apply_boolean_mask(list columns, Column boolean_mask):
     -------
     columns obtained from applying mask
     """
-
-    cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef column_view boolean_mask_view = boolean_mask.view()
-
-    with nogil:
-        c_result = move(
-            cpp_apply_boolean_mask(
-                source_table_view,
-                boolean_mask_view
-            )
+    return columns_from_pylibcudf_table(
+        pylibcudf.stream_compaction.apply_boolean_mask(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            boolean_mask.to_pylibcudf(mode="read"),
         )
+    )
 
-    return columns_from_unique_ptr(move(c_result))
+
+_keep_options = {
+    "first": pylibcudf.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+    "last": pylibcudf.stream_compaction.DuplicateKeepOption.KEEP_LAST,
+    False: pylibcudf.stream_compaction.DuplicateKeepOption.KEEP_NONE,
+}
 
 
 @acquire_spill_lock()
@@ -126,41 +99,18 @@ def drop_duplicates(list columns,
     -------
     columns with duplicate dropped
     """
-
-    cdef vector[size_type] cpp_keys = (
-        keys if keys is not None else range(len(columns))
-    )
-    cdef duplicate_keep_option cpp_keep_option
-
-    if keep == 'first':
-        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
-    elif keep == 'last':
-        cpp_keep_option = duplicate_keep_option.KEEP_LAST
-    elif keep is False:
-        cpp_keep_option = duplicate_keep_option.KEEP_NONE
-    else:
+    if (keep_option := _keep_options.get(keep)) is None:
         raise ValueError('keep must be either "first", "last" or False')
 
-    # shifting the index number by number of index columns
-    cdef null_equality cpp_nulls_equal = (
-        null_equality.EQUAL
-        if nulls_are_equal
-        else null_equality.UNEQUAL
-    )
-    cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_stable_distinct(
-                source_table_view,
-                cpp_keys,
-                cpp_keep_option,
-                cpp_nulls_equal
-            )
+    return columns_from_pylibcudf_table(
+        pylibcudf.stream_compaction.stable_distinct(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            list(keys if keys is not None else range(len(columns))),
+            keep_option,
+            pylibcudf.types.NullEquality.EQUAL
+            if nulls_are_equal else pylibcudf.types.NullEquality.UNEQUAL,
         )
-
-    return columns_from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()
@@ -189,40 +139,19 @@ def distinct_indices(
     --------
     drop_duplicates
     """
-    cdef duplicate_keep_option cpp_keep_option
+    if (keep_option := _keep_options.get(keep)) is None:
+        raise ValueError('keep must be either "first", "last" or False')
 
-    if keep == 'first':
-        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
-    elif keep == 'last':
-        cpp_keep_option = duplicate_keep_option.KEEP_LAST
-    elif keep is False:
-        cpp_keep_option = duplicate_keep_option.KEEP_NONE
-    else:
-        raise ValueError('keep must be either "first", "last", or False')
-
-    # shifting the index number by number of index columns
-    cdef null_equality cpp_nulls_equal = (
-        null_equality.EQUAL
-        if nulls_equal
-        else null_equality.UNEQUAL
-    )
-    cdef nan_equality cpp_nans_equal = (
-        nan_equality.ALL_EQUAL
-        if nans_equal
-        else nan_equality.UNEQUAL
-    )
-    cdef table_view source = table_view_from_columns(columns)
-    cdef unique_ptr[column] c_result
-    with nogil:
-        c_result = move(
-            cpp_distinct_indices(
-                source,
-                cpp_keep_option,
-                cpp_nulls_equal,
-                cpp_nans_equal,
-            )
+    return Column.from_pylibcudf(
+        pylibcudf.stream_compaction.distinct_indices(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in columns]),
+            keep_option,
+            pylibcudf.types.NullEquality.EQUAL
+            if nulls_equal else pylibcudf.types.NullEquality.UNEQUAL,
+            pylibcudf.types.NanEquality.ALL_EQUAL
+            if nans_equal else pylibcudf.types.NanEquality.UNEQUAL,
         )
-    return Column.from_unique_ptr(move(c_result))
+    )
 
 
 @acquire_spill_lock()
@@ -242,24 +171,10 @@ def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
     -------
     Count of number of unique rows in `source_column`
     """
-
-    cdef null_policy cpp_null_handling = (
-        null_policy.EXCLUDE
-        if ignore_nulls
-        else null_policy.INCLUDE
+    return pylibcudf.stream_compaction.distinct_count(
+        source_column.to_pylibcudf(mode="read"),
+        pylibcudf.types.NullPolicy.EXCLUDE
+        if ignore_nulls else pylibcudf.types.NullPolicy.INCLUDE,
+        pylibcudf.types.NanPolicy.NAN_IS_NULL
+        if nan_as_null else pylibcudf.types.NanPolicy.NAN_IS_VALID,
     )
-    cdef nan_policy cpp_nan_handling = (
-        nan_policy.NAN_IS_NULL
-        if nan_as_null
-        else nan_policy.NAN_IS_VALID
-    )
-
-    cdef column_view source_column_view = source_column.view()
-    with nogil:
-        count = cpp_distinct_count(
-            source_column_view,
-            cpp_null_handling,
-            cpp_nan_handling
-        )
-
-    return count
