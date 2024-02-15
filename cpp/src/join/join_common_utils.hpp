@@ -22,10 +22,10 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
+#include <cuda/atomic>
+
 #include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
-
-#include <cuda/atomic>
 
 #include <limits>
 

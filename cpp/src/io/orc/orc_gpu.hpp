@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,10 @@
 
 #pragma once
 
+#include "io/comp/gpuinflate.hpp"
+#include "io/statistics/statistics.cuh"
+#include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/statistics/statistics.cuh>
-#include <io/utilities/column_buffer.hpp>
 
 #include <cudf/detail/timezone.cuh>
 #include <cudf/io/orc_types.hpp>

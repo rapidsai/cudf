@@ -15,14 +15,14 @@
  */
 
 #include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 
-#include <thrust/tuple.h>
-
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/tuple.h>
 
 namespace cudf::io::parquet::detail {
 

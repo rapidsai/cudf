@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/for_each.h>
@@ -36,8 +37,6 @@
 #include <thrust/pair.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace strings {

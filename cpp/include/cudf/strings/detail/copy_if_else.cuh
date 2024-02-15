@@ -27,8 +27,6 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
-#include <cuda/functional>
-
 namespace cudf {
 namespace strings {
 namespace detail {

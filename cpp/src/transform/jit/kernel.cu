@@ -15,20 +15,20 @@
  */
 
 // Include Jitify's cstddef header first
+// clang-format off
 #include <cstddef>
+// clang-format on
+
+#include "transform/jit/operation-udf.hpp"
+
+#include <cudf/types.hpp>
+#include <cudf/wrappers/durations.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/climits>
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-
-#include <cudf/wrappers/durations.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
-#include <transform/jit/operation-udf.hpp>
-
-#include <cudf/types.hpp>
-#include <cudf/wrappers/timestamps.hpp>
 
 namespace cudf {
 namespace transformation {

@@ -34,12 +34,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuco/static_set.cuh>
-
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
+
+#include <cuco/static_set.cuh>
 
 #include <cmath>
 #include <cstddef>

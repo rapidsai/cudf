@@ -18,13 +18,14 @@
  * limitations under the License.
  */
 
+#include "binaryop/jit/operation-udf.hpp"
+
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <binaryop/jit/operation-udf.hpp>
 #include <cuda/std/type_traits>
 
 namespace cudf {
