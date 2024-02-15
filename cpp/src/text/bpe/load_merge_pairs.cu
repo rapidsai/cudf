@@ -48,6 +48,8 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
                                            cuco::empty_value{-1},
                                            bpe_equal{input},
                                            bpe_probe_scheme{bpe_hasher{input}},
+                                           cuco::thread_scope_device,
+                                           cuco_storage{},
                                            cudf::detail::cuco_allocator{stream},
                                            stream.value());
 
@@ -69,6 +71,8 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
                                                           cuco::empty_value{-1},
                                                           mp_equal{input},
                                                           mp_probe_scheme{mp_hasher{input}},
+                                                          cuco::thread_scope_device,
+                                                          cuco_storage{},
                                                           cudf::detail::cuco_allocator{stream},
                                                           stream.value());
 
