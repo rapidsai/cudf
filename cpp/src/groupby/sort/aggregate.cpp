@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <groupby/common/utils.hpp>
-#include <groupby/sort/functors.hpp>
-#include <groupby/sort/group_reductions.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -37,6 +33,10 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <groupby/common/utils.hpp>
+#include <groupby/sort/functors.hpp>
+#include <groupby/sort/group_reductions.hpp>
 
 #include <memory>
 #include <unordered_map>

@@ -33,8 +33,6 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <io/utilities/parsing_utils.cuh>
-
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -42,6 +40,8 @@
 #include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
+
+#include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
 namespace detail {

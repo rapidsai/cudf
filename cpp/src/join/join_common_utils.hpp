@@ -24,7 +24,6 @@
 
 #include <cuco/static_map.cuh>
 #include <cuco/static_multimap.cuh>
-
 #include <cuda/atomic>
 
 #include <limits>

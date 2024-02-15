@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <strings/count_matches.hpp>
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -33,6 +29,10 @@
 
 #include <thrust/functional.h>
 #include <thrust/transform_scan.h>
+
+#include <strings/count_matches.hpp>
+#include <strings/regex/regex_program_impl.h>
+#include <strings/regex/utilities.cuh>
 
 namespace cudf {
 namespace strings {

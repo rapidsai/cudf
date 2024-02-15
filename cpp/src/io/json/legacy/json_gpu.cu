@@ -16,9 +16,6 @@
 
 #include "json_gpu.hpp"
 
-#include <io/utilities/column_type_histogram.hpp>
-#include <io/utilities/parsing_utils.cuh>
-
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
@@ -27,7 +24,6 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -43,6 +39,10 @@
 #include <thrust/mismatch.h>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
+
+#include <io/utilities/column_type_histogram.hpp>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/trie.cuh>
 
 using cudf::device_span;
 using cudf::detail::grid_1d;

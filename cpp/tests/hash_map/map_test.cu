@@ -18,8 +18,6 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 
-#include <hash/concurrent_unordered_map.cuh>
-
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
@@ -29,6 +27,8 @@
 #include <thrust/logical.h>
 #include <thrust/pair.h>
 #include <thrust/tabulate.h>
+
+#include <hash/concurrent_unordered_map.cuh>
 
 #include <cstdlib>
 #include <iostream>

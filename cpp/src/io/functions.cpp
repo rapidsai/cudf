@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.hpp>
-
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
@@ -35,6 +33,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <io/orc/orc.hpp>
 
 #include <algorithm>
 

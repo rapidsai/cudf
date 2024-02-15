@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 
-#include <io/json/nested_json.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing/detail/hashing.hpp>
@@ -23,13 +25,11 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/random.hpp>
-
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
+
+#include <io/json/nested_json.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <stack>
 #include <string>

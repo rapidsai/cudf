@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,18 +15,17 @@
  */
 #pragma once
 
-#include <strings/regex/regcomp.h>
-
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda_runtime.h>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 
-#include <cuda_runtime.h>
+#include <strings/regex/regcomp.h>
 
 #include <memory>
 

@@ -16,15 +16,15 @@
 
 #pragma once
 
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
-
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 
 #include <cub/cub.cuh>
+
+#include <join/join_common_utils.cuh>
+#include <join/join_common_utils.hpp>
 
 namespace cudf {
 namespace detail {

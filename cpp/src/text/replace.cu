@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-#include <text/utilities/tokenize_ops.cuh>
-
-#include <nvtext/detail/tokenize.hpp>
-#include <nvtext/replace.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -31,12 +26,17 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/detail/tokenize.hpp>
+#include <nvtext/replace.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>
+
+#include <text/utilities/tokenize_ops.cuh>
 
 namespace nvtext {
 namespace detail {

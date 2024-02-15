@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-#include <text/bpe/byte_pair_encoding.cuh>
-
-#include <nvtext/byte_pair_encoding.hpp>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -32,6 +28,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/byte_pair_encoding.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -44,6 +42,8 @@
 #include <thrust/merge.h>
 #include <thrust/remove.h>
 #include <thrust/unique.h>
+
+#include <text/bpe/byte_pair_encoding.cuh>
 
 namespace nvtext {
 

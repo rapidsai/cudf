@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,11 +15,6 @@
  */
 
 #include "nested_json.hpp"
-
-#include <io/fst/logical_stack.cuh>
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -44,6 +39,11 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
+
+#include <io/fst/logical_stack.cuh>
+#include <io/fst/lookup_tables.cuh>
+#include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/string_parsing.hpp>
 
 #include <limits>
 #include <stack>

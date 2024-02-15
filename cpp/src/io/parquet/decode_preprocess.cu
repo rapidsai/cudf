@@ -16,12 +16,13 @@
 
 #include "page_decode.cuh"
 
-#include <io/utilities/column_buffer.hpp>
-
 #include <cudf/hashing/detail/default_hash.cuh>
 
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/reduce.h>
+
+#include <io/utilities/column_buffer.hpp>
 
 namespace cudf::io::parquet::detail {
 

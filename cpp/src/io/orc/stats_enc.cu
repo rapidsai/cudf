@@ -16,12 +16,12 @@
 
 #include "orc_gpu.hpp"
 
-#include <io/utilities/block_utils.cuh>
-
 #include <cudf/io/orc_types.hpp>
 #include <cudf/strings/detail/convert/fixed_point_to_string.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <io/utilities/block_utils.cuh>
 
 namespace cudf::io::orc::gpu {
 

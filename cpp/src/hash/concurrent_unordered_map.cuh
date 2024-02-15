@@ -16,8 +16,6 @@
 
 #pragma once
 
-#include <hash/managed.cuh>
-
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
@@ -27,14 +25,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
+#include <cuda/atomic>
 #include <thrust/pair.h>
+
+#include <hash/managed.cuh>
 
 #include <iostream>
 #include <iterator>
 #include <limits>
 #include <type_traits>
-
-#include <cuda/atomic>
 
 namespace {
 template <std::size_t N>

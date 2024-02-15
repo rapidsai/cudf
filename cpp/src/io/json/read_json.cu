@@ -16,10 +16,6 @@
 
 #include "read_json.hpp"
 
-#include <io/comp/io_uncomp.hpp>
-#include <io/json/legacy/read_json.hpp>
-#include <io/json/nested_json.hpp>
-
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
@@ -29,6 +25,10 @@
 
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/scatter.h>
+
+#include <io/comp/io_uncomp.hpp>
+#include <io/json/legacy/read_json.hpp>
+#include <io/json/nested_json.hpp>
 
 #include <numeric>
 

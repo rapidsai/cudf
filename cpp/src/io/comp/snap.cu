@@ -16,9 +16,9 @@
 
 #include "gpuinflate.hpp"
 
-#include <io/utilities/block_utils.cuh>
-
 #include <rmm/cuda_stream_view.hpp>
+
+#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace io {

@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <text/subword/detail/cp_data.h>
-
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <text/subword/detail/cp_data.h>
 
 using uvector_pair = std::pair<std::unique_ptr<rmm::device_uvector<uint32_t>>,
                                std::unique_ptr<rmm::device_uvector<int64_t>>>;

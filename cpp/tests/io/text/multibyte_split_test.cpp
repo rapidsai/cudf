@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <io/utilities/output_builder.cuh>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -30,6 +28,8 @@
 #include <cudf/io/text/multibyte_split.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <io/utilities/output_builder.cuh>
 
 using cudf::test::strings_column_wrapper;
 // 😀 | F0 9F 98 80 | 11110000 10011111 10011000 10000000

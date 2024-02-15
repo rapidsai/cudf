@@ -13,11 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing.hpp>
-#include <cudf/partitioning.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -25,6 +20,12 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/partitioning.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>

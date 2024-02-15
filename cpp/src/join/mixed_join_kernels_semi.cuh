@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_common_utils.cuh>
-
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
+
+#include <join/join_common_utils.hpp>
+#include <join/mixed_join_common_utils.cuh>
 
 namespace cudf {
 namespace detail {

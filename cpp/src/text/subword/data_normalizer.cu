@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/subword/detail/tokenizer_utils.cuh>
-
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -32,6 +29,9 @@
 #include <thrust/remove.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <text/subword/detail/data_normalizer.hpp>
+#include <text/subword/detail/tokenizer_utils.cuh>
 
 namespace nvtext {
 namespace detail {

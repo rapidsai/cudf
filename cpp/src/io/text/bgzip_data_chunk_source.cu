@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,6 @@
 
 #include "io/text/device_data_chunks.hpp"
 
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
-
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/pinned_host_vector.hpp>
@@ -34,6 +31,9 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
+
+#include <io/comp/nvcomp_adapter.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <fstream>
 #include <limits>

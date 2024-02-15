@@ -21,10 +21,6 @@
 
 #include "writer_impl.hpp"
 
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
-
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -39,6 +35,10 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/memcpy_async.h>
+#include <cuda/std/climits>
+#include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
@@ -56,11 +56,9 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
-#include <cooperative_groups.h>
-#include <cooperative_groups/memcpy_async.h>
-
-#include <cuda/std/climits>
-#include <cuda/std/limits>
+#include <io/comp/nvcomp_adapter.hpp>
+#include <io/statistics/column_statistics.cuh>
+#include <io/utilities/column_utils.cuh>
 
 #include <algorithm>
 #include <cstring>

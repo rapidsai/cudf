@@ -14,17 +14,6 @@
  * limitations under the License.
  */
 
-#include <io/json/nested_json.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-
-#include <cudf/io/datasource.hpp>
-#include <cudf/io/json.hpp>
-#include <cudf/io/parquet.hpp>
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/span.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -34,10 +23,21 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
+#include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
+#include <cudf/io/parquet.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
+
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
+
+#include <io/json/nested_json.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <string>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,12 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <jit/cache.hpp>
 #include <jit/parser.hpp>
 #include <jit/util.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
+#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
 namespace transformation {

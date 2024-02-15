@@ -16,12 +16,6 @@
 
 #include "json_gpu.hpp"
 
-#include <hash/concurrent_unordered_map.cuh>
-
-#include <io/comp/io_uncomp.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/parsing_utils.cuh>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -51,6 +45,11 @@
 #include <thrust/pair.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+
+#include <hash/concurrent_unordered_map.cuh>
+#include <io/comp/io_uncomp.hpp>
+#include <io/utilities/column_buffer.hpp>
+#include <io/utilities/parsing_utils.cuh>
 
 using cudf::host_span;
 

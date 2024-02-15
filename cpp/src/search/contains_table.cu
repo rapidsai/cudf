@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
-
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
@@ -26,11 +24,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuco/static_set.cuh>
+#include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 
-#include <cuco/static_set.cuh>
-
-#include <cuda/functional>
+#include <join/join_common_utils.cuh>
 
 #include <type_traits>
 

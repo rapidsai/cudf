@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,6 @@
 
 #include "avro.hpp"
 #include "avro_gpu.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -41,6 +37,9 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/tabulate.h>
 
+#include <io/comp/gpuinflate.hpp>
+#include <io/utilities/column_buffer.hpp>
+#include <io/utilities/hostdevice_vector.hpp>
 #include <nvcomp/snappy.h>
 
 #include <memory>

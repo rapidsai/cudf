@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 
-#include <join/join_common_utils.cuh>
-#include <join/join_common_utils.hpp>
-#include <join/mixed_join_common_utils.cuh>
-
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -25,6 +21,10 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cub/cub.cuh>
+
+#include <join/join_common_utils.cuh>
+#include <join/join_common_utils.hpp>
+#include <join/mixed_join_common_utils.cuh>
 
 namespace cudf {
 namespace detail {

@@ -18,10 +18,6 @@
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
-
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -42,6 +38,10 @@
 #include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
+
+#include <io/comp/gpuinflate.hpp>
+#include <io/comp/nvcomp_adapter.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <algorithm>
 #include <iterator>

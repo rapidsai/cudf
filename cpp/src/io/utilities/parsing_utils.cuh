@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <io/csv/datetime.cuh>
-#include <io/utilities/trie.cuh>
+#include "column_type_histogram.hpp"
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -27,13 +26,14 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include "column_type_histogram.hpp"
-
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
+
+#include <io/csv/datetime.cuh>
+#include <io/utilities/trie.cuh>
 
 #include <optional>
 

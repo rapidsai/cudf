@@ -22,8 +22,6 @@
 #include "rolling_collect_list.cuh"
 #include "rolling_jit.hpp"
 
-#include <reductions/nested_type_minmax_util.cuh>
-
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -45,24 +43,23 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/util.hpp>
-
-#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/climits>
+#include <cuda/std/limits>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
-#include <cuda/std/climits>
-#include <cuda/std/limits>
+#include <jit/cache.hpp>
+#include <jit/parser.hpp>
+#include <jit/util.hpp>
+#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
+#include <reductions/nested_type_minmax_util.cuh>
 
 #include <memory>
 

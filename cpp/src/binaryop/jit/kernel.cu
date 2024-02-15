@@ -24,8 +24,9 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <binaryop/jit/operation-udf.hpp>
 #include <cuda/std/type_traits>
+
+#include <binaryop/jit/operation-udf.hpp>
 
 namespace cudf {
 namespace binops {

@@ -18,12 +18,12 @@
 
 #include "orc_gpu.hpp"
 
-#include <io/utilities/hostdevice_vector.hpp>
-
 #include <cudf/types.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <io/utilities/hostdevice_vector.hpp>
 
 namespace cudf::io::orc::detail {
 

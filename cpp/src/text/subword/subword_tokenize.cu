@@ -26,7 +26,6 @@
 
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
-#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -36,6 +35,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform_scan.h>
+
+#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 namespace nvtext {
 namespace detail {

@@ -18,12 +18,13 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/types.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-#include <src/io/fst/logical_stack.cuh>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <io/utilities/hostdevice_vector.hpp>
+#include <src/io/fst/logical_stack.cuh>
 
 #include <cstdlib>
 #include <iostream>

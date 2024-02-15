@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,8 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#include <lists/utilities.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -33,6 +31,8 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
+
+#include <lists/utilities.hpp>
 
 namespace cudf {
 namespace experimental {

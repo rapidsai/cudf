@@ -16,12 +16,12 @@
 
 #pragma once
 
-#include <text/subword/detail/cp_data.h>
-
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <text/subword/detail/cp_data.h>
 
 #include <cstdint>
 

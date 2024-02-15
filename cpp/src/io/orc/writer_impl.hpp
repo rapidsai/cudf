@@ -19,8 +19,6 @@
 #include "orc.hpp"
 #include "orc_gpu.hpp"
 
-#include <io/utilities/hostdevice_vector.hpp>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/orc.hpp>
@@ -34,6 +32,8 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <memory>
 #include <string>

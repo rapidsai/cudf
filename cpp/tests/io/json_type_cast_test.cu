@@ -22,8 +22,6 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <io/utilities/string_parsing.hpp>
-
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/datasource.hpp>
@@ -33,6 +31,8 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/exec_policy.hpp>
+
+#include <io/utilities/string_parsing.hpp>
 
 #include <algorithm>
 #include <iterator>
