@@ -177,6 +177,7 @@ def test_dataframe_join_suffix():
         rsuffix="_right",
         sort=PANDAS_GE_220,
     )
+    # TODO: Retain result index name
     expect.index.name = None
     assert_eq(got, expect)
 
