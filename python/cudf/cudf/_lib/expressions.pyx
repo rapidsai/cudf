@@ -1,6 +1,8 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from enum import Enum
+
+import numpy as np
 
 from cython.operator cimport dereference
 from libc.stdint cimport int64_t
@@ -10,6 +12,7 @@ from libcpp.utility cimport move
 
 from cudf._lib.cpp cimport expressions as libcudf_exp
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.wrappers.timestamps cimport timestamp_ms, timestamp_us
 
 # Necessary for proper casting, see below.
 ctypedef int32_t underlying_type_ast_operator
@@ -95,6 +98,31 @@ cdef class Literal(Expression):
             self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
                 <string_scalar &>dereference(self.c_scalar)
             ))
+        elif isinstance(value, np.datetime64):
+            scale, _ = np.datetime_data(value.dtype)
+            int_value = value.astype(np.int64)
+            if scale == "ms":
+                self.c_scalar.reset(new timestamp_scalar[timestamp_ms](
+                    <int64_t>int_value, True)
+                )
+                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                    <timestamp_scalar[timestamp_ms] &>dereference(self.c_scalar)
+                ))
+            elif scale == "us":
+                self.c_scalar.reset(new timestamp_scalar[timestamp_us](
+                    <int64_t>int_value, True)
+                )
+                self.c_obj = <expression_ptr> move(make_unique[libcudf_exp.literal](
+                    <timestamp_scalar[timestamp_us] &>dereference(self.c_scalar)
+                ))
+            else:
+                raise NotImplementedError(
+                    f"Unhandled datetime scale {scale=}"
+                )
+        else:
+            raise NotImplementedError(
+                f"Don't know how to make literal with type {type(value)}"
+            )
 
 
 cdef class ColumnReference(Expression):
