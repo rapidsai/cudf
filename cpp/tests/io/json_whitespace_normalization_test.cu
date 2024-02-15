@@ -24,8 +24,6 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <rmm/device_uvector.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <string>
 
@@ -34,27 +32,23 @@ struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
 void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
-  // RMM memory resource
-  std::shared_ptr<rmm::mr::device_memory_resource> rsc =
-    std::make_shared<rmm::mr::cuda_memory_resource>();
-
   rmm::device_uvector<char> device_input(
-    host_input.size(), cudf::test::get_default_stream(), rsc.get());
+    host_input.size(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   CUDF_CUDA_TRY(cudaMemcpyAsync(device_input.data(),
                                 host_input.data(),
                                 host_input.size(),
                                 cudaMemcpyHostToDevice,
-                                cudf::test::get_default_stream().value()));
+                                cudf::get_default_stream().value()));
   // Preprocessing FST
   auto device_fst_output = cudf::io::json::detail::normalize_whitespace(
-    std::move(device_input), cudf::test::get_default_stream(), rsc.get());
+    std::move(device_input), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   std::string preprocessed_host_output(device_fst_output.size(), 0);
   CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
                                 device_fst_output.data(),
                                 preprocessed_host_output.size(),
                                 cudaMemcpyDeviceToHost,
-                                cudf::test::get_default_stream().value()));
+                                cudf::get_default_stream().value()));
   CUDF_TEST_EXPECT_VECTOR_EQUAL(
     preprocessed_host_output, expected_host_output, preprocessed_host_output.size());
 }
@@ -134,31 +128,30 @@ TEST_F(JsonWSNormalizationTest, GroundTruth_InvalidInput)
 
 TEST_F(JsonWSNormalizationTest, ReadJsonOption)
 {
-  // RMM memory resource
-  std::shared_ptr<rmm::mr::device_memory_resource> rsc =
-    std::make_shared<rmm::mr::cuda_memory_resource>();
+  // When mixed type fields are read as strings, the table read will differ depending the
+  // value of normalize_whitespace
 
   // Test input
-  std::string const host_input = "{ \"A \" : \t\" TEST \"}";
+  std::string const host_input = "{ \"a\" : {\"b\" :\t\"c\"}}";
   cudf::io::json_reader_options input_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{host_input.data(), host_input.size()})
       .lines(true)
+      .mixed_types_as_string(true)
       .normalize_whitespace(true);
 
-  cudf::io::table_with_metadata processed_table =
-    cudf::io::read_json(input_options, cudf::test::get_default_stream(), rsc.get());
+  cudf::io::table_with_metadata processed_table = cudf::io::read_json(input_options);
 
   // Expected table
-  std::string const expected_input = R"({"A ":" TEST "})";
+  std::string const expected_input = R"({ "a" : {"b":"c"}})";
   cudf::io::json_reader_options expected_input_options =
     cudf::io::json_reader_options::builder(
       cudf::io::source_info{expected_input.data(), expected_input.size()})
       .lines(true)
-      .normalize_whitespace(true);
+      .mixed_types_as_string(true)
+      .normalize_whitespace(false);
 
-  cudf::io::table_with_metadata expected_table =
-    cudf::io::read_json(expected_input_options, cudf::test::get_default_stream(), rsc.get());
+  cudf::io::table_with_metadata expected_table = cudf::io::read_json(expected_input_options);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table.tbl->view(), processed_table.tbl->view());
 }
 
