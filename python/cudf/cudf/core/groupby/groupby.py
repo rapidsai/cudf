@@ -1362,6 +1362,9 @@ class GroupBy(Serializable, Reducible, Scannable):
                     result = cudf.concat(chunk_results)
                 if total_rows == len(group_names):
                     result.index = group_names
+                    # TODO: Is there a better way to determine what
+                    # the column name should be, especially if we applied
+                    # a nameless UDF.
                     result = result.to_frame(
                         name=grouped_values._data.names[0]
                     )

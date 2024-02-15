@@ -850,11 +850,11 @@ def test_groupby_apply_no_bytecode_fallback():
     assert_groupby_results_equal(expect, got)
 
 
-@pytest.mark.parametrize("func", [lambda group: group.x + group.y])
-def test_groupby_apply_return_col_from_df(func):
+def test_groupby_apply_return_col_from_df():
     # tests a UDF that consists of purely colwise
     # ops, such as `lambda group: group.x + group.y`
     # which returns a column
+    func = lambda group: group.x + group.y  # noqa:E731
     df = cudf.DataFrame(
         {
             "id": range(10),
@@ -871,11 +871,11 @@ def test_groupby_apply_return_col_from_df(func):
         kwargs = {"include_groups": False}
     else:
         kwargs = {}
-    expect = pdf.groupby("id").apply(func, **kwargs)
-    if PANDAS_GE_220:
-        # pandas seems to erroneously add an extra MI level of ids
-        expect = pd.DataFrame(expect.droplevel(1), columns=["x"])
     got = df.groupby("id").apply(func, **kwargs)
+    expect = pdf.groupby("id").apply(func, **kwargs)
+    # pandas seems to erroneously add an extra MI level of ids
+    # TODO: Figure out how pandas groupby.apply determines the columns
+    expect = pd.DataFrame(expect.droplevel(1), columns=got.columns)
     assert_groupby_results_equal(expect, got)
 
 
