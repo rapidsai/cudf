@@ -6,7 +6,6 @@ from libcpp.vector cimport vector
 
 from cudf._lib.cpp cimport search as cpp_search
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.types cimport null_order, order
 
 from .column cimport Column
