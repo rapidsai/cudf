@@ -126,7 +126,7 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
       };
       thrust::for_each_n(rmm::exec_policy(stream),
                          thrust::make_zip_iterator(
-                           thrust::make_tuple(begin, offsets_view.template begin<int32_t>())),
+                           thrust::make_tuple(begin, offsets_view.template begin<size_type>())),
                          strings_count,
                          copy_chars);
       return chars_data;
