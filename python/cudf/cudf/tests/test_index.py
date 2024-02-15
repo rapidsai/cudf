@@ -2081,14 +2081,6 @@ def test_get_indexer_multi_numeric_deviate(request, key, method):
         [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
     )
     gi = cudf.from_pandas(pi)
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=method is not None
-            and key == ((1, 2, 3),)
-            and not PANDAS_GE_220,
-            reason="https://github.com/pandas-dev/pandas/issues/53452",
-        )
-    )
     if method is not None:
         with pytest.raises(ValueError):
             gi.get_indexer(key, method=method)
