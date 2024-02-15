@@ -47,7 +47,7 @@ namespace detail {
 template <typename T>
 class hash_join;
 
-template <has_nested>
+template <cudf::has_nested HasNested>
 class distinct_hash_join;
 }  // namespace detail
 
