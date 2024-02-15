@@ -21,6 +21,7 @@
 
 namespace cudf::detail {
 
+/// Default load factor for cuco data structures
 static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
 
 /**
