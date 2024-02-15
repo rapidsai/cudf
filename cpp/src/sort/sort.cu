@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,25 +61,6 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
                         mr);
 }
 
-struct inplace_column_sort_fn {
-  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
-  void operator()(mutable_column_view& col, bool ascending, rmm::cuda_stream_view stream) const
-  {
-    CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
-    if (ascending) {
-      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::less<T>());
-    } else {
-      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::greater<T>());
-    }
-  }
-
-  template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
-  void operator()(mutable_column_view&, bool, rmm::cuda_stream_view) const
-  {
-    CUDF_FAIL("Column type must be relationally comparable and fixed-width");
-  }
-};
-
 std::unique_ptr<table> sort(table_view const& input,
                             std::vector<order> const& column_order,
                             std::vector<null_order> const& null_precedence,
@@ -94,7 +75,7 @@ std::unique_ptr<table> sort(table_view const& input,
     auto view      = output->mutable_view();
     bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
     cudf::type_dispatcher<dispatch_storage_type>(
-      output->type(), inplace_column_sort_fn{}, view, ascending, stream);
+      output->type(), inplace_column_sort_fn<false>{}, view, ascending, stream);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));

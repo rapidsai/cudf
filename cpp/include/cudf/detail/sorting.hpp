@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,47 @@
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/functional.h>
+#include <thrust/sort.h>
 
 #include <memory>
 #include <vector>
 
 namespace cudf {
 namespace detail {
+
+template <bool stable>
+struct inplace_column_sort_fn {
+  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
+  void operator()(mutable_column_view& col, bool ascending, rmm::cuda_stream_view stream) const
+  {
+    CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
+    auto const do_sort = [&](auto const cmp) {
+      if constexpr (stable) {
+        thrust::stable_sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), cmp);
+      } else {
+        thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), cmp);
+      }
+    };
+    if (ascending) {
+      do_sort(thrust::less<T>());
+    } else {
+      do_sort(thrust::greater<T>());
+    }
+  }
+
+  template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
+  void operator()(mutable_column_view&, bool, rmm::cuda_stream_view) const
+  {
+    CUDF_FAIL("Column type must be relationally comparable and fixed-width");
+  }
+};
 
 /**
  * @copydoc cudf::sorted_order
