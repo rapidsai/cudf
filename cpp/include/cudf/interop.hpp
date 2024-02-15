@@ -203,7 +203,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
  * such as in the representation of bools (Arrow uses a bitmap, cudf uses 1-byte per value).
  */
 struct ArrowDeviceArray to_arrow_device(
-  cudf::table& table,
+  cudf::table&& table,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
