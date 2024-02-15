@@ -100,7 +100,7 @@ struct distinct_hash_join {
 
   /// Hash table type
   using hash_table_type = cuco::static_set<cuco::pair<hash_value_type, lhs_index_type>,
-                                           cuco::extent<std::size_t>,
+                                           cuco::extent<size_type>,
                                            cuda::thread_scope_device,
                                            comparator_adapter<d_equal_type>,
                                            probing_scheme_type,

@@ -16,10 +16,10 @@
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
 
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/distinct_hash_join.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
@@ -255,7 +255,8 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
       cudf::experimental::row::equality::preprocessed_table::create(_build, stream)},
     _preprocessed_probe{
       cudf::experimental::row::equality::preprocessed_table::create(_probe, stream)},
-    _hash_table{::compute_hash_table_size(build.num_rows()),
+    _hash_table{build.num_rows(),
+                CUCO_DESIRED_LOAD_FACTOR,
                 cuco::empty_key{cuco::pair{std::numeric_limits<hash_value_type>::max(),
                                            lhs_index_type{JoinNoneValue}}},
                 prepare_device_equal<HasNested>(
