@@ -7,6 +7,7 @@ from cudf._lib.cpp.types cimport (
     data_type,
     interpolation,
     nan_equality,
+    nan_policy,
     null_equality,
     null_order,
     null_policy,
