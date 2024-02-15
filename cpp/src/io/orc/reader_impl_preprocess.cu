@@ -304,6 +304,19 @@ rmm::device_buffer decompress_stripe_data(
                                    total_decomp_size,
                                    stream);
         break;
+      case compression_type::LZ4:
+        if (auto const reason = nvcomp::is_decompression_disabled(nvcomp::compression_type::LZ4);
+            reason) {
+          CUDF_FAIL("Decompression error: " + reason.value());
+        }
+        nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
+                                   inflate_in_view,
+                                   inflate_out_view,
+                                   inflate_res,
+                                   max_uncomp_block_size,
+                                   total_decomp_size,
+                                   stream);
+        break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
 
