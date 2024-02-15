@@ -100,8 +100,7 @@ std::unique_ptr<table> sort(table_view const& input,
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));
   }
-  return detail::sort_by_key(
-    input, input, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::sort_by_key(input, input, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace detail
