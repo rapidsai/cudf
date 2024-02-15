@@ -156,7 +156,8 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
         // only do string buffer for leaf
-        if (out_buf.string_size() == 0 && col_sizes[pass.chunks[c].src_col_index] > 0) {
+        if (idx == max_depth - 1 and out_buf.string_size() == 0 and
+            col_sizes[pass.chunks[c].src_col_index] > 0) {
           out_buf.create_string_data(col_sizes[pass.chunks[c].src_col_index], _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
