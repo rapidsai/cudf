@@ -171,6 +171,7 @@ CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
             static_cast<cudf::size_type>(found->second), static_cast<cudf::size_type>(idx)};
         }
       }
+
       flushing_tile.sync();
       if (flushing_counter[flushing_tile_id] + max_matches > flushing_buffer_size) {
         flush_buffer(flushing_tile,
@@ -179,7 +180,6 @@ CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
                      counter,
                      build_indices,
                      probe_indices);
-        flushing_tile.sync();
         if (flushing_tile.thread_rank() == 0) { flushing_counter[flushing_tile_id] = 0; }
         flushing_tile.sync();
       }
@@ -187,7 +187,6 @@ CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
       idx += stride;
     }  // while
 
-    flushing_tile.sync();
     if (flushing_counter[flushing_tile_id] > 0) {
       flush_buffer(flushing_tile,
                    flushing_counter[flushing_tile_id],
