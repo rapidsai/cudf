@@ -262,6 +262,8 @@ distinct_hash_join<HasNested>::distinct_hash_join(cudf::table_view const& build,
                 prepare_device_equal<HasNested>(
                   _preprocessed_build, _preprocessed_probe, has_nulls, compare_nulls),
                 {},
+                cuco::thread_scope_device,
+                cuco_storage_type{},
                 cudf::detail::cuco_allocator{stream},
                 stream.value()}
 {
@@ -325,7 +327,7 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
   distinct_join_probe_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     iter,
     probe_table_num_rows,
-    this->_hash_table.ref(cuco::experimental::op::find),
+    this->_hash_table.ref(cuco::find),
     counter.data(),
     left_indices->data(),
     right_indices->data());
