@@ -45,13 +45,14 @@ using multimap_type = cudf::hash_join::impl_type::map_type;
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
 // until the mixed joins are converted to using CGs properly. Right now it's
 // using a cooperative group of size 1.
-using mixed_multimap_type = cuco::static_multimap<hash_value_type,
-                                                  size_type,
-                                                  cuda::thread_scope_device,
-                                                  cudf::detail::cuco_allocator,
-                                                  cuco::double_hashing<1, hash_type, hash_type>>;
+using mixed_multimap_type =
+  cuco::static_multimap<hash_value_type,
+                        size_type,
+                        cuda::thread_scope_device,
+                        cudf::detail::cuco_allocator,
+                        cuco::legacy::double_hashing<1, hash_type, hash_type>>;
 
-using semi_map_type = cuco::
+using semi_map_type = cuco::legacy::
   static_map<hash_value_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 using row_hash_legacy =

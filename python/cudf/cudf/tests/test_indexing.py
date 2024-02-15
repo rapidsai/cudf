@@ -1242,13 +1242,18 @@ def test_out_of_bounds_indexing():
         lambda: psr.__setitem__([0, 1, -4], 2),
         lambda: gsr.__setitem__([0, 1, -4], 2),
     )
+
+
+def test_out_of_bounds_indexing_empty():
+    psr = pd.Series(dtype="int64")
+    gsr = cudf.from_pandas(psr)
     assert_exceptions_equal(
-        lambda: psr[4:6].iloc.__setitem__(-1, 2),
-        lambda: gsr[4:6].iloc.__setitem__(-1, 2),
+        lambda: psr.iloc.__setitem__(-1, 2),
+        lambda: gsr.iloc.__setitem__(-1, 2),
     )
     assert_exceptions_equal(
-        lambda: psr[4:6].iloc.__setitem__(1, 2),
-        lambda: gsr[4:6].iloc.__setitem__(1, 2),
+        lambda: psr.iloc.__setitem__(1, 2),
+        lambda: gsr.iloc.__setitem__(1, 2),
     )
 
 

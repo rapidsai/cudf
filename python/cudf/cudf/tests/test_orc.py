@@ -1927,3 +1927,28 @@ def test_orc_chunked_writer_stripe_size(datadir):
 
     orc_file = orc.ORCFile(buffer)
     assert_eq(orc_file.nstripes, 5)
+
+
+def test_reader_lz4():
+    from pyarrow import orc
+
+    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+    pa_table = pa.Table.from_pandas(pdf)
+
+    buffer = BytesIO()
+    writer = orc.ORCWriter(buffer, compression="LZ4")
+    writer.write(pa_table)
+    writer.close()
+
+    got = cudf.read_orc(buffer)
+    assert_eq(pdf, got)
+
+
+def test_writer_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
+
+    buffer = BytesIO()
+    gdf.to_orc(buffer, compression="LZ4")
+
+    got = pd.read_orc(buffer)
+    assert_eq(gdf, got)
