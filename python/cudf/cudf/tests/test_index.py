@@ -2076,7 +2076,7 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
     ],
 )
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_indexer_multi_numeric_deviate(request, key, method):
+def test_get_indexer_multi_numeric_deviate(key, method):
     pi = pd.MultiIndex.from_tuples(
         [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
     )
