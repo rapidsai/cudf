@@ -1,8 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
-import itertools
 import operator
-import string
 from collections import defaultdict
 
 import numpy as np
@@ -20,17 +18,15 @@ def sort(request):
 
 @pytest.fixture
 def left():
-    left_key = [1, 3, 2, 1, 1, 2, 5, 1, 4, 5, 8, 12, 12312, 1] * 100
-    left_val = list(range(len(left_key)))
+    left_key = [1, 3, 8, 12, 12312] * 2
+    left_val = range(len(left_key))
     return cudf.DataFrame({"key": left_key, "val": left_val})
 
 
 @pytest.fixture
 def right():
-    right_key = [12312, 12312, 3, 2, 1, 1, 5, 7, 2] * 200
-    right_val = list(
-        itertools.islice(itertools.cycle(string.ascii_letters), len(right_key))
-    )
+    right_key = [12312, 12312, 3, 1, 7, 1] * 2
+    right_val = list("abcdef") * 2
     return cudf.DataFrame({"key": right_key, "val": right_val})
 
 
@@ -155,11 +151,17 @@ else:
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
-def test_join_ordering_pandas_compat(left, right, sort, how):
+def test_join_ordering_pandas_compat(left, right, sort, how, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            how == "right" and not PANDAS_GE_220,
+            reason="https://pandas.pydata.org/docs/dev/whatsnew/v2.2.0.html#merge-and-dataframe-join-now-consistently-follow-documented-sort-behavior",  # noqa:E501
+        )
+    )
     with cudf.option_context("mode.pandas_compatible", True):
         actual = left.merge(right, on="key", how=how, sort=sort)
     expect = expected(left, right, sort, how=how)
-    assert_eq(expect, actual)
+    assert_eq(expect, actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])

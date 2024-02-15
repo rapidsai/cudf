@@ -4165,9 +4165,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         lhs, rhs = self, right
         merge_cls = Merge
+        how_was_right = False
         if how == "right":
             # Merge doesn't support right, so just swap
             how = "left"
+            how_was_right = True
             lhs, rhs = right, self
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
@@ -4187,6 +4189,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
+            how_was_right=how_was_right,
         ).perform_merge()
 
     @_cudf_nvtx_annotate

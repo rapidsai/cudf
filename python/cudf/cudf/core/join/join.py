@@ -45,6 +45,7 @@ class Merge:
         sort,
         indicator,
         suffixes,
+        how_was_right=False,
     ):
         """
         Manage the merging of two Frames.
@@ -94,6 +95,7 @@ class Merge:
 
         self.lhs = lhs.copy(deep=False)
         self.rhs = rhs.copy(deep=False)
+        self.how_was_right = how_was_right
         self.how = how
         # If the user requests that the result is sorted or we're in
         # pandas-compatible mode we have various obligations on the
@@ -331,6 +333,11 @@ class Merge:
                         lkey.get(left_result).fillna(rkey.get(right_result)),
                         validate=False,
                     )
+        if self.how_was_right:
+            # In merge, we flipped left and right before merging.
+            # Flip back before returning result.
+            left_result, right_result = right_result, left_result
+            self.lsuffix, self.rsuffix = self.rsuffix, self.lsuffix
 
         # All columns from the left table make it into the output. Non-key
         # columns that share a name with a column in the right table are
@@ -348,7 +355,14 @@ class Merge:
         # key columns from the right table are removed.
         for name, col in right_result._data.items():
             if name in common_names:
-                if name not in self._key_columns_with_same_name:
+                if (
+                    self.how_was_right
+                    and name in self._key_columns_with_same_name
+                ):
+                    # Due to the flip, right keys _may_ contain NAs that we don't
+                    # want in the result
+                    data[name] = col
+                elif name not in self._key_columns_with_same_name:
                     data[f"{name}{self.rsuffix}"] = col
             else:
                 data[name] = col
