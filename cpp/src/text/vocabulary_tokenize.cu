@@ -21,21 +21,21 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 
@@ -93,15 +93,14 @@ struct vocab_equal {
   }
 };
 
-using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
-using probe_scheme              = cuco::experimental::linear_probing<1, vocab_hasher>;
-using vocabulary_map_type       = cuco::experimental::static_map<cudf::size_type,
+using probe_scheme        = cuco::experimental::linear_probing<1, vocab_hasher>;
+using vocabulary_map_type = cuco::experimental::static_map<cudf::size_type,
                                                            cudf::size_type,
                                                            cuco::experimental::extent<std::size_t>,
                                                            cuda::thread_scope_device,
                                                            vocab_equal,
                                                            probe_scheme,
-                                                           hash_table_allocator_type>;
+                                                           cudf::detail::cuco_allocator>;
 }  // namespace
 }  // namespace detail
 
@@ -150,7 +149,7 @@ tokenize_vocabulary::tokenize_vocabulary(cudf::strings_column_view const& input,
     cuco::empty_value{-1},
     detail::vocab_equal{*d_vocabulary},
     detail::probe_scheme{detail::vocab_hasher{*d_vocabulary}},
-    detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+    cudf::detail::cuco_allocator{stream},
     stream.value());
 
   // the row index is the token id (value for each key in the map)
@@ -299,7 +298,7 @@ struct vocabulary_tokenizer_fn {
   cudf::string_view const d_delimiter;
   MapRefType d_map;
   cudf::size_type const default_id;
-  cudf::size_type const* d_offsets;
+  cudf::detail::input_offsetalator d_offsets;
   cudf::size_type* d_results;
 
   __device__ void operator()(cudf::size_type idx) const
@@ -380,7 +379,7 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
     auto tokens = cudf::make_numeric_column(
       output_type, total_count, cudf::mask_state::UNALLOCATED, stream, mr);
     auto d_tokens  = tokens->mutable_view().data<cudf::size_type>();
-    auto d_offsets = token_offsets->view().data<cudf::size_type>();
+    auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
     vocabulary_tokenizer_fn<decltype(map_ref)> tokenizer{
       *d_strings, d_delimiter, map_ref, default_id, d_offsets, d_tokens};
     thrust::for_each_n(rmm::exec_policy(stream), zero_itr, input.size(), tokenizer);
@@ -396,11 +395,11 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
   // longer strings perform better with warp-parallel approach
 
   auto const first_offset  = (input.offset() == 0) ? 0
-                                                   : cudf::detail::get_value<cudf::size_type>(
+                                                   : cudf::strings::detail::get_offset_value(
                                                       input.offsets(), input.offset(), stream);
   auto const last_offset   = (input.offset() == 0 && input.size() == input.offsets().size() - 1)
                                ? input.chars_size(stream)
-                               : cudf::detail::get_value<cudf::size_type>(
+                               : cudf::strings::detail::get_offset_value(
                                  input.offsets(), input.size() + input.offset(), stream);
   auto const chars_size    = last_offset - first_offset;
   auto const d_input_chars = input.chars_begin(stream) + first_offset;

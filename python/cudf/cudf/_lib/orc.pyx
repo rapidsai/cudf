@@ -115,6 +115,7 @@ cpdef read_orc(object filepaths_or_buffers,
     )
 
     cdef table_with_metadata c_result
+    cdef size_type nrows
 
     with nogil:
         c_result = move(libcudf_read_orc(c_orc_reader_options))
@@ -125,6 +126,12 @@ cpdef read_orc(object filepaths_or_buffers,
                                              names,
                                              skip_rows,
                                              num_rows)
+
+    if columns is not None and (isinstance(columns, list) and len(columns) == 0):
+        # When `columns=[]`, index needs to be
+        # established, but not the columns.
+        nrows = c_result.tbl.get()[0].view().num_rows()
+        return {}, cudf.RangeIndex(nrows)
 
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
@@ -150,12 +157,16 @@ cpdef read_orc(object filepaths_or_buffers,
 cdef compression_type _get_comp_type(object compression):
     if compression is None or compression is False:
         return compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return compression_type.SNAPPY
     elif compression == "ZLIB":
         return compression_type.ZLIB
     elif compression == "ZSTD":
         return compression_type.ZSTD
+    elif compression == "LZ4":
+        return compression_type.LZ4
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 
@@ -172,7 +183,6 @@ cdef tuple _get_index_from_metadata(
     range_idx = None
     if json_str != "":
         meta = json.loads(json_str)
-
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
             index_col = meta['index_columns']
             if isinstance(index_col[0], dict) and \
@@ -352,7 +362,8 @@ cdef orc_reader_options make_orc_reader_options(
         c_column_names.reserve(len(column_names))
         for col in column_names:
             c_column_names.push_back(str(col).encode())
-        opts.set_columns(c_column_names)
+        if len(column_names) > 0:
+            opts.set_columns(c_column_names)
 
     return opts
 
