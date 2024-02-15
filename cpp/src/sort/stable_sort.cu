@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,28 @@ std::unique_ptr<column> stable_sorted_order(table_view const& input,
   return sorted_order<true>(input, column_order, null_precedence, stream, mr);
 }
 
+std::unique_ptr<table> stable_sort(table_view const& input,
+                                   std::vector<order> const& column_order,
+                                   std::vector<null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  // fast-path sort conditions: single, non-floating-point, fixed-width column with no nulls
+  if (input.num_columns() == 1 && !input.column(0).has_nulls() &&
+      cudf::is_fixed_width(input.column(0).type()) &&
+      !cudf::is_floating_point(input.column(0).type())) {
+    auto output    = std::make_unique<column>(input.column(0), stream, mr);
+    auto view      = output->mutable_view();
+    bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
+    cudf::type_dispatcher<dispatch_storage_type>(
+      output->type(), inplace_column_sort_fn<true>{}, view, ascending, stream);
+    std::vector<std::unique_ptr<column>> columns;
+    columns.emplace_back(std::move(output));
+    return std::make_unique<table>(std::move(columns));
+  }
+  return detail::stable_sort_by_key(input, input, column_order, null_precedence, stream, mr);
+}
+
 std::unique_ptr<table> stable_sort_by_key(table_view const& values,
                                           table_view const& keys,
                                           std::vector<order> const& column_order,
@@ -67,6 +89,16 @@ std::unique_ptr<column> stable_sorted_order(table_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::stable_sorted_order(input, column_order, null_precedence, stream, mr);
+}
+
+std::unique_ptr<table> stable_sort(table_view const& input,
+                                   std::vector<order> const& column_order,
+                                   std::vector<null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::stable_sort(input, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<table> stable_sort_by_key(table_view const& values,

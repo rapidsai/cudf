@@ -183,5 +183,16 @@ std::unique_ptr<table> sort(table_view const& values,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr);
 
+/**
+ * @copydoc cudf::stable_sort
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<table> stable_sort(table_view const& values,
+                                   std::vector<order> const& column_order,
+                                   std::vector<null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace cudf

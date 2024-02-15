@@ -116,6 +116,18 @@ std::unique_ptr<table> sort(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Performs a stable lexicographic sort of the rows of a table
+ *
+ * @copydoc cudf::sort
+ */
+std::unique_ptr<table> stable_sort(
+  table_view const& input,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::cuda_stream_view stream                   = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs a key-value sort.
  *
  * Creates a new table that reorders the rows of `values` according to the
