@@ -36,15 +36,13 @@ static void bench_copy_range(nvbench::state& state)
     data_profile_builder()
       .distribution(cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width)
       .no_validity();
-  auto const source_table =
-    create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
-  auto const target_table =
-    create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
+  auto const source_tables = create_random_table(
+    {cudf::type_id::STRING, cudf::type_id::STRING}, row_count{num_rows}, table_profile);
 
-  auto const start  = row_width / 4;
-  auto const end    = (row_width * 3) / 4;
-  auto const source = source_table->view().column(0);
-  auto const target = target_table->view().column(0);
+  auto const start  = num_rows / 4;
+  auto const end    = (num_rows * 3) / 4;
+  auto const source = source_tables->view().column(0);
+  auto const target = source_tables->view().column(1);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   auto chars_size = cudf::strings_column_view(target).chars_size(cudf::get_default_stream());
@@ -52,7 +50,7 @@ static void bench_copy_range(nvbench::state& state)
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // both columns are similar size
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
-    auto result = cudf::copy_range(source, target, start, end, start / 2);
+    [[maybe_unused]] auto result = cudf::copy_range(source, target, start, end, start / 2);
   });
 }
 

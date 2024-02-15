@@ -70,7 +70,8 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   auto target_end = target_begin + (source_end - source_begin);
   CUDF_EXPECTS(
     (target_begin >= 0) && (target_begin < target.size()) && (target_end <= target.size()),
-    "Range is out of bounds.");
+    "Range is out of bounds.",
+    std::invalid_argument);
 
   if (target_end == target_begin) { return std::make_unique<column>(target.parent(), stream, mr); }
   auto source_device_view = column_device_view::create(source.parent(), stream);
@@ -79,16 +80,21 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   auto d_target           = *target_device_view;
 
   // create null mask
-  auto [null_mask, null_count] = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(target.size()),
-    [d_source, d_target, source_begin, target_begin, target_end] __device__(size_type idx) {
-      return (idx >= target_begin && idx < target_end)
-               ? d_source.is_valid(source_begin + (idx - target_begin))
-               : d_target.is_valid(idx);
-    },
-    stream,
-    mr);
+  auto [null_mask, null_count] = [&] {
+    if (!target.parent().nullable() && !source.parent().nullable()) {
+      return std::pair(rmm::device_buffer{}, 0);
+    }
+    return cudf::detail::valid_if(
+      thrust::make_counting_iterator<size_type>(0),
+      thrust::make_counting_iterator<size_type>(target.size()),
+      [d_source, d_target, source_begin, target_begin, target_end] __device__(size_type idx) {
+        return (idx >= target_begin && idx < target_end)
+                 ? d_source.is_valid(source_begin + (idx - target_begin))
+                 : d_target.is_valid(idx);
+      },
+      stream,
+      mr);
+  }();
 
   auto [check_source, check_target] = [target, null_count = null_count] {
     // check validities for both source & target
@@ -112,7 +118,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
   auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
   auto d_chars    = chars_data.data();
   thrust::for_each(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(target.size()),
     [d_source, d_target, source_begin, target_begin, target_end, d_offsets, d_chars] __device__(
@@ -129,7 +135,7 @@ std::unique_ptr<column> copy_range(strings_column_view const& source,
                              std::move(offsets_column),
                              chars_data.release(),
                              null_count,
-                             null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
+                             std::move(null_mask));
 }
 
 }  // namespace detail
