@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-// Include Jitify's cstddef header first
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "hash/concurrent_unordered_map.cuh"
 #include "json_gpu.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -46,7 +47,6 @@
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 
-#include <hash/concurrent_unordered_map.cuh>
 #include <io/comp/io_uncomp.hpp>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/parsing_utils.cuh>
