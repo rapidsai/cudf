@@ -1177,20 +1177,15 @@ class TestNestedJsonReaderCommon:
         df = cudf.concat(chunks, ignore_index=True)
         assert expected.to_arrow().equals(df.to_arrow())
 
-    def test_order_nested_json_reader(self, tag, data):
+    def test_order_nested_json_reader(self, request, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(StringIO(data), lines=True)
-        if tag == "dtype_mismatch":
-            with pytest.raises(AssertionError):
-                # pandas parses integer values in float representation
-                # as integer
-                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
-        elif tag == "missing":
-            with pytest.raises(AssertionError):
-                # pandas inferences integer with nulls as float64
-                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
-        else:
-            assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        request.applymarker(
+            pytest.mark.xfail(
+                tag == "dtype_mismatch", reason="int vs float mismatch"
+            )
+        )
+        assert_eq(expected, target)
 
 
 def test_json_round_trip_gzip():
