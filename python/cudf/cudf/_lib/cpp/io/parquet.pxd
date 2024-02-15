@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
@@ -52,6 +52,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         ) except +
         parquet_reader_options_builder& timestamp_type(
             data_type type
+        ) except +
+        parquet_reader_options_builder& filter(
+            const expression & f
         ) except +
         parquet_reader_options build() except +
 
