@@ -86,7 +86,6 @@ std::unique_ptr<table> sort(table_view const& input,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   // fast-path sort conditions: single, non-floating-point, fixed-width column with no nulls
   if (input.num_columns() == 1 && !input.column(0).has_nulls() &&
       cudf::is_fixed_width(input.column(0).type()) &&
