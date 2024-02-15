@@ -44,6 +44,7 @@ namespace detail {
 using string_hasher_type = cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>;
 using hash_value_type    = string_hasher_type::result_type;
 using merge_pair_type    = thrust::pair<cudf::string_view, cudf::string_view>;
+using cuco_storage       = cuco::storage<1>;
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
@@ -98,15 +99,16 @@ struct bpe_equal {
   }
 };
 
-using bpe_probe_scheme = cuco::experimental::linear_probing<1, bpe_hasher>;
+using bpe_probe_scheme = cuco::linear_probing<1, bpe_hasher>;
 
-using merge_pairs_map_type = cuco::experimental::static_map<cudf::size_type,
-                                                            cudf::size_type,
-                                                            cuco::experimental::extent<std::size_t>,
-                                                            cuda::thread_scope_device,
-                                                            bpe_equal,
-                                                            bpe_probe_scheme,
-                                                            cudf::detail::cuco_allocator>;
+using merge_pairs_map_type = cuco::static_map<cudf::size_type,
+                                              cudf::size_type,
+                                              cuco::extent<std::size_t>,
+                                              cuda::thread_scope_device,
+                                              bpe_equal,
+                                              bpe_probe_scheme,
+                                              cudf::detail::cuco_allocator,
+                                              cuco_storage>;
 
 /**
  * @brief Hasher function used for building and using the cuco static-map
@@ -155,15 +157,16 @@ struct mp_equal {
   }
 };
 
-using mp_probe_scheme = cuco::experimental::linear_probing<1, mp_hasher>;
+using mp_probe_scheme = cuco::linear_probing<1, mp_hasher>;
 
-using mp_table_map_type = cuco::experimental::static_map<cudf::size_type,
-                                                         cudf::size_type,
-                                                         cuco::experimental::extent<std::size_t>,
-                                                         cuda::thread_scope_device,
-                                                         mp_equal,
-                                                         mp_probe_scheme,
-                                                         cudf::detail::cuco_allocator>;
+using mp_table_map_type = cuco::static_map<cudf::size_type,
+                                           cudf::size_type,
+                                           cuco::extent<std::size_t>,
+                                           cuda::thread_scope_device,
+                                           mp_equal,
+                                           mp_probe_scheme,
+                                           cudf::detail::cuco_allocator,
+                                           cuco_storage>;
 
 }  // namespace detail
 
@@ -185,8 +188,8 @@ struct bpe_merge_pairs::bpe_merge_pairs_impl {
                        std::unique_ptr<detail::mp_table_map_type>&& mp_table_map);
 
   auto const get_merge_pairs() const { return *d_merge_pairs; }
-  auto get_merge_pairs_ref() const { return merge_pairs_map->ref(cuco::experimental::op::find); }
-  auto get_mp_table_ref() const { return mp_table_map->ref(cuco::experimental::op::find); }
+  auto get_merge_pairs_ref() const { return merge_pairs_map->ref(cuco::op::find); }
+  auto get_mp_table_ref() const { return mp_table_map->ref(cuco::op::find); }
 };
 
 }  // namespace nvtext
