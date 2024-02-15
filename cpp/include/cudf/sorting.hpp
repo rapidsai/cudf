@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -148,26 +148,7 @@ std::unique_ptr<table> sort_by_key(
 /**
  * @brief Performs a key-value stable sort.
  *
- * Creates a new table that reorders the rows of `values` according to the
- * lexicographic ordering of the rows of `keys`.
- *
- * The order of equivalent elements is guaranteed to be preserved.
- *
- * @throws cudf::logic_error if `values.num_rows() != keys.num_rows()`.
- *
- * @param values The table to reorder
- * @param keys The table that determines the ordering
- * @param column_order The desired order for each column in `keys`. Size must be
- * equal to `keys.num_columns()` or empty. If empty, all columns are sorted in
- * ascending order.
- * @param null_precedence The desired order of a null element compared to other
- * elements for each column in `keys`. Size must be equal to
- * `keys.num_columns()` or empty. If empty, all columns will be sorted with
- * `null_order::BEFORE`.
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned table's device memory
- * @return The reordering of `values` determined by the lexicographic order of
- * the rows of `keys`.
+ * @copydoc cudf::sort_by_key
  */
 std::unique_ptr<table> stable_sort_by_key(
   table_view const& values,
