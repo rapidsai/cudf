@@ -29,8 +29,8 @@ namespace groupby {
 namespace detail {
 namespace hash {
 /**
- * @brief Compute single-pass aggregations and store results into a sparse
- * `output_values` table, and populate `set` with indices of unique keys
+ * @brief Computes single-pass aggregations and store results into a sparse `output_values` table,
+ * and populate `set` with indices of unique keys
  *
  * The hash set is built by inserting every row index `i` from the `keys` and `values` tables. If
  * the index was not present in the set, insert they index and then copy it to the output. If the
