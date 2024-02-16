@@ -115,14 +115,15 @@ inline rmm::mr::host_memory_resource* default_pageable_mr()
 
 inline auto& host_mr()
 {
-  static cudf::host_resource_ref host_mr(cuio_uses_pageable_buffer() ? *default_pageable_mr() : *default_pinned_mr());
+  static cudf::host_resource_ref host_mr(cuio_uses_pageable_buffer() ? *default_pageable_mr()
+                                                                     : *default_pinned_mr());
   return host_mr;
 }
 
 }  // namespace detail
 
 void set_current_host_memory_resource(cudf::host_resource_ref mr)
-{  
+{
   std::lock_guard<std::mutex> lock{detail::host_mr_lock()};
   detail::host_mr() = mr;
 }
