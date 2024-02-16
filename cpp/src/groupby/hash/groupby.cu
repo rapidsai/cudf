@@ -26,6 +26,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
+#include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -37,7 +38,6 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
@@ -48,7 +48,6 @@
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 
@@ -73,11 +72,10 @@ namespace {
 int constexpr cg_size                  = 1;   ///< Number of threads used to handle each input key
 cudf::size_type constexpr key_sentinel = -1;  ///< Sentinel value indicating an empty slot
 
-using probing_scheme_type = cuco::experimental::linear_probing<
+using probing_scheme_type = cuco::linear_probing<
   cg_size,
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>>;
-using allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<cudf::size_type>>;
 
 /**
  * @brief List of aggregation operations that can be computed with a hash-based
@@ -580,20 +578,21 @@ std::unique_ptr<table> groupby(table_view const& keys,
   cudf::detail::result_cache sparse_results(requests.size());
 
   auto const comparator_helper = [&](auto const d_key_equal) {
-    auto const set =
-      cuco::experimental::static_set{num_keys,
-                                     0.5,  // desired load factor
-                                     cuco::empty_key{key_sentinel},
-                                     d_key_equal,
-                                     probing_scheme_type{d_row_hash},
-                                     allocator_type{default_allocator<cudf::size_type>{}, stream},
-                                     stream.value()};
+    auto const set = cuco::static_set{num_keys,
+                                      0.5,  // desired load factor
+                                      cuco::empty_key{key_sentinel},
+                                      d_key_equal,
+                                      probing_scheme_type{d_row_hash},
+                                      cuco::thread_scope_device,
+                                      cuco::storage<1>{},
+                                      cudf::detail::cuco_allocator{stream},
+                                      stream.value()};
 
     // Compute all single pass aggs first
     compute_single_pass_aggs(keys,
                              requests,
                              &sparse_results,
-                             set.ref(cuco::experimental::insert_and_find),
+                             set.ref(cuco::insert_and_find),
                              keys_have_nulls,
                              include_null_keys,
                              stream);
@@ -608,7 +607,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
                             &sparse_results,
                             cache,
                             gather_map,
-                            set.ref(cuco::experimental::find),
+                            set.ref(cuco::find),
                             keys_have_nulls,
                             include_null_keys,
                             stream,
