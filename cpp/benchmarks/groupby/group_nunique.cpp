@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/groupby.hpp>
 
@@ -64,13 +63,9 @@ void bench_groupby_nunique(nvbench::state& state, nvbench::type_list<Type>)
   auto const requests = make_aggregation_request_vector(
     *vals, cudf::make_nunique_aggregation<cudf::groupby_aggregation>());
 
-  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
-
-  state.add_buffer_size(
-    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH_TYPES(bench_groupby_nunique, NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t>))
