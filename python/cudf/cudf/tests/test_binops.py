@@ -1695,16 +1695,6 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     assert result.dtype == valid_result.dtype
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1725,8 +1715,22 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop(
-    date_col, n_periods, frequency, dtype, op
+    request, n_periods, frequency, dtype, op
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_GE_220
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency == "microseconds"
+            and n_periods == 0,
+            reason="https://github.com/pandas-dev/pandas/issues/57448",
+        )
+    )
+    date_col = [
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()
 
