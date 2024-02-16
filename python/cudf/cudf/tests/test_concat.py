@@ -10,7 +10,7 @@ import pytest
 
 import cudf
 from cudf.api.types import _is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
@@ -459,42 +459,75 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+        pytest.param(
+            [
+                pd.Series([1, 2, 3.0, 1.2], name="abc"),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame({"a": [1, 2]}),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
+                ),
+                pd.DataFrame({"a": [1, 2]}),
+            ],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2], name="abc", index=["a", "b", "c", "d"]
+                ),
+                pd.DataFrame({"a": [1, 2]}, index=["a", "b"]),
+            ],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2, 8, 100],
+                    name="New name",
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+                pd.DataFrame(
+                    {"a": [1, 2, 4, 10, 11, 12]},
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+            ],
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-        ],
-        [
-            pd.Series(
-                [1, 2, 3.0, 1.2, 8, 100],
-                name="New name",
-                index=["a", "b", "c", "d", "e", "f"],
+        ),
+        pytest.param(
+            [
+                pd.Series(
+                    [1, 2, 3.0, 1.2, 8, 100],
+                    name="New name",
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+                pd.DataFrame(
+                    {"a": [1, 2, 4, 10, 11, 12]},
+                    index=["a", "b", "c", "d", "e", "f"],
+                ),
+            ]
+            * 7,
+            marks=pytest.mark.xfail(
+                not PANDAS_GE_220,
+                reason="https://github.com/pandas-dev/pandas/pull/56365",
             ),
-            pd.DataFrame(
-                {"a": [1, 2, 4, 10, 11, 12]},
-                index=["a", "b", "c", "d", "e", "f"],
-            ),
-        ]
-        * 7,
+        ),
     ],
 )
 def test_concat_series_dataframe_input(objs):

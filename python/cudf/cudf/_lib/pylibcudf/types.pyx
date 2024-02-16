@@ -5,6 +5,7 @@ from libc.stdint cimport int32_t
 from cudf._lib.cpp.types cimport data_type, type_id
 
 from cudf._lib.cpp.types import type_id as TypeId  # no-cython-lint, isort:skip
+from cudf._lib.cpp.types import nan_policy as NanPolicy  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import null_policy as NullPolicy  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import interpolation as Interpolation  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import nan_equality as NanEquality  # no-cython-lint, isort:skip
