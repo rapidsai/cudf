@@ -192,6 +192,9 @@ Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return Compression::SNAPPY;
     case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
     case compression_type::NONE: return Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -1020,6 +1023,8 @@ auto to_nvcomp_compression_type(Compression codec)
 {
   if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+  if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
 
@@ -1366,7 +1371,14 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
         CUDF_FAIL("Compression error: " + reason.value());
       }
       nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-
+      break;
+    }
+    case Compression::LZ4_RAW: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
       break;
     }
     case Compression::UNCOMPRESSED: break;
@@ -2074,7 +2086,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           need_sync = true;
         }
 
-        row_group.total_byte_size += ck.compressed_size;
+        row_group.total_byte_size += ck.bfr_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2220,10 +2232,6 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
-  // See issue #14781. Can remove this check once that is fixed.
-  CUDF_EXPECTS(not(_write_v2_headers and _compression == Compression::ZSTD),
-               "V2 page headers cannot be used with ZSTD compression");
-
   _current_chunk_offset.resize(_out_sink.size());
   // Write file header
   file_header_s fhdr;
@@ -2405,7 +2413,8 @@ void writer::impl::write_parquet_data_to_sink(
             // skip dict pages
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
-            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            int32_t const this_page_size =
+              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }

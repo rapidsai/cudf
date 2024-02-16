@@ -19,6 +19,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/wrap.hpp>
@@ -41,7 +42,7 @@ namespace {  // anonym.
 //
 struct execute_wrap {
   execute_wrap(column_device_view const d_column,
-               int32_t const* d_offsets,
+               cudf::detail::input_offsetalator d_offsets,
                char* d_chars,
                size_type width)
     : d_column_(d_column), d_offsets_(d_offsets), d_chars_(d_chars), width_(width)
@@ -83,7 +84,7 @@ struct execute_wrap {
 
  private:
   column_device_view const d_column_;
-  int32_t const* d_offsets_;
+  cudf::detail::input_offsetalator d_offsets_;
   char* d_chars_;
   size_type width_;
 };
@@ -110,7 +111,8 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
   // build offsets column
   auto offsets_column = std::make_unique<column>(strings.offsets(), stream, mr);  // makes a copy
-  auto d_new_offsets  = offsets_column->view().template data<int32_t>();
+  auto d_new_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
   auto chars_buffer = rmm::device_buffer{strings.chars_begin(stream),
                                          static_cast<std::size_t>(strings.chars_size(stream)),

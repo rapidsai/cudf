@@ -20,6 +20,7 @@ from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib import pylibcudf
 from cudf._lib.types import size_type_dtype
 from cudf._typing import (
     ColumnBinaryOperand,
@@ -55,6 +56,13 @@ from cudf.utils.dtypes import (
 )
 
 from .numerical_base import NumericalBaseColumn
+
+_unaryop_map = {
+    "ASIN": "ARCSIN",
+    "ACOS": "ARCCOS",
+    "ATAN": "ARCTAN",
+    "INVERT": "BIT_INVERT",
+}
 
 
 class NumericalColumn(NumericalBaseColumn):
@@ -173,7 +181,12 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(key, slice):
             out = self._scatter_by_slice(key, device_value)
         else:
-            key = as_column(key)
+            key = as_column(
+                key,
+                dtype="float64"
+                if isinstance(key, list) and len(key) == 0
+                else None,
+            )
             if not isinstance(key, cudf.core.column.NumericalColumn):
                 raise ValueError(f"Invalid scatter map type {key.dtype}.")
             out = self._scatter_by_column(key, device_value)
@@ -209,7 +222,9 @@ class NumericalColumn(NumericalBaseColumn):
         if callable(unaryop):
             return libcudf.transform.transform(self, unaryop)
 
-        unaryop = libcudf.unary.UnaryOp[unaryop.upper()]
+        unaryop = unaryop.upper()
+        unaryop = _unaryop_map.get(unaryop, unaryop)
+        unaryop = pylibcudf.unary.UnaryOperator[unaryop]
         return libcudf.unary.unary_operation(self, unaryop)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -697,7 +712,7 @@ class NumericalColumn(NumericalBaseColumn):
                 col_dtype if col_dtype.kind == "f" else np.dtype("int64")
             )
         elif reduction_op == "sum_of_squares":
-            col_dtype = np.find_common_type([col_dtype], [np.dtype("uint64")])
+            col_dtype = np.result_dtype(col_dtype, np.dtype("uint64"))
 
         return col_dtype
 
