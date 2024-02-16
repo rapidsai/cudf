@@ -157,12 +157,16 @@ cpdef read_orc(object filepaths_or_buffers,
 cdef compression_type _get_comp_type(object compression):
     if compression is None or compression is False:
         return compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return compression_type.SNAPPY
     elif compression == "ZLIB":
         return compression_type.ZLIB
     elif compression == "ZSTD":
         return compression_type.ZSTD
+    elif compression == "LZ4":
+        return compression_type.LZ4
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 

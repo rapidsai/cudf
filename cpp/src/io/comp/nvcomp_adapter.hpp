@@ -29,7 +29,7 @@
 
 namespace cudf::io::nvcomp {
 
-enum class compression_type { SNAPPY, ZSTD, DEFLATE };
+enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4 };
 
 /**
  * @brief Set of parameters that impact whether the use nvCOMP features is enabled.
