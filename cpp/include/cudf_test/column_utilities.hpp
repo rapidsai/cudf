@@ -195,7 +195,6 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  */
 template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c);
-//! @endcond
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
@@ -209,6 +208,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  */
 template <>
 std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c);
+//! @endcond
 
 }  // namespace cudf::test
 
