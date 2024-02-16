@@ -30,7 +30,7 @@ namespace cudf::detail {
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c a `cudf::host_resource_ref` for allocation.
  *
- * This implementation is ported from pinned_host_vector in cudf. 
+ * This implementation is ported from pinned_host_vector in cudf.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
@@ -40,7 +40,7 @@ class rmm_host_allocator;
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c an `cudf::host_resource_ref` for allocation.
  *
- * This implementation is ported from pinned_host_vector in cudf. 
+ * This implementation is ported from pinned_host_vector in cudf.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
@@ -65,7 +65,7 @@ class rmm_host_allocator<void> {
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
  *  that employs \c `rmm::mr::host_memory_resource` for allocation.
  *
- * This implementation is ported from pinned_host_vector in cudf. 
+ * This implementation is ported from pinned_host_vector in cudf.
  *
  *  \see https://en.cppreference.com/w/cpp/memory/allocator
  */
@@ -98,18 +98,18 @@ class rmm_host_allocator {
   /**
    * @brief Construct from a `cudf::host_resource_ref`
    */
-  rmm_host_allocator(cudf::host_resource_ref _mr) : mr(_mr){}
+  rmm_host_allocator(cudf::host_resource_ref _mr) : mr(_mr) {}
 
   /**
    * @brief Copy constructor
    */
-  rmm_host_allocator(rmm_host_allocator const& other) : mr(other.mr){}
+  rmm_host_allocator(rmm_host_allocator const& other) : mr(other.mr) {}
 
   /**
    * @brief Move constructor
    */
-  rmm_host_allocator(rmm_host_allocator&& other) : mr(std::move(other.mr)){}
-  
+  rmm_host_allocator(rmm_host_allocator&& other) : mr(std::move(other.mr)) {}
+
   /**
    * @brief Move operator
    */
@@ -120,7 +120,7 @@ class rmm_host_allocator {
     return *this;
   }
   */
-  
+
   /**
    * @brief Assignment operator
    */
@@ -128,7 +128,7 @@ class rmm_host_allocator {
   {
     mr = col.mr;
     return *this;
-  }  
+  }
 
   /**
    * @brief rmm_host_allocator's null destructor does nothing.
@@ -218,7 +218,8 @@ class rmm_host_allocator {
   {
     return !operator==(x);
   }
-private:
+
+ private:
   cudf::host_resource_ref mr;
 };
 

@@ -18,9 +18,9 @@
 
 #include <cuda/memory_resource>
 
-namespace cudf {  
-  
-  using host_resource_ref = cuda::mr::resource_ref<cuda::mr::host_accessible>;
-  using async_host_resource_ref = cuda::mr::async_resource_ref<cuda::mr::host_accessible>;
+namespace cudf {
 
-} // namespace cudf
+using host_resource_ref       = cuda::mr::resource_ref<cuda::mr::host_accessible>;
+using async_host_resource_ref = cuda::mr::async_resource_ref<cuda::mr::host_accessible>;
+
+}  // namespace cudf

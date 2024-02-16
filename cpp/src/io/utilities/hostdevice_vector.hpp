@@ -60,8 +60,9 @@ class hostdevice_vector {
     : d_data(0, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
-    
-    h_data_owner = std::make_unique<cudf::detail::rmm_host_vector<T>>(cudf::io::get_current_host_memory_resource());
+
+    h_data_owner = std::make_unique<cudf::detail::rmm_host_vector<T>>(
+      cudf::io::get_current_host_memory_resource());
     h_data_owner->reserve(max_size);
     h_data_owner->resize(initial_size);
     host_data = h_data_owner->data();

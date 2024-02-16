@@ -25,4 +25,4 @@ void set_current_host_memory_resource(cudf::host_resource_ref mr);
 // Should this be detail only?
 cudf::host_resource_ref get_current_host_memory_resource();
 
-} // namespace cudf::io
+}  // namespace cudf::io
