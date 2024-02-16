@@ -222,19 +222,19 @@ CUDF_KERNEL void gather_chars_fn_char_parallel(StringIterator strings_begin,
  * @return New chars column fit for a strings column.
  */
 template <typename StringIterator, typename MapIterator>
-std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
-                                           MapIterator map_begin,
-                                           MapIterator map_end,
-                                           cudf::detail::input_offsetalator const offsets,
-                                           size_type chars_bytes,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<char> gather_chars(StringIterator strings_begin,
+                                       MapIterator map_begin,
+                                       MapIterator map_end,
+                                       cudf::detail::input_offsetalator const offsets,
+                                       size_type chars_bytes,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto const output_count = std::distance(map_begin, map_end);
-  if (output_count == 0) return make_empty_column(type_id::INT8);
+  if (output_count == 0) return rmm::device_uvector<char>(0, stream, mr);
 
-  auto chars_column  = create_chars_child_column(chars_bytes, stream, mr);
-  auto const d_chars = chars_column->mutable_view().template data<char>();
+  auto chars_data = rmm::device_uvector<char>(chars_bytes, stream, mr);
+  auto d_chars    = chars_data.data();
 
   constexpr int warps_per_threadblock = 4;
   // String parallel strategy will be used if average string length is above this threshold.
@@ -260,7 +260,7 @@ std::unique_ptr<cudf::column> gather_chars(StringIterator strings_begin,
          stream.value()>>>(strings_begin, d_chars, offsets, map_begin, output_count);
   }
 
-  return chars_column;
+  return chars_data;
 }
 
 /**
@@ -316,12 +316,12 @@ std::unique_ptr<cudf::column> gather(strings_column_view const& strings,
   // build chars column
   auto const offsets_view =
     cudf::detail::offsetalator_factory::make_input_iterator(out_offsets_column->view());
-  auto out_chars_column = gather_chars(
+  auto out_chars_data = gather_chars(
     d_strings->begin<string_view>(), begin, end, offsets_view, total_bytes, stream, mr);
 
   return make_strings_column(output_count,
                              std::move(out_offsets_column),
-                             std::move(out_chars_column->release().data.release()[0]),
+                             out_chars_data.release(),
                              0,  // caller sets these
                              rmm::device_buffer{});
 }
