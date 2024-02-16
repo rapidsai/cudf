@@ -30,29 +30,21 @@ namespace detail {
 namespace hash {
 /**
  * @brief Compute single-pass aggregations and store results into a sparse
- * `output_values` table, and populate `map` with indices of unique keys
+ * `output_values` table, and populate `set` with indices of unique keys
  *
- * The hash map is built by inserting every row `i` from the `keys` and
- * `values` tables as a single (key,value) pair. When the pair is inserted, if
- * the key was not already present in the map, then the corresponding value is
- * simply copied to the output. If the key was already present in the map,
- * then the inserted `values` row is aggregated with the existing row. This
- * aggregation is done for every element `j` in the row by applying aggregation
- * operation `j` between the new and existing element.
+ * The hash set is built by inserting every row index `i` from the `keys` and `values` tables. If
+ * the index was not present in the set, insert they index and then copy it to the output. If the
+ * key was already present in the set, then the inserted index is aggregated with the existing row.
+ * This aggregation is done for every element `j` in the row by applying aggregation operation `j`
+ * between the new and existing element.
  *
  * Instead of storing the entire rows from `input_keys` and `input_values` in
- * the hashmap, we instead store the row indices. For example, when inserting
- * row at index `i` from `input_keys` into the hash map, the value `i` is what
- * gets stored for the hash map's "key". It is assumed the `map` was constructed
+ * the hashset, we instead store the row indices. For example, when inserting
+ * row at index `i` from `input_keys` into the hash set, the value `i` is what
+ * gets stored for the hash set's "key". It is assumed the `set` was constructed
  * with a custom comparator that uses these row indices to check for equality
  * between key rows. For example, comparing two keys `k0` and `k1` will compare
  * the two rows `input_keys[k0] ?= input_keys[k1]`
- *
- * Likewise, we store the row indices for the hash maps "values". These indices
- * index into the `output_values` table. For a given key `k` (which is an index
- * into `input_keys`), the corresponding value `v` indexes into `output_values`
- * and stores the result of aggregating rows from `input_values` from rows of
- * `input_keys` equivalent to the row at `k`.
  *
  * The exact size of the result is not known a priori, but can be upper bounded
  * by the number of rows in `input_keys` & `input_values`. Therefore, it is
@@ -74,9 +66,9 @@ struct compute_single_pass_aggs_fn {
   /**
    * @brief Construct a new compute_single_pass_aggs_fn functor object
    *
-   * @param set_ref Hash map object to insert key,value pairs into.
+   * @param set_ref Hash set object to insert key,value pairs into.
    * @param input_values The table whose rows will be aggregated in the values
-   * of the hash map
+   * of the hash set
    * @param output_values Table that stores the results of aggregating rows of
    * `input_values`.
    * @param aggs The set of aggregation operations to perform across the

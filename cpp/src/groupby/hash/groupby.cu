@@ -561,7 +561,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const d_row_hash  = row_hash.device_hasher(has_null);
 
   // Cache of sparse results where the location of aggregate value in each
-  // column is indexed by the hash map
+  // column is indexed by the hash set
   cudf::detail::result_cache sparse_results(requests.size());
 
   auto const comparator_helper = [&](auto const d_key_equal) {
@@ -584,7 +584,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
                              include_null_keys,
                              stream);
 
-    // Extract the populated indices from the hash map and create a gather map.
+    // Extract the populated indices from the hash set and create a gather map.
     // Gathering using this map from sparse results will give dense results.
     auto gather_map = extract_populated_keys(set, keys.num_rows(), stream);
 
