@@ -16,12 +16,20 @@
 
 #include "config_utils.hpp"
 
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_device.hpp>
+#include <rmm/mr/host/host_memory_resource.hpp>
+#include <rmm/mr/host/new_delete_resource.hpp>
+#include <rmm/mr/host/pinned_memory_resource.hpp>
 
 #include <cstdlib>
 #include <string>
 
-namespace cudf::io::detail {
+namespace cudf::io {
+
+namespace detail {
 
 namespace cufile_integration {
 
@@ -80,4 +88,49 @@ bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_
 
 }  // namespace nvcomp_integration
 
-}  // namespace cudf::io::detail
+inline bool cuio_uses_pageable_buffer()
+{
+  static bool const use_pageable =
+    cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
+  return use_pageable;
+}
+
+inline std::mutex& host_mr_lock()
+{
+  static std::mutex map_lock;
+  return map_lock;
+}
+
+inline rmm::mr::host_memory_resource* default_pinned_mr()
+{
+  static rmm::mr::pinned_memory_resource default_mr{};
+  return &default_mr;
+}
+
+inline rmm::mr::host_memory_resource* default_pageable_mr()
+{
+  static rmm::mr::new_delete_resource default_mr{};
+  return &default_mr;
+}
+
+inline auto& host_mr()
+{
+  static cudf::host_resource_ref host_mr(cuio_uses_pageable_buffer() ? *default_pageable_mr() : *default_pinned_mr());
+  return host_mr;
+}
+
+}  // namespace detail
+
+void set_current_host_memory_resource(cudf::host_resource_ref mr)
+{  
+  std::lock_guard<std::mutex> lock{detail::host_mr_lock()};
+  detail::host_mr() = mr;
+}
+
+cudf::host_resource_ref get_current_host_memory_resource()
+{
+  std::lock_guard<std::mutex> lock{detail::host_mr_lock()};
+  return detail::host_mr();
+}
+
+}  // namespace cudf::io

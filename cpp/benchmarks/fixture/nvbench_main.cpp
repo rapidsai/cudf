@@ -21,7 +21,7 @@
 
 #include <vector>
 
-// strip off the rmm_mode parameter before passing the
+// strip off the rmm_mode and cuio_host_mem parameters before passing the
 // remaining arguments to nvbench::option_parser
 #undef NVBENCH_MAIN_PARSE
 #define NVBENCH_MAIN_PARSE(argc, argv)         \
@@ -30,6 +30,8 @@
   for (int i = 0; i < argc; ++i) {             \
     std::string arg = argv[i];                 \
     if (arg == cudf::detail::rmm_mode_param) { \
+      i += 2;                                  \
+    } else if (arg == cudf::detail::cuio_host_mem_param) { \
       i += 2;                                  \
     } else {                                   \
       m_args.push_back(arg);                   \

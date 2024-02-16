@@ -19,26 +19,21 @@
 #include "config_utils.hpp"
 #include "hostdevice_span.hpp"
 
-#include <cudf/detail/utilities/pinned_host_vector.hpp>
+#include <cudf/detail/utilities/rmm_host_vector.hpp>
+#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/host/host_memory_resource.hpp>
 
 #include <thrust/host_vector.h>
 
 #include <variant>
 
 namespace cudf::detail {
-
-inline bool hostdevice_vector_uses_pageable_buffer()
-{
-  static bool const use_pageable =
-    cudf::io::detail::getenv_or("LIBCUDF_IO_PREFER_PAGEABLE_TMP_MEMORY", 0);
-  return use_pageable;
-}
 
 /**
  * @brief A helper class that wraps fixed-length device memory for the GPU, and
@@ -65,20 +60,11 @@ class hostdevice_vector {
     : d_data(0, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
-
-    if (hostdevice_vector_uses_pageable_buffer()) {
-      h_data_owner = thrust::host_vector<T>();
-    } else {
-      h_data_owner = cudf::detail::pinned_host_vector<T>();
-    }
-
-    std::visit(
-      [&](auto&& v) {
-        v.reserve(max_size);
-        v.resize(initial_size);
-        host_data = v.data();
-      },
-      h_data_owner);
+    
+    h_data_owner = std::make_unique<cudf::detail::rmm_host_vector<T>>(cudf::io::get_current_host_memory_resource());
+    h_data_owner->reserve(max_size);
+    h_data_owner->resize(initial_size);
+    host_data = h_data_owner->data();
 
     current_size = initial_size;
     d_data.resize(max_size, stream);
@@ -190,7 +176,7 @@ class hostdevice_vector {
   }
 
  private:
-  std::variant<thrust::host_vector<T>, cudf::detail::pinned_host_vector<T>> h_data_owner;
+  std::unique_ptr<cudf::detail::rmm_host_vector<T>> h_data_owner;
   T* host_data        = nullptr;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
