@@ -1426,6 +1426,96 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
             static_cast<int64_t>(num_rows * sizeof(column_type)));
 }
 
+TEST_F(ParquetWriterTest, UserRequestedEncodings)
+{
+  constexpr int num_rows = 500;
+
+  auto const ones = thrust::make_constant_iterator(1);
+  auto const col =
+    cudf::test::fixed_width_column_wrapper<int32_t>{ones, ones + num_rows, no_nulls()};
+
+  auto const strings = thrust::make_constant_iterator("string");
+  auto const string_col =
+    cudf::test::strings_column_wrapper(strings, strings + num_rows, no_nulls());
+
+  auto const table = table_view(
+    {col, col, col, col, col, string_col, string_col, string_col, string_col, string_col});
+
+  cudf::io::table_input_metadata table_metadata(table);
+  table_metadata.column_metadata[0].set_name("int_plain");
+  table_metadata.column_metadata[0].set_encoding(cudf::io::parquet_encoding::PLAIN);
+  table_metadata.column_metadata[1].set_name("int_dict");
+  table_metadata.column_metadata[1].set_encoding(cudf::io::parquet_encoding::DICTIONARY);
+  table_metadata.column_metadata[2].set_name("int_delta_binary_packed");
+  table_metadata.column_metadata[2].set_encoding(cudf::io::parquet_encoding::DELTA_BINARY_PACKED);
+  table_metadata.column_metadata[3].set_name("int_delta_length_byte_array");
+  table_metadata.column_metadata[3].set_encoding(
+    cudf::io::parquet_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  table_metadata.column_metadata[4].set_name("int_bogus");
+  table_metadata.column_metadata[4].set_encoding("no such encoding");
+  table_metadata.column_metadata[5].set_name("string_plain");
+  table_metadata.column_metadata[5].set_encoding(cudf::io::parquet_encoding::PLAIN);
+  table_metadata.column_metadata[6].set_name("string_dict");
+  table_metadata.column_metadata[6].set_encoding(cudf::io::parquet_encoding::DICTIONARY);
+  table_metadata.column_metadata[7].set_name("string_delta_length_byte_array");
+  table_metadata.column_metadata[7].set_encoding(
+    cudf::io::parquet_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  table_metadata.column_metadata[8].set_name("string_delta_binary_packed");
+  table_metadata.column_metadata[8].set_encoding(cudf::io::parquet_encoding::DELTA_BINARY_PACKED);
+  table_metadata.column_metadata[9].set_name("string_bogus");
+  table_metadata.column_metadata[9].set_encoding("no such encoding");
+
+  for (auto& col_meta : table_metadata.column_metadata) {
+    col_meta.set_nullability(false);
+  }
+
+  auto const filepath = temp_env->get_temp_filepath("UserRequestedEncodings.parquet");
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+      .metadata(table_metadata)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .compression(cudf::io::compression_type::ZSTD);
+  cudf::io::write_parquet(opts);
+
+  // check page headers to make sure each column is encoded with the appropriate encoder
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // no nulls and no repetition, so the only encoding used should be for the data.
+  // since we're writing v1, both dict and data pages should use PLAIN_DICTIONARY.
+  // requested plain
+  EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN);
+  // requested dictionary
+  EXPECT_EQ(fmd.row_groups[0].columns[1].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  // requested delta_binary_packed
+  EXPECT_EQ(fmd.row_groups[0].columns[2].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::DELTA_BINARY_PACKED);
+  // requested delta_length_byte_array, but should fall back to dictionary
+  EXPECT_EQ(fmd.row_groups[0].columns[3].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  // requested nonsense, but should fall back to dictionary
+  EXPECT_EQ(fmd.row_groups[0].columns[4].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  // requested plain
+  EXPECT_EQ(fmd.row_groups[0].columns[5].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN);
+  // requested dictionary
+  EXPECT_EQ(fmd.row_groups[0].columns[6].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  // requested delta_length_byte_array
+  EXPECT_EQ(fmd.row_groups[0].columns[7].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::DELTA_LENGTH_BYTE_ARRAY);
+  // requested delta_binary_packed, but should fall back to dictionary
+  EXPECT_EQ(fmd.row_groups[0].columns[8].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  // requested nonsense, but should fall back to dictionary
+  EXPECT_EQ(fmd.row_groups[0].columns[9].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+}
+
 /////////////////////////////////////////////////////////////
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>

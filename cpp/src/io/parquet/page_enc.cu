@@ -577,8 +577,10 @@ CUDF_KERNEL void __launch_bounds__(128)
   auto const physical_type = col_g.physical_type;
   auto const type_id       = col_g.leaf_column->type().id();
   auto const is_use_delta =
-    write_v2_headers && !ck_g.use_dictionary &&
-    (physical_type == INT32 || physical_type == INT64 || physical_type == BYTE_ARRAY);
+    col_g.requested_encoding == Encoding::DELTA_BINARY_PACKED ||
+    col_g.requested_encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY ||
+    (write_v2_headers && !ck_g.use_dictionary &&
+     (physical_type == INT32 || physical_type == INT64 || physical_type == BYTE_ARRAY));
 
   if (t < 32) {
     uint32_t fragments_in_chunk  = 0;
@@ -789,7 +791,20 @@ CUDF_KERNEL void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) {
             // set encoding
-            if (is_use_delta) {
+            if (col_g.requested_encoding != Encoding::UNDEFINED) {
+              switch (col_g.requested_encoding) {
+                case Encoding::PLAIN: page_g.kernel_mask = encode_kernel_mask::PLAIN; break;
+                case Encoding::RLE_DICTIONARY:
+                  page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
+                  break;
+                case Encoding::DELTA_BINARY_PACKED:
+                  page_g.kernel_mask = encode_kernel_mask::DELTA_BINARY;
+                  break;
+                case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+                  page_g.kernel_mask = encode_kernel_mask::DELTA_LENGTH_BA;
+                  break;
+              }
+            } else if (is_use_delta) {
               // TODO(ets): at some point make a more intelligent decision on this. DELTA_LENGTH_BA
               // should always be preferred over PLAIN, but DELTA_BINARY is a different matter.
               // If the delta encoding size is going to be close to 32 bits anyway, then plain

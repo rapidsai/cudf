@@ -259,6 +259,24 @@ bool is_col_fixed_width(column_view const& column)
   return is_fixed_width(column.type());
 }
 
+// Convert encoding passed in by user to the correct enum value. Returns `std::nullopt`
+// if passed an unsupported (or mistyped) encoding.
+std::optional<Encoding> string_to_encoding(std::string const& encoding)
+{
+  if (encoding == parquet_encoding::PLAIN) {
+    return Encoding::PLAIN;
+  } else if (encoding == parquet_encoding::DICTIONARY) {
+    return Encoding::RLE_DICTIONARY;
+  } else if (encoding == parquet_encoding::DELTA_BINARY_PACKED) {
+    return Encoding::DELTA_BINARY_PACKED;
+  } else if (encoding == parquet_encoding::DELTA_LENGTH_BYTE_ARRAY) {
+    return Encoding::DELTA_LENGTH_BYTE_ARRAY;
+  } else if (encoding == parquet_encoding::DELTA_BYTE_ARRAY) {
+    return Encoding::DELTA_BYTE_ARRAY;
+  }
+  return std::nullopt;
+}
+
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
  *
@@ -268,11 +286,13 @@ bool is_col_fixed_width(column_view const& column)
  * 2. stats_dtype: datatype for statistics calculation required for the data stream of a leaf node.
  * 3. ts_scale: scale to multiply or divide timestamp by in order to convert timestamp to parquet
  *    supported types
+ * 4. requested_encoding: A user provided encoding to use for the column.
  */
 struct schema_tree_node : public SchemaElement {
   cudf::detail::LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
+  std::optional<Encoding> requested_encoding;
 
   // TODO(fut): Think about making schema a class that holds a vector of schema_tree_nodes. The
   // function construct_schema_tree could be its constructor. It can have method to get the per
@@ -589,7 +609,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool col_nullable = is_col_nullable(col, col_meta, write_mode);
+      bool const col_nullable = is_col_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -603,6 +623,40 @@ std::vector<schema_tree_node> construct_schema_tree(
         auto const child_col_type =
           col->children[lists_column_view::child_column_index]->type().id();
         return child_col_type == type_id::UINT8;
+      };
+
+      // only call this after col_schema.type has been set
+      auto set_encoding = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
+        if (schema[parent_idx].name != "list" and col_meta.is_encoding_set()) {
+          auto enc = string_to_encoding(col_meta.get_encoding());
+
+          // do some validation on the requested encoding
+          // TODO(ets): should we print a warning or error out if the requested encoding is
+          // invalid? for now just silently fall back to the default encoder.
+          if (!enc.has_value() || !is_supported_encoding(enc.value())) { return; }
+
+          switch (enc.value()) {
+            case Encoding::DELTA_BINARY_PACKED:
+              if (s.type != Type::INT32 && s.type != Type::INT64) { return; }
+              break;
+
+            case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+              if (s.type != Type::BYTE_ARRAY) { return; }
+              break;
+
+            // TODO(ets): this will be caught by the check for supported encodings above...leaving
+            // this in for when we add this encoding.
+            case Encoding::DELTA_BYTE_ARRAY:
+              if (s.type != Type::BYTE_ARRAY && s.type != Type::FIXED_LEN_BYTE_ARRAY) { return; }
+              break;
+
+            default: break;
+          }
+
+          // requested encoding seems to be ok, set it
+          s.requested_encoding = enc;
+        }
       };
 
       // There is a special case for a list<int8> column with one byte column child. This column can
@@ -627,6 +681,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        set_encoding(col_schema, col_meta);
         col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
         schema.push_back(col_schema);
       } else if (col->type().id() == type_id::STRUCT) {
@@ -762,6 +817,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        set_encoding(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
@@ -951,6 +1007,9 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
   desc.nullability   = _d_nullability.data();
   desc.max_def_level = _max_def_level;
   desc.max_rep_level = _max_rep_level;
+  // FIXME(ets): need to add some validation that the requested encoding matches the
+  // column type. can't ask for delta byte array for an int column, for instance.
+  desc.requested_encoding = schema_node.requested_encoding.value_or(Encoding::UNDEFINED);
   return desc;
 }
 
@@ -1170,9 +1229,11 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
-    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN ||
-        (col_desc[chunk.col_desc_id].output_as_byte_array &&
-         col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
+    auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
+    if (chunk_col_desc.physical_type == Type::BOOLEAN ||
+        (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY) ||
+        (chunk_col_desc.requested_encoding != Encoding::UNDEFINED &&
+         chunk_col_desc.requested_encoding != Encoding::RLE_DICTIONARY)) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;

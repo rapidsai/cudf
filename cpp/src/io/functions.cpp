@@ -39,6 +39,13 @@
 #include <algorithm>
 
 namespace cudf::io {
+
+std::string const parquet_encoding::PLAIN                   = "PLAIN";
+std::string const parquet_encoding::DICTIONARY              = "DICTIONARY";
+std::string const parquet_encoding::DELTA_BINARY_PACKED     = "DELTA_BINARY_PACKED";
+std::string const parquet_encoding::DELTA_LENGTH_BYTE_ARRAY = "DELTA_LENGTH_BYTE_ARRAY";
+std::string const parquet_encoding::DELTA_BYTE_ARRAY        = "DELTA_BYTE_ARRAY";
+
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
