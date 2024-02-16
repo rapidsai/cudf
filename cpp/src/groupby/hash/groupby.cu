@@ -69,11 +69,8 @@ namespace detail {
 namespace hash {
 namespace {
 
-int constexpr cg_size                  = 1;   ///< Number of threads used to handle each input key
-cudf::size_type constexpr key_sentinel = -1;  ///< Sentinel value indicating an empty slot
-
 using probing_scheme_type = cuco::linear_probing<
-  cg_size,
+  1,  ///< Number of threads used to handle each input key
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
                                                    cudf::nullate::DYNAMIC>>;
 
@@ -580,7 +577,7 @@ std::unique_ptr<table> groupby(table_view const& keys,
   auto const comparator_helper = [&](auto const d_key_equal) {
     auto const set = cuco::static_set{num_keys,
                                       0.5,  // desired load factor
-                                      cuco::empty_key{key_sentinel},
+                                      cuco::empty_key{cudf::detail::CUCO_CUDF_SIZE_TYPE_SENTINEL},
                                       d_key_equal,
                                       probing_scheme_type{d_row_hash},
                                       cuco::thread_scope_device,
