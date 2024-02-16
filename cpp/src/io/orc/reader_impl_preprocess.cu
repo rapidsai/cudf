@@ -102,7 +102,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
   for (auto const& stream : stripefooter->streams) {
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
       // Ignore reading this stream from source.
-      cudf::logger().warn("The input ORC source is invalid.");
+      cudf::logger().warn("Unexpected stream in the input ORC source. The stream will be ignored.");
       src_offset += stream.length;
       continue;
     }
