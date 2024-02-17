@@ -645,11 +645,8 @@ std::vector<schema_tree_node> construct_schema_tree(
               if (s.type != Type::BYTE_ARRAY) { return; }
               break;
 
-            // TODO(ets): this will be caught by the check for supported encodings above...leaving
-            // this in for when we add this encoding.
-            case Encoding::DELTA_BYTE_ARRAY:
-              if (s.type != Type::BYTE_ARRAY && s.type != Type::FIXED_LEN_BYTE_ARRAY) { return; }
-              break;
+            // this is not caught by the check for supported encodings above
+            case Encoding::DELTA_BYTE_ARRAY: return;
 
             default: break;
           }
