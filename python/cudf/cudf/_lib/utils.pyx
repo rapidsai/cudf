@@ -7,7 +7,6 @@ import cudf
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -53,28 +52,6 @@ cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
         if not ignore_index and tbl._index is not None
         else tbl._data.columns
     )
-cdef vector[column_view] make_column_views(object columns):
-    cdef vector[column_view] views
-    views.reserve(len(columns))
-    for col in columns:
-        views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[string] get_column_names(object tbl, object index):
-    cdef vector[string] column_names
-    if index is not False:
-        if isinstance(tbl._index, cudf.core.multiindex.MultiIndex):
-            for idx_name in tbl._index.names:
-                column_names.push_back(str.encode(idx_name))
-        else:
-            if tbl._index.name is not None:
-                column_names.push_back(str.encode(tbl._index.name))
-
-    for col_name in tbl._column_names:
-        column_names.push_back(str.encode(col_name))
-
-    return column_names
 
 
 cpdef generate_pandas_metadata(table, index):
@@ -261,14 +238,12 @@ cdef columns_from_pylibcudf_table(tbl):
     return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
 
 
-cdef data_from_unique_ptr(
-    unique_ptr[table] c_tbl, column_names, index_names=None
-):
-    """Convert a libcudf table into a dict with an index.
+cdef _data_from_columns(columns, column_names, index_names=None):
+    """Convert a list of columns into a dict with an index.
 
     This method is intended to provide the bridge between the columns returned
-    from calls to libcudf APIs and the cuDF Python Frame objects, which require
-    named columns and a separate index.
+    from calls to libcudf or pylibcudf APIs and the cuDF Python Frame objects, which
+    require named columns and a separate index.
 
     Since cuDF Python has an independent representation of a table as a
     collection of columns, this function simply returns a dict of columns
@@ -279,8 +254,8 @@ cdef data_from_unique_ptr(
 
     Parameters
     ----------
-    c_tbl : unique_ptr[cudf::table]
-        The libcudf table whose columns will be extracted
+    columns : list[Column]
+        The columns to be extracted
     column_names : iterable
         The keys associated with the columns in the output data.
     index_names : iterable, optional
@@ -288,16 +263,7 @@ cdef data_from_unique_ptr(
         corresponding first set of columns into a (Multi)Index. If this
         argument is omitted, all columns are assumed to be part of the output
         table and no index is constructed.
-
-
-    Returns
-    -------
-    tuple(Dict[str, Column], Optional[Index])
-        A dict of the columns in the output table.
     """
-
-    columns = columns_from_unique_ptr(move(c_tbl))
-
     # First construct the index, if any
     index = (
         # TODO: For performance, the _from_data methods of Frame types assume
@@ -324,6 +290,24 @@ cdef data_from_unique_ptr(
         for i, name in enumerate(column_names)
     }
     return data, index
+
+
+cdef data_from_unique_ptr(
+    unique_ptr[table] c_tbl, column_names, index_names=None
+):
+    return _data_from_columns(
+        columns_from_unique_ptr(move(c_tbl)),
+        column_names,
+        index_names
+    )
+
+
+cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
+    return _data_from_columns(
+        columns_from_pylibcudf_table(tbl),
+        column_names,
+        index_names
+    )
 
 cdef columns_from_table_view(
     table_view tv,
