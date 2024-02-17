@@ -541,7 +541,7 @@ class path_state : private parser {
       case '.': {
         path_operator op;
         string_view term{".[", 2};
-        if (parse_path_name(op.name, term)) {
+        if (parse_path_name(op.name, term, false)) {
           // this is another potential use case for __SPARK_BEHAVIORS / configurability
           // Spark currently only handles the wildcard operator inside [*], it does
           // not handle .*
@@ -564,7 +564,7 @@ class path_state : private parser {
         path_operator op;
         string_view term{"]", 1};
         bool const is_string = *pos == '\'';
-        if (parse_path_name(op.name, term)) {
+        if (parse_path_name(op.name, term, true)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
             op.type          = path_operator_type::CHILD_WILDCARD;
@@ -600,7 +600,8 @@ class path_state : private parser {
  private:
   cudf::io::parse_options_view json_opts{',', '\n', '\"', '.'};
 
-  bool parse_path_name(string_view& name, string_view const& terminators)
+  // inside_box -> true while parsing inside [ ] example: ['book']
+  bool parse_path_name(string_view& name, string_view const& terminators, bool inside_box)
   {
     switch (*pos) {
       case '*':
@@ -609,8 +610,11 @@ class path_state : private parser {
         break;
 
       case '\'':
-        if (parse_string(name, false, '\'') != parse_result::SUCCESS) { return false; }
-        break;
+        if (inside_box) {
+          if (parse_string(name, false, '\'') != parse_result::SUCCESS) { return false; }
+          break;
+        }
+        // if not inside the box -> go to default
 
       default: {
         size_t const chars_left = input_len - (pos - input);
