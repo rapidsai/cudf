@@ -81,7 +81,7 @@ struct hasher_adapter {
  *
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
-template <has_nested HasNested = has_nested::NO>
+template <cudf::has_nested HasNested>
 struct distinct_hash_join {
  private:
   /// Row equality type for nested columns
@@ -93,7 +93,7 @@ struct distinct_hash_join {
 
   /// Device row equal type
   using d_equal_type =
-    std::conditional_t<HasNested == has_nested::YES, nested_row_equal, flat_row_equal>;
+    std::conditional_t<HasNested == cudf::has_nested::YES, nested_row_equal, flat_row_equal>;
   using hasher              = hasher_adapter<thrust::identity<hash_value_type>>;
   using probing_scheme_type = cuco::linear_probing<1, hasher>;
   using cuco_storage_type   = cuco::storage<1>;

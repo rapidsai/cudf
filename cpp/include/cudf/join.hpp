@@ -456,7 +456,7 @@ class hash_join {
  * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
  */
 // TODO: `HasNested` to be removed via dispatching
-template <has_nested HasNested>
+template <cudf::has_nested HasNested>
 class distinct_hash_join {
  public:
   distinct_hash_join() = delete;
