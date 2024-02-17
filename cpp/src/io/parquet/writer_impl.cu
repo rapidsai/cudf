@@ -1004,11 +1004,9 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
-  desc.nullability   = _d_nullability.data();
-  desc.max_def_level = _max_def_level;
-  desc.max_rep_level = _max_rep_level;
-  // FIXME(ets): need to add some validation that the requested encoding matches the
-  // column type. can't ask for delta byte array for an int column, for instance.
+  desc.nullability        = _d_nullability.data();
+  desc.max_def_level      = _max_def_level;
+  desc.max_rep_level      = _max_rep_level;
   desc.requested_encoding = schema_node.requested_encoding.value_or(Encoding::UNDEFINED);
   return desc;
 }
