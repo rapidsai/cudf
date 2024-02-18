@@ -1018,4 +1018,31 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
   do_test("$.tup[*].a.x", "[\"5\"]", "[null,null,null,\"5\"]");
 }
 
+TEST_F(JsonPathTests, QueriesContainingQuotes)
+{
+  std::string input_string = R"({"AB": 1, "A.B": 2, "'A": {"B'": 3}, "A": {"B": 4} })";
+
+  auto do_test = [&input_string](auto const& json_path_string,
+                                 auto const& expected_string,
+                                 bool const& expect_null = false) {
+    cudf::test::strings_column_wrapper input{input_string};
+    std::string json_path(json_path_string);
+    cudf::get_json_object_options options;
+    options.set_allow_single_quotes(true);
+    auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path, options);
+    cudf::test::strings_column_wrapper expected({expected_string}, {!expect_null});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  };
+
+  // Set 1
+  do_test(R"($.AB)", "1");
+  do_test(R"($['A.B'])", "2");
+  do_test(R"($.'A.B')", "3");
+  do_test(R"($.A.B)", "4");
+
+  // Set 2
+  do_test(R"($.'A)", R"({"B'": 3})");
+}
+
 CUDF_TEST_PROGRAM_MAIN()

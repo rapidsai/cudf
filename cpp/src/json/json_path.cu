@@ -600,8 +600,8 @@ class path_state : private parser {
  private:
   cudf::io::parse_options_view json_opts{',', '\n', '\"', '.'};
 
-  // inside_box -> true while parsing inside [ ] example: ['book']
-  bool parse_path_name(string_view& name, string_view const& terminators, bool inside_box)
+  // inside_brackets is set to true while parsing values enclosed within [ ] example: ['book']
+  bool parse_path_name(string_view& name, string_view const& terminators, bool inside_brackets)
   {
     switch (*pos) {
       case '*':
@@ -610,11 +610,11 @@ class path_state : private parser {
         break;
 
       case '\'':
-        if (inside_box) {
+        if (inside_brackets) {
           if (parse_string(name, false, '\'') != parse_result::SUCCESS) { return false; }
           break;
         }
-        // if not inside the box -> go to default
+        // if not inside the [ ] -> go to default
 
       default: {
         size_t const chars_left = input_len - (pos - input);
