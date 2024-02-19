@@ -1726,6 +1726,24 @@ def test_datetime_dateoffset_binaryop(
             reason="https://github.com/pandas-dev/pandas/issues/57448",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency in ("microseconds", "nanoseconds")
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype == "datetime64[us]"
+            and frequency == "nanoseconds"
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
     date_col = [
         "2000-01-01 00:00:00.012345678",
         "2000-01-31 00:00:00.012345678",
@@ -1791,16 +1809,6 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1820,8 +1828,31 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
 )
 def test_datetime_dateoffset_binaryop_reflected(
-    date_col, n_periods, frequency, dtype
+    request, n_periods, frequency, dtype
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency in ("microseconds", "nanoseconds")
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype == "datetime64[us]"
+            and frequency == "nanoseconds"
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    date_col = [
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 
