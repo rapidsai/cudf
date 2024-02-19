@@ -574,13 +574,14 @@ CUDF_KERNEL void __launch_bounds__(128)
 
   // if writing delta encoded values, we're going to need to know the data length to get a guess
   // at the worst case number of bytes needed to encode.
-  auto const physical_type = col_g.physical_type;
-  auto const type_id       = col_g.leaf_column->type().id();
-  auto const is_use_delta =
-    col_g.requested_encoding == Encoding::DELTA_BINARY_PACKED ||
-    col_g.requested_encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY ||
-    (write_v2_headers && !ck_g.use_dictionary &&
-     (physical_type == INT32 || physical_type == INT64 || physical_type == BYTE_ARRAY));
+  auto const physical_type      = col_g.physical_type;
+  auto const type_id            = col_g.leaf_column->type().id();
+  auto const is_requested_delta = col_g.requested_encoding == Encoding::DELTA_BINARY_PACKED ||
+                                  col_g.requested_encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY;
+  auto const is_fallback_to_delta =
+    !ck_g.use_dictionary && write_v2_headers &&
+    (physical_type == INT32 || physical_type == INT64 || physical_type == BYTE_ARRAY);
+  auto const is_use_delta = is_requested_delta || is_fallback_to_delta;
 
   if (t < 32) {
     uint32_t fragments_in_chunk  = 0;
