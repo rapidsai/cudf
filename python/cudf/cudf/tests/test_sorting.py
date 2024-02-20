@@ -51,7 +51,7 @@ def test_dataframe_sort_values(nelem, dtype):
 def test_dataframe_sort_values_ignore_index(request, index, ignore_index):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_200 and isinstance(index, list) and not ignore_index,
+            PANDAS_GE_220 and isinstance(index, list) and not ignore_index,
             reason="https://github.com/pandas-dev/pandas/issues/57531",
         )
     )
