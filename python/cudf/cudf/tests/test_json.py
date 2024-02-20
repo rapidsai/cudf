@@ -13,7 +13,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -1177,15 +1177,26 @@ class TestNestedJsonReaderCommon:
         df = cudf.concat(chunks, ignore_index=True)
         assert expected.to_arrow().equals(df.to_arrow())
 
-    def test_order_nested_json_reader(self, request, tag, data):
+    def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
+        if PANDAS_GE_220:
+            # TODO: Remove after https://github.com/pandas-dev/pandas/issues/57429
+            # is fixed
+            expected = expected.reset_index(drop=True)
         target = cudf.read_json(StringIO(data), lines=True)
-        request.applymarker(
-            pytest.mark.xfail(
-                tag == "dtype_mismatch", reason="int vs float mismatch"
-            )
-        )
-        assert_eq(expected, target)
+        # Using pyarrow instead of assert_eq because pandas
+        # doesn't handle nested values comparisons correctly
+        if tag == "dtype_mismatch":
+            with pytest.raises(AssertionError):
+                # pandas parses integer values in float representation
+                # as integer
+                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        elif tag == "missing":
+            with pytest.raises(AssertionError):
+                # pandas inferences integer with nulls as float64
+                assert pa.Table.from_pandas(expected).equals(target.to_arrow())
+        else:
+            assert pa.Table.from_pandas(expected).equals(target.to_arrow())
 
 
 def test_json_round_trip_gzip():
