@@ -489,25 +489,12 @@ void reader::impl::read_data()
   for (auto& task : read_tasks) {
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
-}
 
-// TODO: merge with read_data()
-void reader::impl::subpass_preprocess()
-{
-  if (_file_itm_data.has_no_data()) { return; }
-
-  //  auto const rows_to_read      = _file_itm_data.rows_to_read;
-
-  auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
 
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   stream_id_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
-
-  // TODO: fix this, loop only current chunk
-  auto const stripe_chunk =
-    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
 
   cudf::detail::hostdevice_vector<cumulative_size> stripe_decomp_sizes(stripe_chunk.count, _stream);
   std::fill(stripe_decomp_sizes.begin(), stripe_decomp_sizes.end(), cumulative_size{1, 0});
@@ -586,7 +573,7 @@ void reader::impl::subpass_preprocess()
 #endif
       }
 
-      // Must clear so we will not overwrite the old compression info stream_id.
+      // Must clear map since the next level will have similar keys.
       stream_compinfo_map.clear();
 
     } else {
