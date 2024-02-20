@@ -1925,12 +1925,8 @@ def as_column(
             # instead of `string` without data-introspection.
             # Temporary workaround until cudf has native
             # support for `LARGE_STRING` i.e., 64 bit offsets
-            return as_column(
-                pd.Series(arbitrary),
-                nan_as_null=nan_as_null,
-                dtype=dtype,
-                length=length,
-            )
+            arbitrary = arbitrary.cast(pa.string())
+
         if pa.types.is_float16(arbitrary.type):
             raise NotImplementedError(
                 "Type casting from `float16` to `float32` is not "
