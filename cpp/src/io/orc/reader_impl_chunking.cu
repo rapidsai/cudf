@@ -337,6 +337,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   stripe_data_read_chunks.resize(num_stripes);
   lvl_stripe_stream_chunks.resize(_selected_columns.num_levels());
 
+  // TODO: move this
+  auto& lvl_chunks = _file_itm_data.lvl_data_chunks;
+  lvl_chunks.resize(_selected_columns.num_levels());
+  _out_buffers.resize(_selected_columns.num_levels());
+
   // TODO: Check if these data depends on pass and subpass, instead of global pass.
   // Prepare data.
   // Iterates through levels of nested columns, child column will be one level down

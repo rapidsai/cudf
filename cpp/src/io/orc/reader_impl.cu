@@ -695,6 +695,13 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     read_data();
   }
 
+  decompress_and_decode();
+}
+
+// TODO: this should be called per chunk of stripes.
+void reader::impl::decompress_and_decode()
+{
+  if (_file_itm_data.has_no_data()) { return; }
   auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   auto const rows_to_read      = _file_itm_data.rows_to_read;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
@@ -988,45 +995,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   }  // end loop level
 }
 
-reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                   orc_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : reader::impl::impl(0UL, 0UL, std::move(sources), options, stream, mr)
-{
-}
-
-reader::impl::impl(std::size_t output_size_limit,
-                   std::size_t data_read_limit,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   orc_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : _stream(stream),
-    _mr(mr),
-    _config{options.get_timestamp_type(),
-            options.is_enabled_use_index(),
-            options.is_enabled_use_np_dtypes(),
-            options.get_decimal128_columns()},
-    _col_meta{std::make_unique<reader_column_meta>()},
-    _sources(std::move(sources)),
-    _metadata{_sources, stream},
-    _selected_columns{_metadata.select_columns(options.get_columns())},
-    _chunk_read_data{output_size_limit, data_read_limit}
-{
-}
-
-table_with_metadata reader::impl::read(uint64_t skip_rows,
-                                       std::optional<size_type> const& num_rows_opt,
-                                       std::vector<std::vector<size_type>> const& stripes)
-{
-  prepare_data(skip_rows, num_rows_opt, stripes);
-  return make_output_chunk();
-}
-
-// TODO:  move code here
-void reader::impl::decompress_and_decode() {}
-
 table_with_metadata reader::impl::make_output_chunk()
 {
   // There is no columns in the table.
@@ -1116,6 +1084,42 @@ table_metadata reader::impl::make_output_metadata()
   _out_metadata = std::make_unique<table_metadata>(out_metadata);
 
   return out_metadata;
+}
+
+reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                   orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : reader::impl::impl(0UL, 0UL, std::move(sources), options, stream, mr)
+{
+}
+
+reader::impl::impl(std::size_t output_size_limit,
+                   std::size_t data_read_limit,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
+                   orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
+  : _stream(stream),
+    _mr(mr),
+    _config{options.get_timestamp_type(),
+            options.is_enabled_use_index(),
+            options.is_enabled_use_np_dtypes(),
+            options.get_decimal128_columns()},
+    _col_meta{std::make_unique<reader_column_meta>()},
+    _sources(std::move(sources)),
+    _metadata{_sources, stream},
+    _selected_columns{_metadata.select_columns(options.get_columns())},
+    _chunk_read_data{output_size_limit, data_read_limit}
+{
+}
+
+table_with_metadata reader::impl::read(uint64_t skip_rows,
+                                       std::optional<size_type> const& num_rows_opt,
+                                       std::vector<std::vector<size_type>> const& stripes)
+{
+  prepare_data(skip_rows, num_rows_opt, stripes);
+  return make_output_chunk();
 }
 
 // Forward to implementation
