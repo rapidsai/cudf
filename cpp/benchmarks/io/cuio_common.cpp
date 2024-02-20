@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,7 +41,8 @@ std::string random_file_in_dir(std::string const& dir_path)
 cuio_source_sink_pair::cuio_source_sink_pair(io_type type)
   : type{type},
     d_buffer{0, cudf::get_default_stream()},
-    file_name{random_file_in_dir(tmpdir.path())}
+    file_name{random_file_in_dir(tmpdir.path())},
+    void_sink{cudf::io::data_sink::create()}
 {
 }
 
@@ -67,7 +68,7 @@ cudf::io::source_info cuio_source_sink_pair::make_source_info()
 cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
 {
   switch (type) {
-    case io_type::VOID: return cudf::io::sink_info(&void_sink);
+    case io_type::VOID: return cudf::io::sink_info(void_sink.get());
     case io_type::FILEPATH: return cudf::io::sink_info(file_name);
     case io_type::HOST_BUFFER: [[fallthrough]];
     case io_type::DEVICE_BUFFER: return cudf::io::sink_info(&h_buffer);
@@ -78,7 +79,7 @@ cudf::io::sink_info cuio_source_sink_pair::make_sink_info()
 size_t cuio_source_sink_pair::size()
 {
   switch (type) {
-    case io_type::VOID: return void_sink.bytes_written();
+    case io_type::VOID: return void_sink->bytes_written();
     case io_type::FILEPATH:
       return static_cast<size_t>(
         std::ifstream(file_name, std::ifstream::ate | std::ifstream::binary).tellg());

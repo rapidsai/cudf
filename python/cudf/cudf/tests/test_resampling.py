@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.testing._utils import assert_eq
 
 
@@ -31,6 +31,7 @@ def test_series_downsample_simple(ts_resolution):
     assert_resample_results_equal(
         psr.resample("3min").sum(),
         gsr.resample("3min").sum(),
+        check_index=not PANDAS_GE_220,
     )
 
 
@@ -43,6 +44,7 @@ def test_series_upsample_simple():
     assert_resample_results_equal(
         psr.resample("3min").sum(),
         gsr.resample("3min").sum(),
+        check_index=not PANDAS_GE_220,
     )
 
 
