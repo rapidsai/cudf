@@ -2497,19 +2497,12 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "index",
     [
-        [],
-        pd.Series(
-            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
-        ),
-        pd.Series([0, 15, 10], index=[0, None, 9]),
-        pd.Series(
-            range(25),
-            index=pd.date_range(
-                start="2019-01-01", end="2019-01-02", freq="h"
-            ),
-        ),
+        pd.Index([]),
+        pd.Index(["a", "b", "c", "d", "e"]),
+        pd.Index([0, None, 9]),
+        pd.date_range("2019-01-01", periods=3),
     ],
 )
 @pytest.mark.parametrize(
@@ -2521,12 +2514,19 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
         ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02 10:00:00"],
     ],
 )
-def test_isin_index(data, values):
-    psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+def test_isin_index(index, values):
+    pidx = index
+    gidx = cudf.Index.from_pandas(pidx)
 
-    got = gsr.index.isin(values)
-    expected = psr.index.isin(values)
+    is_dt_str = (
+        next(iter(values), None) == "2019-01-01 04:00:00"
+        and len(pidx)
+        and pidx.dtype.kind == "M"
+    )
+    with expect_warning_if(is_dt_str):
+        got = gidx.isin(values)
+    with expect_warning_if(PANDAS_GE_220 and is_dt_str):
+        expected = pidx.isin(values)
 
     assert_eq(got, expected)
 
