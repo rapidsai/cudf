@@ -52,95 +52,6 @@ namespace cudf::io::orc::detail {
 
 namespace {
 
-// TODO: merge this with gather stream info
-/**
- * @brief Function that populates column descriptors stream/chunk
- */
-std::size_t gather_stream_info_and_update_chunks(
-  std::size_t stripe_index,
-  std::size_t level,
-  orc::StripeInformation const* stripeinfo,
-  orc::StripeFooter const* stripefooter,
-  host_span<int const> orc2gdf,
-  host_span<orc::SchemaType const> types,
-  bool use_index,
-  bool apply_struct_map,
-  std::size_t* num_dictionary_entries,
-  std::size_t* stream_idx,
-  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
-{
-  uint64_t src_offset = 0;
-  uint64_t dst_offset = 0;
-
-  auto const get_stream_index_type = [](orc::StreamKind kind) {
-    switch (kind) {
-      case orc::DATA: return gpu::CI_DATA;
-      case orc::LENGTH:
-      case orc::SECONDARY: return gpu::CI_DATA2;
-      case orc::DICTIONARY_DATA: return gpu::CI_DICTIONARY;
-      case orc::PRESENT: return gpu::CI_PRESENT;
-      case orc::ROW_INDEX: return gpu::CI_INDEX;
-      default:
-        // Skip this stream as it's not strictly required
-        return gpu::CI_NUM_STREAMS;
-    }
-  };
-
-  for (auto const& stream : stripefooter->streams) {
-    if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
-      dst_offset += stream.length;
-      continue;
-    }
-
-    auto const column_id = *stream.column_id;
-    auto col             = orc2gdf[column_id];
-
-    if (col == -1 and apply_struct_map) {
-      // A struct-type column has no data itself, but rather child columns
-      // for each of its fields. There is only a PRESENT stream, which
-      // needs to be included for the reader.
-      auto const schema_type = types[column_id];
-      if (not schema_type.subtypes.empty()) {
-        if (schema_type.kind == orc::STRUCT && stream.kind == orc::PRESENT) {
-          for (auto const& idx : schema_type.subtypes) {
-            auto child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
-            if (child_idx >= 0) {
-              col                             = child_idx;
-              auto& chunk                     = chunks[stripe_index][col];
-              chunk.strm_id[gpu::CI_PRESENT]  = *stream_idx;
-              chunk.strm_len[gpu::CI_PRESENT] = stream.length;
-            }
-          }
-        }
-      }
-    }
-    if (col != -1) {
-      if (src_offset >= stripeinfo->indexLength || use_index) {
-        auto& chunk           = chunks[stripe_index][col];
-        auto const index_type = get_stream_index_type(stream.kind);
-        if (index_type < gpu::CI_NUM_STREAMS) {
-          chunk.strm_id[index_type]  = *stream_idx;
-          chunk.strm_len[index_type] = stream.length;
-          // NOTE: skip_count field is temporarily used to track the presence of index streams
-          chunk.skip_count |= 1 << index_type;
-
-          if (index_type == gpu::CI_DICTIONARY) {
-            chunk.dictionary_start = *num_dictionary_entries;
-            chunk.dict_len         = stripefooter->columns[column_id].dictionarySize;
-            *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
-          }
-        }
-      }
-
-      (*stream_idx)++;
-      dst_offset += stream.length;
-    }
-    src_offset += stream.length;
-  }
-
-  return dst_offset;
-}
-
 // TODO: update
 /**
  * @brief Decompresses the stripe data, at stream granularity.
@@ -366,6 +277,8 @@ rmm::device_buffer decompress_stripe_data(
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
+
+   // TODO: proclam return type
 
     // Check if any block has been failed to decompress.
     // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
@@ -641,6 +554,8 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   stream.synchronize();
 }
 
+
+// TODO: this is called for each chunk of stripes.
 /**
  * @brief Aggregate child metadata from parent column chunks.
  */
@@ -817,6 +732,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& columns_level = _selected_columns.levels[level];
+
+    // TODO: do it in global step
     // Association between each ORC column and its cudf::column
     std::vector<orc_column_meta> nested_cols;
 
@@ -891,7 +808,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
-      auto const total_data_size = gather_stream_info_and_update_chunks(stripe_idx,
+      auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx,
                                                                         level,
                                                                         stripe_info,
                                                                         stripe_footer,
@@ -901,7 +818,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                                                         level == 0,
                                                                         &num_dict_entries,
                                                                         &stream_idx,
-                                                                        chunks);
+                                                                        std::nullopt, // stream_info
+                                                                        &chunks);
 
       auto const is_stripe_data_empty = total_data_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
@@ -965,10 +883,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
       stripe_idx++;
     }
-
-    // for (auto& task : read_tasks) {
-    //   CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
-    // }
 
     if (stripe_data.empty()) { continue; }
 
