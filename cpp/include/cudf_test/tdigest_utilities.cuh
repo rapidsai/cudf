@@ -33,14 +33,14 @@
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 // for use with groupby and reduction aggregation tests.
 
 namespace cudf {
 namespace test {
 
-using expected_value = thrust::tuple<size_type, double, double>;
+using expected_value = cuda::std::tuple<size_type, double, double>;
 
 /**
  * @brief Device functor to compute min of a sequence of values serially.

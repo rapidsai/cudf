@@ -33,7 +33,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scatter.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 #include <thrust/uninitialized_fill.h>
 
 #include <cstddef>
@@ -194,9 +194,9 @@ probe_join_hash_table(
   cudf::size_type const probe_table_num_rows = probe_table.num_rows();
 
   auto const out1_zip_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
+    cuda::std::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
   auto const out2_zip_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
+    cuda::std::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};
@@ -296,9 +296,9 @@ std::size_t get_full_join_size(
   cudf::size_type const probe_table_num_rows = probe_table.num_rows();
 
   auto const out1_zip_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
+    cuda::std::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
   auto const out2_zip_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
+    cuda::std::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
   auto const row_comparator =
     cudf::experimental::row::equality::two_table_comparator{preprocessed_probe, preprocessed_build};

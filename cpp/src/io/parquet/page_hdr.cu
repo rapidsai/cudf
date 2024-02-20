@@ -20,7 +20,7 @@
 
 #include <cudf/detail/utilities/cuda.cuh>
 
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -241,10 +241,10 @@ struct FunctionSwitchImpl {
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
                                     int const& field,
-                                    thrust::tuple<Operator...>& ops)
+                                    cuda::std::tuple<Operator...>& ops)
   {
-    if (field == thrust::get<index>(ops).field) {
-      return thrust::get<index>(ops)(bs, field_type);
+    if (field == cuda::std::get<index>(ops).field) {
+      return cuda::std::get<index>(ops)(bs, field_type);
     } else {
       return FunctionSwitchImpl<index - 1>::run(bs, field_type, field, ops);
     }
@@ -257,10 +257,10 @@ struct FunctionSwitchImpl<0> {
   static inline __device__ bool run(byte_stream_s* bs,
                                     int field_type,
                                     int const& field,
-                                    thrust::tuple<Operator...>& ops)
+                                    cuda::std::tuple<Operator...>& ops)
   {
-    if (field == thrust::get<0>(ops).field) {
-      return thrust::get<0>(ops)(bs, field_type);
+    if (field == cuda::std::get<0>(ops).field) {
+      return cuda::std::get<0>(ops)(bs, field_type);
     } else {
       skip_struct_field(bs, field_type);
       return false;
@@ -279,9 +279,9 @@ struct FunctionSwitchImpl<0> {
  * byte stream. Otherwise true is returned.
  */
 template <typename... Operator>
-inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_s* bs)
+inline __device__ bool parse_header(cuda::std::tuple<Operator...>& op, byte_stream_s* bs)
 {
-  constexpr int index = thrust::tuple_size<thrust::tuple<Operator...>>::value - 1;
+  constexpr int index = cuda::std::tuple_size<cuda::std::tuple<Operator...>>::value - 1;
   int field           = 0;
   while (true) {
     auto const current_byte = getb(bs);
@@ -298,7 +298,7 @@ inline __device__ bool parse_header(thrust::tuple<Operator...>& op, byte_stream_
 struct gpuParseDataPageHeader {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldEnum<Encoding>(2, bs->page.encoding),
                                  ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
                                  ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
@@ -309,7 +309,7 @@ struct gpuParseDataPageHeader {
 struct gpuParseDictionaryPageHeader {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldEnum<Encoding>(2, bs->page.encoding));
     return parse_header(op, bs);
   }
@@ -318,7 +318,7 @@ struct gpuParseDictionaryPageHeader {
 struct gpuParseDataPageHeaderV2 {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
                                  ParquetFieldInt32(2, bs->page.num_nulls),
                                  ParquetFieldInt32(3, bs->page.num_rows),
                                  ParquetFieldEnum<Encoding>(4, bs->page.encoding),
@@ -331,7 +331,7 @@ struct gpuParseDataPageHeaderV2 {
 struct gpuParsePageHeader {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = thrust::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
+    auto op = cuda::std::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
                                  ParquetFieldInt32(2, bs->page.uncompressed_page_size),
                                  ParquetFieldInt32(3, bs->page.compressed_page_size),
                                  ParquetFieldStruct<gpuParseDataPageHeader>(5),

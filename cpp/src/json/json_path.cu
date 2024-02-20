@@ -41,7 +41,7 @@
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 #include <thrust/scan.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 namespace cudf {
 namespace detail {

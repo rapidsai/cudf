@@ -84,7 +84,7 @@ struct node_ranges {
   device_span<PdaTokenT const> tokens;
   device_span<SymbolOffsetT const> token_indices;
   bool include_quote_char;
-  __device__ auto operator()(size_type i) -> thrust::tuple<SymbolOffsetT, SymbolOffsetT>
+  __device__ auto operator()(size_type i) -> cuda::std::tuple<SymbolOffsetT, SymbolOffsetT>
   {
     // Whether a token expects to be followed by its respective end-of-* token partner
     auto const is_begin_of_section = [] __device__(PdaTokenT const token) {
@@ -129,7 +129,7 @@ struct node_ranges {
         range_end = get_token_index(tokens[i + 1], token_indices[i + 1]);
       }
     }
-    return thrust::make_tuple(range_begin, range_end);
+    return cuda::std::make_tuple(range_begin, range_end);
   }
 };
 

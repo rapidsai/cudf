@@ -50,7 +50,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 namespace {  // anonymous
 
@@ -367,11 +367,11 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   auto device_in = cudf::column_device_view::create(input, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
-  auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
+  auto in_begin  = thrust::make_zip_iterator(cuda::std::make_tuple(index, valid_it));
 
   rmm::device_uvector<cudf::size_type> gather_map(input.size(), stream);
   auto gm_begin = thrust::make_zip_iterator(
-    thrust::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
+    cuda::std::make_tuple(gather_map.begin(), thrust::make_discard_iterator()));
 
   auto func = cudf::detail::replace_policy_functor();
   if (replace_policy == cudf::replace_policy::PRECEDING) {

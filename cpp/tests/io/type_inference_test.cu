@@ -26,7 +26,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/zip_iterator.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cstddef>
 #include <string>
@@ -59,7 +59,7 @@ TEST_F(TypeInference, Basic)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -92,7 +92,7 @@ TEST_F(TypeInference, Null)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -125,7 +125,7 @@ TEST_F(TypeInference, AllNull)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -158,7 +158,7 @@ TEST_F(TypeInference, String)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -191,7 +191,7 @@ TEST_F(TypeInference, Bool)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -224,7 +224,7 @@ TEST_F(TypeInference, Timestamp)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),
@@ -258,7 +258,7 @@ TEST_F(TypeInference, InvalidInput)
     string_length, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto d_col_strings =
-    thrust::make_zip_iterator(thrust::make_tuple(d_string_offset.begin(), d_string_length.begin()));
+    thrust::make_zip_iterator(cuda::std::make_tuple(d_string_offset.begin(), d_string_length.begin()));
 
   auto res_type =
     infer_data_type(options.json_view(),

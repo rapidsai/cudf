@@ -32,7 +32,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 namespace cudf {
 namespace groupby {
@@ -90,7 +90,7 @@ struct merge_fn {
     // This case should never happen, because all groups are non-empty as the results of
     // aggregation. Here we just to make sure we cover this case.
     if (start_idx == end_idx) {
-      return thrust::make_tuple(size_type{0}, result_type{0}, result_type{0}, int8_t{0});
+      return cuda::std::make_tuple(size_type{0}, result_type{0}, result_type{0}, int8_t{0});
     }
 
     // If `(n = d_counts[idx]) > 0` then `d_means[idx] != null` and `d_M2s[idx] != null`.
@@ -121,7 +121,7 @@ struct merge_fn {
     // zero), then the output is a null.
     auto const is_valid = int8_t{merge_vals.count > 0};
 
-    return thrust::make_tuple(merge_vals.count, merge_vals.mean, merge_vals.M2, is_valid);
+    return cuda::std::make_tuple(merge_vals.count, merge_vals.mean, merge_vals.M2, is_valid);
   }
 };
 
@@ -157,10 +157,10 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
 
   // Perform merging for all the aggregations. Their output (and their validity data) are written
   // out concurrently through an output zip iterator.
-  using iterator_tuple  = thrust::tuple<size_type*, result_type*, result_type*, int8_t*>;
+  using iterator_tuple  = cuda::std::tuple<size_type*, result_type*, result_type*, int8_t*>;
   using output_iterator = thrust::zip_iterator<iterator_tuple>;
   auto const out_iter =
-    output_iterator{thrust::make_tuple(result_counts->mutable_view().template data<size_type>(),
+    output_iterator{cuda::std::make_tuple(result_counts->mutable_view().template data<size_type>(),
                                        result_means->mutable_view().template data<result_type>(),
                                        result_M2s->mutable_view().template data<result_type>(),
                                        validities.begin())};

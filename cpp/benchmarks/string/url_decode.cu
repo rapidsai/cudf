@@ -31,7 +31,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 struct url_string_generator {
   char* chars;
@@ -43,10 +43,10 @@ struct url_string_generator {
   {
   }
 
-  __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<cudf::size_type, cudf::size_type> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       if (esc_seq_dist(engine) < esc_seq_chance and i < end - 3) {

@@ -18,12 +18,12 @@
 #include <cudf/types.hpp>
 
 #include <thrust/functional.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 namespace cudf {
 namespace detail {
 
-using idx_valid_pair_t = thrust::tuple<cudf::size_type, bool>;
+using idx_valid_pair_t = cuda::std::tuple<cudf::size_type, bool>;
 
 /**
  * @brief Functor used by `replace_nulls(replace_policy)` to determine the index to gather from in
@@ -36,7 +36,7 @@ using idx_valid_pair_t = thrust::tuple<cudf::size_type, bool>;
 struct replace_policy_functor {
   __device__ idx_valid_pair_t operator()(idx_valid_pair_t const& lhs, idx_valid_pair_t const& rhs)
   {
-    return thrust::get<1>(rhs) ? rhs : lhs;
+    return cuda::std::get<1>(rhs) ? rhs : lhs;
   }
 };
 

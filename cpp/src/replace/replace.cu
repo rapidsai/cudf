@@ -57,7 +57,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 namespace {  // anonymous
 

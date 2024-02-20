@@ -42,7 +42,7 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 #include <cuda/std/type_traits>
@@ -256,8 +256,8 @@ void rank_average(cudf::device_span<size_type const> group_keys,
                       rank_count1.second + rank_count2.second};
     }),
     cuda::proclaim_return_type<double>([] __device__(MinCount minrank_count) {  // min+(count-1)/2
-      return static_cast<double>(thrust::get<0>(minrank_count)) +
-             (static_cast<double>(thrust::get<1>(minrank_count)) - 1) / 2.0;
+      return static_cast<double>(cuda::std::get<0>(minrank_count)) +
+             (static_cast<double>(cuda::std::get<1>(minrank_count)) - 1) / 2.0;
     }),
     stream);
 }

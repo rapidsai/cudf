@@ -48,7 +48,7 @@
 #include <thrust/pair.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -106,8 +106,8 @@ using index_type = detail::index_type;
  *
  * Merges the bits from two column_device_views into the destination validity buffer
  * according to `merged_indices` map such that bit `i` in `out_validity`
- * will be equal to bit `thrust::get<1>(merged_indices[i])` from `left_dcol`
- * if `thrust::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
+ * will be equal to bit `cuda::std::get<1>(merged_indices[i])` from `left_dcol`
+ * if `cuda::std::get<0>(merged_indices[i])` equals `side::LEFT`; otherwise,
  * from `right_dcol`.
  *
  * `left_dcol` and `right_dcol` must not overlap.

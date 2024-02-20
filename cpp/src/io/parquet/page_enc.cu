@@ -41,7 +41,7 @@
 #include <thrust/merge.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <bitset>
 

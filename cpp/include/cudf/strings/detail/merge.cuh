@@ -30,7 +30,7 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -42,7 +42,7 @@ namespace detail {
  *
  * Caller must set the validity mask in the output column.
  *
- * @tparam row_order_iterator This must be an iterator for type thrust::tuple<side,size_type>.
+ * @tparam row_order_iterator This must be an iterator for type cuda::std::tuple<side,size_type>.
  *
  * @param lhs First column.
  * @param rhs Second column.

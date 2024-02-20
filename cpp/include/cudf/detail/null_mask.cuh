@@ -35,7 +35,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -334,8 +334,8 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
     auto segment_length_iterator = thrust::transform_iterator(
       segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
-        auto const begin = thrust::get<0>(segment);
-        auto const end   = thrust::get<1>(segment);
+        auto const begin = cuda::std::get<0>(segment);
+        auto const end   = cuda::std::get<1>(segment);
         return end - begin;
       }));
     thrust::transform(rmm::exec_policy(stream),
@@ -546,8 +546,8 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
   auto const segment_length_iterator = thrust::make_transform_iterator(
     segments_begin, cuda::proclaim_return_type<size_type>([] __device__(auto const& segment) {
-      auto const begin = thrust::get<0>(segment);
-      auto const end   = thrust::get<1>(segment);
+      auto const begin = cuda::std::get<0>(segment);
+      auto const end   = cuda::std::get<1>(segment);
       return end - begin;
     }));
 
@@ -579,8 +579,8 @@ std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
     length_and_valid_count,
     length_and_valid_count + num_segments,
     [null_handling, valid_initial_value] __device__(auto const& length_and_valid_count) {
-      auto const length      = thrust::get<0>(length_and_valid_count);
-      auto const valid_count = thrust::get<1>(length_and_valid_count);
+      auto const length      = cuda::std::get<0>(length_and_valid_count);
+      auto const valid_count = cuda::std::get<1>(length_and_valid_count);
       return (null_handling == null_policy::EXCLUDE)
                ? (valid_initial_value.value_or(false) || valid_count > 0)
                : (valid_initial_value.value_or(length > 0) && valid_count == length);

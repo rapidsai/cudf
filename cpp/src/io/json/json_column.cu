@@ -350,9 +350,9 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
                     thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
                     [] __device__(auto const& offsets) {
                       // Note: first character for non-field columns
-                      return thrust::make_tuple(
-                        static_cast<size_type>(thrust::get<0>(offsets)),
-                        static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
+                      return cuda::std::make_tuple(
+                        static_cast<size_type>(cuda::std::get<0>(offsets)),
+                        static_cast<size_type>(cuda::std::get<1>(offsets) - cuda::std::get<0>(offsets)));
                     });
 
   cudf::io::parse_options_view options_view{};
@@ -546,7 +546,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto h_range_col_id_it =
     thrust::make_zip_iterator(column_range_beg.begin(), unique_col_ids.begin());
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
-    return thrust::get<0>(a) < thrust::get<0>(b);
+    return cuda::std::get<0>(a) < cuda::std::get<0>(b);
   });
 
   // use hash map because we may skip field name's col_ids
@@ -667,7 +667,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
-    return thrust::get<1>(a) < thrust::get<1>(b);
+    return cuda::std::get<1>(a) < cuda::std::get<1>(b);
   });
   // move columns data to device.
   std::vector<json_column_data> columns_data(num_columns);

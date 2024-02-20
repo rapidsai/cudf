@@ -21,7 +21,7 @@
 
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 namespace cudf::io::nvcomp {
 
@@ -39,7 +39,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
   auto ins_it = thrust::make_zip_iterator(input_data_ptrs.begin(), input_data_sizes.begin());
   thrust::transform(
     rmm::exec_policy(stream), inputs.begin(), inputs.end(), ins_it, [] __device__(auto const& in) {
-      return thrust::make_tuple(in.data(), in.size());
+      return cuda::std::make_tuple(in.data(), in.size());
     });
 
   // Prepare the output vectors
@@ -49,7 +49,7 @@ batched_args create_batched_nvcomp_args(device_span<device_span<uint8_t const> c
     outputs.begin(),
     outputs.end(),
     outs_it,
-    [] __device__(auto const& out) { return thrust::make_tuple(out.data(), out.size()); });
+    [] __device__(auto const& out) { return cuda::std::make_tuple(out.data(), out.size()); });
 
   return {std::move(input_data_ptrs),
           std::move(input_data_sizes),

@@ -44,9 +44,9 @@ struct JSONTypeCastTest : public cudf::test::BaseFixture {};
 
 namespace {
 struct offsets_to_length {
-  __device__ cudf::size_type operator()(thrust::tuple<cudf::size_type, cudf::size_type> const& p)
+  __device__ cudf::size_type operator()(cuda::std::tuple<cudf::size_type, cudf::size_type> const& p)
   {
-    return thrust::get<1>(p) - thrust::get<0>(p);
+    return cuda::std::get<1>(p) - cuda::std::get<0>(p);
   }
 };
 
@@ -55,7 +55,7 @@ auto string_offset_to_length(cudf::strings_column_view const& column, rmm::cuda_
 {
   auto offsets_begin = column.offsets_begin();
   auto offsets_pair =
-    thrust::make_zip_iterator(thrust::make_tuple(offsets_begin, thrust::next(offsets_begin)));
+    thrust::make_zip_iterator(cuda::std::make_tuple(offsets_begin, thrust::next(offsets_begin)));
   rmm::device_uvector<cudf::size_type> svs_length(column.size(), stream);
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
                     offsets_pair,
@@ -96,7 +96,7 @@ TEST_F(JSONTypeCastTest, String)
 
   auto str_col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
-    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(column.offsets_begin(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -129,7 +129,7 @@ TEST_F(JSONTypeCastTest, Int)
 
   auto col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
-    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(column.offsets_begin(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -169,7 +169,7 @@ TEST_F(JSONTypeCastTest, StringEscapes)
 
   auto col = cudf::io::json::detail::parse_data(
     column.chars_begin(stream),
-    thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(column.offsets_begin(), svs_length.begin())),
     column.size(),
     type,
     std::move(null_mask),
@@ -238,7 +238,7 @@ TEST_F(JSONTypeCastTest, ErrorNulls)
 
     auto str_col = cudf::io::json::detail::parse_data(
       column.chars_begin(stream),
-      thrust::make_zip_iterator(thrust::make_tuple(column.offsets_begin(), svs_length.begin())),
+      thrust::make_zip_iterator(cuda::std::make_tuple(column.offsets_begin(), svs_length.begin())),
       column.size(),
       type,
       std::move(null_mask),

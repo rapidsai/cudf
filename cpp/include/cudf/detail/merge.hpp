@@ -29,8 +29,8 @@ namespace detail {
 enum class side : bool { LEFT, RIGHT };
 
 /**
- * @brief Tagged index type: `thrust::get<0>` indicates left/right side,
- * `thrust::get<1>` indicates the row index
+ * @brief Tagged index type: `cuda::std::get<0>` indicates left/right side,
+ * `cuda::std::get<1>` indicates the row index
  */
 using index_type = thrust::pair<side, cudf::size_type>;
 

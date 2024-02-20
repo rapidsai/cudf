@@ -43,7 +43,7 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -947,7 +947,7 @@ struct size_of_helper {
  */
 struct num_batches_func {
   thrust::pair<std::size_t, std::size_t> const* const batches;
-  __device__ std::size_t operator()(size_type i) const { return thrust::get<0>(batches[i]); }
+  __device__ std::size_t operator()(size_type i) const { return cuda::std::get<0>(batches[i]); }
 };
 
 /**
@@ -1466,7 +1466,7 @@ std::unique_ptr<chunk_iteration_state> chunk_iteration_state::create(
      out_to_in_index] __device__(size_type i) {
       size_type const in_buf_index = out_to_in_index(i);
       size_type const batch_index  = i - d_batch_offsets[in_buf_index];
-      auto const batch_size        = thrust::get<1>(batches[in_buf_index]);
+      auto const batch_size        = cuda::std::get<1>(batches[in_buf_index]);
       dst_buf_info const& in       = d_orig_dst_buf_info[in_buf_index];
 
       // adjust info

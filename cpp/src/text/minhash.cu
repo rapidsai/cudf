@@ -112,7 +112,7 @@ CUDF_KERNEL void minhash_kernel(cudf::column_device_view const d_strings,
       } else {
         // This code path assumes the use of MurmurHash3_x64_128 which produces 2 uint64 values
         // but only uses the first uint64 value as requested by the LLM team.
-        auto const hvalue = thrust::get<0>(hasher(hash_str));
+        auto const hvalue = cuda::std::get<0>(hasher(hash_str));
         cuda::atomic_ref<hash_value_type, cuda::thread_scope_block> ref{*(d_output + seed_idx)};
         ref.fetch_min(hvalue, cuda::std::memory_order_relaxed);
       }

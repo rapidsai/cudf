@@ -43,7 +43,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <limits>
 #include <stack>
@@ -131,10 +131,10 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
  * @brief Function object to map (input_symbol,stack_context) tuples to a symbol group.
  */
 struct SymbolPairToSymbolGroupId {
-  CUDF_HOST_DEVICE SymbolGroupT operator()(thrust::tuple<SymbolT, StackSymbolT> symbol) const
+  CUDF_HOST_DEVICE SymbolGroupT operator()(cuda::std::tuple<SymbolT, StackSymbolT> symbol) const
   {
-    auto const input_symbol = thrust::get<0>(symbol);
-    auto const stack_symbol = thrust::get<1>(symbol);
+    auto const input_symbol = cuda::std::get<0>(symbol);
+    auto const stack_symbol = cuda::std::get<1>(symbol);
     return static_cast<SymbolGroupT>(
       input_symbol == '\n'
         ? dfa_symbol_group_id::DELIMITER
@@ -154,7 +154,7 @@ struct TransduceInputOp {
                                                      SymbolT const read_symbol) const
   {
     if (state_id == static_cast<StateT>(dfa_states::EXCESS)) { return '_'; }
-    return thrust::get<1>(read_symbol);
+    return cuda::std::get<1>(read_symbol);
   }
 
   template <typename SymbolT>
@@ -226,9 +226,9 @@ std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS - 1> const symbol_groups{{
 struct UnwrapTokenFromSymbolOp {
   template <typename SymbolGroupLookupTableT>
   CUDF_HOST_DEVICE SymbolGroupT operator()(SymbolGroupLookupTableT const& sgid_lut,
-                                           thrust::tuple<PdaTokenT, SymbolOffsetT> symbol) const
+                                           cuda::std::tuple<PdaTokenT, SymbolOffsetT> symbol) const
   {
-    PdaTokenT const token_type = thrust::get<0>(symbol);
+    PdaTokenT const token_type = cuda::std::get<0>(symbol);
     return sgid_lut.lookup(token_type);
   }
 };
@@ -574,14 +574,14 @@ static __constant__ PdaSymbolGroupIdT tos_sg_to_pda_sgid[] = {
 struct PdaSymbolToSymbolGroupId {
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
-  operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
+  operator()(cuda::std::tuple<SymbolT, StackSymbolT> symbol_pair) const
   {
     // The symbol read from the input
-    auto symbol = thrust::get<0>(symbol_pair);
+    auto symbol = cuda::std::get<0>(symbol_pair);
 
     // The stack symbol (i.e., what is on top of the stack at the time the input symbol was read)
     // I.e., whether we're reading in something within a struct, a list, or the JSON root
-    auto stack_symbol = thrust::get<1>(symbol_pair);
+    auto stack_symbol = cuda::std::get<1>(symbol_pair);
 
     // The stack symbol offset: '_' is the root group (0), '[' is the list group (1), '{' is the
     // struct group (2)

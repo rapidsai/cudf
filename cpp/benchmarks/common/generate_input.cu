@@ -51,7 +51,7 @@
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -464,9 +464,9 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
 
 struct valid_or_zero {
   template <typename T>
-  __device__ T operator()(thrust::tuple<T, bool> len_valid) const
+  __device__ T operator()(cuda::std::tuple<T, bool> len_valid) const
   {
-    return thrust::get<1>(len_valid) ? thrust::get<0>(len_valid) : T{0};
+    return cuda::std::get<1>(len_valid) ? cuda::std::get<0>(len_valid) : T{0};
   }
 };
 
@@ -481,10 +481,10 @@ struct string_generator {
   // range 32-127 is ASCII; 127-136 will be multi-byte UTF-8
   {
   }
-  __device__ void operator()(thrust::tuple<cudf::size_type, cudf::size_type> str_begin_end)
+  __device__ void operator()(cuda::std::tuple<cudf::size_type, cudf::size_type> str_begin_end)
   {
-    auto begin = thrust::get<0>(str_begin_end);
-    auto end   = thrust::get<1>(str_begin_end);
+    auto begin = cuda::std::get<0>(str_begin_end);
+    auto end   = cuda::std::get<1>(str_begin_end);
     engine.discard(begin);
     for (auto i = begin; i < end; ++i) {
       auto ch = char_dist(engine);
@@ -519,7 +519,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto) { return 0; }),
     thrust::logical_not<bool>{});
   auto valid_lengths = thrust::make_transform_iterator(
-    thrust::make_zip_iterator(thrust::make_tuple(lengths.begin(), null_mask.begin())),
+    thrust::make_zip_iterator(cuda::std::make_tuple(lengths.begin(), null_mask.begin())),
     valid_or_zero{});
   rmm::device_uvector<cudf::size_type> offsets(num_rows + 1, cudf::get_default_stream());
   thrust::exclusive_scan(

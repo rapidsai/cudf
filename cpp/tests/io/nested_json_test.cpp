@@ -750,7 +750,7 @@ TEST_F(JsonTest, PostProcessTokenStream)
   // Golden token stream sample
   using token_t       = cuio_json::token_t;
   using token_index_t = cuio_json::SymbolOffsetT;
-  using tuple_t       = thrust::tuple<token_index_t, cuio_json::PdaTokenT>;
+  using tuple_t       = cuda::std::tuple<token_index_t, cuio_json::PdaTokenT>;
 
   std::vector<tuple_t> const input = {// Line 0 (invalid)
                                       {0, token_t::LineEnd},
@@ -861,9 +861,9 @@ TEST_F(JsonTest, PostProcessTokenStream)
 
   for (std::size_t i = 0; i < filtered_tokens.size(); i++) {
     // Ensure the index the tokens are pointing to do match
-    EXPECT_EQ(thrust::get<0>(expected_output[i]), filtered_indices[i]) << "Mismatch at #" << i;
+    EXPECT_EQ(cuda::std::get<0>(expected_output[i]), filtered_indices[i]) << "Mismatch at #" << i;
     // Ensure the token category is correct
-    EXPECT_EQ(thrust::get<1>(expected_output[i]), filtered_tokens[i]) << "Mismatch at #" << i;
+    EXPECT_EQ(cuda::std::get<1>(expected_output[i]), filtered_tokens[i]) << "Mismatch at #" << i;
   }
 }
 

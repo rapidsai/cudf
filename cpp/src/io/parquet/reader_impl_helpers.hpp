@@ -245,7 +245,7 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
                                 thrust::counting_iterator(metadata.schema_info.size())),
       std::inserter(column_name_to_index, column_name_to_index.end()),
       [](auto const& name_index) {
-        return std::make_pair(thrust::get<0>(name_index).name, thrust::get<1>(name_index));
+        return std::make_pair(cuda::std::get<0>(name_index).name, cuda::std::get<1>(name_index));
       });
 
     expr.value().get().accept(*this);

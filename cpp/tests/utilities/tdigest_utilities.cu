@@ -29,7 +29,7 @@
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 // for use with groupby and reduction aggregation tests.
 
@@ -58,9 +58,9 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
   {
     auto iter = thrust::make_counting_iterator(0);
     std::for_each_n(iter, h_expected.size(), [&](size_type const index) {
-      h_expected_src[index]    = thrust::get<0>(h_expected[index]);
-      h_expected_mean[index]   = thrust::get<1>(h_expected[index]);
-      h_expected_weight[index] = thrust::get<2>(h_expected[index]);
+      h_expected_src[index]    = cuda::std::get<0>(h_expected[index]);
+      h_expected_mean[index]   = cuda::std::get<1>(h_expected[index]);
+      h_expected_weight[index] = cuda::std::get<2>(h_expected[index]);
     });
   }
 

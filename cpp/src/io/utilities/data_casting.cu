@@ -783,10 +783,10 @@ template <typename SymbolT>
 struct to_string_view_pair {
   SymbolT const* data;
   to_string_view_pair(SymbolT const* _data) : data(_data) {}
-  __device__ auto operator()(thrust::tuple<size_type, size_type> ip)
+  __device__ auto operator()(cuda::std::tuple<size_type, size_type> ip)
   {
-    return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
-                                                  static_cast<std::size_t>(thrust::get<1>(ip))};
+    return thrust::pair<char const*, std::size_t>{data + cuda::std::get<0>(ip),
+                                                  static_cast<std::size_t>(cuda::std::get<1>(ip))};
   }
 };
 
@@ -908,7 +908,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
 std::unique_ptr<column> parse_data(
   const char* data,
-  thrust::zip_iterator<thrust::tuple<const size_type*, const size_type*>> offset_length_begin,
+  thrust::zip_iterator<cuda::std::tuple<const size_type*, const size_type*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,

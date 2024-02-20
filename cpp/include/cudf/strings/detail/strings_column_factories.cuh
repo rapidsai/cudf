@@ -35,7 +35,7 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
+#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -120,13 +120,13 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
       auto chars_data = rmm::device_uvector<char>(bytes, stream, mr);
       auto d_chars    = chars_data.data();
       auto copy_chars = [d_chars] __device__(auto item) {
-        string_index_pair const str = thrust::get<0>(item);
-        size_type const offset      = thrust::get<1>(item);
+        string_index_pair const str = cuda::std::get<0>(item);
+        size_type const offset      = cuda::std::get<1>(item);
         if (str.first != nullptr) memcpy(d_chars + offset, str.first, str.second);
       };
       thrust::for_each_n(rmm::exec_policy(stream),
                          thrust::make_zip_iterator(
-                           thrust::make_tuple(begin, offsets_view.template begin<size_type>())),
+                           cuda::std::make_tuple(begin, offsets_view.template begin<size_type>())),
                          strings_count,
                          copy_chars);
       return chars_data;
