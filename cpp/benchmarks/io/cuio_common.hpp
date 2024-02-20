@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,15 +32,6 @@ std::string random_file_in_dir(std::string const& dir_path);
  * @brief Class to create a coupled `source_info` and `sink_info` of given type.
  */
 class cuio_source_sink_pair {
-  class bytes_written_only_sink : public cudf::io::data_sink {
-    size_t _bytes_written = 0;
-
-   public:
-    void host_write(void const* data, size_t size) override { _bytes_written += size; }
-    void flush() override {}
-    size_t bytes_written() override { return _bytes_written; }
-  };
-
  public:
   cuio_source_sink_pair(io_type type);
   ~cuio_source_sink_pair()
@@ -79,7 +70,7 @@ class cuio_source_sink_pair {
   std::vector<char> h_buffer;
   rmm::device_uvector<std::byte> d_buffer;
   std::string const file_name;
-  bytes_written_only_sink void_sink;
+  std::unique_ptr<cudf::io::data_sink> void_sink;
 };
 
 /**
