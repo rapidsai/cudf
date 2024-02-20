@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.column import NumericalColumn
 from cudf.testing._utils import (
     DATETIME_TYPES,
