@@ -590,10 +590,10 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
   }
 
   {
-    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
-    std::string json_path("${a}");
-    auto query = [&]() {
-      auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
+    auto const input     = cudf::test::strings_column_wrapper{R"({"a": "b"})"};
+    auto const json_path = std::string{"${a}"};
+    auto const query     = [&]() {
+      auto const result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
     };
     EXPECT_THROW(query(), std::invalid_argument);
   }
@@ -1034,12 +1034,14 @@ TEST_F(JsonPathTests, QueriesContainingQuotes)
   auto do_test = [&input_string](auto const& json_path_string,
                                  auto const& expected_string,
                                  bool const& expect_null = false) {
-    cudf::test::strings_column_wrapper input{input_string};
-    std::string json_path(json_path_string);
+    auto const input     = cudf::test::strings_column_wrapper{input_string};
+    auto const json_path = std::string{json_path_string};
     cudf::get_json_object_options options;
     options.set_allow_single_quotes(true);
-    auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path, options);
-    cudf::test::strings_column_wrapper expected({expected_string}, {!expect_null});
+    auto const result = cudf::get_json_object(cudf::strings_column_view(input), json_path, options);
+    auto const expected =
+      cudf::test::strings_column_wrapper{std::initializer_list<std::string>{expected_string},
+                                         std::initializer_list<bool>{!expect_null}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
   };

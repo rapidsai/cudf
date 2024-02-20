@@ -541,7 +541,7 @@ class path_state : private parser {
       case '.': {
         path_operator op;
         string_view term{".[", 2};
-        if (parse_path_name(op.name, term, false)) {
+        if (parse_path_name(op.name, term, false /*inside_brackets*/)) {
           // this is another potential use case for __SPARK_BEHAVIORS / configurability
           // Spark currently only handles the wildcard operator inside [*], it does
           // not handle .*
