@@ -300,7 +300,7 @@ struct rle_stream {
       if (warp_id == 0) {
         // fill the next set of runs. fill_runs will generally be the bottleneck for any
         // kernel that uses an rle_stream.
-        if (warp_lane == 0) {
+        if (!warp_lane) {
           fill_run_batch();
           if (decode_index == -1) {
             // first time, set it to the beginning of the buffer (rolled)

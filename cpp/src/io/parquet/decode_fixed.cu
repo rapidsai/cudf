@@ -129,6 +129,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
     if (is_valid) {
       int const dst_pos = (value_count + thread_value_count) - 1;
       int const src_pos = (valid_count + thread_valid_count) - 1;
+      auto ix           = rolling_index<state_buf::nz_buf_size>(src_pos);
       sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
     }
 
@@ -168,6 +169,7 @@ __device__ inline void gpuDecodeValues(
     int const src_pos    = pos + t;
 
     // the position in the output column/buffer
+    auto nz_idx = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
     int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] - s->first_row;
 
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
@@ -387,7 +389,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   rle_stream<level_t, decode_block_size, rolling_buf_size> def_decoder{def_runs};
 
+  bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
+
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
   if (s->num_rows == 0) { return; }
 
   bool const nullable            = is_nullable(s);
@@ -494,13 +507,26 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
+  // the level stream decoders
+  // rolling_buf_size = 256
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   rle_stream<level_t, decode_block_size, rolling_buf_size> def_decoder{def_runs};
 
   __shared__ rle_run<uint32_t> dict_runs[rle_run_buffer_size];
   rle_stream<uint32_t, decode_block_size, rolling_buf_size> dict_stream{dict_runs};
 
+  bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
+
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
+  //
+  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
+  // starts before this page and ends after this page:
+  //       P0        P1        P2
+  //  |---------|---------|----------|
+  //        ^------------------^
+  //      row start           row end
+  // P1 will contain 0 rows
+  //
   if (s->num_rows == 0) { return; }
 
   bool const nullable            = is_nullable(s);

@@ -16,6 +16,7 @@
 
 #include "reader_impl.hpp"
 
+#include "decode_fixed.hpp"
 #include "error.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
