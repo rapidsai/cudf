@@ -36,9 +36,9 @@ namespace cudf::io::orc::detail {
 struct stream_id_info {
   uint32_t stripe_idx;  // global stripe id throughout the data source
   // TODO: change type below
-  std::size_t level;    // level of the nested column 
-  uint32_t orc_col_idx; // orc column id
-  StreamKind kind;      // stream kind
+  std::size_t level;     // level of the nested column
+  uint32_t orc_col_idx;  // orc column id
+  StreamKind kind;       // stream kind
 
   struct hash {
     std::size_t operator()(stream_id_info const& id) const
@@ -60,13 +60,13 @@ struct stream_id_info {
 
 /**
  * @brief Map to lookup a value from stream id.
-*/
-template<typename T>
+ */
+template <typename T>
 using stream_id_map =
   std::unordered_map<stream_id_info, T, stream_id_info::hash, stream_id_info::equal_to>;
 
 /**
- * @brief Struct that store identification of an ORC streams.
+ * @brief Struct that store identification of an ORC stream.
  */
 struct orc_stream_info {
   // TODO: remove constructor
@@ -74,10 +74,7 @@ struct orc_stream_info {
                            std::size_t dst_pos_,
                            uint32_t length_,
                            stream_id_info const& id_)
-    : offset(offset_),
-      dst_pos(dst_pos_),
-      length(length_),
-      id(id_)
+    : offset(offset_), dst_pos(dst_pos_), length(length_), id(id_)
   {
 #ifdef PRINT_DEBUG
     printf("   construct stripe id [%d, %d, %d, %d]\n",
@@ -126,10 +123,9 @@ struct range {
  * @brief Struct to store file-level data that remains constant for all chunks being output.
  */
 struct file_intermediate_data {
-    int64_t rows_to_skip;
+  int64_t rows_to_skip;
   size_type rows_to_read;
   std::vector<metadata::OrcStripeInfo> selected_stripes;
-
 
   // Return true if no rows or stripes to read.
   bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
@@ -146,18 +142,16 @@ struct file_intermediate_data {
   // This is used to initialize the stripe_data buffers.
   std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
 
-
-
   // Store information to identify where to read a chunk of data from source.
   // Each read corresponds to one or more consecutive streams combined.
   struct data_read_info {
     // TODO: remove constructor
     data_read_info(uint64_t offset_,
-                     std::size_t length_,
-                     std::size_t dst_pos_,
-                     std::size_t source_idx_,
-                     std::size_t stripe_idx_,
-                     std::size_t level_)
+                   std::size_t length_,
+                   std::size_t dst_pos_,
+                   std::size_t source_idx_,
+                   std::size_t stripe_idx_,
+                   std::size_t level_)
       : offset(offset_),
         length(length_),
         dst_pos(dst_pos_),
@@ -166,39 +160,34 @@ struct file_intermediate_data {
         level(level_)
     {
     }
-      uint64_t offset;      // offset in data source
-    std::size_t dst_pos;  // offset to store data in memory relative to start of raw stripe data
-    std::size_t length;   // data length to read
-    std::size_t source_idx; // the data source id
-    std::size_t stripe_idx; // stream id TODO: processing or source stripe id?
-    std::size_t level; // nested level
+    uint64_t offset;         // offset in data source
+    std::size_t dst_pos;     // offset to store data in memory relative to start of raw stripe data
+    std::size_t length;      // data length to read
+    std::size_t source_idx;  // the data source id
+    std::size_t stripe_idx;  // stream id TODO: processing or source stripe id?
+    std::size_t level;       // nested level
   };
 
-    // Identify what data to read from source.
+  // Identify what data to read from source.
   std::vector<data_read_info> data_read_info;
 
   // For each stripe, we perform a number of read for its streams.
   // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
   std::vector<chunk> stripe_data_read_chunks;
 
-
   // Store info for each ORC stream at each nested level.
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
 
+  // At each nested level, the streams for each stripe are stored consecutively in lvl_stream_info.
+  // This is used to identify the range of streams for each stripe from that vector.
+  std::vector<std::vector<chunk>> lvl_stripe_stream_chunks;
 
-// At each nested level, the streams for each stripe are stored consecutively in lvl_stream_info.
-// This is used to identify the range of streams for each stripe from that vector.
-  std::vector<std::vector<chunk>> lvl_stripe_stream_chunks; 
-
-
-// TODO
+  // TODO
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
 
   // For data processing, decompression, and decoding.
   // Each 'chunk' of data here corresponds to an orc column, in a stripe, at a nested level.
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_data_chunks;
-
-
 
   bool global_preprocessed{false};
 };
@@ -216,7 +205,8 @@ struct chunk_read_data {
   std::size_t data_read_limit;    // approximate maximum size (in bytes) used for store
                                   // intermediate data, or 0 for no limit
 
-  // Chunks of stripes that can be load into memory such that their data size is within a size limit.
+  // Chunks of stripes that can be load into memory such that their data size is within a size
+  // limit.
   std::vector<chunk> load_stripe_chunks;
   std::size_t curr_load_stripe_chunk{0};
   bool more_stripe_to_load() const { return curr_load_stripe_chunk < load_stripe_chunks.size(); }

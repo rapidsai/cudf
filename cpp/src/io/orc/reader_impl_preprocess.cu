@@ -193,12 +193,13 @@ rmm::device_buffer decompress_stripe_data(
 
     //    printf("line %d\n", __LINE__);
     //    fflush(stdout);
-    auto const& cached_comp_info =
-      compinfo_map.at(stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx, info.id.kind});
+    auto const& cached_comp_info = compinfo_map.at(
+      stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind});
     //    printf("line %d\n", __LINE__);
     //    fflush(stdout);
     // auto const& cached_comp_info =
-    //   compinfo_map[stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx, info.id.kind}];
+    //   compinfo_map[stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx,
+    //   info.id.kind}];
     auto& stream_comp_info                   = compinfo[compinfo.size() - 1];
     stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
     stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;

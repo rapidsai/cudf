@@ -92,13 +92,11 @@ std::size_t gather_stream_info(std::size_t stripe_index,
     }
 
     if (col != -1) {
-      stream_info.emplace_back(stripeinfo->offset + src_offset,
-                               dst_offset,
-                               stream.length,
-                               stream_id_info{stripe_index,
-                               level,
-                               column_id,
-                               stream.kind});
+      stream_info.emplace_back(
+        stripeinfo->offset + src_offset,
+        dst_offset,
+        stream.length,
+        stream_id_info{static_cast<uint32_t>(stripe_index), level, column_id, stream.kind});
       dst_offset += stream.length;
     }
     src_offset += stream.length;
@@ -276,13 +274,12 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   lvl_stripe_data.resize(_selected_columns.num_levels());
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
 
-  auto& read_info                 = _file_itm_data.data_read_info;
-  auto& stripe_data_read_chunks = _file_itm_data.stripe_data_read_chunks;
-  auto& lvl_stripe_stream_chunks  = _file_itm_data.lvl_stripe_stream_chunks;
+  auto& read_info                = _file_itm_data.data_read_info;
+  auto& stripe_data_read_chunks  = _file_itm_data.stripe_data_read_chunks;
+  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
 
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
-  std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
-    stream_compinfo_map;
+  stream_id_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
   // Logically view streams as columns
   _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
@@ -463,7 +460,7 @@ void reader::impl::read_data()
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
 
   auto const& stripe_data_read_chunks = _file_itm_data.stripe_data_read_chunks;
-  auto const [read_begin, read_end]     = get_range(stripe_data_read_chunks, stripe_chunk);
+  auto const [read_begin, read_end]   = get_range(stripe_data_read_chunks, stripe_chunk);
 
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read  = read_info[read_idx];
@@ -506,8 +503,7 @@ void reader::impl::subpass_preprocess()
 
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
-  std::unordered_map<stream_id_info, gpu::CompressedStreamInfo*, stream_id_hash, stream_id_equal>
-    stream_compinfo_map;
+  stream_id_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
   // TODO: fix this, loop only current chunk
   auto const stripe_chunk =
@@ -546,7 +542,7 @@ void reader::impl::subpass_preprocess()
           static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx].data()) + info.dst_pos,
           info.length));
         stream_compinfo_map[stream_id_info{
-          info.id.stripe_idx, info.id.level, info.id.orc_cold_idx, info.id.kind}] =
+          info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind}] =
           &compinfo[compinfo.size() - 1];
 #ifdef PRINT_DEBUG
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
@@ -575,7 +571,7 @@ void reader::impl::subpass_preprocess()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
-        stripe_decomp_sizes[stream_id.id.stripe_idx - stripe_chunk.start_idx].size_bytes +=
+        stripe_decomp_sizes[stream_id.stripe_idx - stripe_chunk.start_idx].size_bytes +=
           stream_compinfo->max_uncompressed_size;
 #ifdef PRINT_DEBUG
         printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
