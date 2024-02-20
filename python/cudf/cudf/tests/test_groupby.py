@@ -1433,7 +1433,7 @@ def test_groupby_nulls_basic(agg):
 
     # TODO: fillna() used here since we don't follow
     # Pandas' null semantics. Should we change it?
-    with expect_warning_if(agg in {"idxmax", "idxmin"}):
+    with expect_warning_if(agg in {"idxmax", "idxmin"} and not PANDAS_GE_220):
         assert_groupby_results_equal(
             getattr(pdf.groupby("a"), agg)().fillna(0),
             getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
