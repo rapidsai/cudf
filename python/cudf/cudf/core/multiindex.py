@@ -1836,6 +1836,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             raise NotImplementedError(
                 f"{method=} is not supported yet for MultiIndex."
             )
+        if method in {"ffill", "bfill", "pad", "backfill"} and not (
+            self.is_monotonic_increasing or self.is_monotonic_decreasing
+        ):
+            raise ValueError(
+                "index must be monotonic increasing or decreasing"
+            )
 
         result = cudf.core.column.full(
             len(target),
@@ -1862,12 +1868,6 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         result_series = cudf.Series(result)
 
         if method in {"ffill", "bfill", "pad", "backfill"}:
-            if not (
-                self.is_monotonic_increasing or self.is_monotonic_decreasing
-            ):
-                raise ValueError(
-                    "index must be monotonic increasing or decreasing"
-                )
             result_series = _get_indexer_basic(
                 index=self,
                 positions=result_series,
