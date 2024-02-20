@@ -3955,7 +3955,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Not supporting *copy* because default and only behavior is
             copy=True
         """
-        breakpoint()
         index = self._data.to_pandas_index()
         columns = self.index.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
