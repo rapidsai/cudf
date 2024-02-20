@@ -3,7 +3,7 @@
 import pytest
 
 from cudf import NA, DataFrame
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
 from cudf.testing import _utils as utils
 
 
@@ -26,7 +26,21 @@ from cudf.testing import _utils as utils
     ],
 )
 @pytest.mark.parametrize("na_action", [None, "ignore"])
-def test_applymap_dataframe(data, func, na_action):
+def test_applymap_dataframe(data, func, na_action, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_GE_220
+            and request.node.callspec.id == "None-<lambda>2-data3",
+            reason="https://github.com/pandas-dev/pandas/issues/57390",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_GE_220
+            and request.node.callspec.id == "ignore-<lambda>3-data3",
+            reason="https://github.com/pandas-dev/pandas/pull/57388",
+        )
+    )
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 
