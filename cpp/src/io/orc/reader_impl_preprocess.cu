@@ -52,6 +52,7 @@ namespace cudf::io::orc::detail {
 
 namespace {
 
+// TODO: merge this with gather stream info
 /**
  * @brief Function that populates column descriptors stream/chunk
  */
