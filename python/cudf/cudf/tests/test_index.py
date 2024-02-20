@@ -2076,25 +2076,21 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
     ],
 )
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_indexer_multi_numeric_deviate(request, key, method):
+def test_get_indexer_multi_numeric_deviate(key, method):
     pi = pd.MultiIndex.from_tuples(
         [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
     ).sort_values()
     gi = cudf.from_pandas(pi)
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and method is not None
-            and key == ((1, 2, 3),),
-            reason="https://github.com/pandas-dev/pandas/issues/53452",
-        )
-    )
+
     expected = pi.get_indexer(key, method=method)
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
 
 
+@pytest.mark.xfail(
+    not PANDAS_GE_220, reason="Remove after pandas-2.2+ upgrade"
+)
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
 def test_get_indexer_multi_error(method):
     pi = pd.MultiIndex.from_tuples(
