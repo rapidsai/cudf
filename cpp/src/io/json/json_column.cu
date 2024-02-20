@@ -451,8 +451,10 @@ struct json_column_data {
  * @param row_offsets Row offsets of the nodes in the tree
  * @param root Root node of the `d_json_column` tree
  * @param is_array_of_arrays Whether the tree is an array of arrays
- * @param is_enabled_lines Whether the input is a line-delimited JSON
- * @param is_enabled_mixed_types_as_string Whether to enable reading mixed types as string
+ * @param options Parsing options specifying the parsing behaviour
+ * options affecting behaviour are
+ *   is_enabled_lines: Whether the input is a line-delimited JSON
+ *   is_enabled_mixed_types_as_string: Whether to enable reading mixed types as string
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the device memory
  * of child_offets and validity members of `d_json_column`
@@ -463,14 +465,15 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_span<size_type> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
-                             bool is_enabled_lines,
-                             bool is_enabled_mixed_types_as_string,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const num_nodes = col_ids.size();
+
+  bool const is_enabled_lines                 = options.is_enabled_lines();
+  bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
+  auto const num_nodes                        = col_ids.size();
   rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
 
@@ -1062,8 +1065,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                           gpu_row_offsets,
                           root_column,
                           is_array_of_arrays,
-                          options.is_enabled_lines(),
-                          options.is_enabled_mixed_types_as_string(),
                           options,
                           stream,
                           mr);
