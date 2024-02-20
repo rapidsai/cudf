@@ -316,7 +316,7 @@ struct dispatch_to_arrow_device {
     set_buffer(contents.data, 1, tmp.get());
 
     NANOARROW_RETURN_NOT_OK(
-      ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+      ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
@@ -363,7 +363,7 @@ int unsupported_decimals_to_arrow(cudf::column& input,
   set_buffer(buf, 1, tmp.get());
 
   NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -410,7 +410,7 @@ int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column& colu
   set_buffer(contents.data, 1, tmp.get());
 
   NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -433,7 +433,7 @@ int dispatch_to_arrow_device::operator()<bool>(cudf::column& column,
   set_buffer(bitmask.first, 1, tmp.get());
 
   NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr));
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
