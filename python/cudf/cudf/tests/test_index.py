@@ -2079,18 +2079,41 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
 def test_get_indexer_multi_numeric_deviate(key, method):
     pi = pd.MultiIndex.from_tuples(
         [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
+    ).sort_values()
+    gi = cudf.from_pandas(pi)
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=not PANDAS_GE_220
+            and method is not None
+            and key == ((1, 2, 3),),
+            reason="https://github.com/pandas-dev/pandas/issues/53452",
+        )
+    )
+    expected = pi.get_indexer(key, method=method)
+    got = gi.get_indexer(key, method=method)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
+def test_get_indexer_multi_error(method):
+    pi = pd.MultiIndex.from_tuples(
+        [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
     )
     gi = cudf.from_pandas(pi)
-    if method is not None:
-        with pytest.raises(ValueError):
-            gi.get_indexer(key, method=method)
-        if PANDAS_GE_220:
-            with pytest.raises(ValueError):
-                pi.get_indexer(key, method=method)
-    else:
-        got = gi.get_indexer(key, method=method)
-        expected = pi.get_indexer(key, method=method)
-        assert_eq(got, expected)
+
+    assert_exceptions_equal(
+        pi.get_indexer,
+        gi.get_indexer,
+        lfunc_args_and_kwargs=(
+            [],
+            {"target": ((1, 2, 3),), "method": method},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"target": ((1, 2, 3),), "method": method},
+        ),
+    )
 
 
 @pytest.mark.parametrize(
