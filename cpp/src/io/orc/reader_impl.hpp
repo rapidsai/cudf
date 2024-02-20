@@ -153,22 +153,19 @@ class reader::impl {
    */
   table_metadata make_output_metadata();
 
-  /**
-   * TODO: move code to make_output_chunk
-   */
-  table_with_metadata read_chunk_internal();
-
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
   // Reader configs
-  data_type const _timestamp_type;  // Override output timestamp resolution
-  bool const _use_index;            // Enable or disable attempt to use row index for parsing
-  bool const _use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
-  std::vector<std::string> const _decimal128_columns;   // Control decimals conversion
-  std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
+  struct {
+  data_type timestamp_type;  // Override output timestamp resolution
+  bool use_index;            // Enable or disable attempt to use row index for parsing
+  bool use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
+  std::vector<std::string> decimal128_columns;   // Control decimals conversion
+  } const _config;
 
   // Intermediate data for internal processing.
+  std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
   aggregate_orc_metadata _metadata;
   column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it

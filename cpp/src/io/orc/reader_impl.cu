@@ -24,16 +24,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
-  : _stream(stream),
-    _mr(mr),
-    _timestamp_type{options.get_timestamp_type()},
-    _use_index{options.is_enabled_use_index()},
-    _use_np_dtypes{options.is_enabled_use_np_dtypes()},
-    _decimal128_columns{options.get_decimal128_columns()},
-    _col_meta{std::make_unique<reader_column_meta>()},
-    _sources(std::move(sources)),
-    _metadata{_sources, stream},
-    _selected_columns{_metadata.select_columns(options.get_columns())}
+  : reader::impl::impl(0UL, 0UL, std::move(sources), options, stream, mr)
 {
 }
 
@@ -45,10 +36,10 @@ reader::impl::impl(std::size_t output_size_limit,
                    rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
-    _timestamp_type{options.get_timestamp_type()},
-    _use_index{options.is_enabled_use_index()},
-    _use_np_dtypes{options.is_enabled_use_np_dtypes()},
-    _decimal128_columns{options.get_decimal128_columns()},
+    _config{options.get_timestamp_type(),
+            options.is_enabled_use_index(),
+            options.is_enabled_use_np_dtypes(),
+            options.get_decimal128_columns()},
     _col_meta{std::make_unique<reader_column_meta>()},
     _sources(std::move(sources)),
     _metadata{_sources, stream},
@@ -114,9 +105,9 @@ table_with_metadata reader::impl::make_output_chunk()
                      out_metadata.schema_info.emplace_back("");
                      return create_empty_column(col_meta.id,
                                                 _metadata,
-                                                _decimal128_columns,
-                                                _use_np_dtypes,
-                                                _timestamp_type,
+                                                _config.decimal128_columns,
+                                                _config.use_np_dtypes,
+                                                _config.timestamp_type,
                                                 out_metadata.schema_info.back(),
                                                 _stream);
                    });
