@@ -1796,7 +1796,13 @@ def test_datetime_dateoffset_binaryop(
     "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
-def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
+def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_GE_220 and len(kwargs) == 1 and "milliseconds" in kwargs,
+            reason="https://github.com/pandas-dev/pandas/issues/57529",
+        )
+    )
     gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
@@ -1864,7 +1870,9 @@ def test_datetime_dateoffset_binaryop_reflected(
     expect = poffset + psr
     got = goffset + gsr
 
-    utils.assert_eq(expect, got)
+    # TODO: Remove check_dtype once we get some clarity on:
+    # https://github.com/pandas-dev/pandas/issues/57448
+    utils.assert_eq(expect, got, check_dtype=not PANDAS_GE_220)
 
     with pytest.raises(TypeError):
         poffset - psr
