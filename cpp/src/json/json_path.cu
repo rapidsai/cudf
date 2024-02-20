@@ -660,7 +660,7 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
   do {
     op = p_state.get_next_operator();
     if (op.type == path_operator_type::ERROR) {
-      CUDF_FAIL("Encountered invalid JSONPath input string");
+      CUDF_FAIL("Encountered invalid JSONPath input string", std::invalid_argument);
     }
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer

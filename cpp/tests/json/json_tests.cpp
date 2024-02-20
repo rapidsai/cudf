@@ -588,6 +588,15 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     };
     EXPECT_THROW(query(), std::invalid_argument);
   }
+
+  {
+    cudf::test::strings_column_wrapper input{R"({"a": "b"})"};
+    std::string json_path("${a}");
+    auto query = [&]() {
+      auto result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), std::invalid_argument);
+  }
 }
 
 // queries that are legal, but reference invalid parts of the input
