@@ -84,12 +84,10 @@ class reader::impl {
                            std::optional<size_type> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
 
-
-
  private:
   /**
    * @brief Perform all the necessary data preprocessing before creating an output table.
-   * 
+   *
    * This is the proxy to call all other data preprocessing functions, which are prerequisite
    * for generating an output table.
    *
@@ -104,42 +102,43 @@ class reader::impl {
   /**
    * @brief Perform a global preprocessing step that executes exactly once for the entire duration
    * of the reader.
-   * 
-   * In this step, the metadata of all stripes in the data source is parsed, and information about 
-   * data streams for all selected columns in alls tripes are generated. If the reader has a data 
+   *
+   * In this step, the metadata of all stripes in the data source is parsed, and information about
+   * data streams for all selected columns in alls tripes are generated. If the reader has a data
    * read limit, data size of all stripes are used to determine the chunks of consecutive
-   * stripes for reading each time using the `read_data()` step. This is to ensure that loading 
+   * stripes for reading each time using the `read_data()` step. This is to ensure that loading
    * these stripes will not exceed a fixed portion the data read limit.
-  */
+   */
   void global_preprocess(uint64_t skip_rows,
                          std::optional<size_type> const& num_rows_opt,
                          std::vector<std::vector<size_type>> const& stripes);
 
   /**
    * @brief Read stripes from the input source and store the data in the internal buffers.
-   * 
+   *
    * If there is a data read limit, only a chunk of stripes are read at a time such that
    * their total data size does not exceed a fixed portion of the limit. Then, the data is
    * probed to determine the uncompressed sizes for these loaded stripes, which are in turn
-   * used to determine a subset of stripes to decompress and decode in the next step 
+   * used to determine a subset of stripes to decompress and decode in the next step
    * `decompress_and_decode()`.
-   * This is to ensure that loading data together with decompression and decoding will not exceed 
+   * This is to ensure that loading data together with decompression and decoding will not exceed
    * the data read limit.
    */
   void read_data();
 
   /**
    * TODO: merge with read data.
-  */
+   */
   void subpass_preprocess();
 
   /**
    * @brief Decompress and decode the data in the internal buffers, and store the result into
    * an internal table.
-   * 
+   *
    * If there is a data read limit, only a chunk of stripes are decompressed and decoded at a time.
-   * Then, the result is stored in an internal table, and sizes of its rows are computed 
-   * to determine slices of rows to return as the output table in the final step `make_output_chunk`.
+   * Then, the result is stored in an internal table, and sizes of its rows are computed
+   * to determine slices of rows to return as the output table in the final step
+   * `make_output_chunk`.
    */
   void decompress_and_decode();
 

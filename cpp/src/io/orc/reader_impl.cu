@@ -38,8 +38,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 }
 
 reader::impl::impl(std::size_t output_size_limit,
-                  std::size_t data_read_limit,
-                  std::vector<std::unique_ptr<datasource>>&& sources,
+                   std::size_t data_read_limit,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
