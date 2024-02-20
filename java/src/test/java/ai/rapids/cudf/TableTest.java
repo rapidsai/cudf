@@ -9192,9 +9192,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  // https://github.com/NVIDIA/spark-rapids-jni/issues/1338
-  // Need to remove this tag if #1338 is fixed.
-  @Tag("noSanitizer")
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
