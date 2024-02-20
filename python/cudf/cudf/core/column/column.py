@@ -1920,6 +1920,13 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        if pa.types.is_large_string(arbitrary.type):
+            # Pandas-2.2+: Pandas defaults to `large_string` type
+            # instead of `string` without data-introspection.
+            # Temporary workaround until cudf has native
+            # support for `LARGE_STRING` i.e., 64 bit offsets
+            arbitrary = arbitrary.cast(pa.string())
+
         if pa.types.is_float16(arbitrary.type):
             raise NotImplementedError(
                 "Type casting from `float16` to `float32` is not "
