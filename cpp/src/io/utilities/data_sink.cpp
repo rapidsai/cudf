@@ -139,6 +139,8 @@ class void_sink : public data_sink {
 
   [[nodiscard]] bool supports_device_write() const override { return true; }
 
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override { return true; }
+
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     _bytes_written += size;
@@ -187,6 +189,11 @@ class user_sink_wrapper : public data_sink {
     CUDF_EXPECTS(user_sink->supports_device_write(),
                  "device_write_async() was called on a data_sink that doesn't support it");
     return user_sink->device_write_async(gpu_data, size, stream);
+  }
+
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override
+  {
+    return user_sink->is_device_write_preferred(size);
   }
 
   void flush() override { user_sink->flush(); }

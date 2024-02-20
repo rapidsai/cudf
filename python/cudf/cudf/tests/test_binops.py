@@ -13,7 +13,7 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
@@ -663,11 +663,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
 
     # Test with a RangeIndex
     pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
-    # Test with a GenericIndex
+    # Test with an Index
     pdf2 = pd.DataFrame(
         {"x": [1, 2, 3, 7], "y": [4, 5, 6, 7]}, index=[0, 1, 3, 4]
     )
-    # Test with a GenericIndex in a different order
+    # Test with an Index in a different order
     pdf3 = pd.DataFrame(
         {"x": [4, 5, 6, 7], "y": [1, 2, 3, 7], "z": [0, 5, 3, 7]},
         index=[0, 3, 5, 3],
@@ -825,11 +825,21 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("fill_value", [None, 1.0])
 @pytest.mark.parametrize("use_cudf_scalar", [False, True])
 def test_operator_func_series_and_scalar_logical(
-    dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
+    request, dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
 ):
-    gdf_series = utils.gen_rand_series(
-        dtype, 1000, has_nulls=has_nulls, stride=10000
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_GE_220
+            and fill_value == 1.0
+            and scalar is np.nan
+            and (has_nulls or (not has_nulls and func not in {"eq", "ne"})),
+            reason="https://github.com/pandas-dev/pandas/issues/57447",
+        )
     )
+    if has_nulls:
+        gdf_series = cudf.Series([-1.0, 0, cudf.NA, 1.1], dtype=dtype)
+    else:
+        gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
     pdf_series = gdf_series.to_pandas(nullable=True)
     gdf_series_result = getattr(gdf_series, func)(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
@@ -1685,16 +1695,6 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     assert result.dtype == valid_result.dtype
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1706,13 +1706,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
         "minutes",
         "seconds",
         "microseconds",
-        pytest.param(
-            "nanoseconds",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/36589",
-            ),
-        ),
+        "nanoseconds",
     ],
 )
 @pytest.mark.parametrize(
@@ -1721,10 +1715,42 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop(
-    date_col, n_periods, frequency, dtype, op
+    request, n_periods, frequency, dtype, op
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_GE_220
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency == "microseconds"
+            and n_periods == 0,
+            reason="https://github.com/pandas-dev/pandas/issues/57448",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency in ("microseconds", "nanoseconds")
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype == "datetime64[us]"
+            and frequency == "nanoseconds"
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    date_col = [
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ]
     gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()  # converts to nanos
+    psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 
@@ -1758,28 +1784,16 @@ def test_datetime_dateoffset_binaryop(
         {"months": 2, "years": 5},
         {"microseconds": 1, "seconds": 1},
         {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
-        pytest.param(
-            {"milliseconds": 4},
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="Pandas gets the wrong answer for milliseconds",
-            ),
-        ),
-        pytest.param(
-            {"milliseconds": 4, "years": 2},
-            marks=pytest_xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49897"
-            ),
-        ),
-        pytest.param(
-            {"nanoseconds": 12},
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="Pandas gets the wrong answer for nanoseconds",
-            ),
-        ),
+        {"milliseconds": 4},
+        {"milliseconds": 4, "years": 2},
         {"nanoseconds": 12},
     ],
+)
+@pytest.mark.filterwarnings(
+    "ignore:Non-vectorized DateOffset:pandas.errors.PerformanceWarning"
+)
+@pytest.mark.filterwarnings(
+    "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
@@ -1795,16 +1809,6 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1816,13 +1820,7 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
         "minutes",
         "seconds",
         "microseconds",
-        pytest.param(
-            "nanoseconds",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/36589",
-            ),
-        ),
+        "nanoseconds",
     ],
 )
 @pytest.mark.parametrize(
@@ -1830,8 +1828,31 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
 )
 def test_datetime_dateoffset_binaryop_reflected(
-    date_col, n_periods, frequency, dtype
+    request, n_periods, frequency, dtype
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency in ("microseconds", "nanoseconds")
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    request.applymarker(
+        pytest.mark.xfail(
+            not PANDAS_GE_220
+            and dtype == "datetime64[us]"
+            and frequency == "nanoseconds"
+            and n_periods != 0,
+            reason="https://github.com/pandas-dev/pandas/pull/55595",
+        )
+    )
+    date_col = [
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 

@@ -1,4 +1,6 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -80,6 +82,16 @@ def test_deterministic_tokenize(index):
     df2 = df.set_index(["B", "C"], drop=False)
     assert tokenize(df) != tokenize(df2)
     assert tokenize(df2) == tokenize(df2)
+
+
+def test_deterministic_tokenize_multiindex():
+    dt = datetime.strptime("1995-03-15", "%Y-%m-%d")
+    index = cudf.MultiIndex(
+        levels=[[1, 2], [dt]],
+        codes=[[0, 1], [0, 0]],
+    )
+    df = cudf.DataFrame(index=index)
+    assert tokenize(df) == tokenize(df)
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -147,10 +147,10 @@ struct characters_tokenizer {
  * positions into the d_tokens vector.
  */
 struct strings_tokenizer {
-  cudf::column_device_view const d_strings;  ///< strings to tokenize
-  cudf::string_view const d_delimiter;       ///< delimiter characters to tokenize around
-  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens vector for each string
-  string_index_pair* d_tokens{};             ///< token positions in device memory
+  cudf::column_device_view const d_strings;    ///< strings to tokenize
+  cudf::string_view const d_delimiter;         ///< delimiter characters to tokenize around
+  cudf::detail::input_offsetalator d_offsets;  ///< offsets into the d_tokens vector for each string
+  string_index_pair* d_tokens{};               ///< token positions in device memory
 
   /**
    * @brief Identifies the token positions within each string.
@@ -191,11 +191,11 @@ using delimiterator = cudf::column_device_view::const_iterator<cudf::string_view
  * each string of a given strings column.
  */
 struct multi_delimiter_strings_tokenizer {
-  cudf::column_device_view const d_strings;  ///< strings column to tokenize
-  delimiterator delimiters_begin;            ///< first delimiter
-  delimiterator delimiters_end;              ///< last delimiter
-  cudf::size_type* d_offsets{};              ///< offsets into the d_tokens output vector
-  string_index_pair* d_tokens{};             ///< token positions found for each string
+  cudf::column_device_view const d_strings;    ///< strings column to tokenize
+  delimiterator delimiters_begin;              ///< first delimiter
+  delimiterator delimiters_end;                ///< last delimiter
+  cudf::detail::input_offsetalator d_offsets;  ///< offsets into the d_tokens output vector
+  string_index_pair* d_tokens{};               ///< token positions found for each string
 
   /**
    * @brief Identifies the token positions within each string.

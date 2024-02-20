@@ -1820,12 +1820,12 @@ class structs_column_wrapper : public detail::column_wrapper {
    * child_columns.push_back(std::move(child_int_col));
    * child_columns.push_back(std::move(child_string_col));
    *
-   * struct_column_wrapper struct_column_wrapper{
+   * structs_column_wrapper structs_col{
    *  child_cols,
    *  {1,0,1,0,1} // Validity.
    * };
    *
-   * auto struct_col {struct_column_wrapper.release()};
+   * auto struct_col {structs_col.release()};
    * @endcode
    *
    * @param child_columns The vector of pre-constructed child columns
@@ -1846,12 +1846,12 @@ class structs_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
    * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
    *
-   * struct_column_wrapper struct_column_wrapper{
+   * structs_column_wrapper structs_col{
    *  {child_int_col_wrapper, child_string_col_wrapper}
    *  {1,0,1,0,1} // Validity.
    * };
    *
-   * auto struct_col {struct_column_wrapper.release()};
+   * auto struct_col {structs_col.release()};
    * @endcode
    *
    * @param child_column_wrappers The list of child column wrappers
@@ -1882,12 +1882,12 @@ class structs_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
    * string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
    *
-   * struct_column_wrapper struct_column_wrapper{
+   * structs_column_wrapper structs_col{
    *  {child_int_col_wrapper, child_string_col_wrapper}
    *  cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i%2; }) // Validity.
    * };
    *
-   * auto struct_col {struct_column_wrapper.release()};
+   * auto struct_col {structs_col.release()};
    * @endcode
    *
    * @param child_column_wrappers The list of child column wrappers

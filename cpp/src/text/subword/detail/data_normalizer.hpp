@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,14 @@
 
 #include <text/subword/detail/cp_data.h>
 
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 using uvector_pair = std::pair<std::unique_ptr<rmm::device_uvector<uint32_t>>,
-                               std::unique_ptr<rmm::device_uvector<cudf::size_type>>>;
+                               std::unique_ptr<rmm::device_uvector<int64_t>>>;
 
 namespace nvtext {
 namespace detail {
@@ -74,21 +75,16 @@ class data_normalizer {
    * characters in the text after running normalization. The second pointer is to the
    * offsets of the strings in the code point array. That is, string `i` starts at
    * `result.second->data()[i]`.
-   * This array will always be of length `num_strings + 1` since we need one entry
+   * This array will always be of length `input.size() + 1` since we need one entry
    * for each input and a last entry which has the total number of bytes.
    *
-   * @param d_strings A vector of strings which MUST be encoded in the UTF-8 format.
-   * @param d_offsets A vector of byte offsets to the beginning of individual strings in
-   *        the `d_strings` parameter.
-   * @param num_strings The number of strings identified in `d_strings`.
+   * @param input Strings to normalize
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return Two pointers to GPU data buffers. The first is a pointer
    *         to the code points array and the second is a pointer to the offsets
    *         used to locate the code points for each string.
    */
-  uvector_pair normalize(char const* d_strings,
-                         cudf::size_type const* d_offsets,
-                         cudf::size_type num_strings,
+  uvector_pair normalize(cudf::strings_column_view const& input,
                          rmm::cuda_stream_view stream) const;
 
  private:
