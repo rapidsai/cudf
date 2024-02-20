@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -19,13 +19,12 @@ from cudf._lib.cpp.types cimport (
 )
 
 
-cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" \
-        nogil:
-    ctypedef enum duplicate_keep_option:
-        KEEP_ANY 'cudf::duplicate_keep_option::KEEP_ANY'
-        KEEP_FIRST 'cudf::duplicate_keep_option::KEEP_FIRST'
-        KEEP_LAST 'cudf::duplicate_keep_option::KEEP_LAST'
-        KEEP_NONE 'cudf::duplicate_keep_option::KEEP_NONE'
+cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
+    cpdef enum class duplicate_keep_option:
+        KEEP_ANY
+        KEEP_FIRST
+        KEEP_LAST
+        KEEP_NONE
 
     cdef unique_ptr[table] drop_nulls(table_view source_table,
                                       vector[size_type] keys,

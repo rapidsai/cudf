@@ -30,6 +30,9 @@
 template <typename T>
 struct ParquetWriterDeltaTest : public ParquetWriterTest {};
 
+struct ParquetCompressionTest : public cudf::test::BaseFixture,
+                                public ::testing::WithParamInterface<cudf::io::compression_type> {};
+
 TYPED_TEST_SUITE(ParquetWriterDeltaTest, SupportedDeltaTestTypes);
 
 TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaTestTypes)
@@ -232,3 +235,40 @@ TYPED_TEST(ParquetWriterComparableTypeTest, ThreeColumnSorted)
     EXPECT_EQ(ci.boundary_order, expected_orders[i]);
   }
 }
+
+TEST_P(ParquetCompressionTest, Basic)
+{
+  constexpr auto num_rows     = 12000;
+  auto const compression_type = GetParam();
+
+  // Generate compressible data
+  auto int_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
+  auto float_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 32; });
+
+  cudf::test::fixed_width_column_wrapper<int> int_col(int_sequence, int_sequence + num_rows);
+  cudf::test::fixed_width_column_wrapper<float> float_col(float_sequence,
+                                                          float_sequence + num_rows);
+
+  table_view expected({int_col, float_col});
+
+  std::vector<char> out_buffer;
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
+      .compression(compression_type);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts = cudf::io::parquet_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+INSTANTIATE_TEST_CASE_P(ParquetCompressionTest,
+                        ParquetCompressionTest,
+                        ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::SNAPPY,
+                                          cudf::io::compression_type::LZ4,
+                                          cudf::io::compression_type::ZSTD));

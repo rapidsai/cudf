@@ -138,6 +138,9 @@ struct OrcStatisticsTest : public cudf::test::BaseFixture {};
 // Test fixture for metadata tests
 struct OrcMetadataReaderTest : public cudf::test::BaseFixture {};
 
+struct OrcCompressionTest : public cudf::test::BaseFixture,
+                            public ::testing::WithParamInterface<cudf::io::compression_type> {};
+
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
@@ -2054,6 +2057,42 @@ TEST_F(OrcStatisticsTest, Empty)
   auto& ts6 = std::get<cudf::io::bucket_statistics>(s6.type_specific_stats);
   EXPECT_EQ(ts6.count[0], 0);
 }
+
+TEST_P(OrcCompressionTest, Basic)
+{
+  constexpr auto num_rows     = 12000;
+  auto const compression_type = GetParam();
+
+  // Generate compressible data
+  auto int_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
+  auto float_sequence =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i / 32; });
+
+  int32_col int_col(int_sequence, int_sequence + num_rows);
+  float32_col float_col(float_sequence, float_sequence + num_rows);
+
+  table_view expected({int_col, float_col});
+
+  std::vector<char> out_buffer;
+  cudf::io::orc_writer_options out_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{&out_buffer}, expected)
+      .compression(compression_type);
+  cudf::io::write_orc(out_opts);
+
+  cudf::io::orc_reader_options in_opts = cudf::io::orc_reader_options::builder(
+    cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  auto result = cudf::io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
+                        OrcCompressionTest,
+                        ::testing::Values(cudf::io::compression_type::NONE,
+                                          cudf::io::compression_type::SNAPPY,
+                                          cudf::io::compression_type::LZ4,
+                                          cudf::io::compression_type::ZSTD));
 
 TEST_F(OrcWriterTest, BounceBufferBug)
 {

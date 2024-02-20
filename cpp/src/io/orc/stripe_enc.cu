@@ -1390,6 +1390,12 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
       CUDF_FAIL("Compression error: " + reason.value());
     }
     nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+  } else if (compression == LZ4) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
+    nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
   }
