@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <cudf/interop/nanoarrow/nanoarrow.h>
+#include "nanoarrow.h"
 
 const char* ArrowNanoarrowVersion(void) { return NANOARROW_VERSION; }
 
@@ -201,7 +201,9 @@ static void ArrowBufferAllocatorMallocFree(struct ArrowBufferAllocator* allocato
                                            uint8_t* ptr, int64_t size) {
   NANOARROW_UNUSED(allocator);
   NANOARROW_UNUSED(size);
-  ArrowFree(ptr);
+  if (ptr != NULL) {
+    ArrowFree(ptr);
+  }
 }
 
 static struct ArrowBufferAllocator ArrowBufferAllocatorMalloc = {
@@ -211,13 +213,24 @@ struct ArrowBufferAllocator ArrowBufferAllocatorDefault(void) {
   return ArrowBufferAllocatorMalloc;
 }
 
-static uint8_t* ArrowBufferAllocatorNeverReallocate(
-    struct ArrowBufferAllocator* allocator, uint8_t* ptr, int64_t old_size,
-    int64_t new_size) {
-  NANOARROW_UNUSED(allocator);
-  NANOARROW_UNUSED(ptr);
-  NANOARROW_UNUSED(old_size);
+static uint8_t* ArrowBufferDeallocatorReallocate(struct ArrowBufferAllocator* allocator,
+                                                 uint8_t* ptr, int64_t old_size,
+                                                 int64_t new_size) {
   NANOARROW_UNUSED(new_size);
+
+  // Attempting to reallocate a buffer with a custom deallocator is
+  // a programming error. In debug mode, crash here.
+#if defined(NANOARROW_DEBUG)
+  NANOARROW_PRINT_AND_DIE(ENOMEM,
+                          "It is an error to reallocate a buffer whose allocator is "
+                          "ArrowBufferDeallocator()");
+#endif
+
+  // In release mode, ensure the the deallocator is called exactly
+  // once using the pointer it was given and return NULL, which
+  // will trigger the caller to return ENOMEM.
+  allocator->free(allocator, ptr, old_size);
+  *allocator = ArrowBufferAllocatorDefault();
   return NULL;
 }
 
@@ -226,7 +239,7 @@ struct ArrowBufferAllocator ArrowBufferDeallocator(
                         int64_t size),
     void* private_data) {
   struct ArrowBufferAllocator allocator;
-  allocator.reallocate = &ArrowBufferAllocatorNeverReallocate;
+  allocator.reallocate = &ArrowBufferDeallocatorReallocate;
   allocator.free = custom_free;
   allocator.private_data = private_data;
   return allocator;
@@ -452,7 +465,7 @@ ArrowErrorCode ArrowDecimalAppendDigitsToBuffer(const struct ArrowDecimal* decim
 #include <stdlib.h>
 #include <string.h>
 
-#include <cudf/interop/nanoarrow/nanoarrow.h>
+#include "nanoarrow.h"
 
 static void ArrowSchemaReleaseInternal(struct ArrowSchema* schema) {
   if (schema->format != NULL) ArrowFree((void*)schema->format);
@@ -2022,7 +2035,7 @@ ArrowErrorCode ArrowMetadataBuilderRemove(struct ArrowBuffer* buffer,
 #include <stdlib.h>
 #include <string.h>
 
-#include <cudf/interop/nanoarrow/nanoarrow.h>
+#include "nanoarrow.h"
 
 static void ArrowArrayReleaseInternal(struct ArrowArray* array) {
   // Release buffers held by this array
@@ -2906,6 +2919,10 @@ static int ArrowArrayViewValidateDefault(struct ArrowArrayView* array_view,
                         (long)array_view->buffer_views[2].size_bytes);
           return EINVAL;
         }
+      } else if (array_view->buffer_views[2].size_bytes == -1) {
+        // If the data buffer size is unknown and there are no bytes in the offset buffer,
+        // set the data buffer size to 0.
+        array_view->buffer_views[2].size_bytes = 0;
       }
       break;
 
@@ -2932,6 +2949,10 @@ static int ArrowArrayViewValidateDefault(struct ArrowArrayView* array_view,
                         (long)array_view->buffer_views[2].size_bytes);
           return EINVAL;
         }
+      } else if (array_view->buffer_views[2].size_bytes == -1) {
+        // If the data buffer size is unknown and there are no bytes in the offset
+        // buffer, set the data buffer size to 0.
+        array_view->buffer_views[2].size_bytes = 0;
       }
       break;
 
@@ -3211,7 +3232,7 @@ ArrowErrorCode ArrowArrayViewValidate(struct ArrowArrayView* array_view,
 
 #include <errno.h>
 
-#include <cudf/interop/nanoarrow/nanoarrow.h>
+#include "nanoarrow.h"
 
 struct BasicArrayStreamPrivate {
   struct ArrowSchema schema;

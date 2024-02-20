@@ -241,6 +241,13 @@ class Unique {
   T data_;
 };
 
+template <typename T>
+static inline void DeallocateWrappedBuffer(struct ArrowBufferAllocator* allocator,
+                                           uint8_t* ptr, int64_t size) {
+  auto obj = reinterpret_cast<T*>(allocator->private_data);
+  delete obj;
+}
+
 /// @}
 
 }  // namespace internal
@@ -270,6 +277,51 @@ using UniqueBitmap = internal::Unique<struct ArrowBitmap>;
 
 /// \brief Class wrapping a unique struct ArrowArrayView
 using UniqueArrayView = internal::Unique<struct ArrowArrayView>;
+
+/// @}
+
+/// \defgroup nanoarrow_hpp-buffer Buffer helpers
+///
+/// Helpers to wrap buffer-like C++ objects as ArrowBuffer objects that can
+/// be used to build ArrowArray objects.
+///
+/// @{
+
+/// \brief Initialize a buffer wrapping an arbitrary C++ object
+///
+/// Initializes a buffer with a release callback that deletes the moved obj
+/// when ArrowBufferReset is called. This version is useful for wrapping
+/// an object whose .data() member is missing or unrelated to the buffer
+/// value that is destined for a the buffer of an ArrowArray. T must be movable.
+template <typename T>
+static inline void BufferInitWrapped(struct ArrowBuffer* buffer, T obj,
+                                     const uint8_t* data, int64_t size_bytes) {
+  T* obj_moved = new T(std::move(obj));
+  buffer->data = const_cast<uint8_t*>(data);
+  buffer->size_bytes = size_bytes;
+  buffer->capacity_bytes = 0;
+  buffer->allocator =
+      ArrowBufferDeallocator(&internal::DeallocateWrappedBuffer<T>, obj_moved);
+}
+
+/// \brief Initialize a buffer wrapping a C++ sequence
+///
+/// Specifically, this uses obj.data() to set the buffer address and
+/// obj.size() * sizeof(T::value_type) to set the buffer size. This works
+/// for STL containers like std::vector, std::array, and std::string.
+/// This function moves obj and ensures it is deleted when ArrowBufferReset
+/// is called.
+template <typename T>
+void BufferInitSequence(struct ArrowBuffer* buffer, T obj) {
+  // Move before calling .data() (matters sometimes).
+  T* obj_moved = new T(std::move(obj));
+  buffer->data =
+      const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(obj_moved->data()));
+  buffer->size_bytes = obj_moved->size() * sizeof(typename T::value_type);
+  buffer->capacity_bytes = 0;
+  buffer->allocator =
+      ArrowBufferDeallocator(&internal::DeallocateWrappedBuffer<T>, obj_moved);
+}
 
 /// @}
 
