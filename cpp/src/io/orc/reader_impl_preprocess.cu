@@ -278,7 +278,7 @@ rmm::device_buffer decompress_stripe_data(
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
 
-   // TODO: proclam return type
+    // TODO: proclam return type
 
     // Check if any block has been failed to decompress.
     // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
@@ -554,7 +554,6 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   stream.synchronize();
 }
 
-
 // TODO: this is called for each chunk of stripes.
 /**
  * @brief Aggregate child metadata from parent column chunks.
@@ -740,10 +739,11 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
-      auto col_type = to_cudf_type(_metadata.get_col_type(col.id).kind,
-                                   _config.use_np_dtypes,
-                                   _config.timestamp_type.id(),
-                                   to_cudf_decimal_type(_config.decimal128_columns, _metadata, col.id));
+      auto col_type =
+        to_cudf_type(_metadata.get_col_type(col.id).kind,
+                     _config.use_np_dtypes,
+                     _config.timestamp_type.id(),
+                     to_cudf_decimal_type(_config.decimal128_columns, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
       if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
           col_type == type_id::DECIMAL128) {
@@ -809,17 +809,17 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       auto const stripe_footer = stripe.stripe_footer;
 
       auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx,
-                                                                        level,
-                                                                        stripe_info,
-                                                                        stripe_footer,
-                                                                        col_meta.orc_col_map[level],
-                                                                        _metadata.get_types(),
-                                                                        use_index,
-                                                                        level == 0,
-                                                                        &num_dict_entries,
-                                                                        &stream_idx,
-                                                                        std::nullopt, // stream_info
-                                                                        &chunks);
+                                                                      level,
+                                                                      stripe_info,
+                                                                      stripe_footer,
+                                                                      col_meta.orc_col_map[level],
+                                                                      _metadata.get_types(),
+                                                                      use_index,
+                                                                      level == 0,
+                                                                      &num_dict_entries,
+                                                                      &stream_idx,
+                                                                      std::nullopt,  // stream_info
+                                                                      &chunks);
 
       auto const is_stripe_data_empty = total_data_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
@@ -871,7 +871,9 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 ? sizeof(size_type)
                                 : cudf::size_of(column_types[col_idx]);
         chunk.num_rowgroups = stripe_num_rowgroups;
-        if (chunk.type_kind == orc::TIMESTAMP) { chunk.timestamp_type_id = _config.timestamp_type.id(); }
+        if (chunk.type_kind == orc::TIMESTAMP) {
+          chunk.timestamp_type_id = _config.timestamp_type.id();
+        }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
             chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
