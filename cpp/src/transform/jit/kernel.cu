@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include "transform/jit/operation-udf.hpp"
-
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -26,6 +24,10 @@
 #include <cuda/std/type_traits>
 
 #include <cstddef>
+
+// clang-format off
+#include "transform/jit/operation-udf.hpp"
+// clang-format on
 
 namespace cudf {
 namespace transformation {
