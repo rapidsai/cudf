@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow.h"
+#include <cudf/interop/nanoarrow/nanoarrow.h>
 
 const char* ArrowNanoarrowVersion(void) { return NANOARROW_VERSION; }
 
@@ -465,7 +465,7 @@ ArrowErrorCode ArrowDecimalAppendDigitsToBuffer(const struct ArrowDecimal* decim
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow.h"
+#include <cudf/interop/nanoarrow/nanoarrow.h>
 
 static void ArrowSchemaReleaseInternal(struct ArrowSchema* schema) {
   if (schema->format != NULL) ArrowFree((void*)schema->format);
@@ -2035,7 +2035,7 @@ ArrowErrorCode ArrowMetadataBuilderRemove(struct ArrowBuffer* buffer,
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow.h"
+#include <cudf/interop/nanoarrow/nanoarrow.h>
 
 static void ArrowArrayReleaseInternal(struct ArrowArray* array) {
   // Release buffers held by this array
@@ -3232,7 +3232,7 @@ ArrowErrorCode ArrowArrayViewValidate(struct ArrowArrayView* array_view,
 
 #include <errno.h>
 
-#include "nanoarrow.h"
+#include <cudf/interop/nanoarrow/nanoarrow.h>
 
 struct BasicArrayStreamPrivate {
   struct ArrowSchema schema;

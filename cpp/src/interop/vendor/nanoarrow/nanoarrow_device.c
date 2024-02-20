@@ -17,7 +17,7 @@
 
 #include <errno.h>
 
-#include "nanoarrow.h"
+#include <cudf/interop/nanoarrow/nanoarrow.h>
 
 #include <cudf/interop/nanoarrow/nanoarrow_device.h>
 

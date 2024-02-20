@@ -266,6 +266,7 @@ void set_buffer(std::unique_ptr<T>& device_buf, int64_t i, struct ArrowArray* ou
 {
   ArrowBuffer* buf = ArrowArrayBuffer(out, i);
   buf->data        = reinterpret_cast<uint8_t*>(device_buf->data());
+  buf->size_bytes = device_buf->size();
   // we make a new unique_ptr and move to it in case there was a custom deleter
   ArrowBufferSetAllocator(buf,
                           ArrowBufferDeallocator(&device_buffer_finalize<T>,
