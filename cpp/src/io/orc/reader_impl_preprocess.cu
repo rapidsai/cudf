@@ -24,6 +24,7 @@
 
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -100,7 +101,9 @@ std::size_t gather_stream_info(std::size_t stripe_index,
 
   for (auto const& stream : stripefooter->streams) {
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
-      dst_offset += stream.length;
+      // Ignore reading this stream from source.
+      cudf::logger().warn("Unexpected stream in the input ORC source. The stream will be ignored.");
+      src_offset += stream.length;
       continue;
     }
 
@@ -125,8 +128,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
           }
         }
       }
-    }
-    if (col != -1) {
+    } else if (col != -1) {
       if (src_offset >= stripeinfo->indexLength || use_index) {
         auto& chunk           = chunks[stripe_index][col];
         auto const index_type = get_stream_index_type(stream.kind);
