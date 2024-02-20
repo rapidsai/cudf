@@ -9,7 +9,7 @@ from rmm._lib.device_buffer cimport device_buffer
 
 from cudf._lib.cpp cimport join as cpp_join
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.types cimport data_type, size_type, type_id
+from cudf._lib.cpp.types cimport data_type, null_equality, size_type, type_id
 
 from .column cimport Column
 from .table cimport Table
@@ -32,7 +32,11 @@ cdef Column _column_from_gather_map(cpp_join.gather_map_type gather_map):
     )
 
 
-cpdef tuple inner_join(Table left_keys, Table right_keys):
+cpdef tuple inner_join(
+    Table left_keys,
+    Table right_keys,
+    null_equality nulls_equal
+):
     """Perform an inner join between two tables.
 
     For details, see :cpp:func:`inner_join`.
@@ -43,6 +47,8 @@ cpdef tuple inner_join(Table left_keys, Table right_keys):
         The left table to join.
     right_keys : Table
         The right table to join.
+    nulls_equal : NullEquality
+        Should nulls compare equal?
 
     Returns
     -------
@@ -52,14 +58,18 @@ cpdef tuple inner_join(Table left_keys, Table right_keys):
     """
     cdef cpp_join.gather_map_pair_type c_result
     with nogil:
-        c_result = cpp_join.inner_join(left_keys.view(), right_keys.view())
+        c_result = cpp_join.inner_join(left_keys.view(), right_keys.view(), nulls_equal)
     return (
         _column_from_gather_map(move(c_result.first)),
         _column_from_gather_map(move(c_result.second)),
     )
 
 
-cpdef tuple left_join(Table left_keys, Table right_keys):
+cpdef tuple left_join(
+    Table left_keys,
+    Table right_keys,
+    null_equality nulls_equal
+):
     """Perform a left join between two tables.
 
     For details, see :cpp:func:`left_join`.
@@ -70,6 +80,9 @@ cpdef tuple left_join(Table left_keys, Table right_keys):
         The left table to join.
     right_keys : Table
         The right table to join.
+    nulls_equal : NullEquality
+        Should nulls compare equal?
+
 
     Returns
     -------
@@ -79,14 +92,18 @@ cpdef tuple left_join(Table left_keys, Table right_keys):
     """
     cdef cpp_join.gather_map_pair_type c_result
     with nogil:
-        c_result = cpp_join.left_join(left_keys.view(), right_keys.view())
+        c_result = cpp_join.left_join(left_keys.view(), right_keys.view(), nulls_equal)
     return (
         _column_from_gather_map(move(c_result.first)),
         _column_from_gather_map(move(c_result.second)),
     )
 
 
-cpdef tuple full_join(Table left_keys, Table right_keys):
+cpdef tuple full_join(
+    Table left_keys,
+    Table right_keys,
+    null_equality nulls_equal
+):
     """Perform a full join between two tables.
 
     For details, see :cpp:func:`full_join`.
@@ -97,6 +114,9 @@ cpdef tuple full_join(Table left_keys, Table right_keys):
         The left table to join.
     right_keys : Table
         The right table to join.
+    nulls_equal : NullEquality
+        Should nulls compare equal?
+
 
     Returns
     -------
@@ -106,14 +126,18 @@ cpdef tuple full_join(Table left_keys, Table right_keys):
     """
     cdef cpp_join.gather_map_pair_type c_result
     with nogil:
-        c_result = cpp_join.full_join(left_keys.view(), right_keys.view())
+        c_result = cpp_join.full_join(left_keys.view(), right_keys.view(), nulls_equal)
     return (
         _column_from_gather_map(move(c_result.first)),
         _column_from_gather_map(move(c_result.second)),
     )
 
 
-cpdef Column left_semi_join(Table left_keys, Table right_keys):
+cpdef Column left_semi_join(
+    Table left_keys,
+    Table right_keys,
+    null_equality nulls_equal
+):
     """Perform a left semi join between two tables.
 
     For details, see :cpp:func:`left_semi_join`.
@@ -124,6 +148,9 @@ cpdef Column left_semi_join(Table left_keys, Table right_keys):
         The left table to join.
     right_keys : Table
         The right table to join.
+    nulls_equal : NullEquality
+        Should nulls compare equal?
+
 
     Returns
     -------
@@ -132,11 +159,19 @@ cpdef Column left_semi_join(Table left_keys, Table right_keys):
     """
     cdef cpp_join.gather_map_type c_result
     with nogil:
-        c_result = cpp_join.left_semi_join(left_keys.view(), right_keys.view())
+        c_result = cpp_join.left_semi_join(
+            left_keys.view(),
+            right_keys.view(),
+            nulls_equal
+        )
     return _column_from_gather_map(move(c_result))
 
 
-cpdef Column left_anti_join(Table left_keys, Table right_keys):
+cpdef Column left_anti_join(
+    Table left_keys,
+    Table right_keys,
+    null_equality nulls_equal
+):
     """Perform a left anti join between two tables.
 
     For details, see :cpp:func:`left_anti_join`.
@@ -147,6 +182,9 @@ cpdef Column left_anti_join(Table left_keys, Table right_keys):
         The left table to join.
     right_keys : Table
         The right table to join.
+    nulls_equal : NullEquality
+        Should nulls compare equal?
+
 
     Returns
     -------
@@ -155,5 +193,9 @@ cpdef Column left_anti_join(Table left_keys, Table right_keys):
     """
     cdef cpp_join.gather_map_type c_result
     with nogil:
-        c_result = cpp_join.left_anti_join(left_keys.view(), right_keys.view())
+        c_result = cpp_join.left_anti_join(
+            left_keys.view(),
+            right_keys.view(),
+            nulls_equal
+        )
     return _column_from_gather_map(move(c_result))
