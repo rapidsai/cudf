@@ -16,6 +16,9 @@
 
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -36,10 +39,6 @@
 #include <thrust/detail/copy.h>
 #include <thrust/remove.h>
 #include <thrust/transform.h>
-
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/trie.cuh>
 
 #include <type_traits>
 

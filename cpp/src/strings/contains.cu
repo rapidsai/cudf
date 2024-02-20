@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "strings/count_matches.hpp"
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -25,10 +29,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <strings/count_matches.hpp>
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
 
 namespace cudf {
 namespace strings {

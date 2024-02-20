@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "strings/regex/regex.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -25,8 +27,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/scan.h>
-
-#include <strings/regex/regex.cuh>
 
 #include <stdexcept>
 

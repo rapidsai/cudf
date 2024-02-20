@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -33,9 +36,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/pair.h>
-
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
 
 namespace cudf {
 namespace strings {

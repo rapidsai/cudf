@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "strings/regex/regcomp.h"
+
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
@@ -24,8 +26,6 @@
 #include <cuda_runtime.h>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
-
-#include <strings/regex/regcomp.h>
 
 #include <memory>
 

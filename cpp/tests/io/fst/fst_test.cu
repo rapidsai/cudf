@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <tests/io/fst/common.hpp>
 
 #include <cudf_test/base_fixture.hpp>
@@ -28,9 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
-
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cstdlib>
 #include <vector>

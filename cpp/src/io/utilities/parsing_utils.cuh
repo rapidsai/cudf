@@ -17,6 +17,8 @@
 #pragma once
 
 #include "column_type_histogram.hpp"
+#include "io/csv/datetime.cuh"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -31,9 +33,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/reverse_iterator.h>
 #include <thrust/mismatch.h>
-
-#include <io/csv/datetime.cuh>
-#include <io/utilities/trie.cuh>
 
 #include <optional>
 

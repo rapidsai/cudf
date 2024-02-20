@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "strings/char_types/char_cases.h"
+#include "strings/char_types/char_flags.h"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -27,9 +30,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/char_flags.h>
 
 namespace cudf {
 namespace strings {

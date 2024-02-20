@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "lists/utilities.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/concatenate.hpp>
@@ -31,8 +33,6 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
-
-#include <lists/utilities.hpp>
 
 namespace cudf {
 namespace experimental {

@@ -18,6 +18,9 @@
  */
 
 #include "compiled/binary_ops.hpp"
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/util.hpp"
 
 #include <cudf/binaryop.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -39,9 +42,6 @@
 
 #include <thrust/optional.h>
 
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/util.hpp>
 #include <jit_preprocessed_files/binaryop/jit/kernel.cu.jit.hpp>
 
 #include <string>

@@ -15,6 +15,7 @@
  */
 
 #include "group_reductions.hpp"
+#include "quantiles/quantiles_util.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -33,8 +34,6 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <quantiles/quantiles_util.hpp>
 
 namespace cudf {
 namespace groupby {

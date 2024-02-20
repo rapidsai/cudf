@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
 
@@ -30,10 +33,6 @@
 #include <thrust/logical.h>
 #include <thrust/sort.h>
 #include <thrust/unique.h>
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
 #include <numeric>
 

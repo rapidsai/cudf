@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "join/join_common_utils.hpp"
+
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -34,7 +36,7 @@
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
 
-#include <join/join_common_utils.hpp>
+#include <memory>
 
 namespace cudf {
 namespace detail {

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "groupby/common/utils.hpp"
+#include "groupby/hash/groupby_kernels.cuh"
+#include "hash/concurrent_unordered_map.cuh"
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -51,10 +55,6 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <groupby/common/utils.hpp>
-#include <groupby/hash/groupby_kernels.cuh>
-#include <hash/concurrent_unordered_map.cuh>
 
 #include <memory>
 #include <unordered_set>

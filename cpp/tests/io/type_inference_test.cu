@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/utilities/string_parsing.hpp"
+#include "io/utilities/trie.cuh"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 
@@ -25,9 +28,6 @@
 
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
-
-#include <io/utilities/string_parsing.hpp>
-#include <io/utilities/trie.cuh>
 
 #include <cstddef>
 #include <string>

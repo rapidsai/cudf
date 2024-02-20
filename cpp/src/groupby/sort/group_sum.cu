@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "groupby/sort/group_single_pass_reduction_util.cuh"
+
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 namespace cudf {
 namespace groupby {

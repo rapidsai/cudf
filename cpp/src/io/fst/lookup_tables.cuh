@@ -16,13 +16,13 @@
 
 #pragma once
 
+#include "io/fst/device_dfa.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <cudf/types.hpp>
 
 #include <cub/cub.cuh>
 #include <cuda/std/iterator>
-
-#include <io/fst/device_dfa.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <algorithm>
 #include <cstdint>

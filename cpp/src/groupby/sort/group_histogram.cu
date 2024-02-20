@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "lists/utilities.hpp"
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
@@ -26,8 +28,6 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/gather.h>
-
-#include <lists/utilities.hpp>
 
 namespace cudf::groupby::detail {
 

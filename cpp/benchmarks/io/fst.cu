@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/hostdevice_vector.hpp"  //TODO find better replacement
+
 #include <benchmarks/common/generate_input.hpp>
 #include <tests/io/fst/common.hpp>
 
@@ -29,8 +32,6 @@
 
 #include <thrust/iterator/discard_iterator.h>
 
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>  //TODO find better replacement
 #include <nvbench/nvbench.cuh>
 
 #include <cstdlib>

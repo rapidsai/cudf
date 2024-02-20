@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "text/subword/detail/codepoint_metadata.ah"
+#include "text/subword/detail/tokenizer_utils.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/utilities.cuh>
@@ -27,9 +30,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/fill.h>
-
-#include <text/subword/detail/codepoint_metadata.ah>
-#include <text/subword/detail/tokenizer_utils.cuh>
 
 #include <algorithm>
 #include <cstdint>

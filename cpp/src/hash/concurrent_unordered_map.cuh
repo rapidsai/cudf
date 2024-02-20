@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "hash/managed.cuh"
+
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
@@ -27,8 +29,6 @@
 
 #include <cuda/atomic>
 #include <thrust/pair.h>
-
-#include <hash/managed.cuh>
 
 #include <iostream>
 #include <iterator>

@@ -15,6 +15,7 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/io/data_sink.hpp>
 #include <cudf/utilities/error.hpp>
@@ -22,8 +23,6 @@
 #include <kvikio/file_handle.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <io/utilities/config_utils.hpp>
 
 #include <fstream>
 

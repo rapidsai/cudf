@@ -19,6 +19,10 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
+#include "io/csv/durations.hpp"
+#include "io/utilities/parsing_utils.cuh"
+#include "lists/utilities.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
@@ -52,10 +56,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
-
-#include <io/csv/durations.hpp>
-#include <io/utilities/parsing_utils.cuh>
-#include <lists/utilities.hpp>
 
 #include <algorithm>
 #include <memory>

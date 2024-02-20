@@ -15,6 +15,7 @@
  */
 
 #include "delta_binary.cuh"
+#include "io/utilities/block_utils.cuh"
 #include "page_string_utils.cuh"
 #include "parquet_gpu.hpp"
 
@@ -23,8 +24,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_scan.h>
-
-#include <io/utilities/block_utils.cuh>
 
 namespace cudf::io::parquet::detail {
 

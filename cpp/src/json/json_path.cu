@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/utilities/parsing_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
@@ -40,8 +42,6 @@
 #include <thrust/pair.h>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
-
-#include <io/utilities/parsing_utils.cuh>
 
 namespace cudf {
 namespace detail {

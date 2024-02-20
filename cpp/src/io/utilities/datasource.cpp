@@ -15,6 +15,7 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/arrow_io_source.hpp>
@@ -28,7 +29,6 @@
 
 #include <arrow/io/memory.h>
 #include <fcntl.h>
-#include <io/utilities/config_utils.hpp>
 #include <sys/mman.h>
 #include <unistd.h>
 

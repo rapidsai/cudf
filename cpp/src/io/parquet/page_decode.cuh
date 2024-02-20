@@ -17,13 +17,12 @@
 #pragma once
 
 #include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
 
 #include <cuda/atomic>
 #include <cuda/std/tuple>
-
-#include <io/utilities/block_utils.cuh>
 
 namespace cudf::io::parquet::detail {
 

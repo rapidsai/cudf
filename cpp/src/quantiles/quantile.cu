@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "quantiles/quantiles_util.hpp"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -37,8 +39,6 @@
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
-
-#include <quantiles/quantiles_util.hpp>
 
 #include <memory>
 #include <vector>

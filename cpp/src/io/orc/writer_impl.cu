@@ -19,6 +19,9 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
 #include "writer_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
@@ -55,10 +58,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
 
 #include <algorithm>
 #include <cstring>

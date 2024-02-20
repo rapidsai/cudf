@@ -16,15 +16,15 @@
 
 #pragma once
 
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/time_utils.cuh"
+
 #include <cudf/fixed_point/fixed_point.hpp>
 
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/reduce.h>
-
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/time_utils.cuh>
 
 namespace cudf {
 namespace io {

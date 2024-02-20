@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 
@@ -22,8 +25,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <vector>

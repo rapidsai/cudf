@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/fst/lookup_tables.cuh"
+
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
 
@@ -23,8 +25,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
-
-#include <io/fst/lookup_tables.cuh>
 
 #include <cstdlib>
 #include <string>

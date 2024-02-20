@@ -15,6 +15,7 @@
  */
 
 #include "delta_enc.cuh"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.cuh"
 
 #include <cudf/detail/iterator.cuh>
@@ -38,8 +39,6 @@
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/tuple.h>
-
-#include <io/utilities/block_utils.cuh>
 
 #include <bitset>
 

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
 #include <cudf/io/orc_types.hpp>
@@ -23,8 +24,6 @@
 #include <cub/cub.cuh>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-
-#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace io {

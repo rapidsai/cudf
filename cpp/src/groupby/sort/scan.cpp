@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include "groupby/common/utils.hpp"
+#include "groupby/sort/functors.hpp"
+#include "groupby/sort/group_reductions.hpp"
+#include "groupby/sort/group_scan.hpp"
+
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -30,11 +35,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <groupby/common/utils.hpp>
-#include <groupby/sort/functors.hpp>
-#include <groupby/sort/group_reductions.hpp>
-#include <groupby/sort/group_scan.hpp>
 
 #include <memory>
 

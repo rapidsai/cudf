@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/json/nested_json.hpp"
+
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <tests/io/fst/common.hpp>
@@ -22,7 +24,6 @@
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/types.hpp>
 
-#include <io/json/nested_json.hpp>
 #include <nvbench/nvbench.cuh>
 
 #include <string>

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/utilities/output_builder.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -43,8 +45,6 @@
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <io/utilities/output_builder.cuh>
 
 #include <cstdint>
 #include <limits>

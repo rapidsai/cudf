@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "strings/count_matches.hpp"
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -29,10 +33,6 @@
 
 #include <thrust/functional.h>
 #include <thrust/transform_scan.h>
-
-#include <strings/count_matches.hpp>
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
 
 namespace cudf {
 namespace strings {

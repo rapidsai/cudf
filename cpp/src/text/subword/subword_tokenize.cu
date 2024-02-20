@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/subword/detail/wordpiece_tokenizer.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -35,8 +37,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform_scan.h>
-
-#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 namespace nvtext {
 namespace detail {

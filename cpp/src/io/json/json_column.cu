@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -45,9 +47,6 @@
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
-
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/string_parsing.hpp>
 
 #include <algorithm>
 #include <cstdint>

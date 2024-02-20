@@ -17,13 +17,12 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
+#include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
 
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <io/utilities/column_buffer.hpp>
 
 #include <memory>
 #include <vector>

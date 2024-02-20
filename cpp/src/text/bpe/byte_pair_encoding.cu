@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/bpe/byte_pair_encoding.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -42,8 +44,6 @@
 #include <thrust/merge.h>
 #include <thrust/remove.h>
 #include <thrust/unique.h>
-
-#include <text/bpe/byte_pair_encoding.cuh>
 
 namespace nvtext {
 

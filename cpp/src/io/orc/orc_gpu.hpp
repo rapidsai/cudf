@@ -16,6 +16,9 @@
 
 #pragma once
 
+#include "io/comp/gpuinflate.hpp"
+#include "io/statistics/statistics.cuh"
+#include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
 
 #include <cudf/detail/timezone.cuh>
@@ -28,10 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/static_map.cuh>
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/statistics/statistics.cuh>
-#include <io/utilities/column_buffer.hpp>
 
 namespace cudf {
 namespace io {

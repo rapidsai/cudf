@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "groupby/sort/group_reductions.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
@@ -32,8 +34,6 @@
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <groupby/sort/group_reductions.hpp>
 
 #include <type_traits>
 

@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "io/comp/io_uncomp.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
@@ -23,8 +25,6 @@
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/optional.h>
-
-#include <io/comp/io_uncomp.hpp>
 
 #include <algorithm>
 #include <cstddef>

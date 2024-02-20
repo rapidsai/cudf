@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "quantiles/tdigest/tdigest_util.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
@@ -50,8 +52,6 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <quantiles/tdigest/tdigest_util.cuh>
 
 namespace cudf {
 namespace tdigest {

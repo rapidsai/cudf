@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "io/statistics/statistics.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -27,8 +29,6 @@
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <io/statistics/statistics.cuh>
 
 namespace cudf {
 namespace io {

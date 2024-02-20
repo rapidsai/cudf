@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "strings/regex/regex.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -24,8 +26,6 @@
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/pair.h>
-
-#include <strings/regex/regex.cuh>
 
 namespace cudf {
 namespace strings {

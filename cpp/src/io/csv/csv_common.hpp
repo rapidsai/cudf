@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <io/utilities/column_type_histogram.hpp>
+#include "io/utilities/column_type_histogram.hpp"
 
 #include <cstdint>
 

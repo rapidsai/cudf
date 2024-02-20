@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "reductions/scan/scan.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
@@ -33,8 +35,6 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
-
-#include <reductions/scan/scan.cuh>
 
 #include <type_traits>
 

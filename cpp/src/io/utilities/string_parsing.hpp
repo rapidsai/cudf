@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "io/utilities/parsing_utils.cuh"
+
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -22,8 +24,6 @@
 
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/tuple.h>
-
-#include <io/utilities/parsing_utils.cuh>
 
 namespace cudf::io {
 namespace detail {

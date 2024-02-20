@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "reductions/nested_type_minmax_util.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -25,8 +27,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
-
-#include <reductions/nested_type_minmax_util.cuh>
 
 #include <vector>
 

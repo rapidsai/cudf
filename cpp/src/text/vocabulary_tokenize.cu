@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/utilities/tokenize_ops.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -43,8 +45,6 @@
 #include <thrust/functional.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
-
-#include <text/utilities/tokenize_ops.cuh>
 
 namespace nvtext {
 namespace detail {

@@ -15,6 +15,7 @@
  */
 
 #include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
@@ -22,8 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/tuple.h>
-
-#include <io/utilities/block_utils.cuh>
 
 namespace cudf::io::parquet::detail {
 

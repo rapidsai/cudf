@@ -17,13 +17,12 @@
 #pragma once
 
 #include "gpuinflate.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <io/utilities/config_utils.hpp>
 
 #include <optional>
 

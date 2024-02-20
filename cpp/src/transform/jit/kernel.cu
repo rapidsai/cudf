@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "transform/jit/operation-udf.hpp"
+
 #include <cudf/types.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
@@ -22,8 +24,6 @@
 #include <cuda/std/cstddef>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-
-#include <transform/jit/operation-udf.hpp>
 
 #include <cstddef>
 

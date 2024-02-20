@@ -16,6 +16,10 @@
 
 #pragma once
 
+#include "hash/concurrent_unordered_map.cuh"
+#include "io/utilities/column_type_histogram.hpp"
+#include "io/utilities/parsing_utils.cuh"
+
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -23,10 +27,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/optional.h>
-
-#include <hash/concurrent_unordered_map.cuh>
-#include <io/utilities/column_type_histogram.hpp>
-#include <io/utilities/parsing_utils.cuh>
 
 using cudf::device_span;
 

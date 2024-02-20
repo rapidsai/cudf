@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+#include "groupby/sort/group_single_pass_reduction_util.cuh"
+
 #include <cudf/detail/gather.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/gather.h>
-
-#include <groupby/sort/group_single_pass_reduction_util.cuh>
 
 namespace cudf {
 namespace groupby {

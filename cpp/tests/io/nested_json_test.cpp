@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/json/nested_json.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -35,9 +38,6 @@
 
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
-
-#include <io/json/nested_json.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <string>
 

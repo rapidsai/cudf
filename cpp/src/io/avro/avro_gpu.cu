@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 #include "avro_gpu.hpp"
+#include "io/utilities/block_utils.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <io/utilities/block_utils.cuh>
 
 using cudf::device_span;
 

@@ -16,8 +16,12 @@
 
 #pragma once
 
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/util.hpp"
 #include "lead_lag_nested.cuh"
 #include "nth_element.cuh"
+#include "reductions/nested_type_minmax_util.cuh"
 #include "rolling.hpp"
 #include "rolling_collect_list.cuh"
 #include "rolling_jit.hpp"
@@ -55,11 +59,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/util.hpp>
 #include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
-#include <reductions/nested_type_minmax_util.cuh>
 
 #include <memory>
 

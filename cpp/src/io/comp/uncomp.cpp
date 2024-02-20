@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
@@ -24,7 +25,6 @@
 
 #include <cuda_runtime.h>
 
-#include <io/utilities/hostdevice_vector.hpp>
 #include <zlib.h>  // uncompress
 
 #include <cstring>  // memset

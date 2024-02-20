@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/detail/cuco_helpers.hpp>
@@ -51,8 +52,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <limits>
 

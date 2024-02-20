@@ -21,6 +21,10 @@
 
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
+#include "io/comp/io_uncomp.hpp"
+#include "io/utilities/column_buffer.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+#include "io/utilities/parsing_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -38,11 +42,6 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <io/comp/io_uncomp.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-#include <io/utilities/parsing_utils.cuh>
 
 #include <algorithm>
 #include <iostream>

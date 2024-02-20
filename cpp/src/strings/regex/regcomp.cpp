@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "strings/regex/regcomp.h"
+
 #include <cudf/strings/detail/utf8.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-
-#include <strings/regex/regcomp.h>
 
 #include <algorithm>
 #include <array>

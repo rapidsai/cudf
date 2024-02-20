@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/error.hpp>
+#include "io/utilities/row_selection.hpp"
 
-#include <io/utilities/row_selection.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <limits>

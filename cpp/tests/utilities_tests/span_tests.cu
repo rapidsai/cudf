@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
@@ -28,8 +30,6 @@
 
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cstddef>
 #include <cstring>

@@ -16,12 +16,12 @@
 
 #pragma once
 
+#include "io/utilities/parsing_utils.cuh"
+
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <io/utilities/parsing_utils.cuh>
 
 using cudf::device_span;
 

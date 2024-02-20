@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -31,11 +35,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
 namespace cudf {
 namespace io {

@@ -15,6 +15,9 @@
  */
 
 #include "hash/concurrent_unordered_map.cuh"
+#include "io/comp/io_uncomp.hpp"
+#include "io/utilities/column_buffer.hpp"
+#include "io/utilities/parsing_utils.cuh"
 #include "json_gpu.hpp"
 
 #include <cudf/column/column_factories.hpp>
@@ -46,10 +49,6 @@
 #include <thrust/pair.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
-
-#include <io/comp/io_uncomp.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/parsing_utils.cuh>
 
 using cudf::host_span;
 

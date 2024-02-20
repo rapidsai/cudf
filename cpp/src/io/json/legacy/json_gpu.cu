@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/utilities/column_type_histogram.hpp"
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/trie.cuh"
 #include "json_gpu.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
@@ -39,10 +42,6 @@
 #include <thrust/mismatch.h>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
-
-#include <io/utilities/column_type_histogram.hpp>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/trie.cuh>
 
 using cudf::device_span;
 using cudf::detail::grid_1d;

@@ -13,6 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
@@ -25,9 +28,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/discard_iterator.h>
-
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cstdlib>
 #include <string>

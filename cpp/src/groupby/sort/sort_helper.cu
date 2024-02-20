@@ -15,6 +15,7 @@
  */
 
 #include "common_utils.cuh"
+#include "stream_compaction/stream_compaction_common.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -40,8 +41,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/unique.h>
-
-#include <stream_compaction/stream_compaction_common.cuh>
 
 #include <algorithm>
 #include <numeric>

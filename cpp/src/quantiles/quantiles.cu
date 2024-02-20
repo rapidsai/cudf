@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "quantiles/quantiles_util.hpp"
+
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -29,8 +31,6 @@
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <quantiles/quantiles_util.hpp>
 
 #include <memory>
 #include <vector>

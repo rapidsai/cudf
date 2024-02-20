@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "orc.hpp"
 #include "orc_gpu.hpp"
 
@@ -32,8 +33,6 @@
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <memory>
 #include <string>

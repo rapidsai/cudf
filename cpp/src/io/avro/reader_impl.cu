@@ -16,6 +16,9 @@
 
 #include "avro.hpp"
 #include "avro_gpu.hpp"
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/column_buffer.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -37,9 +40,6 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/tabulate.h>
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
 #include <nvcomp/snappy.h>
 
 #include <memory>

@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "text/subword/detail/data_normalizer.hpp"
+#include "text/subword/detail/tokenizer_utils.cuh"
+#include "text/utilities/tokenize_ops.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -37,10 +41,6 @@
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
-
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/subword/detail/tokenizer_utils.cuh>
-#include <text/utilities/tokenize_ops.cuh>
 
 #include <limits>
 

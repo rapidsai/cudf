@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <rmm/cuda_stream_view.hpp>
+#include "groupby/sort/group_scan_util.cuh"
 
-#include <groupby/sort/group_scan_util.cuh>
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace groupby {

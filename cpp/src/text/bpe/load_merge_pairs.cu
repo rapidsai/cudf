@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/bpe/byte_pair_encoding.cuh"
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -28,8 +30,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
-
-#include <text/bpe/byte_pair_encoding.cuh>
 
 #include <fstream>
 #include <iostream>

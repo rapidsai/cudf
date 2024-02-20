@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+#include "strings/count_matches.hpp"
+#include "strings/regex/utilities.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
-
-#include <strings/count_matches.hpp>
-#include <strings/regex/utilities.cuh>
 
 namespace cudf {
 namespace strings {
