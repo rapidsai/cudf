@@ -491,6 +491,20 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& colum
   CUDF_FAIL("Unsupported type for to_arrow_device");
 }
 
+struct ArrowDeviceArrayPrivateData {
+  struct ArrowArray parent;
+  cudaEvent_t sync_event;
+};
+
+static void ArrowDeviceArrayRelease(struct ArrowArray* array)
+{
+  auto private_data = reinterpret_cast<ArrowDeviceArrayPrivateData*>(array->private_data);
+  cudaEventDestroy(private_data->sync_event);
+  ArrowArrayRelease(&private_data->parent);
+  delete private_data;
+  array->release = nullptr;
+}
+
 }  // namespace
 }  // namespace detail
 
@@ -526,7 +540,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
   return result;
 }
 
-struct ArrowDeviceArray to_arrow_device(cudf::table& table,
+struct ArrowDeviceArray to_arrow_device(cudf::table&& table,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -554,32 +568,21 @@ struct ArrowDeviceArray to_arrow_device(cudf::table& table,
     CUDF_EXPECTS(status == NANOARROW_OK, "type dispatcher failed to convert to ArrowArray");
   }
 
-  auto event = std::make_unique<cudaEvent_t>();
-  cudaEventCreate(event.get());
+  auto private_data = std::make_unique<detail::ArrowDeviceArrayPrivateData>();
+  cudaEventCreate(&private_data->sync_event);
 
-  auto status = cudaEventRecord(*event, stream);
+  auto status = cudaEventRecord(private_data->sync_event, stream);
   if (status != cudaSuccess) { CUDF_FAIL("could not create event to sync on"); }
 
-  void* sync_event = event.release();
-
-  ArrowBuffer* buf = ArrowArrayBuffer(tmp.get(), 0);
-  buf->data        = nullptr;
-  ArrowBufferSetAllocator(buf,
-                          ArrowBufferDeallocator(
-                            [](ArrowBufferAllocator* allocator, uint8_t*, int64_t) {
-                              auto* unique_ev =
-                                reinterpret_cast<cudaEvent_t*>(allocator->private_data);
-                              cudaEventDestroy(*unique_ev);
-                              delete unique_ev;
-                            },
-                            sync_event));
-
+  ArrowArrayMove(tmp.get(), &private_data->parent);
   struct ArrowDeviceArray result;
   result.device_id = rmm::get_current_cuda_device().value();
   // can/should we check whether the memory is managed/cuda_host memory?
-  result.device_type = ARROW_DEVICE_CUDA;
-  result.sync_event  = sync_event;
-  ArrowArrayMove(tmp.get(), &result.array);
+  result.device_type        = ARROW_DEVICE_CUDA;
+  result.sync_event         = &private_data->sync_event;
+  result.array              = private_data->parent;
+  result.array.private_data = private_data.release();
+  result.array.release      = &detail::ArrowDeviceArrayRelease;
   return result;
 }
 
