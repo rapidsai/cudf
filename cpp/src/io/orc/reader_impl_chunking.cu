@@ -459,8 +459,10 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   }
 
   // DEBUG only
+  // TODO: use 0.3 constant
   _chunk_read_data.data_read_limit =
     total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
+
 
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
