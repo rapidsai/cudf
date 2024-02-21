@@ -16,13 +16,8 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <thrust/optional.h>
-#include <rmm/device_vector.hpp>
-#include <cudf/utilities/error.hpp>
 
-namespace cudf {
-namespace strings {
-namespace detail {
+namespace cudf::strings::detail {
 
 /**
  * Json token enum
@@ -85,46 +80,58 @@ class json_parser_options {
     return allow_unescaped_control_chars;
   }
 
-  CUDF_HOST_DEVICE inline bool get_max_nesting_depth() const { return max_nesting_depth; }
+  CUDF_HOST_DEVICE int get_max_string_len() const { return max_string_len; }
 
-  void set_allow_single_quotes(bool _allow_single_quotes)
+  CUDF_HOST_DEVICE int get_max_num_len() const { return max_num_len; }
+
+  CUDF_HOST_DEVICE void set_allow_single_quotes(bool _allow_single_quotes)
   {
     allow_single_quotes = _allow_single_quotes;
   }
 
-  void set_allow_unescaped_control_chars(bool _allow_unescaped_control_chars)
+  CUDF_HOST_DEVICE void set_allow_unescaped_control_chars(bool _allow_unescaped_control_chars)
   {
     allow_unescaped_control_chars = _allow_unescaped_control_chars;
   }
 
+  CUDF_HOST_DEVICE void set_max_string_len(int _max_string_len)
+  {
+    max_string_len = _max_string_len;
+  }
+
+  CUDF_HOST_DEVICE void set_max_num_len(int _max_num_len) { max_num_len = _max_num_len; }
+
  private:
-  // if true, allow both ' and " for quoting strings. e.g.: json string {'k1' : "v1"} is valid
-  // if true, Json is not valid formal format
+  // if true, allow both ' and " to quote strings. e.g.: json string {'k1' : "v1"} is valid
+  // if true, Json is not conventional format.
   bool allow_single_quotes = false;
 
   // Feature that determines whether parser will allow JSON Strings to contain unescaped control
   // characters (ASCII characters with value less than 32, including tab and line feed characters)
-  // or not.
+  // or not. If true, Json is not conventional format.
   // e.g., how to represent carriage return and newline character characters:
-  //   if false, "\\n\\r" is allowed. There are 4 chars(\ n \ r), after escaped, 2 chars remains.
-  //     Note: print "\\n\\r" => \n\r
-  //   if true, allow "\n\r" string
+  //   if true, allow "\n\r" string directly
   //     Note: in this string only contains 2 charactors:
   //       carriage return character (ASCII code 13)
   //       newline character (ASCII code 10)
+  //   if false, "\\n\\r" is allowed. There are 4 chars(\ n \ r), after escaped, 2 chars remains.
+  //     Note: print "\\n\\r" => \n\r
+  //     Direct control char is not allowed, e.g.: "\n\r"
+  //
   bool allow_unescaped_control_chars = false;
 
-  // it's from Jackson json
-  int max_nesting_depth = 1000;
+  // max num length, -1 skips verification
+  // e.g.: the len of -123.45e-67 is 7.
+  int max_num_len = -1;
 
-  // it's from Jackson json
-  // currently not take effective
-  int max_num_len = 1000;
-
-  // it's from Jackson json
-  // currently not take effective
-  int max_string_len = 20000000;
+  // max string length, -1 skips verification
+  // Note: do not count escape chars, e.g.: length of "\\n" is 1
+  int max_string_len = -1;
 };
+
+// max json nesting depth
+// Jackson use max 1000 nesting depth
+constexpr int max_json_nesting_depth = 1000;
 
 /**
  * Json parser, provides token by token parsing.
@@ -134,8 +141,8 @@ class json_parser_options {
  * For Json format:
  * Refer to https://www.json.org/json-en.html.
  *
- * Note: when setting `allow_single_quotes` `allow_unescaped_control_chars`, then
- * format is invalid formal Json format.
+ * Note: when setting `allow_single_quotes` or `allow_unescaped_control_chars`, then Json
+ * format is not conventional.
  *
  * White space can only be 4 chars: ' ', '\n', '\r', '\t',
  * Jackson does not allow other control chars as white spaces.
@@ -143,36 +150,36 @@ class json_parser_options {
  * Valid number examples:
  *   0, 102, -0, -102, 0.3, -0.3
  *   1e-5, 1E+5, 1e0, 1E0, 1.3e5
- *   1e01    allow leading zeor after 'e'
+ *   1e01 : allow leading zeor after 'e'
  *
  * Invalid number examples:
  *   00, -00   Leading zeroes not allowed
  *   infinity, +infinity, -infinity
  *   1e, 1e+, 1e-, -1., 1.
  *
- * When allow_single_quotes is true:
+ * When `allow_single_quotes` is true:
  *   Valid string examples:
  *     "\'" , "\"" ,  '\'' , '\"' , '"' , "'"
  *
- *  When allow_single_quotes is false:
+ *  When `allow_single_quotes` is false:
  *   Inalid string examples:
  *     "\'"
  *
- *  When allow_unescaped_control_chars is true:
+ *  When `allow_unescaped_control_chars` is true:
  *    Valid string: "asscii_control_chars"
  *      here `asscii_control_chars` represents control chars which in Ascii code range: [0, 32)
  *
- *  When allow_unescaped_control_chars is false:
+ *  When `allow_unescaped_control_chars` is false:
  *    Invalid string: "asscii_control_chars"
  *      here `asscii_control_chars` represents control chars which in Ascii code range: [0, 32)
  *
  */
-
+template <int max_json_nesting_depth>
 class json_parser {
  public:
   CUDF_HOST_DEVICE inline json_parser(json_parser_options const _options,
                                       char const* const _json_start_pos,
-                                      int64_t const _json_len)
+                                      cudf::size_type const _json_len)
     : options(_options),
       json_start_pos(_json_start_pos),
       curr_pos(_json_start_pos),
@@ -230,76 +237,26 @@ class json_parser {
   }
 
   /**
-   * get a bit value from a long
-   */
-  CUDF_HOST_DEVICE inline bool get_bit(int64_t number, int position)
-  {
-    int64_t shifted = number >> position;
-    return shifted & 1;
-  }
-
-  /**
-   * set a bit value from a long
-   */
-  CUDF_HOST_DEVICE inline void set_bit(int64_t& number, int position)
-  {
-    int64_t mask = 1L << position;
-
-    // Perform bitwise OR to set the bit at the position
-    number |= mask;
-  }
-
-  /**
-   * reset a bit value from a long
-   */
-  CUDF_HOST_DEVICE inline void reset_bit(int64_t& number, int position)
-  {
-    int64_t mask = 1L << position;
-
-    // Perform bitwise OR to set the bit at the position
-    number &= mask;
-  }
-
-  /**
-   * if depth exceeds limitation, return false;
+   * try to push current context into stack
+   * if nested depth exceeds limitation, return false
    */
   CUDF_HOST_DEVICE inline bool try_push_context(json_token token)
   {
-    if (context_stack_depth() < options.get_max_nesting_depth()) {
+    if (stack_size < max_json_nesting_depth) {
       push_context(token);
       return true;
+    } else {
+      return false;
     }
-
-    return false;
   }
 
   /**
    * record the nested state into stack: Json object or Json array
-   * if stack depth <= 64, save to a long value, each bit save a context;
-   * if stack depth >  64, save to a stack.
    */
   CUDF_HOST_DEVICE inline void push_context(json_token token)
   {
-    bool v = (json_token::START_OBJECT == token ? true : false);
-    if (nested_context_stack.has_value()) {
-      nested_context_stack->push_back(v);
-    } else {
-      if (stack_size_for_long < 64) {
-        if (v) {
-          set_bit(context_stack_long, stack_size_for_long++);
-        } else {
-          reset_bit(context_stack_long, stack_size_for_long++);
-        }
-      } else {
-        // nested depth is 64, copy contexts into a stack
-        nested_context_stack.emplace(rmm::device_vector<bool>(128));
-        for (size_t i = 0; i < 64; i++) {
-          nested_context_stack->push_back(get_bit(context_stack_long, i));
-        }
-        // add the token
-        push_context(token);
-      }
-    }
+    bool v              = json_token::START_OBJECT == token ? true : false;
+    stack[stack_size++] = v;
   }
 
   /**
@@ -307,47 +264,21 @@ class json_parser {
    * true is object, false is array
    * only has two contexts: object or array
    */
-  CUDF_HOST_DEVICE inline bool is_object_context()
-  {
-    if (nested_context_stack.has_value()) {
-      return nested_context_stack->back();
-    } else {
-      return get_bit(context_stack_long, stack_size_for_long - 1);
-    }
-  }
+  CUDF_HOST_DEVICE inline bool is_object_context() { return stack[stack_size - 1]; }
 
   /**
    * pop top context from stack
    */
-  CUDF_HOST_DEVICE inline void pop_curr_context()
-  {
-    if (nested_context_stack.has_value()) {
-      nested_context_stack->pop_back();
-    } else {
-      stack_size_for_long--;
-    }
-  }
-
-  /**
-   * get nested stack depth
-   */
-  CUDF_HOST_DEVICE inline int context_stack_depth()
-  {
-    if (nested_context_stack.has_value()) {
-      return nested_context_stack->size();
-    } else {
-      return stack_size_for_long;
-    }
-  }
+  CUDF_HOST_DEVICE inline void pop_curr_context() { stack_size--; }
 
   /**
    * is context stack is empty
    */
-  CUDF_HOST_DEVICE inline bool is_context_stack_empty() { return context_stack_depth() == 0; }
+  CUDF_HOST_DEVICE inline bool is_context_stack_empty() { return stack_size == 0; }
 
   /**
-   * parse the first token in current value
-   * e.g., after done this function:
+   * parse the first value token from current position
+   * e.g., after finished this function:
    *   current token is START_OBJECT if current value is object
    *   current token is START_ARRAY if current value is array
    *   current token is string/num/true/false/null if current value is terminal
@@ -425,7 +356,7 @@ class json_parser {
   }
 
   /**
-   * parse ' quoted string
+   * parse " quoted string
    */
   CUDF_HOST_DEVICE inline void parse_double_quoted_string()
   {
@@ -500,7 +431,7 @@ class json_parser {
    *     ;
    *
    * When allow_unescaped_control_chars is true:
-   *   Allow [0-32) control Ascii chars without escape
+   *   Allow [0-32) control Ascii chars directly without escape
    * When allow_single_quotes is true:
    *   These strings are allowed: '\'' , '\"' , '"' , "\"" , "\'" , "'"
    */
@@ -508,27 +439,38 @@ class json_parser {
   {
     if (!try_skip(quote_char)) { return false; }
 
+    int curr_str_len = 0;
     // scan string content
     while (!eof()) {
       char c = *curr_pos;
       if (c == quote_char) {
         // path 1: close string
         curr_pos++;
-        return true;
+        return verify_max_string_len(curr_str_len);
       } else if (c >= 0 && c < 32 && options.get_allow_unescaped_control_chars()) {
         // path 2: unescaped control char
         curr_pos++;
+        curr_str_len++;
         continue;
       } else {
         switch (c) {
           case '\\':
             // path 3: escape path
             curr_pos++;
-            if (!try_skip_escape_part()) { return false; }
+            if (!try_skip_escape_part()) {
+              return false;
+            } else {
+              curr_str_len++;
+            }
             break;
+
           default:
             // path 4: safe code point
-            if (!try_skip_safe_code_point(c)) { return false; }
+            if (!try_skip_safe_code_point(c)) {
+              return false;
+            } else {
+              curr_str_len++;
+            }
         }
       }
     }
@@ -542,8 +484,7 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline bool try_skip_escape_part()
   {
-    // already skiped the first \
-
+    // already skiped the first '\'
     // try skip second part
     if (!eof()) {
       switch (*curr_pos) {
@@ -565,11 +506,7 @@ class json_parser {
         case 'u':
           // path 2: \u HEX HEX HEX HEX
           curr_pos++;
-          if (!try_skip_unicode()) {
-            return false;
-          } else {
-            return false;
-          }
+          return try_skip_unicode();
         default:
           // path 3: invalid
           return false;
@@ -591,7 +528,7 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline bool try_skip_safe_code_point(char c)
   {
-    // 1 the char is not quoted/close char, here satisfy, do not need to check again
+    // 1 the char is not quoted(' or ") char, here satisfy, do not need to check again
 
     // 2. the char is not \, here satisfy, do not need to check again
 
@@ -612,8 +549,7 @@ class json_parser {
   {
     // already parsed u
 
-    if (try_skip_hex() && try_skip_hex() && try_skip_hex() && try_skip_hex()) { return true; }
-    return false;
+    return try_skip_hex() && try_skip_hex() && try_skip_hex() && try_skip_hex();
   }
 
   /**
@@ -667,25 +603,59 @@ class json_parser {
   }
 
   /**
+   * verify max number length if enabled
+   * e.g.: -1.23e-456, int len is 1, fraction len is 2, exp len is 3
+   */
+  CUDF_HOST_DEVICE inline bool verify_max_num_len(int int_len, int fraction_len, int exp_len)
+  {
+    int sum_len = int_len + fraction_len + exp_len;
+    return
+      // disabled num len check
+      options.get_max_num_len() <= 0 ||
+      // enabled num len check
+      (options.get_max_num_len() > 0 && sum_len <= options.get_max_num_len());
+  }
+
+  /**
+   * verify max string length if enabled
+   */
+  CUDF_HOST_DEVICE inline bool verify_max_string_len(int str_len)
+  {
+    return
+      // disabled str len check
+      options.get_max_string_len() <= 0 ||
+      // enabled str len check
+      (options.get_max_string_len() > 0 && str_len <= options.get_max_string_len());
+  }
+
+  /**
    * parse:  INT ('.' [0-9]+)? EXP?
    *
    * @param[out] is_float, if contains `.` or `e`, set true
    */
   CUDF_HOST_DEVICE inline bool try_unsigned_number(bool& is_float)
   {
+    int int_len      = 0;
+    int fraction_len = 0;
+    int exp_len      = 0;
+
     if (!eof()) {
       char c = *curr_pos;
       if (c >= '1' && c <= '9') {
         curr_pos++;
+        int_len++;
         // first digit is [1-9]
         // path: INT = [1-9] [0-9]*
-        skip_zero_or_more_digits();
-        return parse_number_from_fraction(is_float);
+        int_len += skip_zero_or_more_digits();
+        return parse_number_from_fraction(is_float, fraction_len, exp_len) &&
+               verify_max_num_len(int_len, fraction_len, exp_len);
       } else if (c == '0') {
         curr_pos++;
+        int_len++;
         // first digit is [0]
         // path: INT = '0'
-        return parse_number_from_fraction(is_float);
+        return parse_number_from_fraction(is_float, fraction_len, exp_len) &&
+               verify_max_num_len(int_len, fraction_len, exp_len);
       } else {
         // first digit is non [0-9]
         return false;
@@ -698,22 +668,27 @@ class json_parser {
 
   /**
    * parse: ('.' [0-9]+)? EXP?
+   * @param[is_float] is float
+   * @param[fraction_len] fraction len in number, e.g.: 1.23 23 is fraction part
+   * @param[exp_len] exp len in number, e.g.: 1e234 234 is exp part
    */
-  CUDF_HOST_DEVICE inline bool parse_number_from_fraction(bool& is_float)
+  CUDF_HOST_DEVICE inline bool parse_number_from_fraction(bool& is_float,
+                                                          int& fraction_len,
+                                                          int& exp_len)
   {
     // parse fraction
     if (try_skip('.')) {
       // has fraction
       is_float = true;
       // try pattern: [0-9]+
-      if (!try_skip_one_or_more_digits()) { return false; }
+      if (!try_skip_one_or_more_digits(fraction_len)) { return false; }
     }
 
     // parse exp
     if (!eof() && (*curr_pos == 'e' || *curr_pos == 'E')) {
       curr_pos++;
       is_float = true;
-      return try_parse_exp();
+      return try_parse_exp(exp_len);
     }
 
     return true;
@@ -723,27 +698,32 @@ class json_parser {
    * parse: [0-9]*
    * skip zero or more [0-9]
    */
-  CUDF_HOST_DEVICE inline void skip_zero_or_more_digits()
+  CUDF_HOST_DEVICE inline int skip_zero_or_more_digits()
   {
+    int digits = 0;
     while (!eof()) {
       if (is_digit(*curr_pos)) {
+        digits++;
         curr_pos++;
       } else {
         // point to first non-digit char
         break;
       }
     }
+    return digits;
   }
 
   /**
    * parse: [0-9]+
    * try skip one or more [0-9]
+   * @param[out] len: skipped num of digits
    */
-  CUDF_HOST_DEVICE inline bool try_skip_one_or_more_digits()
+  CUDF_HOST_DEVICE inline bool try_skip_one_or_more_digits(int& len)
   {
     if (!eof() && is_digit(*curr_pos)) {
       curr_pos++;
-      skip_zero_or_more_digits();
+      len++;
+      len += skip_zero_or_more_digits();
       return true;
     } else {
       return false;
@@ -752,8 +732,9 @@ class json_parser {
 
   /**
    * parse [eE][+-]?[0-9]+
+   * @param[out] exp_len exp len
    */
-  CUDF_HOST_DEVICE inline bool try_parse_exp()
+  CUDF_HOST_DEVICE inline bool try_parse_exp(int& exp_len)
   {
     // already parsed [eE]
 
@@ -761,7 +742,7 @@ class json_parser {
     if (!eof() && (*curr_pos == '+' || *curr_pos == '-')) { curr_pos++; }
 
     // parse [0-9]+
-    return try_skip_one_or_more_digits();
+    return try_skip_one_or_more_digits(exp_len);
   }
 
   // =========== Parse number end ===========
@@ -771,6 +752,7 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline void parse_true()
   {
+    // already parsed 't'
     if (try_skip('r') && try_skip('u') && try_skip('e')) {
       curr_token = json_token::VALUE_TRUE;
     } else {
@@ -783,6 +765,7 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline void parse_false()
   {
+    // already parsed 'f'
     if (try_skip('a') && try_skip('l') && try_skip('s') && try_skip('e')) {
       curr_token = json_token::VALUE_FALSE;
     } else {
@@ -795,6 +778,7 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline void parse_null()
   {
+    // already parsed 'n'
     if (try_skip('u') && try_skip('l') && try_skip('l')) {
       curr_token = json_token::VALUE_NULL;
     } else {
@@ -820,9 +804,8 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline json_token parse_next_token()
   {
-    if (curr_token == json_token::SUCCESS || curr_token == json_token::ERROR) {
-      CUDF_FAIL("Parsing is done, try parse again.", std::invalid_argument);
-    }
+    // Already finished parsing, just return previous SUCCESS/ERROR
+    if (curr_token == json_token::SUCCESS || curr_token == json_token::ERROR) { return curr_token; }
 
     skip_whitespaces();
 
@@ -915,10 +898,12 @@ class json_parser {
     } else {
       // eof
       if (is_context_stack_empty() && curr_token != json_token::INIT) {
-        // eof and stack is empty
+        // reach eof; stack is empty; current token is not INIT
         curr_token = json_token::SUCCESS;
       } else {
-        // eof but has unclosed Json array or Json object
+        // eof, and meet the following case:
+        //   - has unclosed Json array/object;
+        //   - empty Jsong string
         curr_token = json_token::ERROR;
       }
     }
@@ -953,18 +938,10 @@ class json_parser {
 
   // saves the nested contexts: Json object context or Json array context
   // true is Json object context; false is Json array context
-  // When encounter EOF and this stack is non-empty, then parsing will fail
-  // if depth <= 64, use a long record context
-  // if depth is > 64, use stack to save
-  int64_t context_stack_long                                         = 0;
-  int32_t stack_size_for_long                                        = 0;
-  thrust::optional<rmm::device_vector<bool>> nested_context_stack = thrust::nullopt;
-
-  int64_t int_value;
-  double double_value;
-  std::string string_value;
+  // When encounter EOF and this stack is non-empty, means non-closed Json object/array,
+  // then parsing will fail.
+  bool stack[max_json_nesting_depth];
+  int stack_size = 0;
 };
 
-}  // namespace detail
-}  // namespace strings
-}  // namespace cudf
+}  // namespace cudf::strings::detail
