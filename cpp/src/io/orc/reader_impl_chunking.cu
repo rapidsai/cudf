@@ -161,7 +161,7 @@ struct cumulative_size {
 };
 
 /**
- * @brief Functor to sum up cummulative sizes.
+ * @brief Functor to sum up cumulative sizes.
  */
 struct cumulative_size_sum {
   __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
