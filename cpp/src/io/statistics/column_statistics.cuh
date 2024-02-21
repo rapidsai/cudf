@@ -21,11 +21,9 @@
 
 #pragma once
 
-#include "temp_storage_wrapper.cuh"
-
-#include "typed_statistics_chunk.cuh"
-
 #include "statistics.cuh"
+#include "temp_storage_wrapper.cuh"
+#include "typed_statistics_chunk.cuh"
 
 namespace cudf {
 namespace io {

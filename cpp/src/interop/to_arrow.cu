@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "detail/arrow_allocator.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -40,8 +42,6 @@
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include "detail/arrow_allocator.hpp"
 
 namespace cudf {
 namespace detail {

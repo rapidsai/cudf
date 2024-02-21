@@ -27,12 +27,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/fill.h>
-#include <thrust/optional.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/fill.h>
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace detail {

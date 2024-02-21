@@ -15,15 +15,16 @@
  */
 
 #include <benchmarks/io/cuio_common.hpp>
+
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
+
+#include <unistd.h>
 
 #include <cstdio>
 #include <fstream>
 #include <numeric>
 #include <string>
-
-#include <unistd.h>
 
 temp_directory const cuio_source_sink_pair::tmpdir{"cudf_gbench"};
 

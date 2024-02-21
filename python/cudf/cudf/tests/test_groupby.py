@@ -3308,7 +3308,6 @@ def test_groupby_pct_change(data, gkey, periods, fill_method):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/11259")
 @pytest.mark.parametrize("periods", [-5, 5])
 def test_groupby_pct_change_multiindex_dataframe(periods):
     gdf = cudf.DataFrame(
@@ -3812,3 +3811,13 @@ def test_groupby_internal_groups_empty(gdf):
     gb = gdf.groupby("y")._groupby
     _, _, grouped_vals = gb.groups([])
     assert grouped_vals == []
+
+
+def test_groupby_shift_series_multiindex():
+    idx = cudf.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["f", "s"]
+    )
+    ser = Series(range(4), index=idx)
+    result = ser.groupby(level=0).shift(1)
+    expected = ser.to_pandas().groupby(level=0).shift(1)
+    assert_eq(expected, result)
