@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include <groupby/common/utils.hpp>
-#include <groupby/hash/groupby_kernels.cuh>
+#include "groupby/common/utils.hpp"
+#include "groupby/hash/groupby_kernels.cuh"
+#include "hash/concurrent_unordered_map.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -45,17 +46,15 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/traits.hpp>
-#include <hash/concurrent_unordered_map.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
+#include <cuda/std/atomic>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-
-#include <cuda/functional>
-#include <cuda/std/atomic>
 
 #include <memory>
 #include <unordered_set>

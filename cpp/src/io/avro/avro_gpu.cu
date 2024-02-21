@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 #include "avro_gpu.hpp"
-
-#include <io/utilities/block_utils.cuh>
+#include "io/utilities/block_utils.cuh"
 
 #include <rmm/cuda_stream_view.hpp>
 

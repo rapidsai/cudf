@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/subword/detail/wordpiece_tokenizer.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -26,7 +28,6 @@
 
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
-#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
