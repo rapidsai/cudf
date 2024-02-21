@@ -20,7 +20,7 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -2119,19 +2119,8 @@ def test_groupby_list_columns_excluded():
     )
     gdf = cudf.from_pandas(pdf)
 
-    if PANDAS_GE_200:
-        pandas_result = pdf.groupby("a").mean(numeric_only=True)
-        pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
-    else:
-        # cudf does not yet support numeric_only, so our default is False, but
-        # pandas defaults to inferring and throws a warning about it, so
-        # we need to catch that. pandas future behavior will match ours
-        # by default (at which point supporting numeric_only=True will
-        # be the open feature request).
-        with pytest.warns(FutureWarning):
-            pandas_result = pdf.groupby("a").mean()
-        with pytest.warns(FutureWarning):
-            pandas_agg_result = pdf.groupby("a").agg("mean")
+    pandas_result = pdf.groupby("a").mean(numeric_only=True)
+    pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
 
     assert_groupby_results_equal(
         pandas_result, gdf.groupby("a").mean(), check_dtype=False
@@ -2264,7 +2253,7 @@ def test_groupby_apply_return_series_dataframe(func, args):
 def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     if isinstance(pdf, pd.DataFrame):
-        kwargs = {"check_column_type": not PANDAS_GE_200}
+        kwargs = {"check_column_type": False}
     else:
         kwargs = {}
     assert_groupby_results_equal(
@@ -2283,7 +2272,7 @@ def test_groupby_no_keys(pdf):
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     if isinstance(pdf, pd.DataFrame):
-        kwargs = {"check_column_type": not PANDAS_GE_200}
+        kwargs = {"check_column_type": False}
     else:
         kwargs = {}
     assert_groupby_results_equal(
@@ -2979,7 +2968,7 @@ def test_groupby_freq_week(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3012,7 +3001,7 @@ def test_groupby_freq_day(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3045,7 +3034,7 @@ def test_groupby_freq_min(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3078,7 +3067,7 @@ def test_groupby_freq_s(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3565,12 +3554,12 @@ def test_head_tail_empty():
 
     expected = pdf.groupby(pd.Series(values)).head()
     got = df.groupby(cudf.Series(values)).head()
-    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
+    assert_eq(expected, got, check_column_type=False)
 
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
 
-    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
+    assert_eq(expected, got, check_column_type=False)
 
 
 @pytest.mark.parametrize(
