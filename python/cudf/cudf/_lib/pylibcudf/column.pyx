@@ -45,6 +45,8 @@ cdef class Column:
         gpumemoryview mask, size_type null_count, size_type offset,
         list children
     ):
+        if not all(isinstance(c, Column) for c in children):
+            raise ValueError("All children must be pylibcudf Column objects")
         self._data_type = data_type
         self._size = size
         self._data = data

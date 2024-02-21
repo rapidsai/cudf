@@ -35,6 +35,9 @@ from cudf._lib.cpp.aggregation cimport (
     make_variance_aggregation,
     rank_method,
     rank_percentage,
+    reduce_aggregation,
+    rolling_aggregation,
+    scan_aggregation,
 )
 from cudf._lib.cpp.types cimport (
     interpolation,
@@ -57,10 +60,6 @@ from cudf._lib.cpp.aggregation import udf_type as UdfType  # no-cython-lint
 
 from .types cimport DataType
 
-# workaround for https://github.com/cython/cython/issues/3885
-ctypedef groupby_aggregation * gba_ptr
-ctypedef groupby_scan_aggregation * gbsa_ptr
-
 
 cdef class Aggregation:
     """A type of aggregation to perform.
@@ -70,6 +69,8 @@ cdef class Aggregation:
     operations to perform. Using a class for aggregations provides a unified
     API for handling parametrizable aggregations. This class should never be
     instantiated directly, only via one of the factory functions.
+
+    For details, see :cpp:class:`cudf::aggregation`.
     """
     def __init__(self):
         raise ValueError(
@@ -83,39 +84,53 @@ cdef class Aggregation:
         """Get the kind of the aggregation."""
         return dereference(self.c_obj).kind
 
-    cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *:
-        """Make a copy of the underlying aggregation that can be used in a groupby.
+    cdef void _unsupported_agg_error(self, str alg):
+        # Te functions calling this all use a dynamic cast between aggregation types,
+        # and the cast returning a null pointer is how we capture whether or not
+        # libcudf supports a given aggregation for a particular algorithm.
+        agg_repr = str(self.kind()).split(".")[1].title()
+        raise TypeError(f"{agg_repr} aggregations are not supported by {alg}")
 
-        This function will raise an exception if the aggregation is not supported as a
-        groupby aggregation. This failure to cast translates the per-algorithm
-        aggregation logic encoded in libcudf's type hierarchy into Python.
-        """
+    cdef unique_ptr[groupby_aggregation] clone_underlying_as_groupby(self) except *:
+        """Make a copy of the aggregation that can be used in a groupby."""
         cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
         cdef groupby_aggregation *agg_cast = dynamic_cast[gba_ptr](agg.get())
         if agg_cast is NULL:
-            agg_repr = str(self.kind()).split(".")[1].title()
-            raise TypeError(f"{agg_repr} aggregations are not supported by groupby")
+            self._unsupported_agg_error("groupby")
         agg.release()
         return unique_ptr[groupby_aggregation](agg_cast)
 
-    # Ideally this function could reuse the code above, but Cython lacks the
-    # first-class support for type-aliasing and templates that would make it possible.
     cdef unique_ptr[groupby_scan_aggregation] clone_underlying_as_groupby_scan(
         self
     ) except *:
-        """Make a copy of the underlying aggregation that can be used in a groupby scan.
-
-        This function will raise an exception if the aggregation is not supported as a
-        groupby scan aggregation. This failure to cast translates the per-algorithm
-        aggregation logic encoded in libcudf's type hierarchy into Python.
-        """
+        """Make a copy of the aggregation that can be used in a groupby scan."""
         cdef unique_ptr[aggregation] agg = dereference(self.c_obj).clone()
         cdef groupby_scan_aggregation *agg_cast = dynamic_cast[gbsa_ptr](agg.get())
         if agg_cast is NULL:
-            agg_repr = str(self.kind()).split(".")[1].title()
-            raise TypeError(f"{agg_repr} scans are not supported by groupby")
+            self._unsupported_agg_error("groupby_scan")
         agg.release()
         return unique_ptr[groupby_scan_aggregation](agg_cast)
+
+    cdef const reduce_aggregation* view_underlying_as_reduce(self) except *:
+        """View the underlying aggregation as a reduce_aggregation."""
+        cdef reduce_aggregation *agg_cast = dynamic_cast[ra_ptr](self.c_obj.get())
+        if agg_cast is NULL:
+            self._unsupported_agg_error("reduce")
+        return agg_cast
+
+    cdef const scan_aggregation* view_underlying_as_scan(self) except *:
+        """View the underlying aggregation as a scan_aggregation."""
+        cdef scan_aggregation *agg_cast = dynamic_cast[sa_ptr](self.c_obj.get())
+        if agg_cast is NULL:
+            self._unsupported_agg_error("scan")
+        return agg_cast
+
+    cdef const rolling_aggregation* view_underlying_as_rolling(self) except *:
+        """View the underlying aggregation as a rolling_aggregation."""
+        cdef rolling_aggregation *agg_cast = dynamic_cast[roa_ptr](self.c_obj.get())
+        if agg_cast is NULL:
+            self._unsupported_agg_error("rolling")
+        return agg_cast
 
     @staticmethod
     cdef Aggregation from_libcudf(unique_ptr[aggregation] agg):
@@ -128,6 +143,8 @@ cdef class Aggregation:
 cpdef Aggregation sum():
     """Create a sum aggregation.
 
+    For details, see :cpp:func:`make_sum_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -138,6 +155,8 @@ cpdef Aggregation sum():
 
 cpdef Aggregation product():
     """Create a product aggregation.
+
+    For details, see :cpp:func:`make_product_aggregation`.
 
     Returns
     -------
@@ -150,6 +169,8 @@ cpdef Aggregation product():
 cpdef Aggregation min():
     """Create a min aggregation.
 
+    For details, see :cpp:func:`make_min_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -161,6 +182,8 @@ cpdef Aggregation min():
 cpdef Aggregation max():
     """Create a max aggregation.
 
+    For details, see :cpp:func:`make_max_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -171,6 +194,8 @@ cpdef Aggregation max():
 
 cpdef Aggregation count(null_policy null_handling = null_policy.EXCLUDE):
     """Create a count aggregation.
+
+    For details, see :cpp:func:`make_count_aggregation`.
 
     Parameters
     ----------
@@ -190,6 +215,8 @@ cpdef Aggregation count(null_policy null_handling = null_policy.EXCLUDE):
 cpdef Aggregation any():
     """Create an any aggregation.
 
+    For details, see :cpp:func:`make_any_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -201,6 +228,8 @@ cpdef Aggregation any():
 cpdef Aggregation all():
     """Create an all aggregation.
 
+    For details, see :cpp:func:`make_all_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -211,6 +240,8 @@ cpdef Aggregation all():
 
 cpdef Aggregation sum_of_squares():
     """Create a sum_of_squares aggregation.
+
+    For details, see :cpp:func:`make_sum_of_squares_aggregation`.
 
     Returns
     -------
@@ -225,6 +256,8 @@ cpdef Aggregation sum_of_squares():
 cpdef Aggregation mean():
     """Create a mean aggregation.
 
+    For details, see :cpp:func:`make_mean_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -235,6 +268,8 @@ cpdef Aggregation mean():
 
 cpdef Aggregation variance(size_type ddof=1):
     """Create a variance aggregation.
+
+    For details, see :cpp:func:`make_variance_aggregation`.
 
     Parameters
     ----------
@@ -252,6 +287,8 @@ cpdef Aggregation variance(size_type ddof=1):
 cpdef Aggregation std(size_type ddof=1):
     """Create a std aggregation.
 
+    For details, see :cpp:func:`make_std_aggregation`.
+
     Parameters
     ----------
     ddof : int, default 1
@@ -268,6 +305,8 @@ cpdef Aggregation std(size_type ddof=1):
 cpdef Aggregation median():
     """Create a median aggregation.
 
+    For details, see :cpp:func:`make_median_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -278,6 +317,8 @@ cpdef Aggregation median():
 
 cpdef Aggregation quantile(list quantiles, interpolation interp = interpolation.LINEAR):
     """Create a quantile aggregation.
+
+    For details, see :cpp:func:`make_quantile_aggregation`.
 
     Parameters
     ----------
@@ -300,6 +341,8 @@ cpdef Aggregation quantile(list quantiles, interpolation interp = interpolation.
 cpdef Aggregation argmax():
     """Create an argmax aggregation.
 
+    For details, see :cpp:func:`make_argmax_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -311,6 +354,8 @@ cpdef Aggregation argmax():
 cpdef Aggregation argmin():
     """Create an argmin aggregation.
 
+    For details, see :cpp:func:`make_argmin_aggregation`.
+
     Returns
     -------
     Aggregation
@@ -321,6 +366,8 @@ cpdef Aggregation argmin():
 
 cpdef Aggregation nunique(null_policy null_handling = null_policy.EXCLUDE):
     """Create a nunique aggregation.
+
+    For details, see :cpp:func:`make_nunique_aggregation`.
 
     Parameters
     ----------
@@ -342,6 +389,8 @@ cpdef Aggregation nth_element(
 ):
     """Create a nth_element aggregation.
 
+    For details, see :cpp:func:`make_nth_element_aggregation`.
+
     Parameters
     ----------
     null_handling : null_policy, default INCLUDE
@@ -359,6 +408,8 @@ cpdef Aggregation nth_element(
 
 cpdef Aggregation collect_list(null_policy null_handling = null_policy.INCLUDE):
     """Create a collect_list aggregation.
+
+    For details, see :cpp:func:`make_collect_list_aggregation`.
 
     Parameters
     ----------
@@ -381,6 +432,8 @@ cpdef Aggregation collect_set(
     nans_equal = nan_equality.ALL_EQUAL,
 ):
     """Create a collect_set aggregation.
+
+    For details, see :cpp:func:`make_collect_set_aggregation`.
 
     Parameters
     ----------
@@ -406,6 +459,8 @@ cpdef Aggregation collect_set(
 
 cpdef Aggregation udf(str operation, DataType output_type):
     """Create a udf aggregation.
+
+    For details, see :cpp:func:`make_udf_aggregation`.
 
     Parameters
     ----------
@@ -433,6 +488,8 @@ cpdef Aggregation udf(str operation, DataType output_type):
 cpdef Aggregation correlation(correlation_type type, size_type min_periods):
     """Create a correlation aggregation.
 
+    For details, see :cpp:func:`make_correlation_aggregation`.
+
     Parameters
     ----------
     type : correlation_type
@@ -453,6 +510,8 @@ cpdef Aggregation correlation(correlation_type type, size_type min_periods):
 
 cpdef Aggregation covariance(size_type min_periods, size_type ddof):
     """Create a covariance aggregation.
+
+    For details, see :cpp:func:`make_covariance_aggregation`.
 
     Parameters
     ----------
@@ -480,6 +539,8 @@ cpdef Aggregation rank(
     rank_percentage percentage = rank_percentage.NONE,
 ):
     """Create a rank aggregation.
+
+    For details, see :cpp:func:`make_rank_aggregation`.
 
     Parameters
     ----------

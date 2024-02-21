@@ -19,11 +19,10 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
 #include "writer_impl.hpp"
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -39,6 +38,10 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/memcpy_async.h>
+#include <cuda/std/climits>
+#include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
@@ -55,12 +58,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <cooperative_groups.h>
-#include <cooperative_groups/memcpy_async.h>
-
-#include <cuda/std/climits>
-#include <cuda/std/limits>
 
 #include <algorithm>
 #include <cstring>
@@ -98,6 +95,7 @@ auto to_nvcomp_compression_type(CompressionKind compression_kind)
   if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
   if (compression_kind == ZSTD) return nvcomp::compression_type::ZSTD;
+  if (compression_kind == LZ4) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
 
@@ -111,6 +109,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
     case compression_type::SNAPPY: return orc::CompressionKind::SNAPPY;
     case compression_type::ZLIB: return orc::CompressionKind::ZLIB;
     case compression_type::ZSTD: return orc::CompressionKind::ZSTD;
+    case compression_type::LZ4: return orc::CompressionKind::LZ4;
     case compression_type::NONE: return orc::CompressionKind::NONE;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -2346,29 +2345,20 @@ auto convert_table_to_orc_data(table_view const& input,
   auto const padded_block_header_size =
     util::round_up_unsafe<size_t>(block_header_size, compressed_block_align);
 
-  auto bounce_buffer = [&]() {
-    size_t max_stream_size = 0;
-    bool all_device_write  = true;
+  for (auto& ss : strm_descs.host_view().flat_view()) {
+    size_t stream_size = ss.stream_size;
+    if (compression_kind != NONE) {
+      ss.first_block = num_compressed_blocks;
+      ss.bfr_offset  = compressed_bfr_size;
 
-    for (auto& ss : strm_descs.host_view().flat_view()) {
-      if (!out_sink.is_device_write_preferred(ss.stream_size)) { all_device_write = false; }
-      size_t stream_size = ss.stream_size;
-      if (compression_kind != NONE) {
-        ss.first_block = num_compressed_blocks;
-        ss.bfr_offset  = compressed_bfr_size;
-
-        auto num_blocks =
-          std::max<uint32_t>((stream_size + compression_blocksize - 1) / compression_blocksize, 1);
-        stream_size += num_blocks * block_header_size;
-        num_compressed_blocks += num_blocks;
-        compressed_bfr_size +=
-          (padded_block_header_size + padded_max_compressed_block_size) * num_blocks;
-      }
-      max_stream_size = std::max(max_stream_size, stream_size);
+      auto num_blocks =
+        std::max<uint32_t>((stream_size + compression_blocksize - 1) / compression_blocksize, 1);
+      stream_size += num_blocks * block_header_size;
+      num_compressed_blocks += num_blocks;
+      compressed_bfr_size +=
+        (padded_block_header_size + padded_max_compressed_block_size) * num_blocks;
     }
-
-    return cudf::detail::pinned_host_vector<uint8_t>(all_device_write ? 0 : max_stream_size);
-  }();
+  }
 
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
@@ -2398,6 +2388,18 @@ auto convert_table_to_orc_data(table_view const& input,
     strm_descs.device_to_host_async(stream);
     comp_results.device_to_host_sync(stream);
   }
+
+  auto const max_out_stream_size = [&]() {
+    uint32_t max_stream_size = 0;
+    for (auto const& ss : strm_descs.host_view().flat_view()) {
+      if (!out_sink.is_device_write_preferred(ss.stream_size)) {
+        max_stream_size = std::max(max_stream_size, ss.stream_size);
+      }
+    }
+    return max_stream_size;
+  }();
+
+  cudf::detail::pinned_host_vector<uint8_t> bounce_buffer(max_out_stream_size);
 
   auto intermediate_stats = gather_statistic_blobs(stats_freq, orc_table, segmentation, stream);
 

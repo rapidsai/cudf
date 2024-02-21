@@ -90,16 +90,17 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
     pdf = pd.DataFrame(data)
 
     if len(pdf) > 0:
-        for col_idx in range(len(pdf.columns)):
-            if nulls == "one":
-                p = rng.integers(0, len(data))
-                pdf.iloc[p, col_idx] = np.nan
-            elif nulls == "some":
-                p1, p2 = rng.integers(0, len(data), (2,))
-                pdf.iloc[p1, col_idx] = np.nan
-                pdf.iloc[p2, col_idx] = np.nan
-            elif nulls == "all":
-                pdf.iloc[:, col_idx] = np.nan
+        if nulls == "all":
+            pdf = pd.DataFrame(np.nan, columns=pdf.columns, index=pdf.index)
+        else:
+            for col_idx in range(len(pdf.columns)):
+                if nulls == "one":
+                    p = rng.integers(0, len(data))
+                    pdf.iloc[p, col_idx] = np.nan
+                elif nulls == "some":
+                    p1, p2 = rng.integers(0, len(data), (2,))
+                    pdf.iloc[p1, col_idx] = np.nan
+                    pdf.iloc[p2, col_idx] = np.nan
 
     gdf = cudf.from_pandas(pdf)
     for window_size in range(1, len(data) + 1):

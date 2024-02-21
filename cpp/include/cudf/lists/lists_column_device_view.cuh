@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,11 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/types.hpp>
+
+#include <cuda_runtime.h>
 
 namespace cudf {
 
