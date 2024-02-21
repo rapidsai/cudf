@@ -34,8 +34,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from nvtx import annotate
-from pandas._config import get_option
-from pandas.core.dtypes.common import is_float, is_integer
 from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 from typing_extensions import Self, assert_never
@@ -1817,12 +1815,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dimensions (rows x columns)
         """
 
-        max_rows = get_option("display.max_rows")
-        min_rows = get_option("display.min_rows")
-        max_cols = get_option("display.max_columns")
-        max_colwidth = get_option("display.max_colwidth")
-        show_dimensions = get_option("display.show_dimensions")
-        if get_option("display.expand_frame_repr"):
+        max_rows = pd.get_option("display.max_rows")
+        min_rows = pd.get_option("display.min_rows")
+        max_cols = pd.get_option("display.max_columns")
+        max_colwidth = pd.get_option("display.max_colwidth")
+        show_dimensions = pd.get_option("display.show_dimensions")
+        if pd.get_option("display.expand_frame_repr"):
             width, _ = console.get_console_size()
         else:
             width = None
@@ -3318,8 +3316,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             Diff currently only supports numeric dtype columns.
         """
-        if not is_integer(periods):
-            if not (is_float(periods) and periods.is_integer()):
+        if not isinstance(periods, int):
+            if not (isinstance(periods, float) and periods.is_integer()):
                 raise ValueError("periods must be an integer")
             periods = int(periods)
 
@@ -3957,7 +3955,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Not supporting *copy* because default and only behavior is
             copy=True
         """
-
         index = self._data.to_pandas_index()
         columns = self.index.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
@@ -6204,9 +6201,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         "Columns must all have the same dtype to "
                         f"perform {op=} with {axis=}"
                     )
-                return Series._from_data(
-                    {None: as_column(result)}, as_index(source._data.names)
-                )
+                if source._data.multiindex:
+                    idx = MultiIndex.from_tuples(
+                        source._data.names, names=source._data.level_names
+                    )
+                else:
+                    idx = as_index(source._data.names)
+                return Series._from_data({None: as_column(result)}, idx)
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
@@ -6713,7 +6714,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
     @_cudf_nvtx_annotate
-    def stack(self, level=-1, dropna=True):
+    def stack(self, level=-1, dropna=no_default, future_stack=False):
         """Stack the prescribed level(s) from columns to index
 
         Return a reshaped DataFrame or Series having a multi-level
@@ -6845,6 +6846,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
              weight  kg    3.0
         dtype: float64
         """
+        if future_stack:
+            if dropna is not no_default:
+                raise ValueError(
+                    "dropna must be unspecified with future_stack=True as the new "
+                    "implementation does not introduce rows of NA values. This "
+                    "argument will be removed in a future version of cudf."
+                )
+        else:
+            if dropna is not no_default or self._data.nlevels > 1:
+                warnings.warn(
+                    "The previous implementation of stack is deprecated and will be "
+                    "removed in a future version of cudf. Specify future_stack=True "
+                    "to adopt the new implementation and silence this warning.",
+                    FutureWarning,
+                )
+            if dropna is no_default:
+                dropna = True
 
         if isinstance(level, (int, str)):
             level = [level]
@@ -6860,7 +6878,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         level = [level] if not isinstance(level, list) else level
 
-        if len(level) > 1 and not dropna:
+        if not future_stack and len(level) > 1 and not dropna:
             raise NotImplementedError(
                 "When stacking multiple levels, setting `dropna` to False "
                 "will generate new column combination that does not exist "
@@ -6902,7 +6920,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Since `level` may only specify a subset of all levels, `unique()` is
         # required to remove duplicates. In pandas, the order of the keys in
         # the specified levels are always sorted.
-        unique_named_levels = named_levels.unique().sort_values()
+        unique_named_levels = named_levels.unique()
+        if not future_stack:
+            unique_named_levels = unique_named_levels.sort_values()
 
         # Each index from the original dataframe should repeat by the number
         # of unique values in the named_levels
@@ -6951,11 +6971,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     # `unique_named_levels` assigns -1 to these key
                     # combinations, representing an all-null column that
                     # is used in the subsequent libcudf call.
-                    yield grpdf.reindex(
-                        unique_named_levels, axis=0, fill_value=-1
-                    ).sort_index().values
+                    if future_stack:
+                        yield grpdf.reindex(
+                            unique_named_levels, axis=0, fill_value=-1
+                        ).values
+                    else:
+                        yield grpdf.reindex(
+                            unique_named_levels, axis=0, fill_value=-1
+                        ).sort_index().values
             else:
-                yield column_idx_df.sort_index().values
+                if future_stack:
+                    yield column_idx_df.values
+                else:
+                    yield column_idx_df.sort_index().values
 
         column_indices = list(unnamed_group_generator())
 
@@ -7006,6 +7034,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         [
                             stacked[i]
                             for i in unnamed_level_values.argsort().argsort()
+                        ]
+                        if not future_stack
+                        else [
+                            stacked[i] for i in unnamed_level_values.argsort()
                         ],
                     )
                 ),
@@ -7015,7 +7047,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             result = DataFrame._from_data(data, index=new_index)
 
-        if dropna:
+        if not future_stack and dropna:
             return result.dropna(how="all")
         else:
             return result
