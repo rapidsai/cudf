@@ -15,21 +15,22 @@
  */
 #pragma once
 
+#include <cudf/json/json.hpp>
 #include <cudf/types.hpp>
 
 namespace cudf::strings::detail {
 
 /**
- * Json token enum
+ * JSON token enum
  */
 enum class json_token {
   // start token
   INIT = 0,
 
-  // successfully parsed the whole Json string
+  // successfully parsed the whole JSON string
   SUCCESS,
 
-  // get error when parsing Json string
+  // get error when parsing JSON string
   ERROR,
 
   // '{'
@@ -68,76 +69,14 @@ enum class json_token {
 };
 
 /**
- * options for json_parser
- *
- */
-class json_parser_options {
- public:
-  CUDF_HOST_DEVICE inline bool get_allow_single_quotes() const { return allow_single_quotes; }
-
-  CUDF_HOST_DEVICE inline bool get_allow_unescaped_control_chars() const
-  {
-    return allow_unescaped_control_chars;
-  }
-
-  CUDF_HOST_DEVICE int get_max_string_len() const { return max_string_len; }
-
-  CUDF_HOST_DEVICE int get_max_num_len() const { return max_num_len; }
-
-  CUDF_HOST_DEVICE void set_allow_single_quotes(bool _allow_single_quotes)
-  {
-    allow_single_quotes = _allow_single_quotes;
-  }
-
-  CUDF_HOST_DEVICE void set_allow_unescaped_control_chars(bool _allow_unescaped_control_chars)
-  {
-    allow_unescaped_control_chars = _allow_unescaped_control_chars;
-  }
-
-  CUDF_HOST_DEVICE void set_max_string_len(int _max_string_len)
-  {
-    max_string_len = _max_string_len;
-  }
-
-  CUDF_HOST_DEVICE void set_max_num_len(int _max_num_len) { max_num_len = _max_num_len; }
-
- private:
-  // if true, allow both ' and " to quote strings. e.g.: json string {'k1' : "v1"} is valid
-  // if true, Json is not conventional format.
-  bool allow_single_quotes = false;
-
-  // Feature that determines whether parser will allow JSON Strings to contain unescaped control
-  // characters (ASCII characters with value less than 32, including tab and line feed characters)
-  // or not. If true, Json is not conventional format.
-  // e.g., how to represent carriage return and newline character characters:
-  //   if true, allow "\n\r" string directly
-  //     Note: in this string only contains 2 charactors:
-  //       carriage return character (ASCII code 13)
-  //       newline character (ASCII code 10)
-  //   if false, "\\n\\r" is allowed. There are 4 chars(\ n \ r), after escaped, 2 chars remains.
-  //     Note: print "\\n\\r" => \n\r
-  //     Direct control char is not allowed, e.g.: "\n\r"
-  //
-  bool allow_unescaped_control_chars = false;
-
-  // max num length, -1 skips verification
-  // e.g.: the len of -123.45e-67 is 7.
-  int max_num_len = -1;
-
-  // max string length, -1 skips verification
-  // Note: do not count escape chars, e.g.: length of "\\n" is 1
-  int max_string_len = -1;
-};
-
-/**
- * Json parser, provides token by token parsing.
- * Follow Jackson Json format by default.
+ * JSON parser, provides token by token parsing.
+ * Follow Jackson JSON format by default.
  *
  *
- * For Json format:
+ * For JSON format:
  * Refer to https://www.json.org/json-en.html.
  *
- * Note: when setting `allow_single_quotes` or `allow_unescaped_control_chars`, then Json
+ * Note: when setting `allow_single_quotes` or `allow_unescaped_control_chars`, then JSON
  * format is not conventional.
  *
  * White space can only be 4 chars: ' ', '\n', '\r', '\t',
@@ -173,7 +112,7 @@ class json_parser_options {
 template <int max_json_nesting_depth>
 class json_parser {
  public:
-  CUDF_HOST_DEVICE inline json_parser(json_parser_options const _options,
+  CUDF_HOST_DEVICE inline json_parser(cudf::get_json_object_options const& _options,
                                       char const* const _json_start_pos,
                                       cudf::size_type const _json_len)
     : options(_options),
@@ -247,7 +186,7 @@ class json_parser {
   }
 
   /**
-   * record the nested state into stack: Json object or Json array
+   * record the nested state into stack: JSON object or JSON array
    */
   CUDF_HOST_DEVICE inline void push_context(json_token token)
   {
@@ -256,7 +195,7 @@ class json_parser {
   }
 
   /**
-   * whether the top of nested context stack is Json object context
+   * whether the top of nested context stack is JSON object context
    * true is object, false is array
    * only has two contexts: object or array
    */
@@ -397,7 +336,7 @@ class json_parser {
    *     and the leading bits of the second and third bytes are 10.
    *   Four-byte characters: The leading bits of the first byte are 11110,
    *     and the leading bits of the second, third, and fourth bytes are 10.
-   * Because Json structural chars([ ] { } , :), string quote char(" ') and
+   * Because JSON structural chars([ ] { } , :), string quote char(" ') and
    * Escape char \ are all Ascii(The leading bit is 0), so it's safe that do
    * not convert byte array to UTF-8 char.
    *
@@ -800,8 +739,9 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline json_token parse_next_token()
   {
-    // Already finished parsing, just return previous SUCCESS/ERROR
-    if (curr_token == json_token::SUCCESS || curr_token == json_token::ERROR) { return curr_token; }
+    // SUCCESS or ERROR means parsing is completed,
+    // should not call this function again.
+    assert(curr_token != json_token::SUCCESS && curr_token != json_token::ERROR);
 
     skip_whitespaces();
 
@@ -815,15 +755,15 @@ class json_parser {
           parse_first_token_in_value();
         } else {
           // privious token is not INIT, means already get a token; stack is empty;
-          // Json should be a terminal value without any nested object/array.
-          // Here try to get more token, it's wrong.
-          curr_token = json_token::ERROR;
+          // Successfully parsed.
+          // Note: ignore the tailing sub-string
+          curr_token = json_token::SUCCESS;
         }
       } else {
         // stack is non-empty
 
         if (is_object_context()) {
-          // in Json object context
+          // in JSON object context
           if (curr_token == json_token::START_OBJECT) {
             // previous token is '{'
             if (c == '}') {
@@ -894,12 +834,12 @@ class json_parser {
     } else {
       // eof
       if (is_context_stack_empty() && curr_token != json_token::INIT) {
-        // reach eof; stack is empty; current token is not INIT
+        // reach eof; stack is empty; previous token is not INIT
         curr_token = json_token::SUCCESS;
       } else {
         // eof, and meet the following case:
-        //   - has unclosed Json array/object;
-        //   - empty Jsong string
+        //   - has unclosed JSON array/object;
+        //   - JSON is empty
         curr_token = json_token::ERROR;
       }
     }
@@ -914,7 +854,7 @@ class json_parser {
   CUDF_HOST_DEVICE json_token next_token() { return parse_next_token(); }
 
   /**
-   * is valid Json by parsing through all tokens
+   * is valid JSON by parsing through all tokens
    */
   CUDF_HOST_DEVICE bool is_valid()
   {
@@ -925,16 +865,16 @@ class json_parser {
   }
 
  private:
-  json_parser_options const options;
+  cudf::get_json_object_options const& options;
   char const* const json_start_pos{nullptr};
   char const* const json_end_pos{nullptr};
 
   char const* curr_pos{nullptr};
   json_token curr_token{json_token::INIT};
 
-  // saves the nested contexts: Json object context or Json array context
-  // true is Json object context; false is Json array context
-  // When encounter EOF and this stack is non-empty, means non-closed Json object/array,
+  // saves the nested contexts: JSON object context or JSON array context
+  // true is JSON object context; false is JSON array context
+  // When encounter EOF and this stack is non-empty, means non-closed JSON object/array,
   // then parsing will fail.
   bool stack[max_json_nesting_depth];
   int stack_size = 0;

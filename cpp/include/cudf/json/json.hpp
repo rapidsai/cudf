@@ -43,6 +43,15 @@ class get_json_object_options {
   // Whether to return nulls when an object does not contain the requested field.
   bool missing_fields_as_nulls = false;
 
+  // Whether allow unescaped control characters in JSON Strings.
+  bool allow_unescaped_control_chars = false;
+
+  // Define the maximum JSON String length.
+  int max_string_len = -1;
+
+  // Define the maximum JSON number length.
+  int max_num_len = -1;
+
  public:
   /**
    * @brief Default constructor.
@@ -116,6 +125,47 @@ class get_json_object_options {
   }
 
   /**
+   * @brief Returns true/false depending on whether unescaped characters for representing strings
+   * are allowed.
+   *
+   * Unescaped control characters are ASCII characters with value less than 32,
+   * including tab and line feed characters.
+   *
+   * If true, JSON is not conventional format.
+   * e.g., how to represent carriage return and newline characters:
+   *   if true, allow "\n\r" two control characters without escape directly
+   *   if false, "\n\r" are not allowed, should use escape characters: "\\n\\r"
+   *
+   * @return true if unescaped characters are allowed, false otherwise.
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE inline bool get_allow_unescaped_control_chars() const
+  {
+    return allow_unescaped_control_chars;
+  }
+
+  /**
+   * @brief Returns maximum JSON String length, negative or zero means no limitation.
+   *
+   * By default, maximum JSON String length is negative one, means no limitation.
+   * e.g.: The length of String "\\n" is 1, JSON parser does not count escape characters.
+   *
+   * @return integer value of allowed maximum JSON String length
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE int get_max_string_len() const { return max_string_len; }
+
+  /**
+   * @brief Returns maximum JSON number length, negative or zero means no limitation.
+   *
+   * By default, maximum JSON number length is negative one, means no limitation.
+   *
+   * e.g.: The length of number -123.45e-67 is 7. if maximum JSON number length is 6,
+   * then this number is a invalid number.
+   *
+   * @return integer value of allowed maximum JSON number length
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE int get_max_num_len() const { return max_num_len; }
+
+  /**
    * @brief Set whether single-quotes for strings are allowed.
    *
    * @param _allow_single_quotes bool indicating desired behavior.
@@ -144,6 +194,30 @@ class get_json_object_options {
   {
     missing_fields_as_nulls = _missing_fields_as_nulls;
   }
+
+  /**
+   * @brief Set whether alow unescaped control characters.
+   *
+   * @param _allow_unescaped_control_chars bool indicating desired behavior.
+   */
+  void set_allow_unescaped_control_chars(bool _allow_unescaped_control_chars)
+  {
+    allow_unescaped_control_chars = _allow_unescaped_control_chars;
+  }
+
+  /**
+   * @brief Set maximum JSON String length.
+   *
+   * @param _max_string_len integer indicating desired behavior.
+   */
+  void set_max_string_len(int _max_string_len) { max_string_len = _max_string_len; }
+
+  /**
+   * @brief Set maximum JSON number length.
+   *
+   * @param _max_num_len integer indicating desired behavior.
+   */
+  void set_max_num_len(int _max_num_len) { max_num_len = _max_num_len; }
 };
 
 /**

@@ -697,12 +697,19 @@ std::pair<thrust::optional<rmm::device_uvector<path_operator>>, int> build_comma
  * @param commands The command buffer to be applied to the string. Always ends with a
  * path_operator_type::END
  * @param output Buffer user to store the results of the query
+ * @param options behavior options, used by JSON validation
+ * @param input pointer of json string, used by JSON validation
+ * @param input_len length of json string, used by JSON validation
  * @returns A result code indicating success/fail/empty.
  */
 template <int max_command_stack_depth>
 __device__ parse_result parse_json_path(json_state& j_state,
                                         path_operator const* commands,
-                                        json_output& output)
+                                        json_output& output,
+                                        get_json_object_options const& options,
+                                        char const* input,
+                                        size_t input_len
+                                        )
 {
   // manually maintained context stack in lieu of calling parse_json_path recursively.
   struct context {
@@ -729,6 +736,15 @@ __device__ parse_result parse_json_path(json_state& j_state,
     return false;
   };
   push_context(j_state, commands, false);
+
+  // First do JSON validation
+  // Jackson uses 1000 as max nesting depth
+  constexpr int max_json_nesting_depth = 1000;
+  cudf::strings::detail::json_parser<max_json_nesting_depth> j_parser(options, input, input_len);
+  bool validation_result = j_parser.is_valid();
+  if (!validation_result) {
+    return parse_result::ERROR;
+  }
 
   parse_result last_result = parse_result::SUCCESS;
   context ctx;
@@ -882,7 +898,8 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
   json_state j_state(input, input_len, options);
   json_output output{out_buf_size, out_buf};
 
-  auto const result = parse_json_path<max_command_stack_depth>(j_state, commands, output);
+  auto const result =
+    parse_json_path<max_command_stack_depth>(j_state, commands, output, options, input, input_len);
 
   return {result, output};
 }
@@ -934,19 +951,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
         get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size, options);
       output_size = out.output_len.value_or(0);
 
-      // Json validation
-      cudf::strings::detail::json_parser_options j_parser_options;
-      j_parser_options.set_allow_single_quotes(true);
-      j_parser_options.set_allow_unescaped_control_chars(true);
-      j_parser_options.set_max_string_len(20000000);
-      j_parser_options.set_max_num_len(1000);
-      // Jackson uses 1000 as max nesting depth
-      constexpr int max_json_nesting_depth = 1000;
-      cudf::strings::detail::json_parser<max_json_nesting_depth> j_parser(
-        j_parser_options, str.data(), str.size_bytes());
-      bool validation_result = j_parser.is_valid();
-
-      if (out.output_len.has_value() && result == parse_result::SUCCESS && validation_result) {
+      if (out.output_len.has_value() && result == parse_result::SUCCESS) {
         is_valid = true;
       }
     }
