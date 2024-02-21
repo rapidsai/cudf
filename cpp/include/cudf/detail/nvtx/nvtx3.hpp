@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1901,33 +1901,9 @@ inline void mark(event_attributes const& attr) noexcept
  *
  * @param[in] D Type containing `name` member used to identify the
  * `domain` to which the `registered_message` belongs. Else,
- * `domain::global` to  indicate that the global NVTX domain should be used.
+ * `domain::global` to indicate that the global NVTX domain should be used.
  */
 #define NVTX3_FUNC_RANGE_IN(D)                                                 \
   static ::nvtx3::registered_message<D> const nvtx3_func_name__{__func__};     \
   static ::nvtx3::event_attributes const nvtx3_func_attr__{nvtx3_func_name__}; \
   [[maybe_unused]] ::nvtx3::domain_thread_range<D> const nvtx3_range__{nvtx3_func_attr__};
-
-/**
- * @brief Convenience macro for generating a range in the global domain from the
- * lifetime of a function.
- *
- * This macro is useful for generating an NVTX range in the global domain from
- * the entry point of a function to its exit. It is intended to be the first
- * line of the function.
- *
- * Constructs a static `registered_message` using the name of the immediately
- * enclosing function returned by `__func__` and constructs a
- * `nvtx3::thread_range` using the registered function name as the range's
- * message.
- *
- * Example:
- * ```
- * void foo(...){
- *    NVTX3_FUNC_RANGE(); // Range begins on entry to foo()
- *    // do stuff
- *    ...
- * } // Range ends on return from foo()
- * ```
- */
-#define NVTX3_FUNC_RANGE() NVTX3_FUNC_RANGE_IN(::nvtx3::domain::global)

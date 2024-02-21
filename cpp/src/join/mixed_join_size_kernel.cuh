@@ -25,7 +25,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <cooperative_groups.h>
-
 #include <cub/cub.cuh>
 #include <thrust/iterator/discard_iterator.h>
 

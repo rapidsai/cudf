@@ -570,6 +570,7 @@ add_library(
   src/strings/convert/convert_lists.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
+  src/strings/copying/copy_range.cu
   src/strings/copying/shift.cu
   src/strings/count_matches.cu
   src/strings/extract/extract.cu
