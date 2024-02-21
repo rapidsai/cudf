@@ -32,6 +32,7 @@
 
 #include <cuda/std/chrono>
 
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -41,7 +42,6 @@
 #include <thrust/merge.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
-#include <cuda/std/tuple>
 
 #include <bitset>
 

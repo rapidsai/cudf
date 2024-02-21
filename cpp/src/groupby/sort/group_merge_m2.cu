@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,13 +26,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/transform.h>
-#include <cuda/std/tuple>
 
 namespace cudf {
 namespace groupby {
@@ -161,9 +161,9 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
   using output_iterator = thrust::zip_iterator<iterator_tuple>;
   auto const out_iter =
     output_iterator{cuda::std::make_tuple(result_counts->mutable_view().template data<size_type>(),
-                                       result_means->mutable_view().template data<result_type>(),
-                                       result_M2s->mutable_view().template data<result_type>(),
-                                       validities.begin())};
+                                          result_means->mutable_view().template data<result_type>(),
+                                          result_M2s->mutable_view().template data<result_type>(),
+                                          validities.begin())};
 
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);

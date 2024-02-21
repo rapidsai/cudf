@@ -21,9 +21,9 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <cuda/std/tuple>
 
 #include <cuda/atomic>
 #include <cuda/functional>

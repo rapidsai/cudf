@@ -37,12 +37,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -131,8 +131,8 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   auto output_device_view =
     cudf::mutable_column_device_view::create(output->mutable_view(), stream);
   auto input_device_view = cudf::column_device_view::create(input, stream);
-  auto scalar_zip_itr =
-    thrust::make_zip_iterator(cuda::std::make_tuple(lo_itr, lo_replace_itr, hi_itr, hi_replace_itr));
+  auto scalar_zip_itr    = thrust::make_zip_iterator(
+    cuda::std::make_tuple(lo_itr, lo_replace_itr, hi_itr, hi_replace_itr));
 
   auto trans =
     cuda::proclaim_return_type<T>([] __device__(auto element_optional, auto scalar_tuple) {

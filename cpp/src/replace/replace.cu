@@ -53,11 +53,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/pair.h>
-#include <cuda/std/tuple>
 
 namespace {  // anonymous
 

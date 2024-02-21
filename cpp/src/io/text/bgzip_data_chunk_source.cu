@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,9 +58,9 @@ struct bgzip_nvcomp_transform_functor {
     auto const decompressed_begin = cuda::std::get<2>(t);
     auto const decompressed_end   = cuda::std::get<3>(t);
     return cuda::std::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
-                                                         compressed_end - compressed_begin},
-                              device_span<uint8_t>{decompressed_ptr + decompressed_begin,
-                                                   decompressed_end - decompressed_begin});
+                                                            compressed_end - compressed_begin},
+                                 device_span<uint8_t>{decompressed_ptr + decompressed_begin,
+                                                      decompressed_end - decompressed_begin});
   }
 };
 

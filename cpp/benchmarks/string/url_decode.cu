@@ -26,12 +26,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/random.h>
-#include <cuda/std/tuple>
 
 struct url_string_generator {
   char* chars;

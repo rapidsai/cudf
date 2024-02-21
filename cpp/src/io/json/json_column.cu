@@ -344,16 +344,17 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   rmm::device_uvector<size_type> string_offsets(num_strings, stream);
   rmm::device_uvector<size_type> string_lengths(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  thrust::transform(rmm::exec_policy(stream),
-                    d_offset_pairs,
-                    d_offset_pairs + num_strings,
-                    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
-                    [] __device__(auto const& offsets) {
-                      // Note: first character for non-field columns
-                      return cuda::std::make_tuple(
-                        static_cast<size_type>(cuda::std::get<0>(offsets)),
-                        static_cast<size_type>(cuda::std::get<1>(offsets) - cuda::std::get<0>(offsets)));
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    d_offset_pairs,
+    d_offset_pairs + num_strings,
+    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
+    [] __device__(auto const& offsets) {
+      // Note: first character for non-field columns
+      return cuda::std::make_tuple(
+        static_cast<size_type>(cuda::std::get<0>(offsets)),
+        static_cast<size_type>(cuda::std::get<1>(offsets) - cuda::std::get<0>(offsets)));
+    });
 
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes

@@ -38,10 +38,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
 #include <thrust/scan.h>
-#include <cuda/std/tuple>
 
 namespace cudf {
 namespace detail {

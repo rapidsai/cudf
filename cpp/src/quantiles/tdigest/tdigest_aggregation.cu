@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -50,7 +51,6 @@
 #include <thrust/replace.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-#include <cuda/std/tuple>
 
 #include <cuda/functional>
 
@@ -825,7 +825,7 @@ struct get_scalar_minmax {
   {
     return valid_count > 0
              ? cuda::std::make_tuple(static_cast<double>(col.element<T>(0)),
-                                  static_cast<double>(col.element<T>(valid_count - 1)))
+                                     static_cast<double>(col.element<T>(valid_count - 1)))
              : cuda::std::make_tuple(0.0, 0.0);
   }
 };
@@ -867,7 +867,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
-                                                   max_col->mutable_view().begin<double>())),
+                                                      max_col->mutable_view().begin<double>())),
       get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
 
     // for simple input values, the "centroids" all have a weight of 1.
@@ -947,7 +947,7 @@ struct typed_reduce_tdigest {
       thrust::make_counting_iterator(0),
       thrust::make_counting_iterator(0) + 1,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
-                                                   max_col->mutable_view().begin<double>())),
+                                                      max_col->mutable_view().begin<double>())),
       get_scalar_minmax<T>{*d_col, valid_count});
 
     // for simple input values, the "centroids" all have a weight of 1.

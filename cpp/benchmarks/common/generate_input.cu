@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -51,7 +52,6 @@
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-#include <cuda/std/tuple>
 
 #include <cuda/functional>
 

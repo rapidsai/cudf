@@ -298,10 +298,11 @@ inline __device__ bool parse_header(cuda::std::tuple<Operator...>& op, byte_stre
 struct gpuParseDataPageHeader {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding),
-                                 ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
-                                 ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
+    auto op =
+      cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                            ParquetFieldEnum<Encoding>(2, bs->page.encoding),
+                            ParquetFieldEnum<Encoding>(3, bs->page.definition_level_encoding),
+                            ParquetFieldEnum<Encoding>(4, bs->page.repetition_level_encoding));
     return parse_header(op, bs);
   }
 };
@@ -310,7 +311,7 @@ struct gpuParseDictionaryPageHeader {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldEnum<Encoding>(2, bs->page.encoding));
+                                    ParquetFieldEnum<Encoding>(2, bs->page.encoding));
     return parse_header(op, bs);
   }
 };
@@ -318,12 +319,13 @@ struct gpuParseDictionaryPageHeader {
 struct gpuParseDataPageHeaderV2 {
   __device__ bool operator()(byte_stream_s* bs)
   {
-    auto op = cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
-                                 ParquetFieldInt32(2, bs->page.num_nulls),
-                                 ParquetFieldInt32(3, bs->page.num_rows),
-                                 ParquetFieldEnum<Encoding>(4, bs->page.encoding),
-                                 ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
-                                 ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]));
+    auto op =
+      cuda::std::make_tuple(ParquetFieldInt32(1, bs->page.num_input_values),
+                            ParquetFieldInt32(2, bs->page.num_nulls),
+                            ParquetFieldInt32(3, bs->page.num_rows),
+                            ParquetFieldEnum<Encoding>(4, bs->page.encoding),
+                            ParquetFieldInt32(5, bs->page.lvl_bytes[level_type::DEFINITION]),
+                            ParquetFieldInt32(6, bs->page.lvl_bytes[level_type::REPETITION]));
     return parse_header(op, bs);
   }
 };
@@ -332,11 +334,11 @@ struct gpuParsePageHeader {
   __device__ bool operator()(byte_stream_s* bs)
   {
     auto op = cuda::std::make_tuple(ParquetFieldEnum<PageType>(1, bs->page_type),
-                                 ParquetFieldInt32(2, bs->page.uncompressed_page_size),
-                                 ParquetFieldInt32(3, bs->page.compressed_page_size),
-                                 ParquetFieldStruct<gpuParseDataPageHeader>(5),
-                                 ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
-                                 ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
+                                    ParquetFieldInt32(2, bs->page.uncompressed_page_size),
+                                    ParquetFieldInt32(3, bs->page.compressed_page_size),
+                                    ParquetFieldStruct<gpuParseDataPageHeader>(5),
+                                    ParquetFieldStruct<gpuParseDictionaryPageHeader>(7),
+                                    ParquetFieldStruct<gpuParseDataPageHeaderV2>(8));
     return parse_header(op, bs);
   }
 };

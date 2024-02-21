@@ -26,6 +26,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/for_each.h>
@@ -35,7 +36,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
-#include <cuda/std/tuple>
 
 #include <cuda/functional>
 

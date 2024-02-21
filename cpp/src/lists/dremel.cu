@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -407,8 +407,8 @@ dremel_data get_encoding(column_view h_col,
     auto input_parent_zip_it =
       thrust::make_zip_iterator(cuda::std::make_tuple(input_parent_rep_it, input_parent_def_it));
 
-    auto input_child_zip_it =
-      thrust::make_zip_iterator(cuda::std::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
+    auto input_child_zip_it = thrust::make_zip_iterator(
+      cuda::std::make_tuple(temp_rep_vals.begin(), temp_def_vals.begin()));
 
     auto output_zip_it =
       thrust::make_zip_iterator(cuda::std::make_tuple(rep_level.begin(), def_level.begin()));
