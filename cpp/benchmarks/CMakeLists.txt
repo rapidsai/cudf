@@ -312,6 +312,7 @@ ConfigureNVBench(
   string/char_types.cpp
   string/contains.cpp
   string/copy_if_else.cpp
+  string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
   string/gather.cpp
