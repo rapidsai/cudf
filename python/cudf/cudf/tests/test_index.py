@@ -1740,8 +1740,7 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
             rfunc_args_and_kwargs=([], {"key": key, "method": method}),
         )
     else:
-        with expect_warning_if(method is not None):
-            expected = pi.get_indexer(key, method=method)
+        expected = pi.get_indexer(key, method=method)
         got = gi.get_indexer(key, method=method)
 
         assert_eq(expected, got)
@@ -3058,8 +3057,7 @@ def test_index_to_frame(data, data_name, index, name):
     pidx = pd.Index(data, name=data_name)
     gidx = cudf.from_pandas(pidx)
 
-    with expect_warning_if(name is None):
-        expected = pidx.to_frame(index=index, name=name)
+    expected = pidx.to_frame(index=index, name=name)
     actual = gidx.to_frame(index=index, name=name)
 
     assert_eq(expected, actual)
