@@ -363,6 +363,9 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _strings_to_categorical,
                               _timestamp_type.id());
 
+  // Find the name, and dtypes of parquet root level schema. (save it in _metadata.)
+  _metadata->get_schema_dtypes(_strings_to_categorical, _timestamp_type.id());
+
   // Save the states of the output buffers for reuse in `chunk_read()`.
   for (auto const& buff : _output_buffers) {
     _output_buffers_template.emplace_back(cudf::io::detail::inline_column_buffer::empty_like(buff));
@@ -508,7 +511,7 @@ table_with_metadata reader::impl::read(
   auto expr_conv     = named_to_reference_converter(filter, metadata);
   auto output_filter = expr_conv.get_converted_expr();
 
-  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, output_filter);
+  prepare_data(skip_rows, num_rows, uses_custom_row_bounds, row_group_indices, filter);
   return read_chunk_internal(uses_custom_row_bounds, output_filter);
 }
 

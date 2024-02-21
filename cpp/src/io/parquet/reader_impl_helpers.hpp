@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -82,6 +82,8 @@ class aggregate_reader_metadata {
   int64_t num_rows;
   size_type num_row_groups;
 
+  std::vector<data_type> _root_level_types;
+  std::vector<std::string> _root_level_names;
   /**
    * @brief Create a metadata object from each element in the source vector
    */
@@ -167,18 +169,19 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
+  std::tuple<host_span<data_type const>, host_span<std::string const>> get_schema_dtypes(
+    bool strings_to_categorical, type_id timestamp_type_id);
+
   /**
    * @brief Filters the row groups based on predicate filter
    *
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param output_dtypes List of output column datatypes
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices, if any is filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -191,7 +194,6 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
-   * @param output_dtypes List of output column datatypes
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
@@ -201,7 +203,6 @@ class aggregate_reader_metadata {
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
     std::optional<size_type> const& row_count,
-    host_span<data_type const> output_dtypes,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -234,7 +235,6 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  public:
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata)
-    : metadata(metadata)
   {
     if (!expr.has_value()) return;
     // create map for column name.
@@ -251,6 +251,21 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
     expr.value().get().accept(*this);
   }
 
+  named_to_reference_converter(std::reference_wrapper<ast::expression const> expr,
+                               host_span<std::string const> root_column_names)
+  {
+    // create map for column name.
+    std::transform(
+      thrust::make_zip_iterator(root_column_names.begin(), thrust::counting_iterator<size_t>(0)),
+      thrust::make_zip_iterator(root_column_names.end(),
+                                thrust::counting_iterator(root_column_names.size())),
+      std::inserter(column_name_to_index, column_name_to_index.end()),
+      [](auto const& name_index) {
+        return std::make_pair(thrust::get<0>(name_index), thrust::get<1>(name_index));
+      });
+
+    expr.get().accept(*this);
+  }
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
    */
@@ -284,7 +299,6 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     std::vector<std::reference_wrapper<ast::expression const>> operands);
 
-  table_metadata const& metadata;
   std::unordered_map<std::string, size_type> column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
   // Using std::list or std::deque to avoid reference invalidation

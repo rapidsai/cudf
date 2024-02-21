@@ -374,9 +374,46 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
+std::tuple<host_span<data_type const>, host_span<std::string const>>
+aggregate_reader_metadata::get_schema_dtypes(bool strings_to_categorical, type_id timestamp_type_id)
+{
+  // TODO, get types and names for only names present in filter.? and their col_idx.
+  // create root column types and names as vector
+  if (!_root_level_types.empty()) return {_root_level_types, _root_level_names};
+  std::function<cudf::data_type(int)> get_dtype = [strings_to_categorical,
+                                                   timestamp_type_id,
+                                                   &get_dtype,
+                                                   this](int schema_idx) -> cudf::data_type {
+    // returns type of root level columns only.
+    // if (schema_idx < 0) { return false; }
+    auto const& schema_elem = get_schema(schema_idx);
+    if (schema_elem.is_stub()) {
+      CUDF_EXPECTS(schema_elem.num_children == 1, "Unexpected number of children for stub");
+      return get_dtype(schema_elem.children_idx[0]);
+    }
+
+    auto const one_level_list = schema_elem.is_one_level_list(get_schema(schema_elem.parent_idx));
+    // if we're at the root, this is a new output column
+    auto const col_type = one_level_list
+                            ? type_id::LIST
+                            : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+    auto const dtype    = to_data_type(col_type, schema_elem);
+    // path_is_valid is skipped for nested columns here. TODO: more test cases where no leaf.
+    return dtype;
+  };
+
+  auto const& root = get_schema(0);
+  for (auto const& schema_idx : root.children_idx) {
+    if (schema_idx < 0) { continue; }
+    _root_level_types.push_back(get_dtype(schema_idx));
+    _root_level_names.push_back(get_schema(schema_idx).name);
+  }
+  return {_root_level_types, _root_level_names};
+  ;
+}
+
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(
   host_span<std::vector<size_type> const> row_group_indices,
-  host_span<data_type const> output_dtypes,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -410,8 +447,8 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
   // For each column, it contains #sources * #column_chunks_per_src rows.
   std::vector<std::unique_ptr<column>> columns;
   stats_caster stats_col{total_row_groups, per_file_metadata, input_row_group_indices};
-  for (size_t col_idx = 0; col_idx < output_dtypes.size(); col_idx++) {
-    auto const& dtype = output_dtypes[col_idx];
+  for (size_t col_idx = 0; col_idx < _root_level_types.size(); col_idx++) {
+    auto const& dtype = _root_level_types[col_idx];
     // Only comparable types except fixed point are supported.
     if (cudf::is_compound(dtype) && dtype.id() != cudf::type_id::STRING) {
       // placeholder only for unsupported types.
@@ -427,9 +464,13 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::fi
     columns.push_back(std::move(max_col));
   }
   auto stats_table = cudf::table(std::move(columns));
+  // named filter to reference filter w.r.t parquet schema order.
+  auto expr_conv        = named_to_reference_converter(filter, _root_level_names);
+  auto reference_filter = expr_conv.get_converted_expr();
 
   // Converts AST to StatsAST with reference to min, max columns in above `stats_table`.
-  stats_expression_converter stats_expr{filter, static_cast<size_type>(output_dtypes.size())};
+  stats_expression_converter stats_expr{reference_filter.value().get(),
+                                        static_cast<size_type>(_root_level_types.size())};
   auto stats_ast     = stats_expr.get_stats_expr();
   auto predicate_col = cudf::detail::compute_column(stats_table, stats_ast.get(), stream, mr);
   auto predicate     = predicate_col->view();
