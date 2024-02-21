@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
 {
   // If there are no rows in the input, return successfully
   if (input.num_columns() == 0 || input.num_rows() == 0) {
-    return std::pair(std::make_unique<column>(), table_view{});
+    return {std::make_unique<column>(), table_view{}};
   }
 
   // Check datatype homogeneity
@@ -53,9 +53,9 @@ std::pair<std::unique_ptr<column>, table_view> transpose(table_view const& input
   auto splits_iter   = thrust::make_transform_iterator(
     one_iter, [width = input.num_columns()](size_type idx) { return idx * width; });
   auto splits = std::vector<size_type>(splits_iter, splits_iter + input.num_rows() - 1);
-  auto output_column_views = split(output_column->view(), splits, stream);
+  auto output_column_views = detail::split(output_column->view(), splits, stream);
 
-  return std::pair(std::move(output_column), table_view(output_column_views));
+  return {std::move(output_column), table_view(output_column_views)};
 }
 }  // namespace detail
 

@@ -1,15 +1,16 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import math
 import re
 import warnings
-from typing import Sequence, Type, TypeVar, Union
+from typing import Literal, Optional, Sequence, Union
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pandas.tseries.offsets as pd_offset
 from pandas.core.tools.datetimes import _unit_map
+from typing_extensions import Self
 
 import cudf
 from cudf import _lib as libcudf
@@ -48,16 +49,16 @@ _offset_alias_to_code = {
 
 def to_datetime(
     arg,
-    errors="raise",
-    dayfirst=False,
-    yearfirst=False,
-    utc=None,
-    format=None,
-    exact=True,
-    unit="ns",
-    infer_datetime_format=False,
+    errors: Literal["raise", "coerce", "warn", "ignore"] = "raise",
+    dayfirst: bool = False,
+    yearfirst: bool = False,
+    utc: bool = False,
+    format: Optional[str] = None,
+    exact: bool = True,
+    unit: str = "ns",
+    infer_datetime_format: bool = False,
     origin="unix",
-    cache=True,
+    cache: bool = True,
 ):
     """
     Convert argument to datetime.
@@ -79,6 +80,8 @@ def to_datetime(
         2012-11-10.
         Warning: dayfirst=True is not strict, but will prefer to parse
         with day first (this is a known bug, based on dateutil behavior).
+    utc : bool, default False
+        Whether the result should be have a UTC timezone.
     format : str, default None
         The strftime to parse time, eg "%d/%m/%Y", note that "%f" will parse
         all the way up to nanoseconds.
@@ -130,6 +133,10 @@ def to_datetime(
             f"{['ignore', 'raise', 'coerce', 'warn']}, found: "
             f"{errors}"
         )
+    elif errors in {"ignore", "coerce"} and not is_scalar(arg):
+        raise NotImplementedError(
+            f"{errors=} is not implemented when arg is not scalar-like"
+        )
 
     if arg is None:
         return None
@@ -143,8 +150,13 @@ def to_datetime(
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
 
-    if format is not None and "%f" in format:
-        format = format.replace("%f", "%9f")
+    if format is not None:
+        if "%Z" in format or "%z" in format:
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
+        elif "%f" in format:
+            format = format.replace("%f", "%9f")
 
     try:
         if isinstance(arg, cudf.DataFrame):
@@ -152,24 +164,24 @@ def to_datetime(
             required = ["year", "month", "day"]
             req = list(set(required) - set(arg._data.names))
             if len(req):
-                req = ",".join(req)
+                err_req = ",".join(req)
                 raise ValueError(
                     f"to assemble mappings requires at least that "
-                    f"[year, month, day] be specified: [{req}] "
+                    f"[year, month, day] be specified: [{err_req}] "
                     f"is missing"
                 )
 
             # replace passed column name with values in _unit_map
-            unit = {k: get_units(k) for k in arg._data.names}
-            unit_rev = {v: k for k, v in unit.items()}
+            got_units = {k: get_units(k) for k in arg._data.names}
+            unit_rev = {v: k for k, v in got_units.items()}
 
             # keys we don't recognize
             excess = set(unit_rev.keys()) - set(_unit_map.values())
             if len(excess):
-                excess = ",".join(excess)
+                err_excess = ",".join(excess)
                 raise ValueError(
                     f"extra keys have been passed to the "
-                    f"datetime assemblage: [{excess}]"
+                    f"datetime assemblage: [{err_excess}]"
                 )
 
             new_series = (
@@ -232,38 +244,29 @@ def to_datetime(
                 col = (col.astype(dtype="int64") + times_column).astype(
                     dtype=col.dtype
                 )
+            col = _process_col(
+                col=col,
+                unit=unit,
+                dayfirst=dayfirst,
+                infer_datetime_format=infer_datetime_format,
+                format=format,
+                utc=utc,
+            )
             return cudf.Series(col, index=arg.index)
-        elif isinstance(arg, cudf.BaseIndex):
-            col = arg._values
-            col = _process_col(
-                col=col,
-                unit=unit,
-                dayfirst=dayfirst,
-                infer_datetime_format=infer_datetime_format,
-                format=format,
-            )
-            return as_index(col, name=arg.name)
-        elif isinstance(arg, (cudf.Series, pd.Series)):
-            col = column.as_column(arg)
-            col = _process_col(
-                col=col,
-                unit=unit,
-                dayfirst=dayfirst,
-                infer_datetime_format=infer_datetime_format,
-                format=format,
-            )
-            return cudf.Series(col, index=arg.index, name=arg.name)
         else:
-            col = column.as_column(arg)
             col = _process_col(
-                col=col,
+                col=column.as_column(arg),
                 unit=unit,
                 dayfirst=dayfirst,
                 infer_datetime_format=infer_datetime_format,
                 format=format,
+                utc=utc,
             )
-
-            if is_scalar(arg):
+            if isinstance(arg, (cudf.BaseIndex, pd.Index)):
+                return as_index(col, name=arg.name)
+            elif isinstance(arg, (cudf.Series, pd.Series)):
+                return cudf.Series(col, index=arg.index, name=arg.name)
+            elif is_scalar(arg):
                 return col.element_indexing(0)
             else:
                 return as_index(col)
@@ -282,15 +285,18 @@ def to_datetime(
         return arg
 
 
-def _process_col(col, unit, dayfirst, infer_datetime_format, format):
-    if col.dtype.kind == "M":
-        return col
-    elif col.dtype.kind == "m":
-        raise TypeError(
-            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
-        )
+def _process_col(
+    col,
+    unit: str,
+    dayfirst: bool,
+    infer_datetime_format: bool,
+    format: Optional[str],
+    utc: bool,
+):
+    # Causes circular import
+    from cudf.core._internals.timezones import localize
 
-    if col.dtype.kind in ("f"):
+    if col.dtype.kind == "f":
         if unit not in (None, "ns"):
             factor = cudf.Scalar(
                 column.datetime._unit_to_nanoseconds_conversion[unit]
@@ -317,7 +323,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             col = col.as_datetime_column(dtype="datetime64[ns]")
 
-    if col.dtype.kind in ("i"):
+    elif col.dtype.kind in "iu":
         if unit in ("D", "h", "m"):
             factor = cudf.Scalar(
                 column.datetime._unit_to_nanoseconds_conversion[unit]
@@ -332,7 +338,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
         else:
             col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
 
-    elif col.dtype.kind in ("O"):
+    elif col.dtype.kind == "O":
         if unit not in (None, "ns") or col.null_count == len(col):
             try:
                 col = col.astype(dtype="int64")
@@ -344,21 +350,29 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
                 dayfirst=dayfirst,
                 infer_datetime_format=infer_datetime_format,
                 format=format,
+                utc=utc,
             )
         else:
-            if infer_datetime_format and format is None:
+            if format is None:
+                if not infer_datetime_format and dayfirst:
+                    raise NotImplementedError(
+                        f"{dayfirst=} not implemented "
+                        f"when {format=} and {infer_datetime_format=}."
+                    )
                 format = column.datetime.infer_format(
                     element=col.element_indexing(0),
                     dayfirst=dayfirst,
-                )
-            elif format is None:
-                format = column.datetime.infer_format(
-                    element=col.element_indexing(0)
                 )
             col = col.as_datetime_column(
                 dtype=_unit_dtype_map[unit],
                 format=format,
             )
+    elif col.dtype.kind != "M":
+        raise TypeError(
+            f"dtype {col.dtype} cannot be converted to {_unit_dtype_map[unit]}"
+        )
+    if utc and not isinstance(col.dtype, pd.DatetimeTZDtype):
+        return localize(col, "UTC", ambiguous="NaT", nonexistent="NaT")
     return col
 
 
@@ -371,9 +385,6 @@ def get_units(value):
         return _unit_map[value.lower()]
 
     return value
-
-
-_T = TypeVar("_T", bound="DateOffset")
 
 
 class DateOffset:
@@ -452,13 +463,19 @@ class DateOffset:
     }
 
     _CODES_TO_UNITS = {
+        "N": "nanoseconds",
         "ns": "nanoseconds",
+        "U": "microseconds",
         "us": "microseconds",
         "ms": "milliseconds",
         "L": "milliseconds",
         "s": "seconds",
+        "S": "seconds",
         "m": "minutes",
+        "min": "minutes",
+        "T": "minutes",
         "h": "hours",
+        "H": "hours",
         "D": "days",
         "W": "weeks",
         "M": "months",
@@ -476,7 +493,7 @@ class DateOffset:
         pd_offset.Nano: "nanoseconds",
     }
 
-    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
+    _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -647,7 +664,7 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
+    def _from_freqstr(cls, freqstr: str) -> Self:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
@@ -669,9 +686,9 @@ class DateOffset:
 
     @classmethod
     def _from_pandas_ticks_or_weeks(
-        cls: Type[_T],
+        cls,
         tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
-    ) -> _T:
+    ) -> Self:
         return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
     def _maybe_as_fast_pandas_offset(self):
@@ -925,7 +942,7 @@ def date_range(
         arr = cp.arange(start=start, stop=stop, step=step, dtype="int64")
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
 
-    return cudf.DatetimeIndex._from_data({name: res})
+    return cudf.DatetimeIndex._from_data({name: res}, freq=freq)
 
 
 def _has_fixed_frequency(freq: DateOffset) -> bool:

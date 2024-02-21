@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -461,8 +461,8 @@ struct column_gatherer_impl<struct_view> {
     std::transform(thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(column.num_children()),
                    std::back_inserter(sliced_children),
-                   [structs_view = structs_column_view{column}](auto const idx) {
-                     return structs_view.get_sliced_child(idx);
+                   [&stream, structs_view = structs_column_view{column}](auto const idx) {
+                     return structs_view.get_sliced_child(idx, stream);
                    });
 
     std::vector<std::unique_ptr<cudf::column>> output_struct_members;
@@ -583,10 +583,12 @@ void gather_bitmask(table_view const& source,
   std::transform(target.begin(), target.end(), target_masks.begin(), [](auto const& col) {
     return col->mutable_view().null_mask();
   });
-  auto d_target_masks = make_device_uvector_async(target_masks, stream);
+  auto d_target_masks =
+    make_device_uvector_async(target_masks, stream, rmm::mr::get_current_device_resource());
 
   auto const device_source = table_device_view::create(source, stream);
-  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(target.size(), stream);
+  auto d_valid_counts      = make_zeroed_device_uvector_async<size_type>(
+    target.size(), stream, rmm::mr::get_current_device_resource());
 
   // Dispatch operation enum to get implementation
   auto const impl = [op]() {
@@ -647,13 +649,12 @@ void gather_bitmask(table_view const& source,
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>
-std::unique_ptr<table> gather(
-  table_view const& source_table,
-  MapIterator gather_map_begin,
-  MapIterator gather_map_end,
-  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<table> gather(table_view const& source_table,
+                              MapIterator gather_map_begin,
+                              MapIterator gather_map_end,
+                              out_of_bounds_policy bounds_policy,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
 {
   std::vector<std::unique_ptr<column>> destination_columns;
 
@@ -672,14 +673,20 @@ std::unique_ptr<table> gather(
                                                    mr));
   }
 
-  auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||
-                        std::any_of(source_table.begin(), source_table.end(), [](auto const& col) {
-                          return col.nullable();
-                        });
-  if (nullable) {
-    auto const op = bounds_policy == out_of_bounds_policy::NULLIFY ? gather_bitmask_op::NULLIFY
-                                                                   : gather_bitmask_op::DONT_CHECK;
-    gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+  auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
+                           cudf::has_nested_nullable_columns(source_table);
+  if (needs_new_bitmask) {
+    needs_new_bitmask = needs_new_bitmask || cudf::has_nested_nulls(source_table);
+    if (needs_new_bitmask) {
+      auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
+                        ? gather_bitmask_op::NULLIFY
+                        : gather_bitmask_op::DONT_CHECK;
+      gather_bitmask(source_table, gather_map_begin, destination_columns, op, stream, mr);
+    } else {
+      for (size_type i = 0; i < source_table.num_columns(); ++i) {
+        set_all_valid_null_masks(source_table.column(i), *destination_columns[i], stream, mr);
+      }
+    }
   }
 
   return std::make_unique<table>(std::move(destination_columns));

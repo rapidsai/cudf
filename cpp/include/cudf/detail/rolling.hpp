@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -39,14 +39,13 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> rolling_window(
-  column_view const& input,
-  column_view const& preceding_window,
-  column_view const& following_window,
-  size_type min_periods,
-  rolling_aggregation const& agg,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> rolling_window(column_view const& input,
+                                       column_view const& preceding_window,
+                                       column_view const& following_window,
+                                       size_type min_periods,
+                                       rolling_aggregation const& agg,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 #include <cudf/detail/fill.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/lists/lists_column_factories.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/fill.hpp>
 
@@ -57,7 +57,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
 
   // Since we are setting every row to the scalar, the fill() never needs to access
   // any of the children in the strings column which would otherwise cause an exception.
-  column_view sc{value.type(), size, nullptr};
+  column_view sc{value.type(), size, nullptr, nullptr, 0};
   auto& sv = static_cast<scalar_type_t<cudf::string_view> const&>(value);
 
   // fill the column with the scalar

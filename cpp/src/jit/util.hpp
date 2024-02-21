@@ -26,12 +26,12 @@ namespace jit {
 /**
  * @brief Get the raw pointer to data in a (mutable_)column_view
  */
-const void* get_data_ptr(column_view const& view);
+void const* get_data_ptr(column_view const& view);
 
 /**
  * @brief Get the raw pointer to data in a scalar
  */
-const void* get_data_ptr(scalar const& s);
+void const* get_data_ptr(scalar const& s);
 
 }  // namespace jit
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,15 +49,15 @@ enum class is_int96_timestamp { YES, NO };
 template <io_file_format IO, is_int96_timestamp INT96>
 struct conversion_map;
 
-// Every timestamp or duration type is converted to milliseconds in ORC statistics
+// Every timestamp or duration type is converted to nanoseconds in ORC statistics
 template <is_int96_timestamp INT96>
 struct conversion_map<io_file_format::ORC, INT96> {
-  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_us, cudf::timestamp_ms>,
-                           std::pair<cudf::timestamp_ns, cudf::timestamp_ms>,
-                           std::pair<cudf::duration_s, cudf::duration_ms>,
-                           std::pair<cudf::duration_us, cudf::duration_ms>,
-                           std::pair<cudf::duration_ns, cudf::duration_ms>>;
+  using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_us, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_ns, cudf::timestamp_ns>,
+                           std::pair<cudf::duration_s, cudf::duration_ns>,
+                           std::pair<cudf::duration_us, cudf::duration_ns>,
+                           std::pair<cudf::duration_ns, cudf::duration_ns>>;
 };
 
 // In Parquet timestamps and durations with second resolution are converted to
@@ -92,7 +92,7 @@ class type_conversion {
   using type = typename type_selector::template type<T>;
 
   template <typename T>
-  static constexpr __device__ typename type_selector::template type<T> convert(const T& elem)
+  static constexpr __device__ typename type_selector::template type<T> convert(T const& elem)
   {
     using Type = typename type_selector::template type<T>;
     if constexpr (cudf::is_duration<T>()) {
@@ -108,8 +108,7 @@ class type_conversion {
 };
 
 template <class T>
-struct dependent_false : std::false_type {
-};
+struct dependent_false : std::false_type {};
 
 /**
  * @brief Utility class to convert a leaf column element into its extrema type
@@ -126,7 +125,7 @@ class extrema_type {
 
   using non_arithmetic_extrema_type = typename std::conditional_t<
     cudf::is_fixed_point<T>() or cudf::is_duration<T>() or cudf::is_timestamp<T>(),
-    typename std::conditional_t<std::is_same_v<T, numeric::decimal128>, __int128_t, int64_t>,
+    typename std::conditional_t<cudf::is_fixed_point<T>(), __int128_t, int64_t>,
     typename std::conditional_t<
       std::is_same_v<T, string_view>,
       string_view,
@@ -135,8 +134,7 @@ class extrema_type {
   // unsigned int/bool -> uint64_t
   // signed int        -> int64_t
   // float/double      -> double
-  // decimal32/64      -> int64_t
-  // decimal128        -> __int128_t
+  // decimal32/64/128  -> __int128_t
   // duration_[T]      -> int64_t
   // string_view       -> string_view
   // byte_array_view   -> byte_array_view
@@ -154,7 +152,7 @@ class extrema_type {
   /**
    * @brief Function that converts an element of a leaf column into its extrema type
    */
-  __device__ static type convert(const T& val)
+  __device__ static type convert(T const& val)
   {
     if constexpr (std::is_arithmetic_v<T> or std::is_same_v<T, string_view> or
                   std::is_same_v<T, byte_array_view>) {
@@ -216,7 +214,7 @@ class aggregation_type {
   /**
    * @brief Function that converts an element of a leaf column into its aggregate type
    */
-  __device__ static type convert(const T& val)
+  __device__ static type convert(T const& val)
   {
     if constexpr (std::is_same_v<T, string_view> or std::is_same_v<T, byte_array_view>) {
       return val.size_bytes();

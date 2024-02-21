@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -276,8 +277,7 @@ TEST_F(FillStringTestFixture, SetRangeNullCount)
   this->test(0, size, value, true, odd_valid);
 }
 
-class FillErrorTestFixture : public cudf::test::BaseFixture {
-};
+class FillErrorTestFixture : public cudf::test::BaseFixture {};
 
 TEST_F(FillErrorTestFixture, InvalidInplaceCall)
 {
@@ -364,8 +364,7 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
 }
 
 template <typename T>
-class FixedPointAllReps : public cudf::test::BaseFixture {
-};
+class FixedPointAllReps : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
 

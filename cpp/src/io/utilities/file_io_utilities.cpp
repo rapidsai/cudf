@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "file_io_utilities.hpp"
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <io/utilities/config_utils.hpp>
@@ -20,7 +21,10 @@
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
+#include <errno.h>
+#include <string.h>
 
+#include <filesystem>
 #include <fstream>
 #include <numeric>
 
@@ -28,23 +32,42 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-size_t get_file_size(int file_descriptor)
+[[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
+{
+  // save errno because it may be overwritten by subsequent calls
+  auto const err = errno;
+
+  if (auto const path = std::filesystem::path(filepath); is_create) {
+    CUDF_EXPECTS(std::filesystem::exists(path.parent_path()),
+                 "Cannot create output file; directory does not exist");
+
+  } else {
+    CUDF_EXPECTS(std::filesystem::exists(path), "Cannot open file; it does not exist");
+  }
+
+  std::array<char, 1024> error_msg_buffer;
+  auto const error_msg = strerror_r(err, error_msg_buffer.data(), 1024);
+  CUDF_FAIL("Cannot open file; failed with errno: " + std::string{error_msg});
+}
+
+[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+{
+  auto const fd = open(filepath.c_str(), flags, mode);
+  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
+
+  return fd;
+}
+
+[[nodiscard]] size_t get_file_size(int file_descriptor)
 {
   struct stat st;
   CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
   return static_cast<size_t>(st.st_size);
 }
 
-file_wrapper::file_wrapper(std::string const& filepath, int flags)
-  : fd(open(filepath.c_str(), flags)), _size{get_file_size(fd)}
-{
-  CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
-}
-
 file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
-  : fd(open(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
+  : fd(open_file_checked(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
 {
-  CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
@@ -68,7 +91,7 @@ class cufile_shim {
   auto is_valid() const noexcept { return init_error == nullptr; }
 
  public:
-  cufile_shim(cufile_shim const&) = delete;
+  cufile_shim(cufile_shim const&)            = delete;
   cufile_shim& operator=(cufile_shim const&) = delete;
 
   static cufile_shim const* instance();
@@ -117,7 +140,22 @@ void cufile_shim::modify_cufile_json() const
 
 void cufile_shim::load_cufile_lib()
 {
-  cf_lib = dlopen("libcufile.so", RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
+  for (auto&& name : {"libcufile.so.0",
+                      // Prior to CUDA 11.7.1, although ABI
+                      // compatibility was maintained, some (at least
+                      // Debian) packages do not have the .0 symlink,
+                      // instead request the exact version.
+                      "libcufile.so.1.3.0" /* 11.7.0 */,
+                      "libcufile.so.1.2.1" /* 11.6.2, 11.6.1 */,
+                      "libcufile.so.1.2.0" /* 11.6.0 */,
+                      "libcufile.so.1.1.1" /* 11.5.1 */,
+                      "libcufile.so.1.1.0" /* 11.5.0 */,
+                      "libcufile.so.1.0.2" /* 11.4.4, 11.4.3, 11.4.2 */,
+                      "libcufile.so.1.0.1" /* 11.4.1 */,
+                      "libcufile.so.1.0.0" /* 11.4.0 */}) {
+    cf_lib = dlopen(name, RTLD_LAZY | RTLD_LOCAL | RTLD_NODELETE);
+    if (cf_lib != nullptr) break;
+  }
   CUDF_EXPECTS(cf_lib != nullptr, "Failed to load cuFile library");
   driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
   CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
@@ -273,24 +311,44 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      return std::make_unique<cufile_input_impl>(filepath);
+      auto cufile_in = std::make_unique<cufile_input_impl>(filepath);
+      CUDF_LOG_INFO("File successfully opened for reading with GDS.");
+      return cufile_in;
     } catch (...) {
-      if (cufile_integration::is_always_enabled()) throw;
+      if (cufile_integration::is_always_enabled()) {
+        CUDF_LOG_ERROR(
+          "Failed to open file for reading with GDS. Enable bounce buffer fallback to read this "
+          "file.");
+        throw;
+      }
+      CUDF_LOG_INFO(
+        "Failed to open file for reading with GDS. Data will be read from the file using a bounce "
+        "buffer (possible performance impact).");
     }
   }
-  return nullptr;
+  return {};
 }
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      return std::make_unique<cufile_output_impl>(filepath);
+      auto cufile_out = std::make_unique<cufile_output_impl>(filepath);
+      CUDF_LOG_INFO("File successfully opened for writing with GDS.");
+      return cufile_out;
     } catch (...) {
-      if (cufile_integration::is_always_enabled()) throw;
+      if (cufile_integration::is_always_enabled()) {
+        CUDF_LOG_ERROR(
+          "Failed to open file for writing with GDS. Enable bounce buffer fallback to write to "
+          "this file.");
+        throw;
+      }
+      CUDF_LOG_INFO(
+        "Failed to open file for writing with GDS. Data will be written to the file using a bounce "
+        "buffer (possible performance impact).");
     }
   }
-  return nullptr;
+  return {};
 }
 
 std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size)

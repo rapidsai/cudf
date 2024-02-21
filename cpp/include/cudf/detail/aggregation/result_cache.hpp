@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include <cudf/detail/hashing.hpp>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/types.hpp>
 
 #include <unordered_map>
@@ -36,16 +36,16 @@ struct pair_column_aggregation_equal_to {
 struct pair_column_aggregation_hash {
   size_t operator()(std::pair<column_view, aggregation const&> const& key) const
   {
-    return hash_combine(shallow_hash(key.first), key.second.do_hash());
+    return cudf::hashing::detail::hash_combine(shallow_hash(key.first), key.second.do_hash());
   }
 };
 
 class result_cache {
  public:
-  result_cache()                    = delete;
-  ~result_cache()                   = default;
-  result_cache(result_cache const&) = delete;
-  result_cache& operator=(const result_cache& other) = delete;
+  result_cache()                                     = delete;
+  ~result_cache()                                    = default;
+  result_cache(result_cache const&)                  = delete;
+  result_cache& operator=(result_cache const& other) = delete;
 
   result_cache(size_t num_columns) : _cache(num_columns) {}
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,12 +32,11 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> sequence(
-  size_type size,
-  scalar const& init,
-  scalar const& step,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sequence(size_type size,
+                                 scalar const& init,
+                                 scalar const& step,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::sequence(size_type size, scalar const& init,
@@ -46,11 +45,10 @@ std::unique_ptr<column> sequence(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> sequence(
-  size_type size,
-  scalar const& init,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> sequence(size_type size,
+                                 scalar const& init,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::calendrical_month_sequence(size_type size,
@@ -60,12 +58,11 @@ std::unique_ptr<column> sequence(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> calendrical_month_sequence(
-  size_type size,
-  scalar const& init,
-  size_type months,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
+                                                         scalar const& init,
+                                                         size_type months,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

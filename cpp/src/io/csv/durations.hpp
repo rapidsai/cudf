@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,9 @@ namespace io {
 namespace detail {
 namespace csv {
 
-std::unique_ptr<column> pandas_format_durations(
-  column_view const& durations,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> pandas_format_durations(column_view const& durations,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 }  // namespace csv
 }  // namespace detail

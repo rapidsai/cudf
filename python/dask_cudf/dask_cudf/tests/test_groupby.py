@@ -1,6 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
-
-import contextlib
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -11,7 +9,6 @@ from dask import dataframe as dd
 from dask.utils_test import hlg_layer
 
 import cudf
-from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
 from dask_cudf.groupby import OPTIMIZED_AGGS, _aggs_optimized
@@ -79,7 +76,18 @@ def test_groupby_basic(series, aggregation, pdf):
 
 # TODO: explore adding support with `.agg()`
 @pytest.mark.parametrize("series", [True, False])
-@pytest.mark.parametrize("aggregation", ["cumsum", "cumcount"])
+@pytest.mark.parametrize(
+    "aggregation",
+    [
+        "cumsum",
+        pytest.param(
+            "cumcount",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13390"
+            ),
+        ),
+    ],
+)
 def test_groupby_cumulative(aggregation, pdf, series):
     gdf = cudf.DataFrame.from_pandas(pdf)
     ddf = dask_cudf.from_cudf(gdf, npartitions=5)
@@ -91,17 +99,10 @@ def test_groupby_cumulative(aggregation, pdf, series):
         gdf_grouped = gdf_grouped.xx
         ddf_grouped = ddf_grouped.xx
 
-    if pdf.isna().sum().any():
-        # https://github.com/rapidsai/cudf/issues/12055
-        gdf_grouped = gdf.groupby("xx")
-        context = pytest.raises(ValueError)
-    else:
-        context = contextlib.nullcontext()
-    with context:
-        a = getattr(gdf_grouped, aggregation)()
-        b = getattr(ddf_grouped, aggregation)()
+    a = getattr(gdf_grouped, aggregation)()
+    b = getattr(ddf_grouped, aggregation)()
 
-        dd.assert_eq(a, b)
+    dd.assert_eq(a, b)
 
 
 @pytest.mark.parametrize("aggregation", OPTIMIZED_AGGS)
@@ -137,7 +138,6 @@ def test_groupby_agg(func, aggregation, pdf):
 
 @pytest.mark.parametrize("split_out", [1, 3])
 def test_groupby_agg_empty_partition(tmpdir, split_out):
-
     # Write random and empty cudf DataFrames
     # to two distinct files.
     df = cudf.datasets.randomdata()
@@ -160,18 +160,8 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
 @pytest.mark.parametrize(
     "func",
     [
-        pytest.param(
-            lambda df: df.groupby(["a", "b"]).x.sum(),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        ),
-        pytest.param(
-            lambda df: df.groupby(["a", "b"]).sum(),
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_120, reason="pandas bug"
-            ),
-        ),
+        lambda df: df.groupby(["a", "b"]).x.sum(),
+        lambda df: df.groupby(["a", "b"]).sum(),
         pytest.param(
             lambda df: df.groupby(["a", "b"]).agg({"x", "sum"}),
             marks=pytest.mark.xfail,
@@ -507,7 +497,6 @@ def test_groupby_mean_sort_false():
 
 
 def test_groupby_reset_index_dtype():
-
     # Make sure int8 dtype is properly preserved
     # Through various cudf/dask_cudf ops
     #
@@ -845,26 +834,38 @@ def test_groupby_shuffle():
 
     # Sorted aggregation, single-partition output
     # (sort=True, split_out=1)
-    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=1)
+    got = gddf.groupby("a", sort=True).agg(
+        spec, shuffle_method=True, split_out=1
+    )
     dd.assert_eq(expect, got)
 
     # Sorted aggregation, multi-partition output
     # (sort=True, split_out=2)
-    got = gddf.groupby("a", sort=True).agg(spec, shuffle=True, split_out=2)
+    got = gddf.groupby("a", sort=True).agg(
+        spec, shuffle_method=True, split_out=2
+    )
     dd.assert_eq(expect, got)
 
     # Un-sorted aggregation, single-partition output
     # (sort=False, split_out=1)
-    got = gddf.groupby("a", sort=False).agg(spec, shuffle=True, split_out=1)
+    got = gddf.groupby("a", sort=False).agg(
+        spec, shuffle_method=True, split_out=1
+    )
     dd.assert_eq(expect.sort_index(), got.compute().sort_index())
 
     # Un-sorted aggregation, multi-partition output
     # (sort=False, split_out=2)
-    # NOTE: `shuffle=True` should be default
+    # NOTE: `shuffle_method=True` should be default
     got = gddf.groupby("a", sort=False).agg(spec, split_out=2)
     dd.assert_eq(expect, got.compute().sort_index())
 
     # Sorted aggregation fails with split_out>1 when shuffle is False
-    # (sort=True, split_out=2, shuffle=False)
+    # (sort=True, split_out=2, shuffle_method=False)
     with pytest.raises(ValueError):
-        gddf.groupby("a", sort=True).agg(spec, shuffle=False, split_out=2)
+        gddf.groupby("a", sort=True).agg(
+            spec, shuffle_method=False, split_out=2
+        )
+
+    # Check shuffle kwarg deprecation
+    with pytest.warns(match="'shuffle' keyword is deprecated"):
+        gddf.groupby("a", sort=True).agg(spec, shuffle=False)

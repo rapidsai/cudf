@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,11 @@
 
 #pragma once
 
+#include <cudf/column/column_view.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
+#include <memory>
+#include <vector>
 
 namespace cudf::detail {
 
@@ -28,40 +30,34 @@ using LinkedColPtr    = std::shared_ptr<linked_column_view>;
 using LinkedColVector = std::vector<LinkedColPtr>;
 
 /**
- * @brief column_view with the added member pointer to the parent of this column.
- *
+ * @brief A column_view class with pointer to parent's column_view
  */
 struct linked_column_view : public column_view_base {
-  linked_column_view(linked_column_view const&) = delete;
+  linked_column_view(linked_column_view const&)            = delete;
   linked_column_view& operator=(linked_column_view const&) = delete;
 
-  linked_column_view(column_view const& col) : linked_column_view(nullptr, col) {}
+  /**
+   * @brief Construct from column_view
+   *
+   * @param col column_view to wrap
+   */
+  linked_column_view(column_view const& col);
 
-  linked_column_view(linked_column_view* parent, column_view const& col)
-    : column_view_base(col), parent(parent)
-  {
-    children.reserve(col.num_children());
-    std::transform(
-      col.child_begin(), col.child_end(), std::back_inserter(children), [&](column_view const& c) {
-        return std::make_shared<linked_column_view>(this, c);
-      });
-  }
+  /**
+   * @brief Construct from column_view with it's parent
+   *
+   * @param parent Pointer to the column_view's parent column_view
+   * @param col column_view to wrap
+   */
+  linked_column_view(linked_column_view* parent, column_view const& col);
 
-  operator column_view() const
-  {
-    auto child_it = thrust::make_transform_iterator(
-      children.begin(), [](auto const& c) { return static_cast<column_view>(*c); });
-    return column_view(this->type(),
-                       this->size(),
-                       this->head(),
-                       this->null_mask(),
-                       UNKNOWN_NULL_COUNT,
-                       this->offset(),
-                       std::vector<column_view>(child_it, child_it + children.size()));
-  }
+  /**
+   * @brief Conversion operator to cast this instance to it's column_view
+   */
+  operator column_view() const;
 
-  linked_column_view* parent;  //!< Pointer to parent of this column. Nullptr if root
-  LinkedColVector children;
+  linked_column_view* parent;  ///< Pointer to parent of this column; nullptr if root
+  LinkedColVector children;    ///< Vector of children of this instance
 };
 
 /**
@@ -70,11 +66,6 @@ struct linked_column_view : public column_view_base {
  * @param table table of columns to convert
  * @return Vector of converted linked_column_views
  */
-inline LinkedColVector table_to_linked_columns(table_view const& table)
-{
-  auto linked_it = thrust::make_transform_iterator(
-    table.begin(), [](auto const& c) { return std::make_shared<linked_column_view>(c); });
-  return LinkedColVector(linked_it, linked_it + table.num_columns());
-}
+LinkedColVector table_to_linked_columns(table_view const& table);
 
 }  // namespace cudf::detail

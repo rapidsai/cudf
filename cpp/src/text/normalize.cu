@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ namespace {
  */
 struct normalize_spaces_fn {
   cudf::column_device_view const d_strings;  // strings to normalize
-  int32_t* d_offsets{};                      // offsets into d_buffer
+  cudf::size_type* d_offsets{};              // offsets into d_chars
   char* d_chars{};                           // output buffer for characters
 
   __device__ void operator()(cudf::size_type idx)
@@ -71,7 +71,8 @@ struct normalize_spaces_fn {
     auto const d_str = d_strings.element<cudf::string_view>(idx);
     char* buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
     char* optr       = buffer;  // running output pointer
-    int32_t nbytes   = 0;       // holds the number of bytes per output string
+
+    cudf::size_type nbytes = 0;  // holds the number of bytes per output string
 
     // create a tokenizer for this string with whitespace delimiter (default)
     characters_tokenizer tokenizer(d_str);
@@ -79,15 +80,16 @@ struct normalize_spaces_fn {
     // this will retrieve tokens automatically skipping runs of whitespace
     while (tokenizer.next_token()) {
       auto const token_pos = tokenizer.token_byte_positions();
-      nbytes += token_pos.second - token_pos.first + 1;  // token size plus a single space
+      auto const token =
+        cudf::string_view(d_str.data() + token_pos.first, token_pos.second - token_pos.first);
       if (optr) {
-        cudf::string_view const token(d_str.data() + token_pos.first,
-                                      token_pos.second - token_pos.first);
-        if (optr != buffer)  // prepend space unless we are at the beginning
-          optr = cudf::strings::detail::copy_string(optr, single_space);
+        // prepend space unless we are at the beginning
+        if (optr != buffer) { optr = cudf::strings::detail::copy_string(optr, single_space); }
         // write token to output buffer
-        optr = cudf::strings::detail::copy_string(optr, token);
+        thrust::copy_n(thrust::seq, token.data(), token.size_bytes(), optr);
+        optr += token.size_bytes();
       }
+      nbytes += token.size_bytes() + 1;  // token size plus a single space
     }
     // remove trailing space
     if (!d_chars) d_offsets[idx] = (nbytes > 0) ? nbytes - 1 : 0;
@@ -105,8 +107,8 @@ constexpr uint32_t UTF8_3BYTE = 0x01'0000;
 struct codepoint_to_utf8_fn {
   cudf::column_device_view const d_strings;  // input strings
   uint32_t const* cp_data;                   // full code-point array
-  int32_t const* d_cp_offsets{};             // offsets to each string's code-point array
-  int32_t* d_offsets{};                      // offsets for the output strings
+  cudf::size_type const* d_cp_offsets{};     // offsets to each string's code-point array
+  cudf::size_type* d_offsets{};              // offsets for the output strings
   char* d_chars{};                           // buffer for the output strings column
 
   /**
@@ -116,7 +118,7 @@ struct codepoint_to_utf8_fn {
    * @param count number of code-points in `str_cps`
    * @return Number of bytes required for the output
    */
-  __device__ int32_t compute_output_size(uint32_t const* str_cps, uint32_t count)
+  __device__ cudf::size_type compute_output_size(uint32_t const* str_cps, uint32_t count)
   {
     return thrust::transform_reduce(
       thrust::seq,
@@ -124,7 +126,7 @@ struct codepoint_to_utf8_fn {
       str_cps + count,
       [](auto cp) { return 1 + (cp >= UTF8_1BYTE) + (cp >= UTF8_2BYTE) + (cp >= UTF8_3BYTE); },
       0,
-      thrust::plus<int32_t>());
+      thrust::plus());
   }
 
   __device__ void operator()(cudf::size_type idx)
@@ -180,12 +182,12 @@ std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& 
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the normalize_space_fn
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     normalize_spaces_fn{*d_strings}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
-                                   std::move(children.first),
-                                   std::move(children.second),
+                                   std::move(offsets_column),
+                                   std::move(chars_column->release().data.release()[0]),
                                    strings.null_count(),
                                    cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -206,31 +208,32 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
     auto const aux_table   = get_aux_codepoint_data(stream);
     auto const normalizer  = data_normalizer(cp_metadata.data(), aux_table.data(), do_lower_case);
     auto const offsets     = strings.offsets();
-    auto const d_offsets   = offsets.data<uint32_t>() + strings.offset();
-    auto const offset      = cudf::detail::get_value<int32_t>(offsets, strings.offset(), stream);
-    auto const d_chars     = strings.chars().data<char>() + offset;
+    auto const d_offsets   = offsets.data<cudf::size_type>() + strings.offset();
+    auto const offset = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
+    auto const d_chars = strings.chars_begin(stream) + offset;
     return normalizer.normalize(d_chars, d_offsets, strings.size(), stream);
   }();
 
   CUDF_EXPECTS(
-    result.first->size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-    "output too large for strings column");
+    result.first->size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "output exceeds the column size limit",
+    std::overflow_error);
 
   // convert the result into a strings column
   // - the cp_chars are the new 4-byte code-point values for all the characters in the output
   // - the cp_offsets identify which code-points go with which strings
-  uint32_t const* cp_chars  = result.first->data();
-  int32_t const* cp_offsets = reinterpret_cast<int32_t const*>(result.second->data());
+  uint32_t const* cp_chars          = result.first->data();
+  cudf::size_type const* cp_offsets = result.second->data();
 
   auto d_strings = cudf::column_device_view::create(strings.parent(), stream);
 
   // build offsets and children using the codepoint_to_utf8_fn
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
     codepoint_to_utf8_fn{*d_strings, cp_chars, cp_offsets}, strings.size(), stream, mr);
 
   return cudf::make_strings_column(strings.size(),
-                                   std::move(children.first),
-                                   std::move(children.second),
+                                   std::move(offsets_column),
+                                   std::move(chars_column->release().data.release()[0]),
                                    strings.null_count(),
                                    cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -239,22 +242,24 @@ std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view con
 
 // external APIs
 
-std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> normalize_spaces(cudf::strings_column_view const& input,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_spaces(strings, cudf::get_default_stream(), mr);
+  return detail::normalize_spaces(input, stream, mr);
 }
 
 /**
  * @copydoc nvtext::normalize_characters
  */
-std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> normalize_characters(cudf::strings_column_view const& input,
                                                    bool do_lower_case,
+                                                   rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::normalize_characters(strings, do_lower_case, cudf::get_default_stream(), mr);
+  return detail::normalize_characters(input, do_lower_case, stream, mr);
 }
 
 }  // namespace nvtext

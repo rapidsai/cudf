@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -193,12 +193,15 @@ def test_column_mixed_dtype(data, error):
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_as_column_scalar_with_nan(nan_as_null):
-    size = 10
-    scalar = np.nan
-
+@pytest.mark.parametrize(
+    "scalar",
+    [np.nan, pd.Timedelta(days=1), pd.Timestamp(2020, 1, 1)],
+    ids=repr,
+)
+@pytest.mark.parametrize("size", [1, 10])
+def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
     expected = (
-        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        cudf.Series([scalar] * size, nan_as_null=nan_as_null)
         .dropna()
         .to_numpy()
     )
@@ -395,11 +398,11 @@ def test_column_view_string_slice(slc):
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.as_column([], dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype="uint8"),
         ),
         (
-            cp.array([453], dtype="uint8"),
-            cudf.core.column.as_column([453], dtype="uint8"),
+            cp.array([255], dtype="uint8"),
+            cudf.core.column.as_column([255], dtype="uint8"),
         ),
     ],
 )
@@ -520,10 +523,7 @@ def test_concatenate_large_column_strings():
     s_1 = cudf.Series(["very long string " * string_scale_f] * num_strings)
     s_2 = cudf.Series(["very long string " * string_scale_f] * num_strings)
 
-    with pytest.raises(
-        OverflowError,
-        match="total size of output is too large for a cudf column",
-    ):
+    with pytest.raises(OverflowError):
         cudf.concat([s_1, s_2])
 
 

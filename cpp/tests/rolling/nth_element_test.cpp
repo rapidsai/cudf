@@ -108,12 +108,10 @@ class rolling_exec {
   }
 };
 
-struct NthElementTest : public cudf::test::BaseFixture {
-};
+struct NthElementTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct NthElementTypedTest : public NthElementTest {
-};
+struct NthElementTypedTest : public NthElementTest {};
 
 using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
                                         cudf::test::FloatingPointTypes,

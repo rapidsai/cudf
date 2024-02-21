@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ namespace io {
 #define BZ_UNEXPECTED_EOF   (-7)
 #define BZ_OUTBUFF_FULL     (-8)
 
-int32_t cpu_bz2_uncompress(const uint8_t* input,
+int32_t cpu_bz2_uncompress(uint8_t const* input,
                            size_t inlen,
                            uint8_t* dst,
                            size_t* dstlen,

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -71,7 +71,7 @@ final class BitVectorHelper {
   /**
    * This method returns the length in bytes needed to represent X number of rows
    * e.g. getValidityLengthInBytes(5) => 1 byte
-   * getLengthInBytes(7) => 1 byte
+   * getValidityLengthInBytes(7) => 1 byte
    * getValidityLengthInBytes(14) => 2 bytes
    */
   static long getValidityLengthInBytes(long rows) {

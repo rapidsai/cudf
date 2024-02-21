@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,8 +61,7 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     host_span<size_type const> splits,
                                     rmm::cuda_stream_view stream)
 {
-  std::vector<table_view> result{};
-  if (input.num_columns() == 0) { return result; }
+  if (input.num_columns() == 0) { return {}; }
   return split(input, input.column(0).size(), splits, stream);
 }
 
@@ -70,7 +69,7 @@ std::vector<column_view> split(column_view const& input,
                                std::initializer_list<size_type> splits,
                                rmm::cuda_stream_view stream)
 {
-  return split(input, host_span<size_type const>(splits.begin(), splits.size()), stream);
+  return detail::split(input, host_span<size_type const>(splits.begin(), splits.size()), stream);
 }
 
 std::vector<table_view> split(table_view const& input,
@@ -83,29 +82,35 @@ std::vector<table_view> split(table_view const& input,
 }  // namespace detail
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
-                                     host_span<size_type const> splits)
+                                     host_span<size_type const> splits,
+                                     rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::get_default_stream());
+  return detail::split(input, splits, stream);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
-                                    host_span<size_type const> splits)
+                                    host_span<size_type const> splits,
+                                    rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::get_default_stream());
+  return detail::split(input, splits, stream);
 }
 
-std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits)
+std::vector<column_view> split(column_view const& input,
+                               std::initializer_list<size_type> splits,
+                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::get_default_stream());
+  return detail::split(input, splits, stream);
 }
 
-std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits)
+std::vector<table_view> split(table_view const& input,
+                              std::initializer_list<size_type> splits,
+                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::split(input, splits, cudf::get_default_stream());
+  return detail::split(input, splits, stream);
 }
 
 }  // namespace cudf

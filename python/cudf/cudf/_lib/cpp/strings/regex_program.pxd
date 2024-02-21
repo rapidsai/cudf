@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -12,4 +12,7 @@ cdef extern from "cudf/strings/regex/regex_program.hpp" \
     cdef cppclass regex_program:
 
         @staticmethod
-        unique_ptr[regex_program] create(string pattern, regex_flags flags)
+        unique_ptr[regex_program] create(
+            string pattern,
+            regex_flags flags
+        ) except +

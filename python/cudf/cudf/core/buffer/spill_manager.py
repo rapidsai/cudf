@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -11,13 +11,19 @@ import warnings
 import weakref
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import partial
 from typing import Dict, List, Optional, Tuple
 
 import rmm.mr
 
-from cudf.core.buffer.spillable_buffer import SpillableBuffer
+from cudf.core.buffer.spillable_buffer import SpillableBufferOwner
 from cudf.options import get_option
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.string import format_bytes
+
+_spill_cudf_nvtx_annotate = partial(
+    _cudf_nvtx_annotate, domain="cudf_python-spill"
+)
 
 
 def get_traceback() -> str:
@@ -122,7 +128,7 @@ class SpillStatistics:
                 total_time + time,
             )
 
-    def log_expose(self, buf: SpillableBuffer) -> None:
+    def log_expose(self, buf: SpillableBufferOwner) -> None:
         """Log an expose event
 
         We track logged exposes by grouping them by their traceback such
@@ -218,14 +224,14 @@ class SpillManager:
         SpillStatistics for the different levels.
     """
 
-    _buffers: weakref.WeakValueDictionary[int, SpillableBuffer]
+    _buffers: weakref.WeakValueDictionary[int, SpillableBufferOwner]
     statistics: SpillStatistics
 
     def __init__(
         self,
         *,
         spill_on_demand: bool = False,
-        device_memory_limit: int = None,
+        device_memory_limit: Optional[int] = None,
         statistic_level: int = 0,
     ) -> None:
         self._lock = threading.Lock()
@@ -271,8 +277,8 @@ class SpillManager:
         In order to avoid deadlock, this function should not lock
         already locked buffers.
         """
-
         # Let's try to spill device memory
+
         spilled = self.spill_device_memory(nbytes=nbytes)
 
         if spilled > 0:
@@ -292,14 +298,14 @@ class SpillManager:
         )
         return False  # Since we didn't find anything to spill, we give up
 
-    def add(self, buffer: SpillableBuffer) -> None:
+    def add(self, buffer: SpillableBufferOwner) -> None:
         """Add buffer to the set of managed buffers
 
         The manager keeps a weak reference to the buffer
 
         Parameters
         ----------
-        buffer : SpillableBuffer
+        buffer : SpillableBufferOwner
             The buffer to manage
         """
         if buffer.size > 0 and not buffer.exposed:
@@ -310,7 +316,7 @@ class SpillManager:
 
     def buffers(
         self, order_by_access_time: bool = False
-    ) -> Tuple[SpillableBuffer, ...]:
+    ) -> Tuple[SpillableBufferOwner, ...]:
         """Get all managed buffers
 
         Parameters
@@ -329,6 +335,7 @@ class SpillManager:
             ret = tuple(sorted(ret, key=lambda b: b.last_accessed))
         return ret
 
+    @_spill_cudf_nvtx_annotate
     def spill_device_memory(self, nbytes: int) -> int:
         """Try to spill device memory
 
@@ -358,7 +365,7 @@ class SpillManager:
                     buf.lock.release()
         return spilled
 
-    def spill_to_device_limit(self, device_limit: int = None) -> int:
+    def spill_to_device_limit(self, device_limit: Optional[int] = None) -> int:
         """Try to spill device memory until device limit
 
         Notice, by default this is a no-op.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,12 +22,8 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 
-namespace cudf {
-namespace test {
-
 template <typename V>
-struct groupby_collect_list_test : public cudf::test::BaseFixture {
-};
+struct groupby_collect_list_test : public cudf::test::BaseFixture {};
 
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
@@ -39,13 +35,13 @@ TYPED_TEST(groupby_collect_list_test, CollectWithoutNulls)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 1, 2, 2, 2};
-  fixed_width_column_wrapper<V, int32_t> values{1, 2, 3, 4, 5, 6};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 1, 2, 2, 2};
+  cudf::test::fixed_width_column_wrapper<V, int32_t> values{1, 2, 3, 4, 5, 6};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2};
-  lists_column_wrapper<V, int32_t> expect_vals{{1, 2, 3}, {4, 5, 6}};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2};
+  cudf::test::lists_column_wrapper<V, int32_t> expect_vals{{1, 2, 3}, {4, 5, 6}};
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>();
+  auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -54,17 +50,17 @@ TYPED_TEST(groupby_collect_list_test, CollectWithNulls)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3};
-  fixed_width_column_wrapper<V, int32_t> values{{1, 2, 3, 4, 5, 6},
-                                                {true, false, true, false, true, false}};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3};
+  cudf::test::fixed_width_column_wrapper<V, int32_t> values{
+    {1, 2, 3, 4, 5, 6}, {true, false, true, false, true, false}};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3};
 
   std::vector<int32_t> validity({true, false});
-  lists_column_wrapper<V, int32_t> expect_vals{
+  cudf::test::lists_column_wrapper<V, int32_t> expect_vals{
     {{1, 2}, validity.begin()}, {{3, 4}, validity.begin()}, {{5, 6}, validity.begin()}};
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>();
+  auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -73,16 +69,17 @@ TYPED_TEST(groupby_collect_list_test, CollectWithNullExclusion)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 1, 2, 2, 3, 3, 4, 4};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 1, 2, 2, 3, 3, 4, 4};
 
-  fixed_width_column_wrapper<V, int32_t> values{
+  cudf::test::fixed_width_column_wrapper<V, int32_t> values{
     {1, 2, 3, 4, 5, 6, 7, 8, 9}, {false, true, false, true, false, false, false, true, true}};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
 
-  lists_column_wrapper<V, int32_t> expect_vals{{2}, {4}, {}, {8, 9}};
+  cudf::test::lists_column_wrapper<V, int32_t> expect_vals{{2}, {4}, {}, {8, 9}};
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>(null_policy::EXCLUDE);
+  auto agg =
+    cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE);
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -91,13 +88,14 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInput)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K, int32_t> keys{};
-  fixed_width_column_wrapper<V, int32_t> values{};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{};
+  cudf::test::fixed_width_column_wrapper<V, int32_t> values{};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{};
-  lists_column_wrapper<V, int32_t> expect_vals{};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{};
+  cudf::test::lists_column_wrapper<V, int32_t> expect_vals{};
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>(null_policy::EXCLUDE);
+  auto agg =
+    cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE);
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -108,15 +106,16 @@ TYPED_TEST(groupby_collect_list_test, CollectLists)
 
   using LCW = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
 
-  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3};
-  lists_column_wrapper<V, int32_t> values{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3};
+  cudf::test::lists_column_wrapper<V, int32_t> values{
+    {1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3};
 
-  lists_column_wrapper<V, int32_t> expect_vals{
+  cudf::test::lists_column_wrapper<V, int32_t> expect_vals{
     {{1, 2}, {3, 4}}, {{5, 6, 7}, LCW{}}, {{9, 10}, {11}}};
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>();
+  auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -127,15 +126,16 @@ TYPED_TEST(groupby_collect_list_test, CollectListsWithNullExclusion)
 
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
-  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3, 4, 4};
-  const bool validity_mask[] = {true, false, false, true, true, true, false, false};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 2, 2, 3, 3, 4, 4};
+  bool const validity_mask[] = {true, false, false, true, true, true, false, false};
   LCW values{{{1, 2}, {3, 4}, {5, 6, 7}, LCW{}, {9, 10}, {11}, {20, 30, 40}, LCW{}}, validity_mask};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2, 3, 4};
 
   LCW expect_vals{{{1, 2}}, {LCW{}}, {{9, 10}, {11}}, {}};
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>(null_policy::EXCLUDE);
+  auto agg =
+    cudf::make_collect_list_aggregation<cudf::groupby_aggregation>(cudf::null_policy::EXCLUDE);
   test_single_agg(keys, values, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -146,19 +146,20 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputLists)
 
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
-  auto offsets = data_type{type_to_id<offset_type>()};
+  auto offsets = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
 
-  fixed_width_column_wrapper<K, int32_t> keys{};
-  auto values = cudf::make_lists_column(0, make_empty_column(offsets), LCW{}.release(), 0, {});
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{};
+  auto values =
+    cudf::make_lists_column(0, cudf::make_empty_column(offsets), LCW{}.release(), 0, {});
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{};
 
   auto expect_child =
-    cudf::make_lists_column(0, make_empty_column(offsets), LCW{}.release(), 0, {});
+    cudf::make_lists_column(0, cudf::make_empty_column(offsets), LCW{}.release(), 0, {});
   auto expect_values =
-    cudf::make_lists_column(0, make_empty_column(offsets), std::move(expect_child), 0, {});
+    cudf::make_lists_column(0, cudf::make_empty_column(offsets), std::move(expect_child), 0, {});
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>();
+  auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));
 }
 
@@ -169,24 +170,36 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
 
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
-  fixed_width_column_wrapper<K, int32_t> keys{};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{};
   auto struct_child  = LCW{};
-  auto struct_column = structs_column_wrapper{{struct_child}};
+  auto struct_column = cudf::test::structs_column_wrapper{{struct_child}};
 
-  auto values = cudf::make_lists_column(
-    0, make_empty_column(type_to_id<offset_type>()), struct_column.release(), 0, {});
+  auto values =
+    cudf::make_lists_column(0,
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
+                            struct_column.release(),
+                            0,
+                            {});
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{};
 
   auto expect_struct_child  = LCW{};
-  auto expect_struct_column = structs_column_wrapper{{expect_struct_child}};
+  auto expect_struct_column = cudf::test::structs_column_wrapper{{expect_struct_child}};
 
-  auto expect_child = cudf::make_lists_column(
-    0, make_empty_column(type_to_id<offset_type>()), expect_struct_column.release(), 0, {});
-  auto expect_values = cudf::make_lists_column(
-    0, make_empty_column(type_to_id<offset_type>()), std::move(expect_child), 0, {});
+  auto expect_child =
+    cudf::make_lists_column(0,
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
+                            expect_struct_column.release(),
+                            0,
+                            {});
+  auto expect_values =
+    cudf::make_lists_column(0,
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
+                            std::move(expect_child),
+                            0,
+                            {});
 
-  auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>();
+  auto agg = cudf::make_collect_list_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));
 }
 
@@ -195,13 +208,13 @@ TYPED_TEST(groupby_collect_list_test, dictionary)
   using K = int32_t;
   using V = TypeParam;
 
-  fixed_width_column_wrapper<K, int32_t> keys{1, 1, 1, 2, 2, 2};
-  dictionary_column_wrapper<V, int32_t> vals{1, 2, 3, 4, 5, 6};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> keys{1, 1, 1, 2, 2, 2};
+  cudf::test::dictionary_column_wrapper<V, int32_t> vals{1, 2, 3, 4, 5, 6};
 
-  fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2};
-  lists_column_wrapper<V, int32_t> expect_vals_w{{1, 2, 3}, {4, 5, 6}};
+  cudf::test::fixed_width_column_wrapper<K, int32_t> expect_keys{1, 2};
+  cudf::test::lists_column_wrapper<V, int32_t> expect_vals_w{{1, 2, 3}, {4, 5, 6}};
 
-  fixed_width_column_wrapper<int32_t> offsets({0, 3, 6});
+  cudf::test::fixed_width_column_wrapper<int32_t> offsets({0, 3, 6});
   auto expect_vals = cudf::make_lists_column(cudf::column_view(offsets).size() - 1,
                                              std::make_unique<cudf::column>(offsets),
                                              std::make_unique<cudf::column>(vals),
@@ -212,8 +225,5 @@ TYPED_TEST(groupby_collect_list_test, dictionary)
                   vals,
                   expect_keys,
                   expect_vals->view(),
-                  cudf::make_collect_list_aggregation<groupby_aggregation>());
+                  cudf::make_collect_list_aggregation<cudf::groupby_aggregation>());
 }
-
-}  // namespace test
-}  // namespace cudf

@@ -14,102 +14,125 @@
  * limitations under the License.
  */
 
+#include <cudf/detail/utilities/stacktrace.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
+
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda_runtime.h>
 
+#include <cstdlib>
+#include <cstring>
 #include <cxxabi.h>
 #include <dlfcn.h>
 #include <execinfo.h>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
+
+// This file is compiled into a separate library that is dynamically loaded with LD_PRELOAD at
+// runtime to libcudf to override some stream-related symbols in libcudf. The goal of such a library
+// is to verify if the stream/stream pool is being correctly forwarded between API calls.
+//
+// We control whether to override cudf::test::get_default_stream or
+// cudf::get_default_stream with a compile-time flag. The behaviour of tests
+// depend on whether STREAM_MODE_TESTING is defined:
+// 1. If STREAM_MODE_TESTING is not defined, cudf::get_default_stream will
+//    return a custom stream and stream_is_invalid will return true if any CUDA
+//    API is called using any of CUDA's default stream constants
+//    (cudaStreamLegacy, cudaStreamDefault, or cudaStreamPerThread). This check
+//    is sufficient to ensure that cudf is using cudf::get_default_stream
+//    everywhere internally rather than implicitly using stream 0,
+//    cudaStreamDefault, cudaStreamLegacy, thrust execution policies, etc. It
+//    is not sufficient to guarantee a stream-ordered API because it will not
+//    identify places in the code that use cudf::get_default_stream instead of
+//    properly forwarding along a user-provided stream.
+// 2. If STREAM_MODE_TESTING compiler option is defined, cudf::test::get_default_stream
+//    returns a custom stream and stream_is_invalid returns true if any CUDA
+//    API is called using any stream other than cudf::test::get_default_stream.
+//    This is a necessary and sufficient condition to ensure that libcudf is
+//    properly passing streams through all of its (tested) APIs.
+
+namespace cudf {
+
+#ifdef STREAM_MODE_TESTING
+namespace test {
+#endif
+
+rmm::cuda_stream_view const get_default_stream()
+{
+  static rmm::cuda_stream stream{};
+  return {stream};
+}
+
+#ifdef STREAM_MODE_TESTING
+}  // namespace test
+#endif
+
+#ifdef STREAM_MODE_TESTING
+namespace detail {
+
+/**
+ * @brief Implementation of `cuda_stream_pool` that always returns the
+ * `cudf::test::get_default_stream()`
+ */
+class test_cuda_stream_pool : public cuda_stream_pool {
+ public:
+  rmm::cuda_stream_view get_stream() override { return cudf::test::get_default_stream(); }
+  [[maybe_unused]] rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
+  {
+    return cudf::test::get_default_stream();
+  }
+
+  std::vector<rmm::cuda_stream_view> get_streams(std::size_t count) override
+  {
+    return std::vector<rmm::cuda_stream_view>(count, cudf::test::get_default_stream());
+  }
+
+  std::size_t get_stream_pool_size() const override { return 1UL; }
+};
+
+cuda_stream_pool* create_global_cuda_stream_pool() { return new test_cuda_stream_pool(); }
+
+}  // namespace detail
+#endif
+
+}  // namespace cudf
+
+bool stream_is_invalid(cudaStream_t stream)
+{
+#ifdef STREAM_MODE_TESTING
+  // In this mode the _only_ valid stream is the one returned by cudf::test::get_default_stream.
+  return (stream != cudf::test::get_default_stream().value());
+#else
+  // We explicitly list the possibilities rather than using
+  // `cudf::get_default_stream().value()` because there is no guarantee that
+  // `thrust::device` and the default value of
+  // `cudf::get_default_stream().value()` are actually the same. At present, the
+  // former is `cudaStreamLegacy` while the latter is 0.
+  return (stream == cudaStreamDefault) || (stream == cudaStreamLegacy) ||
+         (stream == cudaStreamPerThread);
+#endif
+}
 
 /**
  * @brief Print a backtrace and raise an error if stream is a default stream.
  */
 void check_stream_and_error(cudaStream_t stream)
 {
-  // We explicitly list the possibilities rather than using
-  // `cudf::get_default_stream().value()` for two reasons:
-  // 1. There is no guarantee that `thrust::device` and the default value of
-  //    `cudf::get_default_stream().value()` are actually the same. At present,
-  //    the former is `cudaStreamLegacy` while the latter is 0.
-  // 2. Using the cudf default stream would require linking against cudf, which
-  //    adds unnecessary complexity to the build process (especially in CI)
-  //    when this simple approach is sufficient.
-  if (stream == cudaStreamDefault || (stream == cudaStreamLegacy) ||
-      (stream == cudaStreamPerThread)) {
-#ifdef __GNUC__
-    // If we're on the wrong stream, print the stack trace from the current frame.
-    // Adapted from from https://panthema.net/2008/0901-stacktrace-demangled/
-    constexpr int kMaxStackDepth = 64;
-    void* stack[kMaxStackDepth];
-    auto depth   = backtrace(stack, kMaxStackDepth);
-    auto strings = backtrace_symbols(stack, depth);
+  if (stream_is_invalid(stream)) {
+    // Exclude the current function from stacktrace.
+    std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
+              << std::endl;
 
-    if (strings == nullptr) {
-      std::cout << "No stack trace could be found!" << std::endl;
+    char const* env_stream_error_mode{std::getenv("GTEST_CUDF_STREAM_ERROR_MODE")};
+    if (env_stream_error_mode && !strcmp(env_stream_error_mode, "print")) {
+      std::cout << "cudf_identify_stream_usage found unexpected stream!" << std::endl;
     } else {
-      // If we were able to extract a trace, parse it, demangle symbols, and
-      // print a readable output.
-
-      // allocate string which will be filled with the demangled function name
-      size_t funcnamesize = 256;
-      char* funcname      = (char*)malloc(funcnamesize);
-
-      // Start at frame 1 to skip print_trace itself.
-      for (int i = 1; i < depth; ++i) {
-        char* begin_name   = nullptr;
-        char* begin_offset = nullptr;
-        char* end_offset   = nullptr;
-
-        // find parentheses and +address offset surrounding the mangled name:
-        // ./module(function+0x15c) [0x8048a6d]
-        for (char* p = strings[i]; *p; ++p) {
-          if (*p == '(') {
-            begin_name = p;
-          } else if (*p == '+') {
-            begin_offset = p;
-          } else if (*p == ')' && begin_offset) {
-            end_offset = p;
-            break;
-          }
-        }
-
-        if (begin_name && begin_offset && end_offset && begin_name < begin_offset) {
-          *begin_name++   = '\0';
-          *begin_offset++ = '\0';
-          *end_offset     = '\0';
-
-          // mangled name is now in [begin_name, begin_offset) and caller offset
-          // in [begin_offset, end_offset). now apply __cxa_demangle():
-
-          int status;
-          char* ret = abi::__cxa_demangle(begin_name, funcname, &funcnamesize, &status);
-          if (status == 0) {
-            funcname =
-              ret;  // use possibly realloc()-ed string (__cxa_demangle may realloc funcname)
-            std::cout << "#" << i << " in " << strings[i] << " : " << funcname << "+"
-                      << begin_offset << std::endl;
-          } else {
-            // demangling failed. Output function name as a C function with no arguments.
-            std::cout << "#" << i << " in " << strings[i] << " : " << begin_name << "()+"
-                      << begin_offset << std::endl;
-          }
-        } else {
-          std::cout << "#" << i << " in " << strings[i] << std::endl;
-        }
-      }
-
-      free(funcname);
+      throw std::runtime_error("cudf_identify_stream_usage found unexpected stream!");
     }
-    free(strings);
-#else
-    std::cout << "Backtraces are only when built with a GNU compiler." << std::endl;
-#endif  // __GNUC__
-    throw std::runtime_error("Found unexpected default stream!");
   }
 }
 
@@ -185,7 +208,7 @@ DEFINE_OVERLOAD(cudaEventRecordWithFlags,
 // Execution APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__EXECUTION.html#group__CUDART__EXECUTION
 DEFINE_OVERLOAD(cudaLaunchKernel,
-                ARG(const void* func,
+                ARG(void const* func,
                     dim3 gridDim,
                     dim3 blockDim,
                     void** args,
@@ -193,7 +216,7 @@ DEFINE_OVERLOAD(cudaLaunchKernel,
                     cudaStream_t stream),
                 ARG(func, gridDim, blockDim, args, sharedMem, stream));
 DEFINE_OVERLOAD(cudaLaunchCooperativeKernel,
-                ARG(const void* func,
+                ARG(void const* func,
                     dim3 gridDim,
                     dim3 blockDim,
                     void** args,
@@ -207,12 +230,12 @@ DEFINE_OVERLOAD(cudaLaunchHostFunc,
 // Memory transfer APIS:
 // https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__MEMORY.html#group__CUDART__MEMORY
 DEFINE_OVERLOAD(cudaMemPrefetchAsync,
-                ARG(const void* devPtr, size_t count, int dstDevice, cudaStream_t stream),
+                ARG(void const* devPtr, size_t count, int dstDevice, cudaStream_t stream),
                 ARG(devPtr, count, dstDevice, stream));
 DEFINE_OVERLOAD(cudaMemcpy2DAsync,
                 ARG(void* dst,
                     size_t dpitch,
-                    const void* src,
+                    void const* src,
                     size_t spitch,
                     size_t width,
                     size_t height,
@@ -234,7 +257,7 @@ DEFINE_OVERLOAD(cudaMemcpy2DToArrayAsync,
                 ARG(cudaArray_t dst,
                     size_t wOffset,
                     size_t hOffset,
-                    const void* src,
+                    void const* src,
                     size_t spitch,
                     size_t width,
                     size_t height,
@@ -242,26 +265,26 @@ DEFINE_OVERLOAD(cudaMemcpy2DToArrayAsync,
                     cudaStream_t stream),
                 ARG(dst, wOffset, hOffset, src, spitch, width, height, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpy3DAsync,
-                ARG(const cudaMemcpy3DParms* p, cudaStream_t stream),
+                ARG(cudaMemcpy3DParms const* p, cudaStream_t stream),
                 ARG(p, stream));
 DEFINE_OVERLOAD(cudaMemcpy3DPeerAsync,
-                ARG(const cudaMemcpy3DPeerParms* p, cudaStream_t stream),
+                ARG(cudaMemcpy3DPeerParms const* p, cudaStream_t stream),
                 ARG(p, stream));
 DEFINE_OVERLOAD(
   cudaMemcpyAsync,
-  ARG(void* dst, const void* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream),
+  ARG(void* dst, void const* src, size_t count, cudaMemcpyKind kind, cudaStream_t stream),
   ARG(dst, src, count, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpyFromSymbolAsync,
                 ARG(void* dst,
-                    const void* symbol,
+                    void const* symbol,
                     size_t count,
                     size_t offset,
                     cudaMemcpyKind kind,
                     cudaStream_t stream),
                 ARG(dst, symbol, count, offset, kind, stream));
 DEFINE_OVERLOAD(cudaMemcpyToSymbolAsync,
-                ARG(const void* symbol,
-                    const void* src,
+                ARG(void const* symbol,
+                    void const* src,
                     size_t count,
                     size_t offset,
                     cudaMemcpyKind kind,
@@ -288,23 +311,6 @@ DEFINE_OVERLOAD(cudaMallocAsync,
 DEFINE_OVERLOAD(cudaMallocFromPoolAsync,
                 ARG(void** ptr, size_t size, cudaMemPool_t memPool, cudaStream_t stream),
                 ARG(ptr, size, memPool, stream));
-
-namespace cudf {
-
-/**
- * @brief Get the current default stream
- *
- * Overload the default function to return a new stream here.
- *
- * @return The current default stream.
- */
-rmm::cuda_stream_view const get_default_stream()
-{
-  static rmm::cuda_stream stream{};
-  return {stream};
-}
-
-}  // namespace cudf
 
 /**
  * @brief Function to collect all the original CUDA symbols corresponding to overloaded functions.

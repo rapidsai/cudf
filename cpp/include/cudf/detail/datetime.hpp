@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,70 +29,63 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_year(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_year(cudf::column_view const& column,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_month(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_month(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_month(cudf::column_view const& column,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_day(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_day(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_day(cudf::column_view const& column,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_weekday(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_weekday(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_weekday(cudf::column_view const& column,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_hour(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_hour(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_hour(cudf::column_view const& column,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_minute(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_minute(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_minute(cudf::column_view const& column,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_second(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_second(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_second(cudf::column_view const& column,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_millisecond_fraction(cudf::column_view const&,
@@ -100,10 +93,9 @@ std::unique_ptr<cudf::column> extract_second(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_millisecond_fraction(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_millisecond_fraction(cudf::column_view const& column,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_microsecond_fraction(cudf::column_view const&,
@@ -111,10 +103,9 @@ std::unique_ptr<cudf::column> extract_millisecond_fraction(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_microsecond_fraction(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_microsecond_fraction(cudf::column_view const& column,
+                                                           rmm::cuda_stream_view stream,
+                                                           rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::extract_nanosecond_fraction(cudf::column_view const&,
@@ -122,30 +113,27 @@ std::unique_ptr<cudf::column> extract_microsecond_fraction(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> extract_nanosecond_fraction(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_nanosecond_fraction(cudf::column_view const& column,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::last_day_of_month(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> last_day_of_month(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> last_day_of_month(cudf::column_view const& column,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::day_of_year(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> day_of_year(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> day_of_year(cudf::column_view const& column,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::add_calendrical_months(cudf::column_view const&, cudf::column_view const&,
@@ -153,11 +141,10 @@ std::unique_ptr<cudf::column> day_of_year(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> add_calendrical_months(
-  cudf::column_view const& timestamps,
-  cudf::column_view const& months,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamps,
+                                                     cudf::column_view const& months,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::add_calendrical_months(cudf::column_view const&, cudf::scalar const&,
@@ -165,26 +152,23 @@ std::unique_ptr<cudf::column> add_calendrical_months(
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> add_calendrical_months(
-  cudf::column_view const& timestamps,
-  cudf::scalar const& months,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> add_calendrical_months(cudf::column_view const& timestamps,
+                                                     cudf::scalar const& months,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr);
 
 /**
  * @copydoc cudf::is_leap_year(cudf::column_view const&, rmm::mr::device_memory_resource *)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<cudf::column> is_leap_year(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> is_leap_year(cudf::column_view const& column,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<cudf::column> extract_quarter(
-  cudf::column_view const& column,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::column> extract_quarter(cudf::column_view const& column,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace datetime

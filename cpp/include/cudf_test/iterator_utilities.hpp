@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,6 +121,9 @@ template <typename Iter>
  * The returned iterator yields `false` (to mark `null`) at the indices corresponding to the
  * pointers having `nullptr` values and `true` for the remaining indices.
  *
+ * @note The input vector is referenced by the transform iterator, so the
+ * lifespan must be just as long as the iterator.
+ *
  * @tparam T the data type
  * @param ptrs The data pointers for which the validity iterator is computed
  * @return auto Validity iterator
@@ -128,8 +131,7 @@ template <typename Iter>
 template <class T>
 [[maybe_unused]] static auto nulls_from_nullptrs(std::vector<T const*> const& ptrs)
 {
-  // The vector `indices` is copied into the lambda as it can be destroyed at the caller site.
-  return thrust::make_transform_iterator(ptrs.begin(), [ptrs](auto ptr) { return ptr != nullptr; });
+  return thrust::make_transform_iterator(ptrs.begin(), [](auto ptr) { return ptr != nullptr; });
 }
 
 }  // namespace iterators

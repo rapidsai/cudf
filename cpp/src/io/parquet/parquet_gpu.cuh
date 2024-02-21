@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 
 #include <cuco/static_map.cuh>
 
-namespace cudf::io::parquet::gpu {
+namespace cudf::io::parquet::detail {
 
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
@@ -36,8 +36,7 @@ using map_type = cuco::static_map<size_type, size_type>;
  * Declare this struct by trivial subclassing instead of type aliasing so we can have forward
  * declaration of this struct somewhere else.
  */
-struct slot_type : public map_type::pair_atomic_type {
-};
+struct slot_type : public map_type::pair_atomic_type {};
 
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
@@ -82,4 +81,4 @@ inline size_type __device__ row_to_value_idx(size_type idx,
   return idx;
 }
 
-}  // namespace cudf::io::parquet::gpu
+}  // namespace cudf::io::parquet::detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,9 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -37,6 +39,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <list>
 #include <random>
 #include <type_traits>
 #include <vector>
@@ -46,8 +49,7 @@ using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
 constexpr cudf::test::debug_output_level verbosity{cudf::test::debug_output_level::ALL_ERRORS};
 
-struct TransformTest : public cudf::test::BaseFixture {
-};
+struct TransformTest : public cudf::test::BaseFixture {};
 
 TEST_F(TransformTest, ColumnReference)
 {
@@ -95,6 +97,33 @@ TEST_F(TransformTest, NullLiteral)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, IsNull)
+{
+  auto c_0   = column_wrapper<int32_t>{{0, 1, 2, 0}, {0, 1, 1, 0}};
+  auto table = cudf::table_view{{c_0}};
+
+  // result of IS_NULL on literal, will be a column of table size, with all values set to
+  // !literal.is_valid(). The table values are irrelevant.
+  auto literal_value = cudf::numeric_scalar<int32_t>(-123);
+  auto literal       = cudf::ast::literal(literal_value);
+  auto expression    = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, literal);
+
+  auto result    = cudf::compute_column(table, expression);
+  auto expected1 = column_wrapper<bool>({0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected1, result->view(), verbosity);
+
+  literal_value.set_valid_async(false);
+  result         = cudf::compute_column(table, expression);
+  auto expected2 = column_wrapper<bool>({1, 1, 1, 1}, cudf::test::iterators::no_nulls());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected2, result->view(), verbosity);
+
+  auto col_ref_0   = cudf::ast::column_reference(0);
+  auto expression2 = cudf::ast::operation(cudf::ast::ast_operator::IS_NULL, col_ref_0);
+  result           = cudf::compute_column(table, expression2);
+  auto expected3   = column_wrapper<bool>({1, 0, 0, 1}, cudf::test::iterators::no_nulls());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected3, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, BasicAddition)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
@@ -106,6 +135,22 @@ TEST_F(TransformTest, BasicAddition)
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<int32_t>{13, 27, 21, 50};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, BasicAdditionEmptyTable)
+{
+  auto c_0   = column_wrapper<int32_t>{};
+  auto c_1   = column_wrapper<int32_t>{};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto col_ref_1  = cudf::ast::column_reference(1);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_1);
+
+  auto expected = column_wrapper<int32_t>{};
   auto result   = cudf::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
@@ -273,6 +318,107 @@ TEST_F(TransformTest, ImbalancedTreeArithmetic)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
+TEST_F(TransformTest, ImbalancedTreeArithmeticDeep)
+{
+  auto c_0   = column_wrapper<int64_t>{4, 5, 6};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+
+  // expression: (c0 < c0) == (c0 < (c0 + c0))
+  //              {false, false, false} == (c0 < {8, 10, 12})
+  //              {false, false, false} == {true, true, true}
+  //              {false, false, false}
+  auto expression_left_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_0);
+  auto expression_right_inner_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::ADD, col_ref_0, col_ref_0);
+  auto expression_right_subtree =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, expression_right_inner_subtree);
+
+  auto expression_tree = cudf::ast::operation(
+    cudf::ast::ast_operator::EQUAL, expression_left_subtree, expression_right_subtree);
+
+  auto result   = cudf::compute_column(table, expression_tree);
+  auto expected = column_wrapper<bool>{false, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, DeeplyNestedArithmeticLogicalExpression)
+{
+  // Test logic for deeply nested arithmetic and logical expressions.
+  constexpr int64_t left_depth_level  = 100;
+  constexpr int64_t right_depth_level = 75;
+
+  auto generate_ast_expr = [](int64_t depth_level,
+                              cudf::ast::column_reference col_ref,
+                              cudf::ast::ast_operator root_operator,
+                              cudf::ast::ast_operator arithmetic_operator,
+                              bool nested_left_tree) {
+    // Note that a std::list is required here because of its guarantees against reference
+    // invalidation when items are added or removed. References to items in a std::vector are not
+    // safe if the vector must re-allocate.
+    auto expressions = std::list<cudf::ast::operation>();
+
+    auto op = arithmetic_operator;
+    expressions.push_back(cudf::ast::operation(op, col_ref, col_ref));
+
+    for (int64_t i = 0; i < depth_level - 1; i++) {
+      if (i == depth_level - 2) {
+        op = root_operator;
+      } else {
+        op = arithmetic_operator;
+      }
+      if (nested_left_tree) {
+        expressions.push_back(cudf::ast::operation(op, expressions.back(), col_ref));
+      } else {
+        expressions.push_back(cudf::ast::operation(op, col_ref, expressions.back()));
+      }
+    }
+    return expressions;
+  };
+
+  auto c_0   = column_wrapper<int64_t>{0, 0, 0};
+  auto c_1   = column_wrapper<int32_t>{0, 0, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0 = cudf::ast::column_reference(0);
+  auto col_ref_1 = cudf::ast::column_reference(1);
+
+  auto left_expression  = generate_ast_expr(left_depth_level,
+                                           col_ref_0,
+                                           cudf::ast::ast_operator::LESS,
+                                           cudf::ast::ast_operator::ADD,
+                                           false);
+  auto right_expression = generate_ast_expr(right_depth_level,
+                                            col_ref_1,
+                                            cudf::ast::ast_operator::EQUAL,
+                                            cudf::ast::ast_operator::SUB,
+                                            true);
+
+  auto expression_tree = cudf::ast::operation(
+    cudf::ast::ast_operator::LOGICAL_OR, left_expression.back(), right_expression.back());
+
+  // Expression:
+  // OR(<(+(+(+(+($0, $0), $0), $0), $0), $0), ==($1, -($1, -($1, -($1, -($1, $1))))))
+  // ...
+  // OR(<($L, $0), ==($1, $R))
+  // true
+  //
+  // Breakdown:
+  // - Left Operand ($L): (+(+(+(+($0, $0), $0), $0), $0), $0)
+  // - Right Operand ($R): -($1, -($1, -($1, -($1, $1))))
+  // Explanation:
+  // If all $1 values and $R values are zeros, the result is true because of the equality check
+  // combined with the OR operator in OR(<($L, $0), ==($1, $R)).
+
+  auto result   = cudf::compute_column(table, expression_tree);
+  auto expected = column_wrapper<bool>{true, true, true};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TEST_F(TransformTest, MultiLevelTreeComparator)
 {
   auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
@@ -392,6 +538,48 @@ TEST_F(TransformTest, StringComparison)
   auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, col_ref_1);
 
   auto expected = column_wrapper<bool>{true, false, true, false};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, StringScalarComparison)
+{
+  auto c_0 =
+    cudf::test::strings_column_wrapper({"1", "12", "123", "23"}, {true, true, false, true});
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::string_scalar("2");
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto expected = column_wrapper<bool>{{true, true, true, false}, {true, true, false, true}};
+  auto result   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+
+  // compare with null literal
+  literal_value.set_valid_async(false);
+  auto expected2 = column_wrapper<bool>{{false, false, false, false}, {false, false, false, false}};
+  auto result2   = cudf::compute_column(table, expression);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(TransformTest, NumericScalarComparison)
+{
+  auto c_0   = column_wrapper<int32_t>{1, 12, 123, 23};
+  auto table = cudf::table_view{{c_0}};
+
+  auto literal_value = cudf::numeric_scalar<int32_t>(2);
+  auto literal       = cudf::ast::literal(literal_value);
+
+  auto col_ref_0  = cudf::ast::column_reference(0);
+  auto expression = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_0, literal);
+
+  auto expected = column_wrapper<bool>{true, false, false, false};
   auto result   = cudf::compute_column(table, expression);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
@@ -603,9 +791,9 @@ TEST_F(TransformTest, BasicAdditionLargeNulls)
 TEST_F(TransformTest, NullLogicalAnd)
 {
   auto c_0   = column_wrapper<bool>{{false, false, true, true, false, false, true, true},
-                                  {1, 1, 1, 1, 1, 0, 0, 0}};
+                                    {1, 1, 1, 1, 1, 0, 0, 0}};
   auto c_1   = column_wrapper<bool>{{false, true, false, true, true, true, false, true},
-                                  {1, 1, 1, 1, 0, 1, 1, 0}};
+                                    {1, 1, 1, 1, 0, 1, 1, 0}};
   auto table = cudf::table_view{{c_0, c_1}};
 
   auto col_ref_0 = cudf::ast::column_reference(0);
@@ -623,9 +811,9 @@ TEST_F(TransformTest, NullLogicalAnd)
 TEST_F(TransformTest, NullLogicalOr)
 {
   auto c_0   = column_wrapper<bool>{{false, false, true, true, false, false, true, true},
-                                  {1, 1, 1, 1, 1, 0, 1, 0}};
+                                    {1, 1, 1, 1, 1, 0, 1, 0}};
   auto c_1   = column_wrapper<bool>{{false, true, false, true, true, true, false, true},
-                                  {1, 1, 1, 1, 0, 1, 0, 0}};
+                                    {1, 1, 1, 1, 0, 1, 0, 0}};
   auto table = cudf::table_view{{c_0, c_1}};
 
   auto col_ref_0 = cudf::ast::column_reference(0);

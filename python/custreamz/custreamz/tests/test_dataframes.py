@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 """
 Tests for Streamz Dataframes (SDFs) built on top of cuDF DataFrames.
@@ -32,7 +32,7 @@ def client():
 
 
 @pytest.fixture(params=["core", "dask"])
-def stream(request, client):  # flake8: noqa
+def stream(request, client):
     if request.param == "core":
         return Stream()
     else:

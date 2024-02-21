@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,10 +173,7 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
   };
   auto [new_nullmask, null_count] =
     cudf::detail::valid_if(count.begin<size_type>(), count.end<size_type>(), is_null, stream, mr);
-  if (null_count != 0) {
-    result->set_null_mask(std::move(new_nullmask));
-    result->set_null_count(null_count);
-  }
+  if (null_count != 0) { result->set_null_mask(std::move(new_nullmask), null_count); }
   return result;
 }
 

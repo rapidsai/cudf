@@ -26,4 +26,5 @@ documentation
 testing
 benchmarking
 options
+pylibcudf
 ```

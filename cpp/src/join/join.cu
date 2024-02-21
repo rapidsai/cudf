@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,18 +43,21 @@ inner_join(table_view const& left_input,
     rmm::mr::get_current_device_resource());  // temporary objects returned
 
   // now rebuild the table views with the updated ones
-  auto const left  = matched.second.front();
-  auto const right = matched.second.back();
+  auto const left      = matched.second.front();
+  auto const right     = matched.second.back();
+  auto const has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
+                           ? cudf::nullable_join::YES
+                           : cudf::nullable_join::NO;
 
   // For `inner_join`, we can freely choose either the `left` or `right` table to use for
   // building/probing the hash map. Because building is typically more expensive than probing, we
   // build the hash map from the smaller table.
   if (right.num_rows() > left.num_rows()) {
-    cudf::hash_join hj_obj(left, compare_nulls, stream);
+    cudf::hash_join hj_obj(left, has_nulls, compare_nulls, stream);
     auto [right_result, left_result] = hj_obj.inner_join(right, std::nullopt, stream, mr);
     return std::pair(std::move(left_result), std::move(right_result));
   } else {
-    cudf::hash_join hj_obj(right, compare_nulls, stream);
+    cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
     return hj_obj.inner_join(left, std::nullopt, stream, mr);
   }
 }
@@ -76,8 +79,11 @@ left_join(table_view const& left_input,
   // now rebuild the table views with the updated ones
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
+  auto const has_nulls   = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
 
-  cudf::hash_join hj_obj(right, compare_nulls, stream);
+  cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
   return hj_obj.left_join(left, std::nullopt, stream, mr);
 }
 
@@ -98,8 +104,11 @@ full_join(table_view const& left_input,
   // now rebuild the table views with the updated ones
   table_view const left  = matched.second.front();
   table_view const right = matched.second.back();
+  auto const has_nulls   = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
 
-  cudf::hash_join hj_obj(right, compare_nulls, stream);
+  cudf::hash_join hj_obj(right, has_nulls, compare_nulls, stream);
   return hj_obj.full_join(left, std::nullopt, stream, mr);
 }
 

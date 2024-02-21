@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,11 +27,11 @@ template <typename T>
 struct NaNsToNullTest : public cudf::test::BaseFixture {
   void run_test(cudf::column_view const& input, cudf::column_view const& expected)
   {
-    auto got_mask = cudf::nans_to_nulls(input);
+    auto [null_mask, null_count] = cudf::nans_to_nulls(input);
     cudf::column got(input);
-    got.set_null_mask(std::move(*(got_mask.first)));
+    got.set_null_mask(std::move(*null_mask), null_count);
 
-    EXPECT_EQ(expected.null_count(), got_mask.second);
+    EXPECT_EQ(expected.null_count(), null_count);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got.view());
   }
@@ -118,8 +118,7 @@ TYPED_TEST(NaNsToNullTest, EmptyColumn)
   this->run_test(input_column, expected_column->view());
 }
 
-struct NaNsToNullFailTest : public cudf::test::BaseFixture {
-};
+struct NaNsToNullFailTest : public cudf::test::BaseFixture {};
 
 TEST_F(NaNsToNullFailTest, StringType)
 {

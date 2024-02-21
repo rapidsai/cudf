@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 
+#include <cuda/functional>
+
 namespace cudf {
 namespace detail {
 std::unique_ptr<table> reverse(table_view const& source_table,
@@ -39,8 +41,10 @@ std::unique_ptr<table> reverse(table_view const& source_table,
                                rmm::mr::device_memory_resource* mr)
 {
   size_type num_rows = source_table.num_rows();
-  auto elements =
-    make_counting_transform_iterator(0, [num_rows] __device__(auto i) { return num_rows - i - 1; });
+  auto elements      = make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<size_type>([num_rows] __device__(auto i) {
+      return num_rows - i - 1;
+    }));
   auto elements_end = elements + source_table.num_rows();
 
   return gather(source_table, elements, elements_end, out_of_bounds_policy::DONT_CHECK, stream, mr);
@@ -50,20 +54,24 @@ std::unique_ptr<column> reverse(column_view const& source_column,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  return std::move(cudf::reverse(table_view({source_column}))->release().front());
+  return std::move(
+    cudf::detail::reverse(table_view({source_column}), stream, mr)->release().front());
 }
 }  // namespace detail
 
-std::unique_ptr<table> reverse(table_view const& source_table, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> reverse(table_view const& source_table,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_table, cudf::get_default_stream(), mr);
+  return detail::reverse(source_table, stream, mr);
 }
 
 std::unique_ptr<column> reverse(column_view const& source_column,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reverse(source_column, cudf::get_default_stream(), mr);
+  return detail::reverse(source_column, stream, mr);
 }
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,13 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/replace.hpp>
 #include <cudf/scalar/scalar.hpp>
 
-struct ReplaceNaNsErrorTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNaNsErrorTest : public cudf::test::BaseFixture {};
 
 // Error: old-values and new-values size mismatch
 TEST_F(ReplaceNaNsErrorTest, SizeMismatch)
@@ -63,8 +63,7 @@ TEST_F(ReplaceNaNsErrorTest, NonFloatType)
 }
 
 template <typename T>
-struct ReplaceNaNsTest : public cudf::test::BaseFixture {
-};
+struct ReplaceNaNsTest : public cudf::test::BaseFixture {};
 
 using test_types = cudf::test::Types<float, double>;
 

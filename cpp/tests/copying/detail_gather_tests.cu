@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,8 +36,7 @@
 #include <thrust/sequence.h>
 
 template <typename T>
-class GatherTest : public cudf::test::BaseFixture {
-};
+class GatherTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 
@@ -58,7 +57,12 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
   // test with device vector iterators
   {
     std::unique_ptr<cudf::table> result =
-      cudf::detail::gather(source_table, gather_map.begin(), gather_map.end());
+      cudf::detail::gather(source_table,
+                           gather_map.begin(),
+                           gather_map.end(),
+                           cudf::out_of_bounds_policy::DONT_CHECK,
+                           cudf::get_default_stream(),
+                           rmm::mr::get_current_device_resource());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
@@ -70,7 +74,12 @@ TYPED_TEST(GatherTest, GatherDetailDeviceVectorTest)
   // test with raw pointers
   {
     std::unique_ptr<cudf::table> result =
-      cudf::detail::gather(source_table, gather_map.data(), gather_map.data() + gather_map.size());
+      cudf::detail::gather(source_table,
+                           gather_map.begin(),
+                           gather_map.data() + gather_map.size(),
+                           cudf::out_of_bounds_policy::DONT_CHECK,
+                           cudf::get_default_stream(),
+                           rmm::mr::get_current_device_resource());
 
     for (auto i = 0; i < source_table.num_columns(); ++i) {
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(source_table.column(i), result->view().column(i));
@@ -97,7 +106,8 @@ TYPED_TEST(GatherTest, GatherDetailInvalidIndexTest)
                          gather_map,
                          cudf::out_of_bounds_policy::NULLIFY,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
-                         cudf::get_default_stream());
+                         cudf::get_default_stream(),
+                         rmm::mr::get_current_device_resource());
 
   auto expect_data =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2) ? 0 : i; });

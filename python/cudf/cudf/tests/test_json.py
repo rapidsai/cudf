@@ -13,7 +13,6 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -32,22 +31,18 @@ def make_numeric_dataframe(nrows, dtype):
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        }
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype("object").astype(typer)
 
     return test_pdf
 
@@ -165,18 +160,7 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert os.path.exists(pdf_series_fname)
         assert os.path.exists(gdf_series_fname)
 
-        try:
-            # xref 'https://github.com/pandas-dev/pandas/pull/33373'
-            expect_series = pd.read_json(pdf_series_fname, typ="series")
-        except TypeError as e:
-            if (
-                not PANDAS_GE_110
-                and str(e) == "<class 'bool'> is not convertible to datetime"
-            ):
-                continue
-            else:
-                raise e
-
+        expect_series = pd.read_json(pdf_series_fname, typ="series")
         got_series = pd.read_json(gdf_series_fname, typ="series")
 
         assert_eq(expect_series, got_series)
@@ -187,14 +171,23 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert_eq(pdf_string, gdf_string)
 
 
-def test_cudf_json_writer(pdf):
+@pytest.mark.parametrize(
+    "lines", [True, False], ids=["lines=True", "lines=False"]
+)
+def test_cudf_json_writer(pdf, lines):
     # removing datetime column because pandas doesn't support it
     for col_name in pdf.columns:
         if "datetime" in col_name:
             pdf.drop(col_name, axis=1, inplace=True)
     gdf = cudf.DataFrame.from_pandas(pdf)
-    pdf_string = pdf.to_json(orient="records", lines=True)
-    gdf_string = gdf.to_json(orient="records", lines=True, engine="cudf")
+    pdf_string = pdf.to_json(orient="records", lines=lines)
+    gdf_string = gdf.to_json(orient="records", lines=lines, engine="cudf")
+
+    assert_eq(pdf_string, gdf_string)
+
+    gdf_string = gdf.to_json(
+        orient="records", lines=lines, engine="cudf", rows_per_chunk=8
+    )
 
     assert_eq(pdf_string, gdf_string)
 
@@ -220,6 +213,69 @@ def test_cudf_json_writer_read(gdf_writer_types):
         pdf2.reset_index(drop=True, inplace=True)
         pdf2.columns = pdf2.columns.astype("object")
     assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize(
+    "jsonl_string, expected",
+    [
+        # fixed width
+        ("""{"a":10, "b":1.1}\n {"a":20, "b":2.1}\n""", None),
+        # simple list
+        ("""{"a":[1, 2, 3], "b":1.1}\n {"a":[]}\n""", None),
+        # simple struct
+        ("""{"a":{"c": 123 }, "b":1.1}\n {"a": {"c": 456}}\n""", None),
+        # list of lists
+        ("""{"a":[[], [1, 2], [3, 4]], "b":1.1}\n""", None),
+        ("""{"a":[null, [1, 2], [null, 4]], "b":1.1}\n""", None),
+        # list of structs
+        # error ("""{"a":[null, {}], "b":1.1}\n""", None),
+        (
+            """{"a":[null, {"L": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}\n""",
+            None,
+        ),
+        (
+            """{"a":[{"L": 123}, null], "b":1.0}\n {"b":1.1}\n {"b":2.1}\n""",
+            None,
+        ),
+        # struct of lists
+        (
+            """{"a":{"L": [1, 2, 3]}, "b":1.1}\n {"a": {"L": [4, 5, 6]}}\n""",
+            None,
+        ),
+        ("""{"a":{"L": [1, 2, null]}, "b":1.1}\n {"a": {"L": []}}\n""", None),
+        # struct of structs
+        (
+            """{"a":{"L": {"M": 123}}, "b":1.1}
+               {"a": {"L": {"M": 456}}}\n""",
+            None,
+        ),
+        (
+            """{"a":{"L": {"M": null}}, "b":1.1}\n {"a": {"L": {}}}\n""",
+            """{"a":{"L": {}}, "b":1.1}\n {"a": {"L": {}}}\n""",
+        ),
+        # list of structs of lists
+        ("""{"a":[{"L": [1, 2, 3]}, {"L": [4, 5, 6]}], "b":1.1}\n""", None),
+        ("""{"a":[{"L": [1, 2, null]}, {"L": []}], "b":1.1}\n""", None),
+        # struct of lists of structs
+        ("""{"a":{"L": [{"M": 123}, {"M": 456}]}, "b":1.1}\n""", None),
+        (
+            """{"a":{"L": [{"M": null}, {}]}, "b":1.1}\n""",
+            """{"a":{"L": [{}, {}]}, "b":1.1}\n""",
+        ),
+    ],
+)
+def test_cudf_json_roundtrip(jsonl_string, expected):
+    gdf = cudf.read_json(
+        StringIO(jsonl_string),
+        lines=True,
+        engine="cudf",
+        # dtype=dict(dtypes),
+    )
+    expected = jsonl_string if expected is None else expected
+    gdf_string = gdf.to_json(
+        orient="records", lines=True, engine="cudf", include_nulls=False
+    )
+    assert_eq(gdf_string, expected.replace(" ", ""))
 
 
 @pytest.mark.parametrize("sink", ["string", "file"])
@@ -1192,7 +1248,7 @@ def test_json_array_of_arrays(data, lines):
         # simple list with mixed types
         """{"a":[123, {}], "b":1.1}""",
         """{"a":[123, {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
-        """{"a":[{"0": 123}, 123], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":[{"L": 123}, 123], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":[123, {"0": 123}, 12.3], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":[123, {"0": 123}, null], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":["123", {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",

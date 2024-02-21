@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ cuda_event_timer::cuda_event_timer(benchmark::State& state,
     CUDF_CUDA_TRY(cudaDeviceGetAttribute(&l2_cache_bytes, cudaDevAttrL2CacheSize, current_device));
 
     if (l2_cache_bytes > 0) {
-      const int memset_value = 0;
+      int const memset_value = 0;
       rmm::device_buffer l2_cache_buffer(l2_cache_bytes, stream);
       CUDF_CUDA_TRY(
         cudaMemsetAsync(l2_cache_buffer.data(), memset_value, l2_cache_bytes, stream.value()));

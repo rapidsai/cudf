@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,9 +47,9 @@ conditional_join(table_view const& left,
                  table_view const& right,
                  ast::expression const& binary_predicate,
                  join_kind JoinKind,
-                 std::optional<std::size_t> output_size = {},
-                 rmm::cuda_stream_view stream           = cudf::get_default_stream(),
-                 rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+                 std::optional<std::size_t> output_size,
+                 rmm::cuda_stream_view stream,
+                 rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Computes the size of a join operation between two tables without
@@ -63,13 +63,12 @@ conditional_join(table_view const& left,
  *
  * @return Join output indices vector pair
  */
-std::size_t compute_conditional_join_output_size(
-  table_view const& left,
-  table_view const& right,
-  ast::expression const& binary_predicate,
-  join_kind JoinKind,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::size_t compute_conditional_join_output_size(table_view const& left,
+                                                 table_view const& right,
+                                                 ast::expression const& binary_predicate,
+                                                 join_kind JoinKind,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

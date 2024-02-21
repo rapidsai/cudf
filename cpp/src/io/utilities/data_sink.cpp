@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 
 namespace cudf {
 namespace io {
+
 /**
  * @brief Implementation class for storing data into a local file.
  */
@@ -34,10 +35,12 @@ class file_sink : public data_sink {
   explicit file_sink(std::string const& filepath)
   {
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
-    CUDF_EXPECTS(_output_stream.is_open(), "Cannot open output file");
+    if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 
     if (detail::cufile_integration::is_kvikio_enabled()) {
       _kvikio_file = kvikio::FileHandle(filepath, "w");
+      CUDF_LOG_INFO("Writing a file using kvikIO, with compatibility mode {}.",
+                    _kvikio_file.is_compat_mode_on() ? "on" : "off");
     } else {
       _cufile_out = detail::make_cufile_output(filepath);
     }
@@ -63,8 +66,8 @@ class file_sink : public data_sink {
 
   [[nodiscard]] bool is_device_write_preferred(size_t size) const override
   {
-    return !_kvikio_file.closed() ||
-           (_cufile_out != nullptr && _cufile_out->is_cufile_io_preferred(size));
+    if (size < _gds_write_preferred_threshold) { return false; }
+    return supports_device_write();
   }
 
   std::future<void> device_write_async(void const* gpu_data,
@@ -96,6 +99,8 @@ class file_sink : public data_sink {
   size_t _bytes_written = 0;
   std::unique_ptr<detail::cufile_output_impl> _cufile_out;
   kvikio::FileHandle _kvikio_file;
+  // The write size above which GDS is faster then d2h-copy + posix-write
+  static constexpr size_t _gds_write_preferred_threshold = 128 << 10;  // 128KB
 };
 
 /**
@@ -192,7 +197,7 @@ class user_sink_wrapper : public data_sink {
   cudf::io::data_sink* const user_sink;
 };
 
-std::unique_ptr<data_sink> data_sink::create(const std::string& filepath)
+std::unique_ptr<data_sink> data_sink::create(std::string const& filepath)
 {
   return std::make_unique<file_sink>(filepath);
 }

@@ -22,33 +22,18 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <arrow/buffer.h>
-
-// We disable warning 611 because some Arrow subclasses of
-// `arrow::fs::FileSystem` only partially override the `Equals` method,
-// triggering warning 611-D from nvcc.
-#pragma nv_diag_suppress 611
-#include <arrow/filesystem/filesystem.h>
-#include <arrow/filesystem/s3fs.h>
-#pragma nv_diag_default 611
-
-// We disable warning 2810 to workaround the compile issue (warning treated as error):
-// result.h(263): error #2810-D: ignoring return value type with "nodiscard" attribute
-#pragma nv_diag_suppress 2810
-#include <arrow/result.h>
-#pragma nv_diag_default 2810
-
-#include <arrow/io/file.h>
-#include <arrow/io/interfaces.h>
-#include <arrow/io/memory.h>
-#include <arrow/status.h>
-
 #include <future>
 #include <memory>
 
 namespace cudf {
 //! IO interfaces
 namespace io {
+
+/**
+ * @addtogroup io_datasources
+ * @{
+ * @file
+ */
 
 /**
  * @brief Interface class for providing input data to the readers.
@@ -105,9 +90,19 @@ class datasource {
    * @param[in] size Bytes from the offset; use zero for entire file (the default is zero)
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(const std::string& filepath,
+  static std::unique_ptr<datasource> create(std::string const& filepath,
                                             size_t offset = 0,
                                             size_t size   = 0);
+
+  /**
+   * @brief Creates a source from a host memory buffer.
+   *
+   # @deprecated Since 23.04
+   *
+   * @param[in] buffer Host buffer object
+   * @return Constructed datasource object
+   */
+  static std::unique_ptr<datasource> create(host_buffer const& buffer);
 
   /**
    * @brief Creates a source from a host memory buffer.
@@ -115,7 +110,7 @@ class datasource {
    * @param[in] buffer Host buffer object
    * @return Constructed datasource object
    */
-  static std::unique_ptr<datasource> create(host_buffer const& buffer);
+  static std::unique_ptr<datasource> create(cudf::host_span<std::byte const> buffer);
 
   /**
    * @brief Creates a source from a device memory buffer.
@@ -124,15 +119,6 @@ class datasource {
    * @return Constructed datasource object
    */
   static std::unique_ptr<datasource> create(cudf::device_span<std::byte const> buffer);
-
-  /**
-   * @brief Creates a source from a from an Arrow file.
-   *
-   * @param[in] arrow_file RandomAccessFile to which the API calls are forwarded
-   * @return Constructed datasource object
-   */
-  static std::unique_ptr<datasource> create(
-    std::shared_ptr<arrow::io::RandomAccessFile> arrow_file);
 
   /**
    * @brief Creates a source from an user implemented datasource object.
@@ -286,14 +272,14 @@ class datasource {
   /**
    * @brief Returns the size of the data in the source.
    *
-   * @return size_t The size of the source data in bytes
+   * @return The size of the source data in bytes
    */
   [[nodiscard]] virtual size_t size() const = 0;
 
   /**
    * @brief Returns whether the source contains any data.
    *
-   * @return bool True if there is data, False otherwise
+   * @return True if there is data, False otherwise
    */
   [[nodiscard]] virtual bool is_empty() const { return size() == 0; }
 
@@ -388,107 +374,6 @@ class datasource {
   };
 };
 
-/**
- * @brief Implementation class for reading from an Apache Arrow file. The file
- * could be a memory-mapped file or other implementation supported by Arrow.
- */
-class arrow_io_source : public datasource {
-  /**
-   * @brief Implementation for an owning buffer where `arrow::Buffer` holds the data.
-   */
-  class arrow_io_buffer : public buffer {
-    std::shared_ptr<arrow::Buffer> arrow_buffer;
-
-   public:
-    explicit arrow_io_buffer(std::shared_ptr<arrow::Buffer> arrow_buffer)
-      : arrow_buffer(arrow_buffer)
-    {
-    }
-    [[nodiscard]] size_t size() const override { return arrow_buffer->size(); }
-    [[nodiscard]] uint8_t const* data() const override { return arrow_buffer->data(); }
-  };
-
- public:
-  /**
-   * @brief Constructs an object from an Apache Arrow Filesystem URI
-   *
-   * @param arrow_uri Apache Arrow Filesystem URI
-   */
-  explicit arrow_io_source(std::string_view arrow_uri)
-  {
-    const std::string uri_start_delimiter = "//";
-    const std::string uri_end_delimiter   = "?";
-
-    arrow::Result<std::shared_ptr<arrow::fs::FileSystem>> result =
-      arrow::fs::FileSystemFromUri(static_cast<std::string>(arrow_uri));
-    CUDF_EXPECTS(result.ok(), "Failed to generate Arrow Filesystem instance from URI.");
-    filesystem = result.ValueOrDie();
-
-    // Parse the path from the URI
-    size_t start          = arrow_uri.find(uri_start_delimiter) == std::string::npos
-                              ? 0
-                              : arrow_uri.find(uri_start_delimiter) + uri_start_delimiter.size();
-    size_t end            = arrow_uri.find(uri_end_delimiter) - start;
-    std::string_view path = arrow_uri.substr(start, end);
-
-    arrow::Result<std::shared_ptr<arrow::io::RandomAccessFile>> in_stream =
-      filesystem->OpenInputFile(static_cast<std::string>(path).c_str());
-    CUDF_EXPECTS(in_stream.ok(), "Failed to open Arrow RandomAccessFile");
-    arrow_file = in_stream.ValueOrDie();
-  }
-
-  /**
-   * @brief Constructs an object from an `arrow` source object.
-   *
-   * @param file The `arrow` object from which the data is read
-   */
-  explicit arrow_io_source(std::shared_ptr<arrow::io::RandomAccessFile> file) : arrow_file(file) {}
-
-  /**
-   * @brief Returns a buffer with a subset of data from the `arrow` source.
-   *
-   * @param offset The offset in bytes from which to read
-   * @param size The number of bytes to read
-   * @return A buffer with the read data
-   */
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
-  {
-    auto result = arrow_file->ReadAt(offset, size);
-    CUDF_EXPECTS(result.ok(), "Cannot read file data");
-    return std::make_unique<arrow_io_buffer>(result.ValueOrDie());
-  }
-
-  /**
-   * @brief Reads a selected range from the `arrow` source into a preallocated buffer.
-   *
-   * @param[in] offset The offset in bytes from which to read
-   * @param[in] size The number of bytes to read
-   * @param[out] dst The preallocated buffer to read into
-   * @return The number of bytes read
-   */
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
-  {
-    auto result = arrow_file->ReadAt(offset, size, dst);
-    CUDF_EXPECTS(result.ok(), "Cannot read file data");
-    return result.ValueOrDie();
-  }
-
-  /**
-   * @brief Returns the size of the data in the `arrow` source.
-   *
-   * @return The size of the data in the `arrow` source
-   */
-  [[nodiscard]] size_t size() const override
-  {
-    auto result = arrow_file->GetSize();
-    CUDF_EXPECTS(result.ok(), "Cannot get file size");
-    return result.ValueOrDie();
-  }
-
- private:
-  std::shared_ptr<arrow::fs::FileSystem> filesystem;
-  std::shared_ptr<arrow::io::RandomAccessFile> arrow_file;
-};
-
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

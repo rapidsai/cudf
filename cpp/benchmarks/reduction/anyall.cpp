@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,14 +24,13 @@
 
 #include <memory>
 
-class Reduction : public cudf::benchmark {
-};
+class Reduction : public cudf::benchmark {};
 
 template <typename type>
 void BM_reduction_anyall(benchmark::State& state,
                          std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
-  const cudf::size_type column_size{static_cast<cudf::size_type>(state.range(0))};
+  cudf::size_type const column_size{static_cast<cudf::size_type>(state.range(0))};
   auto const dtype           = cudf::type_to_id<type>();
   data_profile const profile = data_profile_builder().no_validity().distribution(
     dtype, distribution_id::UNIFORM, 0, agg->kind == cudf::aggregation::ANY ? 0 : 100);

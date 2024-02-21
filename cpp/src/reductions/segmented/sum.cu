@@ -16,10 +16,11 @@
 
 #include "simple.cuh"
 
-#include <cudf/detail/reduction_functions.hpp>
+#include <cudf/reduction/detail/reduction_functions.hpp>
 
 namespace cudf {
 namespace reduction {
+namespace detail {
 
 std::unique_ptr<cudf::column> segmented_sum(
   column_view const& col,
@@ -30,16 +31,10 @@ std::unique_ptr<cudf::column> segmented_sum(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(col.type(),
-                               simple::detail::column_type_dispatcher<cudf::reduction::op::sum>{},
-                               col,
-                               offsets,
-                               output_dtype,
-                               null_handling,
-                               init,
-                               stream,
-                               mr);
+  using reducer = simple::detail::column_type_dispatcher<op::sum>;
+  return cudf::type_dispatcher(
+    col.type(), reducer{}, col, offsets, output_dtype, null_handling, init, stream, mr);
 }
-
+}  // namespace detail
 }  // namespace reduction
 }  // namespace cudf

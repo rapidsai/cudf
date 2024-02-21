@@ -1,6 +1,7 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import math
+import textwrap
 import warnings
 
 import numpy as np
@@ -21,11 +22,11 @@ from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
 import cudf
 from cudf import _lib as libcudf
-from cudf.utils.utils import _dask_cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
-from dask_cudf.sorting import _get_shuffle_type
+from dask_cudf.sorting import _deprecate_shuffle_kwarg, _get_shuffle_method
 
 
 class _Frame(dd.core._Frame, OperatorMethodMixin):
@@ -55,10 +56,8 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
     @_dask_cudf_nvtx_annotate
     def to_dask_dataframe(self, **kwargs):
         """Create a dask.dataframe object from a dask_cudf object"""
-        nullable_pd_dtype = kwargs.get("nullable_pd_dtype", False)
-        return self.map_partitions(
-            M.to_pandas, nullable_pd_dtype=nullable_pd_dtype
-        )
+        nullable = kwargs.get("nullable", False)
+        return self.map_partitions(M.to_pandas, nullable=nullable)
 
 
 concat = dd.concat
@@ -68,6 +67,18 @@ normalize_token.register(_Frame, lambda a: a._name)
 
 
 class DataFrame(_Frame, dd.core.DataFrame):
+    """
+    A distributed Dask DataFrame where the backing dataframe is a
+    :class:`cuDF DataFrame <cudf:cudf.DataFrame>`.
+
+    Typically you would not construct this object directly, but rather
+    use one of Dask-cuDF's IO routines.
+
+    Most operations on :doc:`Dask DataFrames <dask:dataframe>` are
+    supported, with many of the same caveats.
+
+    """
+
     _partition_type = cudf.DataFrame
 
     @_dask_cudf_nvtx_annotate
@@ -100,17 +111,22 @@ class DataFrame(_Frame, dd.core.DataFrame):
             do_apply_rows, func, incols, outcols, kwargs, meta=meta
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def merge(self, other, shuffle=None, **kwargs):
+    def merge(self, other, shuffle_method=None, **kwargs):
         on = kwargs.pop("on", None)
         if isinstance(on, tuple):
             on = list(on)
         return super().merge(
-            other, on=on, shuffle=_get_shuffle_type(shuffle), **kwargs
+            other,
+            on=on,
+            shuffle_method=_get_shuffle_method(shuffle_method),
+            **kwargs,
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def join(self, other, shuffle=None, **kwargs):
+    def join(self, other, shuffle_method=None, **kwargs):
         # CuDF doesn't support "right" join yet
         how = kwargs.pop("how", "left")
         if how == "right":
@@ -120,12 +136,22 @@ class DataFrame(_Frame, dd.core.DataFrame):
         if isinstance(on, tuple):
             on = list(on)
         return super().join(
-            other, how=how, on=on, shuffle=_get_shuffle_type(shuffle), **kwargs
+            other,
+            how=how,
+            on=on,
+            shuffle_method=_get_shuffle_method(shuffle_method),
+            **kwargs,
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
     def set_index(
-        self, other, sorted=False, divisions=None, shuffle=None, **kwargs
+        self,
+        other,
+        sorted=False,
+        divisions=None,
+        shuffle_method=None,
+        **kwargs,
     ):
 
         pre_sorted = sorted
@@ -161,7 +187,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions=divisions,
                 set_divisions=True,
                 ignore_index=True,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             )
 
             # Ignore divisions if its a dataframe
@@ -188,11 +214,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return super().set_index(
             other,
             sorted=pre_sorted,
-            shuffle=_get_shuffle_type(shuffle),
+            shuffle_method=_get_shuffle_method(shuffle_method),
             divisions=divisions,
             **kwargs,
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
     def sort_values(
         self,
@@ -205,7 +232,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         na_position="last",
         sort_function=None,
         sort_function_kwargs=None,
-        shuffle=None,
+        shuffle_method=None,
         **kwargs,
     ):
         if kwargs:
@@ -222,7 +249,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             ignore_index=ignore_index,
             ascending=ascending,
             na_position=na_position,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
             sort_function=sort_function,
             sort_function_kwargs=sort_function_kwargs,
         )
@@ -275,11 +302,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         else:
             return _parallel_var(self, meta, skipna, split_every, out)
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def shuffle(self, *args, shuffle=None, **kwargs):
+    def shuffle(self, *args, shuffle_method=None, **kwargs):
         """Wraps dask.dataframe DataFrame.shuffle method"""
         return super().shuffle(
-            *args, shuffle=_get_shuffle_type(shuffle), **kwargs
+            *args, shuffle_method=_get_shuffle_method(shuffle_method), **kwargs
         )
 
     @_dask_cudf_nvtx_annotate
@@ -408,7 +436,7 @@ def _naive_var(ddf, meta, skipna, ddof, split_every, out):
 def _parallel_var(ddf, meta, skipna, split_every, out):
     def _local_var(x, skipna):
         if skipna:
-            n = x.count(skipna=skipna)
+            n = x.count()
             avg = x.mean(skipna=skipna)
         else:
             # Not skipping nulls, so might as well
@@ -671,12 +699,35 @@ def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
 
 
 from_cudf.__doc__ = (
-    "Wraps main-line Dask from_pandas...\n" + dd.from_pandas.__doc__
+    textwrap.dedent(
+        """
+        Create a :class:`.DataFrame` from a :class:`cudf.DataFrame`.
+
+        This function is a thin wrapper around
+        :func:`dask.dataframe.from_pandas`, accepting the same
+        arguments (described below) excepting that it operates on cuDF
+        rather than pandas objects.\n
+        """
+    )
+    + textwrap.dedent(dd.from_pandas.__doc__)
 )
 
 
 @_dask_cudf_nvtx_annotate
 def from_dask_dataframe(df):
+    """
+    Convert a Dask :class:`dask.dataframe.DataFrame` to a Dask-cuDF
+    one.
+
+    Parameters
+    ----------
+    df : dask.dataframe.DataFrame
+        The Dask dataframe to convert
+
+    Returns
+    -------
+    dask_cudf.DataFrame : A new Dask collection backed by cuDF objects
+    """
     return df.map_partitions(cudf.from_pandas)
 
 

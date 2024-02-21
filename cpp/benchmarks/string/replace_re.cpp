@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,70 +14,54 @@
  * limitations under the License.
  */
 
-#include "string_bench_args.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf_test/column_wrapper.hpp>
-
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-class StringReplace : public cudf::benchmark {
-};
+#include <nvbench/nvbench.cuh>
 
-enum replace_type { replace_re, replace_re_multi, replace_backref };
-
-static void BM_replace(benchmark::State& state, replace_type rt)
+static void bench_replace(nvbench::state& state)
 {
-  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
-  data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
-  cudf::strings_column_view input(column->view());
-  cudf::test::strings_column_wrapper repls({"#", ""});
+  auto const n_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const rtype     = state.get_string("type");
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    switch (rt) {
-      case replace_type::replace_re:  // contains_re and matches_re use the same main logic
-        cudf::strings::replace_re(input, "\\d+");
-        break;
-      case replace_type::replace_re_multi:  // counts occurrences of pattern
-        cudf::strings::replace_re(input, {"\\d+", "\\s+"}, cudf::strings_column_view(repls));
-        break;
-      case replace_type::replace_backref:  // returns occurrences of matches
-        cudf::strings::replace_with_backrefs(input, "(\\d+)", "#\\1X");
-        break;
-    }
+  if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(row_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
   }
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  data_profile const profile = data_profile_builder().distribution(
+    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+  cudf::strings_column_view input(column->view());
+
+  auto program = cudf::strings::regex_program::create("(\\d+)");
+
+  auto chars_size = input.chars_size(cudf::get_default_stream());
+  state.add_element_count(chars_size, "chars_size");
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+
+  if (rtype == "backref") {
+    auto replacement = std::string("#\\1X");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::replace_with_backrefs(input, *program, replacement);
+    });
+  } else {
+    auto replacement = std::string("77");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      cudf::strings::replace_re(input, *program, replacement);
+    });
+  }
 }
 
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
-  generate_string_bench_args(b, min_rows, max_rows, row_mult, min_rowlen, max_rowlen, len_mult);
-}
-
-#define STRINGS_BENCHMARK_DEFINE(name)                \
-  BENCHMARK_DEFINE_F(StringReplace, name)             \
-  (::benchmark::State & st) { BM_replace(st, name); } \
-  BENCHMARK_REGISTER_F(StringReplace, name)           \
-    ->Apply(generate_bench_args)                      \
-    ->UseManualTime()                                 \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(replace_re)
-STRINGS_BENCHMARK_DEFINE(replace_re_multi)
-STRINGS_BENCHMARK_DEFINE(replace_backref)
+NVBENCH_BENCH(bench_replace)
+  .set_name("replace_re")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512})
+  .add_int64_axis("num_rows", {32768, 262144, 2097152, 16777216})
+  .add_string_axis("type", {"replace", "backref"});

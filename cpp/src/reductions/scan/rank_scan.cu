@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,23 @@ namespace cudf {
 namespace detail {
 namespace {
 
+template <typename device_comparator_type, typename value_resolver>
+struct rank_equality_functor {
+  rank_equality_functor(device_comparator_type comparator, value_resolver resolver)
+    : _comparator(comparator), _resolver(resolver)
+  {
+  }
+
+  auto __device__ operator()(size_type row_index) const noexcept
+  {
+    return _resolver(row_index == 0 || !_comparator(row_index, row_index - 1), row_index);
+  }
+
+ private:
+  device_comparator_type _comparator;
+  value_resolver _resolver;
+};
+
 /**
  * @brief generate row ranks or dense ranks using a row comparison then scan the results
  *
@@ -51,20 +68,30 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  auto comp = cudf::experimental::row::equality::self_comparator(table_view{{order_by}}, stream);
-  auto const device_comparator =
-    comp.equal_to(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
+  auto const order_by_tview = table_view{{order_by}};
+  auto comp = cudf::experimental::row::equality::self_comparator(order_by_tview, stream);
+
   auto ranks = make_fixed_width_column(
     data_type{type_to_id<size_type>()}, order_by.size(), mask_state::UNALLOCATED, stream, mr);
   auto mutable_ranks = ranks->mutable_view();
 
-  thrust::tabulate(rmm::exec_policy(stream),
-                   mutable_ranks.begin<size_type>(),
-                   mutable_ranks.end<size_type>(),
-                   [comparator = device_comparator, resolver] __device__(size_type row_index) {
-                     return resolver(row_index == 0 || !comparator(row_index, row_index - 1),
-                                     row_index);
-                   });
+  auto const comparator_helper = [&](auto const device_comparator) {
+    thrust::tabulate(rmm::exec_policy(stream),
+                     mutable_ranks.begin<size_type>(),
+                     mutable_ranks.end<size_type>(),
+                     rank_equality_functor<decltype(device_comparator), value_resolver>(
+                       device_comparator, resolver));
+  };
+
+  if (cudf::detail::has_nested_columns(order_by_tview)) {
+    auto const device_comparator =
+      comp.equal_to<true>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
+    comparator_helper(device_comparator);
+  } else {
+    auto const device_comparator =
+      comp.equal_to<false>(nullate::DYNAMIC{has_nested_nulls(table_view({order_by}))});
+    comparator_helper(device_comparator);
+  }
 
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          mutable_ranks.begin<size_type>(),

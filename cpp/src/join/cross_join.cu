@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,11 +37,10 @@ namespace detail {
  *
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-std::unique_ptr<cudf::table> cross_join(
-  cudf::table_view const& left,
-  cudf::table_view const& right,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<cudf::table> cross_join(cudf::table_view const& left,
+                                        cudf::table_view const& right,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS(0 != right.num_columns(), "Right table is empty");

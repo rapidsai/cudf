@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -194,6 +194,7 @@ def test_to_numeric_downcast_int(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -223,6 +224,7 @@ def test_to_numeric_downcast_float(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:invalid value encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -245,6 +247,7 @@ def test_to_numeric_downcast_large_float(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -325,6 +328,7 @@ def test_to_numeric_downcast_string_float(data, downcast):
     assert_eq(expected, got)
 
 
+@pytest.mark.filterwarnings("ignore:overflow encountered in cast")
 @pytest.mark.parametrize(
     "data",
     [
@@ -421,3 +425,11 @@ def test_series_to_numeric_bool(data, downcast):
     got = cudf.to_numeric(gs, downcast=downcast)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("klass", [cudf.Series, pd.Series])
+def test_series_to_numeric_preserve_index_name(klass):
+    ser = klass(["1"] * 8, index=range(2, 10), name="name")
+    result = cudf.to_numeric(ser)
+    expected = cudf.Series([1] * 8, index=range(2, 10), name="name")
+    assert_eq(result, expected)

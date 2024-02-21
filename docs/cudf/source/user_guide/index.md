@@ -1,8 +1,9 @@
-# User Guide
+# cuDF User Guide
 
 ```{toctree}
 :maxdepth: 2
 
+api_docs/index
 10min
 pandas-comparison
 data-types
@@ -12,5 +13,7 @@ groupby
 guide-to-udfs
 cupy-interop
 options
+performance-comparisons/index
 PandasCompat
+copy-on-write
 ```

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
-
 namespace cudf {
 //! IO interfaces
 namespace io {
@@ -51,6 +44,12 @@ class datasource;
 namespace cudf {
 //! IO interfaces
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
 /**
  * @brief Compression algorithms
  */
@@ -101,29 +100,134 @@ enum statistics_freq {
 };
 
 /**
- * @brief Control use of dictionary encoding for parquet writer
+ * @brief Statistics about compression performed by a writer.
  */
-enum dictionary_policy {
-  NEVER,     ///< Never use dictionary encoding
-  ADAPTIVE,  ///< Use dictionary when it will not impact compression
-  ALWAYS     ///< Use dictionary reqardless of impact on compression
+class writer_compression_statistics {
+ public:
+  /**
+   * @brief Default constructor
+   */
+  writer_compression_statistics() = default;
+
+  /**
+   * @brief Constructor with initial values.
+   *
+   * @param num_compressed_bytes The number of bytes that were successfully compressed
+   * @param num_failed_bytes The number of bytes that failed to compress
+   * @param num_skipped_bytes The number of bytes that were skipped during compression
+   * @param num_compressed_output_bytes The number of bytes in the compressed output
+   */
+  writer_compression_statistics(size_t num_compressed_bytes,
+                                size_t num_failed_bytes,
+                                size_t num_skipped_bytes,
+                                size_t num_compressed_output_bytes)
+    : _num_compressed_bytes(num_compressed_bytes),
+      _num_failed_bytes(num_failed_bytes),
+      _num_skipped_bytes(num_skipped_bytes),
+      _num_compressed_output_bytes(num_compressed_output_bytes)
+  {
+  }
+
+  /**
+   * @brief Adds the values from another `writer_compression_statistics` object.
+   *
+   * @param other The other writer_compression_statistics object
+   * @return writer_compression_statistics& Reference to this object
+   */
+  writer_compression_statistics& operator+=(writer_compression_statistics const& other) noexcept
+  {
+    _num_compressed_bytes += other._num_compressed_bytes;
+    _num_failed_bytes += other._num_failed_bytes;
+    _num_skipped_bytes += other._num_skipped_bytes;
+    _num_compressed_output_bytes += other._num_compressed_output_bytes;
+    return *this;
+  }
+
+  /**
+   * @brief Returns the number of bytes in blocks that were successfully compressed.
+   *
+   * This is the number of bytes that were actually compressed, not the size of the compressed
+   * output.
+   *
+   * @return size_t The number of bytes that were successfully compressed
+   */
+  [[nodiscard]] auto num_compressed_bytes() const noexcept { return _num_compressed_bytes; }
+
+  /**
+   * @brief Returns the number of bytes in blocks that failed to compress.
+   *
+   * @return size_t The number of bytes that failed to compress
+   */
+  [[nodiscard]] auto num_failed_bytes() const noexcept { return _num_failed_bytes; }
+
+  /**
+   * @brief Returns the number of bytes in blocks that were skipped during compression.
+   *
+   * @return size_t The number of bytes that were skipped during compression
+   */
+  [[nodiscard]] auto num_skipped_bytes() const noexcept { return _num_skipped_bytes; }
+
+  /**
+   * @brief Returns the total size of compression inputs.
+   *
+   * @return size_t The total size of compression inputs
+   */
+  [[nodiscard]] auto num_total_input_bytes() const noexcept
+  {
+    return num_compressed_bytes() + num_failed_bytes() + num_skipped_bytes();
+  }
+
+  /**
+   * @brief Returns the compression ratio for the successfully compressed blocks.
+   *
+   * Returns nan if there were no successfully compressed blocks.
+   *
+   * @return double The ratio between the size of the compression inputs and the size of the
+   * compressed output.
+   */
+  [[nodiscard]] auto compression_ratio() const noexcept
+  {
+    return static_cast<double>(num_compressed_bytes()) / _num_compressed_output_bytes;
+  }
+
+ private:
+  std::size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
+  std::size_t _num_failed_bytes     = 0;  ///< The number of bytes that failed to compress
+  std::size_t _num_skipped_bytes = 0;  ///< The number of bytes that were skipped during compression
+  std::size_t _num_compressed_output_bytes = 0;  ///< The number of bytes in the compressed output
 };
 
 /**
- * @brief Detailed name information for output columns.
+ * @brief Control use of dictionary encoding for parquet writer
+ */
+enum dictionary_policy {
+  NEVER    = 0,  ///< Never use dictionary encoding
+  ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
+  ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
+};
+
+/**
+ * @brief Detailed name (and optionally nullability) information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
  * cudf columns.
  */
 struct column_name_info {
   std::string name;                        ///< Column name
+  std::optional<bool> is_nullable;         ///< Column nullability
   std::vector<column_name_info> children;  ///< Child column names
+
   /**
-   * @brief Construct a column name info with a name and no children
+   * @brief Construct a column name info with a name, optional nullabilty, and no children
    *
    * @param _name Column name
+   * @param _is_nullable True if column is nullable
    */
-  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
+    : name(_name), is_nullable(_is_nullable)
+  {
+  }
+
   column_name_info() = default;
 };
 
@@ -150,6 +254,8 @@ struct table_with_metadata {
 /**
  * @brief Non-owning view of a host memory buffer
  *
+ * @deprecated Since 23.04
+ *
  * Used to describe buffer input in `source_info` objects.
  */
 struct host_buffer {
@@ -163,15 +269,29 @@ struct host_buffer {
    * @param data Pointer to the buffer
    * @param size Size of the buffer
    */
-  host_buffer(const char* data, size_t size) : data(data), size(size) {}
+  host_buffer(char const* data, size_t size) : data(data), size(size) {}
 };
+
+/**
+ * @brief Returns `true` if the type is byte-like, meaning it is reasonable to pass as a pointer to
+ * bytes.
+ *
+ * @tparam T The representation type
+ * @return `true` if the type is considered a byte-like type
+ */
+template <typename T>
+constexpr inline auto is_byte_like_type()
+{
+  using non_cv_T = std::remove_cv_t<T>;
+  return std::is_same_v<non_cv_T, int8_t> || std::is_same_v<non_cv_T, char> ||
+         std::is_same_v<non_cv_T, uint8_t> || std::is_same_v<non_cv_T, unsigned char> ||
+         std::is_same_v<non_cv_T, std::byte>;
+}
 
 /**
  * @brief Source information for read interfaces
  */
 struct source_info {
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;  //!< Input files
-
   source_info() = default;
 
   /**
@@ -179,33 +299,88 @@ struct source_info {
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  {
+  }
 
   /**
    * @brief Construct a new source info object for a single file
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
+  explicit source_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
+
+  /**
+   * @brief Construct a new source info object for multiple buffers in host memory
+   *
+   * @deprecated Since 23.04
+   *
+   * @param host_buffers Input buffers in host memory
+   */
+  explicit source_info(std::vector<host_buffer> const& host_buffers) : _type(io_type::HOST_BUFFER)
+  {
+    _host_buffers.reserve(host_buffers.size());
+    std::transform(host_buffers.begin(),
+                   host_buffers.end(),
+                   std::back_inserter(_host_buffers),
+                   [](auto const hb) {
+                     return cudf::host_span<std::byte const>{
+                       reinterpret_cast<std::byte const*>(hb.data), hb.size};
+                   });
+  }
+
+  /**
+   * @brief Construct a new source info object for a single buffer
+   *
+   * @deprecated Since 23.04
+   *
+   * @param host_data Input buffer in host memory
+   * @param size Size of the buffer
+   */
+  explicit source_info(char const* host_data, size_t size)
+    : _type(io_type::HOST_BUFFER),
+      _host_buffers(
+        {cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(host_data), size)})
+  {
+  }
 
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
    *
    * @param host_buffers Input buffers in host memory
    */
-  explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : _type(io_type::HOST_BUFFER), _host_buffers(host_buffers)
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<cudf::host_span<T>> const host_buffers)
+    : _type(io_type::HOST_BUFFER)
   {
+    if constexpr (not std::is_same_v<std::remove_cv_t<T>, std::byte>) {
+      _host_buffers.reserve(host_buffers.size());
+      std::transform(host_buffers.begin(),
+                     host_buffers.end(),
+                     std::back_inserter(_host_buffers),
+                     [](auto const s) {
+                       return cudf::host_span<std::byte const>{
+                         reinterpret_cast<std::byte const*>(s.data()), s.size()};
+                     });
+    } else {
+      _host_buffers.assign(host_buffers.begin(), host_buffers.end());
+    }
   }
 
   /**
    * @brief Construct a new source info object for a single buffer
    *
    * @param host_data Input buffer in host memory
-   * @param size Size of the buffer
    */
-  explicit source_info(const char* host_data, size_t size)
-    : _type(io_type::HOST_BUFFER), _host_buffers({{host_data, size}})
+  template <typename T, CUDF_ENABLE_IF(is_byte_like_type<std::remove_cv_t<T>>())>
+  explicit source_info(cudf::host_span<T> host_data)
+    : _type(io_type::HOST_BUFFER),
+      _host_buffers{cudf::host_span<std::byte const>(
+        reinterpret_cast<std::byte const*>(host_data.data()), host_data.size())}
   {
   }
 
@@ -274,12 +449,6 @@ struct source_info {
    */
   [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
   /**
-   * @brief Get the input files
-   *
-   * @return The input files
-   */
-  [[nodiscard]] auto const& files() const { return _files; }
-  /**
    * @brief Get the user sources of the input
    *
    * @return The user sources of the input
@@ -287,9 +456,9 @@ struct source_info {
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
-  io_type _type = io_type::FILEPATH;
+  io_type _type = io_type::VOID;
   std::vector<std::string> _filepaths;
-  std::vector<host_buffer> _host_buffers;
+  std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;
   std::vector<cudf::io::datasource*> _user_sources;
 };
@@ -452,8 +621,6 @@ class column_in_metadata {
   /**
    * @brief Set the nullability of this column
    *
-   * Only valid in case of chunked writes. In single writes, this option is ignored.
-   *
    * @param nullable Whether this column is nullable
    * @return this for chaining
    */
@@ -526,6 +693,11 @@ class column_in_metadata {
   column_in_metadata& set_output_as_binary(bool binary) noexcept
   {
     _output_as_binary = binary;
+    if (_output_as_binary and children.size() == 1) {
+      children.emplace_back();
+    } else if (!_output_as_binary and children.size() == 2) {
+      children.pop_back();
+    }
     return *this;
   }
 
@@ -562,8 +734,8 @@ class column_in_metadata {
   /**
    * @brief Gets the explicitly set nullability for this column.
    *
-   * @throws If nullability is not explicitly defined for this column.
-   *         Check using `is_nullability_defined()` first.
+   * @throws std::bad_optional_access If nullability is not explicitly defined
+   *         for this column. Check using `is_nullability_defined()` first.
    * @return Boolean indicating whether this column is nullable
    */
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
@@ -596,8 +768,8 @@ class column_in_metadata {
   /**
    * @brief Get the decimal precision that was set for this column.
    *
-   * @throws If decimal precision was not set for this column.
-   *         Check using `is_decimal_precision_set()` first.
+   * @throws std::bad_optional_access If decimal precision was not set for this
+   *         column. Check using `is_decimal_precision_set()` first.
    * @return The decimal precision that was set for this column
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
@@ -615,8 +787,8 @@ class column_in_metadata {
   /**
    * @brief Get the parquet field id that was set for this column.
    *
-   * @throws If parquet field id was not set for this column.
-   *         Check using `is_parquet_field_id_set()` first.
+   * @throws std::bad_optional_access If parquet field id was not set for this
+   *         column. Check using `is_parquet_field_id_set()` first.
    * @return The parquet field id that was set for this column
    */
   [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
@@ -650,7 +822,17 @@ class table_input_metadata {
    *
    * @param table The table_view to construct metadata for
    */
-  table_input_metadata(table_view const& table);
+  explicit table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_metadata object.
+   *
+   * The constructed table_input_metadata has the same structure, column names and nullability as
+   * the passed table_metadata.
+   *
+   * @param metadata The table_metadata to construct table_intput_metadata for
+   */
+  explicit table_input_metadata(table_metadata const& metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
@@ -767,5 +949,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

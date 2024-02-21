@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -84,11 +84,13 @@ std::enable_if_t<cudf::is_fixed_width<TypeParam>() && !cudf::is_timestamp_t<Type
                  thrust::host_vector<TypeParam>>
 make_type_param_vector(std::initializer_list<T> const& init_list)
 {
-  thrust::host_vector<TypeParam> vec(init_list.size());
-  std::transform(std::cbegin(init_list), std::cend(init_list), std::begin(vec), [](auto const& e) {
-    if constexpr (std::is_unsigned_v<TypeParam>) { return static_cast<TypeParam>(std::abs(e)); }
-    return static_cast<TypeParam>(e);
-  });
+  std::vector<T> input{init_list};
+  std::vector<TypeParam> vec(init_list.size());
+  std::transform(
+    std::cbegin(input), std::cend(input), std::begin(vec), [](auto const& e) -> TypeParam {
+      if constexpr (std::is_unsigned_v<TypeParam>) { return static_cast<TypeParam>(std::abs(e)); }
+      return static_cast<TypeParam>(e);
+    });
   return vec;
 }
 

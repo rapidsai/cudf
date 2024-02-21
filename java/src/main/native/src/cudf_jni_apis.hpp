@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/copying.hpp>
+#include <cudf/contiguous_split.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 
 #include "jni_utils.hpp"
@@ -100,7 +100,8 @@ jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
 /**
  * Allocate a HostMemoryBuffer
  */
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned,
+                             jobject host_memory_allocator);
 
 /**
  * Get the address of a HostMemoryBuffer
@@ -132,6 +133,14 @@ void auto_set_device(JNIEnv *env);
  * operations occurring on other streams.
  */
 void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value);
+
+//
+// DataSource APIs
+//
+
+bool cache_data_source_jni(JNIEnv *env);
+
+void release_data_source_jni(JNIEnv *env);
 
 } // namespace jni
 } // namespace cudf

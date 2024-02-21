@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import operator
 import string
@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_134
+from cudf.core._compat import PANDAS_GE_134
 from cudf.testing._utils import (
     NUMERIC_TYPES,
     assert_eq,
@@ -81,7 +81,6 @@ t a
     assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
 
-@pytest.mark.skipif(not PANDAS_GE_110, reason="requires pandas>=1.1.0")
 def test_categorical_integer():
     cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
     pdsr = pd.Series(cat)
@@ -218,7 +217,7 @@ def test_categorical_masking():
     got_masked = sr[got_matches]
 
     assert len(expect_masked) == len(got_masked)
-    assert len(expect_masked) == got_masked.valid_count
+    assert got_masked.null_count == 0
     assert_eq(got_masked, expect_masked)
 
 
@@ -228,7 +227,7 @@ def test_df_cat_set_index():
     df["b"] = np.arange(len(df))
     got = df.set_index("a")
 
-    pddf = df.to_pandas(nullable_pd_dtype=False)
+    pddf = df.to_pandas()
     expect = pddf.set_index("a")
 
     assert_eq(got, expect)
@@ -240,7 +239,7 @@ def test_df_cat_sort_index():
     df["b"] = np.arange(len(df))
 
     got = df.set_index("a").sort_index()
-    expect = df.to_pandas(nullable_pd_dtype=False).set_index("a").sort_index()
+    expect = df.to_pandas().set_index("a").sort_index()
 
     assert_eq(got, expect)
 
@@ -443,10 +442,13 @@ def test_categorical_reorder_categories(
         "reorder_categories"
     ):
         pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
-    cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
     if inplace:
+        with pytest.warns(FutureWarning):
+            cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
+    else:
+        cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
 
     assert_eq(pd_sr_1, cd_sr_1)
 
@@ -479,10 +481,14 @@ def test_categorical_add_categories(pd_str_cat, inplace):
         "add_categories"
     ):
         pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
-    cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
+
     if inplace:
+        with pytest.warns(FutureWarning):
+            cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
+    else:
+        cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
 
     assert "d" in pd_sr_1.cat.categories.to_list()
     assert "d" in cd_sr_1.cat.categories.to_pandas().to_list()
@@ -516,10 +522,14 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
         "remove_categories"
     ):
         pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
-    cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
+
     if inplace:
+        with pytest.warns(FutureWarning):
+            cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
         pd_sr_1 = pd_sr
         cd_sr_1 = cd_sr
+    else:
+        cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
 
     assert "a" not in pd_sr_1.cat.categories.to_list()
     assert "a" not in cd_sr_1.cat.categories.to_pandas().to_list()
@@ -529,7 +539,7 @@ def test_categorical_remove_categories(pd_str_cat, inplace):
     # test using ordered operators
     with _hide_deprecated_pandas_categorical_inplace_warnings(
         "remove_categories"
-    ):
+    ) as _, pytest.warns(FutureWarning) as _:
         assert_exceptions_equal(
             lfunc=cd_sr.to_pandas().cat.remove_categories,
             rfunc=cd_sr.cat.remove_categories,
@@ -916,3 +926,32 @@ def test_categorical_string_index_contains(data, value):
     pidx = idx.to_pandas()
 
     assert_eq(value in idx, value in pidx)
+
+
+def test_categorical_index_with_dtype():
+    dtype = cudf.CategoricalDtype(categories=["a", "z", "c"])
+    gi = cudf.Index(["z", "c", "a"], dtype=dtype)
+    pi = pd.Index(["z", "c", "a"], dtype=dtype.to_pandas())
+
+    assert_eq(gi, pi)
+    assert_eq(gi.dtype, pi.dtype)
+    assert_eq(gi.dtype.categories, pi.dtype.categories)
+
+
+def test_cat_iterate_error():
+    s = cudf.Series([1, 2, 3], dtype="category")
+    with pytest.raises(TypeError):
+        iter(s.cat)
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_empty_series_category_cast(ordered):
+    dtype = cudf.CategoricalDtype(ordered=ordered)
+    ps = pd.Series([], dtype="str")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.astype(dtype.to_pandas())
+    actual = gs.astype(dtype)
+
+    assert_eq(expected, actual)
+    assert_eq(expected.dtype.ordered, actual.dtype.ordered)

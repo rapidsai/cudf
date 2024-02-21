@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,8 @@
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
-// Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
-//       Jitify is needed for several algorithms (binaryop, rolling, etc)
-#include <cuda/std/climits>
 #include <cuda/std/limits>
-#include <cuda/std/type_traits>  // add cuda namespace
+#include <cuda/std/type_traits>
 
 #include <algorithm>
 #include <cassert>
@@ -33,6 +30,13 @@
 
 /// `fixed_point` and supporting types
 namespace numeric {
+
+/**
+ * @addtogroup fixed_point_classes
+ * @{
+ * @file
+ * @brief Class definition for fixed point data type
+ */
 
 /// The scale type for fixed_point
 enum scale_type : int32_t {};
@@ -73,6 +77,8 @@ constexpr inline auto is_supported_construction_value_type()
 {
   return cuda::std::is_integral<T>() || cuda::std::is_floating_point_v<T>;
 }
+
+/** @} */  // end of group
 
 // Helper functions for `fixed_point` type
 namespace detail {

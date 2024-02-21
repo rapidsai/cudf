@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,11 +33,10 @@ namespace cudf::lists::detail {
  * @param mr Device memory resource used to allocate the returned object
  * @return A column containing list labels corresponding to each element in the child column
  */
-std::unique_ptr<column> generate_labels(
-  lists_column_view const& input,
-  size_type n_elements,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> generate_labels(lists_column_view const& input,
+                                        size_type n_elements,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Reconstruct an offsets column from the input list labels column.
@@ -61,9 +60,8 @@ std::unique_ptr<column> reconstruct_offsets(column_view const& labels,
  * @param mr Device memory resource used to allocate the returned object
  * @return The output offsets column with values start from 0
  */
-std::unique_ptr<column> get_normalized_offsets(
-  lists_column_view const& input,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> get_normalized_offsets(lists_column_view const& input,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr);
 
 }  // namespace cudf::lists::detail

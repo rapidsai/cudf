@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,16 +106,16 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
   });
   // copy translate table to device memory
   rmm::device_uvector<translate_table> table =
-    cudf::detail::make_device_uvector_async(htable, stream);
+    cudf::detail::make_device_uvector_async(htable, stream, rmm::mr::get_current_device_resource());
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
-  auto children = make_strings_children(
+  auto [offsets_column, chars_column] = make_strings_children(
     translate_fn{*d_strings, table.begin(), table.end()}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }
@@ -124,12 +124,13 @@ std::unique_ptr<column> translate(strings_column_view const& strings,
 
 // external APIs
 
-std::unique_ptr<column> translate(strings_column_view const& strings,
+std::unique_ptr<column> translate(strings_column_view const& input,
                                   std::vector<std::pair<uint32_t, uint32_t>> const& chars_table,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::translate(strings, chars_table, cudf::get_default_stream(), mr);
+  return detail::translate(input, chars_table, stream, mr);
 }
 
 }  // namespace strings

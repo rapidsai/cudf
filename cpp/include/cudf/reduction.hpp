@@ -198,7 +198,7 @@ std::unique_ptr<column> segmented_reduce(
  * @returns Scanned output column
  */
 std::unique_ptr<column> scan(
-  const column_view& input,
+  column_view const& input,
   scan_aggregation const& agg,
   scan_type inclusive,
   null_policy null_handling           = null_policy::EXCLUDE,

@@ -64,12 +64,12 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
     });
   }
 
-  auto d_expected_src =
-    cudf::detail::make_device_uvector_async(h_expected_src, cudf::get_default_stream());
-  auto d_expected_mean =
-    cudf::detail::make_device_uvector_async(h_expected_mean, cudf::get_default_stream());
-  auto d_expected_weight =
-    cudf::detail::make_device_uvector_async(h_expected_weight, cudf::get_default_stream());
+  auto d_expected_src = cudf::detail::make_device_uvector_async(
+    h_expected_src, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_expected_mean = cudf::detail::make_device_uvector_async(
+    h_expected_mean, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_expected_weight = cudf::detail::make_device_uvector_async(
+    h_expected_weight, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
   auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(
@@ -110,12 +110,12 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
     auto tdigests =
       cudf::make_structs_column(tdigest.mean.size(), std::move(inner_children), 0, {});
 
-    std::vector<offset_type> h_offsets{0, tdigest.mean.size()};
+    std::vector<size_type> h_offsets{0, tdigest.mean.size()};
     auto offsets =
       cudf::make_fixed_width_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED);
-    CUDF_CUDA_TRY(cudaMemcpy(offsets->mutable_view().begin<offset_type>(),
+    CUDF_CUDA_TRY(cudaMemcpy(offsets->mutable_view().begin<size_type>(),
                              h_offsets.data(),
-                             sizeof(offset_type) * 2,
+                             sizeof(size_type) * 2,
                              cudaMemcpyDefault));
 
     auto list = cudf::make_lists_column(1, std::move(offsets), std::move(tdigests), 0, {});

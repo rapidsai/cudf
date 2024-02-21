@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/join/join_common.hpp>
 
 template <typename key_type, typename payload_type, bool Nullable>
@@ -27,7 +26,10 @@ void nvbench_inner_join(nvbench::state& state,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(left_input, compare_nulls, stream);
+    auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
+    cudf::hash_join hj_obj(left_input, has_nulls, compare_nulls, stream);
     return hj_obj.inner_join(right_input, std::nullopt, stream);
   };
 
@@ -44,7 +46,10 @@ void nvbench_left_join(nvbench::state& state,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(left_input, compare_nulls, stream);
+    auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
+    cudf::hash_join hj_obj(left_input, has_nulls, compare_nulls, stream);
     return hj_obj.left_join(right_input, std::nullopt, stream);
   };
 
@@ -61,7 +66,10 @@ void nvbench_full_join(nvbench::state& state,
                  cudf::table_view const& right_input,
                  cudf::null_equality compare_nulls,
                  rmm::cuda_stream_view stream) {
-    cudf::hash_join hj_obj(left_input, compare_nulls, stream);
+    auto const has_nulls = cudf::has_nested_nulls(left_input) || cudf::has_nested_nulls(right_input)
+                             ? cudf::nullable_join::YES
+                             : cudf::nullable_join::NO;
+    cudf::hash_join hj_obj(left_input, has_nulls, compare_nulls, stream);
     return hj_obj.full_join(right_input, std::nullopt, stream);
   };
 

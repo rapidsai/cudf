@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class count_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class histogram_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class any_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class all_aggregation const& agg);
@@ -89,6 +91,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class merge_sets_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_m2_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class merge_histogram_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class covariance_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -108,6 +112,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class min_aggregation const& agg);
   virtual void visit(class max_aggregation const& agg);
   virtual void visit(class count_aggregation const& agg);
+  virtual void visit(class histogram_aggregation const& agg);
   virtual void visit(class any_aggregation const& agg);
   virtual void visit(class all_aggregation const& agg);
   virtual void visit(class sum_of_squares_aggregation const& agg);
@@ -130,6 +135,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
+  virtual void visit(class merge_histogram_aggregation const& agg);
   virtual void visit(class covariance_aggregation const& agg);
   virtual void visit(class correlation_aggregation const& agg);
   virtual void visit(class tdigest_aggregation const& agg);
@@ -242,6 +248,25 @@ class count_aggregation final : public rolling_aggregation,
   [[nodiscard]] std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<count_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived class for specifying a histogram aggregation
+ */
+class histogram_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  histogram_aggregation() : aggregation(HISTOGRAM) {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<histogram_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -535,7 +560,9 @@ class argmin_aggregation final : public rolling_aggregation, public groupby_aggr
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public groupby_aggregation, public reduce_aggregation {
+class nunique_aggregation final : public groupby_aggregation,
+                                  public reduce_aggregation,
+                                  public segmented_reduce_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -971,6 +998,25 @@ class merge_m2_aggregation final : public groupby_aggregation {
 };
 
 /**
+ * @brief Derived aggregation class for specifying MERGE_HISTOGRAM aggregation
+ */
+class merge_histogram_aggregation final : public groupby_aggregation, public reduce_aggregation {
+ public:
+  explicit merge_histogram_aggregation() : aggregation{MERGE_HISTOGRAM} {}
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<merge_histogram_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Derived aggregation class for specifying COVARIANCE aggregation
  */
 class covariance_aggregation final : public groupby_aggregation {
@@ -1144,6 +1190,12 @@ struct target_type_impl<Source, aggregation::COUNT_VALID> {
 template <typename Source>
 struct target_type_impl<Source, aggregation::COUNT_ALL> {
   using type = size_type;
+};
+
+// Use list for HISTOGRAM
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::HISTOGRAM> {
+  using type = list_view;
 };
 
 // Computing ANY of any type, use bool accumulator
@@ -1324,6 +1376,12 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
 };
 
+// Use list for MERGE_HISTOGRAM
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::MERGE_HISTOGRAM> {
+  using type = list_view;
+};
+
 // Always use double for COVARIANCE
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::COVARIANCE> {
@@ -1394,7 +1452,9 @@ AGG_KIND_MAPPING(aggregation::VARIANCE, var_aggregation);
  * @param args Parameter pack forwarded to the `operator()` invocation
  * @return Forwards the return value of the callable.
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <typename F, typename... Ts>
 CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind k,
                                                               F&& f,
@@ -1413,6 +1473,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::COUNT_VALID>(std::forward<Ts>(args)...);
     case aggregation::COUNT_ALL:
       return f.template operator()<aggregation::COUNT_ALL>(std::forward<Ts>(args)...);
+    case aggregation::HISTOGRAM:
+      return f.template operator()<aggregation::HISTOGRAM>(std::forward<Ts>(args)...);
     case aggregation::ANY:
       return f.template operator()<aggregation::ANY>(std::forward<Ts>(args)...);
     case aggregation::ALL:
@@ -1456,6 +1518,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_M2:
       return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
+    case aggregation::MERGE_HISTOGRAM:
+      return f.template operator()<aggregation::MERGE_HISTOGRAM>(std::forward<Ts>(args)...);
     case aggregation::COVARIANCE:
       return f.template operator()<aggregation::COVARIANCE>(std::forward<Ts>(args)...);
     case aggregation::CORRELATION:
@@ -1476,7 +1540,9 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
 
 template <typename Element>
 struct dispatch_aggregation {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <aggregation::Kind k, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(F&& f, Ts&&... args) const
   {
@@ -1485,7 +1551,9 @@ struct dispatch_aggregation {
 };
 
 struct dispatch_source {
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
   template <typename Element, typename F, typename... Ts>
   CUDF_HOST_DEVICE inline decltype(auto) operator()(aggregation::Kind k, F&& f, Ts&&... args) const
   {
@@ -1509,7 +1577,9 @@ struct dispatch_source {
  * @param args Parameter pack forwarded to the `operator()` invocation
  * `F`.
  */
+#ifdef __CUDACC__
 #pragma nv_exec_check_disable
+#endif
 template <typename F, typename... Ts>
 CUDF_HOST_DEVICE inline constexpr decltype(auto) dispatch_type_and_aggregation(data_type type,
                                                                                aggregation::Kind k,

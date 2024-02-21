@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -13,8 +13,8 @@ from cudf._lib.cpp.strings.combine cimport (
     concatenate as cpp_concatenate,
     join_list_elements as cpp_join_list_elements,
     join_strings as cpp_join_strings,
-    output_if_empty_list as output_if_empty_list,
-    separator_on_nulls as separator_on_nulls,
+    output_if_empty_list,
+    separator_on_nulls,
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.scalar cimport DeviceScalar

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -63,14 +63,16 @@ namespace cudf {
  * @param needles Values for which to find the insert locations in the search space
  * @param column_order Vector of column sort order
  * @param null_precedence Vector of null_precedence enums needles
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A non-nullable column of cudf::size_type elements containing the insertion points
+ * @return A non-nullable column of elements containing the insertion points
  */
 std::unique_ptr<column> lower_bound(
   table_view const& haystack,
   table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -103,14 +105,16 @@ std::unique_ptr<column> lower_bound(
  * @param needles Values for which to find the insert locations in the search space
  * @param column_order Vector of column sort order
  * @param null_precedence Vector of null_precedence enums needles
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return A non-nullable column of cudf::size_type elements containing the insertion points
+ * @return A non-nullable column of elements containing the insertion points
  */
 std::unique_ptr<column> upper_bound(
   table_view const& haystack,
   table_view const& needles,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -128,9 +132,12 @@ std::unique_ptr<column> upper_bound(
  *
  * @param haystack The column containing search space
  * @param needle A scalar value to check for existence in the search space
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return true if the given `needle` value exists in the `haystack` column
  */
-bool contains(column_view const& haystack, scalar const& needle);
+bool contains(column_view const& haystack,
+              scalar const& needle,
+              rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Check if the given `needles` values exists in the `haystack` column.
@@ -149,12 +156,14 @@ bool contains(column_view const& haystack, scalar const& needle);
  *
  * @param haystack The column containing search space
  * @param needles A column of values to check for existence in the search space
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return A BOOL column indicating if each element in `needles` exists in the search space
  */
 std::unique_ptr<column> contains(
   column_view const& haystack,
   column_view const& needles,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

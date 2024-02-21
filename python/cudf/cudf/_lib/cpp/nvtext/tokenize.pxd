@@ -1,10 +1,11 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport string_scalar
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
@@ -37,4 +38,18 @@ cdef extern from "nvtext/tokenize.hpp" namespace "nvtext" nogil:
         const column_view & strings,
         const column_view & row_indices,
         const string_scalar & separator
+    ) except +
+
+    cdef struct tokenize_vocabulary "nvtext::tokenize_vocabulary":
+        pass
+
+    cdef unique_ptr[tokenize_vocabulary] load_vocabulary(
+        const column_view & strings
+    ) except +
+
+    cdef unique_ptr[column] tokenize_with_vocabulary(
+        const column_view & strings,
+        const tokenize_vocabulary & vocabulary,
+        const string_scalar & delimiter,
+        size_type default_id
     ) except +

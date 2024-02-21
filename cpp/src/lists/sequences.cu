@@ -19,6 +19,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -34,6 +35,7 @@
 
 #include <limits>
 #include <optional>
+#include <stdexcept>
 
 namespace cudf::lists {
 namespace detail {
@@ -45,7 +47,7 @@ struct tabulator {
 
   T const* const starts;
   T const* const steps;
-  offset_type const* const offsets;
+  size_type const* const offsets;
 
   template <typename U>
   static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
@@ -84,7 +86,7 @@ struct sequences_dispatcher {
                                      size_type n_elements,
                                      column_view const& starts,
                                      std::optional<column_view> const& steps,
-                                     offset_type const* offsets,
+                                     size_type const* offsets,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
@@ -104,7 +106,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
                                         size_type n_elements,
                                         column_view const& starts,
                                         std::optional<column_view> const& steps,
-                                        offset_type const* offsets,
+                                        size_type const* offsets,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
@@ -125,16 +127,6 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     return result;
   }
 };
-
-std::unique_ptr<column> make_empty_lists_column(data_type child_type,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr)
-{
-  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
-  auto child   = make_empty_column(child_type);
-  return make_lists_column(
-    0, std::move(offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr), stream, mr);
-}
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
@@ -162,14 +154,17 @@ std::unique_ptr<column> sequences(column_view const& starts,
 
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
-    data_type(type_to_id<offset_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
+    data_type(type_to_id<size_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
+  auto const offsets_begin  = list_offsets->mutable_view().template begin<size_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
+  // First copy the sizes since the exclusive_scan tries to read (n_lists+1) values
+  thrust::copy_n(rmm::exec_policy(stream), sizes_input_it, sizes.size(), offsets_begin);
 
   auto const n_elements = cudf::detail::sizes_to_offsets(
-    sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin, stream);
-  CUDF_EXPECTS(n_elements <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit");
+    offsets_begin, offsets_begin + list_offsets->size(), offsets_begin, stream);
+  CUDF_EXPECTS(n_elements <= std::numeric_limits<size_type>::max(),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},
@@ -213,19 +208,21 @@ std::unique_ptr<column> sequences(column_view const& starts,
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, sizes, cudf::get_default_stream(), mr);
+  return detail::sequences(starts, sizes, stream, mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& steps,
                                   column_view const& sizes,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, steps, sizes, cudf::get_default_stream(), mr);
+  return detail::sequences(starts, steps, sizes, stream, mr);
 }
 
 }  // namespace cudf::lists

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,11 +52,11 @@ struct unbound_list_view {
   using lists_column_device_view = cudf::detail::lists_column_device_view;
   using list_device_view         = cudf::list_device_view;
 
-  unbound_list_view()                         = default;
-  unbound_list_view(unbound_list_view const&) = default;
-  unbound_list_view(unbound_list_view&&)      = default;
+  unbound_list_view()                                    = default;
+  unbound_list_view(unbound_list_view const&)            = default;
+  unbound_list_view(unbound_list_view&&)                 = default;
   unbound_list_view& operator=(unbound_list_view const&) = default;
-  unbound_list_view& operator=(unbound_list_view&&) = default;
+  unbound_list_view& operator=(unbound_list_view&&)      = default;
 
   /**
    * @brief __device__ Constructor, for use from `scatter()`.

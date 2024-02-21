@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,13 +25,12 @@
 
 #include <vector>
 
-struct DictionarySliceTest : public cudf::test::BaseFixture {
-};
+struct DictionarySliceTest : public cudf::test::BaseFixture {};
 
 TEST_F(DictionarySliceTest, SliceColumn)
 {
   cudf::test::strings_column_wrapper strings{
-    {"eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
+    {"eee", "aaa", "ddd", "bbb", "ccc", "", "ccc", "eee", "aaa"}, {1, 1, 1, 1, 1, 0, 1, 1, 1}};
   auto dictionary = cudf::dictionary::encode(strings);
 
   std::vector<cudf::size_type> splits{1, 6};

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@
 #include <benchmarks/join/join_common.hpp>
 
 template <typename key_type, typename payload_type>
-class Join : public cudf::benchmark {
-};
+class Join : public cudf::benchmark {};
 
 #define LEFT_ANTI_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
   BENCHMARK_TEMPLATE_DEFINE_F(Join, name, key_type, payload_type)               \

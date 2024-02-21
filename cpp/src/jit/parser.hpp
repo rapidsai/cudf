@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,7 @@ class ptx_parser {
     )
 
    */
-  std::string parse_function_header(const std::string& src);
+  std::string parse_function_header(std::string const& src);
 
   /**
    * @brief parse and transform input parameter list of the PTX code into the
@@ -86,7 +86,7 @@ class ptx_parser {
    * @param src The input parameter list part of the PTX code
    * @return The parsed CUDA input parameter list
    */
-  std::string parse_param_list(const std::string& src);
+  std::string parse_param_list(std::string const& src);
 
   /**
    * @brief parse and transform an input parameter line of the PTX code into the
@@ -95,15 +95,15 @@ class ptx_parser {
    * @param src The input parameter line of the PTX code
    * @return The parsed CUDA input parameter
    */
-  static std::string parse_param(const std::string& src);
+  static std::string parse_param(std::string const& src);
 
   /**
-   * @brief parse function body of the the PTX code into statements by `;`s.
+   * @brief parse function body of the PTX code into statements by `;`s.
    *
    * @param src The function body of the PTX code
    * @return The parsed statements
    */
-  std::vector<std::string> parse_function_body(const std::string& src);
+  std::vector<std::string> parse_function_body(std::string const& src);
 
   /**
    * @brief Remove leading white characters and call `parse_instruction`.
@@ -111,7 +111,7 @@ class ptx_parser {
    * @param src The statement to be parsed.
    * @return The resulting CUDA statement.
    */
-  std::string parse_statement(const std::string& src);
+  std::string parse_statement(std::string const& src);
 
   /**
    * @brief Convert the input PTX instruction into an inline PTX
@@ -134,7 +134,7 @@ class ptx_parser {
    * @param src The statement to be parsed.
    * @return The resulting CUDA inline PTX statement.
    */
-  std::string parse_instruction(const std::string& src);
+  std::string parse_instruction(std::string const& src);
 
   /**
    * @brief Convert register type (e.g. ".f32") to the corresponding
@@ -145,7 +145,7 @@ class ptx_parser {
    * @param src The input code
    * @return The resulting code
    */
-  static std::string register_type_to_cpp_type(const std::string& register_type);
+  static std::string register_type_to_cpp_type(std::string const& register_type);
 
   /**
    * @brief Convert register type (e.g. ".f32") to the corresponding
@@ -156,7 +156,7 @@ class ptx_parser {
    * @param src The input code
    * @return The resulting code
    */
-  static std::string register_type_to_contraint(const std::string& src);
+  static std::string register_type_to_contraint(std::string const& src);
 
   /**
    * @brief Replace any non-alphanumeric characters that are not underscore with
@@ -167,7 +167,7 @@ class ptx_parser {
    * @param src The input code
    * @return The resulting code
    */
-  static std::string remove_nonalphanumeric(const std::string& src);
+  static std::string remove_nonalphanumeric(std::string const& src);
 
   /**
    * @brief Replace leading `%` in register identifiers with `_`.
@@ -180,7 +180,7 @@ class ptx_parser {
    * @param src The input code
    * @return The resulting code
    */
-  static std::string escape_percent(const std::string& src);
+  static std::string escape_percent(std::string const& src);
 
  public:
   ptx_parser() = delete;
@@ -195,10 +195,10 @@ class ptx_parser {
    * function.
    * @param pointer_arg_list_ A list of the parameters that are pointers.
    */
-  ptx_parser(const std::string& ptx_,
-             const std::string& function_name_,
-             const std::string& output_arg_type_,
-             const std::set<int>& pointer_arg_list_);
+  ptx_parser(std::string const& ptx_,
+             std::string const& function_name_,
+             std::string const& output_arg_type_,
+             std::set<int> const& pointer_arg_list_);
 
   // parse the source!!!
   std::string parse();
@@ -216,10 +216,10 @@ class ptx_parser {
  * @param pointer_arg_list A list of the parameters that are pointers.
  * @return The output CUDA device function
  */
-inline std::string parse_single_function_ptx(const std::string& src,
-                                             const std::string& function_name,
-                                             const std::string& output_arg_type,
-                                             const std::set<int>& pointer_arg_list = {0})
+inline std::string parse_single_function_ptx(std::string const& src,
+                                             std::string const& function_name,
+                                             std::string const& output_arg_type,
+                                             std::set<int> const& pointer_arg_list = {0})
 {
   ptx_parser instance(src, function_name, output_arg_type, pointer_arg_list);
 
@@ -236,7 +236,7 @@ inline std::string parse_single_function_ptx(const std::string& src,
  * will have.
  * @return The output CUDA device function
  */
-std::string parse_single_function_cuda(const std::string& src, const std::string& function_name);
+std::string parse_single_function_cuda(std::string const& src, std::string const& function_name);
 
 }  // namespace jit
 }  // namespace cudf

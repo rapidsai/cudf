@@ -17,7 +17,7 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/pinned_allocator.hpp>
+#include <cudf/detail/utilities/pinned_host_vector.hpp>
 #include <cudf/io/text/data_chunk_source_factories.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -30,16 +30,16 @@ namespace cudf::io::text {
 
 namespace {
 
+struct host_ticket {
+  cudaEvent_t event;
+  cudf::detail::pinned_host_vector<char> buffer;
+};
+
 /**
  * @brief A reader which produces owning chunks of device memory which contain a copy of the data
  * from an istream.
  */
 class datasource_chunk_reader : public data_chunk_reader {
-  struct host_ticket {
-    cudaEvent_t event;
-    thrust::host_vector<char, cudf::detail::pinned_allocator<char>> buffer;
-  };
-
   constexpr static int num_tickets = 2;
 
  public:
@@ -114,11 +114,6 @@ class datasource_chunk_reader : public data_chunk_reader {
  * from an istream.
  */
 class istream_data_chunk_reader : public data_chunk_reader {
-  struct host_ticket {
-    cudaEvent_t event;
-    thrust::host_vector<char, cudf::detail::pinned_allocator<char>> buffer;
-  };
-
   constexpr static int num_tickets = 2;
 
  public:
@@ -187,7 +182,7 @@ class istream_data_chunk_reader : public data_chunk_reader {
  */
 class host_span_data_chunk_reader : public data_chunk_reader {
  public:
-  host_span_data_chunk_reader(cudf::host_span<const char> data) : _data(data) {}
+  host_span_data_chunk_reader(cudf::host_span<char const> data) : _data(data) {}
 
   void skip_bytes(std::size_t read_size) override
   {
@@ -220,7 +215,7 @@ class host_span_data_chunk_reader : public data_chunk_reader {
 
  private:
   std::size_t _position = 0;
-  cudf::host_span<const char> _data;
+  cudf::host_span<char const> _data;
 };
 
 /**
@@ -293,14 +288,14 @@ class file_data_chunk_source : public data_chunk_source {
  */
 class host_span_data_chunk_source : public data_chunk_source {
  public:
-  host_span_data_chunk_source(host_span<const char> data) : _data(data) {}
+  host_span_data_chunk_source(host_span<char const> data) : _data(data) {}
   [[nodiscard]] std::unique_ptr<data_chunk_reader> create_reader() const override
   {
     return std::make_unique<host_span_data_chunk_reader>(_data);
   }
 
  private:
-  host_span<const char> _data;
+  host_span<char const> _data;
 };
 
 /**
@@ -325,7 +320,7 @@ std::unique_ptr<data_chunk_source> make_source(datasource& data)
   return std::make_unique<datasource_chunk_source>(data);
 }
 
-std::unique_ptr<data_chunk_source> make_source(host_span<const char> data)
+std::unique_ptr<data_chunk_source> make_source(host_span<char const> data)
 {
   return std::make_unique<host_span_data_chunk_source>(data);
 }

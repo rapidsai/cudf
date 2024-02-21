@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,13 +27,13 @@ namespace detail {
 
 template <>
 void merge_group_statistics<detail::io_file_format::PARQUET>(statistics_chunk* chunks_out,
-                                                             const statistics_chunk* chunks_in,
-                                                             const statistics_merge_group* groups,
+                                                             statistics_chunk const* chunks_in,
+                                                             statistics_merge_group const* groups,
                                                              uint32_t num_chunks,
                                                              rmm::cuda_stream_view stream);
 template <>
 void calculate_group_statistics<detail::io_file_format::PARQUET>(statistics_chunk* chunks,
-                                                                 const statistics_group* groups,
+                                                                 statistics_group const* groups,
                                                                  uint32_t num_chunks,
                                                                  rmm::cuda_stream_view stream,
                                                                  bool int96_timestamp);

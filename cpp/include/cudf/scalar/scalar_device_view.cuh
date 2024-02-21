@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -304,7 +304,7 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
    * validity of the stored value
    * @param size The pointer to the size of the string in device memory
    */
-  string_scalar_device_view(data_type type, const char* data, bool* is_valid, size_type size)
+  string_scalar_device_view(data_type type, char const* data, bool* is_valid, size_type size)
     : detail::scalar_device_view_base(type, is_valid), _data(data), _size(size)
   {
   }
@@ -337,7 +337,7 @@ class string_scalar_device_view : public detail::scalar_device_view_base {
   [[nodiscard]] __device__ size_type size() const noexcept { return _size; }
 
  private:
-  const char* _data{};  ///< Pointer to device memory containing the value
+  char const* _data{};  ///< Pointer to device memory containing the value
   size_type _size;      ///< Size of the string in bytes
 };
 

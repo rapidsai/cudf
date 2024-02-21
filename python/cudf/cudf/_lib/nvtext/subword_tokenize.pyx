@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t
 
@@ -37,7 +37,6 @@ def subword_tokenize_inmem_hash(
     uint32_t stride=48,
     bool do_lower=True,
     bool do_truncate=False,
-    uint32_t max_rows_tensor=500
 ):
     """
     Subword tokenizes text series by using the pre-loaded hashed vocabulary
@@ -53,7 +52,6 @@ def subword_tokenize_inmem_hash(
                 stride,
                 do_lower,
                 do_truncate,
-                max_rows_tensor
             )
         )
     # return the 3 tensor components

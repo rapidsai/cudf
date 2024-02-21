@@ -1679,7 +1679,7 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
             gd.Series(
                 [Decimal("955.22"), Decimal("8.2")], dtype=Decimal64Dtype(5, 2)
             ),
-            gd.Series(["2007-06-12", "2006-03-14"], dtype="datetime64"),
+            gd.Series(["2007-06-12", "2006-03-14"], dtype="datetime64[s]"),
             gd.Series(
                 [
                     "955.22",
@@ -1869,3 +1869,16 @@ def test_concat_invalid_axis(axis):
     s = gd.Series([1, 2, 3])
     with pytest.raises(ValueError):
         gd.concat([s], axis=axis)
+
+
+@pytest.mark.parametrize(
+    "s1,s2",
+    [
+        ([1, 2], [[1, 2], [3, 4]]),
+    ],
+)
+def test_concat_mixed_list_types_error(s1, s2):
+    s1, s2 = gd.Series(s1), gd.Series(s2)
+
+    with pytest.raises(NotImplementedError):
+        gd.concat([s1, s2], ignore_index=True)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,8 +29,8 @@ T minimum(T a, T b)
 }
 
 struct preceding_window_wrapper {
-  const cudf::size_type* d_group_offsets;
-  const cudf::size_type* d_group_labels;
+  cudf::size_type const* d_group_offsets;
+  cudf::size_type const* d_group_labels;
   cudf::size_type preceding_window;
 
   cudf::size_type operator[](cudf::size_type idx)
@@ -42,8 +42,8 @@ struct preceding_window_wrapper {
 };
 
 struct following_window_wrapper {
-  const cudf::size_type* d_group_offsets;
-  const cudf::size_type* d_group_labels;
+  cudf::size_type const* d_group_offsets;
+  cudf::size_type const* d_group_labels;
   cudf::size_type following_window;
 
   cudf::size_type operator[](cudf::size_type idx)

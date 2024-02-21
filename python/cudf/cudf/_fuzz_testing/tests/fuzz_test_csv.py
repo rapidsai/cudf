@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import sys
 from io import StringIO
@@ -54,12 +54,12 @@ def csv_writer_test(pdf):
         ],
         "columns": ALL_POSSIBLE_VALUES,
         "index": [True, False],
-        "line_terminator": ["\n", "\r", "\r\n"],
+        "lineterminator": ["\n", "\r", "\r\n"],
         "chunksize": ALL_POSSIBLE_VALUES,
     },
 )
 def csv_writer_test_params(
-    pdf, sep, header, na_rep, columns, index, line_terminator, chunksize
+    pdf, sep, header, na_rep, columns, index, lineterminator, chunksize
 ):
     gdf = cudf.from_pandas(pdf)
 
@@ -69,7 +69,7 @@ def csv_writer_test_params(
         na_rep=na_rep,
         columns=columns,
         index=index,
-        line_terminator=line_terminator,
+        lineterminator=lineterminator,
         chunksize=chunksize,
     )
     gd_buffer = gdf.to_csv(
@@ -78,7 +78,7 @@ def csv_writer_test_params(
         na_rep=na_rep,
         columns=columns,
         index=index,
-        line_terminator=line_terminator,
+        lineterminator=lineterminator,
         chunksize=chunksize,
     )
 
@@ -90,13 +90,13 @@ def csv_writer_test_params(
         StringIO(gd_buffer),
         delimiter=sep,
         na_values=na_rep,
-        lineterminator=line_terminator,
+        lineterminator=lineterminator,
     )
     expected = pd.read_csv(
         StringIO(pd_buffer),
         delimiter=sep,
         na_values=na_rep,
-        lineterminator=line_terminator,
+        lineterminator=lineterminator,
     )
     if not header:
         # TODO: Remove renaming columns once the following bug is fixed:

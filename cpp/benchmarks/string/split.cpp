@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
-#include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -25,64 +23,49 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <limits>
+#include <nvbench/nvbench.cuh>
 
-class StringSplit : public cudf::benchmark {
-};
-
-enum split_type { split, split_ws, record, record_ws };
-
-static void BM_split(benchmark::State& state, split_type rt)
+static void bench_split(nvbench::state& state)
 {
-  cudf::size_type const n_rows{static_cast<cudf::size_type>(state.range(0))};
-  cudf::size_type const max_str_length{static_cast<cudf::size_type>(state.range(1))};
+  auto const num_rows  = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const row_width = static_cast<cudf::size_type>(state.get_int64("row_width"));
+  auto const stype     = state.get_string("type");
+
+  if (static_cast<std::size_t>(num_rows) * static_cast<std::size_t>(row_width) >=
+      static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
+    state.skip("Skip benchmarks greater than size_type limit");
+  }
+
   data_profile const profile = data_profile_builder().distribution(
-    cudf::type_id::STRING, distribution_id::NORMAL, 0, max_str_length);
-  auto const column = create_random_column(cudf::type_id::STRING, row_count{n_rows}, profile);
+    cudf::type_id::STRING, distribution_id::NORMAL, 0, row_width);
+  auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
   cudf::string_scalar target("+");
 
-  for (auto _ : state) {
-    cuda_event_timer raii(state, true, cudf::get_default_stream());
-    switch (rt) {
-      case split: cudf::strings::split(input, target); break;
-      case split_ws: cudf::strings::split(input); break;
-      case record: cudf::strings::split_record(input, target); break;
-      case record_ws: cudf::strings::split_record(input); break;
-    }
-  }
+  state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  // gather some throughput statistics as well
+  auto chars_size = input.chars_size(cudf::get_default_stream());
+  state.add_element_count(chars_size, "chars_size");            // number of bytes;
+  state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
+  state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written
 
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
-}
-
-static void generate_bench_args(benchmark::internal::Benchmark* b)
-{
-  int const min_rows   = 1 << 12;
-  int const max_rows   = 1 << 24;
-  int const row_mult   = 8;
-  int const min_rowlen = 1 << 5;
-  int const max_rowlen = 1 << 13;
-  int const len_mult   = 4;
-  for (int row_count = min_rows; row_count <= max_rows; row_count *= row_mult) {
-    for (int rowlen = min_rowlen; rowlen <= max_rowlen; rowlen *= len_mult) {
-      // avoid generating combinations that exceed the cudf column limit
-      size_t total_chars = static_cast<size_t>(row_count) * rowlen;
-      if (total_chars < static_cast<size_t>(std::numeric_limits<cudf::size_type>::max())) {
-        b->Args({row_count, rowlen});
-      }
-    }
+  if (stype == "split") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::split(input, target); });
+  } else if (stype == "split_ws") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::split(input); });
+  } else if (stype == "record") {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::split_record(input, target); });
+  } else {
+    state.exec(nvbench::exec_tag::sync,
+               [&](nvbench::launch& launch) { cudf::strings::split_record(input); });
   }
 }
 
-#define STRINGS_BENCHMARK_DEFINE(name)                          \
-  BENCHMARK_DEFINE_F(StringSplit, name)                         \
-  (::benchmark::State & st) { BM_split(st, split_type::name); } \
-  BENCHMARK_REGISTER_F(StringSplit, name)                       \
-    ->Apply(generate_bench_args)                                \
-    ->UseManualTime()                                           \
-    ->Unit(benchmark::kMillisecond);
-
-STRINGS_BENCHMARK_DEFINE(split)
-STRINGS_BENCHMARK_DEFINE(split_ws)
-STRINGS_BENCHMARK_DEFINE(record)
-STRINGS_BENCHMARK_DEFINE(record_ws)
+NVBENCH_BENCH(bench_split)
+  .set_name("split")
+  .add_int64_axis("row_width", {32, 64, 128, 256, 512, 1024, 2048})
+  .add_int64_axis("num_rows", {4096, 32768, 262144, 2097152, 16777216})
+  .add_string_axis("type", {"split", "split_ws", "record", "record_ws"});

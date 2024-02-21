@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -8,23 +8,23 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.sorting cimport stable_sort_by_key as cpp_stable_sort_by_key
 from cudf._lib.cpp.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
     distinct_count as cpp_distinct_count,
+    distinct_indices as cpp_distinct_indices,
     drop_nulls as cpp_drop_nulls,
     duplicate_keep_option,
-    unique as cpp_unique,
+    stable_distinct as cpp_stable_distinct,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
+    nan_equality,
     nan_policy,
     null_equality,
-    null_order,
     null_policy,
-    order,
     size_type,
 )
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
@@ -62,6 +62,8 @@ def drop_nulls(list columns, how="any", keys=None, thresh=None):
     cdef unique_ptr[table] c_result
     cdef table_view source_table_view = table_view_from_columns(columns)
 
+    if how not in {"any", "all"}:
+        raise ValueError("how must be 'any' or 'all'")
     with nogil:
         c_result = move(
             cpp_drop_nulls(
@@ -145,41 +147,13 @@ def drop_duplicates(list columns,
         if nulls_are_equal
         else null_equality.UNEQUAL
     )
-
-    cdef vector[order] column_order = (
-        vector[order](
-            cpp_keys.size(),
-            order.ASCENDING
-        )
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            cpp_keys.size(),
-            null_order.BEFORE
-        )
-    )
-
     cdef table_view source_table_view = table_view_from_columns(columns)
-    cdef table_view keys_view = source_table_view.select(cpp_keys)
-    cdef unique_ptr[table] sorted_source_table
     cdef unique_ptr[table] c_result
 
     with nogil:
-        # cudf::unique keeps unique rows in each consecutive group of
-        # equivalent rows. To match the behavior of pandas.DataFrame.
-        # drop_duplicates, users need to stable sort the input first
-        # and then invoke cudf::unique.
-        sorted_source_table = move(
-            cpp_stable_sort_by_key(
-                source_table_view,
-                keys_view,
-                column_order,
-                null_precedence
-            )
-        )
         c_result = move(
-            cpp_unique(
-                sorted_source_table.get().view(),
+            cpp_stable_distinct(
+                source_table_view,
                 cpp_keys,
                 cpp_keep_option,
                 cpp_nulls_equal
@@ -187,6 +161,68 @@ def drop_duplicates(list columns,
         )
 
     return columns_from_unique_ptr(move(c_result))
+
+
+@acquire_spill_lock()
+def distinct_indices(
+    list columns,
+    object keep="first",
+    bool nulls_equal=True,
+    bool nans_equal=True,
+):
+    """
+    Return indices of the distinct rows in a table.
+
+    Parameters
+    ----------
+    columns : list of columns to check for duplicates
+    keep : treat "first", "last", or (False) none of any duplicate
+        rows as distinct
+    nulls_equal : Should nulls compare equal
+    nans_equal: Should nans compare equal
+
+    Returns
+    -------
+    Column of indices
+
+    See Also
+    --------
+    drop_duplicates
+    """
+    cdef duplicate_keep_option cpp_keep_option
+
+    if keep == 'first':
+        cpp_keep_option = duplicate_keep_option.KEEP_FIRST
+    elif keep == 'last':
+        cpp_keep_option = duplicate_keep_option.KEEP_LAST
+    elif keep is False:
+        cpp_keep_option = duplicate_keep_option.KEEP_NONE
+    else:
+        raise ValueError('keep must be either "first", "last", or False')
+
+    # shifting the index number by number of index columns
+    cdef null_equality cpp_nulls_equal = (
+        null_equality.EQUAL
+        if nulls_equal
+        else null_equality.UNEQUAL
+    )
+    cdef nan_equality cpp_nans_equal = (
+        nan_equality.ALL_EQUAL
+        if nans_equal
+        else nan_equality.NANS_UNEQUAL
+    )
+    cdef table_view source = table_view_from_columns(columns)
+    cdef unique_ptr[column] c_result
+    with nogil:
+        c_result = move(
+            cpp_distinct_indices(
+                source,
+                cpp_keep_option,
+                cpp_nulls_equal,
+                cpp_nans_equal,
+            )
+        )
+    return Column.from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()

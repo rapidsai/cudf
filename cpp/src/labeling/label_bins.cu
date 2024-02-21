@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,13 +89,13 @@ struct bin_finder {
     return (m_right_comp(value, m_right_begin[index])) ? index : NULL_VALUE;
   }
 
-  const RandomAccessIterator
+  RandomAccessIterator const
     m_left_begin{};  // The beginning of the range containing the left bin edges.
-  const RandomAccessIterator m_left_end{};  // The end of the range containing the left bin edges.
-  const RandomAccessIterator
+  RandomAccessIterator const m_left_end{};  // The end of the range containing the left bin edges.
+  RandomAccessIterator const
     m_right_begin{};                   // The beginning of the range containing the right bin edges.
-  const LeftComparator m_left_comp{};  // Comparator used for left edges.
-  const RightComparator m_right_comp{};  // Comparator used for right edges.
+  LeftComparator const m_left_comp{};  // Comparator used for left edges.
+  RightComparator const m_right_comp{};  // Comparator used for right edges.
 };
 
 // Functor to identify rows that should be filtered out based on the sentinel set by
@@ -236,15 +236,11 @@ std::unique_ptr<column> label_bins(column_view const& input,
                                    inclusive left_inclusive,
                                    column_view const& right_edges,
                                    inclusive right_inclusive,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::label_bins(input,
-                            left_edges,
-                            left_inclusive,
-                            right_edges,
-                            right_inclusive,
-                            cudf::get_default_stream(),
-                            mr);
+  return detail::label_bins(
+    input, left_edges, left_inclusive, right_edges, right_inclusive, stream, mr);
 }
 }  // namespace cudf

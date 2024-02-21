@@ -1,14 +1,14 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 from __future__ import annotations
 
 from functools import cached_property
+from typing import Optional
 
 import pandas as pd
 import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
-from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
@@ -28,10 +28,10 @@ class StructColumn(ColumnBase):
 
     @property
     def base_size(self):
-        if not self.base_children:
-            return 0
-        else:
+        if self.base_children:
             return len(self.base_children[0])
+        else:
+            return self.size + self.offset
 
     def to_arrow(self):
         children = [
@@ -57,15 +57,15 @@ class StructColumn(ColumnBase):
             pa_type, len(self), buffers, children=children
         )
 
-    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+    def to_pandas(
+        self, *, index: Optional[pd.Index] = None, nullable: bool = False
+    ) -> pd.Series:
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
 
-        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+        return pd.Series(self.to_arrow().tolist(), dtype="object", index=index)
 
     @cached_property
     def memory_usage(self):
@@ -95,7 +95,9 @@ class StructColumn(ColumnBase):
         super().__setitem__(key, value)
 
     def copy(self, deep=True):
-        result = super().copy(deep=deep)
+        # Since struct columns are immutable, both deep and
+        # shallow copies share the underlying device data and mask.
+        result = super().copy(deep=False)
         if deep:
             result = result._rename_fields(self.dtype.fields.keys())
         return result
@@ -155,7 +157,7 @@ class StructMethods(ColumnMethods):
     _column: StructColumn
 
     def __init__(self, parent=None):
-        if not is_struct_dtype(parent.dtype):
+        if not isinstance(parent.dtype, StructDtype):
             raise AttributeError(
                 "Can only use .struct accessor with a 'struct' dtype"
             )

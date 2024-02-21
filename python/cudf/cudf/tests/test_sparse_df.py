@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
 import numpy as np
 
@@ -7,7 +7,7 @@ from cudf import Series
 
 def test_to_dense_array():
     data = np.random.random(8)
-    mask = np.asarray([0b11010110], dtype=np.byte)
+    mask = np.asarray([0b11010110]).astype(np.byte)
 
     sr = Series.from_masked_array(data=data, mask=mask, null_count=3)
     assert sr.has_nulls

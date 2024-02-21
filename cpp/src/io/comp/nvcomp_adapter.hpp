@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,6 +56,19 @@ struct feature_status_parameters {
 };
 
 /**
+ * @brief Equality operator overload. Required to use `feature_status_parameters` as a map key.
+ */
+inline bool operator==(feature_status_parameters const& lhs, feature_status_parameters const& rhs)
+{
+  return lhs.lib_major_version == rhs.lib_major_version and
+         lhs.lib_minor_version == rhs.lib_minor_version and
+         lhs.lib_patch_version == rhs.lib_patch_version and
+         lhs.are_all_integrations_enabled == rhs.are_all_integrations_enabled and
+         lhs.are_stable_integrations_enabled == rhs.are_stable_integrations_enabled and
+         lhs.compute_capability_major == rhs.compute_capability_major;
+}
+
+/**
  * @brief If a compression type is disabled through nvCOMP, returns the reason as a string.
  *
  * Result cab depend on nvCOMP version and environment variables.
@@ -86,8 +99,8 @@ struct feature_status_parameters {
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] results List of output status structures
- * @param[in] max_uncomp_chunk_size maximum size of uncompressed chunk
- * @param[in] max_total_uncomp_size maximum total size of uncompressed data
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
  * @param[in] stream CUDA stream to use
  */
 void batched_decompress(compression_type compression,
@@ -97,6 +110,24 @@ void batched_decompress(compression_type compression,
                         size_t max_uncomp_chunk_size,
                         size_t max_total_uncomp_size,
                         rmm::cuda_stream_view stream);
+
+/**
+ * @brief Return the amount of temporary space required in bytes for a given decompression
+ * operation.
+ *
+ * The size returned reflects the size of the scratch buffer to be passed to
+ * `batched_decompress_async`
+ *
+ * @param[in] compression Compression type
+ * @param[in] num_chunks The number of decompression chunks to be processed
+ * @param[in] max_uncomp_chunk_size Maximum size of any single uncompressed chunk
+ * @param[in] max_total_uncomp_size Maximum total size of uncompressed data
+ * @returns The total required size in bytes
+ */
+size_t batched_decompress_temp_size(compression_type compression,
+                                    size_t num_chunks,
+                                    size_t max_uncomp_chunk_size,
+                                    size_t max_total_uncomp_size);
 
 /**
  * @brief Gets the maximum size any chunk could compress to in the batch.

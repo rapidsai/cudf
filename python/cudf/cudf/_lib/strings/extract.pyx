@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint32_t
@@ -30,10 +30,10 @@ def extract(Column source_strings, object pattern, uint32_t flags):
 
     cdef string pattern_string = <string>str(pattern).encode()
     cdef regex_flags c_flags = <regex_flags>flags
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(pattern_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(pattern_string, c_flags))
         c_result = move(cpp_extract(
             source_view,
             dereference(c_prog)

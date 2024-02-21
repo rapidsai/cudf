@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint32_t
@@ -35,10 +35,10 @@ def contains_re(Column source_strings, object reg_ex, uint32_t flags):
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
     cdef regex_flags c_flags = <regex_flags>flags
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(reg_ex_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(reg_ex_string, c_flags))
         c_result = move(cpp_contains_re(
             source_view,
             dereference(c_prog)
@@ -58,10 +58,10 @@ def count_re(Column source_strings, object reg_ex, uint32_t flags):
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
     cdef regex_flags c_flags = <regex_flags>flags
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(reg_ex_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(reg_ex_string, c_flags))
         c_result = move(cpp_count_re(
             source_view,
             dereference(c_prog)
@@ -81,10 +81,10 @@ def match_re(Column source_strings, object reg_ex, uint32_t flags):
 
     cdef string reg_ex_string = <string>str(reg_ex).encode()
     cdef regex_flags c_flags = <regex_flags>flags
-    cdef unique_ptr[regex_program] c_prog = \
-        regex_program.create(reg_ex_string, c_flags)
+    cdef unique_ptr[regex_program] c_prog
 
     with nogil:
+        c_prog = move(regex_program.create(reg_ex_string, c_flags))
         c_result = move(cpp_matches_re(
             source_view,
             dereference(c_prog)

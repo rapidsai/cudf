@@ -1,9 +1,13 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import collections
 import datetime
 import itertools
+import operator
+import string
 import textwrap
 from decimal import Decimal
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -15,13 +19,10 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import (
-    PANDAS_GE_110,
-    PANDAS_GE_130,
-    PANDAS_GE_150,
-    PANDAS_LT_140,
-)
+from cudf.core._compat import PANDAS_GE_150, PANDAS_LT_140
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
+from cudf.core.udf.utils import UDFError, precompiled
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -180,6 +181,16 @@ def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     assert_groupby_results_equal(pdf, gdf)
 
 
+@pytest.mark.parametrize("engine", ["cudf", "jit"])
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
+    gdf = gdf.groupby("y", as_index=as_index).apply(
+        lambda df: df["x"].mean(), engine=engine
+    )
+    pdf = pdf.groupby("y", as_index=as_index).apply(lambda df: df["x"].mean())
+    assert_groupby_results_equal(pdf, gdf)
+
+
 @pytest.mark.parametrize("as_index", [True, False])
 def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     pdf = pd.DataFrame(
@@ -219,20 +230,22 @@ def test_groupby_getitem_getattr(as_index):
     pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("x")["y"].sum(),
-        gdf.groupby("x")["y"].sum(),
+        pdf.groupby("x", as_index=as_index)["y"].sum(),
+        gdf.groupby("x", as_index=as_index)["y"].sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x").y.sum(),
-        gdf.groupby("x").y.sum(),
+        pdf.groupby("x", as_index=as_index).y.sum(),
+        gdf.groupby("x", as_index=as_index).y.sum(),
         as_index=as_index,
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(),
-        gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        gdf.groupby("x", as_index=as_index)[["y"]].sum(),
+        as_index=as_index,
+        by="x",
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
@@ -379,19 +392,72 @@ def test_groupby_apply_grouped():
 
 
 @pytest.fixture(scope="module")
-def groupby_jit_data():
-    np.random.seed(0)
+def groupby_jit_data_small():
+    """
+    Return a small dataset for testing JIT Groupby Apply. The dataframe
+    contains 4 groups of size 1, 2, 3, 4 as well as an additional key
+    column that can be used to test subgroups within groups. This data
+    is useful for smoke testing basic numeric results
+    """
+    rng = np.random.default_rng(42)
     df = DataFrame()
-    nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    key1 = [1] + [2] * 2 + [3] * 3 + [4] * 4
+    key2 = [1, 2] * 5
+    df["key1"] = key1
+    df["key2"] = key2
+
+    df["val1"] = rng.integers(0, 10, len(key1))
+    df["val2"] = rng.integers(0, 10, len(key1))
+
+    # randomly permute data
+    df = df.sample(frac=1, ignore_index=True)
     return df
 
 
+@pytest.fixture(scope="module")
+def groupby_jit_data_large(groupby_jit_data_small):
+    """
+    Larger version of groupby_jit_data_small which contains enough data
+    to require more than one block per group. This data is useful for
+    testing if JIT GroupBy algorithms scale to larger dastasets without
+    manifesting numerical issues such as overflow.
+    """
+    max_tpb = 1024
+    factor = (
+        max_tpb + 1
+    )  # bigger than a block but not always an exact multiple
+    df = cudf.concat([groupby_jit_data_small] * factor)
+
+    return df
+
+
+@pytest.fixture(scope="module")
+def groupby_jit_data_nans(groupby_jit_data_small):
+    """
+    Returns a modified version of groupby_jit_data_small which contains
+    nan values.
+    """
+
+    df = groupby_jit_data_small.sort_values(["key1", "key2"])
+    df["val1"] = df["val1"].astype("float64")
+    df["val1"][::2] = np.nan
+    df = df.sample(frac=1, ignore_index=True)
+    return df
+
+
+@pytest.fixture(scope="module")
+def groupby_jit_datasets(
+    groupby_jit_data_small, groupby_jit_data_large, groupby_jit_data_nans
+):
+    return {
+        "small": groupby_jit_data_small,
+        "large": groupby_jit_data_large,
+        "nans": groupby_jit_data_nans,
+    }
+
+
 def run_groupby_apply_jit_test(data, func, keys, *args):
-    expect_groupby_obj = data.to_pandas().groupby(keys, as_index=False)
+    expect_groupby_obj = data.to_pandas().groupby(keys)
     got_groupby_obj = data.groupby(keys)
 
     # compare cuDF jit to pandas
@@ -400,11 +466,7 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
-@pytest.mark.parametrize("dtype", SUPPORTED_GROUPBY_NUMPY_TYPES)
-@pytest.mark.parametrize(
-    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
-)
-def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
+def groupby_apply_jit_reductions_test_inner(func, data, dtype):
     # ideally we'd just have:
     # lambda group: getattr(group, func)()
     # but the current kernel caching mechanism relies on pickle which
@@ -421,70 +483,248 @@ def test_groupby_apply_jit_reductions(func, groupby_jit_data, dtype):
     exec(funcstr, lcl)
     func = lcl["func"]
 
-    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
-    groupby_jit_data["val2"] = groupby_jit_data["val2"].astype(dtype)
+    data["val1"] = data["val1"].astype(dtype)
+    data["val2"] = data["val2"].astype(dtype)
 
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+    run_groupby_apply_jit_test(data, func, ["key1"])
 
 
-@pytest.mark.parametrize("dtype", ["float64"])
-@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
-@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
-def test_groupby_apply_jit_reductions_special_vals(
-    func, groupby_jit_data, dtype, special_val
+# test unary reductions
+@pytest.mark.parametrize(
+    "dtype",
+    SUPPORTED_GROUPBY_NUMPY_TYPES,
+    ids=[str(t) for t in SUPPORTED_GROUPBY_NUMPY_TYPES],
+)
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "var", "std", "idxmin", "idxmax"]
+)
+@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+def test_groupby_apply_jit_unary_reductions(
+    func, dtype, dataset, groupby_jit_datasets
 ):
-    # dynamically generate to avoid pickling error.
-    # see test_groupby_apply_jit_reductions for details.
+    dataset = groupby_jit_datasets[dataset]
+
+    groupby_apply_jit_reductions_test_inner(func, dataset, dtype)
+
+
+# test unary reductions for special values
+def groupby_apply_jit_reductions_special_vals_inner(
+    func, data, dtype, special_val
+):
     funcstr = textwrap.dedent(
         f"""
-            def func(df):
-                return df['val1'].{func}()
+        def func(df):
+            return df['val1'].{func}()
         """
     )
     lcl = {}
     exec(funcstr, lcl)
     func = lcl["func"]
 
-    groupby_jit_data["val1"] = special_val
-    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
+    data["val1"] = data["val1"].astype(dtype)
+    data["val2"] = data["val2"].astype(dtype)
+    data["val1"] = special_val
+    data["val2"] = special_val
 
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1"])
+    run_groupby_apply_jit_test(data, func, ["key1"])
+
+
+# test unary index reductions for special values
+def groupby_apply_jit_idx_reductions_special_vals_inner(
+    func, data, dtype, special_val
+):
+    funcstr = textwrap.dedent(
+        f"""
+        def func(df):
+            return df['val1'].{func}()
+        """
+    )
+    lcl = {}
+    exec(funcstr, lcl)
+    func = lcl["func"]
+
+    data["val1"] = data["val1"].astype(dtype)
+    data["val2"] = data["val2"].astype(dtype)
+    data["val1"] = special_val
+    data["val2"] = special_val
+
+    run_groupby_apply_jit_test(data, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["float64", "float32"])
+@pytest.mark.parametrize("func", ["min", "max", "sum", "mean", "var", "std"])
+@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
+def test_groupby_apply_jit_reductions_special_vals(
+    func, dtype, dataset, groupby_jit_datasets, special_val
+):
+    dataset = groupby_jit_datasets[dataset]
+    groupby_apply_jit_reductions_special_vals_inner(
+        func, dataset, dtype, special_val
+    )
 
 
 @pytest.mark.parametrize("dtype", ["float64"])
 @pytest.mark.parametrize("func", ["idxmax", "idxmin"])
-@pytest.mark.parametrize("special_val", [np.nan, np.inf, -np.inf])
+@pytest.mark.parametrize(
+    "special_val",
+    [
+        pytest.param(
+            np.nan,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/rapidsai/cudf/issues/13832"
+            ),
+        ),
+        np.inf,
+        -np.inf,
+    ],
+)
+@pytest.mark.parametrize("dataset", ["small", "large", "nans"])
 def test_groupby_apply_jit_idx_reductions_special_vals(
-    func, groupby_jit_data, dtype, special_val
+    func, dtype, dataset, groupby_jit_datasets, special_val
 ):
-    # dynamically generate to avoid pickling error.
-    # see test_groupby_apply_jit_reductions for details.
-    funcstr = textwrap.dedent(
-        f"""
-            def func(df):
-                return df['val1'].{func}()
-        """
-    )
-    lcl = {}
-    exec(funcstr, lcl)
-    func = lcl["func"]
-
-    groupby_jit_data["val1"] = special_val
-    groupby_jit_data["val1"] = groupby_jit_data["val1"].astype(dtype)
-
-    expect = (
-        groupby_jit_data.to_pandas()
-        .groupby("key1", as_index=False)
-        .apply(func)
+    dataset = groupby_jit_datasets[dataset]
+    groupby_apply_jit_idx_reductions_special_vals_inner(
+        func, dataset, dtype, special_val
     )
 
-    grouped = groupby_jit_data.groupby("key1")
-    sorted = grouped._grouped()[3].to_pandas()
-    expect_vals = sorted["key1"].drop_duplicates().index
-    expect[None] = expect_vals
 
-    got = grouped.apply(func, engine="jit")
-    assert_eq(expect, got)
+@pytest.mark.parametrize("dtype", ["int32"])
+def test_groupby_apply_jit_sum_integer_overflow(dtype):
+    max = np.iinfo(dtype).max
+
+    data = DataFrame(
+        {
+            "a": [0, 0, 0],
+            "b": [max, max, max],
+        }
+    )
+
+    def func(group):
+        return group["b"].sum()
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
+@pytest.mark.parametrize("dtype", ["int32", "int64", "float32", "float64"])
+@pytest.mark.parametrize(
+    "dataset",
+    [
+        pytest.param(
+            "small",
+            marks=[
+                pytest.mark.filterwarnings(
+                    "ignore:Degrees of Freedom <= 0 for slice"
+                ),
+                pytest.mark.filterwarnings(
+                    "ignore:divide by zero encountered in divide"
+                ),
+            ],
+        ),
+        "large",
+    ],
+)
+def test_groupby_apply_jit_correlation(dataset, groupby_jit_datasets, dtype):
+
+    dataset = groupby_jit_datasets[dataset]
+
+    dataset["val1"] = dataset["val1"].astype(dtype)
+    dataset["val2"] = dataset["val2"].astype(dtype)
+
+    keys = ["key1"]
+
+    def func(group):
+        return group["val1"].corr(group["val2"])
+
+    if np.dtype(dtype).kind == "f":
+        # Correlation of floating types is not yet supported:
+        # https://github.com/rapidsai/cudf/issues/13839
+        m = (
+            f"Series.corr\\(Series\\) is not "
+            f"supported for \\({dtype}, {dtype}\\)"
+        )
+        with pytest.raises(UDFError, match=m):
+            run_groupby_apply_jit_test(dataset, func, keys)
+        return
+    run_groupby_apply_jit_test(dataset, func, keys)
+
+
+@pytest.mark.parametrize("dtype", ["int32", "int64"])
+def test_groupby_apply_jit_correlation_zero_variance(dtype):
+    # pearson correlation is undefined when the variance of either
+    # variable is zero. This test ensures that the jit implementation
+    # returns the same result as pandas in this case.
+    data = DataFrame(
+        {"a": [0, 0, 0, 0, 0], "b": [1, 1, 1, 1, 1], "c": [2, 2, 2, 2, 2]}
+    )
+
+    def func(group):
+        return group["b"].corr(group["c"])
+
+    run_groupby_apply_jit_test(data, func, ["a"])
+
+
+@pytest.mark.parametrize("op", unary_ops)
+def test_groupby_apply_jit_invalid_unary_ops_error(groupby_jit_data_small, op):
+    keys = ["key1"]
+
+    def func(group):
+        return op(group["val1"])
+
+    with pytest.raises(
+        UDFError,
+        match=f"{op.__name__}\\(Series\\) is not supported by JIT GroupBy",
+    ):
+        run_groupby_apply_jit_test(groupby_jit_data_small, func, keys)
+
+
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_groupby_apply_jit_invalid_binary_ops_error(
+    groupby_jit_data_small, op
+):
+    keys = ["key1"]
+
+    def func(group):
+        return op(group["val1"], group["val2"])
+
+    with pytest.raises(
+        UDFError,
+        match=f"{op.__name__}\\(Series, Series\\) is not supported",
+    ):
+        run_groupby_apply_jit_test(groupby_jit_data_small, func, keys)
+
+
+def test_groupby_apply_jit_no_df_ops(groupby_jit_data_small):
+    # DataFrame level operations are not yet supported.
+    def func(group):
+        return group.sum()
+
+    with pytest.raises(
+        UDFError,
+        match="JIT GroupBy.apply\\(\\) does not support DataFrame.sum\\(\\)",
+    ):
+        run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1"])
+
+
+@pytest.mark.parametrize("dtype", ["uint8", "str"])
+def test_groupby_apply_unsupported_dtype(dtype):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]})
+    df["b"] = df["b"].astype(dtype)
+
+    # a UDAF that doesn't actually use the input column
+    # with the unsupported dtype should still succeed
+    def func(group):
+        return group["c"].sum()
+
+    run_groupby_apply_jit_test(df, func, ["a"])
+
+    # however a UDAF that does use the unsupported dtype
+    # should fail
+    def func(group):
+        return group["b"].sum()
+
+    with pytest.raises(UDFError, match="Only columns of the following dtypes"):
+        run_groupby_apply_jit_test(df, func, ["a"])
 
 
 @pytest.mark.parametrize(
@@ -495,8 +735,8 @@ def test_groupby_apply_jit_idx_reductions_special_vals(
         lambda df: df["val1"].mean() + df["val2"].std(),
     ],
 )
-def test_groupby_apply_jit_basic(func, groupby_jit_data):
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"])
+def test_groupby_apply_jit_basic(func, groupby_jit_data_small):
+    run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1", "key2"])
 
 
 def create_test_groupby_apply_jit_args_params():
@@ -515,8 +755,10 @@ def create_test_groupby_apply_jit_args_params():
 @pytest.mark.parametrize(
     "func,args", create_test_groupby_apply_jit_args_params()
 )
-def test_groupby_apply_jit_args(func, args, groupby_jit_data):
-    run_groupby_apply_jit_test(groupby_jit_data, func, ["key1", "key2"], *args)
+def test_groupby_apply_jit_args(func, args, groupby_jit_data_small):
+    run_groupby_apply_jit_test(
+        groupby_jit_data_small, func, ["key1", "key2"], *args
+    )
 
 
 def test_groupby_apply_jit_block_divergence():
@@ -534,6 +776,91 @@ def test_groupby_apply_jit_block_divergence():
         return 0
 
     run_groupby_apply_jit_test(df, diverging_block, ["a"])
+
+
+def test_groupby_apply_caching():
+    # Make sure similar functions that differ
+    # by simple things like constants actually
+    # recompile
+
+    # begin with a clear cache
+    precompiled.clear()
+    assert precompiled.currsize == 0
+
+    data = cudf.DataFrame({"a": [1, 1, 1, 2, 2, 2], "b": [1, 2, 3, 4, 5, 6]})
+
+    def f(group):
+        return group["b"].mean() * 2
+
+    # a single run should result in a cache size of 1
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 1
+
+    # a second run with f should not increase the count
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 1
+
+    # changing a constant value inside the UDF should miss
+    def f(group):
+        return group["b"].mean() * 3
+
+    run_groupby_apply_jit_test(data, f, ["a"])
+    assert precompiled.currsize == 2
+
+    # changing the dtypes of the columns should miss
+    data["b"] = data["b"].astype("float64")
+    run_groupby_apply_jit_test(data, f, ["a"])
+
+    assert precompiled.currsize == 3
+
+
+def test_groupby_apply_no_bytecode_fallback():
+    # tests that a function which contains no bytecode
+    # attribute, but would still be executable using
+    # the iterative groupby apply approach, still works.
+
+    gdf = cudf.DataFrame({"a": [0, 1, 1], "b": [1, 2, 3]})
+    pdf = gdf.to_pandas()
+
+    def f(group):
+        return group.sum()
+
+    part = partial(f)
+
+    expect = pdf.groupby("a").apply(part)
+    got = gdf.groupby("a").apply(part, engine="auto")
+
+    assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("func", [lambda group: group.x + group.y])
+def test_groupby_apply_return_col_from_df(func):
+    # tests a UDF that consists of purely colwise
+    # ops, such as `lambda group: group.x + group.y`
+    # which returns a column
+    df = cudf.datasets.randomdata()
+    pdf = df.to_pandas()
+
+    def func(df):
+        return df.x + df.y
+
+    expect = pdf.groupby("id").apply(func)
+    got = df.groupby("id").apply(func)
+
+    assert_groupby_results_equal(expect, got)
+
+
+@pytest.mark.parametrize("func", [lambda group: group.sum()])
+def test_groupby_apply_return_df(func):
+    # tests a UDF that reduces over a dataframe
+    # and produces a series with the original column names
+    # as its index, such as lambda group: group.sum() + group.min()
+    df = cudf.DataFrame({"a": [1, 1, 2, 2], "b": [1, 2, 3, 4]})
+    pdf = df.to_pandas()
+
+    expect = pdf.groupby("a").apply(func)
+    got = df.groupby("a").apply(func)
+    assert_groupby_results_equal(expect, got)
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
@@ -573,7 +900,7 @@ def test_groupby_2keys_agg(nelem, func):
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
 )
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    condition=PANDAS_LT_140,
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
@@ -1242,11 +1569,6 @@ def test_groupby_quantile(request, interpolation, q):
     pdresult = pdg.quantile(q, interpolation=interpolation)
     gdresult = gdg.quantile(q, interpolation=interpolation)
 
-    # There's a lot left to add to python bindings like index name
-    # so this is a temporary workaround
-    pdresult = pdresult["y"].reset_index(drop=True)
-    gdresult = gdresult["y"].reset_index(drop=True)
-
     assert_groupby_results_equal(pdresult, gdresult)
 
 
@@ -1479,7 +1801,6 @@ def test_grouping(grouper):
 @pytest.mark.parametrize("agg", [lambda x: x.count(), "count"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_count(agg, by):
-
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
     )
@@ -1488,7 +1809,7 @@ def test_groupby_count(agg, by):
     expect = pdf.groupby(by).agg(agg)
     got = gdf.groupby(by).agg(agg)
 
-    assert_groupby_results_equal(expect, got, check_dtype=False)
+    assert_groupby_results_equal(expect, got, check_dtype=True)
 
 
 @pytest.mark.parametrize("agg", [lambda x: x.median(), "median"])
@@ -1507,9 +1828,6 @@ def test_groupby_median(agg, by):
 
 @pytest.mark.parametrize("agg", [lambda x: x.nunique(), "nunique"])
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_110, reason="pandas >= 1.1 required"
-)
 def test_groupby_nunique(agg, by):
     pdf = pd.DataFrame(
         {"a": [1, 1, 1, 2, 3], "b": [1, 2, 2, 2, 1], "c": [1, 2, None, 4, 5]}
@@ -1545,11 +1863,9 @@ def test_groupby_nth(n, by):
 
 
 @pytest.mark.xfail(
-    condition=PANDAS_GE_130,
     reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_raise_data_error():
-
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
     gdf = cudf.from_pandas(pdf)
 
@@ -1560,7 +1876,6 @@ def test_raise_data_error():
 
 
 def test_drop_unsupported_multi_agg():
-
     gdf = cudf.DataFrame(
         {"a": [1, 1, 2, 2], "b": [1, 2, 3, 4], "c": ["a", "b", "c", "d"]}
     )
@@ -2061,6 +2376,35 @@ def test_groupby_rank_fails():
         gdf.groupby(["a"]).rank(method="min", axis=1)
 
 
+@pytest.mark.parametrize(
+    "with_nan", [False, True], ids=["just-NA", "also-NaN"]
+)
+@pytest.mark.parametrize("dropna", [False, True], ids=["keepna", "dropna"])
+@pytest.mark.parametrize(
+    "duplicate_index", [False, True], ids=["rangeindex", "dupindex"]
+)
+def test_groupby_scan_null_keys(with_nan, dropna, duplicate_index):
+    key_col = [None, 1, 2, None, 3, None, 3, 1, None, 1]
+    if with_nan:
+        df = pd.DataFrame(
+            {"key": pd.Series(key_col, dtype="float32"), "value": range(10)}
+        )
+    else:
+        df = pd.DataFrame(
+            {"key": pd.Series(key_col, dtype="Int32"), "value": range(10)}
+        )
+
+    if duplicate_index:
+        # Non-default index with duplicates
+        df.index = [1, 2, 3, 1, 3, 2, 4, 1, 6, 10]
+
+    cdf = cudf.from_pandas(df)
+
+    expect = df.groupby("key", dropna=dropna).cumsum()
+    got = cdf.groupby("key", dropna=dropna).cumsum()
+    assert_eq(expect, got)
+
+
 def test_groupby_mix_agg_scan():
     err_msg = "Cannot perform both aggregation and scan in one operation"
     func = ["cumsum", "sum"]
@@ -2510,7 +2854,8 @@ def test_groupby_fillna_method(nelem, method):
     gdf = cudf.from_pandas(pdf)
 
     expect = pdf.groupby(key_col).fillna(method=method)
-    got = gdf.groupby(key_col).fillna(method=method)
+    with expect_warning_if(method in {"pad", "backfill"}):
+        got = gdf.groupby(key_col).fillna(method=method)
 
     assert_groupby_results_equal(
         expect[value_cols], got[value_cols], sort=False
@@ -2576,7 +2921,6 @@ def test_groupby_apply_series():
     ],
 )
 def test_groupby_apply_series_args(func, args):
-
     got = make_frame(DataFrame, 100).groupby("x").y.apply(func, *args)
     expect = (
         make_frame(pd.DataFrame, 100)
@@ -2960,3 +3304,414 @@ def test_groupby_ngroup(by, ascending, df_ngroup):
     expected = df_ngroup.to_pandas().groupby(by).ngroup(ascending=ascending)
     actual = df_ngroup.groupby(by).ngroup(ascending=ascending)
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_groupby_dtypes(groups):
+    df = cudf.DataFrame(
+        {"a": [1, 2, 3, 3], "b": ["x", "y", "z", "a"], "c": [10, 11, 12, 12]}
+    )
+    pdf = df.to_pandas()
+
+    assert_eq(pdf.groupby(groups).dtypes, df.groupby(groups).dtypes)
+
+
+@pytest.mark.parametrize("index_names", ["a", "b", "c", ["b", "c"]])
+def test_groupby_by_index_names(index_names):
+    gdf = cudf.DataFrame(
+        {"a": [1, 2, 3, 4], "b": ["a", "b", "a", "a"], "c": [1, 1, 2, 1]}
+    ).set_index(index_names)
+    pdf = gdf.to_pandas()
+
+    assert_groupby_results_equal(
+        pdf.groupby(index_names).min(), gdf.groupby(index_names).min()
+    )
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+def test_group_by_pandas_compat(groups):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [1, 3, 2, 3, 3],
+                "b": ["x", "a", "y", "z", "a"],
+                "c": [10, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(pdf.groupby(groups).max(), df.groupby(groups).max())
+
+
+class TestSample:
+    @pytest.fixture(params=["default", "rangeindex", "intindex", "strindex"])
+    def index(self, request):
+        n = 12
+        if request.param == "rangeindex":
+            return cudf.RangeIndex(2, n + 2)
+        elif request.param == "intindex":
+            return cudf.Index(
+                [2, 3, 4, 1, 0, 5, 6, 8, 7, 9, 10, 13], dtype="int32"
+            )
+        elif request.param == "strindex":
+            return cudf.Index(list(string.ascii_lowercase[:n]))
+        elif request.param == "default":
+            return None
+
+    @pytest.fixture(
+        params=[
+            ["a", "a", "b", "b", "c", "c", "c", "d", "d", "d", "d", "d"],
+            [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 4],
+        ],
+        ids=["str-group", "int-group"],
+    )
+    def df(self, index, request):
+        return cudf.DataFrame(
+            {"a": request.param, "b": request.param, "v": request.param},
+            index=index,
+        )
+
+    @pytest.fixture(params=["a", ["a", "b"]], ids=["single-col", "two-col"])
+    def by(self, request):
+        return request.param
+
+    def expected(self, df, *, n=None, frac=None):
+        value_counts = collections.Counter(df.a.values_host)
+        if n is not None:
+            values = list(
+                itertools.chain.from_iterable(
+                    itertools.repeat(v, n) for v in value_counts.keys()
+                )
+            )
+        elif frac is not None:
+            values = list(
+                itertools.chain.from_iterable(
+                    itertools.repeat(v, round(count * frac))
+                    for v, count in value_counts.items()
+                )
+            )
+        else:
+            raise ValueError("Must provide either n or frac")
+        values = cudf.Series(sorted(values), dtype=df.a.dtype)
+        return cudf.DataFrame({"a": values, "b": values, "v": values})
+
+    @pytest.mark.parametrize("n", [None, 0, 1, 2])
+    def test_constant_n_no_replace(self, df, by, n):
+        result = df.groupby(by).sample(n=n).sort_values("a")
+        n = 1 if n is None else n
+        assert_eq(self.expected(df, n=n), result.reset_index(drop=True))
+
+    def test_constant_n_no_replace_too_large_raises(self, df):
+        with pytest.raises(ValueError):
+            df.groupby("a").sample(n=3)
+
+    @pytest.mark.parametrize("n", [1, 2, 3])
+    def test_constant_n_replace(self, df, by, n):
+        result = df.groupby(by).sample(n=n, replace=True).sort_values("a")
+        assert_eq(self.expected(df, n=n), result.reset_index(drop=True))
+
+    def test_invalid_arguments(self, df):
+        with pytest.raises(ValueError):
+            df.groupby("a").sample(n=1, frac=0.1)
+
+    def test_not_implemented_arguments(self, df):
+        with pytest.raises(NotImplementedError):
+            # These are valid weights, but we don't implement this yet.
+            df.groupby("a").sample(n=1, weights=[1 / len(df)] * len(df))
+
+    @pytest.mark.parametrize("frac", [0, 1 / 3, 1 / 2, 2 / 3, 1])
+    @pytest.mark.parametrize("replace", [False, True])
+    def test_fraction_rounding(self, df, by, frac, replace):
+        result = (
+            df.groupby(by).sample(frac=frac, replace=replace).sort_values("a")
+        )
+        assert_eq(self.expected(df, frac=frac), result.reset_index(drop=True))
+
+
+class TestHeadTail:
+    @pytest.fixture(params=[-3, -2, -1, 0, 1, 2, 3], ids=lambda n: f"{n=}")
+    def n(self, request):
+        return request.param
+
+    @pytest.fixture(
+        params=[False, True], ids=["no-preserve-order", "preserve-order"]
+    )
+    def preserve_order(self, request):
+        return request.param
+
+    @pytest.fixture
+    def df(self):
+        return cudf.DataFrame(
+            {
+                "a": [1, 0, 1, 2, 2, 1, 3, 2, 3, 3, 3],
+                "b": [0, 1, 2, 4, 3, 5, 6, 7, 9, 8, 10],
+            }
+        )
+
+    @pytest.fixture(params=[True, False], ids=["head", "tail"])
+    def take_head(self, request):
+        return request.param
+
+    @pytest.fixture
+    def expected(self, df, n, take_head, preserve_order):
+        if n == 0:
+            # We'll get an empty dataframe in this case
+            return df._empty_like(keep_index=True)
+        else:
+            if preserve_order:
+                # Should match pandas here
+                g = df.to_pandas().groupby("a")
+                if take_head:
+                    return g.head(n=n)
+                else:
+                    return g.tail(n=n)
+            else:
+                # We groupby "a" which is the first column. This
+                # possibly relies on an implementation detail that for
+                # integer group keys, cudf produces groups in sorted
+                # (ascending) order.
+                keyfunc = operator.itemgetter(0)
+                if take_head or n == 0:
+                    # Head does group[:n] as does tail for n == 0
+                    slicefunc = operator.itemgetter(slice(None, n))
+                else:
+                    # Tail does group[-n:] except when n == 0
+                    slicefunc = operator.itemgetter(
+                        slice(-n, None) if n else slice(0)
+                    )
+                values_to_sort = np.hstack(
+                    [df.values_host, np.arange(len(df)).reshape(-1, 1)]
+                )
+                expect_a, expect_b, index = zip(
+                    *itertools.chain.from_iterable(
+                        slicefunc(list(group))
+                        for _, group in itertools.groupby(
+                            sorted(values_to_sort.tolist(), key=keyfunc),
+                            key=keyfunc,
+                        )
+                    )
+                )
+                return cudf.DataFrame(
+                    {"a": expect_a, "b": expect_b}, index=index
+                )
+
+    def test_head_tail(self, df, n, take_head, expected, preserve_order):
+        if take_head:
+            actual = df.groupby("a").head(n=n, preserve_order=preserve_order)
+        else:
+            actual = df.groupby("a").tail(n=n, preserve_order=preserve_order)
+        assert_eq(actual, expected)
+
+
+def test_head_tail_empty():
+    # GH #13397
+
+    values = [1, 2, 3]
+    pdf = pd.DataFrame({}, index=values)
+    df = cudf.DataFrame({}, index=values)
+
+    expected = pdf.groupby(pd.Series(values)).head()
+    got = df.groupby(cudf.Series(values)).head()
+    assert_eq(expected, got)
+
+    expected = pdf.groupby(pd.Series(values)).tail()
+    got = df.groupby(cudf.Series(values)).tail()
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
+)
+@pytest.mark.parametrize("sort", [True, False])
+def test_group_by_pandas_sort_order(groups, sort):
+    with cudf.option_context("mode.pandas_compatible", True):
+        df = cudf.DataFrame(
+            {
+                "a": [10, 1, 10, 3, 2, 1, 3, 3],
+                "b": [5, 6, 7, 1, 2, 3, 4, 9],
+                "c": [20, 20, 10, 11, 13, 11, 12, 12],
+            }
+        )
+        pdf = df.to_pandas()
+
+        assert_eq(
+            pdf.groupby(groups, sort=sort).sum(),
+            df.groupby(groups, sort=sort).sum(),
+        )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "reduce_op",
+    [
+        "min",
+        "max",
+        "idxmin",
+        "idxmax",
+        "first",
+        "last",
+    ],
+)
+def test_group_by_empty_reduction(dtype, reduce_op):
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        getattr(gg, reduce_op)(), getattr(pg, reduce_op)(), check_dtype=True
+    )
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int32", "int64", "float64", "datetime64[ns]", "timedelta64[ns]", "bool"],
+)
+@pytest.mark.parametrize(
+    "apply_op",
+    ["sum", "min", "max", "idxmax"],
+)
+def test_group_by_empty_apply(request, dtype, apply_op):
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(dtype == "datetime64[ns]" and apply_op == "sum"),
+            reason=("sum isn't supported for datetime64[ns]"),
+        )
+    )
+
+    gdf = cudf.DataFrame({"a": [], "b": [], "c": []}, dtype=dtype)
+    pdf = gdf.to_pandas()
+
+    gg = gdf.groupby("a")["c"]
+    pg = pdf.groupby("a")["c"]
+
+    assert_eq(
+        gg.apply(apply_op),
+        pg.apply(apply_op),
+        check_dtype=True,
+        check_index_type=True,
+    )
+
+
+def test_groupby_consecutive_operations():
+    df = cudf.DataFrame([[1, np.nan], [1, 4], [5, 6]], columns=["A", "B"])
+    pdf = df.to_pandas()
+
+    gg = df.groupby("A")
+    pg = pdf.groupby("A")
+
+    actual = gg.nth(-1)
+    expected = pg.nth(-1)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.nth(0)
+    expected = pg.nth(0)
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumcount()
+    expected = pg.cumcount()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+    actual = gg.cumsum()
+    expected = pg.cumsum()
+
+    assert_groupby_results_equal(actual, expected, check_dtype=False)
+
+
+def test_categorical_grouping_pandas_compatibility():
+    gdf = cudf.DataFrame(
+        {
+            "key": cudf.Series([2, 1, 3, 1, 1], dtype="category"),
+            "a": [0, 1, 3, 2, 3],
+        }
+    )
+    pdf = gdf.to_pandas()
+
+    with cudf.option_context("mode.pandas_compatible", True):
+        actual = gdf.groupby("key", sort=False).sum()
+    expected = pdf.groupby("key", sort=False).sum()
+
+    assert_eq(actual, expected)
+
+
+@pytest.mark.parametrize("normalize", [True, False])
+@pytest.mark.parametrize("sort", [True, False])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("as_index", [True, False])
+def test_group_by_value_counts(normalize, sort, ascending, dropna, as_index):
+    # From Issue#12789
+    df = cudf.DataFrame(
+        {
+            "gender": ["male", "male", "female", "male", "female", "male"],
+            "education": ["low", "medium", np.nan, "low", "high", "low"],
+            "country": ["US", "FR", "US", "FR", "FR", "FR"],
+        }
+    )
+    pdf = df.to_pandas()
+
+    actual = df.groupby("gender", as_index=as_index).value_counts(
+        normalize=normalize, sort=sort, ascending=ascending, dropna=dropna
+    )
+    expected = pdf.groupby("gender", as_index=as_index).value_counts(
+        normalize=normalize, sort=sort, ascending=ascending, dropna=dropna
+    )
+
+    # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
+    assert_groupby_results_equal(
+        actual, expected, check_names=False, check_index_type=False
+    )
+
+
+def test_group_by_value_counts_subset():
+    # From Issue#12789
+    df = cudf.DataFrame(
+        {
+            "gender": ["male", "male", "female", "male", "female", "male"],
+            "education": ["low", "medium", "high", "low", "high", "low"],
+            "country": ["US", "FR", "US", "FR", "FR", "FR"],
+        }
+    )
+    pdf = df.to_pandas()
+
+    actual = df.groupby("gender").value_counts(["education"])
+    expected = pdf.groupby("gender").value_counts(["education"])
+
+    # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
+    assert_groupby_results_equal(
+        actual, expected, check_names=False, check_index_type=False
+    )
+
+
+def test_group_by_value_counts_clash_with_subset():
+    df = cudf.DataFrame({"a": [1, 5, 3], "b": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a").value_counts(["a"])
+
+
+def test_group_by_value_counts_subset_not_exists():
+    df = cudf.DataFrame({"a": [1, 5, 3], "b": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a").value_counts(["c"])
+
+
+def test_group_by_value_counts_with_count_column():
+    df = cudf.DataFrame({"a": [1, 5, 3], "count": [2, 5, 2]})
+    with pytest.raises(ValueError):
+        df.groupby("a", as_index=False).value_counts()

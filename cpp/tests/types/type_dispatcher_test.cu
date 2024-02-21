@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,17 +20,16 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <rmm/device_uvector.hpp>
 
-struct DispatcherTest : public cudf::test::BaseFixture {
-};
+struct DispatcherTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct TypedDispatcherTest : public DispatcherTest {
-};
+struct TypedDispatcherTest : public DispatcherTest {};
 
 TYPED_TEST_SUITE(TypedDispatcherTest, cudf::test::AllTypes);
 
@@ -60,7 +59,7 @@ struct verify_dispatched_type {
   }
 };
 
-__global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
+CUDF_KERNEL void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
     *d_result = cudf::type_dispatcher(cudf::data_type{id}, verify_dispatched_type{}, id);
@@ -69,15 +68,16 @@ __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result)
 
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch)
 {
-  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1, cudf::get_default_stream());
+  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
+    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
   EXPECT_EQ(true, result.front_element(cudf::get_default_stream()));
 }
 
-struct IdDispatcherTest : public DispatcherTest, public testing::WithParamInterface<cudf::type_id> {
-};
+struct IdDispatcherTest : public DispatcherTest,
+                          public testing::WithParamInterface<cudf::type_id> {};
 
 INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest, testing::ValuesIn(cudf::test::all_type_ids));
 
@@ -88,8 +88,7 @@ TEST_P(IdDispatcherTest, IdToType)
 }
 
 template <typename T>
-struct TypedDoubleDispatcherTest : public DispatcherTest {
-};
+struct TypedDoubleDispatcherTest : public DispatcherTest {};
 
 TYPED_TEST_SUITE(TypedDoubleDispatcherTest, cudf::test::AllTypes);
 
@@ -120,7 +119,7 @@ struct verify_double_dispatched_type {
   }
 };
 
-__global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
+CUDF_KERNEL void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2, bool* d_result)
 {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
     *d_result = cudf::double_type_dispatcher(
@@ -130,7 +129,8 @@ __global__ void double_dispatch_test_kernel(cudf::type_id id1, cudf::type_id id2
 
 TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 {
-  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(1, cudf::get_default_stream());
+  auto result = cudf::detail::make_zeroed_device_uvector_sync<bool>(
+    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   double_dispatch_test_kernel<<<1, 1, 0, cudf::get_default_stream().value()>>>(
     cudf::type_to_id<TypeParam>(), cudf::type_to_id<TypeParam>(), result.data());
   CUDF_CUDA_TRY(cudaDeviceSynchronize());
@@ -138,8 +138,7 @@ TYPED_TEST(TypedDoubleDispatcherTest, DeviceDoubleDispatch)
 }
 
 struct IdDoubleDispatcherTest : public DispatcherTest,
-                                public testing::WithParamInterface<cudf::type_id> {
-};
+                                public testing::WithParamInterface<cudf::type_id> {};
 
 INSTANTIATE_TEST_CASE_P(TestAllIds,
                         IdDoubleDispatcherTest,
@@ -154,8 +153,7 @@ TEST_P(IdDoubleDispatcherTest, IdToType)
 }
 
 struct IdFixedDoubleDispatcherTest : public DispatcherTest,
-                                     public testing::WithParamInterface<cudf::type_id> {
-};
+                                     public testing::WithParamInterface<cudf::type_id> {};
 
 INSTANTIATE_TEST_CASE_P(TestAllIds,
                         IdFixedDoubleDispatcherTest,

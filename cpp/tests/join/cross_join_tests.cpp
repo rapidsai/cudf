@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,8 +30,7 @@ template <typename T, typename SourceT = T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T, SourceT>;
 
 template <typename T>
-class CrossJoinTypeTests : public cudf::test::BaseFixture {
-};
+class CrossJoinTypeTests : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(CrossJoinTypeTests, cudf::test::FixedWidthTypes);
 
@@ -80,8 +79,7 @@ TYPED_TEST(CrossJoinTypeTests, CrossJoin)
   CUDF_TEST_EXPECT_TABLES_EQUAL(join_table->view(), table_expect);
 }
 
-class CrossJoinInvalidInputs : public cudf::test::BaseFixture {
-};
+class CrossJoinInvalidInputs : public cudf::test::BaseFixture {};
 
 TEST_F(CrossJoinInvalidInputs, EmptyTable)
 {
@@ -103,8 +101,7 @@ TEST_F(CrossJoinInvalidInputs, EmptyTable)
   EXPECT_THROW(cudf::cross_join(table_b, table_a), cudf::logic_error);
 }
 
-class CrossJoinEmptyResult : public cudf::test::BaseFixture {
-};
+class CrossJoinEmptyResult : public cudf::test::BaseFixture {};
 
 TEST_F(CrossJoinEmptyResult, NoRows)
 {

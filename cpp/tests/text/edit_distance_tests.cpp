@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,18 +26,17 @@
 
 #include <vector>
 
-struct TextEditDistanceTest : public cudf::test::BaseFixture {
-};
+struct TextEditDistanceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextEditDistanceTest, EditDistance)
 {
-  std::vector<const char*> h_strings{"dog", nullptr, "cat", "mouse", "pup", "", "puppy", "thé"};
+  std::vector<char const*> h_strings{"dog", nullptr, "cat", "mouse", "pup", "", "puppy", "thé"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
 
-  std::vector<const char*> h_targets{"hog", "not", "cake", "house", "fox", nullptr, "puppy", "the"};
+  std::vector<char const*> h_targets{"hog", "not", "cake", "house", "fox", nullptr, "puppy", "the"};
   cudf::test::strings_column_wrapper targets(
     h_targets.begin(),
     h_targets.end(),
@@ -59,7 +58,7 @@ TEST_F(TextEditDistanceTest, EditDistance)
 
 TEST_F(TextEditDistanceTest, EditDistanceMatrix)
 {
-  std::vector<const char*> h_strings{"dog", nullptr, "hog", "frog", "cat", "", "hat", "clog"};
+  std::vector<char const*> h_strings{"dog", nullptr, "hog", "frog", "cat", "", "hat", "clog"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

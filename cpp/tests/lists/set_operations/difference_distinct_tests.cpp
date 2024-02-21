@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/lists/set_operations.hpp>
 #include <cudf/lists/sorting.hpp>
-#include <cudf/lists/stream_compaction.hpp>
+#include <cudf/null_mask.hpp>
 
 #include <limits>
 #include <string>
@@ -63,12 +63,10 @@ auto set_difference_sorted(cudf::column_view const& lhs,
 }
 }  // namespace
 
-struct SetDifferenceTest : public cudf::test::BaseFixture {
-};
+struct SetDifferenceTest : public cudf::test::BaseFixture {};
 
 template <typename T>
-struct SetDifferenceTypedTest : public cudf::test::BaseFixture {
-};
+struct SetDifferenceTypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
@@ -241,13 +239,19 @@ TEST_F(SetDifferenceTest, StringTestsWithNullsEqual)
        strings_lists{}, /* NULL */
        strings_lists{"aha", "this", "is another", "string???"}},
       null_at(1)};
-    auto const expected = strings_lists{{strings_lists{"a", "is", "string", "this"},
-                                         strings_lists{} /*NULL*/,
-                                         strings_lists{"a", "is", "string"}},
-                                        null_at(1)};
+    auto const expected = [] {
+      auto str_lists = strings_lists{{strings_lists{"a", "is", "string", "this"},
+                                      strings_lists{} /*NULL*/,
+                                      strings_lists{"a", "is", "string"}},
+                                     null_at(1)}
+                         .release();
+      auto& child = str_lists->child(cudf::lists_column_view::child_column_index);
+      child.set_null_mask(cudf::create_null_mask(child.size(), cudf::mask_state::ALL_VALID), 0);
+      return str_lists;
+    }();
 
     auto const results_sorted = set_difference_sorted(lhs, rhs, NULL_EQUAL);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results_sorted);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *results_sorted);
   }
 }
 

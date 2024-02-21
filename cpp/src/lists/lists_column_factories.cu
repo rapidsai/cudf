@@ -19,6 +19,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/sizes_to_offsets_iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/detail/lists_column_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -37,7 +40,7 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
 {
   if (size == 0) {
     return make_lists_column(0,
-                             make_empty_column(type_to_id<offset_type>()),
+                             make_empty_column(type_to_id<size_type>()),
                              empty_like(value.view()),
                              0,
                              cudf::detail::create_null_mask(0, mask_state::UNALLOCATED, stream, mr),
@@ -47,14 +50,9 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
   auto mr_final = size == 1 ? mr : rmm::mr::get_current_device_resource();
 
   // Handcraft a 1-row column
-  auto offsets = make_numeric_column(
-    data_type{type_to_id<offset_type>()}, 2, mask_state::UNALLOCATED, stream, mr_final);
-  auto m_offsets = offsets->mutable_view();
-  thrust::sequence(rmm::exec_policy(stream),
-                   m_offsets.begin<size_type>(),
-                   m_offsets.end<size_type>(),
-                   0,
-                   value.view().size());
+  auto sizes_itr = thrust::constant_iterator<size_type>(value.view().size());
+  auto offsets   = std::get<0>(
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + 1, stream, mr_final));
   size_type null_count = value.is_valid(stream) ? 0 : 1;
   auto null_mask_state = null_count ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
   auto null_mask       = cudf::detail::create_null_mask(1, null_mask_state, stream, mr_final);
@@ -82,6 +80,32 @@ std::unique_ptr<cudf::column> make_lists_column_from_scalar(list_scalar const& v
                                   stream,
                                   mr_final);
   return std::move(res->release()[0]);
+}
+
+std::unique_ptr<column> make_empty_lists_column(data_type child_type,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = make_empty_column(data_type(type_to_id<size_type>()));
+  auto child   = make_empty_column(child_type);
+  return make_lists_column(
+    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{}, stream, mr);
+}
+
+std::unique_ptr<column> make_all_nulls_lists_column(size_type size,
+                                                    data_type child_type,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = [&] {
+    auto offsets_buff =
+      cudf::detail::make_zeroed_device_uvector_async<size_type>(size + 1, stream, mr);
+    return std::make_unique<column>(std::move(offsets_buff), rmm::device_buffer{}, 0);
+  }();
+  auto child     = make_empty_column(child_type);
+  auto null_mask = cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
+  return make_lists_column(
+    size, std::move(offsets), std::move(child), size, std::move(null_mask), stream, mr);
 }
 
 }  // namespace detail

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -12,15 +12,10 @@ import cudf
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
     is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
     is_numeric_dtype,
     is_string_dtype,
-    is_struct_dtype,
 )
-from cudf.core._compat import PANDAS_GE_110
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -28,10 +23,15 @@ def dtype_can_compare_equal_to_other(dtype):
     # as equal to equal values of a different dtype
     return not (
         is_string_dtype(dtype)
-        or is_list_dtype(dtype)
-        or is_struct_dtype(dtype)
-        or is_decimal_dtype(dtype)
-        or is_interval_dtype(dtype)
+        or isinstance(
+            dtype,
+            (
+                cudf.IntervalDtype,
+                cudf.ListDtype,
+                cudf.StructDtype,
+                cudf.core.dtypes.DecimalDtype,
+            ),
+        )
     )
 
 
@@ -232,11 +232,11 @@ def assert_column_equal(
     elif not (
         (
             not dtype_can_compare_equal_to_other(left.dtype)
-            and is_numeric_dtype(right)
+            and is_numeric_dtype(right.dtype)
         )
         or (
-            is_numeric_dtype(left)
-            and not dtype_can_compare_equal_to_other(right)
+            is_numeric_dtype(left.dtype)
+            and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
         try:
@@ -245,7 +245,11 @@ def assert_column_equal(
                 left.isnull().values == right.isnull().values
             )
 
-            if columns_equal and not check_exact and is_numeric_dtype(left):
+            if (
+                columns_equal
+                and not check_exact
+                and is_numeric_dtype(left.dtype)
+            ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
                     left.apply_boolean_mask(
@@ -272,8 +276,12 @@ def assert_column_equal(
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
-        ldata = str([val for val in left.to_pandas(nullable=True)])
-        rdata = str([val for val in right.to_pandas(nullable=True)])
+        try:
+            ldata = str([val for val in left.to_pandas(nullable=True)])
+            rdata = str([val for val in right.to_pandas(nullable=True)])
+        except NotImplementedError:
+            ldata = str([val for val in left.to_pandas(nullable=False)])
+            rdata = str([val for val in right.to_pandas(nullable=False)])
         try:
             diff = 0
             for i in range(left.size):
@@ -291,7 +299,7 @@ def assert_column_equal(
 
 
 def null_safe_scalar_equals(left, right):
-    if left in {NA, np.nan} or right in {NA, np.nan}:
+    if left in {NA, NaT, np.nan} or right in {NA, NaT, np.nan}:
         return left is right
     return left == right
 
@@ -699,28 +707,17 @@ def assert_frame_equal(
         obj=f"{obj}.index",
     )
 
-    if PANDAS_GE_110:
-        pd.testing.assert_index_equal(
-            left._data.to_pandas_index(),
-            right._data.to_pandas_index(),
-            exact=check_column_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            rtol=rtol,
-            atol=atol,
-            obj=f"{obj}.columns",
-        )
-    else:
-        pd.testing.assert_index_equal(
-            left._data.to_pandas_index(),
-            right._data.to_pandas_index(),
-            exact=check_column_type,
-            check_names=check_names,
-            check_exact=check_exact,
-            check_categorical=check_categorical,
-            obj=f"{obj}.columns",
-        )
+    pd.testing.assert_index_equal(
+        left._data.to_pandas_index(),
+        right._data.to_pandas_index(),
+        exact=check_column_type,
+        check_names=check_names,
+        check_exact=check_exact,
+        check_categorical=check_categorical,
+        rtol=rtol,
+        atol=atol,
+        obj=f"{obj}.columns",
+    )
 
     for col in left._column_names:
         assert_column_equal(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,6 +108,7 @@ struct out_of_place_copy_range_dispatch {
     if (source_end != source_begin) {  // otherwise no-op
       auto ret_view = p_ret->mutable_view();
       in_place_copy_range<T>(source, ret_view, source_begin, source_end, target_begin, stream);
+      p_ret->set_null_count(ret_view.null_count());
     }
 
     return p_ret;
@@ -271,11 +272,12 @@ void copy_range_in_place(column_view const& source,
                          mutable_column_view& target,
                          size_type source_begin,
                          size_type source_end,
-                         size_type target_begin)
+                         size_type target_begin,
+                         rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   return detail::copy_range_in_place(
-    source, target, source_begin, source_end, target_begin, cudf::get_default_stream());
+    source, target, source_begin, source_end, target_begin, stream);
 }
 
 std::unique_ptr<column> copy_range(column_view const& source,
@@ -283,11 +285,11 @@ std::unique_ptr<column> copy_range(column_view const& source,
                                    size_type source_begin,
                                    size_type source_end,
                                    size_type target_begin,
+                                   rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::copy_range(
-    source, target, source_begin, source_end, target_begin, cudf::get_default_stream(), mr);
+  return detail::copy_range(source, target, source_begin, source_end, target_begin, stream, mr);
 }
 
 }  // namespace cudf

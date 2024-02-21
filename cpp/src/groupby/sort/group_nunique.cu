@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +33,10 @@ namespace groupby {
 namespace detail {
 namespace {
 
-template <typename Nullate>
+template <bool has_nested_columns, typename Nullate>
 struct is_unique_iterator_fn {
   using comparator_type =
-    typename cudf::experimental::row::equality::device_row_comparator<Nullate>;
+    typename cudf::experimental::row::equality::device_row_comparator<has_nested_columns, Nullate>;
 
   Nullate nulls;
   column_device_view const v;
@@ -91,22 +91,41 @@ std::unique_ptr<column> group_nunique(column_view const& values,
 
   auto const values_view = table_view{{values}};
   auto const comparator  = cudf::experimental::row::equality::self_comparator{values_view, stream};
-  auto const d_equal     = comparator.equal_to(
-    cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
 
   auto const d_values_view = column_device_view::create(values, stream);
-  auto const is_unique_iterator =
-    thrust::make_transform_iterator(thrust::counting_iterator<cudf::size_type>(0),
-                                    is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
-                                                          *d_values_view,
-                                                          d_equal,
-                                                          null_handling,
-                                                          group_offsets.data(),
-                                                          group_labels.data()});
+
+  auto d_result = rmm::device_uvector<size_type>(group_labels.size(), stream);
+
+  auto const comparator_helper = [&](auto const d_equal) {
+    auto fn = is_unique_iterator_fn{nullate::DYNAMIC{values.has_nulls()},
+                                    *d_values_view,
+                                    d_equal,
+                                    null_handling,
+                                    group_offsets.data(),
+                                    group_labels.data()};
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::make_counting_iterator<size_type>(0),
+                      thrust::make_counting_iterator<size_type>(values.size()),
+                      d_result.begin(),
+                      fn);
+  };
+
+  if (cudf::detail::has_nested_columns(values_view)) {
+    auto const d_equal = comparator.equal_to<true>(
+      cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
+    comparator_helper(d_equal);
+  } else {
+    auto const d_equal = comparator.equal_to<false>(
+      cudf::nullate::DYNAMIC{cudf::has_nested_nulls(values_view)}, null_equality::EQUAL);
+    comparator_helper(d_equal);
+  }
+
+  // calling this with a vector instead of a transform iterator is 10x faster to compile;
+  // it also helps that we are only calling it once for both conditions
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
                         group_labels.end(),
-                        is_unique_iterator,
+                        d_result.begin(),
                         thrust::make_discard_iterator(),
                         result->mutable_view().begin<size_type>());
 

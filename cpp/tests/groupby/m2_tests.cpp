@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,8 +53,7 @@ auto compute_M2(cudf::column_view const& keys, cudf::column_view const& values)
 }  // namespace
 
 template <class T>
-struct GroupbyM2TypedTest : public cudf::test::BaseFixture {
-};
+struct GroupbyM2TypedTest : public cudf::test::BaseFixture {};
 
 using TestTypes = cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t>,
                                      cudf::test::FloatingPointTypes>;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,7 +186,7 @@ template <typename T>
   auto constexpr BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(T);
 
   std::shared_ptr<arrow::Array> arr;
-  arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -scale),
+  arrow::Decimal128Builder decimal_builder(arrow::decimal(cudf::detail::max_precision<T>(), -scale),
                                            arrow::default_memory_pool());
 
   for (T i = 0; i < static_cast<T>(data.size() / BIT_WIDTH_RATIO); ++i) {
@@ -194,7 +194,7 @@ template <typename T>
       CUDF_EXPECTS(decimal_builder.AppendNull().ok(), "Failed to append");
     } else {
       CUDF_EXPECTS(
-        decimal_builder.Append(reinterpret_cast<const uint8_t*>(data.data() + BIT_WIDTH_RATIO * i))
+        decimal_builder.Append(reinterpret_cast<uint8_t const*>(data.data() + BIT_WIDTH_RATIO * i))
           .ok(),
         "Failed to append");
     }

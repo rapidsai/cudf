@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint16_t, uint32_t
 from libcpp cimport bool
@@ -38,8 +38,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         uint32_t max_sequence_length,
         uint32_t stride,
         bool do_lower,
-        bool do_truncate,
-        uint32_t max_rows_tensor
+        bool do_truncate
     ) except +
 
     cdef tokenizer_result subword_tokenize(
@@ -48,8 +47,7 @@ cdef extern from "nvtext/subword_tokenize.hpp" namespace "nvtext" nogil:
         uint32_t max_sequence_length,
         uint32_t stride,
         bool do_lower,
-        bool do_truncate,
-        uint32_t max_rows_tensor
+        bool do_truncate
     ) except +
 
 cdef extern from "<utility>" namespace "std" nogil:

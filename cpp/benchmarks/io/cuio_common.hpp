@@ -26,11 +26,6 @@
 
 using cudf::io::io_type;
 
-#define WR_BENCHMARK_DEFINE_ALL_SINKS(benchmark, name, type_or_group)                          \
-  benchmark(name##_file_output, type_or_group, static_cast<uint32_t>(io_type::FILEPATH));      \
-  benchmark(name##_buffer_output, type_or_group, static_cast<uint32_t>(io_type::HOST_BUFFER)); \
-  benchmark(name##_void_output, type_or_group, static_cast<uint32_t>(io_type::VOID));
-
 std::string random_file_in_dir(std::string const& dir_path);
 
 /**
@@ -143,3 +138,27 @@ std::vector<cudf::size_type> segments_in_chunk(int num_segments, int num_chunks,
  * @throw cudf::logic_error if the environment variable is set and the command fails
  */
 void try_drop_l3_cache();
+
+/**
+ * @brief Convert a string to the corresponding io_type enum value.
+ *
+ * This function takes a string and returns the matching io_type enum value. It allows you to
+ * convert a string representation of an io_type into its corresponding enum value.
+ *
+ * @param io_string The input string representing the io_type
+ *
+ * @return The io_type enum value
+ */
+cudf::io::io_type retrieve_io_type_enum(std::string_view io_string);
+
+/**
+ * @brief Convert a string to the corresponding compression_type enum value.
+ *
+ * This function takes a string and returns the matching compression_type enum value. It allows you
+ * to convert a string representation of a compression_type into its corresponding enum value.
+ *
+ * @param compression_string The input string representing the compression_type
+ *
+ * @return The compression_type enum value
+ */
+cudf::io::compression_type retrieve_compression_type_enum(std::string_view compression_string);

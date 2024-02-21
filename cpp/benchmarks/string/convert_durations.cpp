@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,12 +27,11 @@
 #include <algorithm>
 #include <random>
 
-class DurationsToString : public cudf::benchmark {
-};
+class DurationsToString : public cudf::benchmark {};
 template <class TypeParam>
 void BM_convert_from_durations(benchmark::State& state)
 {
-  const cudf::size_type source_size = state.range(0);
+  cudf::size_type const source_size = state.range(0);
 
   // Every element is valid
   auto data = cudf::detail::make_counting_transform_iterator(
@@ -48,12 +47,11 @@ void BM_convert_from_durations(benchmark::State& state)
   state.SetBytesProcessed(state.iterations() * source_size * sizeof(TypeParam));
 }
 
-class StringToDurations : public cudf::benchmark {
-};
+class StringToDurations : public cudf::benchmark {};
 template <class TypeParam>
 void BM_convert_to_durations(benchmark::State& state)
 {
-  const cudf::size_type source_size = state.range(0);
+  cudf::size_type const source_size = state.range(0);
 
   // Every element is valid
   auto data = cudf::detail::make_counting_transform_iterator(

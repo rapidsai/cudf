@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,8 +44,7 @@ struct string_view_to_pair {
 };
 }  // namespace
 
-class StringsFactory : public cudf::benchmark {
-};
+class StringsFactory : public cudf::benchmark {};
 
 static void BM_factory(benchmark::State& state)
 {
@@ -64,11 +63,11 @@ static void BM_factory(benchmark::State& state)
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, cudf::get_default_stream());
-    cudf::make_strings_column(pairs);
+    cudf::make_strings_column(pairs, cudf::get_default_stream());
   }
 
   cudf::strings_column_view input(column->view());
-  state.SetBytesProcessed(state.iterations() * input.chars_size());
+  state.SetBytesProcessed(state.iterations() * input.chars_size(cudf::get_default_stream()));
 }
 
 static void generate_bench_args(benchmark::internal::Benchmark* b)

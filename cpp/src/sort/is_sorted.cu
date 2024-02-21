@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,9 +15,8 @@
  */
 
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/row_operators.cuh>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -28,46 +27,54 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/count.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/sort.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
 
-auto is_sorted(cudf::table_view const& in,
+bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               bool has_nulls,
                std::vector<null_order> const& null_precedence,
                rmm::cuda_stream_view stream)
 {
-  // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
-  auto flattened = structs::detail::flatten_nested_columns(in, column_order, null_precedence);
+  auto const comparator =
+    experimental::row::lexicographic::self_comparator{in, column_order, null_precedence, stream};
 
-  auto const d_input           = table_device_view::create(flattened, stream);
-  auto const d_column_order    = make_device_uvector_async(flattened.orders(), stream);
-  auto const d_null_precedence = has_nulls
-                                   ? make_device_uvector_async(flattened.null_orders(), stream)
-                                   : rmm::device_uvector<null_order>(0, stream);
+  if (cudf::detail::has_nested_columns(in)) {
+    auto const device_comparator = comparator.less<true>(has_nested_nulls(in));
 
-  auto comparator = row_lexicographic_comparator(nullate::DYNAMIC{has_nulls},
-                                                 *d_input,
-                                                 *d_input,
-                                                 d_column_order.data(),
-                                                 d_null_precedence.data());
+    // Using a temporary buffer for intermediate transform results from the lambda containing
+    // the comparator speeds up compile-time significantly over using the comparator directly
+    // in thrust::is_sorted.
+    auto d_results = rmm::device_uvector<bool>(in.num_rows(), stream);
+    thrust::transform(rmm::exec_policy(stream),
+                      thrust::counting_iterator<size_type>(0),
+                      thrust::counting_iterator<size_type>(in.num_rows()),
+                      d_results.begin(),
+                      [device_comparator] __device__(auto idx) -> bool {
+                        return (idx == 0) || device_comparator(idx - 1, idx);
+                      });
 
-  auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
-                                  thrust::make_counting_iterator(0),
-                                  thrust::make_counting_iterator(in.num_rows()),
-                                  comparator);
+    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), false) == 0;
+  } else {
+    auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
-  return sorted;
+    return thrust::is_sorted(rmm::exec_policy(stream),
+                             thrust::counting_iterator<size_type>(0),
+                             thrust::counting_iterator<size_type>(in.num_rows()),
+                             device_comparator);
+  }
 }
 
 }  // namespace detail
 
 bool is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
-               std::vector<null_order> const& null_precedence)
+               std::vector<null_order> const& null_precedence,
+               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   if (in.num_columns() == 0 || in.num_rows() == 0) { return true; }
@@ -83,8 +90,7 @@ bool is_sorted(cudf::table_view const& in,
       "Number of columns in the table doesn't match the vector null_precedence's size .\n");
   }
 
-  return detail::is_sorted(
-    in, column_order, has_nulls(in), null_precedence, cudf::get_default_stream());
+  return detail::is_sorted(in, column_order, null_precedence, stream);
 }
 
 }  // namespace cudf

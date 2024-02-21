@@ -20,8 +20,6 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
-#include <optional>
-
 namespace cudf {
 namespace strings {
 /**
@@ -49,18 +47,19 @@ namespace strings {
  * out is '123XYZ-123XYZ-123XYZ-'
  * @endcode
  *
- * @throw cudf::logic_error if the size of the output string scalar exceeds the maximum value that
- *        can be stored by the index type:
- *        `input.size() * repeat_times > max of size_type`
+ * @throw std::overflow_error if the size of the output string scalar exceeds the maximum value that
+ *        can be stored by the scalar: `input.size() * repeat_times > max of size_type`
  *
  * @param input The scalar containing the string to repeat
  * @param repeat_times The number of times the input string is repeated
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned string scalar
  * @return New string scalar in which the input string is repeated
  */
 std::unique_ptr<string_scalar> repeat_string(
   string_scalar const& input,
   size_type repeat_times,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -84,12 +83,14 @@ std::unique_ptr<string_scalar> repeat_string(
  *
  * @param input The column containing strings to repeat
  * @param repeat_times The number of times each input string is repeated
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned strings column
  * @return New column containing the repeated strings
  */
 std::unique_ptr<column> repeat_strings(
   strings_column_view const& input,
   size_type repeat_times,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -118,13 +119,15 @@ std::unique_ptr<column> repeat_strings(
  *
  * @param input The column containing strings to repeat
  * @param repeat_times The column containing numbers of times that the corresponding input strings
- *                     are repeated
+ *                     for each row are repeated
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned strings column
  * @return New column containing the repeated strings.
  */
 std::unique_ptr<column> repeat_strings(
   strings_column_view const& input,
   column_view const& repeat_times,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

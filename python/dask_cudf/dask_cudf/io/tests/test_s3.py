@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 import os
 import socket
@@ -55,9 +55,12 @@ def s3_base(endpoint_ip, endpoint_port):
     with ensure_safe_environment_variables():
         # Fake aws credentials exported to prevent botocore looking for
         # system aws credentials, https://github.com/spulec/moto/issues/1793
-        os.environ.setdefault("AWS_ACCESS_KEY_ID", "foobar_key")
-        os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "foobar_secret")
-        os.environ.setdefault("S3FS_LOGGING_LEVEL", "DEBUG")
+        os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
+        os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
+        os.environ["S3FS_LOGGING_LEVEL"] = "DEBUG"
+        os.environ["AWS_SECURITY_TOKEN"] = "foobar_security_token"
+        os.environ["AWS_SESSION_TOKEN"] = "foobar_session_token"
+        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
         # Launching moto in server mode, i.e., as a separate process
         # with an S3 endpoint on localhost

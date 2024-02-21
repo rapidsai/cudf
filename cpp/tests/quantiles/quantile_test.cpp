@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -384,8 +385,7 @@ void test(testdata::test_case<T> test_case)
 // ----- tests -----------------------------------------------------------------
 
 template <typename T>
-struct QuantileTest : public cudf::test::BaseFixture {
-};
+struct QuantileTest : public cudf::test::BaseFixture {};
 
 using TestTypes = cudf::test::NumericTypes;
 TYPED_TEST_SUITE(QuantileTest, TestTypes);
@@ -418,8 +418,7 @@ TYPED_TEST(QuantileTest, TestEmpty)
 }
 
 template <typename T>
-struct QuantileUnsupportedTypesTest : public cudf::test::BaseFixture {
-};
+struct QuantileUnsupportedTypesTest : public cudf::test::BaseFixture {};
 
 // TODO add tests for FixedPointTypes
 using UnsupportedTestTypes = cudf::test::RemoveIf<
@@ -448,8 +447,7 @@ TYPED_TEST(QuantileUnsupportedTypesTest, TestMultipleElements)
   EXPECT_THROW(cudf::quantile(input, {0}), cudf::logic_error);
 }
 
-struct QuantileDictionaryTest : public cudf::test::BaseFixture {
-};
+struct QuantileDictionaryTest : public cudf::test::BaseFixture {};
 
 TEST_F(QuantileDictionaryTest, TestValid)
 {

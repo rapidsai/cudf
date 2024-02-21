@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -126,13 +126,12 @@ void iterator_bench_thrust(cudf::column_view& col, rmm::device_uvector<T>& resul
 }
 
 // -----------------------------------------------------------------------------
-class Iterator : public cudf::benchmark {
-};
+class Iterator : public cudf::benchmark {};
 
 template <class TypeParam, bool cub_or_thrust, bool raw_or_iterator>
 void BM_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
 
@@ -140,8 +139,8 @@ void BM_iterator(benchmark::State& state)
   cudf::column_view hasnull_F = wrap_hasnull_F;
 
   // Initialize dev_result to false
-  auto dev_result =
-    cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(1, cudf::get_default_stream());
+  auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<TypeParam>(
+    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {
@@ -196,7 +195,7 @@ void pair_iterator_bench_thrust(cudf::column_view& col,
 template <class TypeParam, bool cub_or_thrust>
 void BM_pair_iterator(benchmark::State& state)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   using T      = TypeParam;
   auto num_gen = thrust::counting_iterator<cudf::size_type>(0);
   auto null_gen =
@@ -210,7 +209,7 @@ void BM_pair_iterator(benchmark::State& state)
 
   // Initialize dev_result to false
   auto dev_result = cudf::detail::make_zeroed_device_uvector_sync<thrust::pair<T, bool>>(
-    1, cudf::get_default_stream());
+    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   for (auto _ : state) {
     cuda_event_timer raii(state, true);  // flush_l2_cache = true, stream = 0
     if (cub_or_thrust) {

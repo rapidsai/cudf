@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,7 +78,7 @@ struct store_result_functor {
       // It's overridden in scan implementation.
       return sorted_values->view();
     else
-      return (grouped_values = helper.grouped_values(values, stream))->view();
+      return (grouped_values = helper.grouped_values(values, stream, mr))->view();
   };
 
   /**
@@ -90,7 +90,7 @@ struct store_result_functor {
   column_view get_sorted_values()
   {
     return sorted_values ? sorted_values->view()
-                         : (sorted_values = helper.sorted_values(values, stream))->view();
+                         : (sorted_values = helper.sorted_values(values, stream, mr))->view();
   };
 
  protected:

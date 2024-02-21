@@ -434,8 +434,7 @@ TYPED_TEST(Rank, min_desc_bottom_pct)
   this->run_all_tests(cudf::rank_method::MIN, desc_bottom, col1_rank, col2_rank, col3_rank, true);
 }
 
-struct RankLarge : public cudf::test::BaseFixture {
-};
+struct RankLarge : public cudf::test::BaseFixture {};
 
 TEST_F(RankLarge, average_large)
 {

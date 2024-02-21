@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,12 +28,11 @@
 
 #include <vector>
 
-struct TextReplaceTest : public cudf::test::BaseFixture {
-};
+struct TextReplaceTest : public cudf::test::BaseFixture {};
 
 TEST_F(TextReplaceTest, ReplaceTokens)
 {
-  std::vector<const char*> h_strings{"the fox jumped over the dog",
+  std::vector<char const*> h_strings{"the fox jumped over the dog",
                                      "is theme of the thesis",
                                      nullptr,
                                      "",
@@ -45,7 +44,7 @@ TEST_F(TextReplaceTest, ReplaceTokens)
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
   cudf::test::strings_column_wrapper targets({"is", "the"});
   cudf::test::strings_column_wrapper repls({"___", ""});
-  std::vector<const char*> h_expected{" fox jumped over  dog",
+  std::vector<char const*> h_expected{" fox jumped over  dog",
                                       "___ theme of  thesis",
                                       nullptr,
                                       "",

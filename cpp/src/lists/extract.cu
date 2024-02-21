@@ -101,8 +101,10 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
  */
 std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_stream_view stream)
 {
-  return cudf::detail::sequence(
-    num_lists + 1, cudf::scalar_type_t<size_type>(0, true, stream), stream);
+  return cudf::detail::sequence(num_lists + 1,
+                                cudf::scalar_type_t<size_type>(0, true, stream),
+                                stream,
+                                rmm::mr::get_current_device_resource());
 }
 
 }  // namespace
@@ -194,10 +196,11 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              size_type index,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::extract_list_element(lists_column, index, cudf::get_default_stream(), mr);
+  return detail::extract_list_element(lists_column, index, stream, mr);
 }
 
 /**
@@ -207,12 +210,13 @@ std::unique_ptr<column> extract_list_element(lists_column_view const& lists_colu
  */
 std::unique_ptr<column> extract_list_element(lists_column_view const& lists_column,
                                              column_view const& indices,
+                                             rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() == lists_column.size(),
                "Index column must have as many elements as lists column.");
-  return detail::extract_list_element(lists_column, indices, cudf::get_default_stream(), mr);
+  return detail::extract_list_element(lists_column, indices, stream, mr);
 }
 
 }  // namespace lists

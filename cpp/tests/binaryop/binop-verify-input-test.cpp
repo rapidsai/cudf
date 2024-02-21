@@ -22,8 +22,7 @@
 
 #include <cudf/binaryop.hpp>
 
-struct BinopVerifyInputTest : public cudf::test::BaseFixture {
-};
+struct BinopVerifyInputTest : public cudf::test::BaseFixture {};
 
 TEST_F(BinopVerifyInputTest, Vector_Scalar_ErrorOutputVectorType)
 {

@@ -1,10 +1,15 @@
 # Comparison of cuDF and Pandas
 
 cuDF is a DataFrame library that closely matches the Pandas API, but
-it is *not* a full drop-in replacement for Pandas.  There are some
+when used directly is *not* a full drop-in replacement for Pandas.  There are some
 differences between cuDF and Pandas, both in terms of API and
 behaviour.  This page documents the similarities and differences
 between cuDF and Pandas.
+
+Starting with the v23.10.01 release, cuDF also provides a pandas
+accelerator mode (`cudf.pandas`) that supports 100% of the pandas API
+and accelerates pandas code on the GPU without requiring any code
+change.  See the [`cudf.pandas` documentation](../cudf_pandas/index).
 
 ## Supported operations
 
@@ -15,7 +20,7 @@ filtering, concatenating, joining, groupby and window operations -
 among many others.
 
 The best way to check if we support a particular Pandas API is to search
-our [API docs](/api_docs/index).
+our [API docs](/user_guide/api_docs/index).
 
 ## Data types
 
@@ -87,37 +92,51 @@ do *not* guarantee output ordering.
 Compare the results obtained from Pandas and cuDF below:
 
 ```{code} python
- >>> import cupy as cp
- >>> df = cudf.DataFrame({'a': cp.random.randint(0, 1000, 1000), 'b': range(1000)})
- >>> df.groupby("a").mean().head()
-          b
- a
- 742  694.5
- 29   840.0
- 459  525.5
- 442  363.0
- 666    7.0
- >>> df.to_pandas().groupby("a").mean().head()
-          b
- a
- 2   643.75
- 6    48.00
- 7   631.00
- 9   906.00
- 10  640.00
+>>> import cupy as cp
+>>> cp.random.seed(0)
+>>> import cudf
+>>> df = cudf.DataFrame({'a': cp.random.randint(0, 1000, 1000), 'b': range(1000)})
+>>> df.groupby("a").mean().head()
+         b
+a
+29   193.0
+803  915.0
+5    138.0
+583  300.0
+418  613.0
+>>> df.to_pandas().groupby("a").mean().head()
+            b
+a
+0   70.000000
+1  356.333333
+2  770.000000
+3  838.000000
+4  342.000000
 ```
 
-To match Pandas behavior, you must explicitly pass `sort=True`:
+To match Pandas behavior, you must explicitly pass `sort=True`
+or enable the `mode.pandas_compatible` option when trying to
+match Pandas behavior with `sort=False`:
 
 ```{code} python
 >>> df.to_pandas().groupby("a", sort=True).mean().head()
-         b
+            b
 a
-2   643.75
-6    48.00
-7   631.00
-9   906.00
-10  640.00
+0   70.000000
+1  356.333333
+2  770.000000
+3  838.000000
+4  342.000000
+
+>>> cudf.set_option("mode.pandas_compatible", True)
+>>> df.groupby("a").mean().head()
+            b
+a
+0   70.000000
+1  356.333333
+2  770.000000
+3  838.000000
+4  342.000000
 ```
 
 ## Floating-point computation
@@ -131,7 +150,7 @@ For example, `s.sum()` is not guaranteed to produce identical results
 to Pandas nor produce identical results from run to run, when `s` is a
 Series of floats.  If you need to compare floating point results, you
 should typically do so using the functions provided in the
-[`cudf.testing`](/api_docs/general_utilities#testing-functions)
+[`cudf.testing`](/user_guide/api_docs/general_utilities)
 module, which allow you to compare values up to a desired precision.
 
 ## Column names

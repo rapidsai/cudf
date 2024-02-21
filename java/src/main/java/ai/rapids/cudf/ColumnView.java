@@ -43,30 +43,50 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   protected final ColumnVector.OffHeapState offHeap;
 
   /**
-   * Constructs a Column View given a native view address
+   * Constructs a Column View given a native view address. This asserts that if the ColumnView is
+   * of nested-type it doesn't contain non-empty nulls
    * @param address the view handle
+   * @throws AssertionError if the address points to a nested-type view with non-empty nulls
    */
   ColumnView(long address) {
     this.viewHandle = address;
-    this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    this.rows = ColumnView.getNativeRowCount(viewHandle);
-    this.nullCount = ColumnView.getNativeNullCount(viewHandle);
-    this.offHeap = null;
+    try {
+      this.type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      this.rows = ColumnView.getNativeRowCount(viewHandle);
+      this.nullCount = ColumnView.getNativeNullCount(viewHandle);
+      this.offHeap = null;
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (Throwable t) {
+      // offHeap state is null, so there is nothing to clean in offHeap
+      // delete ColumnView to avoid memory leak
+      deleteColumnView(viewHandle);
+      viewHandle = 0;
+      throw t;
+    }
   }
 
 
   /**
    * Intended to be called from ColumnVector when it is being constructed. Because state creates a
    * cudf::column_view instance and will close it in all cases, we don't want to have to double
-   * close it.
+   * close it. This asserts that if the offHeapState is of nested-type it doesn't contain non-empty nulls
    * @param state the state this view is based off of.
+   * @throws AssertionError if offHeapState points to a nested-type view with non-empty nulls
    */
   protected ColumnView(ColumnVector.OffHeapState state) {
     offHeap = state;
-    viewHandle = state.getViewHandle();
-    type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
-    rows = ColumnView.getNativeRowCount(viewHandle);
-    nullCount = ColumnView.getNativeNullCount(viewHandle);
+    try {
+      viewHandle = state.getViewHandle();
+      type = DType.fromNative(ColumnView.getNativeTypeId(viewHandle), ColumnView.getNativeTypeScale(viewHandle));
+      rows = ColumnView.getNativeRowCount(viewHandle);
+      nullCount = ColumnView.getNativeNullCount(viewHandle);
+      AssertEmptyNulls.assertNullsAreEmpty(this);
+    } catch (Throwable t) {
+      // cleanup offHeap
+      offHeap.clean(false);
+      viewHandle = 0;
+      throw t;
+    }
   }
 
   /**
@@ -287,7 +307,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Returns the amount of device memory used.
    */
   public long getDeviceMemorySize() {
-    return getDeviceMemorySize(getNativeView());
+    return getDeviceMemorySize(getNativeView(), false);
   }
 
   @Override
@@ -351,6 +371,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector getByteCount() {
     assert type.equals(DType.STRING) : "type has to be a String";
     return new ColumnVector(byteCount(getNativeView()));
+  }
+
+  /**
+   * Get the code point values (integers) for each character of each string.
+   *
+   * @return ColumnVector, with code point integer values for each character as INT32
+   */
+  public final ColumnVector codePoints() {
+    assert type.equals(DType.STRING) : "type has to be a String";
+    return new ColumnVector(codePoints(getNativeView()));
   }
 
   /**
@@ -647,8 +677,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector[] slice(int... indices) {
     long[] nativeHandles = slice(this.getNativeView(), indices);
     ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnVectors[i] = new ColumnVector(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columnVectors[i] = new ColumnVector(nativeHandle);
+      }
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columnVectors, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnVectors;
   }
@@ -786,10 +830,45 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public ColumnView[] splitAsViews(int... indices) {
     long[] nativeHandles = split(this.getNativeView(), indices);
     ColumnView[] columnViews = new ColumnView[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      columnViews[i] = new ColumnView(nativeHandles[i]);
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columnViews[i] = new ColumnView(nativeHandle);
+      }
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columnViews, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
     return columnViews;
+  }
+
+  static void cleanupColumnViews(long[] nativeHandles, ColumnView[] columnViews, Throwable throwable) {
+    for (ColumnView columnView : columnViews) {
+      if (columnView != null) {
+        try {
+          columnView.close();
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
+      }
+    }
+    for (long nativeHandle : nativeHandles) {
+      if (nativeHandle != 0) {
+        try {
+          deleteColumnView(nativeHandle);
+        } catch (Throwable s) {
+          throwable.addSuppressed(s);
+        }
+      }
+    }
   }
 
   /**
@@ -814,8 +893,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
    * bitwise merge of null masks in the columns given as arguments.
+   * The result will be sanitized to not contain any non-empty nulls in case of nested types
    *
-   * @param mergeOp binary operator, currently only BITWISE_AND is supported.
+   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
    */
@@ -2445,6 +2525,31 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   * Any row containing null list elements will result in a null output row.
+   *
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists() {
+    return flattenLists(false);
+  }
+
+  /**
+   * Flatten each list of lists into a single list.
+   *
+   * The column must have rows that are lists of lists.
+   *
+   * @param ignoreNull Whether to ignore null list elements in the input column from the operation,
+   *                   or any row containing null list elements will result in a null output row
+   * @return A new column vector containing the flattened result
+   */
+  public ColumnVector flattenLists(boolean ignoreNull) {
+    return new ColumnVector(flattenLists(getNativeView(), ignoreNull));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // STRINGS
   /////////////////////////////////////////////////////////////////////////////
@@ -2912,6 +3017,41 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
     return new ColumnVector(stringReplace(getNativeView(), target.getScalarHandle(),
         replace.getScalarHandle()));
+  }
+
+  /**
+   * Returns a new strings column where target strings with each string are replaced with
+   * corresponding replacement strings. For each string in the column, the list of targets
+   * is searched within that string. If a target string is found, it is replaced by the
+   * corresponding entry in the repls column. All occurrences found in each string are replaced.
+   * The repls argument can optionally contain a single string. In this case, all matching
+   * target substrings will be replaced by that single string.
+   *
+   * Example:
+   * cv = ["hello", "goodbye"]
+   * targets = ["e","o"]
+   * repls = ["EE","OO"]
+   * r1 = cv.stringReplace(targets, repls)
+   * r1 is now ["hEEllO", "gOOOOdbyEE"]
+   *
+   * targets = ["e", "o"]
+   * repls = ["_"]
+   * r2 = cv.stringReplace(targets, repls)
+   * r2 is now ["h_ll_", "g__dby_"]
+   *
+   * @param targets Strings to search for in each string.
+   * @param repls Corresponding replacement strings for target strings.
+   * @return A new java column vector containing the replaced strings.
+   */
+  public final ColumnVector stringReplace(ColumnView targets, ColumnView repls) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets != null : "target list may not be null";
+    assert targets.getType().equals(DType.STRING) : "target list must be a string column";
+    assert repls != null : "replacement list may not be null";
+    assert repls.getType().equals(DType.STRING) : "replacement list must be a string column";
+
+    return new ColumnVector(stringReplaceMulti(getNativeView(), targets.getNativeView(),
+        repls.getNativeView()));
   }
 
   /**
@@ -3886,6 +4026,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return ((actualBytes + 63) >> 6) << 6;
   }
 
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * @param nullPolicy if nulls should be included or not.
+   */
+  public int distinctCount(NullPolicy nullPolicy) {
+    return distinctCount(getNativeView(), nullPolicy.includeNulls);
+  }
+
+  /**
+   * Count how many rows in the column are distinct from one another.
+   * Nulls are included.
+   */
+  public int distinctCount() {
+    return distinctCount(getNativeView(), true);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
@@ -3918,6 +4074,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   // Native Methods
+  private static native int distinctCount(long handle, boolean nullsIncluded);
+
   /**
    * Native method to parse and convert a string column vector to unix timestamp. A unix
    * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
@@ -3940,6 +4098,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
 
   private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
+
+  private static native long toHex(long viewHandle);
 
   /**
    * Native method to concatenate a list column of strings (each row is a list of strings),
@@ -4171,6 +4331,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringReplace(long columnView, long target, long repl) throws CudfException;
 
   /**
+   * Native method to replace target strings by corresponding repl strings.
+   * @param inputCV native handle of the cudf::column_view being operated on.
+   * @param targetsCV handle of column containing the strings being searched.
+   * @param replsCV handle of column containing the strings to replace (can optionally contain a single string).
+   */
+  private static native long stringReplaceMulti(long inputCV, long targetsCV, long replsCV) throws CudfException;
+
+  /**
    * Native method for replacing each regular expression pattern match with the specified
    * replacement string.
    * @param columnView native handle of the cudf::column_view being operated on.
@@ -4352,6 +4520,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long byteCount(long viewHandle) throws CudfException;
 
+  private static native long codePoints(long viewHandle);
+
   private static native long extractListElement(long nativeView, int index);
 
   private static native long extractListElementV(long nativeView, long indicesView);
@@ -4359,6 +4529,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long dropListDuplicates(long nativeView);
 
   private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
+
+  private static native long flattenLists(long inputHandle, boolean ignoreNull);
 
   /**
    * Native method for list lookup
@@ -4631,13 +4803,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   static native int getNativeNumChildren(long viewHandle) throws CudfException;
 
   // calculate the amount of device memory used by this column including any child columns
-  static native long getDeviceMemorySize(long viewHandle) throws CudfException;
+  static native long getDeviceMemorySize(long viewHandle, boolean shouldPadForCpu) throws CudfException;
 
   static native long copyColumnViewToCV(long viewHandle) throws CudfException;
 
   static native long generateListOffsets(long handle) throws CudfException;
 
   static native long applyBooleanMask(long arrayColumnView, long booleanMaskHandle) throws CudfException;
+
+  static native boolean hasNonEmptyNulls(long handle) throws CudfException;
+
+  static native long purgeNonEmptyNulls(long handle) throws CudfException;
 
   /**
    * A utility class to create column vector like objects without refcounts and other APIs when
@@ -4841,7 +5017,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /////////////////////////////////////////////////////////////////////////////
 
   private static HostColumnVectorCore copyToHostNestedHelper(
-      ColumnView deviceCvPointer) {
+      ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
       return null;
     }
@@ -4861,21 +5037,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       currOffsets = deviceCvPointer.getOffsets();
       currValidity = deviceCvPointer.getValid();
       if (currData != null) {
-        hostData = HostMemoryBuffer.allocate(currData.length);
+        hostData = hostMemoryAllocator.allocate(currData.length);
         hostData.copyFromDeviceBuffer(currData);
       }
       if (currValidity != null) {
-        hostValid = HostMemoryBuffer.allocate(currValidity.length);
+        hostValid = hostMemoryAllocator.allocate(currValidity.length);
         hostValid.copyFromDeviceBuffer(currValidity);
       }
       if (currOffsets != null) {
-        hostOffsets = HostMemoryBuffer.allocate(currOffsets.length);
+        hostOffsets = hostMemoryAllocator.allocate(currOffsets.length);
         hostOffsets.copyFromDeviceBuffer(currOffsets);
       }
       int numChildren = deviceCvPointer.getNumChildren();
       for (int i = 0; i < numChildren; i++) {
         try(ColumnView childDevPtr = deviceCvPointer.getChildColumnView(i)) {
-          children.add(copyToHostNestedHelper(childDevPtr));
+          children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
         }
       }
       currNullCount = deviceCvPointer.getNullCount();
@@ -4912,7 +5088,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Copy the data to the host.
    */
-  public HostColumnVector copyToHost() {
+  public HostColumnVector copyToHost(HostMemoryAllocator hostMemoryAllocator) {
     try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
@@ -4932,16 +5108,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         getNullCount();
         if (!type.isNestedType()) {
           if (valid != null) {
-            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
+            hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
             hostValidityBuffer.copyFromDeviceBuffer(valid);
           }
           if (offsets != null) {
-            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.length);
+            hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.length);
             hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
           }
           // If a strings column is all null values there is no data buffer allocated
           if (data != null) {
-            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
+            hostDataBuffer = hostMemoryAllocator.allocate(data.length);
             hostDataBuffer.copyFromDeviceBuffer(data);
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -4950,22 +5126,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
           return ret;
         } else {
           if (data != null) {
-            hostDataBuffer = HostMemoryBuffer.allocate(data.length);
+            hostDataBuffer = hostMemoryAllocator.allocate(data.length);
             hostDataBuffer.copyFromDeviceBuffer(data);
           }
 
           if (valid != null) {
-            hostValidityBuffer = HostMemoryBuffer.allocate(valid.getLength());
+            hostValidityBuffer = hostMemoryAllocator.allocate(valid.getLength());
             hostValidityBuffer.copyFromDeviceBuffer(valid);
           }
           if (offsets != null) {
-            hostOffsetsBuffer = HostMemoryBuffer.allocate(offsets.getLength());
+            hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
             hostOffsetsBuffer.copyFromDeviceBuffer(offsets);
           }
           List<HostColumnVectorCore> children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
-              children.add(copyToHostNestedHelper(childDevPtr));
+              children.add(copyToHostNestedHelper(childDevPtr, hostMemoryAllocator));
             }
           }
           HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
@@ -4996,5 +5172,102 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         }
       }
     }
+  }
+
+  public HostColumnVector copyToHost() {
+    return copyToHost(DefaultHostMemoryAllocator.get());
+  }
+
+  /**
+   * Calculate the total space required to copy the data to the host. This should be padded to
+   * the alignment that the CPU requires.
+   */
+  public long getHostBytesRequired() {
+    return getDeviceMemorySize(getNativeView(), true);
+  }
+
+  /**
+   * Get the size that the host will align memory allocations to in bytes.
+   */
+  public static native long hostPaddingSizeInBytes();
+
+  /**
+   * Exact check if a column or its descendants have non-empty null rows
+   *
+   * @return Whether the column or its descendants have non-empty null rows
+   */
+  public boolean hasNonEmptyNulls() {
+    return hasNonEmptyNulls(viewHandle);
+  }
+
+  /**
+   * Copies this column into output while purging any non-empty null rows in the column or its
+   * descendants.
+   *
+   * If this column is not of compound type (LIST/STRING/STRUCT/DICTIONARY), the output will be
+   * the same as input.
+   *
+   * The purge operation only applies directly to LIST and STRING columns, but it applies indirectly
+   * to STRUCT/DICTIONARY columns as well, since these columns may have child columns that
+   * are LIST or STRING.
+   *
+   * Examples:
+   * lists = data: [{{0,1}, {2,3}, {4,5}} validity: {true, false, true}]
+   * lists[1] is null, but the list's child column still stores `{2,3}`.
+   *
+   * After purging the contents of the list's null rows, the column's contents will be:
+   * lists = [data: {{0,1}, {4,5}} validity: {true, false, true}]
+   *
+   * @return A new column with equivalent contents to `input`, but with null rows purged
+   */
+  public ColumnVector purgeNonEmptyNulls() {
+    return new ColumnVector(purgeNonEmptyNulls(viewHandle));
+  }
+
+  static ColumnView[] getColumnViewsFromPointers(long[] nativeHandles) {
+    ColumnView[] columns = new ColumnView[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnView(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      try {
+        cleanupColumnViews(nativeHandles, columns, t);
+      } catch (Throwable s) {
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
+    }
+  }
+
+  /**
+   * Convert this integer column to hexadecimal column and return a new strings column
+   *
+   * Any null entries will result in corresponding null entries in the output column.
+   *
+   * The output character set is '0'-'9' and 'A'-'F'. The output string width will
+   * be a multiple of 2 depending on the size of the integer type. A single leading
+   * zero is applied to the first non-zero output byte if it is less than 0x10.
+   *
+   * Example:
+   * input = [123, -1, 0, 27, 342718233]
+   * s = input.toHex()
+   * s is [ '04D2', 'FFFFFFFF', '00', '1B', '146D7719']
+   *
+   * The example above shows an `INT32` type column where each integer is 4 bytes.
+   * Leading zeros are suppressed unless filling out a complete byte as in
+   * `123 -> '04D2'` instead of `000004D2` or `4D2`.
+   *
+   * @return new string ColumnVector
+   */
+  public ColumnVector toHex() {
+    assert getType().isIntegral() : "Only integers are supported";
+    return new ColumnVector(toHex(this.getNativeView()));
   }
 }

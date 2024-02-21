@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -7,7 +7,7 @@ from pandas.testing import assert_series_equal
 
 from dask import dataframe as dd
 
-from cudf import DataFrame, Series
+from cudf import DataFrame, Series, date_range
 from cudf.testing._utils import assert_eq, does_not_raise
 
 import dask_cudf as dgd
@@ -259,13 +259,13 @@ def test_categorical_categories():
         {"a": ["a", "b", "c", "d", "e", "e", "a", "d"], "b": range(8)}
     )
     df["a"] = df["a"].astype("category")
-    pdf = df.to_pandas(nullable_pd_dtype=False)
+    pdf = df.to_pandas(nullable=False)
 
     ddf = dgd.from_cudf(df, 2)
     dpdf = dd.from_pandas(pdf, 2)
 
     dd.assert_eq(
-        ddf.a.cat.categories.to_series().to_pandas(nullable_pd_dtype=False),
+        ddf.a.cat.categories.to_series().to_pandas(nullable=False),
         dpdf.a.cat.categories.to_series(),
         check_index=False,
     )
@@ -527,3 +527,33 @@ def test_struct_explode(data):
     got = dgd.from_cudf(Series(data), 2).struct.explode()
     # Output index will not agree for >1 partitions
     assert_eq(expect, got.compute().reset_index(drop=True))
+
+
+def test_tz_localize():
+    data = Series(date_range("2000-04-01", "2000-04-03", freq="H"))
+    expect = data.dt.tz_localize(
+        "US/Eastern", ambiguous="NaT", nonexistent="NaT"
+    )
+    got = dgd.from_cudf(data, 2).dt.tz_localize(
+        "US/Eastern", ambiguous="NaT", nonexistent="NaT"
+    )
+    dd.assert_eq(expect, got)
+
+    expect = expect.dt.tz_localize(None)
+    got = got.dt.tz_localize(None)
+    dd.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize("UTC"),
+        date_range("2000-04-01", "2000-04-03", freq="H").tz_localize(
+            "US/Eastern"
+        ),
+    ],
+)
+def test_tz_convert(data):
+    expect = Series(data).dt.tz_convert("US/Pacific")
+    got = dgd.from_cudf(Series(data), 2).dt.tz_convert("US/Pacific")
+    dd.assert_eq(expect, got)

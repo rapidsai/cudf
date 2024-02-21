@@ -31,35 +31,8 @@ struct regex_program;
  * @addtogroup strings_contains
  * @{
  * @file strings/contains.hpp
- * @brief Strings APIs for regex contains, count, matches
+ * @brief Strings APIs for regex contains, count, matches, like
  */
-
-/**
- * @brief Returns a boolean column identifying rows which
- * match the given regex pattern.
- *
- * @code{.pseudo}
- * Example:
- * s = ["abc","123","def456"]
- * r = contains_re(s,"\\d+")
- * r is now [false, true, true]
- * @endcode
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param strings Strings instance for this operation.
- * @param pattern Regex pattern to match to each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
- */
-std::unique_ptr<column> contains_re(
-  strings_column_view const& strings,
-  std::string_view pattern,
-  regex_flags const flags             = regex_flags::DEFAULT,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a boolean column identifying rows which
@@ -77,41 +50,16 @@ std::unique_ptr<column> contains_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param prog Regex program instance
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string
  */
 std::unique_ptr<column> contains_re(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   regex_program const& prog,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Returns a boolean column identifying rows which
- * matching the given regex pattern but only at the beginning the string.
- *
- * @code{.pseudo}
- * Example:
- * s = ["abc","123","def456"]
- * r = matches_re(s,"\\d+")
- * r is now [false, true, false]
- * @endcode
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param strings Strings instance for this operation.
- * @param pattern Regex pattern to match to each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New column of boolean results for each string.
- */
-std::unique_ptr<column> matches_re(
-  strings_column_view const& strings,
-  std::string_view pattern,
-  regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -130,41 +78,16 @@ std::unique_ptr<column> matches_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param prog Regex program instance
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New column of boolean results for each string
  */
 std::unique_ptr<column> matches_re(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   regex_program const& prog,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Returns the number of times the given regex pattern
- * matches in each string.
- *
- * @code{.pseudo}
- * Example:
- * s = ["abc","123","def45"]
- * r = count_re(s,"\\d")
- * r is now [0, 3, 2]
- * @endcode
- *
- * Any null string entries return corresponding null output column entries.
- *
- * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
- *
- * @param strings Strings instance for this operation.
- * @param pattern Regex pattern to match within each string.
- * @param flags Regex flags for interpreting special characters in the pattern.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New INT32 column with counts for each string.
- */
-std::unique_ptr<column> count_re(
-  strings_column_view const& strings,
-  std::string_view pattern,
-  regex_flags const flags             = regex_flags::DEFAULT,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -183,14 +106,16 @@ std::unique_ptr<column> count_re(
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.
  *
- * @param strings Strings instance for this operation
+ * @param input Strings instance for this operation
  * @param prog Regex program instance
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New INT32 column with counts for each string
+ * @return New column of match counts for each string
  */
 std::unique_ptr<column> count_re(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   regex_program const& prog,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -227,8 +152,9 @@ std::unique_ptr<column> count_re(
  *
  * @param input Strings instance for this operation
  * @param pattern Like pattern to match within each string
- * @param escape_character Optional character specifies the escape prefix;
- *                         default is no escape character
+ * @param escape_character Optional character specifies the escape prefix.
+ *                         Default is no escape character.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New boolean column
  */
@@ -236,6 +162,7 @@ std::unique_ptr<column> like(
   strings_column_view const& input,
   string_scalar const& pattern,
   string_scalar const& escape_character = string_scalar(""),
+  rmm::cuda_stream_view stream          = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
 
 /**
@@ -266,8 +193,9 @@ std::unique_ptr<column> like(
  *
  * @param input Strings instance for this operation
  * @param patterns Like patterns to match within each corresponding string
- * @param escape_character Optional character specifies the escape prefix;
- *                         default is no escape character
+ * @param escape_character Optional character specifies the escape prefix.
+ *                         Default is no escape character.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New boolean column
  */
@@ -275,6 +203,7 @@ std::unique_ptr<column> like(
   strings_column_view const& input,
   strings_column_view const& patterns,
   string_scalar const& escape_character = string_scalar(""),
+  rmm::cuda_stream_view stream          = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr   = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

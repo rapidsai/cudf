@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  */
 #include <tests/iterator/iterator_tests.cuh>
 
+#include <cudf_test/random.hpp>
+
 #include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
 
-struct TransformedIteratorTest : public IteratorTest<int8_t> {
-};
+struct TransformedIteratorTest : public IteratorTest<int8_t> {};
 
 // Tests up cast reduction with null iterator.
 // The up cast iterator will be created by transform_iterator and
 // cudf::detail::make_null_replacement_iterator(col, T{0})
 TEST_F(TransformedIteratorTest, null_iterator_upcast)
 {
-  const int column_size{1000};
+  int const column_size{1000};
   using T        = int8_t;
   using T_upcast = int64_t;
   T init{0};
@@ -68,7 +69,7 @@ TEST_F(TransformedIteratorTest, null_iterator_upcast)
 //        cudf::detail::transformer_squared<T_upcast>)
 TEST_F(TransformedIteratorTest, null_iterator_square)
 {
-  const int column_size{1000};
+  int const column_size{1000};
   using T        = int8_t;
   using T_upcast = int64_t;
   T init{0};
@@ -110,7 +111,7 @@ TEST_F(TransformedIteratorTest, large_size_reduction)
 {
   using T = int64_t;
 
-  const int column_size{1000000};
+  int const column_size{1000000};
   const T init{0};
 
   // data and valid arrays

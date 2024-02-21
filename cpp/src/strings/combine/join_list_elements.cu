@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -53,13 +53,13 @@ template <class Functor>
 struct compute_size_and_concatenate_fn {
   Functor const func;
   column_device_view const lists_dv;
-  offset_type const* const list_offsets;
+  size_type const* const list_offsets;
   column_device_view const strings_dv;
   string_scalar_device_view const string_narep_dv;
   separator_on_nulls const separate_nulls;
   output_if_empty_list const empty_list_policy;
 
-  offset_type* d_offsets{nullptr};
+  size_type* d_offsets{nullptr};
 
   // If d_chars == nullptr: only compute sizes and validities of the output strings.
   // If d_chars != nullptr: only concatenate strings.
@@ -215,8 +215,11 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            stream,
                            mr);
 
-  return make_strings_column(
-    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+  return make_strings_column(num_rows,
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
+                             null_count,
+                             std::move(null_mask));
 }
 
 namespace {
@@ -290,8 +293,11 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                            stream,
                            mr);
 
-  return make_strings_column(
-    num_rows, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
+  return make_strings_column(num_rows,
+                             std::move(offsets_column),
+                             std::move(chars_column->release().data.release()[0]),
+                             null_count,
+                             std::move(null_mask));
 }
 
 }  // namespace detail
@@ -301,16 +307,12 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            string_scalar const& narep,
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::join_list_elements(lists_strings_column,
-                                    separator,
-                                    narep,
-                                    separate_nulls,
-                                    empty_list_policy,
-                                    cudf::get_default_stream(),
-                                    mr);
+  return detail::join_list_elements(
+    lists_strings_column, separator, narep, separate_nulls, empty_list_policy, stream, mr);
 }
 
 std::unique_ptr<column> join_list_elements(lists_column_view const& lists_strings_column,
@@ -319,6 +321,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                            string_scalar const& string_narep,
                                            separator_on_nulls separate_nulls,
                                            output_if_empty_list empty_list_policy,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -328,7 +331,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
                                     string_narep,
                                     separate_nulls,
                                     empty_list_policy,
-                                    cudf::get_default_stream(),
+                                    stream,
                                     mr);
 }
 

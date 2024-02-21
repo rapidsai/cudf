@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,10 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
+
+#include <cuda/functional>
+
+#include <stdexcept>
 
 namespace nvtext {
 namespace detail {
@@ -191,10 +195,11 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count),
     d_ngram_offsets + 1,
-    [d_token_offsets, ngrams] __device__(cudf::size_type idx) {
-      auto token_count = d_token_offsets[idx + 1] - d_token_offsets[idx];
-      return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
-    },
+    cuda::proclaim_return_type<cudf::size_type>(
+      [d_token_offsets, ngrams] __device__(cudf::size_type idx) {
+        auto token_count = d_token_offsets[idx + 1] - d_token_offsets[idx];
+        return (token_count >= ngrams) ? token_count - ngrams + 1 : 0;
+      }),
     thrust::plus{});
   ngram_offsets.set_element_to_zero_async(0, stream);
   auto const total_ngrams = ngram_offsets.back_element(stream);
@@ -220,15 +225,15 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
     chars_offsets.begin(), chars_offsets.end(), chars_offsets.begin(), stream);
   CUDF_EXPECTS(
     output_chars_size <= static_cast<int64_t>(std::numeric_limits<cudf::size_type>::max()),
-    "Size of output exceeds column size limit");
+    "Size of output exceeds the column size limit",
+    std::overflow_error);
 
   // This will contain the size in bytes of each ngram to generate
   rmm::device_uvector<cudf::size_type> ngram_sizes(total_ngrams, stream);
 
   // build output chars column
-  auto chars_column = cudf::strings::detail::create_chars_child_column(
-    static_cast<cudf::size_type>(output_chars_size), stream, mr);
-  auto d_chars = chars_column->mutable_view().data<char>();
+  rmm::device_uvector<char> chars(output_chars_size, stream, mr);
+  auto d_chars = chars.data();
   // Generate the ngrams into the chars column data buffer.
   // The ngram_builder_fn functor also fills the ngram_sizes vector with the
   // size of each ngram.
@@ -247,11 +252,10 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
   // build the offsets column -- converting the ngram sizes into offsets
   auto offsets_column = std::get<0>(
     cudf::detail::make_offsets_child_column(ngram_sizes.begin(), ngram_sizes.end(), stream, mr));
-  chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
   return make_strings_column(
-    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -262,11 +266,11 @@ std::unique_ptr<cudf::column> ngrams_tokenize(cudf::strings_column_view const& s
                                               cudf::size_type ngrams,
                                               cudf::string_scalar const& delimiter,
                                               cudf::string_scalar const& separator,
+                                              rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ngrams_tokenize(
-    strings, ngrams, delimiter, separator, cudf::get_default_stream(), mr);
+  return detail::ngrams_tokenize(strings, ngrams, delimiter, separator, stream, mr);
 }
 
 }  // namespace nvtext

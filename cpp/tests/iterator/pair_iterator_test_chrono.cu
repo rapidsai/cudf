@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,7 @@
 using TestingTypes = cudf::test::ChronoTypes;
 
 template <typename T>
-struct ChronoPairIteratorTest : public IteratorTest<T> {
-};
+struct ChronoPairIteratorTest : public IteratorTest<T> {};
 
 TYPED_TEST_SUITE(ChronoPairIteratorTest, TestingTypes);
 TYPED_TEST(ChronoPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
