@@ -2080,9 +2080,6 @@ def test_get_indexer_multi_numeric_deviate(key, method):
     assert_eq(expected, got)
 
 
-@pytest.mark.xfail(
-    not PANDAS_GE_220, reason="Remove after pandas-2.2+ upgrade"
-)
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
 def test_get_indexer_multi_error(method):
     pi = pd.MultiIndex.from_tuples(
