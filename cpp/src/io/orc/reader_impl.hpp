@@ -103,6 +103,8 @@ class reader::impl {
    * @brief Perform a global preprocessing step that executes exactly once for the entire duration
    * of the reader.
    *
+   * TODO: rewrite, not use "ensure".
+   *
    * In this step, the metadata of all stripes in the data source is parsed, and information about
    * data streams for all selected columns in alls tripes are generated. If the reader has a data
    * read limit, data size of all stripes are used to determine the chunks of consecutive

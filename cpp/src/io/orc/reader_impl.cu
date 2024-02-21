@@ -987,7 +987,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
 
   // TODO: fix this, should be called once
   // TODO: only load data if needed.
-  _chunk_read_data.curr_load_stripe_chunk = 0;
   while (_chunk_read_data.more_stripe_to_load()) {
     load_data();
   }
