@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <text/subword/detail/data_normalizer.hpp>
+#include "text/subword/detail/data_normalizer.hpp"
 
 #include <cudf/strings/strings_column_view.hpp>
 
