@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,6 +97,7 @@ namespace detail {
 template <typename Rep, int32_t Base>
 CUDF_HOST_DEVICE inline constexpr Rep get_power(int32_t exp)
 {
+  //Compute power recursively
   return (exp > 0) ? Rep(Base) * get_power<Rep, Base>(exp - 1) : 1;
 }
 
@@ -112,6 +113,7 @@ CUDF_HOST_DEVICE inline constexpr Rep get_power(int32_t exp)
 template <typename Rep, int32_t Base, std::size_t... Exponents>
 CUDF_HOST_DEVICE inline Rep ipow_impl(int32_t exponent, cuda::std::index_sequence<Exponents...>)
 {
+  //Compute powers at compile time, storing into array
   static constexpr Rep powers[] = { get_power<Rep, Base>(Exponents)... };
   return powers[exponent];
 }
@@ -133,8 +135,11 @@ CUDF_HOST_DEVICE inline Rep ipow(T exponent)
   if constexpr (Base == numeric::Radix::BASE_2) {
     return static_cast<Rep>(1) << exponent;
   } else { //BASE_10
+    //Build index sequence for building power array at compile time
     static constexpr auto max_exp = cuda::std::numeric_limits<Rep>::digits10;
     static constexpr auto exponents = cuda::std::make_index_sequence<max_exp + 1>{};
+
+    //Get compile-time result
     return ipow_impl<Rep, static_cast<int32_t>(Base)>(exponent, exponents);
   }
 }
