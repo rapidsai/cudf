@@ -522,6 +522,14 @@ struct path_operator {
 };
 
 /**
+ * @brief Enum to specify whether parsing values enclosed within brackets, like `['book']`
+ */
+enum class bracket_state : bool {
+  INSIDE,  ///< Parsing inside brackets
+  OUTSIDE  ///< Parsing outside brackets
+};
+
+/**
  * @brief Parsing class that holds the current state of the JSONPath string to be parsed
  * and provides functions for navigating through it. This is only called on the host
  * during the preprocess step which builds a command buffer that the gpu uses.
@@ -541,7 +549,7 @@ class path_state : private parser {
       case '.': {
         path_operator op;
         string_view term{".[", 2};
-        if (parse_path_name(op.name, term, false /*outside_brackets*/)) {
+        if (parse_path_name(op.name, term, bracket_state::OUTSIDE)) {
           // this is another potential use case for __SPARK_BEHAVIORS / configurability
           // Spark currently only handles the wildcard operator inside [*], it does
           // not handle .*
@@ -564,7 +572,7 @@ class path_state : private parser {
         path_operator op;
         string_view term{"]", 1};
         bool const is_string = *pos == '\'';
-        if (parse_path_name(op.name, term, true /*inside_brackets*/)) {
+        if (parse_path_name(op.name, term, bracket_state::INSIDE)) {
           pos++;
           if (op.name.size_bytes() == 1 && op.name.data()[0] == '*') {
             op.type          = path_operator_type::CHILD_WILDCARD;
@@ -600,8 +608,8 @@ class path_state : private parser {
  private:
   cudf::io::parse_options_view json_opts{',', '\n', '\"', '.'};
 
-  // inside_brackets is set to true while parsing values enclosed within [ ] example: ['book']
-  bool parse_path_name(string_view& name, string_view const& terminators, bool inside_brackets)
+  // b_state is set to INSIDE while parsing values enclosed within [ ], otherwise OUTSIDE
+  bool parse_path_name(string_view& name, string_view const& terminators, bracket_state b_state)
   {
     switch (*pos) {
       case '*':
@@ -610,7 +618,7 @@ class path_state : private parser {
         break;
 
       case '\'':
-        if (inside_brackets) {
+        if (b_state == bracket_state::INSIDE) {
           if (parse_string(name, false, '\'') != parse_result::SUCCESS) { return false; }
           break;
         }
