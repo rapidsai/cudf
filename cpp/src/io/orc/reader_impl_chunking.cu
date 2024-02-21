@@ -172,7 +172,7 @@ struct cumulative_size_sum {
 
 #if 1
 /**
- * @brief Find the splits of the input data such that each split has cummulative size less than a
+ * @brief Find the splits of the input data such that each split has cumulative size less than a
  * given `size_limit`.
  */
 std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
