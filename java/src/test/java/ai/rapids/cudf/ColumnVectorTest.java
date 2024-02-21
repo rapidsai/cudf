@@ -6391,6 +6391,35 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetJSONObjectValidation() {
+    GetJsonObjectOptions options = GetJsonObjectOptions.builder().allowSingleQuotes(true).build();
+    try (ColumnVector json = ColumnVector.fromStrings(
+        "{\"url\":\"http://test.com\"}",
+        "{'url':'http://test.com'}",
+        "{'url':'http://test.com'},,,,,,tail is useless", // ignore tailing unused chars, consistent with Spark
+        "{'url':'http://test.com\t'}",
+        "{\"url\":\"http://\"http://test.com\"\",\"something\":1234\"}",
+        "{\"url\":\"http://test.com\",\"something\":1234, ",
+        "{\"url\":\"http://test.com\",}",
+        "{\"url\":\"http://test.com\",,}",
+        "[{\"url\": \"http://test.com\"}]");
+        ColumnVector expectedAuthors = ColumnVector.fromStrings(
+            "http://test.com",
+            "http://test.com",
+            "http://test.com",
+            "http://test.com\t",
+            null,
+            null,
+            null,
+            null,
+            null);
+        Scalar path = Scalar.fromString("$.url");
+        ColumnVector gotAuthors = json.getJSONObject(path, options)) {
+      assertColumnsAreEqual(expectedAuthors, gotAuthors);
+    }
+  }
+
+  @Test
   void testGetJSONObjectWithSingleQuotes() {
     String jsonString =  "{" +
           "\'a\': \'A\"\'" +
