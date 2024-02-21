@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import decimal
 import operator
@@ -114,7 +114,6 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     _VALID_BINARY_OPERATIONS = BinaryOperand._SUPPORTED_BINARY_OPERATIONS
 
     def __init__(self, value, dtype=None):
-
         self._host_value = None
         self._host_dtype = None
         self._device_value = None

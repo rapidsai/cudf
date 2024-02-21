@@ -58,6 +58,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
     ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
                                $<TARGET_NAME_IF_EXISTS:conda_env>
   )
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}
@@ -174,7 +175,6 @@ ConfigureTest(
   hashing/sha256_test.cpp
   hashing/sha384_test.cpp
   hashing/sha512_test.cpp
-  hashing/spark_murmurhash3_x86_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
 
@@ -314,6 +314,7 @@ ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(JSON_QUOTE_NORMALIZATION io/json_quote_normalization_test.cpp)
+ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json_whitespace_normalization_test.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
@@ -438,8 +439,13 @@ ConfigureTest(
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
-  TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu table/row_operator_tests_utilities.cu
+  TABLE_TEST
+  table/table_tests.cpp
+  table/table_view_tests.cu
+  table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
+  table/row_operator_tests_utilities.cu
+  table/row_operator_tests_utilities2.cu
 )
 
 # ##################################################################################################
