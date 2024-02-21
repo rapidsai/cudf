@@ -344,9 +344,6 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   auto& stripe_data_read_chunks  = _file_itm_data.stripe_data_read_chunks;
   auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
 
-  // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
-  stream_id_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
-
   // Logically view streams as columns
   _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
 
