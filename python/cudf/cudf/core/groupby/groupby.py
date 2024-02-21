@@ -1549,7 +1549,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result.sort_index()
         if self._as_index is False:
             result = result.reset_index()
-        #            result[None] = result.pop(0)
         return result
 
     @_cudf_nvtx_annotate
