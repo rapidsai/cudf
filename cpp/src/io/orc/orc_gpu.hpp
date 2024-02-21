@@ -16,11 +16,10 @@
 
 #pragma once
 
+#include "io/comp/gpuinflate.hpp"
+#include "io/statistics/statistics.cuh"
+#include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/statistics/statistics.cuh>
-#include <io/utilities/column_buffer.hpp>
 
 #include <cudf/detail/timezone.cuh>
 #include <cudf/io/orc_types.hpp>

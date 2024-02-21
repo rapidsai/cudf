@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
-#include <cudf/strings/detail/copy_range.cuh>
+#include <cudf/strings/detail/copy_range.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -130,29 +130,8 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto target_end           = target_begin + (source_end - source_begin);
-  auto p_source_device_view = cudf::column_device_view::create(source, stream);
-  if (source.has_nulls()) {
-    return cudf::strings::detail::copy_range(
-      cudf::detail::make_null_replacement_iterator<cudf::string_view>(*p_source_device_view,
-                                                                      cudf::string_view()) +
-        source_begin,
-      cudf::detail::make_validity_iterator(*p_source_device_view) + source_begin,
-      cudf::strings_column_view(target),
-      target_begin,
-      target_end,
-      stream,
-      mr);
-  } else {
-    return cudf::strings::detail::copy_range(
-      p_source_device_view->begin<cudf::string_view>() + source_begin,
-      thrust::make_constant_iterator(true),
-      cudf::strings_column_view(target),
-      target_begin,
-      target_end,
-      stream,
-      mr);
-  }
+  return cudf::strings::detail::copy_range(
+    source, target, source_begin, source_end, target_begin, stream, mr);
 }
 
 template <>

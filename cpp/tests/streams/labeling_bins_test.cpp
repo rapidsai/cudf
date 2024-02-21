@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/labeling/label_bins.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+
+#include <cudf/labeling/label_bins.hpp>
 
 class LabelingBinsStreamTest : public cudf::test::BaseFixture {};
 

@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -160,33 +160,30 @@ def _check_series(expect, got):
 def test_dataframe_join_suffix():
     np.random.seed(0)
 
-    df = cudf.DataFrame()
-    for k in "abc":
-        df[k] = np.random.randint(0, 5, 5)
+    df = cudf.DataFrame(np.random.randint(0, 5, (5, 3)), columns=list("abc"))
 
     left = df.set_index("a")
     right = df.set_index("c")
-    with pytest.raises(ValueError) as raises:
-        left.join(right)
-    raises.match(
-        "there are overlapping columns but lsuffix"
-        " and rsuffix are not defined"
+    msg = (
+        "there are overlapping columns but lsuffix and rsuffix are not defined"
     )
+    with pytest.raises(ValueError, match=msg):
+        left.join(right)
 
     got = left.join(right, lsuffix="_left", rsuffix="_right", sort=True)
-    # Get expected value
-    pddf = df.to_pandas()
-    expect = pddf.set_index("a").join(
-        pddf.set_index("c"), lsuffix="_left", rsuffix="_right"
+    expect = left.to_pandas().join(
+        right.to_pandas(),
+        lsuffix="_left",
+        rsuffix="_right",
+        sort=PANDAS_GE_220,
     )
-    # Check
-    assert list(expect.columns) == list(got.columns)
-    assert_eq(expect.index.values, got.index.values)
+    # TODO: Retain result index name
+    expect.index.name = None
+    assert_eq(got, expect)
 
     got_sorted = got.sort_values(by=["b_left", "c", "b_right"], axis=0)
     expect_sorted = expect.sort_values(by=["b_left", "c", "b_right"], axis=0)
-    for k in expect_sorted.columns:
-        _check_series(expect_sorted[k].fillna(-1), got_sorted[k].fillna(-1))
+    assert_eq(got_sorted, expect_sorted)
 
 
 def test_dataframe_join_cats():
