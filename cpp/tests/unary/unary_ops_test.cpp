@@ -23,9 +23,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/unary.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <cuda/std/limits>
+#include <thrust/iterator/counting_iterator.h>
 
 template <typename T>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,

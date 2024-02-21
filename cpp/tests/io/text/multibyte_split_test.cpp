@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/utilities/output_builder.cuh>
+#include "io/utilities/output_builder.cuh"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>

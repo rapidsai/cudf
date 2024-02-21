@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regex_program_impl.h>
-#include <strings/regex/utilities.cuh>
+#include "strings/regex/regex_program_impl.h"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
