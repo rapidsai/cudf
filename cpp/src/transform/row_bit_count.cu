@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -352,11 +353,12 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
     return 0;
   }
 
-  auto const offsets_size  = sizeof(size_type) * CHAR_BIT;
+  auto const offsets_size =
+    (offsets.type().id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t)) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
-  auto const chars_size =
-    (offsets.data<size_type>()[row_end] - offsets.data<size_type>()[row_start]) * CHAR_BIT;
-  return ((offsets_size + validity_size) * num_rows) + chars_size;
+  auto const d_offsets     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+  auto const chars_size    = (d_offsets[row_end] - d_offsets[row_start]) * CHAR_BIT;
+  return static_cast<size_type>(((offsets_size + validity_size) * num_rows) + chars_size);
 }
 
 /**
