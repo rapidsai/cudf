@@ -1082,7 +1082,7 @@ def test_private_method_result_wrapped():
     xoffset = xpd.offsets.Day()
     dt = datetime.datetime(2020, 1, 1)
     result = xoffset._apply(dt)
-    assert type(result) is xpd.Timestamp
+    assert isinstance(result, xpd.Timestamp)
 
 
 def test_numpy_var():
