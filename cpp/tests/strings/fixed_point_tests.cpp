@@ -324,7 +324,7 @@ TEST_F(StringsConvertTest, DISABLED_FixedPointStringConversionOperator)
 {
   auto const max = cuda::std::numeric_limits<__int128_t>::max();
 
-  //Must use scaled_integer, else shift (multiply) is undefined behavior (integer overflow)
+  // Must use scaled_integer, else shift (multiply) is undefined behavior (integer overflow)
   auto const x = numeric::decimal128(numeric::scaled_integer{max, numeric::scale_type{-10}});
   EXPECT_EQ(static_cast<std::string>(x), "17014118346046923173168730371.5884105727");
 
