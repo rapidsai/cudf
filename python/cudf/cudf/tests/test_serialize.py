@@ -352,9 +352,9 @@ def test_serialize_seriesgroupby():
 
 
 def test_serialize_seriesresampler():
-    index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+    index = cudf.date_range(start="2001-01-01", periods=10, freq="1min")
     sr = cudf.Series(range(10), index=index)
-    re_sampler = sr.resample("3T")
+    re_sampler = sr.resample("3min")
     actual = re_sampler.sum()
     recreated = re_sampler.__class__.deserialize(*re_sampler.serialize())
     expected = recreated.sum()

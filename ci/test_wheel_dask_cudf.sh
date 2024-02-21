@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -eou pipefail
 
@@ -26,5 +26,15 @@ python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
+rapids-logger "pytest dask_cudf"
+pushd python/dask_cudf/dask_cudf
+python -m pytest \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
+  --numprocesses=8 \
+  .
+popd

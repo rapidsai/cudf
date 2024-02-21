@@ -5,9 +5,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.index import IntervalIndex, interval_range
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import assert_eq, expect_warning_if
 
 
 def test_interval_constructor_default_closed():
@@ -30,6 +30,15 @@ INTERVAL_BOUNDARY_TYPES = [
     np.int64,
     np.float32,
     np.float64,
+    cudf.Scalar,
+]
+
+PERIODS_TYPES = [
+    int,
+    np.int8,
+    np.int16,
+    np.int32,
+    np.int64,
     cudf.Scalar,
 ]
 
@@ -96,7 +105,7 @@ def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
-@pytest.mark.parametrize("periods", [1, 1.0, 2, 2.0, 3.0, 3])
+@pytest.mark.parametrize("periods", [1, 2, 3])
 @pytest.mark.parametrize("start", [0, 0.0, 1.0, 1, 2, 2.0, 3.0, 3])
 @pytest.mark.parametrize("end", [4, 4.0, 5.0, 5, 6, 6.0, 7.0, 7])
 def test_interval_range_periods_basic(start, end, periods, closed):
@@ -112,9 +121,9 @@ def test_interval_range_periods_basic(start, end, periods, closed):
 
 @pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
 @pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
-@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("periods_t", PERIODS_TYPES)
 def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
-    start, end, periods = start_t(0), end_t(4), periods_t(1.0)
+    start, end, periods = start_t(0), end_t(4), periods_t(1)
     start_val = start.value if isinstance(start, cudf.Scalar) else start
     end_val = end.value if isinstance(end, cudf.Scalar) else end
     periods_val = (
@@ -126,6 +135,21 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
     gindex = cudf.interval_range(
         start=start, end=end, periods=periods, closed="left"
     )
+
+    assert_eq(pindex, gindex)
+
+
+def test_interval_range_periods_warnings():
+    start_val, end_val, periods_val = 0, 4, 1.0
+
+    with expect_warning_if(PANDAS_GE_220):
+        pindex = pd.interval_range(
+            start=start_val, end=end_val, periods=periods_val, closed="left"
+        )
+    with pytest.warns(FutureWarning):
+        gindex = cudf.interval_range(
+            start=start_val, end=end_val, periods=periods_val, closed="left"
+        )
 
     assert_eq(pindex, gindex)
 
@@ -145,7 +169,7 @@ def test_interval_range_periods_freq_end(end, freq, periods, closed):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("periods_t", PERIODS_TYPES)
 @pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
 @pytest.mark.parametrize("end_t", INTERVAL_BOUNDARY_TYPES)
 def test_interval_range_periods_freq_end_dtype(periods_t, freq_t, end_t):
@@ -180,7 +204,7 @@ def test_interval_range_periods_freq_start(start, freq, periods, closed):
     assert_eq(pindex, gindex)
 
 
-@pytest.mark.parametrize("periods_t", INTERVAL_BOUNDARY_TYPES)
+@pytest.mark.parametrize("periods_t", PERIODS_TYPES)
 @pytest.mark.parametrize("freq_t", INTERVAL_BOUNDARY_TYPES)
 @pytest.mark.parametrize("start_t", INTERVAL_BOUNDARY_TYPES)
 def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):

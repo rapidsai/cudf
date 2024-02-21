@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
 from cudf.testing._utils import assert_eq
 
 
@@ -24,31 +24,33 @@ def assert_resample_results_equal(lhs, rhs, **kwargs):
 def test_series_downsample_simple(ts_resolution):
     # Series with and index of 5min intervals:
 
-    index = pd.date_range(start="2001-01-01", periods=10, freq="1T")
+    index = pd.date_range(start="2001-01-01", periods=10, freq="1min")
     psr = pd.Series(range(10), index=index)
     gsr = cudf.from_pandas(psr)
     gsr.index = gsr.index.astype(f"datetime64[{ts_resolution}]")
     assert_resample_results_equal(
-        psr.resample("3T").sum(),
-        gsr.resample("3T").sum(),
+        psr.resample("3min").sum(),
+        gsr.resample("3min").sum(),
+        check_index=not PANDAS_GE_220,
     )
 
 
 def test_series_upsample_simple():
     # Series with and index of 5min intervals:
 
-    index = pd.date_range(start="2001-01-01", periods=10, freq="1T")
+    index = pd.date_range(start="2001-01-01", periods=10, freq="1min")
     psr = pd.Series(range(10), index=index)
     gsr = cudf.from_pandas(psr)
     assert_resample_results_equal(
-        psr.resample("3T").sum(),
-        gsr.resample("3T").sum(),
+        psr.resample("3min").sum(),
+        gsr.resample("3min").sum(),
+        check_index=not PANDAS_GE_220,
     )
 
 
-@pytest.mark.parametrize("rule", ["2S", "10S"])
+@pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_ffill(rule):
-    rng = pd.date_range("1/1/2012", periods=10, freq="5S")
+    rng = pd.date_range("1/1/2012", periods=10, freq="5s")
     ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
@@ -56,9 +58,9 @@ def test_series_resample_ffill(rule):
     )
 
 
-@pytest.mark.parametrize("rule", ["2S", "10S"])
+@pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_bfill(rule):
-    rng = pd.date_range("1/1/2012", periods=10, freq="5S")
+    rng = pd.date_range("1/1/2012", periods=10, freq="5s")
     ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
@@ -66,9 +68,9 @@ def test_series_resample_bfill(rule):
     )
 
 
-@pytest.mark.parametrize("rule", ["2S", "10S"])
+@pytest.mark.parametrize("rule", ["2s", "10s"])
 def test_series_resample_asfreq(rule):
-    rng = pd.date_range("1/1/2012", periods=100, freq="5S")
+    rng = pd.date_range("1/1/2012", periods=100, freq="5s")
     ts = pd.Series(np.random.randint(0, 500, len(rng)), index=rng)
     gts = cudf.from_pandas(ts)
     assert_resample_results_equal(
@@ -79,25 +81,25 @@ def test_series_resample_asfreq(rule):
 def test_dataframe_resample_aggregation_simple():
     pdf = pd.DataFrame(
         np.random.randn(1000, 3),
-        index=pd.date_range("1/1/2012", freq="S", periods=1000),
+        index=pd.date_range("1/1/2012", freq="s", periods=1000),
         columns=["A", "B", "C"],
     )
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
-        pdf.resample("3T").mean(), gdf.resample("3T").mean()
+        pdf.resample("3min").mean(), gdf.resample("3min").mean()
     )
 
 
 def test_dataframe_resample_multiagg():
     pdf = pd.DataFrame(
         np.random.randn(1000, 3),
-        index=pd.date_range("1/1/2012", freq="S", periods=1000),
+        index=pd.date_range("1/1/2012", freq="s", periods=1000),
         columns=["A", "B", "C"],
     )
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
-        pdf.resample("3T").agg(["sum", "mean", "std"]),
-        gdf.resample("3T").agg(["sum", "mean", "std"]),
+        pdf.resample("3min").agg(["sum", "mean", "std"]),
+        gdf.resample("3min").agg(["sum", "mean", "std"]),
     )
 
 
@@ -106,12 +108,13 @@ def test_dataframe_resample_on():
     pdf = pd.DataFrame(
         {
             "x": np.random.randn(1000),
-            "y": pd.date_range("1/1/2012", freq="S", periods=1000),
+            "y": pd.date_range("1/1/2012", freq="s", periods=1000),
         }
     )
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
-        pdf.resample("3T", on="y").mean(), gdf.resample("3T", on="y").mean()
+        pdf.resample("3min", on="y").mean(),
+        gdf.resample("3min", on="y").mean(),
     )
 
 
@@ -120,15 +123,15 @@ def test_dataframe_resample_level():
     pdf = pd.DataFrame(
         {
             "x": np.random.randn(1000),
-            "y": pd.date_range("1/1/2012", freq="S", periods=1000),
+            "y": pd.date_range("1/1/2012", freq="s", periods=1000),
         }
     )
     pdi = pd.MultiIndex.from_frame(pdf)
     pdf = pd.DataFrame({"a": np.random.randn(1000)}, index=pdi)
     gdf = cudf.from_pandas(pdf)
     assert_resample_results_equal(
-        pdf.resample("3T", level="y").mean(),
-        gdf.resample("3T", level="y").mean(),
+        pdf.resample("3min", level="y").mean(),
+        gdf.resample("3min", level="y").mean(),
     )
 
 
@@ -139,8 +142,8 @@ def test_dataframe_resample_level():
         ("1us", "10us", "us"),
         ("ms", "100us", "us"),
         ("ms", "1s", "s"),
-        ("s", "1T", "s"),
-        ("1T", "30s", "s"),
+        ("s", "1min", "s"),
+        ("1min", "30s", "s"),
         ("1D", "10D", "s"),
         ("10D", "1D", "s"),
     ],

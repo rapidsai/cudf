@@ -23,10 +23,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/scan.h>
-
 #include <cuda_runtime.h>
 #include <nvtx3/nvToolsExt.h>
+#include <thrust/scan.h>
 
 /**
  * @brief Computes the size of each output row
