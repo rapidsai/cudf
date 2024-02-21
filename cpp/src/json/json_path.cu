@@ -932,16 +932,20 @@ __launch_bounds__(block_size) CUDF_KERNEL
       output_size = out.output_len.value_or(0);
 
       // Json validation
-      json_parser_options j_parser_options;
+      cudf::strings::detail::json_parser_options j_parser_options;
       j_parser_options.set_allow_single_quotes(true);
       j_parser_options.set_allow_unescaped_control_chars(true);
       j_parser_options.set_max_string_len(20000000);
       j_parser_options.set_max_num_len(1000);
-
-      json_parser<max_json_nesting_depth> j_parser(j_parser_options, str.data(), str.size_bytes());
+      // Jackson uses 1000 as max nesting depth
+      constexpr int max_json_nesting_depth = 1000;
+      cudf::strings::detail::json_parser<max_json_nesting_depth> j_parser(
+        j_parser_options, str.data(), str.size_bytes());
       bool validation_result = j_parser.is_valid();
 
-      if (out.output_len.has_value() && result == parse_result::SUCCESS && validation_result) { is_valid = true; }
+      if (out.output_len.has_value() && result == parse_result::SUCCESS && validation_result) {
+        is_valid = true;
+      }
     }
 
     // filled in only during the precompute step. during the compute step, the offsets

@@ -129,10 +129,6 @@ class json_parser_options {
   int max_string_len = -1;
 };
 
-// max json nesting depth
-// Jackson use max 1000 nesting depth
-constexpr int max_json_nesting_depth = 1000;
-
 /**
  * Json parser, provides token by token parsing.
  * Follow Jackson Json format by default.
