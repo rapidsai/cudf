@@ -950,10 +950,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
       thrust::tie(result, out) =
         get_json_object_single(str.data(), str.size_bytes(), commands, dst, dst_size, options);
       output_size = out.output_len.value_or(0);
-
-      if (out.output_len.has_value() && result == parse_result::SUCCESS) {
-        is_valid = true;
-      }
+      if (out.output_len.has_value() && result == parse_result::SUCCESS) { is_valid = true; }
     }
 
     // filled in only during the precompute step. during the compute step, the offsets
