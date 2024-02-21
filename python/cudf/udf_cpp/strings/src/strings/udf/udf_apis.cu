@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/udf/udf_apis.hpp>
-#include <cudf/strings/udf/udf_string.cuh>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/udf/udf_apis.hpp>
+#include <cudf/strings/udf/udf_string.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/device_uvector.hpp>

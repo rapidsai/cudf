@@ -1,7 +1,24 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 # TODO: Verify consistent usage of relative/absolute imports in pylibcudf.
-from . cimport aggregation, binaryop, copying, groupby, interop, join, unary
+from . cimport (
+    aggregation,
+    binaryop,
+    concatenate,
+    copying,
+    groupby,
+    interop,
+    join,
+    lists,
+    merge,
+    reduce,
+    replace,
+    rolling,
+    sorting,
+    stream_compaction,
+    types,
+    unary,
+)
 from .column cimport Column
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -17,11 +34,19 @@ __all__ = [
     "Table",
     "aggregation",
     "binaryop",
+    "concatenate",
     "copying",
     "gpumemoryview",
     "groupby",
     "interop",
     "join",
-    "unary",
+    "lists",
+    "merge",
+    "reduce",
+    "replace",
+    "rolling",
+    "stream_compaction",
+    "sorting",
     "types",
+    "unary",
 ]

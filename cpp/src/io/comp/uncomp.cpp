@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "io_uncomp.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/error.hpp>
@@ -26,9 +25,9 @@
 
 #include <cuda_runtime.h>
 
-#include <cstring>  // memset
-
 #include <zlib.h>  // uncompress
+
+#include <cstring>  // memset
 
 using cudf::host_span;
 

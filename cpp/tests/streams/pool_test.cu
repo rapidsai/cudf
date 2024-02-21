@@ -18,6 +18,7 @@
 #include <cudf_test/default_stream.hpp>
 
 #include <cudf/detail/utilities/stream_pool.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 
 class StreamPoolTest : public cudf::test::BaseFixture {};

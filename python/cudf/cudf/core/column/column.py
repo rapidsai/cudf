@@ -1925,11 +1925,25 @@ def as_column(
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
+        if pa.types.is_large_string(arbitrary.type):
+            # Pandas-2.2+: Pandas defaults to `large_string` type
+            # instead of `string` without data-introspection.
+            # Temporary workaround until cudf has native
+            # support for `LARGE_STRING` i.e., 64 bit offsets
+            arbitrary = arbitrary.cast(pa.string())
+
         if pa.types.is_float16(arbitrary.type):
             raise NotImplementedError(
                 "Type casting from `float16` to `float32` is not "
                 "yet supported in pyarrow, see: "
                 "https://github.com/apache/arrow/issues/20213"
+            )
+        elif (
+            pa.types.is_timestamp(arbitrary.type)
+            and arbitrary.type.tz is not None
+        ):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
             )
         elif (nan_as_null is None or nan_as_null) and pa.types.is_floating(
             arbitrary.type
