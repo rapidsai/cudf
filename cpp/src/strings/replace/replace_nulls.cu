@@ -29,9 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/for_each.h>
-
 #include <cuda/functional>
+#include <thrust/for_each.h>
 
 namespace cudf {
 namespace strings {
