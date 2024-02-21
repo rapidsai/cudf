@@ -673,29 +673,6 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
-void reader::impl::prepare_data(uint64_t skip_rows,
-                                std::optional<size_type> const& num_rows_opt,
-                                std::vector<std::vector<size_type>> const& stripes)
-{
-  // Selected columns at different levels of nesting are stored in different elements
-  // of `selected_columns`; thus, size == 1 means no nested columns
-  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.num_levels() == 1,
-               "skip_rows is not supported by nested columns");
-
-  // There are no columns in the table
-  if (_selected_columns.num_levels() == 0) { return; }
-
-  global_preprocess(skip_rows, num_rows_opt, stripes);
-
-  // TODO: fix this, should be called once
-  _chunk_read_data.curr_load_stripe_chunk = 0;
-  while (_chunk_read_data.more_stripe_to_load()) {
-    load_data();
-  }
-
-  decompress_and_decode();
-}
-
 // TODO: this should be called per chunk of stripes.
 void reader::impl::decompress_and_decode()
 {
@@ -991,6 +968,32 @@ void reader::impl::decompress_and_decode()
       if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
   }  // end loop level
+}
+
+void reader::impl::prepare_data(uint64_t skip_rows,
+                                std::optional<size_type> const& num_rows_opt,
+                                std::vector<std::vector<size_type>> const& stripes)
+{
+  // Selected columns at different levels of nesting are stored in different elements
+  // of `selected_columns`; thus, size == 1 means no nested columns
+  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.num_levels() == 1,
+               "skip_rows is not supported by nested columns");
+
+  // There are no columns in the table.
+  if (_selected_columns.num_levels() == 0) { return; }
+
+  // Perform a global preprocessing step for the entire input sources.
+  global_preprocess(skip_rows, num_rows_opt, stripes);
+
+  // TODO: fix this, should be called once
+  // TODO: only load data if needed.
+  _chunk_read_data.curr_load_stripe_chunk = 0;
+  while (_chunk_read_data.more_stripe_to_load()) {
+    load_data();
+  }
+
+  // TODO: only do if needed.
+  decompress_and_decode();
 }
 
 table_with_metadata reader::impl::make_output_chunk()
