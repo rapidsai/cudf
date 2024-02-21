@@ -3813,7 +3813,7 @@ def test_groupby_internal_groups_empty(gdf):
     assert grouped_vals == []
 
 
-def test_groupby_shift_series_mi():
+def test_groupby_shift_series_multiindex():
     idx = cudf.MultiIndex.from_tuples(
         [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["f", "s"]
     )
