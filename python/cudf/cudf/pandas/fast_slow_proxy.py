@@ -1065,7 +1065,7 @@ def _is_function_or_method(obj: Any) -> bool:
             types.MethodDescriptorType,
             types.BuiltinMethodType,
         ),
-    )
+    ) or "cython_function_or_method" in str(type(obj))
 
 
 def _replace_closurevars(
