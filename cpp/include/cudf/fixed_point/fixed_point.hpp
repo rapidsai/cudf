@@ -88,7 +88,7 @@ namespace detail {
  * @brief Recursively computes integer exponentiation
  *
  * Note: This is intended to be run at compile time
- * 
+ *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
  * @param exp The exponent to be used for exponentiation
@@ -97,7 +97,7 @@ namespace detail {
 template <typename Rep, int32_t Base>
 CUDF_HOST_DEVICE inline constexpr Rep get_power(int32_t exp)
 {
-  //Compute power recursively
+  // Compute power recursively
   return (exp > 0) ? Rep(Base) * get_power<Rep, Base>(exp - 1) : 1;
 }
 
@@ -113,8 +113,8 @@ CUDF_HOST_DEVICE inline constexpr Rep get_power(int32_t exp)
 template <typename Rep, int32_t Base, std::size_t... Exponents>
 CUDF_HOST_DEVICE inline Rep ipow_impl(int32_t exponent, cuda::std::index_sequence<Exponents...>)
 {
-  //Compute powers at compile time, storing into array
-  static constexpr Rep powers[] = { get_power<Rep, Base>(Exponents)... };
+  // Compute powers at compile time, storing into array
+  static constexpr Rep powers[] = {get_power<Rep, Base>(Exponents)...};
   return powers[exponent];
 }
 
@@ -126,7 +126,9 @@ CUDF_HOST_DEVICE inline Rep ipow_impl(int32_t exponent, cuda::std::index_sequenc
  * @param exponent The exponent to be used for exponentiation
  * @return Result of `Base` to the power of `exponent` of type `Rep`
  */
-template <typename Rep, Radix Base, typename T,
+template <typename Rep,
+          Radix Base,
+          typename T,
           typename cuda::std::enable_if_t<(cuda::std::is_same_v<int32_t, T> &&
                                            is_supported_representation_type<Rep>())>* = nullptr>
 CUDF_HOST_DEVICE inline Rep ipow(T exponent)
@@ -134,12 +136,12 @@ CUDF_HOST_DEVICE inline Rep ipow(T exponent)
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
   if constexpr (Base == numeric::Radix::BASE_2) {
     return static_cast<Rep>(1) << exponent;
-  } else { //BASE_10
-    //Build index sequence for building power array at compile time
-    static constexpr auto max_exp = cuda::std::numeric_limits<Rep>::digits10;
+  } else {  // BASE_10
+    // Build index sequence for building power array at compile time
+    static constexpr auto max_exp   = cuda::std::numeric_limits<Rep>::digits10;
     static constexpr auto exponents = cuda::std::make_index_sequence<max_exp + 1>{};
 
-    //Get compile-time result
+    // Get compile-time result
     return ipow_impl<Rep, static_cast<int32_t>(Base)>(exponent, exponents);
   }
 }
