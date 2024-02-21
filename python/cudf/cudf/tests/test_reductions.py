@@ -374,5 +374,5 @@ def test_reduction_column_multiindex():
     )
     df = cudf.DataFrame(np.array([[1, 3], [2, 4]]), columns=idx)
     result = df.mean()
-    expected = Series([1.5, 3.5], index=idx)
+    expected = df.to_pandas().mean()
     assert_eq(result, expected)
