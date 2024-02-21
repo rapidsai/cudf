@@ -1122,22 +1122,26 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
   return make_output_chunk();
 }
 
-// Forward to implementation
-reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-               orc_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-  : _impl{std::make_unique<impl>(std::move(sources), options, stream, mr)}
+bool reader::impl::has_next()
 {
+  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
+  // return _chunk_read_info.current_chunk_idx < _chunk_read_info.chunks.size();
+  return true;
 }
 
-// Destructor within this translation unit
-reader::~reader() = default;
-
-// Forward to implementation
-table_with_metadata reader::read(orc_reader_options const& options)
+table_with_metadata reader::impl::read_chunk()
 {
-  return _impl->read(options.get_skip_rows(), options.get_num_rows(), options.get_stripes());
+  // Reset the output buffers to their original states (right after reader construction).
+  // Don't need to do it if we read the file all at once.
+  // if (_chunk_read_info.chunk_size_limit > 0) {
+  //    _output_buffers.resize(0);
+  //    for (auto const& buff : _output_buffers_template) {
+  //      _output_buffers.emplace_back(column_buffer::empty_like(buff));
+  //    }
+  // }
+
+  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
+  return make_output_chunk();
 }
 
 }  // namespace cudf::io::orc::detail

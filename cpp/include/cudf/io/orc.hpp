@@ -404,6 +404,80 @@ table_with_metadata read_orc(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief The chunked orc reader class to read ORC file iteratively in to a series of
+ * tables, chunk by chunk.
+ *
+ * This class is designed to address the reading issue when reading very large ORC files such
+ * that sizes of their columns exceed the limit that can be stored in cudf columns. By reading the
+ * file content by chunks using this class, each chunk is guaranteed to have its size stay within
+ * the given limit.
+ */
+class chunked_orc_reader {
+ public:
+  /**
+   * @brief Default constructor, this should never be used.
+   *
+   * This is added just to satisfy cython.
+   */
+  chunked_orc_reader() = default;
+
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `orc_reader_option` parameter as in
+   * `cudf::read_orc()`, and additional parameters to specify the size byte limits of the
+   * output table for each reading.
+   *
+   * TODO: data read limit
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
+   *        of input, or `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  chunked_orc_reader(std::size_t output_size_limit,
+                     std::size_t data_read_limit,
+                     orc_reader_options const& options,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  /**
+   * @brief Destructor, destroying the internal reader instance.
+   *
+   * Since the declaration of the internal `reader` object does not exist in this header, this
+   * destructor needs to be defined in a separate source file which can access to that object's
+   * declaration.
+   */
+  ~chunked_orc_reader();
+
+  /**
+   * @brief Check if there is any data in the given file has not yet read.
+   *
+   * @return A boolean value indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next() const;
+
+  /**
+   * @brief Read a chunk of rows in the given ORC file.
+   *
+   * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
+   * dataset as reading the entire given file at once.
+   *
+   * An empty table will be returned if the given file is empty, or all the data in the file has
+   * been read and returned by the previous calls.
+   *
+   * @return An output `cudf::table` along with its metadata
+   */
+  [[nodiscard]] table_with_metadata read_chunk() const;
+
+ private:
+  std::unique_ptr<cudf::io::orc::detail::chunked_reader> reader;
+};
+
 /** @} */  // end of group
 /**
  * @addtogroup io_writers

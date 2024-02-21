@@ -54,16 +54,7 @@ class reader::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
-   * @brief Constructor from a dataset source with reader options.
-   *
-   * @param output_size_limit Limit on total number of bytes to be returned per read,
-   *        or `0` if there is no limit
-   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
-   *        of input, or `0` if there is no limit
-   * @param sources Dataset sources
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
+   * @copydoc cudf::io::orc::detail::chunked_reader
    */
   explicit impl(std::size_t output_size_limit,
                 std::size_t data_read_limit,
@@ -83,6 +74,16 @@ class reader::impl {
   table_with_metadata read(uint64_t skip_rows,
                            std::optional<size_type> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::has_next
+   */
+  bool has_next();
+
+  /**
+   * @copydoc cudf::io::chunked_orc_reader::read_chunk
+   */
+  table_with_metadata read_chunk();
 
  private:
   /**
