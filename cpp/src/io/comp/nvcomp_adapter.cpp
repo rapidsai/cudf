@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 #include "nvcomp_adapter.hpp"
+
+#include "io/utilities/config_utils.hpp"
 #include "nvcomp_adapter.cuh"
 
 #include <cudf/utilities/error.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <nvcomp/lz4.h>
 #include <nvcomp/snappy.h>

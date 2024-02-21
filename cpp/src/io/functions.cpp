@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.hpp>
+#include "io/orc/orc.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>

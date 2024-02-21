@@ -15,9 +15,8 @@
  */
 
 #include "delta_enc.cuh"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.cuh"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/assert.cuh>
@@ -29,9 +28,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
-
 #include <cuda/std/chrono>
-
 #include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>

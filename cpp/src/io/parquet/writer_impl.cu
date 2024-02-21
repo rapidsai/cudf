@@ -21,14 +21,13 @@
 
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
+#include "io/utilities/config_utils.hpp"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
-#include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
