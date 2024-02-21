@@ -36,7 +36,7 @@ dependencies = [
     "pandas>=2.0,<2.1.5dev0",
     "protobuf>=4.21,<5",
     "ptxcompiler",
-    "pyarrow>=14.0.2,<15.0.0a0",
+    "pyarrow>=14.0.1,<15.0.0a0",
     "rich",
     "rmm==24.4.*",
     "typing_extensions>=4.0.0",
