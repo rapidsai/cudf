@@ -13,10 +13,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import (
-    PANDAS_EQ_200,
-    PANDAS_GE_210,
-)
+from cudf.core._compat import PANDAS_EQ_200, PANDAS_GE_210
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
