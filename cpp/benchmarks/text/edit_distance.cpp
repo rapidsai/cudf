@@ -20,9 +20,9 @@
 
 #include <nvtext/edit_distance.hpp>
 
-#include <nvbench/nvbench.cuh>
-
 #include <rmm/device_buffer.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 static void bench_edit_distance(nvbench::state& state)
 {

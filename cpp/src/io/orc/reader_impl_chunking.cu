@@ -16,13 +16,12 @@
 
 // #define PRINT_DEBUG
 
+#include "io/comp/gpuinflate.hpp"
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/config_utils.hpp"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
