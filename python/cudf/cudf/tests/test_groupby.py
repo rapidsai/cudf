@@ -3819,5 +3819,5 @@ def test_groupby_shift_series_mi():
     )
     ser = Series(range(4), index=idx)
     result = ser.groupby(level=0).shift(1)
-    expected = Series([None, 0, None, 2], index=idx)
+    expected = ser.to_pandas().groupby(level=0).shift(1)
     assert_eq(expected, result)
