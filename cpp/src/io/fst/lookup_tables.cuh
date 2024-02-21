@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +16,12 @@
 
 #pragma once
 
+#include "io/fst/device_dfa.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <cudf/types.hpp>
-#include <io/fst/device_dfa.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cub/cub.cuh>
-
 #include <cuda/std/iterator>
 
 #include <algorithm>

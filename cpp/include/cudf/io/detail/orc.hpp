@@ -22,11 +22,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::io {
 

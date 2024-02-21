@@ -23,11 +23,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/static_map.cuh>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
-
-#include <cuco/static_map.cuh>
 
 namespace cudf::detail {
 

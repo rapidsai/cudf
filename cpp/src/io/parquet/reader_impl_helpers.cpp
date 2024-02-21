@@ -16,7 +16,7 @@
 
 #include "reader_impl_helpers.hpp"
 
-#include <io/utilities/row_selection.hpp>
+#include "io/utilities/row_selection.hpp"
 
 #include <numeric>
 #include <regex>

@@ -15,6 +15,7 @@
  */
 
 #include "reader_impl.hpp"
+
 #include "error.hpp"
 
 #include <cudf/detail/stream_compaction.hpp>
