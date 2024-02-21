@@ -34,12 +34,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
 
-#include <arrow/io/api.h>
-
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <arrow/io/api.h>
 
 #include <algorithm>
 #include <fstream>
