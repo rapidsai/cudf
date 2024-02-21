@@ -28,7 +28,6 @@ from cudf.api.extensions import no_default
 from cudf.core._compat import (
     PANDAS_GE_200,
     PANDAS_GE_210,
-    PANDAS_GE_220,
     PANDAS_LT_203,
 )
 from cudf.core.buffer.spill_manager import get_global_manager
@@ -3567,16 +3566,8 @@ def test_dataframe_empty_sort_index():
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    request, index, axis, ascending, inplace, ignore_index, na_position
+    index, axis, ascending, inplace, ignore_index, na_position
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and axis in (1, "columns")
-            and ignore_index,
-            reason="Bug fixed in pandas-2.2",
-        )
-    )
     pdf = pd.DataFrame(
         {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
         index=index,
@@ -3629,15 +3620,6 @@ def test_dataframe_sort_index(
 def test_dataframe_mulitindex_sort_index(
     request, axis, level, ascending, inplace, ignore_index, na_position
 ):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and axis in (1, "columns")
-            and ignore_index
-            and not (level is None and not ascending),
-            reason="https://github.com/pandas-dev/pandas/issues/56478",
-        )
-    )
     request.applymarker(
         pytest.mark.xfail(
             condition=axis in (1, "columns")

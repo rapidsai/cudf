@@ -17,7 +17,6 @@ from cudf.core._compat import (
     PANDAS_EQ_200,
     PANDAS_GE_200,
     PANDAS_GE_210,
-    PANDAS_GE_220,
 )
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
@@ -1655,29 +1654,7 @@ def test_date_range_end_freq_periods(request, end, freq, periods):
             reason="https://github.com/pandas-dev/pandas/issues/46877",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_220
-                and isinstance(freq, dict)
-                and freq.get("hours", None) == 10
-                and freq.get("days", None) == 57
-                and freq.get("nanoseconds", None) == 3
-                and periods in (10, 100)
-                and (
-                    end
-                    in {
-                        "2000-02-13 08:41:06",
-                        "1996-11-21 04:05:30",
-                        "1970-01-01 00:00:00",
-                        "1831-05-08 15:23:21",
-                    }
-                )
-            ),
-            reason="Nanosecond offsets being dropped by pandas, which is "
-            "fixed in pandas-2.0+",
-        )
-    )
+
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1748,15 +1725,7 @@ def test_date_range_raise_overflow():
         "B",
     ],
 )
-def test_date_range_raise_unsupported(request, freqstr_unsupported):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_220 and freqstr_unsupported.endswith("E")
-            ),
-            reason="TODO: Remove this once pandas-2.2 support is added",
-        )
-    )
+def test_date_range_raise_unsupported(freqstr_unsupported):
     s, e = "2001-01-01", "2008-01-31"
     pd.date_range(start=s, end=e, freq=freqstr_unsupported)
     with pytest.raises(ValueError, match="does not yet support"):
@@ -1768,7 +1737,7 @@ def test_date_range_raise_unsupported(request, freqstr_unsupported):
     if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
         with pytest.raises(ValueError, match="does not yet support"):
-            with expect_warning_if(PANDAS_GE_220):
+            with pytest.warns(FutureWarning):
                 cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
 

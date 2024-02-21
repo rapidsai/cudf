@@ -809,14 +809,6 @@ def test_index_difference(request, data, other, sort, name_data, name_other):
             reason="https://github.com/pandas-dev/pandas/issues/57318",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=not PANDAS_GE_220
-            and len(pd_other) == 0
-            and len(pd_data) != len(pd_data.unique()),
-            reason="Bug fixed in pandas-2.2+",
-        )
-    )
 
     gd_data = cudf.from_pandas(pd_data)
     gd_other = cudf.from_pandas(pd_other)
@@ -2525,7 +2517,7 @@ def test_isin_index(index, values):
     )
     with expect_warning_if(is_dt_str):
         got = gidx.isin(values)
-    with expect_warning_if(PANDAS_GE_220 and is_dt_str):
+    with expect_warning_if(is_dt_str):
         expected = pidx.isin(values)
 
     assert_eq(got, expected)
