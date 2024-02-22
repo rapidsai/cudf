@@ -580,7 +580,7 @@ struct get_span_size_by_index {
   cudf::device_span<page_span const> page_indices;
   __device__ size_t operator()(size_t i) const
   {
-    return i > page_indices.size() ? 0 : page_indices[i].end - page_indices[i].start;
+    return i >= page_indices.size() ? 0 : page_indices[i].end - page_indices[i].start;
   }
 };
 
