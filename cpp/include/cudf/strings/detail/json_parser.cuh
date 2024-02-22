@@ -221,58 +221,53 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline void parse_first_token_in_value()
   {
-    if (!eof()) {
-      // non eof
-      char c = *curr_pos;
-      switch (c) {
-        case '{':
-          if (!try_push_context(json_token::START_OBJECT)) {
-            curr_token = json_token::ERROR;
-            return;
-          }
-          curr_pos++;
-          curr_token = json_token::START_OBJECT;
-          break;
+    // already checked eof
+    char c = *curr_pos;
+    switch (c) {
+      case '{':
+        if (!try_push_context(json_token::START_OBJECT)) {
+          curr_token = json_token::ERROR;
+          return;
+        }
+        curr_pos++;
+        curr_token = json_token::START_OBJECT;
+        break;
 
-        case '[':
-          if (!try_push_context(json_token::START_ARRAY)) {
-            curr_token = json_token::ERROR;
-            return;
-          }
-          curr_pos++;
-          curr_token = json_token::START_ARRAY;
-          break;
+      case '[':
+        if (!try_push_context(json_token::START_ARRAY)) {
+          curr_token = json_token::ERROR;
+          return;
+        }
+        curr_pos++;
+        curr_token = json_token::START_ARRAY;
+        break;
 
-        case '"': parse_double_quoted_string(); break;
+      case '"': parse_double_quoted_string(); break;
 
-        case '\'':
-          if (options.get_allow_single_quotes()) {
-            parse_single_quoted_string();
-          } else {
-            curr_token = json_token::ERROR;
-          }
-          break;
+      case '\'':
+        if (options.get_allow_single_quotes()) {
+          parse_single_quoted_string();
+        } else {
+          curr_token = json_token::ERROR;
+        }
+        break;
 
-        case 't':
-          curr_pos++;
-          parse_true();
-          break;
+      case 't':
+        curr_pos++;
+        parse_true();
+        break;
 
-        case 'f':
-          curr_pos++;
-          parse_false();
-          break;
+      case 'f':
+        curr_pos++;
+        parse_false();
+        break;
 
-        case 'n':
-          curr_pos++;
-          parse_null();
-          break;
+      case 'n':
+        curr_pos++;
+        parse_null();
+        break;
 
-        default: parse_number();
-      }
-    } else {
-      // eof
-      curr_token = json_token::ERROR;
+      default: parse_number();
     }
   }
 
