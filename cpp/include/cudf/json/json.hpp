@@ -52,6 +52,9 @@ class get_json_object_options {
   // Define the maximum JSON number length.
   int max_num_len = -1;
 
+  // Whether allow tailing useless sub-string
+  bool allow_tailing_sub_string = true;
+
  public:
   /**
    * @brief Default constructor.
@@ -166,6 +169,19 @@ class get_json_object_options {
   [[nodiscard]] CUDF_HOST_DEVICE int get_max_num_len() const { return max_num_len; }
 
   /**
+   * @brief Retuns whether allow tailing useless sub-string in JSON.
+   *
+   * If true, e.g., the following invalid JSON is allowed, because prefix {'k' : 'v'} is valid.
+   *   {'k' : 'v'}_extra_tail_sub_string
+   *
+   * @return true if alow tailing useless sub-string, false otherwise.
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE int get_allow_tailing_sub_string() const
+  {
+    return allow_tailing_sub_string;
+  }
+
+  /**
    * @brief Set whether single-quotes for strings are allowed.
    *
    * @param _allow_single_quotes bool indicating desired behavior.
@@ -218,6 +234,16 @@ class get_json_object_options {
    * @param _max_num_len integer indicating desired behavior.
    */
   void set_max_num_len(int _max_num_len) { max_num_len = _max_num_len; }
+
+  /**
+   * @brief Set whether allow tailing useless sub-string.
+   *
+   * @param _allow_tailing_sub_string bool indicating desired behavior.
+   */
+  void set_allow_tailing_sub_string(bool _allow_tailing_sub_string)
+  {
+    allow_tailing_sub_string = _allow_tailing_sub_string;
+  }
 };
 
 /**

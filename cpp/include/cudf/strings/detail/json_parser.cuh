@@ -754,10 +754,15 @@ class json_parser {
           // main root entry point
           parse_first_token_in_value();
         } else {
-          // privious token is not INIT, means already get a token; stack is empty;
-          // Successfully parsed.
-          // Note: ignore the tailing sub-string
-          curr_token = json_token::SUCCESS;
+          if (options.get_allow_tailing_sub_string()) {
+            // privious token is not INIT, means already get a token; stack is empty;
+            // Successfully parsed.
+            // Note: ignore the tailing sub-string
+            curr_token = json_token::SUCCESS;
+          } else {
+            // not eof, has extra useless tailing characters.
+            curr_token = json_token::ERROR;
+          }
         }
       } else {
         // stack is non-empty
@@ -837,9 +842,9 @@ class json_parser {
         // reach eof; stack is empty; previous token is not INIT
         curr_token = json_token::SUCCESS;
       } else {
-        // eof, and meet the following case:
+        // eof, and meet the following cases:
         //   - has unclosed JSON array/object;
-        //   - JSON is empty
+        //   - the whole JSON is empty
         curr_token = json_token::ERROR;
       }
     }
