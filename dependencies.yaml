@@ -261,7 +261,7 @@ dependencies:
           - &numpy numpy>=1.21
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.1.*
+          - pyarrow==14.0.2.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -306,10 +306,10 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.1.*
-          - libarrow-dataset==14.0.1.*
-          - libarrow==14.0.1.*
-          - libparquet==14.0.1.*
+          - libarrow-acero==14.0.2.*
+          - libarrow-dataset==14.0.2.*
+          - libarrow==14.0.2.*
+          - libparquet==14.0.2.*
   libarrow_run:
     common:
       - output_types: conda

@@ -21,9 +21,9 @@
 
 #include <nvtext/jaccard.hpp>
 
-#include <nvbench/nvbench.cuh>
-
 #include <rmm/device_buffer.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 static void bench_jaccard(nvbench::state& state)
 {

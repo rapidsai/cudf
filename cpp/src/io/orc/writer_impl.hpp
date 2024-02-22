@@ -16,10 +16,9 @@
 
 #pragma once
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "orc.hpp"
 #include "orc_gpu.hpp"
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>

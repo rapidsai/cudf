@@ -14,15 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/merge.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -32,6 +23,15 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/merge.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>

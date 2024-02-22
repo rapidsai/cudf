@@ -26,9 +26,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/transform.h>
-
 #include <cuda/functional>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace strings {

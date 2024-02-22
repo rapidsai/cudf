@@ -16,6 +16,10 @@
 
 #pragma once
 
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -32,10 +36,6 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/default_stream.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
