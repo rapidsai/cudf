@@ -613,7 +613,7 @@ class metadata {
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
 
-  [[nodiscard]] uint64_t get_total_rows() const { return ff.numberOfRows; }
+  [[nodiscard]] auto get_total_rows() const { return ff.numberOfRows; }
   [[nodiscard]] size_type get_num_stripes() const { return ff.stripes.size(); }
   [[nodiscard]] size_type get_num_columns() const { return ff.types.size(); }
   /**
@@ -638,7 +638,7 @@ class metadata {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_paths[column_id];
   }
-  [[nodiscard]] int get_row_index_stride() const { return ff.rowIndexStride; }
+  [[nodiscard]] auto get_row_index_stride() const { return ff.rowIndexStride; }
 
   /**
    * @brief Returns the ID of the parent column of the given column.
