@@ -17,7 +17,6 @@
 #pragma once
 
 #include "error.hpp"
-
 #include "io/comp/gpuinflate.hpp"
 #include "io/parquet/parquet.hpp"
 #include "io/parquet/parquet_common.hpp"
@@ -34,7 +33,6 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
-
 #include <cuda_runtime.h>
 
 #include <type_traits>

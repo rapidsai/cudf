@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include <algorithm>
-#include <cctype>
+#include "jit/parser.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
-#include <jit/parser.hpp>
+
+#include <algorithm>
+#include <cctype>
 
 struct JitParseTest : public ::testing::Test {};
 
