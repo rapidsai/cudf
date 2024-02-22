@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "strings/split/split.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -332,43 +334,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_targets_indices = targets_indices.data();
 
   // create a vector of offsets to each string's set of target positions
-  auto const targets_offsets = [&] {
-    auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
-    auto const offsets_begin =
-      cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
-
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        offsets_begin,
-                        offsets_begin + input.size() + 1,
-                        d_positions,
-                        d_positions + target_count,
-                        string_indices.begin());
-
-    // compute offsets per string
-    auto targets_counts = rmm::device_uvector<size_type>(strings_count, stream);
-    // memset to zero-out the target counts for any null-entries or strings with no targets
-    thrust::uninitialized_fill(
-      rmm::exec_policy(stream), targets_counts.begin(), targets_counts.end(), 0);
-    auto d_targets_counts = targets_counts.data();
-
-    // next, count the number of targets per string
-    auto d_string_indices = string_indices.data();
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<int64_t>(0),
-      target_count,
-      [d_string_indices, d_targets_counts] __device__(int64_t idx) {
-        auto const str_idx = d_string_indices[idx] - 1;
-        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_targets_counts + str_idx)};
-        ref.fetch_add(1, cuda::std::memory_order_relaxed);
-      });
-    // finally, convert the counts into offsets
-    return std::get<0>(
-      cudf::strings::detail::make_offsets_child_column(targets_counts.begin(),
-                                                       targets_counts.end(),
-                                                       stream,
-                                                       rmm::mr::get_current_device_resource()));
-  }();
+  auto const targets_offsets = create_offsets_from_positions(
+    input, targets_positions, stream, rmm::mr::get_current_device_resource());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 

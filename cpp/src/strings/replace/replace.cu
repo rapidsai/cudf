@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "strings/split/split.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -61,24 +63,24 @@ constexpr size_type AVG_CHAR_BYTES_THRESHOLD = 256;
 /**
  * @brief Helper functions for performing character-parallel replace
  */
-struct replace_multi_parallel_fn {
-  __device__ char const* get_base_ptr() const { return d_strings.head<char>(); }
+struct replace_parallel_chars_fn {
+  __device__ inline char const* get_base_ptr() const { return d_strings.head<char>(); }
 
-  __device__ string_view const get_string(size_type idx) const
+  __device__ inline string_view const get_string(size_type idx) const
   {
     return d_strings.element<string_view>(idx);
   }
 
-  __device__ bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
+  __device__ inline bool is_valid(size_type idx) const { return d_strings.is_valid(idx); }
 
   /**
-   * @brief Returns the index of the target string found at the given byte position
-   * in the input strings column
+   * @brief Returns true if the target string is found at the given byte position
+   * in the input strings column and is legally within a string row
    *
    * @param idx Index of the byte position in the chars column
    * @param chars_bytes Number of bytes in the chars column
    */
-  __device__ bool target_index(int64_t idx, int64_t chars_bytes) const
+  __device__ bool is_target_within_row(int64_t idx) const
   {
     auto const d_offsets = d_strings_offsets;
     auto const d_chars   = get_base_ptr() + idx;
@@ -95,7 +97,13 @@ struct replace_multi_parallel_fn {
     return false;
   }
 
-  __device__ bool has_target(int64_t idx, int64_t chars_bytes) const
+  /**
+   * @brief Returns true if the target string found at the given byte position
+   *
+   * @param idx Index of the byte position in the chars column
+   * @param chars_bytes Number of bytes in the chars column
+   */
+  __device__ bool has_target(int64_t idx) const
   {
     auto const d_chars = get_base_ptr() + d_strings_offsets[0] + idx;
     return (!d_target.empty() && (idx + d_target.size_bytes() <= chars_bytes) &&
@@ -131,16 +139,12 @@ struct replace_multi_parallel_fn {
     size_type count = 1;  // always at least one string
     auto str_ptr    = d_str.data();
     for (std::size_t i = 0; (i < targets_size) && (max_n > 0); ++i) {
-      auto const d_tgt   = d_target;
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
         auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { count++; }  // don't bother counting empty strings
-
-        auto const d_repl = d_replacement;
-        if (!d_repl.empty()) { count++; }
-
-        str_ptr += keep_size + d_tgt.size_bytes();
+        if (!d_replacement.empty()) { count++; }
+        str_ptr += keep_size + d_target.size_bytes();
         --max_n;
       }
     }
@@ -186,20 +190,19 @@ struct replace_multi_parallel_fn {
     size_type output_size = 0;
     auto str_ptr          = d_str.data();
     for (std::size_t i = 0; (i < targets_size) && (max_n > 0); ++i) {
-      auto const d_tgt   = d_target;
       auto const tgt_ptr = base_ptr + positions[i];
       if (str_ptr <= tgt_ptr && tgt_ptr < d_str_end) {
         auto const keep_size = static_cast<size_type>(thrust::distance(str_ptr, tgt_ptr));
         if (keep_size > 0) { d_output[output_idx++] = string_index_pair{str_ptr, keep_size}; }
         output_size += keep_size;
 
-        auto const d_repl = d_replacement;
-        if (!d_repl.empty()) {
-          d_output[output_idx++] = string_index_pair{d_repl.data(), d_repl.size_bytes()};
+        if (!d_replacement.empty()) {
+          d_output[output_idx++] =
+            string_index_pair{d_replacement.data(), d_replacement.size_bytes()};
         }
-        output_size += d_repl.size_bytes();
+        output_size += d_replacement.size_bytes();
 
-        str_ptr += keep_size + d_tgt.size_bytes();
+        str_ptr += keep_size + d_target.size_bytes();
         --max_n;
       }
     }
@@ -212,13 +215,15 @@ struct replace_multi_parallel_fn {
     return output_size;
   }
 
-  replace_multi_parallel_fn(column_device_view const& d_strings,
+  replace_parallel_chars_fn(column_device_view const& d_strings,
                             cudf::detail::input_offsetalator d_strings_offsets,
+                            int64_t chars_bytes,
                             string_view d_target,
                             string_view d_replacement,
                             cudf::size_type maxrepl)
     : d_strings(d_strings),
       d_strings_offsets(d_strings_offsets),
+      chars_bytes(chars_bytes),
       d_target{d_target},
       d_replacement{d_replacement},
       maxrepl(maxrepl)
@@ -228,15 +233,10 @@ struct replace_multi_parallel_fn {
  protected:
   column_device_view d_strings;
   cudf::detail::input_offsetalator d_strings_offsets;
+  int64_t chars_bytes;
   string_view d_target;
   string_view d_replacement;
   cudf::size_type maxrepl;
-};
-
-struct copy_if_fn {
-  __device__ bool operator()(int64_t idx) { return fn.target_index(idx, chars_bytes); }
-  replace_multi_parallel_fn fn;
-  int64_t chars_bytes;
 };
 
 std::unique_ptr<column> replace_character_parallel(strings_column_view const& input,
@@ -256,25 +256,26 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto const offsets_begin =
     cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
 
-  replace_multi_parallel_fn fn{*d_strings, offsets_begin, d_target, d_replacement, maxrepl};
+  replace_parallel_chars_fn fn{
+    *d_strings, offsets_begin, chars_bytes, d_target, d_replacement, maxrepl};
 
   // Count the number of targets in the entire column.
   // Note this may over-count in the case where a target spans adjacent strings.
-  auto target_count = thrust::count_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<int64_t>(0),
-    thrust::make_counting_iterator<int64_t>(chars_bytes),
-    [fn, chars_bytes] __device__(int64_t idx) { return fn.has_target(idx, chars_bytes); });
+  auto target_count = thrust::count_if(rmm::exec_policy(stream),
+                                       thrust::make_counting_iterator<int64_t>(0),
+                                       thrust::make_counting_iterator<int64_t>(chars_bytes),
+                                       [fn] __device__(int64_t idx) { return fn.has_target(idx); });
 
   // Create a vector of every target position in the chars column.
   // These may also include overlapping targets which will be resolved later.
   auto targets_positions = rmm::device_uvector<int64_t>(target_count, stream);
   auto const copy_itr    = thrust::counting_iterator<int64_t>(chars_offset);
-  auto const copy_end    = cudf::detail::copy_if_safe(copy_itr,
-                                                   copy_itr + chars_bytes + chars_offset,
-                                                   targets_positions.begin(),
-                                                   copy_if_fn{fn, chars_bytes},
-                                                   stream);
+  auto const copy_end    = cudf::detail::copy_if_safe(
+    copy_itr,
+    copy_itr + chars_bytes + chars_offset,
+    targets_positions.begin(),
+    [fn] __device__(int64_t idx) { return fn.is_target_within_row(idx); },
+    stream);
 
   // adjust target count since the copy-if may have eliminated some invalid targets
   target_count = std::min(std::distance(targets_positions.begin(), copy_end), target_count);
@@ -282,37 +283,8 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_positions = targets_positions.data();
 
   // create a vector of offsets to each string's set of target positions
-  auto const targets_offsets = [&] {
-    auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
-
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        offsets_begin,
-                        offsets_begin + input.size() + 1,
-                        d_positions,
-                        d_positions + target_count,
-                        string_indices.begin());
-
-    // compute offsets per string
-    auto counts = rmm::device_uvector<size_type>(strings_count, stream);
-    // memset to zero-out the target counts for any null-entries or strings with no targets
-    thrust::uninitialized_fill(rmm::exec_policy(stream), counts.begin(), counts.end(), 0);
-    auto d_counts = counts.data();
-
-    // next, count the number of targets per string
-    auto d_string_indices = string_indices.data();
-    thrust::for_each_n(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<int64_t>(0),
-      target_count,
-      [d_string_indices, d_counts] __device__(int64_t idx) {
-        auto const str_idx = d_string_indices[idx] - 1;
-        cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_counts + str_idx)};
-        ref.fetch_add(1, cuda::std::memory_order_relaxed);
-      });
-    // finally, convert the counts into offsets
-    return std::get<0>(cudf::strings::detail::make_offsets_child_column(
-      counts.begin(), counts.end(), stream, rmm::mr::get_current_device_resource()));
-  }();
+  auto const targets_offsets = create_offsets_from_positions(
+    input, targets_positions, stream, rmm::mr::get_current_device_resource());
   auto const d_targets_offsets =
     cudf::detail::offsetalator_factory::make_input_iterator(targets_offsets->view());
 
@@ -369,7 +341,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
  * Performs the multi-replace operation with a thread per string.
  * This performs best on smaller strings. @see AVG_CHAR_BYTES_THRESHOLD
  */
-struct replace_multi_fn {
+struct replace_fn {
   column_device_view const d_strings;
   string_view d_target;
   string_view d_replacement;
@@ -427,7 +399,7 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
-    replace_multi_fn{*d_strings, d_target, d_replacement, maxrepl}, input.size(), stream, mr);
+    replace_fn{*d_strings, d_target, d_replacement, maxrepl}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
