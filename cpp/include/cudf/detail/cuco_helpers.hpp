@@ -24,8 +24,7 @@
 namespace cudf::detail {
 
 /// Sentinel value for `cudf::size_type`
-cudf::size_type constexpr CUCO_CUDF_SIZE_TYPE_SENTINEL = -1;
-// TODO: is it a mouthful? Maybe `CUCO_SIZE_TYPE_SENTINEL`?
+cudf::size_type constexpr CUDF_SIZE_TYPE_SENTINEL = -1;
 
 /**
  * @brief Stream-ordered allocator adaptor used for cuco data structures
