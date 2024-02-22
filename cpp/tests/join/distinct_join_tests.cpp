@@ -55,8 +55,8 @@ struct DistinctJoinTest : public cudf::test::BaseFixture {
     auto probe_indices_col = cudf::column_view{probe_indices_span};
 
     auto constexpr oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
-    auto const joined_cols    = cudf::gather(build_table, build_indices_col, oob_policy)->release();
-    auto const right_cols     = cudf::gather(probe_table, probe_indices_col, oob_policy)->release();
+    auto joined_cols          = cudf::gather(build_table, build_indices_col, oob_policy)->release();
+    auto right_cols           = cudf::gather(probe_table, probe_indices_col, oob_policy)->release();
 
     joined_cols.insert(joined_cols.end(),
                        std::make_move_iterator(right_cols.begin()),
