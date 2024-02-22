@@ -35,6 +35,8 @@ namespace cudf {
 
 /**
  * @brief Enum to indicate whether the distinct join table has nested columns or not
+ *
+ * @ingroup column_join
  */
 enum class has_nested : bool { YES, NO };
 
