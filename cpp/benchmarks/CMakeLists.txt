@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -184,6 +184,11 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
+# * structs benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
+
+# ##################################################################################################
 # * quantiles benchmark
 # --------------------------------------------------------------------------------
 ConfigureBench(QUANTILES_BENCH quantiles/quantiles.cpp)
@@ -306,6 +311,8 @@ ConfigureNVBench(
   string/case.cpp
   string/char_types.cpp
   string/contains.cpp
+  string/copy_if_else.cpp
+  string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
   string/gather.cpp

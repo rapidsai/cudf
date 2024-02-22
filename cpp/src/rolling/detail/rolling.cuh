@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,15 @@
 
 #pragma once
 
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/util.hpp"
 #include "lead_lag_nested.cuh"
 #include "nth_element.cuh"
+#include "reductions/nested_type_minmax_util.cuh"
 #include "rolling.hpp"
 #include "rolling_collect_list.cuh"
 #include "rolling_jit.hpp"
-
-#include <reductions/nested_type_minmax_util.cuh>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -45,24 +47,19 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/util.hpp>
-
-#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/climits>
+#include <cuda/std/limits>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
-#include <cuda/std/climits>
-#include <cuda/std/limits>
+#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
 #include <memory>
 
@@ -1022,7 +1019,7 @@ template <typename OutputType,
           typename DeviceRollingOperator,
           typename PrecedingWindowIterator,
           typename FollowingWindowIterator>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void gpu_rolling(column_device_view input,
                    column_device_view default_outputs,
                    mutable_column_device_view output,

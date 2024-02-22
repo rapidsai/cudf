@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -246,20 +246,29 @@ public final class Table implements AutoCloseable {
   /**
    * read JSON data and return a pointer to a TableWithMeta object.
    */
-  private static native long readJSON(String[] columnNames,
+  private static native long readJSON(int[] numChildren, String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
                                         boolean dayFirst, boolean lines,
-                                        boolean recoverWithNulls) throws CudfException;
+                                        boolean recoverWithNulls,
+                                        boolean normalizeSingleQuotes,
+                                        boolean mixedTypesAsStrings) throws CudfException;
 
-  private static native long readJSONFromDataSource(String[] columnNames,
+  private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
                                       int[] dTypeIds, int[] dTypeScales,
                                       boolean dayFirst, boolean lines,
                                       boolean recoverWithNulls,
+                                      boolean normalizeSingleQuotes,
+                                      boolean mixedTypesAsStrings,
                                       long dsHandle) throws CudfException;
 
+  private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
+                                      boolean recoverWithNulls,
+                                      boolean normalizeSingleQuotes,
+                                      boolean mixedTypesAsStrings,
+                                      long dsHandle) throws CudfException;
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines, boolean recoverWithNulls) throws CudfException;
+      boolean dayFirst, boolean lines, boolean recoverWithNulls, boolean normalizeSingleQuotes, boolean mixedTypesAsStrings) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -751,14 +760,6 @@ public final class Table implements AutoCloseable {
                                              long targetTableHandle)
                                              throws CudfException;
 
-  private static native long[] convertToRows(long nativeHandle);
-
-  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
-
-  private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
-
-  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
-
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
@@ -812,8 +813,11 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
+    if (schema.hasNestedChildren()) {
+      throw new IllegalArgumentException("CSV does not support nested types");
+    }
     return new Table(
-        readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+        readCSV(schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
             opts.getIncludeColumnNames(), path.getAbsolutePath(),
             0, 0,
             opts.getHeaderRow(),
@@ -894,7 +898,10 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+    if (schema.hasNestedChildren()) {
+      throw new IllegalArgumentException("CSV does not support nested types");
+    }
+    return new Table(readCSV(schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
         opts.getIncludeColumnNames(), null,
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
@@ -910,9 +917,12 @@ public final class Table implements AutoCloseable {
   public static Table readCSV(Schema schema, CSVOptions opts, DataSource ds) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
     try {
-      return new Table(readCSVFromDataSource(schema.getColumnNames(),
-              schema.getTypeIds(),
-              schema.getTypeScales(),
+      if (schema.hasNestedChildren()) {
+        throw new IllegalArgumentException("CSV does not support nested types");
+      }
+      return new Table(readCSVFromDataSource(schema.getFlattenedColumnNames(),
+              schema.getFlattenedTypeIds(),
+              schema.getFlattenedTypeScales(),
               opts.getIncludeColumnNames(),
               opts.getHeaderRow(),
               opts.getDelim(),
@@ -1047,6 +1057,134 @@ public final class Table implements AutoCloseable {
     return readJSON(schema, opts, buffer, 0, buffer.length);
   }
 
+  private static class DidViewChange {
+    ColumnVector changeWasNeeded = null;
+    boolean noChangeNeeded = false;
+
+    public static DidViewChange yes(ColumnVector cv) {
+      DidViewChange ret = new DidViewChange();
+      ret.changeWasNeeded = cv;
+      return ret;
+    }
+
+    public static DidViewChange no() {
+      DidViewChange ret = new DidViewChange();
+      ret.noChangeNeeded = true;
+      return ret;
+    }
+  }
+
+  private static DidViewChange gatherJSONColumns(Schema schema, TableWithMeta.NestedChildren children,
+                                                 ColumnView cv) {
+    // We need to do this recursively to be sure it all matches as expected.
+    // If we run into problems where the data types don't match, we are not
+    // going to fix up the data types. We are only going to reorder the columns.
+    if (schema.getType() == DType.STRUCT) {
+      if (cv.getType() != DType.STRUCT) {
+        // The types don't match so just return the input unchanged...
+        return DidViewChange.no();
+      } else {
+        String[] foundNames = children.getNames();
+        HashMap<String, Integer> indices = new HashMap<>();
+        for (int i = 0; i < foundNames.length; i++) {
+          indices.put(foundNames[i], i);
+        }
+        // We might need to rearrange the columns to match what we want.
+        DType[] types = schema.getChildTypes();
+        String[] neededNames = schema.getColumnNames();
+        ColumnView[] columns = new ColumnView[neededNames.length];
+        try {
+          boolean somethingChanged = false;
+          if (columns.length != foundNames.length) {
+            somethingChanged = true;
+          }
+          for (int i = 0; i < columns.length; i++) {
+            String neededColumnName = neededNames[i];
+            Integer index = indices.get(neededColumnName);
+            if (index != null) {
+              if (schema.getChild(i).isStructOrHasStructDescendant()) {
+                ColumnView child = cv.getChildColumnView(index);
+                boolean shouldCloseChild = true;
+                try {
+                  if (index != i) {
+                    somethingChanged = true;
+                  }
+                  DidViewChange childResult = gatherJSONColumns(schema.getChild(i),
+                      children.getChild(index), child);
+                  if (childResult.noChangeNeeded) {
+                    shouldCloseChild = false;
+                    columns[i] = child;
+                  } else {
+                    somethingChanged = true;
+                    columns[i] = childResult.changeWasNeeded;
+                  }
+                } finally {
+                  if (shouldCloseChild) {
+                    child.close();
+                  }
+                }
+              } else {
+                if (index != i) {
+                  somethingChanged = true;
+                }
+                columns[i] = cv.getChildColumnView(index);
+              }
+            } else {
+              somethingChanged = true;
+              try (Scalar s = Scalar.fromNull(types[i])) {
+                columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
+              }
+            }
+          }
+          if (somethingChanged) {
+            try (ColumnView ret = new ColumnView(cv.type, cv.rows, Optional.of(cv.nullCount),
+                cv.getValid(), null, columns)) {
+              return DidViewChange.yes(ret.copyToColumnVector());
+            }
+          } else {
+            return DidViewChange.no();
+          }
+        } finally {
+          for (ColumnView c: columns) {
+            if (c != null) {
+              c.close();
+            }
+          }
+        }
+      }
+    } else if (schema.getType() == DType.LIST && cv.getType() == DType.LIST) {
+      if (schema.isStructOrHasStructDescendant()) {
+        String [] childNames = children.getNames();
+        if (childNames.length == 2 &&
+            "offsets".equals(childNames[0]) &&
+            "element".equals(childNames[1])) {
+          try (ColumnView child = cv.getChildColumnView(0)){
+            DidViewChange listResult = gatherJSONColumns(schema.getChild(0),
+                children.getChild(1), child);
+            if (listResult.noChangeNeeded) {
+              return DidViewChange.no();
+            } else {
+              try (ColumnView listView = new ColumnView(cv.type, cv.rows,
+                  Optional.of(cv.nullCount), cv.getValid(), cv.getOffsets(),
+                  new ColumnView[]{listResult.changeWasNeeded})) {
+                return DidViewChange.yes(listView.copyToColumnVector());
+              } finally {
+                listResult.changeWasNeeded.close();
+              }
+            }
+          }
+        }
+      }
+      // Nothing to change so just return the input, but we need to inc a ref count to really
+      // make it work, so for now we are going to turn it into a ColumnVector.
+      return DidViewChange.no();
+    } else {
+      // Nothing to change so just return the input, but we need to inc a ref count to really
+      // make it work, so for now we are going to turn it into a ColumnVector.
+      return DidViewChange.no();
+    }
+  }
+
   private static Table gatherJSONColumns(Schema schema, TableWithMeta twm) {
     String[] neededColumns = schema.getColumnNames();
     if (neededColumns == null || neededColumns.length == 0) {
@@ -1058,14 +1196,24 @@ public final class Table implements AutoCloseable {
         indices.put(foundNames[i], i);
       }
       // We might need to rearrange the columns to match what we want.
-      DType[] types = schema.getTypes();
+      DType[] types = schema.getChildTypes();
       ColumnVector[] columns = new ColumnVector[neededColumns.length];
       try (Table tbl = twm.releaseTable()) {
         for (int i = 0; i < columns.length; i++) {
           String neededColumnName = neededColumns[i];
           Integer index = indices.get(neededColumnName);
           if (index != null) {
-            columns[i] = tbl.getColumn(index).incRefCount();
+            if (schema.getChild(i).isStructOrHasStructDescendant()) {
+              DidViewChange gathered = gatherJSONColumns(schema.getChild(i), twm.getChild(index),
+                  tbl.getColumn(index));
+              if (gathered.noChangeNeeded) {
+                columns[i] = tbl.getColumn(index).incRefCount();
+              } else {
+                columns[i] = gathered.changeWasNeeded;
+              }
+            } else {
+              columns[i] = tbl.getColumn(index).incRefCount();
+            }
           } else {
             try (Scalar s = Scalar.fromNull(types[i])) {
               columns[i] = ColumnVector.fromScalar(s, (int)tbl.getRowCount());
@@ -1092,10 +1240,13 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
     try (TableWithMeta twm = new TableWithMeta(
-            readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+            readJSON(schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
+                    schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
                     path.getAbsolutePath(),
                     0, 0,
-                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()))) {
+                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+                    opts.isNormalizeSingleQuotes(),
+                    opts.isMixedTypesAsStrings()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1147,7 +1298,29 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull()));
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+        opts.isNormalizeSingleQuotes(),
+        opts.isMixedTypesAsStrings()));
+  }
+
+  /**
+   * Read JSON formatted data and infer the column names and schema.
+   * @param opts various JSON parsing options.
+   * @return the data parsed as a table on the GPU and the metadata for the table returned.
+   */
+  public static TableWithMeta readAndInferJSON(JSONOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      TableWithMeta twm = new TableWithMeta(readAndInferJSONFromDataSource(opts.isDayFirst(),
+          opts.isLines(),
+          opts.isRecoverWithNull(),
+          opts.isNormalizeSingleQuotes(),
+          opts.isMixedTypesAsStrings(),
+          dsHandle));
+        return twm;
+      } finally {
+        DataSourceHelper.destroyWrapperDataSource(dsHandle);
+      }
   }
 
   /**
@@ -1167,10 +1340,12 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
-            schema.getTypeIds(), schema.getTypeScales(), null,
+    try (TableWithMeta twm = new TableWithMeta(readJSON(
+            schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
+            schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
             buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
-            opts.isRecoverWithNull()))) {
+            opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+            opts.isMixedTypesAsStrings()))) {
       return gatherJSONColumns(schema, twm);
     }
   }
@@ -1184,9 +1359,10 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds) {
     long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
-    try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getColumnNames(),
-            schema.getTypeIds(), schema.getTypeScales(), opts.isDayFirst(), opts.isLines(),
-            opts.isRecoverWithNull(), dsHandle))) {
+    try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
+        schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
+        opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+        opts.isMixedTypesAsStrings(), dsHandle))) {
       return gatherJSONColumns(schema, twm);
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dsHandle);
@@ -3645,140 +3821,6 @@ public final class Table implements AutoCloseable {
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
     return buildSemiJoinGatherMap(gatherMapData);
-  }
-
-  /**
-   * For details about how this method functions refer to
-   * {@link #convertToRowsFixedWidthOptimized()}.
-   *
-   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
-   * is that this can handle roughly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
-   * can only handle columns less than 100
-   */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
-    return ColumnVector.getColumnVectorsFromPointers(ptrs);
-  }
-
-  /**
-   * Convert this table of columns into a row major format that is useful for interacting with other
-   * systems that do row major processing of the data. Currently only fixed-width column types are
-   * supported.
-   * <p/>
-   * The output is one or more ColumnVectors that are lists of bytes. A ColumnVector that is a
-   * list of bytes can have at most 2GB of data stored in it. Multiple ColumnVectors are returned
-   * if not all of the data can fit in a single one.
-   * <p/>
-   * Each row in the returned ColumnVector array corresponds to a row in the input table. The rows
-   * will be in the same order as the input Table. The first ColumnVector in the array will hold
-   * the first N rows followed by the second ColumnVector and so on.  The following illustrates
-   * this and also shows some of the internal structure that will be explained later.
-   * <p/><pre>
-   * result[0]:
-   *  | row 0 | validity for row 0 | padding |
-   *  ...
-   *  | row N | validity for row N | padding |
-   *  result[1]:
-   *  |row N+1 | validity for row N+1 | padding |
-   *  ...
-   * </pre>
-   *
-   * The format of each row is similar in layout to a C struct where each column will have padding
-   * in front of it to align it properly. Each row has padding inserted at the end so the next row
-   * is aligned to a 64-bit boundary. This is so that the first column will always start at the
-   * beginning (first byte) of the list of bytes and each row has a consistent layout for fixed
-   * width types.
-   * <p/>
-   * Validity bytes are added to the end of the row. There will be one byte for each 8 columns in a
-   * row. Because the validity is byte aligned there is no padding between it and the last column
-   * in the row.
-   * <p/>
-   * For example a table consisting of the following columns A, B, C with the corresponding types
-   * <p/><pre>
-   *   | A - BOOL8 (8-bit) | B - INT16 (16-bit) | C - DURATION_DAYS (32-bit) |
-   * </pre>
-   * <p/>
-   *  Will have a layout that looks like
-   *  <p/><pre>
-   *  | A_0 | P | B_0 | B_1 | C_0 | C_1 | C_2 | C_3 | V0 | P | P | P | P | P | P | P |
-   * </pre>
-   * <p/>
-   * In this P corresponds to a byte of padding, [LETTER]_[NUMBER] represents the NUMBER
-   * byte of the corresponding LETTER column, and V[NUMBER] is a validity byte for the `NUMBER * 8`
-   * to `(NUMBER + 1) * 8` columns.
-   * <p/>
-   * The order of the columns will not be changed, but to reduce the total amount of padding it is
-   * recommended to order the columns in the following way.
-   * <p/>
-   * <ol>
-   *  <li>64-bit columns</li>
-   *  <li>32-bit columns</li>
-   *  <li>16-bit columns</li>
-   *  <li>8-bit columns</li>
-   * </ol>
-   * <p/>
-   * This way padding is only inserted at the end of a row to make the next column 64-bit aligned.
-   * So for the example above if the columns were ordered C, B, A the layout would be.
-   * <pre>
-   * | C_0 | C_1 | C_2 | C_3 | B_0 | B_1 | A_0 | V0 |
-   * </pre>
-   * This would have reduced the overall size of the data transferred by half.
-   * <p/>
-   * One of the main motivations for doing a row conversion on the GPU is to avoid cache problems
-   * when walking through columnar data on the CPU in a row wise manner. If you are not transferring
-   * very many columns it is likely to be more efficient to just pull back the columns and walk
-   * through them. This is especially true of a single column of fixed width data. The extra
-   * padding will slow down the transfer and looking at only a handful of buffers is not likely to
-   * cause cache issues.
-   * <p/>
-   * There are some limits on the size of a single row.  If the row is larger than 1KB this will
-   * throw an exception.
-   */
-  public ColumnVector[] convertToRowsFixedWidthOptimized() {
-    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    return ColumnVector.getColumnVectorsFromPointers(ptrs);
-  }
-
-  /**
-   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
-   * and convert it back to a table.
-   *
-   * NOTE: This method doesn't support nested types
-   *
-   * @param vec the row data to process.
-   * @param schema the types of each column.
-   * @return the parsed table.
-   */
-  public static Table convertFromRows(ColumnView vec, DType ... schema) {
-    int[] types = new int[schema.length];
-    int[] scale = new int[schema.length];
-    for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].typeId.nativeId;
-      scale[i] = schema[i].getScale();
-
-    }
-    return new Table(convertFromRows(vec.getNativeView(), types, scale));
-  }
-
-  /**
-   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
-   * and convert it back to a table.
-   *
-   * NOTE: This method doesn't support nested types
-   *
-   * @param vec the row data to process.
-   * @param schema the types of each column.
-   * @return the parsed table.
-   */
-  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
-    int[] types = new int[schema.length];
-    int[] scale = new int[schema.length];
-    for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].typeId.nativeId;
-      scale[i] = schema[i].getScale();
-
-    }
-    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
   }
 
   /**

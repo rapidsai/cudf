@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
 #include <cudf/io/orc_types.hpp>
-#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
-#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {
@@ -1082,7 +1083,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
  */
 // blockDim {block_size,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpuDecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
                                       uint32_t num_columns,
@@ -1358,7 +1359,7 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] = {
  */
 // blockDim {block_size,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpuDecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
                          table_device_view tz_table,

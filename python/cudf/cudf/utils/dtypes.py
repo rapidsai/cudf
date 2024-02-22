@@ -1,7 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
-from collections import namedtuple
 from decimal import Decimal
 
 import cupy as cp
@@ -139,17 +138,6 @@ def np_to_pa_dtype(dtype):
     return _np_pa_dtypes[cudf.dtype(dtype).type]
 
 
-def get_numeric_type_info(dtype):
-    _TypeMinMax = namedtuple("_TypeMinMax", "min,max")
-    if dtype.kind in {"i", "u"}:
-        info = np.iinfo(dtype)
-        return _TypeMinMax(info.min, info.max)
-    elif dtype.kind == "f":
-        return _TypeMinMax(dtype.type("-inf"), dtype.type("+inf"))
-    else:
-        raise TypeError(dtype)
-
-
 def numeric_normalize_types(*args):
     """Cast all args to a common type using numpy promotion logic"""
     dtype = np.result_type(*[a.dtype for a in args])
@@ -184,7 +172,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
     Python dtype.
     """
 
-    if cudf.api.types.is_categorical_dtype(dtype):
+    if cudf.api.types._is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif cudf.api.types.is_decimal32_dtype(dtype):
         return cudf.core.dtypes.Decimal32Dtype
@@ -202,12 +190,13 @@ def cudf_dtype_to_pa_type(dtype):
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
-    if cudf.api.types.is_categorical_dtype(dtype):
-        raise NotImplementedError()
-    elif (
-        cudf.api.types.is_list_dtype(dtype)
-        or cudf.api.types.is_struct_dtype(dtype)
-        or cudf.api.types.is_decimal_dtype(dtype)
+    if isinstance(dtype, cudf.CategoricalDtype):
+        raise NotImplementedError(
+            "No conversion from Categorical to pyarrow type"
+        )
+    elif isinstance(
+        dtype,
+        (cudf.StructDtype, cudf.ListDtype, cudf.core.dtypes.DecimalDtype),
     ):
         return dtype.to_arrow()
     else:
@@ -224,6 +213,8 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_large_string(typ):
+        return cudf.dtype("str")
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -273,6 +264,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if isinstance(val, pd.Timestamp):
         if val.tz is not None:
             raise NotImplementedError(tz_error_msg)
+
         val = val.to_datetime64()
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
@@ -400,7 +392,7 @@ def min_column_type(x, expected_type):
 
     if not isinstance(x, cudf.core.column.NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericalColumn")
-    if x.valid_count == 0:
+    if x.null_count == len(x):
         return x.dtype
 
     if np.issubdtype(x.dtype, np.floating):
@@ -426,9 +418,9 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
-    if cudf.api.types.is_categorical_dtype(lhs.dtype):
+    if cudf.api.types._is_categorical_dtype(lhs.dtype):
         return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
-    elif cudf.api.types.is_categorical_dtype(rhs.dtype):
+    elif cudf.api.types._is_categorical_dtype(rhs.dtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
@@ -528,10 +520,10 @@ def find_common_type(dtypes):
 
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
-    if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+    if any(cudf.api.types._is_categorical_dtype(dtype) for dtype in dtypes):
         if all(
             (
-                cudf.api.types.is_categorical_dtype(dtype)
+                cudf.api.types._is_categorical_dtype(dtype)
                 and (not dtype.ordered if hasattr(dtype, "ordered") else True)
             )
             for dtype in dtypes
@@ -557,7 +549,9 @@ def find_common_type(dtypes):
     # Aggregate same types
     dtypes = set(dtypes)
 
-    if any(cudf.api.types.is_decimal_dtype(dtype) for dtype in dtypes):
+    if any(
+        isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
+    ):
         if all(
             cudf.api.types.is_decimal_dtype(dtype)
             or cudf.api.types.is_numeric_dtype(dtype)
@@ -572,7 +566,7 @@ def find_common_type(dtypes):
             )
         else:
             return cudf.dtype("O")
-    if any(cudf.api.types.is_list_dtype(dtype) for dtype in dtypes):
+    if any(isinstance(dtype, cudf.ListDtype) for dtype in dtypes):
         if len(dtypes) == 1:
             return dtypes.get(0)
         else:
@@ -585,7 +579,7 @@ def find_common_type(dtypes):
                 "Finding a common type for `ListDtype` is currently "
                 "not supported"
             )
-    if any(cudf.api.types.is_struct_dtype(dtype) for dtype in dtypes):
+    if any(isinstance(dtype, cudf.StructDtype) for dtype in dtypes):
         if len(dtypes) == 1:
             return dtypes.get(0)
         else:
@@ -610,7 +604,7 @@ def find_common_type(dtypes):
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
 
-    common_dtype = np.find_common_type(list(dtypes), [])
+    common_dtype = np.result_type(*dtypes)
     if common_dtype == np.dtype("float16"):
         return cudf.dtype("float32")
     return cudf.dtype(common_dtype)

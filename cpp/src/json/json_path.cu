@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
+#include "io/utilities/parsing_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/json/json.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -30,8 +34,6 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <io/utilities/parsing_utils.cuh>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -900,10 +902,11 @@ __device__ thrust::pair<parse_result, json_output> get_json_object_single(
  * @param options Options controlling behavior
  */
 template <int block_size>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void get_json_object_kernel(column_device_view col,
                               path_operator const* const commands,
-                              size_type* output_offsets,
+                              size_type* d_sizes,
+                              cudf::detail::input_offsetalator output_offsets,
                               thrust::optional<char*> out_buf,
                               thrust::optional<bitmask_type*> out_validity,
                               thrust::optional<size_type*> out_valid_count,
@@ -934,7 +937,7 @@ __launch_bounds__(block_size) __global__
 
     // filled in only during the precompute step. during the compute step, the offsets
     // are fed back in so we do -not- want to write them out
-    if (!out_buf.has_value()) { output_offsets[tid] = static_cast<size_type>(output_size); }
+    if (!out_buf.has_value()) { d_sizes[tid] = output_size; }
 
     // validity filled in only during the output step
     if (out_validity.has_value()) {
@@ -971,11 +974,6 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   if (col.is_empty()) return make_empty_column(type_id::STRING);
 
-  // allocate output offsets buffer.
-  auto offsets = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, col.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  cudf::mutable_column_view offsets_view(*offsets);
-
   // if the query is empty, return a string column containing all nulls
   if (!std::get<0>(preprocess).has_value()) {
     return std::make_unique<column>(
@@ -986,6 +984,11 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       col.size());  // null count
   }
 
+  // compute output sizes
+  auto sizes =
+    rmm::device_uvector<size_type>(col.size(), stream, rmm::mr::get_current_device_resource());
+  auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(col.offsets());
+
   constexpr int block_size = 512;
   cudf::detail::grid_1d const grid{col.size(), block_size};
   auto cdv = column_device_view::create(col.parent(), stream);
@@ -994,23 +997,20 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
       std::get<0>(preprocess).value().data(),
-      offsets_view.head<size_type>(),
+      sizes.data(),
+      d_offsets,
       thrust::nullopt,
       thrust::nullopt,
       thrust::nullopt,
       options);
 
   // convert sizes to offsets
-  thrust::exclusive_scan(rmm::exec_policy(stream),
-                         offsets_view.head<size_type>(),
-                         offsets_view.head<size_type>() + col.size() + 1,
-                         offsets_view.head<size_type>(),
-                         0);
-  size_type const output_size =
-    cudf::detail::get_value<size_type>(offsets_view, col.size(), stream);
+  auto [offsets, output_size] =
+    cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+  d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // allocate output string column
-  auto chars = cudf::strings::detail::create_chars_child_column(output_size, stream, mr);
+  rmm::device_uvector<char> chars(output_size, stream, mr);
 
   // potential optimization : if we know that all outputs are valid, we could skip creating
   // the validity mask altogether
@@ -1018,22 +1018,22 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, mr);
 
   // compute results
-  cudf::mutable_column_view chars_view(*chars);
   rmm::device_scalar<size_type> d_valid_count{0, stream};
 
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       *cdv,
       std::get<0>(preprocess).value().data(),
-      offsets_view.head<size_type>(),
-      chars_view.head<char>(),
+      sizes.data(),
+      d_offsets,
+      chars.data(),
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
 
   auto result = make_strings_column(col.size(),
                                     std::move(offsets),
-                                    std::move(chars),
+                                    chars.release(),
                                     col.size() - d_valid_count.value(stream),
                                     std::move(validity));
   // unmatched array query may result in unsanitized '[' value in the result

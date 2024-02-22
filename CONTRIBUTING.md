@@ -79,7 +79,7 @@ CUDA/GPU:
 
 * CUDA 11.5+
 * NVIDIA driver 450.80.02+
-* Pascal architecture or better
+* Volta architecture or better (Compute Capability >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
@@ -151,116 +151,31 @@ cd $CUDF_HOME
 ./build.sh --help
 ```
 
-### Build, install and test cuDF libraries for contributors
+#### Building for development
 
-The general workflow is provided below. Please also see the last section about
-[code formatting](#code-formatting).
-
-#### `libcudf` (C++)
-
-- If you're only interested in building the library (and not the unit tests):
+To build Python packages for development purposes, add the `--pydevelop` flag.
+To build C++ tests, you can also request that build.sh build the `test` target.
+To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
-cd $CUDF_HOME
-./build.sh libcudf
+./build.sh --pydevelop libcudf libcudf_kafka cudf dask_cudf cudf_kafka custreamz
 ```
 
-- If, in addition, you want to build tests:
+To run the C++ tests, run
 
 ```bash
-./build.sh libcudf tests
+ctest --test-dir ${CUDF_HOME}/cpp/build  # libcudf
+ctest --test-dir ${CUDF_HOME}/cpp/libcudf_kafka/build  # libcudf_kafka
 ```
 
-- To run the tests:
-
-```bash
-make test
-```
-
-#### `cudf` (Python)
-
-- First, build the `libcudf` C++ library following the steps above
-
-- To build and install in edit/develop `cudf` Python package:
-```bash
-cd $CUDF_HOME/python/cudf
-python setup.py build_ext --inplace
-python setup.py develop
-```
+To run python tests, run
 
 - To run `cudf` tests:
 ```bash
 cd $CUDF_HOME/python
-pytest -v cudf/cudf/tests
-```
-
-#### `dask-cudf` (Python)
-
-- First, build the `libcudf` C++ and `cudf` Python libraries following the steps above
-
-- To install the `dask-cudf` Python package in editable/develop mode:
-```bash
-cd $CUDF_HOME/python/dask_cudf
-python setup.py build_ext --inplace
-python setup.py develop
-```
-
-- To run `dask_cudf` tests:
-```bash
-cd $CUDF_HOME/python
-pytest -v dask_cudf
-```
-
-#### `libcudf_kafka` (C++)
-
-- If you're only interested in building the library (and not the unit tests):
-
-```bash
-cd $CUDF_HOME
-./build.sh libcudf_kafka
-```
-
-- If, in addition, you want to build tests:
-
-```bash
-./build.sh libcudf_kafka tests
-```
-
-- To run the tests:
-
-```bash
-make test
-```
-
-#### `cudf-kafka` (Python)
-
-- First, build the `libcudf` and `libcudf_kafka` libraries following the steps above
-
-- To install the `cudf-kafka` Python package in editable/develop mode:
-
-```bash
-cd $CUDF_HOME/python/cudf_kafka
-python setup.py build_ext --inplace
-python setup.py develop
-```
-
-#### `custreamz` (Python)
-
-- First, build `libcudf`, `libcudf_kafka`, and `cudf_kafka` following the steps above
-
-- To install the `custreamz` Python package in editable/develop mode:
-
-```bash
-cd $CUDF_HOME/python/custreamz
-python setup.py build_ext --inplace
-python setup.py develop
-```
-
-- To run `custreamz` tests :
-
-```bash
-cd $CUDF_HOME/python
-pytest -v custreamz
+pytest -v ${CUDF_HOME}/python/cudf/cudf/tests
+pytest -v ${CUDF_HOME}/python/dask_cudf/dask_cudf/ # There are tests in both tests/ and io/tests/
+pytest -v ${CUDF_HOME}/python/custreamz/custreamz/tests
 ```
 
 #### `cudf` (Java):

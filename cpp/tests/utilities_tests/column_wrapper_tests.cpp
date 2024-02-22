@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
@@ -254,7 +255,7 @@ TYPED_TEST(StringsColumnWrapperTest, NullablePairListConstructorAllNull)
   EXPECT_EQ(view.size(), count);
   EXPECT_EQ(view.offsets().size(), count + 1);
   // all null entries results in no data allocated to chars
-  EXPECT_EQ(nullptr, view.chars().head());
+  EXPECT_EQ(nullptr, view.parent().head());
   EXPECT_NE(nullptr, view.offsets().head());
   EXPECT_TRUE(view.has_nulls());
   EXPECT_EQ(view.null_count(), 5);

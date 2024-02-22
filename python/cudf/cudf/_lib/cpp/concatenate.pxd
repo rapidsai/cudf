@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
@@ -16,16 +16,7 @@ cdef extern from "cudf/concatenate.hpp" namespace "cudf" nogil:
     # constructable from a vector. In case they are needed in the future,
     # host_span versions can be added, e.g:
     #
-    # cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
-    #    host_span[column_view] views
-    # ) except +
+    # cdef unique_ptr[column] concatenate(host_span[column_view] columns) except +
 
-    cdef device_buffer concatenate_masks "cudf::concatenate_masks"(
-        const vector[column_view] views
-    ) except +
-    cdef unique_ptr[column] concatenate_columns "cudf::concatenate"(
-        const vector[column_view] columns
-    ) except +
-    cdef unique_ptr[table] concatenate_tables "cudf::concatenate"(
-        const vector[table_view] tables
-    ) except +
+    cdef unique_ptr[column] concatenate(const vector[column_view] columns) except +
+    cdef unique_ptr[table] concatenate(const vector[table_view] tables) except +

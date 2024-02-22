@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
@@ -26,12 +27,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
-#include <thrust/fill.h>
-#include <thrust/optional.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/fill.h>
+#include <thrust/optional.h>
 
 namespace cudf {
 namespace detail {
@@ -352,11 +353,12 @@ __device__ size_type row_size_functor::operator()<string_view>(column_device_vie
     return 0;
   }
 
-  auto const offsets_size  = sizeof(size_type) * CHAR_BIT;
+  auto const offsets_size =
+    (offsets.type().id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t)) * CHAR_BIT;
   auto const validity_size = col.nullable() ? 1 : 0;
-  auto const chars_size =
-    (offsets.data<size_type>()[row_end] - offsets.data<size_type>()[row_start]) * CHAR_BIT;
-  return ((offsets_size + validity_size) * num_rows) + chars_size;
+  auto const d_offsets     = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+  auto const chars_size    = (d_offsets[row_end] - d_offsets[row_start]) * CHAR_BIT;
+  return static_cast<size_type>(((offsets_size + validity_size) * num_rows) + chars_size);
 }
 
 /**
@@ -398,10 +400,10 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
  * @param output Output span of size (# rows) where per-row bit sizes are stored
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
  */
-__global__ void compute_row_sizes(device_span<column_device_view const> cols,
-                                  device_span<column_info const> info,
-                                  device_span<size_type> output,
-                                  size_type max_branch_depth)
+CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
+                                   device_span<column_info const> info,
+                                   device_span<size_type> output,
+                                   size_type max_branch_depth)
 {
   extern __shared__ row_span thread_branch_stacks[];
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;

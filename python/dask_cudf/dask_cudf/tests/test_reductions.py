@@ -1,14 +1,15 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 from dask import dataframe as dd
 
 import cudf
 
-import dask_cudf as dgd
+import dask_cudf
 
 
 def _make_random_frame(nelem, npartitions=2):
@@ -19,7 +20,7 @@ def _make_random_frame(nelem, npartitions=2):
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
-    dgf = dgd.from_cudf(gdf, npartitions=npartitions)
+    dgf = dask_cudf.from_cudf(gdf, npartitions=npartitions)
     return df, dgf
 
 
@@ -66,15 +67,20 @@ def test_series_reduce(reducer):
     "op", ["max", "min", "sum", "prod", "mean", "var", "std"]
 )
 def test_rowwise_reductions(data, op):
-
-    gddf = dgd.from_cudf(data, npartitions=10)
+    gddf = dask_cudf.from_cudf(data, npartitions=10)
     pddf = gddf.to_dask_dataframe()
 
-    if op in ("var", "std"):
-        expected = getattr(pddf, op)(axis=1, ddof=0)
-        got = getattr(gddf, op)(axis=1, ddof=0)
-    else:
-        expected = getattr(pddf, op)(axis=1)
-        got = getattr(pddf, op)(axis=1)
+    with dask.config.set({"dataframe.convert-string": False}):
+        if op in ("var", "std"):
+            expected = getattr(pddf, op)(axis=1, numeric_only=True, ddof=0)
+            got = getattr(gddf, op)(axis=1, numeric_only=True, ddof=0)
+        else:
+            expected = getattr(pddf, op)(numeric_only=True, axis=1)
+            got = getattr(pddf, op)(numeric_only=True, axis=1)
 
-    dd.assert_eq(expected.compute(), got.compute(), check_exact=False)
+        dd.assert_eq(
+            expected,
+            got,
+            check_exact=False,
+            check_dtype=op not in ("var", "std"),
+        )

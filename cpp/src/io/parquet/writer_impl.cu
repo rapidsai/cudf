@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,14 +21,13 @@
 
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
+#include "io/utilities/config_utils.hpp"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
-#include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -54,6 +53,10 @@
 #include <cstring>
 #include <numeric>
 #include <utility>
+
+#ifndef CUDF_VERSION
+#error "CUDF_VERSION is not defined"
+#endif
 
 namespace cudf::io::parquet::detail {
 
@@ -108,7 +111,7 @@ struct aggregate_writer_metadata {
     meta.num_rows           = this->files[part].num_rows;
     meta.row_groups         = this->files[part].row_groups;
     meta.key_value_metadata = this->files[part].key_value_metadata;
-    meta.created_by         = this->created_by;
+    meta.created_by         = "cudf version " CUDF_STRINGIFY(CUDF_VERSION);
     meta.column_orders      = this->column_orders;
     return meta;
   }
@@ -171,7 +174,6 @@ struct aggregate_writer_metadata {
     std::vector<std::vector<uint8_t>> column_indexes;
   };
   std::vector<per_file_metadata> files;
-  std::string created_by                                   = "";
   thrust::optional<std::vector<ColumnOrder>> column_orders = thrust::nullopt;
 };
 
@@ -189,6 +191,9 @@ Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return Compression::SNAPPY;
     case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
     case compression_type::NONE: return Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -606,10 +611,10 @@ std::vector<schema_tree_node> construct_schema_tree(
       // column that isn't a single-depth list<int8> the code will throw.
       if (col_meta.is_enabled_output_as_binary() && is_last_list_child(col)) {
         CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                     "Binary column's corresponding metadata should have zero or two children!");
+                     "Binary column's corresponding metadata should have zero or two children");
         if (col_meta.num_children() > 0) {
           CUDF_EXPECTS(col->children[lists_column_view::child_column_index]->children.empty(),
-                       "Binary column must not be nested!");
+                       "Binary column must not be nested");
         }
 
         schema_tree_node col_schema{};
@@ -731,8 +736,13 @@ std::vector<schema_tree_node> construct_schema_tree(
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
-          CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
-                       "String column's corresponding metadata should have zero or two children");
+          if (col_meta.is_enabled_output_as_binary()) {
+            CUDF_EXPECTS(col_meta.num_children() == 2 or col_meta.num_children() == 0,
+                         "Binary column's corresponding metadata should have zero or two children");
+          } else {
+            CUDF_EXPECTS(col_meta.num_children() == 1 or col_meta.num_children() == 0,
+                         "String column's corresponding metadata should have zero or one children");
+          }
         } else {
           CUDF_EXPECTS(col_meta.num_children() == 0,
                        "Leaf column's corresponding metadata cannot have children");
@@ -1012,6 +1022,8 @@ auto to_nvcomp_compression_type(Compression codec)
 {
   if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+  if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
 
@@ -1358,7 +1370,14 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
         CUDF_FAIL("Compression error: " + reason.value());
       }
       nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-
+      break;
+    }
+    case Compression::LZ4_RAW: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
       break;
     }
     case Compression::UNCOMPRESSED: break;
@@ -2066,7 +2085,7 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
           need_sync = true;
         }
 
-        row_group.total_byte_size += ck.compressed_size;
+        row_group.total_byte_size += ck.bfr_size;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2393,7 +2412,8 @@ void writer::impl::write_parquet_data_to_sink(
             // skip dict pages
             if (enc_page.page_type == PageType::DICTIONARY_PAGE) { continue; }
 
-            int32_t this_page_size = enc_page.hdr_size + enc_page.max_data_size;
+            int32_t const this_page_size =
+              enc_page.hdr_size + (ck.is_compressed ? enc_page.comp_data_size : enc_page.data_size);
             // first_row_idx is relative to start of row group
             PageLocation loc{curr_pg_offset, this_page_size, enc_page.start_row - ck.start_row};
             if (is_byte_arr) { var_bytes.push_back(enc_page.var_bytes_size); }

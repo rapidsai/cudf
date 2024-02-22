@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import functools
 from typing import Any, Dict
@@ -108,7 +108,6 @@ def apply_chunks(
 
 @acquire_spill_lock()
 def make_aggregate_nullmask(df, columns=None, op="__and__"):
-
     out_mask = None
     for k in columns or df._data:
         col = cudf.core.dataframe.extract_col(df, k)

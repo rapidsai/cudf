@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections.abc import Iterator
@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
-from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
@@ -62,8 +61,6 @@ def _nonempty_index(idx):
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
         values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.StringIndex):
-        return cudf.StringIndex(["cat", "dog"], name=idx.name)
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
         key = tuple(idx._data.keys())
         assert len(key) == 1
@@ -74,15 +71,17 @@ def _nonempty_index(idx):
             categories=categories, codes=codes, ordered=ordered
         )
         return cudf.core.index.CategoricalIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.index.GenericIndex):
-        return cudf.core.index.GenericIndex(
-            np.arange(2, dtype=idx.dtype), name=idx.name
-        )
     elif isinstance(idx, cudf.core.multiindex.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0] for i in idx.levels]
         return cudf.core.multiindex.MultiIndex(
             levels=levels, codes=codes, names=idx.names
+        )
+    elif isinstance(idx._column, cudf.core.column.StringColumn):
+        return cudf.Index(["cat", "dog"], name=idx.name)
+    elif isinstance(idx, cudf.core.index.Index):
+        return cudf.core.index.Index(
+            np.arange(2, dtype=idx.dtype), name=idx.name
         )
 
     raise TypeError(f"Don't know how to handle index of type {type(idx)}")
@@ -127,7 +126,7 @@ def _get_non_empty_data(s):
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
-    elif is_datetime64tz_dtype(s.dtype):
+    elif isinstance(s.dtype, pd.DatetimeTZDtype):
         from cudf.utils.dtypes import get_time_unit
 
         data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
@@ -313,7 +312,7 @@ def tolist_cudf(obj):
 )
 @_dask_cudf_nvtx_annotate
 def is_categorical_dtype_cudf(obj):
-    return cudf.api.types.is_categorical_dtype(obj)
+    return cudf.api.types._is_categorical_dtype(obj)
 
 
 @grouper_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -334,7 +333,7 @@ def percentile_cudf(a, q, interpolation="linear"):
     if isinstance(q, Iterator):
         q = list(q)
 
-    if cudf.api.types.is_categorical_dtype(a.dtype):
+    if cudf.api.types._is_categorical_dtype(a.dtype):
         result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
         return (
@@ -438,7 +437,6 @@ def hash_object_cudf(frame, index=True):
 @hash_object_dispatch.register(cudf.BaseIndex)
 @_dask_cudf_nvtx_annotate
 def hash_object_cudf_index(ind, index=None):
-
     if isinstance(ind, cudf.MultiIndex):
         return ind.to_frame(index=False).hash_values()
 
@@ -586,7 +584,6 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         columns=None,
         constructor=cudf.DataFrame,
     ):
-
         return _default_backend(
             dd.from_dict,
             data,

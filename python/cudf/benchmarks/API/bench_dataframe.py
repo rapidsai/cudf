@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Benchmarks of DataFrame methods."""
 
@@ -178,6 +178,8 @@ def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):
     benchmark(dataframe.nsmallest, n, by)
 
 
-@pytest_cases.parametrize_with_cases("dataframe, cond, other", prefix="where")
+@pytest_cases.parametrize_with_cases(
+    "dataframe, cond, other", prefix="where", cases="cases_dataframe"
+)
 def bench_where(benchmark, dataframe, cond, other):
     benchmark(dataframe.where, cond, other)

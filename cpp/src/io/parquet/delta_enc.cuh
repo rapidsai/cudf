@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -186,6 +186,7 @@ class delta_binary_packer {
     _bitpack_tmp      = _buffer + delta::buffer_size;
     _current_idx      = 0;
     _values_in_buffer = 0;
+    _buffer[0]        = 0;
   }
 
   // Each thread calls this to add its current value.
@@ -200,7 +201,7 @@ class delta_binary_packer {
     if (is_valid) { _buffer[delta::rolling_idx(pos + _current_idx + _values_in_buffer)] = value; }
     __syncthreads();
 
-    if (threadIdx.x == 0) {
+    if (num_valid > 0 && threadIdx.x == 0) {
       _values_in_buffer += num_valid;
       // if first pass write header
       if (_current_idx == 0) {
@@ -215,7 +216,7 @@ class delta_binary_packer {
   }
 
   // Called by each thread to flush data to the sink.
-  inline __device__ uint8_t const* flush()
+  inline __device__ uint8_t* flush()
   {
     using cudf::detail::warp_size;
     __shared__ T block_min;
@@ -224,6 +225,10 @@ class delta_binary_packer {
     int const warp_id = t / warp_size;
     int const lane_id = t % warp_size;
 
+    // if no values have been written, still need to write the header
+    if (t == 0 && _current_idx == 0) { write_header(); }
+
+    // if there are no values to write, just return
     if (_values_in_buffer <= 0) { return _dst; }
 
     // Calculate delta for this thread.

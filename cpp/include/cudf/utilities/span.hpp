@@ -30,10 +30,17 @@
 #include <type_traits>
 
 namespace cudf {
+/**
+ * @addtogroup utility_span
+ * @{
+ * @file
+ * @brief APIs for spans
+ */
 
 /// A constant used to differentiate std::span of static and dynamic extent
 constexpr std::size_t dynamic_extent = std::numeric_limits<std::size_t>::max();
 
+/** @} */  // end of group
 namespace detail {
 
 /**
@@ -189,7 +196,7 @@ class span_base {
  * @addtogroup utility_span
  * @{
  * @file
- * @brief APIs for labeling values by bin.
+ * @brief APIs for spans
  */
 
 // ===== host_span =================================================================================

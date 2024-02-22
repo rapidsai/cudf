@@ -1,10 +1,11 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.testing._utils import assert_eq
 
@@ -52,7 +53,15 @@ def test_to_pandas_simple(simple_data):
     Test that a ColumnAccessor converts to a correct pd.Index
     """
     ca = ColumnAccessor(simple_data)
-    assert_eq(ca.to_pandas_index(), pd.DataFrame(simple_data).columns)
+    # We cannot return RangeIndex, while pandas returns RangeIndex.
+    # Pandas compares `inferred_type` which is `empty` for
+    # Index([], dtype='object'), and `integer` for RangeIndex()
+    # to ignore this `inferred_type` comparison, we pass exact=False.
+    assert_eq(
+        ca.to_pandas_index(),
+        pd.DataFrame(simple_data).columns,
+        exact=not PANDAS_GE_200,
+    )
 
 
 def test_to_pandas_multiindex(mi_data):

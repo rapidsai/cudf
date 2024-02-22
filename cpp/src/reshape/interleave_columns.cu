@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/reshape.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/interleave_columns.hpp>
@@ -30,12 +31,11 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace detail {
@@ -188,14 +188,14 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
       });
     auto offsets_transformer_itr = thrust::make_transform_iterator(
       thrust::make_counting_iterator<size_type>(0), offsets_transformer);
-    auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
+    auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
       offsets_transformer_itr, offsets_transformer_itr + num_strings, stream, mr);
-    auto d_results_offsets = offsets_column->view().template data<int32_t>();
+    auto d_results_offsets =
+      cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
 
     // Create the chars column
-    auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
-    // Fill the chars column
-    auto d_results_chars = chars_column->mutable_view().template data<char>();
+    rmm::device_uvector<char> chars(bytes, stream, mr);
+    auto d_results_chars = chars.data();
     thrust::for_each_n(
       rmm::exec_policy(stream),
       thrust::make_counting_iterator<size_type>(0),
@@ -215,7 +215,7 @@ struct interleave_columns_impl<T, std::enable_if_t<std::is_same_v<T, cudf::strin
 
     return make_strings_column(num_strings,
                                std::move(offsets_column),
-                               std::move(chars_column),
+                               chars.release(),
                                null_count,
                                std::move(valid_mask.first));
   }
