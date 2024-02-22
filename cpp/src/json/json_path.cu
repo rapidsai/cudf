@@ -24,7 +24,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/json/json.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/strings/detail/json_parser.cuh>
+#include <cudf/json/detail/json_parser.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>

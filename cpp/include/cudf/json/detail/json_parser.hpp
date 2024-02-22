@@ -18,7 +18,7 @@
 #include <cudf/json/json.hpp>
 #include <cudf/types.hpp>
 
-namespace cudf::strings::detail {
+namespace cudf::json::detail {
 
 /**
  * JSON token enum
@@ -880,4 +880,4 @@ class json_parser {
   int stack_size = 0;
 };
 
-}  // namespace cudf::strings::detail
+}  // namespace cudf::json::detail
