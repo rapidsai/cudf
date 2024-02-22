@@ -76,10 +76,10 @@ class hostdevice_span {
   [[nodiscard]] operator cudf::device_span<T>() { return {_device_data, size()}; }
 
   /**
-   * @brief Converts a hostdevice view into a device span.
+   * @brief Converts a hostdevice view into a device span of const data.
    *
    * @tparam T The device span type.
-   * @return A typed device span of the hostdevice view's data.
+   * @return A const typed device span of the hostdevice view's data.
    */
   [[nodiscard]] operator cudf::device_span<T const>() const { return {_device_data, size()}; }
 
