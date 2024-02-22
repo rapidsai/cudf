@@ -244,7 +244,7 @@ class CategoricalDtype(_BaseDtype):
         """  # noqa: E501
         if self._categories is None:
             categories = None
-        elif self._categories.dtype == "f":
+        elif self._categories.dtype.kind == "f":
             categories = self._categories.dropna().to_pandas()
         else:
             categories = self._categories.to_pandas()
