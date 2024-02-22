@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -39,9 +40,6 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cuda/atomic>
-#include <cuda/functional>
 
 namespace cudf {
 namespace strings {

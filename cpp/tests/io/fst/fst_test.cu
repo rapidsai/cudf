@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
+
 #include <tests/io/fst/common.hpp>
 
 #include <cudf_test/base_fixture.hpp>

@@ -72,7 +72,7 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
 
 /**
  * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
- * size_type. size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+ * size_type, size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       string_scalar const& repl,

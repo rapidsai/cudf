@@ -27,7 +27,6 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
 
 #include <cuda/functional>
 

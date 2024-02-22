@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,10 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -30,9 +29,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/for_each.h>
-
 #include <cuda/functional>
+#include <thrust/for_each.h>
 
 namespace cudf {
 namespace strings {

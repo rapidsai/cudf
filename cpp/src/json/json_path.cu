@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "io/utilities/parsing_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
@@ -32,8 +34,6 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <io/utilities/parsing_utils.cuh>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
