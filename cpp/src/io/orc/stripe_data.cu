@@ -1370,7 +1370,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                          table_device_view tz_table,
                          device_2dspan<RowGroup> row_groups,
                          uint64_t first_row,
-                         uint64_t rowidx_stride,
+                         size_type rowidx_stride,
                          size_t level,
                          size_type* error_count)
 {
@@ -1879,7 +1879,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   uint64_t first_row,
                                   table_device_view tz_table,
                                   uint64_t num_rowgroups,
-                                  uint64_t rowidx_stride,
+                                  size_type rowidx_stride,
                                   size_t level,
                                   size_type* error_count,
                                   rmm::cuda_stream_view stream)

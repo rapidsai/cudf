@@ -59,7 +59,7 @@ class aggregate_orc_metadata {
 
  public:
   std::vector<metadata> per_file_metadata;
-  uint64_t const num_rows;
+  int64_t const num_rows;
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
@@ -79,7 +79,12 @@ class aggregate_orc_metadata {
 
   [[nodiscard]] auto const& get_types() const { return per_file_metadata[0].ff.types; }
 
-  [[nodiscard]] auto get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
+  [[nodiscard]] size_type get_row_index_stride() const
+  {
+    CUDF_EXPECTS(per_file_metadata[0].ff.rowIndexStride <= std::numeric_limits<size_type>::max(),
+                 "Row index stride exceeds size_type max");
+    return per_file_metadata[0].ff.rowIndexStride;
+  }
 
   [[nodiscard]] auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 

@@ -286,7 +286,7 @@ void ParseRowGroupIndex(RowGroup* row_groups,
                         ColumnDesc* chunks,
                         size_type num_columns,
                         size_type num_stripes,
-                        uint64_t rowidx_stride,
+                        size_type rowidx_stride,
                         bool use_base_stride,
                         rmm::cuda_stream_view stream);
 
@@ -332,7 +332,7 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          uint64_t first_row,
                          table_device_view tz_table,
                          uint64_t num_rowgroups,
-                         uint64_t rowidx_stride,
+                         size_type rowidx_stride,
                          size_t level,
                          size_type* error_count,
                          rmm::cuda_stream_view stream);
