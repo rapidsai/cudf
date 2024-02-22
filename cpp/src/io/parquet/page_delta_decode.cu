@@ -15,14 +15,14 @@
  */
 
 #include "delta_binary.cuh"
+#include "io/utilities/block_utils.cuh"
 #include "page_string_utils.cuh"
 #include "parquet_gpu.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::parquet::detail {

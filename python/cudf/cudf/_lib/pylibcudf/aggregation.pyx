@@ -36,6 +36,7 @@ from cudf._lib.cpp.aggregation cimport (
     rank_method,
     rank_percentage,
     reduce_aggregation,
+    rolling_aggregation,
     scan_aggregation,
 )
 from cudf._lib.cpp.types cimport (
@@ -122,6 +123,13 @@ cdef class Aggregation:
         cdef scan_aggregation *agg_cast = dynamic_cast[sa_ptr](self.c_obj.get())
         if agg_cast is NULL:
             self._unsupported_agg_error("scan")
+        return agg_cast
+
+    cdef const rolling_aggregation* view_underlying_as_rolling(self) except *:
+        """View the underlying aggregation as a rolling_aggregation."""
+        cdef rolling_aggregation *agg_cast = dynamic_cast[roa_ptr](self.c_obj.get())
+        if agg_cast is NULL:
+            self._unsupported_agg_error("rolling")
         return agg_cast
 
     @staticmethod

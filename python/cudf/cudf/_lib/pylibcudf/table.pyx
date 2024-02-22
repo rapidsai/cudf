@@ -28,6 +28,8 @@ cdef class Table:
         The columns in this table.
     """
     def __init__(self, list columns):
+        if not all(isinstance(c, Column) for c in columns):
+            raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
 
     cdef table_view view(self) nogil:

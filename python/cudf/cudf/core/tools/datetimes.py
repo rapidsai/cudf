@@ -162,6 +162,14 @@ def to_datetime(
             f"{errors=} is not implemented when arg is not scalar-like"
         )
 
+    if errors == "ignore":
+        warnings.warn(
+            "errors='ignore' is deprecated and will raise in a future version. "
+            "Use to_datetime without passing `errors` and catch exceptions "
+            "explicitly instead",
+            FutureWarning,
+        )
+
     if infer_datetime_format in {None, False}:
         warnings.warn(
             "`infer_datetime_format` is deprecated and will "
@@ -759,10 +767,20 @@ def _isin_datetimelike(
     rhs = None
     try:
         rhs = cudf.core.column.as_column(values)
+        was_string = len(rhs) and rhs.dtype.kind == "O"
 
         if rhs.dtype.kind in {"f", "i", "u"}:
             return cudf.core.column.full(len(lhs), False, dtype="bool")
         rhs = rhs.astype(lhs.dtype)
+        if was_string:
+            warnings.warn(
+                f"The behavior of 'isin' with dtype={lhs.dtype} and "
+                "castable values (e.g. strings) is deprecated. In a "
+                "future version, these will not be considered matching "
+                "by isin. Explicitly cast to the appropriate dtype before "
+                "calling isin instead.",
+                FutureWarning,
+            )
         res = lhs._isin_earlystop(rhs)
         if res is not None:
             return res

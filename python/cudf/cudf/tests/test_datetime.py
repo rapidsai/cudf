@@ -1275,23 +1275,23 @@ def test_datetime_reductions(data, op, dtype):
         assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize("timezone", ["naive", "UTC"])
+@pytest.mark.parametrize("timezone", ["", "Z"])
 @pytest.mark.parametrize(
     "data",
     [
-        np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[m]"),
-        np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[m]"),
-        np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[ns]"),
-        np.arange("2002-10-27T04:30", 10 * 60, 1, dtype="M8[us]"),
-        np.arange("2002-10-27T04:30", 4 * 60, 60, dtype="M8[s]"),
+        "2002-10-27T04:30",
+        "2002-10-27T04:30:00",
+        "2002-10-27T04:30:00.000",
+        "2002-10-27T04:30:00.000000",
+        "2002-10-27T04:30:00.000000000",
     ],
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_datetime_infer_format(data, timezone, dtype):
-    ts_data = np.datetime_as_string(data, timezone=timezone)
+    ts_data = [data + timezone]
     sr = cudf.Series(ts_data)
     psr = pd.Series(ts_data)
-    if timezone == "naive":
+    if not timezone:
         expected = psr.astype(dtype)
         actual = sr.astype(dtype)
 
@@ -2468,3 +2468,17 @@ def test_datetime_raise_warning(freqstr):
     )
     with pytest.warns(FutureWarning):
         t.dt.ceil(freqstr)
+
+
+def test_timezone_array_notimplemented():
+    pa_array = pa.array(
+        [datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc)],
+        type=pa.timestamp("ns", "UTC"),
+    )
+    with pytest.raises(NotImplementedError):
+        cudf.Series(pa_array)
+
+
+def test_to_datetime_errors_ignore_deprecated():
+    with pytest.warns(FutureWarning):
+        cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")

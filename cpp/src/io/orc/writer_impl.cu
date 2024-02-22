@@ -19,11 +19,10 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
 #include "writer_impl.hpp"
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -39,6 +38,10 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cooperative_groups.h>
+#include <cooperative_groups/memcpy_async.h>
+#include <cuda/std/climits>
+#include <cuda/std/limits>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
@@ -55,12 +58,6 @@
 #include <thrust/sort.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
-
-#include <cooperative_groups.h>
-#include <cooperative_groups/memcpy_async.h>
-
-#include <cuda/std/climits>
-#include <cuda/std/limits>
 
 #include <algorithm>
 #include <cstring>
@@ -98,6 +95,7 @@ auto to_nvcomp_compression_type(CompressionKind compression_kind)
   if (compression_kind == SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (compression_kind == ZLIB) return nvcomp::compression_type::DEFLATE;
   if (compression_kind == ZSTD) return nvcomp::compression_type::ZSTD;
+  if (compression_kind == LZ4) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
 
@@ -111,6 +109,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
     case compression_type::SNAPPY: return orc::CompressionKind::SNAPPY;
     case compression_type::ZLIB: return orc::CompressionKind::ZLIB;
     case compression_type::ZSTD: return orc::CompressionKind::ZSTD;
+    case compression_type::LZ4: return orc::CompressionKind::LZ4;
     case compression_type::NONE: return orc::CompressionKind::NONE;
     default: CUDF_FAIL("Unsupported compression type");
   }

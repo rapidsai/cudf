@@ -17,8 +17,12 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_GE_200
-from cudf.testing._utils import assert_eq, assert_exceptions_equal
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
+from cudf.testing._utils import (
+    assert_eq,
+    assert_exceptions_equal,
+    expect_warning_if,
+)
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1263,20 +1267,28 @@ def test_csv_reader_delim_whitespace():
     buffer = "1    2  3\n4  5 6"
 
     # with header row
-    cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    with pytest.warns(FutureWarning):
+        cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
+    with expect_warning_if(PANDAS_GE_220):
+        pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
-    cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    with pytest.warns(FutureWarning):
+        cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    with expect_warning_if(PANDAS_GE_220):
+        pd_df = pd.read_csv(
+            StringIO(buffer), delim_whitespace=True, header=None
+        )
     assert pd_df.shape == cu_df.shape
 
     # should raise an error if used with delimiter or sep
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
+        with pytest.warns(FutureWarning):
+            read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
+        with pytest.warns(FutureWarning):
+            read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
 
 
 def test_csv_reader_unnamed_cols():
