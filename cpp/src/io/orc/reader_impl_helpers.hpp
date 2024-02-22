@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include "aggregate_orc_metadata.hpp"
+#include "io/orc/aggregate_orc_metadata.hpp"
+#include "io/orc/orc.hpp"
 #include "io/utilities/column_buffer.hpp"
-#include "orc.hpp"
 
 #include <cudf/io/orc.hpp>
 

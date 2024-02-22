@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "reader_impl.hpp"
-#include "reader_impl_helpers.hpp"
+#include "io/orc/reader_impl.hpp"
+#include "io/orc/reader_impl_helpers.hpp"
 
 namespace cudf::io::orc::detail {
 

@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include "aggregate_orc_metadata.hpp"
-#include "reader_impl_chunking.hpp"
+#include "io/orc/aggregate_orc_metadata.hpp"
+#include "io/orc/reader_impl_chunking.hpp"
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/orc.hpp>
@@ -96,9 +96,9 @@ class reader::impl {
    * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
    * @param stripes Indices of individual stripes to load if non-empty
    */
-  void prepare_data(uint64_t skip_rows,
-                    std::optional<size_type> const& num_rows_opt,
-                    std::vector<std::vector<size_type>> const& stripes);
+  void prepare_data(uint64_t skip_rows                                 = 0,
+                    std::optional<size_type> const& num_rows_opt       = std::nullopt,
+                    std::vector<std::vector<size_type>> const& stripes = {});
 
   /**
    * @brief Perform a global preprocessing step that executes exactly once for the entire duration

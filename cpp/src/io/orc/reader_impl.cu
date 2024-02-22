@@ -18,10 +18,10 @@
 
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
+#include "io/orc/reader_impl.hpp"
+#include "io/orc/reader_impl_chunking.hpp"
+#include "io/orc/reader_impl_helpers.hpp"
 #include "io/utilities/config_utils.hpp"
-#include "reader_impl.hpp"
-#include "reader_impl_chunking.hpp"
-#include "reader_impl_helpers.hpp"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/timezone.hpp>
@@ -981,16 +981,8 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return; }
 
-  // Perform a global preprocessing step for the entire input sources.
   global_preprocess(skip_rows, num_rows_opt, stripes);
-
-  // TODO: fix this, should be called once
-  // TODO: only load data if needed.
-  while (_chunk_read_data.more_stripe_to_load()) {
-    load_data();
-  }
-
-  // TODO: only do if needed.
+  load_data();
   decompress_and_decode();
 }
 
@@ -1123,23 +1115,13 @@ table_with_metadata reader::impl::read(uint64_t skip_rows,
 
 bool reader::impl::has_next()
 {
-  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
-  // return _chunk_read_info.current_chunk_idx < _chunk_read_info.chunks.size();
-  return true;
+  prepare_data();
+  return _chunk_read_data.has_next();
 }
 
 table_with_metadata reader::impl::read_chunk()
 {
-  // Reset the output buffers to their original states (right after reader construction).
-  // Don't need to do it if we read the file all at once.
-  // if (_chunk_read_info.chunk_size_limit > 0) {
-  //    _output_buffers.resize(0);
-  //    for (auto const& buff : _output_buffers_template) {
-  //      _output_buffers.emplace_back(column_buffer::empty_like(buff));
-  //    }
-  // }
-
-  prepare_data(0 /*skip_rows*/, std::nullopt /*num_rows, `std::nullopt` means unlimited*/, {});
+  prepare_data();
   return make_output_chunk();
 }
 
