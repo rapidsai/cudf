@@ -466,6 +466,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
+  printf("total stripe sizes:\n");
   for (auto& size : total_stripe_sizes) {
     printf("size: %ld, %zu\n", size.count, size.size_bytes);
   }
@@ -479,7 +480,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
 #ifndef PRINT_DEBUG
   auto& splits = _chunk_read_data.load_stripe_chunks;
-  printf("------------\nSplits (/%d): \n", (int)num_stripes);
+  printf("------------\nSplits (/total num stripe = %d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
   }
@@ -515,6 +516,8 @@ void reader::impl::load_data()
     _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
   auto const stripe_start = stripe_chunk.start_idx;
   auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
+
+  printf("loading data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 
   // Prepare the buffer to read raw data onto.
   // TODO: clear all old buffer.
@@ -679,8 +682,7 @@ void reader::impl::load_data()
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
   // DEBUG only
-  //  _chunk_read_data.data_read_limit =
-  //    stripe_decompression_sizes.back().size_bytes / 3;
+  _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
 
   _chunk_read_data.decode_stripe_chunks =
     find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
@@ -694,7 +696,7 @@ void reader::impl::load_data()
 
 #ifndef PRINT_DEBUG
   auto& splits = _chunk_read_data.decode_stripe_chunks;
-  printf("------------\nSplits second level (/%d): \n", (int)stripe_chunk.count);
+  printf("------------\nSplits decode_stripe_chunks (/%d): \n", (int)stripe_chunk.count);
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
   }
@@ -715,6 +717,9 @@ void reader::impl::load_data()
 
   // lvl_stripe_data.clear();
   // _file_itm_data.compinfo_ready = true;
+
+  // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
+  _chunk_read_data.curr_decode_stripe_chunk = 0;
 }
 
 }  // namespace cudf::io::orc::detail

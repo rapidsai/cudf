@@ -16,6 +16,12 @@
 
 // #define PRINT_DEBUG
 
+// TODO: remove
+#include <cudf/concatenate.hpp>
+//
+//
+//
+
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/reader_impl.hpp"
@@ -676,6 +682,12 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 void reader::impl::decompress_and_decode()
 {
   if (_file_itm_data.has_no_data()) { return; }
+
+  //  auto const stripe_chunk =
+  //    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_decode_stripe_chunk++];
+  //  auto const stripe_start = stripe_chunk.start_idx;
+  //  auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
+
   auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   auto const rows_to_read      = _file_itm_data.rows_to_read;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
@@ -982,11 +994,19 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   if (_selected_columns.num_levels() == 0) { return; }
 
   global_preprocess(skip_rows, num_rows_opt, stripes);
+
+  // TODO: only load data if there is no loaded stripe ready to decode.
   // load_data();
   while (_chunk_read_data.more_stripe_to_load()) {
     load_data();
+    printf("done load data\n\n");
   }
+
+  // decompress_and_decode();
+  // while (_chunk_read_data.more_stripe_to_decode()) {
   decompress_and_decode();
+  _file_itm_data.out_buffers.push_back(std::move(_out_buffers));
+  // }
 }
 
 table_with_metadata reader::impl::make_output_chunk()
@@ -1017,19 +1037,54 @@ table_with_metadata reader::impl::make_output_chunk()
 
   // TODO: move this into decompress_and_decode
   // Create columns from buffer with respective schema information.
-  std::transform(
-    _selected_columns.levels[0].begin(),
-    _selected_columns.levels[0].end(),
-    std::back_inserter(out_columns),
-    [&](auto const& orc_col_meta) {
-      out_metadata.schema_info.emplace_back("");
-      auto col_buffer = assemble_buffer(
-        orc_col_meta.id, 0, *_col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
-      return make_column(col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
-    });
+
+  // TODO: remove
+  std::vector<std::unique_ptr<table>> tabs;
+  std::vector<cudf::table_view> tv;
+
+  for (auto& buffers : _file_itm_data.out_buffers) {
+    //
+    out_columns.clear();  // TODO: remove
+
+    std::transform(_selected_columns.levels[0].begin(),
+                   _selected_columns.levels[0].end(),
+                   std::back_inserter(out_columns),
+                   [&](auto const& orc_col_meta) {
+                     out_metadata.schema_info.emplace_back("");
+                     auto col_buffer = assemble_buffer(orc_col_meta.id,
+                                                       0,
+                                                       *_col_meta,
+                                                       _metadata,
+                                                       _selected_columns,
+                                                       buffers, /*_out_buffers*/
+                                                       _stream,
+                                                       _mr);
+                     return make_column(
+                       col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
+                   });
+
+    auto tbl = std::make_unique<table>(std::move(out_columns));
+    tabs.push_back(std::move(tbl));
+    tv.push_back(tabs.back()->view());
+
+    //
+    printf(" ----- decode one chunk\n");
+    fflush(stdout);
+    //
+    //
+    //
+    //
+  }
+  printf(" ----- decode total %d chunks\n", (int)tv.size());
+  fflush(stdout);
 
   // todo: remove this
-  auto out_table = std::make_unique<table>(std::move(out_columns));
+  // auto out_table = std::make_unique<table>(std::move(out_columns));
+  auto out_table = [&] {
+    if (tv.size() > 1) { return cudf::concatenate(tv); }
+    return std::move(tabs.front());
+  }();
+  // auto out_table = std::move(tabs.front());
 
 #if 0
   auto out_table = [&] {
