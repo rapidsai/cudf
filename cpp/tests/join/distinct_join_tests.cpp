@@ -13,14 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/column/column.hpp>
-#include <cudf/filling.hpp>
-#include <cudf/join.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/table/table_view.hpp>
-#include <cudf/types.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -28,6 +20,14 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/filling.hpp>
+#include <cudf/join.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 
 #include <limits>
 #include <vector>
@@ -55,11 +55,9 @@ struct DistinctJoinTest : public cudf::test::BaseFixture {
     auto probe_indices_col = cudf::column_view{probe_indices_span};
 
     auto constexpr oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
-    auto build_result         = cudf::gather(build_table, build_indices_col, oob_policy);
-    auto probe_result         = cudf::gather(probe_table, probe_indices_col, oob_policy);
+    auto const joined_cols    = cudf::gather(build_table, build_indices_col, oob_policy)->release();
+    auto const right_cols     = cudf::gather(probe_table, probe_indices_col, oob_policy)->release();
 
-    auto joined_cols = build_result->release();
-    auto right_cols  = probe_result->release();
     joined_cols.insert(joined_cols.end(),
                        std::make_move_iterator(right_cols.begin()),
                        std::make_move_iterator(right_cols.end()));
