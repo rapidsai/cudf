@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#include "io/utilities/block_utils.cuh"
 #include "orc_gpu.hpp"
 
 #include <cudf/io/orc_types.hpp>
-#include <io/utilities/block_utils.cuh>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
-#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace io {

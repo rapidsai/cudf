@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
-
-#include <cudf/io/orc_types.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -1391,6 +1390,12 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
       CUDF_FAIL("Compression error: " + reason.value());
     }
     nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+  } else if (compression == LZ4) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
+    nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
   }

@@ -15,6 +15,7 @@
  */
 
 #include "orc.hpp"
+
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 

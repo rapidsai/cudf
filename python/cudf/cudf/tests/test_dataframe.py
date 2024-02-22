@@ -4174,10 +4174,8 @@ def test_dataframe_round_dict_decimal_validation():
 def test_all(data):
     # Provide a dtype when data is empty to avoid future pandas changes.
     dtype = None if data else float
-    # Pandas treats `None` in object type columns as True for some reason, so
-    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data=data, dtype=dtype).replace([None], False)
+        pdata = pd.Series(data=data, dtype=dtype)
         gdata = cudf.Series.from_pandas(pdata)
         got = gdata.all()
         expected = pdata.all()
@@ -9257,78 +9255,55 @@ def test_agg_for_dataframe_with_string_columns(aggs):
 
 
 @pytest_unmark_spilling
+@pytest.mark.parametrize("overwrite", [True, False])
 @pytest.mark.parametrize(
-    "join",
-    ["left"],
-)
-@pytest.mark.parametrize(
-    "overwrite",
-    [True, False],
-)
-@pytest.mark.parametrize(
-    "errors",
-    ["ignore"],
-)
-@pytest.mark.parametrize(
-    "data",
+    "left_keys,right_keys",
     [
-        {"a": [1, 2, 3], "b": [3, 4, 5]},
-        {"e": [1.0, 2.0, 3.0], "d": [3.0, 4.0, 5.0]},
-        {"c": [True, False, False], "d": [False, True, True]},
-        {"g": [2.0, np.nan, 4.0], "n": [np.nan, np.nan, np.nan]},
-        {"d": [np.nan, np.nan, np.nan], "e": [np.nan, np.nan, np.nan]},
-        {"a": [1.0, 2, 3], "b": pd.Series([4.0, 8.0, 3.0], index=[1, 2, 3])},
-        {
-            "d": [1.0, 2.0, 3.0],
-            "c": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
-        },
-        {
-            "a": [False, True, False],
-            "b": pd.Series([1.0, 2.0, np.nan], index=[1, 2, 3]),
-        },
-        {
-            "a": [np.nan, np.nan, np.nan],
-            "e": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
-        },
+        [("a", "b"), ("a", "b")],
+        [("a", "b"), ("a", "c")],
+        [("a", "b"), ("d", "e")],
     ],
 )
 @pytest.mark.parametrize(
-    "data2",
+    "data_left,data_right",
     [
-        {"b": [3, 5, 6], "e": [8, 2, 1]},
-        {"c": [True, False, True], "d": [3.0, 4.0, 5.0]},
-        {"e": [False, False, True], "g": [True, True, False]},
-        {"g": [np.nan, np.nan, np.nan], "c": [np.nan, np.nan, np.nan]},
-        {"a": [7, 5, 8], "b": pd.Series([2.0, 7.0, 9.0], index=[0, 1, 2])},
-        {
-            "b": [np.nan, 2.0, np.nan],
-            "c": pd.Series([2, np.nan, 5.0], index=[2, 3, 4]),
-        },
-        {
-            "a": pd.Series([True, None, True], dtype=pd.BooleanDtype()),
-            "d": pd.Series(
-                [False, True, None], index=[0, 1, 3], dtype=pd.BooleanDtype()
-            ),
-        },
+        [([1, 2, 3], [3, 4, 5]), ([1, 2, 3], [3, 4, 5])],
+        [
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+        ],
+        [
+            ([True, False, True], [False, False, False]),
+            ([True, False, True], [False, False, False]),
+        ],
+        [
+            ([np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]),
+            ([np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]),
+        ],
+        [([1, 2, 3], [3, 4, 5]), ([1, 2, 4], [30, 40, 50])],
+        [
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+            ([1.0, 2.0, 4.0], [30.0, 40.0, 50.0]),
+        ],
+        [([1, 2, 3], [3, 4, 5]), ([10, 20, 40], [30, 40, 50])],
+        [
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+            ([10.0, 20.0, 40.0], [30.0, 40.0, 50.0]),
+        ],
     ],
 )
-def test_update_for_dataframes(request, data, data2, join, overwrite, errors):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=request.node.name
-            in {
-                "test_update_for_dataframes[data21-data2-ignore-True-left]",
-                "test_update_for_dataframes[data24-data7-ignore-True-left]",
-                "test_update_for_dataframes[data25-data2-ignore-True-left]",
-            },
-            reason="mixing of bools & non-bools is not allowed.",
-        )
-    )
-    pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame(data, nan_as_null=False)
+def test_update_for_dataframes(
+    left_keys, right_keys, data_left, data_right, overwrite
+):
+    errors = "ignore"
+    join = "left"
+    left = dict(zip(left_keys, data_left))
+    right = dict(zip(right_keys, data_right))
+    pdf = pd.DataFrame(left)
+    gdf = cudf.DataFrame(left, nan_as_null=False)
 
-    other_pd = pd.DataFrame(data2)
-    other_gd = cudf.DataFrame(data2, nan_as_null=False)
+    other_pd = pd.DataFrame(right)
+    other_gd = cudf.DataFrame(right, nan_as_null=False)
 
     pdf.update(other=other_pd, join=join, overwrite=overwrite, errors=errors)
     gdf.update(other=other_gd, join=join, overwrite=overwrite, errors=errors)

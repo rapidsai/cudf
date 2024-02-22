@@ -1178,20 +1178,25 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return cls(obj, grouping, **kwargs)
 
-    def _grouped(self):
+    def _grouped(self, *, include_groups: bool = True):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
+            to_drop = self.grouping.keys.names
         else:
             grouped_keys.name = self.grouping.keys.name
+            to_drop = (self.grouping.keys.name,)
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
+        if not include_groups:
+            for col_name in to_drop:
+                del grouped_values[col_name]
         group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
@@ -1348,13 +1353,25 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index.names = self.grouping.names
             # When the UDF is like df.x + df.y, the result for each
             # group is the same length as the original group
-            elif len(self.obj) == sum(len(chk) for chk in chunk_results):
+            elif (total_rows := sum(len(chk) for chk in chunk_results)) in {
+                len(self.obj),
+                len(group_names),
+            }:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", FutureWarning)
                     result = cudf.concat(chunk_results)
-                index_data = group_keys._data.copy(deep=True)
-                index_data[None] = grouped_values.index._column
-                result.index = cudf.MultiIndex._from_data(index_data)
+                if total_rows == len(group_names):
+                    result.index = group_names
+                    # TODO: Is there a better way to determine what
+                    # the column name should be, especially if we applied
+                    # a nameless UDF.
+                    result = result.to_frame(
+                        name=grouped_values._data.names[0]
+                    )
+                else:
+                    index_data = group_keys._data.copy(deep=True)
+                    index_data[None] = grouped_values.index._column
+                    result.index = cudf.MultiIndex._from_data(index_data)
             else:
                 raise TypeError(
                     "Error handling Groupby apply output with input of "
@@ -1372,7 +1389,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @_cudf_nvtx_annotate
-    def apply(self, function, *args, engine="auto"):
+    def apply(
+        self, function, *args, engine="auto", include_groups: bool = True
+    ):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -1396,6 +1415,10 @@ class GroupBy(Serializable, Reducible, Scannable):
           The default value `auto` will attempt to use the numba JIT pipeline
           where possible and will fall back to the iterative algorithm if
           necessary.
+        include_groups : bool, default True
+            When True, will attempt to apply ``func`` to the groupings in
+            the case that they are columns of the DataFrame. In the future,
+            this will default to ``False``.
 
         Examples
         --------
@@ -1444,15 +1467,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ...     'c': [1, 2, 3, 4],
                 ... })
                 >>> gdf = cudf.from_pandas(df)
-                >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
-                     a  b  c
+                >>> df.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                     b  c
                 a
-                1 0  1  1  1
-                2 2  2  1  3
-                >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
-                   a  b  c
-                0  1  1  1
-                2  2  1  3
+                1 0  1  1
+                2 2  1  3
+                >>> gdf.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                   b  c
+                0  1  1
+                2  1  3
 
         ``engine='jit'`` may be used to accelerate certain functions,
         initially those that contain reductions and arithmetic operations
@@ -1487,7 +1510,9 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
-        group_names, offsets, group_keys, grouped_values = self._grouped()
+        group_names, offsets, group_keys, grouped_values = self._grouped(
+            include_groups=include_groups
+        )
 
         if engine == "auto":
             if _can_be_jitted(grouped_values, function, args):

@@ -16,11 +16,10 @@
 
 #pragma once
 
+#include "io/comp/gpuinflate.hpp"
+#include "io/statistics/statistics.cuh"
+#include "io/utilities/column_buffer.hpp"
 #include "orc.hpp"
-
-#include <io/comp/gpuinflate.hpp>
-#include <io/statistics/statistics.cuh>
-#include <io/utilities/column_buffer.hpp>
 
 #include <cudf/detail/timezone.cuh>
 #include <cudf/io/orc_types.hpp>
@@ -44,7 +43,7 @@ using cudf::detail::host_2dspan;
 auto constexpr KEY_SENTINEL   = size_type{-1};
 auto constexpr VALUE_SENTINEL = size_type{-1};
 
-using map_type = cuco::static_map<size_type, size_type>;
+using map_type = cuco::legacy::static_map<size_type, size_type>;
 
 /**
  * @brief The alias of `map_type::pair_atomic_type` class.
