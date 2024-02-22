@@ -108,7 +108,7 @@ struct orcdec_state_s {
   orc_bytestream_s bs;
   orc_bytestream_s bs2;
   int is_string;
-  uint64_t num_child_rows;
+  int64_t num_child_rows;
   union {
     orc_strdict_state_s dict;
     uint32_t nulls_desc_row;  // number of rows processed for nulls.
@@ -1828,7 +1828,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     if (num_rowgroups > 0) {
       row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }
-    atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{chunks[chunk_id].num_child_rows};
+    ref.fetch_add(s->num_child_rows, cuda::std::memory_order_relaxed);
   }
 }
 

@@ -107,10 +107,10 @@ auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sour
 
 }  // namespace
 
-uint64_t aggregate_orc_metadata::calc_num_rows() const
+int64_t aggregate_orc_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0ul, [](auto const& sum, auto const& pfm) {
+    per_file_metadata.begin(), per_file_metadata.end(), 0l, [](auto const& sum, auto const& pfm) {
       return sum + pfm.get_total_rows();
     });
 }
@@ -163,7 +163,7 @@ aggregate_orc_metadata::select_stripes(
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not user_specified_stripes.empty()) { return std::pair<uint64_t, size_type>{0, 0}; }
+    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
     return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
   }();
 
@@ -192,8 +192,8 @@ aggregate_orc_metadata::select_stripes(
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
     }
   } else {
-    uint64_t count            = 0;
-    uint64_t stripe_skip_rows = 0;
+    int64_t count            = 0;
+    int64_t stripe_skip_rows = 0;
     // Iterate all source files, each source file has corelating metadata
     for (size_t src_file_idx = 0;
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;

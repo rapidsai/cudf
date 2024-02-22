@@ -101,22 +101,21 @@ struct DictionaryEntry {
 struct ColumnDesc {
   uint8_t const* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
-  uint64_t strm_len[CI_NUM_STREAMS];       // stream length
+  int64_t strm_len[CI_NUM_STREAMS];        // stream length
   uint32_t* valid_map_base;                // base pointer of valid bit map for this column
   void* column_data_base;                  // base pointer of column data
-  uint64_t start_row;                      // starting row of the stripe
-  uint64_t num_rows;                       // number of rows in stripe
-  uint64_t column_num_rows;                // number of rows in whole column
-  uint32_t num_child_rows;  // store number of child rows if it's list column (output, 32bit should
-                            // be enough)
-  uint32_t num_rowgroups;   // number of rowgroups in the chunk
-  uint64_t dictionary_start;         // start position in global dictionary
-  uint32_t dict_len;                 // length of local dictionary
-  uint64_t null_count;               // number of null values in this stripe's column
-  uint64_t skip_count;               // number of non-null values to skip
-  uint32_t rowgroup_id;              // row group position
-  ColumnEncodingKind encoding_kind;  // column encoding kind
-  TypeKind type_kind;                // column data type
+  int64_t start_row;                       // starting row of the stripe
+  int64_t num_rows;                        // number of rows in stripe
+  int64_t column_num_rows;                 // number of rows in whole column
+  int64_t num_child_rows;                  // store number of child rows if it's list column
+  uint32_t num_rowgroups;                  // number of rowgroups in the chunk
+  int64_t dictionary_start;                // start position in global dictionary
+  uint32_t dict_len;                       // length of local dictionary
+  int64_t null_count;                      // number of null values in this stripe's column
+  int64_t skip_count;                      // number of non-null values to skip
+  uint32_t rowgroup_id;                    // row group position
+  ColumnEncodingKind encoding_kind;        // column encoding kind
+  TypeKind type_kind;                      // column data type
   uint8_t dtype_len;          // data type length (for types that can be mapped to different sizes)
   type_id dtype_id;           // TODO
   int32_t decimal_scale;      // number of fractional decimal digits for decimal type
@@ -130,10 +129,10 @@ struct ColumnDesc {
  */
 struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
-  uint64_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
+  int64_t strm_offset[2];   // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
   uint32_t num_rows;        // number of rows in rowgroup
-  uint64_t start_row;       // starting row of the rowgroup
+  int64_t start_row;        // starting row of the rowgroup
   uint32_t num_child_rows;  // number of rows of children in rowgroup in case of list type
 };
 

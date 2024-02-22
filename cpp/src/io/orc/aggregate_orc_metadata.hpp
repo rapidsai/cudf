@@ -50,7 +50,7 @@ class aggregate_orc_metadata {
   /**
    * @brief Sums up the number of rows of each source
    */
-  [[nodiscard]] uint64_t calc_num_rows() const;
+  [[nodiscard]] int64_t calc_num_rows() const;
 
   /**
    * @brief Sums up the number of stripes of each source
