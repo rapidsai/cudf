@@ -143,14 +143,14 @@ struct file_intermediate_data {
 
   // Store information to identify where to read a chunk of data from source.
   // Each read corresponds to one or more consecutive streams combined.
-  struct data_read_info {
+  struct stream_data_read_info {
     // TODO: remove constructor
-    data_read_info(uint64_t offset_,
-                   std::size_t length_,
-                   std::size_t dst_pos_,
-                   std::size_t source_idx_,
-                   std::size_t stripe_idx_,
-                   std::size_t level_)
+    stream_data_read_info(uint64_t offset_,
+                          std::size_t length_,
+                          std::size_t dst_pos_,
+                          std::size_t source_idx_,
+                          std::size_t stripe_idx_,
+                          std::size_t level_)
       : offset(offset_),
         length(length_),
         dst_pos(dst_pos_),
@@ -168,7 +168,7 @@ struct file_intermediate_data {
   };
 
   // Identify what data to read from source.
-  std::vector<data_read_info> data_read_info;
+  std::vector<stream_data_read_info> data_read_info;
 
   // For each stripe, we perform a number of read for its streams.
   // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
