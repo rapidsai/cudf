@@ -129,6 +129,9 @@ struct file_intermediate_data {
   // Return true if no rows or stripes to read.
   bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
 
+  // TODO: remove
+  std::size_t num_stripes() const { return selected_stripes.size(); }
+
   // Store the compression information for each data stream.
   stream_id_map<stripe_level_comp_info> compinfo_map;
 

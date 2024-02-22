@@ -866,7 +866,7 @@ void reader::impl::decompress_and_decode()
       num_rowgroups += stripe_num_rowgroups;
 
       stripe_idx++;
-    }
+    }  // for (stripe : selected_stripes)
 
     if (stripe_data.empty()) { continue; }
 

@@ -320,8 +320,6 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
                                      std::vector<std::vector<size_type>> const& stripes)
 {
   if (_file_itm_data.global_preprocessed) { return; }
-
-  // TODO: move this to end of func.
   _file_itm_data.global_preprocessed = true;
 
   // Load stripes's metadata.
@@ -455,7 +453,6 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // Load all chunks if there is no read limit.
   if (_chunk_read_data.data_read_limit == 0) {
     _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
-    // TODO: DEBUG only
     //    return;
   }
 
@@ -520,6 +517,7 @@ void reader::impl::load_data()
   auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
 
   // Prepare the buffer to read raw data onto.
+  // TODO: clear all old buffer.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& stripe_data  = lvl_stripe_data[level];
     auto& stripe_sizes = lvl_stripe_sizes[level];
