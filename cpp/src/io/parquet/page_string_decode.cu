@@ -535,6 +535,9 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
         uint32_t const idx = db->current_value_idx + i + lane_id;
         if (idx >= start_value && idx < end_value && idx < db->value_count) {
           lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
+        }
+        // need lane_max over all values, not just in bounds
+        if (idx < db->value_count) {
           lane_max = max(lane_max, db->value[rolling_index<delta_rolling_buf_size>(idx)]);
         }
       }
