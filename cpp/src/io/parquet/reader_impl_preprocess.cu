@@ -455,8 +455,8 @@ void decode_page_headers(pass_intermediate_data& pass,
     iter,
     iter + pass.chunks.size() + 1,
     chunk_page_counts.begin(),
-    [chunks = pass.chunks.d_begin()] __device__(size_t i) {
-      return chunks[i].num_data_pages + chunks[i].num_dict_pages;
+    [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
+      return i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages;
     },
     0,
     thrust::plus<size_t>{});
