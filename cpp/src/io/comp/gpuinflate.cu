@@ -44,9 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 */
 
 #include "gpuinflate.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "io_uncomp.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 

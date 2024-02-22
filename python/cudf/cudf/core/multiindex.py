@@ -2037,7 +2037,8 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
         self: MultiIndex, other: MultiIndex, *, override_dtypes=None
     ) -> MultiIndex:
         res = super()._copy_type_metadata(other)
-        res._names = other._names
+        if isinstance(other, MultiIndex):
+            res._names = other._names
         return res
 
     @_cudf_nvtx_annotate

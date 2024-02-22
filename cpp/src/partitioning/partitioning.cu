@@ -32,12 +32,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/block/block_scan.cuh>
+#include <cub/device/device_histogram.cuh>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-
-#include <cub/block/block_scan.cuh>
-#include <cub/device/device_histogram.cuh>
 
 namespace cudf {
 namespace {
