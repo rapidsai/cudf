@@ -65,7 +65,7 @@ requirements:
     - scikit-build-core >=0.7.0
     - setuptools
     - dlpack >=0.5,<0.6.0a0
-    - pyarrow ==14.0.1.*
+    - pyarrow ==14.0.2.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
     {% if cuda_major == "11" %}
