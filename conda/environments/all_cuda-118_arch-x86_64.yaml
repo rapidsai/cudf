@@ -29,6 +29,7 @@ dependencies:
 - cxx-compiler
 - cython>=3.0.3
 - dask-cuda==24.4.*
+- dask-expr==0.4.0
 - dlpack>=0.5,<0.6.0a0
 - doxygen=1.9.1
 - fastavro>=0.22.9
@@ -102,6 +103,5 @@ dependencies:
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - pip:
-  - git+https://github.com/dask-contrib/dask-expr.git@b588a9e15e90e0567061664ffc01374786686e20
   - git+https://github.com/python-streamz/streamz.git@master
 name: all_cuda-118_arch-x86_64
