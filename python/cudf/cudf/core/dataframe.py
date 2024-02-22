@@ -5272,13 +5272,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     object
         dtype: object
         """
-        out_data = {}
         out_index = self.index.to_pandas()
-
-        for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(
-                index=out_index, nullable=nullable
-            )
+        out_data = {
+            i: col.to_pandas(index=out_index, nullable=nullable)
+            for i, col in enumerate(self._data)
+        }
 
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index()
