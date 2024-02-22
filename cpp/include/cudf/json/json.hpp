@@ -53,7 +53,7 @@ class get_json_object_options {
   int max_num_len = -1;
 
   // Whether allow tailing useless sub-string
-  bool allow_tailing_sub_string = true;
+  bool allow_tailing_sub_string = false;
 
  public:
   /**
