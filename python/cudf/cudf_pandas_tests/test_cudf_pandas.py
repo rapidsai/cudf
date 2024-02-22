@@ -1193,7 +1193,6 @@ def test_func_namespace():
     assert xpd.concat is xpd.core.reshape.concat.concat
 
 
-
 def test_register_accessor():
     @xpd.api.extensions.register_dataframe_accessor("xyz")
     class XYZ:
@@ -1223,4 +1222,3 @@ def test_pickle_groupby(dataframe):
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
-
