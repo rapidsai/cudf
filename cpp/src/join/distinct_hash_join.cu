@@ -29,11 +29,9 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <cuco/static_set.cuh>
-
-#include <cub/block/block_scan.cuh>
-
 #include <cooperative_groups.h>
+#include <cub/block/block_scan.cuh>
+#include <cuco/static_set.cuh>
 
 #include <cstddef>
 #include <limits>
