@@ -112,7 +112,7 @@ rmm::device_buffer decompress_stripe_data(
     // auto const& cached_comp_info =
     //   compinfo_map[stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx,
     //   info.id.kind}];
-    auto& stream_comp_info                   = compinfo[compinfo.size() - 1];
+    auto& stream_comp_info                   = compinfo.back();
     stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
     stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
     stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
@@ -982,7 +982,10 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   if (_selected_columns.num_levels() == 0) { return; }
 
   global_preprocess(skip_rows, num_rows_opt, stripes);
-  load_data();
+  // load_data();
+  while (_chunk_read_data.more_stripe_to_load()) {
+    load_data();
+  }
   decompress_and_decode();
 }
 

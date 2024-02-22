@@ -96,6 +96,19 @@ class hostdevice_vector {
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
+  [[nodiscard]] T& front()
+  {
+    CUDF_EXPECTS(size() > 0, "Cannot access `front()` element of an empty vector.");
+    return host_data[0];
+  }
+  [[nodiscard]] T& back()
+  {
+    CUDF_EXPECTS(size() > 0, "Cannot access `back()` element of an empty vector.");
+    return host_data[size() - 1];
+  }
+  [[nodiscard]] T const& front() const { return front(); }
+  [[nodiscard]] T const& back() const { return back(); }
+
   [[nodiscard]] T& operator[](size_t i) { return host_data[i]; }
   [[nodiscard]] T const& operator[](size_t i) const { return host_data[i]; }
 

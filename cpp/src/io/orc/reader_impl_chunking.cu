@@ -282,7 +282,7 @@ void verify_splits(host_span<chunk const> splits,
     }
     cur_cumulative_size = sizes[split.start_idx + split.count - 1].size_bytes;
   }
-  CUDF_EXPECTS(last_split.start_idx + last_split.count == sizes[sizes.size() - 1].count,
+  CUDF_EXPECTS(last_split.start_idx + last_split.count == sizes.back().count,
                "Invalid split start_idx.");
   CUDF_EXPECTS(count == total_count, "Invalid total count.");
 }
@@ -324,7 +324,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // TODO: move this to end of func.
   _file_itm_data.global_preprocessed = true;
 
-  // Select only stripes required (aka row groups)
+  // Load stripes's metadata.
   std::tie(
     _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
     _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
@@ -347,7 +347,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
 
   // Get the total number of stripes across all input files.
-  std::size_t num_stripes = selected_stripes.size();
+  auto const num_stripes = selected_stripes.size();
 
   stripe_data_read_chunks.resize(num_stripes);
   lvl_stripe_stream_chunks.resize(_selected_columns.num_levels());
@@ -475,8 +475,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   // DEBUG only
   // TODO: use 0.3 constant
-  _chunk_read_data.data_read_limit =
-    total_stripe_sizes[total_stripe_sizes.size() - 1].size_bytes / 3;
+  _chunk_read_data.data_read_limit = total_stripe_sizes.back().size_bytes / 3;
 
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
@@ -603,8 +602,7 @@ void reader::impl::load_data()
           static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx].data()) + info.dst_pos,
           info.length));
         stream_compinfo_map[stream_id_info{
-          info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind}] =
-          &compinfo[compinfo.size() - 1];
+          info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind}] = &compinfo.back();
 #ifdef PRINT_DEBUG
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
                (int)info.id.stripe_idx,
@@ -684,7 +682,7 @@ void reader::impl::load_data()
 
   // DEBUG only
   //  _chunk_read_data.data_read_limit =
-  //    stripe_decompression_sizes[stripe_decompression_sizes.size() - 1].size_bytes / 3;
+  //    stripe_decompression_sizes.back().size_bytes / 3;
 
   _chunk_read_data.decode_stripe_chunks =
     find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
