@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -441,7 +441,7 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
   set(CUDF_VERSION_Arrow
       # This version must be kept in sync with the libarrow version pinned for builds in
       # dependencies.yaml.
-      14.0.1
+      14.0.2
       CACHE STRING "The version of Arrow to find (or build)"
   )
 endif()
