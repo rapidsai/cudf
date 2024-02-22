@@ -140,9 +140,9 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  uint64_t start_row;                // start row of this chunk
+  int64_t start_row;                 // start row of this chunk
   uint32_t num_rows;                 // number of rows in this chunk
-  uint64_t null_mask_start_row;      // adjusted to multiple of 8
+  int64_t null_mask_start_row;       // adjusted to multiple of 8
   uint32_t null_mask_num_rows;       // adjusted to multiple of 8
   ColumnEncodingKind encoding_kind;  // column encoding kind
   TypeKind type_kind;                // column data type
@@ -304,7 +304,7 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
                                       size_type num_columns,
                                       uint32_t num_stripes,
-                                      uint64_t first_row,
+                                      int64_t first_row,
                                       rmm::cuda_stream_view stream);
 
 /**
@@ -329,9 +329,9 @@ void DecodeOrcColumnData(ColumnDesc* chunks,
                          device_2dspan<RowGroup> row_groups,
                          size_type num_columns,
                          uint32_t num_stripes,
-                         uint64_t first_row,
+                         int64_t first_row,
                          table_device_view tz_table,
-                         uint64_t num_rowgroups,
+                         int64_t num_rowgroups,
                          size_type rowidx_stride,
                          size_t level,
                          size_type* error_count,
