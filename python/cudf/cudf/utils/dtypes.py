@@ -67,18 +67,6 @@ pyarrow_dtypes_to_pandas_dtypes = {
     pa.string(): pd.StringDtype(),
 }
 
-pandas_dtypes_to_np_dtypes = {
-    pd.UInt8Dtype(): np.dtype("uint8"),
-    pd.UInt16Dtype(): np.dtype("uint16"),
-    pd.UInt32Dtype(): np.dtype("uint32"),
-    pd.UInt64Dtype(): np.dtype("uint64"),
-    pd.Int8Dtype(): np.dtype("int8"),
-    pd.Int16Dtype(): np.dtype("int16"),
-    pd.Int32Dtype(): np.dtype("int32"),
-    pd.Int64Dtype(): np.dtype("int64"),
-    pd.BooleanDtype(): np.dtype("bool_"),
-    pd.StringDtype(): np.dtype("object"),
-}
 
 pandas_dtypes_alias_to_cudf_alias = {
     "UInt8": "uint8",

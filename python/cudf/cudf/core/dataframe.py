@@ -5275,7 +5275,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         out_index = self.index.to_pandas()
         out_data = {
             i: col.to_pandas(index=out_index, nullable=nullable)
-            for i, col in enumerate(self._data)
+            for i, col in enumerate(self._data.columns)
         }
 
         out_df = pd.DataFrame(out_data, index=out_index)
