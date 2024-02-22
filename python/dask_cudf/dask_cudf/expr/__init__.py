@@ -10,9 +10,7 @@ try:
     import dask_cudf.expr._collection
     import dask_cudf.expr._expr
 
-    DASK_EXPR_ENABLED = True  # Dask-expr is installed
 except ImportError as err:
-    DASK_EXPR_ENABLED = False  # Dask-expr is not installed
     if QUERY_PLANNING_ON:
         # Dask *should* raise an error before this.
         # However, we can still raise here to be certain.
