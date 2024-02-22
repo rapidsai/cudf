@@ -740,7 +740,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
   // First do JSON validation
   // Jackson uses 1000 as max nesting depth
   constexpr int max_json_nesting_depth = 1000;
-  cudf::strings::detail::json_parser<max_json_nesting_depth> j_parser(options, input, input_len);
+  cudf::json::detail::json_parser<max_json_nesting_depth> j_parser(options, input, input_len);
   bool validation_result = j_parser.is_valid();
   if (!validation_result) {
     return parse_result::ERROR;
