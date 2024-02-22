@@ -129,6 +129,10 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
 
 Additional style guidelines for libcudf code include:
 
+ * Prefer "east const", placing `const` after the type. This is not
+   automatically enforced by `clang-format` because the option
+   `QualifierAlignment: Right` has been observed to produce false negatives and
+   false positives.
  * [NL.11: Make Literals
    Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
    Decimal values should use integer separators every thousands place, like

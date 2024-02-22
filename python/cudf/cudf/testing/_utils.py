@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import itertools
 import string
@@ -400,32 +400,6 @@ def assert_column_memory_ne(
     except AssertionError:
         return
     raise AssertionError("lhs and rhs holds the same memory.")
-
-
-def _create_pandas_series_float64_default(
-    data=None, index=None, dtype=None, *args, **kwargs
-):
-    # Wrapper around pd.Series using a float64
-    # default dtype for empty data to silence warnings.
-    # TODO: Remove this in pandas-2.0 upgrade
-    if dtype is None and (
-        data is None or (not is_scalar(data) and len(data) == 0)
-    ):
-        dtype = "float64"
-    return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
-
-
-def _create_cudf_series_float64_default(
-    data=None, index=None, dtype=None, *args, **kwargs
-):
-    # Wrapper around cudf.Series using a float64
-    # default dtype for empty data to silence warnings.
-    # TODO: Remove this in pandas-2.0 upgrade
-    if dtype is None and (
-        data is None or (not is_scalar(data) and len(data) == 0)
-    ):
-        dtype = "float64"
-    return cudf.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(

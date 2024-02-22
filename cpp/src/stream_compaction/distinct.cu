@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ rmm::device_uvector<size_type> distinct_indices(table_view const& input,
   auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
                            cuco::empty_key{-1},
                            cuco::empty_value{std::numeric_limits<size_type>::min()},
-                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                           cudf::detail::cuco_allocator{stream},
                            stream.value()};
 
   auto const preprocessed_input =

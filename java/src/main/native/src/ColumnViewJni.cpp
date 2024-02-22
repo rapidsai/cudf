@@ -2436,9 +2436,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyColumnViewToCV(JNIEnv
   CATCH_STD(env, 0)
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env, jclass,
-                                                                     jlong j_view_handle,
-                                                                     jlong j_scalar_handle) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(
+    JNIEnv *env, jclass, jlong j_view_handle, jlong j_scalar_handle, jboolean allow_single_quotes,
+    jboolean strip_quotes_from_single_strings, jboolean missing_fields_as_nulls) {
 
   JNI_NULL_CHECK(env, j_view_handle, "view cannot be null", 0);
   JNI_NULL_CHECK(env, j_scalar_handle, "path cannot be null", 0);
@@ -2448,7 +2448,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(JNIEnv *env
     cudf::column_view *n_column_view = reinterpret_cast<cudf::column_view *>(j_view_handle);
     cudf::strings_column_view n_strings_col_view(*n_column_view);
     cudf::string_scalar *n_scalar_path = reinterpret_cast<cudf::string_scalar *>(j_scalar_handle);
-    return release_as_jlong(cudf::get_json_object(n_strings_col_view, *n_scalar_path));
+    auto options = cudf::get_json_object_options{};
+    options.set_allow_single_quotes(allow_single_quotes);
+    options.set_strip_quotes_from_single_strings(strip_quotes_from_single_strings);
+    options.set_missing_fields_as_nulls(missing_fields_as_nulls);
+    return release_as_jlong(cudf::get_json_object(n_strings_col_view, *n_scalar_path, options));
   }
   CATCH_STD(env, 0)
 }
