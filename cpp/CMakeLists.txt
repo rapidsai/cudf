@@ -587,7 +587,9 @@ add_library(
   src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
+  src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu
+  src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu

@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include <groupby/common/utils.hpp>
-#include <groupby/hash/groupby_kernels.cuh>
+#include "groupby/common/utils.hpp"
+#include "groupby/hash/groupby_kernels.cuh"
+#include "hash/concurrent_unordered_map.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -45,7 +46,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuco/static_set.cuh>
-
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 

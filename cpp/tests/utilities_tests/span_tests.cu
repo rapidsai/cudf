@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/span.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
+#include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_vector.hpp>

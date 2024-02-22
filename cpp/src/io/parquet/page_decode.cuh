@@ -17,10 +17,9 @@
 #pragma once
 
 #include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <cuda/atomic>
 #include <cuda/std/tuple>

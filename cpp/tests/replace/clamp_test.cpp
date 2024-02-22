@@ -14,11 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/dictionary/encode.hpp>
-#include <cudf/replace.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -26,9 +21,14 @@
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <gtest/gtest.h>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/encode.hpp>
+#include <cudf/replace.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <gtest/gtest.h>
 
 struct ClampErrorTest : public cudf::test::BaseFixture {};
 
