@@ -13,6 +13,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.io.orc import ORCWriter
 from cudf.testing import assert_frame_equal
 from cudf.testing._utils import (
@@ -130,16 +131,21 @@ def test_orc_reader_filepath_or_buffer(path_or_buf, src):
 
 def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
+    expect = pd.read_orc(path)
+    got = cudf.read_orc(path)
+    if PANDAS_GE_220:
+        check_categorical = True
+    else:
+        check_categorical = False
+        expect = expect.fillna(0)
+        got = got.fillna(0)
 
-    expect = pd.read_orc(path).fillna(0)
-    got = cudf.read_orc(path).fillna(0)
+        # PANDAS uses NaN to represent invalid data, which forces float dtype
+        # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
+        for col in expect.columns:
+            expect[col] = expect[col].astype(got[col].dtype)
 
-    # PANDAS uses NaN to represent invalid data, which forces float dtype
-    # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
-    for col in expect.columns:
-        expect[col] = expect[col].astype(got[col].dtype)
-
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got, check_categorical=check_categorical)
 
 
 @pytest.mark.parametrize("use_index", [False, True])
@@ -1927,3 +1933,28 @@ def test_orc_chunked_writer_stripe_size(datadir):
 
     orc_file = orc.ORCFile(buffer)
     assert_eq(orc_file.nstripes, 5)
+
+
+def test_reader_lz4():
+    from pyarrow import orc
+
+    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+    pa_table = pa.Table.from_pandas(pdf)
+
+    buffer = BytesIO()
+    writer = orc.ORCWriter(buffer, compression="LZ4")
+    writer.write(pa_table)
+    writer.close()
+
+    got = cudf.read_orc(buffer)
+    assert_eq(pdf, got)
+
+
+def test_writer_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
+
+    buffer = BytesIO()
+    gdf.to_orc(buffer, compression="LZ4")
+
+    got = pd.read_orc(buffer)
+    assert_eq(gdf, got)

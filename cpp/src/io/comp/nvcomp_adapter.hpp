@@ -17,8 +17,7 @@
 #pragma once
 
 #include "gpuinflate.hpp"
-
-#include <io/utilities/config_utils.hpp>
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -29,7 +28,7 @@
 
 namespace cudf::io::nvcomp {
 
-enum class compression_type { SNAPPY, ZSTD, DEFLATE };
+enum class compression_type { SNAPPY, ZSTD, DEFLATE, LZ4 };
 
 /**
  * @brief Set of parameters that impact whether the use nvCOMP features is enabled.

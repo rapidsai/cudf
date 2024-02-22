@@ -13,11 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing.hpp>
-#include <cudf/partitioning.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -25,6 +20,12 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/partitioning.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -309,11 +310,11 @@ void run_fixed_width_test(size_t cols,
   cudf::table_view partitions_table({partitions_col});
 
   // Sort partition numbers by the corresponding row hashes of each output
-  auto hash1 = cudf::hash(output1->view());
+  auto hash1 = cudf::hashing::murmurhash3_x86_32(output1->view());
   cudf::table_view hash1_table({hash1->view()});
   auto sorted_partitions1 = cudf::sort_by_key(partitions_table, hash1_table);
 
-  auto hash2 = cudf::hash(output2->view());
+  auto hash2 = cudf::hashing::murmurhash3_x86_32(output2->view());
   cudf::table_view hash2_table({hash2->view()});
   auto sorted_partitions2 = cudf::sort_by_key(partitions_table, hash2_table);
 

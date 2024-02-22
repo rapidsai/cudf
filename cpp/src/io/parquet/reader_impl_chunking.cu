@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking.hpp"
 
@@ -22,13 +25,9 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
-#include <io/comp/nvcomp_adapter.hpp>
-
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
-
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -36,8 +35,6 @@
 #include <thrust/sort.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
-
-#include <cuda/functional>
 
 #include <numeric>
 
@@ -765,7 +762,11 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     size_t total_decomp_size      = 0;
   };
 
-  std::array codecs{codec_stats{GZIP}, codec_stats{SNAPPY}, codec_stats{BROTLI}, codec_stats{ZSTD}};
+  std::array codecs{codec_stats{GZIP},
+                    codec_stats{SNAPPY},
+                    codec_stats{BROTLI},
+                    codec_stats{ZSTD},
+                    codec_stats{LZ4_RAW}};
 
   auto is_codec_supported = [&codecs](int8_t codec) {
     if (codec == UNCOMPRESSED) return true;
@@ -885,6 +886,15 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
                      debrotli_scratch.data(),
                      debrotli_scratch.size(),
                      stream);
+        break;
+      case LZ4_RAW:
+        nvcomp::batched_decompress(nvcomp::compression_type::LZ4,
+                                   d_comp_in,
+                                   d_comp_out,
+                                   d_comp_res_view,
+                                   codec.max_decompressed_size,
+                                   codec.total_decomp_size,
+                                   stream);
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
@@ -1071,6 +1081,12 @@ struct get_decomp_scratch {
       case ZSTD:
         return cudf::io::nvcomp::batched_decompress_temp_size(
           cudf::io::nvcomp::compression_type::ZSTD,
+          di.num_pages,
+          di.max_page_decompressed_size,
+          di.total_decompressed_size);
+      case LZ4_RAW:
+        return cudf::io::nvcomp::batched_decompress_temp_size(
+          cudf::io::nvcomp::compression_type::LZ4,
           di.num_pages,
           di.max_page_decompressed_size,
           di.total_decompressed_size);

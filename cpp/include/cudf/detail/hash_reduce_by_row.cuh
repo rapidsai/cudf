@@ -23,16 +23,15 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/static_map.cuh>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/uninitialized_fill.h>
 
-#include <cuco/static_map.cuh>
-
 namespace cudf::detail {
 
-using hash_map_type =
-  cuco::static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
+using hash_map_type = cuco::legacy::
+  static_map<size_type, size_type, cuda::thread_scope_device, cudf::detail::cuco_allocator>;
 
 /**
  * @brief The base struct for customized reduction functor to perform reduce-by-key with keys are

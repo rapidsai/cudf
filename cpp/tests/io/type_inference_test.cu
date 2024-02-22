@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include <io/utilities/string_parsing.hpp>
-#include <io/utilities/trie.cuh>
+#include "io/utilities/string_parsing.hpp"
+#include "io/utilities/trie.cuh"
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/testing_main.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>

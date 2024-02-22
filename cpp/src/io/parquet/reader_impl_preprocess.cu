@@ -24,6 +24,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
@@ -39,8 +40,6 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 #include <thrust/unique.h>
-
-#include <cuda/functional>
 
 #include <bitset>
 #include <numeric>
