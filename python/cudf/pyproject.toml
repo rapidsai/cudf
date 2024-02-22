@@ -99,6 +99,7 @@ pandas-tests = [
     "pytest-asyncio",
     "pytest-reportlog",
     "python-snappy",
+    "pytest-timeout",
     "pyxlsb",
     "s3fs",
     "scipy",
