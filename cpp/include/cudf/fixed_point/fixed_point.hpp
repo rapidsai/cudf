@@ -87,7 +87,7 @@ namespace detail {
 /**
  * @brief Recursively computes integer exponentiation
  *
- * Note: This is intended to be run at compile time
+ * @note This is intended to be run at compile time
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
