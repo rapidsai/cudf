@@ -46,6 +46,12 @@ np_dtypes_to_pandas_dtypes = {
     np.dtype("int64"): pd.Int64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
     np.dtype("object"): pd.StringDtype(),
+    np.dtype("float32"): pd.Float32Dtype(),
+    np.dtype("float64"): pd.Float64Dtype(),
+}
+pandas_dtypes_to_np_dtypes = {
+    pd_dtype: np_dtype
+    for np_dtype, pd_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
 pyarrow_dtypes_to_pandas_dtypes = {
@@ -84,15 +90,9 @@ pandas_dtypes_alias_to_cudf_alias = {
     "Int32": "int32",
     "Int64": "int64",
     "boolean": "bool",
+    "Float32": "float32",
+    "Float64": "float64",
 }
-
-
-np_dtypes_to_pandas_dtypes[np.dtype("float32")] = pd.Float32Dtype()
-np_dtypes_to_pandas_dtypes[np.dtype("float64")] = pd.Float64Dtype()
-pandas_dtypes_to_np_dtypes[pd.Float32Dtype()] = np.dtype("float32")
-pandas_dtypes_to_np_dtypes[pd.Float64Dtype()] = np.dtype("float64")
-pandas_dtypes_alias_to_cudf_alias["Float32"] = "float32"
-pandas_dtypes_alias_to_cudf_alias["Float64"] = "float64"
 
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}

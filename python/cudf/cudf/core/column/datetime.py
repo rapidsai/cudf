@@ -735,9 +735,9 @@ class DatetimeTZColumn(DatetimeColumn):
     ) -> pd.Series:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        series = self._local_time.to_pandas().dt.tz_localize(
-            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
-        )
+        series = self._utc_time.to_pandas().dt.tz_localize("UTC")
+        if str(self.dtype.tz).lower() != "utc":
+            series = series.dt.tz_convert(self.dtype.tz)
         if index is not None:
             series.index = index
         return series
