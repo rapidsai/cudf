@@ -567,9 +567,7 @@ class DatetimeColumn(column.ColumnBase):
         if other is NotImplemented:
             return NotImplemented
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect).astype(
-                self.dtype
-            )
+            return other._datetime_binop(self, op, reflect=reflect)
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
