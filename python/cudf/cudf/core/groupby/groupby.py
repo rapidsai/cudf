@@ -109,11 +109,11 @@ Falcon    350.0
 Parrot     30.0
 Parrot     20.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(level=0).mean()
+>>> ser.groupby(level=0, sort=True).mean()
 Falcon    370.0
 Parrot     25.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(ser > 100).mean()
+>>> ser.groupby(ser > 100, sort=True).mean()
 Max Speed
 False     25.0
 True     370.0
@@ -133,7 +133,7 @@ Name: Max Speed, dtype: float64
 1  Falcon      370.0
 2  Parrot       24.0
 3  Parrot       26.0
->>> df.groupby(['Animal']).mean()
+>>> df.groupby(['Animal'], sort=True).mean()
         Max Speed
 Animal
 Falcon      375.0
@@ -151,22 +151,22 @@ Falcon Captive      390.0
         Wild         350.0
 Parrot Captive       30.0
         Wild          20.0
->>> df.groupby(level=0).mean()
+>>> df.groupby(level=0, sort=True).mean()
         Max Speed
 Animal
 Falcon      370.0
 Parrot       25.0
->>> df.groupby(level="Type").mean()
+>>> df.groupby(level="Type", sort=True).mean()
         Max Speed
 Type
-Wild         185.0
 Captive      210.0
+Wild         185.0
 
 >>> df = cudf.DataFrame({{'A': 'a a b'.split(),
 ...                      'B': [1,2,3],
 ...                      'C': [4,6,5]}})
->>> g1 = df.groupby('A', group_keys=False)
->>> g2 = df.groupby('A', group_keys=True)
+>>> g1 = df.groupby('A', group_keys=False, sort=True)
+>>> g2 = df.groupby('A', group_keys=True, sort=True)
 
 Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
 differ in their ``group_keys`` argument. Calling `apply` in various ways,
@@ -539,11 +539,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg('sum')
+        >>> a.groupby('a', sort=True).agg('sum')
            b  c
         a
-        2  3  1
         1  3  4
+        2  3  1
 
         Specifying a list of aggregations to perform on each column.
 
@@ -553,12 +553,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg(['sum', 'min'])
+        >>> a.groupby('a', sort=True).agg(['sum', 'min'])
             b       c
           sum min sum min
         a
-        2   3   3   1   1
         1   3   1   4   2
+        2   3   3   1   1
 
         Using a dict to specify aggregations to perform per column.
 
@@ -568,12 +568,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
+        >>> a.groupby('a', sort=True).agg({'a': 'max', 'b': ['min', 'mean']})
             a   b
           max min mean
         a
-        2   2   3  3.0
         1   1   1  1.5
+        2   2   3  3.0
 
         Using lambdas/callables to specify aggregations taking parameters.
 

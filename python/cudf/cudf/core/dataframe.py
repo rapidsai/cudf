@@ -7693,7 +7693,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dog            4          0
         cat            4          0
         ant            6          0
-        >>> df.value_counts()
+        >>> df.value_counts(sort=True)
         num_legs  num_wings
         4         0            2
         2         2            1
