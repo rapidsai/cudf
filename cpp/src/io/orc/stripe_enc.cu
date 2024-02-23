@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
-
-#include <cudf/io/orc_types.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>

@@ -2068,14 +2068,6 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
 
 
 @pytest.mark.parametrize(
-    "idx",
-    [
-        pd.MultiIndex.from_tuples(
-            [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
-        )
-    ],
-)
-@pytest.mark.parametrize(
     "key",
     [
         ((1, 2, 3),),
@@ -2084,19 +2076,40 @@ def test_get_loc_multi_numeric_deviate(idx, key, result):
     ],
 )
 @pytest.mark.parametrize("method", [None, "ffill", "bfill"])
-def test_get_indexer_multi_numeric_deviate(request, idx, key, method):
-    pi = idx
+def test_get_indexer_multi_numeric_deviate(key, method):
+    pi = pd.MultiIndex.from_tuples(
+        [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
+    ).sort_values()
     gi = cudf.from_pandas(pi)
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=method is not None and key == ((1, 2, 3),),
-            reason="https://github.com/pandas-dev/pandas/issues/53452",
-        )
-    )
+
     expected = pi.get_indexer(key, method=method)
     got = gi.get_indexer(key, method=method)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.xfail(
+    not PANDAS_GE_220, reason="Remove after pandas-2.2+ upgrade"
+)
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
+def test_get_indexer_multi_error(method):
+    pi = pd.MultiIndex.from_tuples(
+        [(2, 1, 1), (1, 2, 3), (1, 2, 1), (1, 1, 10), (1, 1, 1), (2, 2, 1)]
+    )
+    gi = cudf.from_pandas(pi)
+
+    assert_exceptions_equal(
+        pi.get_indexer,
+        gi.get_indexer,
+        lfunc_args_and_kwargs=(
+            [],
+            {"target": ((1, 2, 3),), "method": method},
+        ),
+        rfunc_args_and_kwargs=(
+            [],
+            {"target": ((1, 2, 3),), "method": method},
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -2497,19 +2510,12 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "index",
     [
-        [],
-        pd.Series(
-            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
-        ),
-        pd.Series([0, 15, 10], index=[0, None, 9]),
-        pd.Series(
-            range(25),
-            index=pd.date_range(
-                start="2019-01-01", end="2019-01-02", freq="h"
-            ),
-        ),
+        pd.Index([]),
+        pd.Index(["a", "b", "c", "d", "e"]),
+        pd.Index([0, None, 9]),
+        pd.date_range("2019-01-01", periods=3),
     ],
 )
 @pytest.mark.parametrize(
@@ -2521,12 +2527,19 @@ def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
         ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02 10:00:00"],
     ],
 )
-def test_isin_index(data, values):
-    psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(psr)
+def test_isin_index(index, values):
+    pidx = index
+    gidx = cudf.Index.from_pandas(pidx)
 
-    got = gsr.index.isin(values)
-    expected = psr.index.isin(values)
+    is_dt_str = (
+        next(iter(values), None) == "2019-01-01 04:00:00"
+        and len(pidx)
+        and pidx.dtype.kind == "M"
+    )
+    with expect_warning_if(is_dt_str):
+        got = gidx.isin(values)
+    with expect_warning_if(PANDAS_GE_220 and is_dt_str):
+        expected = pidx.isin(values)
 
     assert_eq(got, expected)
 
@@ -3094,7 +3107,7 @@ def test_index_with_index_dtype(data, dtype):
 
 
 def test_period_index_error():
-    pidx = pd.PeriodIndex(year=[2000, 2002], quarter=[1, 3])
+    pidx = pd.PeriodIndex(data=[pd.Period("2020-01")])
     with pytest.raises(NotImplementedError):
         cudf.from_pandas(pidx)
     with pytest.raises(NotImplementedError):

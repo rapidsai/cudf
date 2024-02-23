@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,19 +15,19 @@
  */
 
 #include "file_io_utilities.hpp"
+#include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <kvikio/file_handle.hpp>
+
 #include <rmm/device_buffer.hpp>
 
 #include <arrow/io/memory.h>
-
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>

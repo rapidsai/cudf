@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cooperative_groups.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -32,15 +31,19 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <cooperative_groups.h>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
+
 #include <type_traits>
 
 #if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
@@ -51,6 +54,8 @@
 #include <cuda/barrier>
 #endif  // #if !defined(__CUDA_ARCH__) || defined(ASYNC_MEMCPY_SUPPORTED)
 
+#include <cuda/functional>
+
 #include <algorithm>
 #include <cstdarg>
 #include <cstdint>
@@ -59,8 +64,6 @@
 #include <limits>
 #include <optional>
 #include <tuple>
-
-#include <cuda/functional>
 
 namespace {
 

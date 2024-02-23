@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <io/fst/lookup_tables.cuh>
+#include "io/fst/lookup_tables.cuh"
 
 #include <cudf/io/detail/json.hpp>
 #include <cudf/types.hpp>
