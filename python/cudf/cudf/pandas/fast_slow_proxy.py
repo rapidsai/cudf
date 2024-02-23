@@ -223,8 +223,6 @@ def make_final_proxy_type(
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
-        elif slow_name.startswith("_"):
-            cls_dict[slow_name] = getattr(slow_type, slow_name)
         else:
             cls_dict[slow_name] = _FastSlowAttribute(slow_name)
 
@@ -806,7 +804,11 @@ class _FunctionProxy(_CallableProxyMixin):
         with disable_module_accelerator():
             pickled_fast = pickle.dumps(self._fsproxy_fast)
             pickled_slow = pickle.dumps(self._fsproxy_slow)
-        return (_PickleConstructor(type(self)), (), (pickled_fast, pickled_slow))
+        return (
+            _PickleConstructor(type(self)),
+            (),
+            (pickled_fast, pickled_slow),
+        )
 
     def __setstate__(self, state):
         # Need a local import to avoid circular import issues
@@ -817,6 +819,7 @@ class _FunctionProxy(_CallableProxyMixin):
             unpickled_slow = pickle.loads(state[1])
         self._fsproxy_fast = unpickled_fast
         self._fsproxy_slow = unpickled_slow
+
 
 class _FastSlowAttribute:
     """
