@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -169,3 +169,51 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     }
   },
   [](auto) { return std::string{}; })
+
+enum class normalize_single_quotes : bool { YES, NO };
+
+enum class mixed_types_as_string : bool { YES, NO };
+
+enum class recovery_mode : bool { FAIL, RECOVER_WITH_NULL };
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  normalize_single_quotes,
+  [](auto value) {
+    switch(value) {
+      case normalize_single_quotes::YES: return "YES";
+      case normalize_single_quotes::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) {
+    return std::string{};
+  }
+)
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  mixed_types_as_string,
+  [](auto value) {
+    switch(value) {
+      case mixed_types_as_string::YES: return "YES";
+      case mixed_types_as_string::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) {
+    return std::string{};
+  }
+)
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  recovery_mode,
+  [](auto value) {
+    switch(value) {
+      case recovery_mode::FAIL: return "FAIL";
+      case recovery_mode::RECOVER_WITH_NULL: return "RECOVER_WITH_NULL";
+      default: return "Unknown";
+    }
+  },
+  [](auto) {
+    return std::string{};
+  }
+)
