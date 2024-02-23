@@ -59,6 +59,7 @@ namespace cudf::io::orc::detail {
 namespace {
 
 // TODO: update
+// TODO: compute num stripes from chunks
 /**
  * @brief Decompresses the stripe data, at stream granularity.
  *
@@ -683,10 +684,12 @@ void reader::impl::decompress_and_decode()
 {
   if (_file_itm_data.has_no_data()) { return; }
 
-  //  auto const stripe_chunk =
-  //    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_decode_stripe_chunk++];
-  //  auto const stripe_start = stripe_chunk.start_idx;
-  //  auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
+  auto const stripe_chunk =
+    _chunk_read_data.decode_stripe_chunks[_chunk_read_data.curr_decode_stripe_chunk++];
+  auto const stripe_start = stripe_chunk.start_idx;
+  auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
+
+  printf("decoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 
   auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   auto const rows_to_read      = _file_itm_data.rows_to_read;
@@ -710,6 +713,8 @@ void reader::impl::decompress_and_decode()
   auto& null_count_prefix_sums = _file_itm_data.null_count_prefix_sums;
   auto& lvl_chunks             = _file_itm_data.lvl_data_chunks;
 
+  null_count_prefix_sums.clear();
+
   // TODO: move this to global step
   lvl_chunks.resize(_selected_columns.num_levels());
   _out_buffers.resize(_selected_columns.num_levels());
@@ -718,7 +723,8 @@ void reader::impl::decompress_and_decode()
   //
   //
   // TODO: move this to reader_impl.cu, decomp and decode step
-  std::size_t num_stripes = selected_stripes.size();
+  //  std::size_t num_stripes = selected_stripes.size();
+  std::size_t num_stripes = stripe_chunk.count;
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
@@ -794,15 +800,16 @@ void reader::impl::decompress_and_decode()
     std::size_t num_rowgroups    = 0;
 
     // TODO: Stripe and stream idx must be by chunk.
-    std::size_t stripe_idx = 0;
+    //    std::size_t stripe_idx = 0;
     std::size_t stream_idx = 0;
 
-    // std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
-    for (auto const& stripe : selected_stripes) {
+    for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
+      //    for (auto const& stripe : selected_stripes) {
+      auto const& stripe       = selected_stripes[stripe_idx];
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
-      auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx,
+      auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx - stripe_start,
                                                                       level,
                                                                       stripe_info,
                                                                       stripe_footer,
@@ -830,7 +837,7 @@ void reader::impl::decompress_and_decode()
       }
       // Update chunks to reference streams pointers
       for (std::size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-        auto& chunk = chunks[stripe_idx][col_idx];
+        auto& chunk = chunks[stripe_idx - stripe_start][col_idx];
         // start row, number of rows in a each stripe and total number of rows
         // may change in lower levels of nesting
         chunk.start_row       = (level == 0)
@@ -877,7 +884,7 @@ void reader::impl::decompress_and_decode()
       stripe_start_row += num_rows_per_stripe;
       num_rowgroups += stripe_num_rowgroups;
 
-      stripe_idx++;
+      //      stripe_idx++;
     }  // for (stripe : selected_stripes)
 
     if (stripe_data.empty()) { continue; }
@@ -903,17 +910,19 @@ void reader::impl::decompress_and_decode()
     }
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      auto decomp_data = decompress_stripe_data(_file_itm_data.compinfo_map,
-                                                *_metadata.per_file_metadata[0].decompressor,
-                                                stripe_data,
-                                                stream_info,
-                                                chunks,
-                                                row_groups,
-                                                num_stripes,
-                                                _metadata.get_row_index_stride(),
-                                                level == 0,
-                                                _stream);
-      stripe_data.clear();
+      auto decomp_data = decompress_stripe_data(
+        _file_itm_data.compinfo_map,
+        *_metadata.per_file_metadata[0].decompressor,
+        stripe_data,
+        host_span<orc_stream_info const>(stream_info.data() + stripe_start, stripe_chunk.count),
+        chunks,
+        row_groups,
+        num_stripes,
+        _metadata.get_row_index_stride(),
+        level == 0,
+        _stream);
+      // TODO: fix this
+      // stripe_data.clear();
       stripe_data.push_back(std::move(decomp_data));
     } else {
       if (row_groups.size().first) {
@@ -1000,12 +1009,17 @@ void reader::impl::prepare_data(uint64_t skip_rows,
   while (_chunk_read_data.more_stripe_to_load()) {
     load_data();
     printf("done load data\n\n");
+
+    while (_chunk_read_data.more_stripe_to_decode()) {
+      decompress_and_decode();
+      _file_itm_data.out_buffers.push_back(std::move(_out_buffers));
+    }
   }
 
   // decompress_and_decode();
   // while (_chunk_read_data.more_stripe_to_decode()) {
-  decompress_and_decode();
-  _file_itm_data.out_buffers.push_back(std::move(_out_buffers));
+  //   decompress_and_decode();
+  //   _file_itm_data.out_buffers.push_back(std::move(_out_buffers));
   // }
 }
 
