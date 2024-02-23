@@ -2587,7 +2587,7 @@ class IndexedFrame(Frame):
                     isinstance(self, cudf.core.dataframe.DataFrame)
                     and self._data.multiindex
                 ):
-                    out._set_column_names_like(self)
+                    out._set_columns_like(self._data)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -2607,7 +2607,7 @@ class IndexedFrame(Frame):
                     isinstance(self, cudf.core.dataframe.DataFrame)
                     and self._data.multiindex
                 ):
-                    out._set_column_names_like(self)
+                    out._set_columns_like(self._data)
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
