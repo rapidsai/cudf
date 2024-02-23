@@ -328,8 +328,6 @@ def make_intermediate_proxy_type(
     for slow_name in dir(slow_type):
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
-        elif slow_name.startswith("_"):
-            cls_dict[slow_name] = getattr(slow_type, slow_name)
         else:
             cls_dict[slow_name] = _FastSlowAttribute(slow_name)
 
@@ -796,6 +794,29 @@ class _FunctionProxy(_CallableProxyMixin):
             updated=updated,
         )
 
+    def __reduce__(self):
+        """
+        In conjunction with `__proxy_setstate__`, this effectively enables
+        proxy types to be pickled and unpickled by pickling and unpickling
+        the underlying wrapped types.
+        """
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            pickled_fast = pickle.dumps(self._fsproxy_fast)
+            pickled_slow = pickle.dumps(self._fsproxy_slow)
+        return (_PickleConstructor(type(self)), (), (pickled_fast, pickled_slow))
+
+    def __setstate__(self, state):
+        # Need a local import to avoid circular import issues
+        from .module_accelerator import disable_module_accelerator
+
+        with disable_module_accelerator():
+            unpickled_fast = pickle.loads(state[0])
+            unpickled_slow = pickle.loads(state[1])
+        self._fsproxy_fast = unpickled_fast
+        self._fsproxy_slow = unpickled_slow
 
 class _FastSlowAttribute:
     """
@@ -816,6 +837,7 @@ class _FastSlowAttribute:
         if self._attr is None:
             fast_attr = getattr(owner._fsproxy_fast, self._name, _Unusable())
             slow_attr = getattr(owner._fsproxy_slow, self._name)
+
             if _is_function_or_method(slow_attr):
                 self._attr = _MethodProxy(fast_attr, slow_attr)
             else:

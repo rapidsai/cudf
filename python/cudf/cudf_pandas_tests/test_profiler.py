@@ -32,7 +32,7 @@ def test_profiler():
     assert set(per_function_stats) == {
         "DataFrame",
         "DataFrame.groupby",
-        "DataFrameGroupBy.sum",
+        "GroupBy.sum",
         "DataFrame.sum",
         "Series.__getitem__",
     }
