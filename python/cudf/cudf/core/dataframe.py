@@ -1566,7 +1566,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @classmethod
     @_cudf_nvtx_annotate
     def _concat(
-        cls, objs, axis=0, join="outer", ignore_index=False, sort=False
+        cls, objs, axis=0, join="outer", ignore_index=False, sort=False, keys=None
     ):
         # flag to indicate at least one empty input frame also has an index
         empty_has_index = False
@@ -1581,9 +1581,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         are_all_range_index = False
 
         for i, obj in enumerate(objs):
-            # shallow-copy the input DFs in case the same DF instance
-            # is concatenated with itself
-            objs[i] = obj.copy(deep=False)
+            if keys is None:
+                # shallow-copy the input DFs in case the same DF instance
+                # is concatenated with itself
+                objs[i] = obj.copy(deep=False)
+            else:
+                # create a multi-index with the key as 
+                # the outermost index level
+                idx_df = obj.index.to_frame()
+                idx_df.insert(0, 'concat_key', keys[i])
+                obj.index = cudf.MultiIndex.from_frame(idx_df)
+                objs[i] = obj
 
             # If ignore_index is true, determine if
             # all or some objs are empty(and have index).

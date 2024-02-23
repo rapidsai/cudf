@@ -120,7 +120,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
     Parameters
     ----------
-    objs : list of DataFrame, Series, or Index
+    objs : list or dictionary of DataFrame, Series, or Index
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
     join : {'inner', 'outer'}, default 'outer'
@@ -235,7 +235,13 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     if not objs:
         raise ValueError("No objects to concatenate")
 
-    objs = [obj for obj in objs if obj is not None]
+    if isinstance(objs, dict):
+        objs = {k: obj for k, obj in objs.items() if obj is not None}
+        keys = list(objs)
+        objs = list(objs.values())
+    else:
+        objs = [obj for obj in objs if obj is not None]
+        keys = None
 
     if not objs:
         raise ValueError("All objects passed were None")
@@ -249,7 +255,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     # Return for single object
     if len(objs) == 1:
         obj = objs[0]
-
         if ignore_index:
             if axis == 1:
                 result = cudf.DataFrame._from_data(
@@ -280,6 +285,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         else:
             if axis == 0:
                 result = obj.copy()
+                if keys is not None:
+                    result.index = cudf.MultiIndex.from_product([
+                        keys,
+                        result.index
+                    ])
             else:
                 data = obj._data.copy(deep=True)
                 if isinstance(obj, cudf.Series) and obj.name is None:
@@ -288,6 +298,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 result = cudf.DataFrame._from_data(
                     data, index=obj.index.copy(deep=True)
                 )
+                if keys is not None:
+                    result.columns = cudf.MultiIndex.from_product([
+                        keys,
+                        result.columns
+                    ])
+                
 
         if isinstance(result, cudf.Series) and axis == 0:
             # sort has no effect for series concatted along axis 0
@@ -351,35 +367,56 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             objs = _align_objs(objs, how=join, sort=sort)
             df.index = objs[0].index
 
-        for o in objs:
-            for name, col in o._data.items():
-                if name in df._data:
-                    raise NotImplementedError(
-                        f"A Column with duplicate name found: {name}, cuDF "
-                        f"doesn't support having multiple columns with "
-                        f"same names yet."
-                    )
-                if empty_inner:
-                    # if join is inner and it contains an empty df
-                    # we return an empty df, hence creating an empty
-                    # column with dtype metadata retained.
-                    df[name] = cudf.core.column.column_empty_like(
-                        col, newsize=0
-                    )
-                else:
-                    df[name] = col
+        if keys is None:
 
-        result_columns = (
-            objs[0]
-            ._data.to_pandas_index()
-            .append([obj._data.to_pandas_index() for obj in objs[1:]])
-        )
+            for o in objs:
+                for name, col in o._data.items():
+                    if name in df._data:
+                        raise NotImplementedError(
+                            f"A Column with duplicate name found: {name}, cuDF "
+                            f"doesn't support having multiple columns with "
+                            f"same names yet."
+                        )
+                    if empty_inner:
+                        # if join is inner and it contains an empty df
+                        # we return an empty df, hence creating an empty
+                        # column with dtype metadata retained.
+                        df[name] = cudf.core.column.column_empty_like(
+                            col, newsize=0
+                        )
+                    else:
+                        df[name] = col
+
+            result_columns = (
+                objs[0]
+                ._data.to_pandas_index()
+                .append([obj._data.to_pandas_index() for obj in objs[1:]])
+                .unique()
+            )
+        
+        # need to create a MultiIndex column
+        else:
+            for k, o in zip(keys, objs):
+                for name, col in o._data.items():
+                    # the existing column might be multiindex
+                    if not isinstance(name, tuple):
+                        name = (name,)
+                    if empty_inner:
+                        df[(k, *name)] = cudf.core.column.column_empty_like(
+                            col, newsize=0
+                        )
+                    else:
+                        df[(k, *name)] = col
+
+            # MultiIndex construction here
+            result_columns = cudf.MultiIndex.from_tuples(df.columns)
+
 
         if ignore_index:
             # with ignore_index the column names change to numbers
-            df.columns = pd.RangeIndex(len(result_columns.unique()))
+            df.columns = pd.RangeIndex(len(result_columns))
         else:
-            df.columns = result_columns.unique()
+            df.columns = result_columns
 
         if empty_inner:
             # if join is inner and it contains an empty df
@@ -411,11 +448,20 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             obj = objs[0]
+            # check if we need to construct a MultiIndex
+            if ignore_index:
+                index = cudf.RangeIndex(len(obj))
+            else:
+                if keys is None:
+                    index = obj.index.copy(deep=True)
+                else:
+                    index = cudf.MultiIndex.from_product([
+                        keys,
+                        obj.index
+                    ])
             result = cudf.DataFrame._from_data(
                 data=None if join == "inner" else obj._data.copy(deep=True),
-                index=cudf.RangeIndex(len(obj))
-                if ignore_index
-                else obj.index.copy(deep=True),
+                index=index,
             )
             return result
         else:
@@ -429,16 +475,23 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 ignore_index=ignore_index,
                 # Explicitly cast rather than relying on None being falsy.
                 sort=bool(sort),
+                keys=keys
             )
         return result
 
     elif typ is cudf.Series:
         new_objs = [obj for obj in objs if len(obj)]
         if len(new_objs) == 1 and not ignore_index:
-            return new_objs[0]
+            new_srs = new_objs[0]
+            if keys is not None:
+                new_srs.index = cudf.MultiIndex.from_product([
+                    keys,
+                    new_srs.index
+                ])
+            return new_srs
         else:
             return cudf.Series._concat(
-                objs, axis=axis, index=None if ignore_index else True
+                objs, axis=axis, index=None if ignore_index else True, keys=keys
             )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)
