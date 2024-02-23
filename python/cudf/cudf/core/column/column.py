@@ -966,6 +966,10 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             # TODO: Figure out why `cudf.dtype("category")`
             # astype's different than just the string
             return col.as_categorical_column(dtype)
+        elif dtype == "interval" and isinstance(
+            self.dtype, cudf.IntervalDtype
+        ):
+            return col
         was_object = dtype == object or dtype == np.dtype(object)
         dtype = cudf.dtype(dtype)
         if self.dtype == dtype:

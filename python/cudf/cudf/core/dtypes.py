@@ -62,6 +62,8 @@ def dtype(arbitrary):
             return np.dtype("object")
         else:
             return dtype(pd_dtype.numpy_dtype)
+    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
+        return dtype(pd_dtype.numpy_dtype)
     elif isinstance(pd_dtype, pd.CategoricalDtype):
         return cudf.CategoricalDtype.from_pandas(pd_dtype)
     elif isinstance(pd_dtype, pd.IntervalDtype):
