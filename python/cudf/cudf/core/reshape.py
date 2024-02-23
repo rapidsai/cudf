@@ -123,6 +123,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     objs : list or dictionary of DataFrame, Series, or Index
     axis : {0/'index', 1/'columns'}, default 0
         The axis to concatenate along.
+        `axis=1` must be passed if a dictionary is passed.
     join : {'inner', 'outer'}, default 'outer'
         How to handle indexes on other axis (or axes).
     ignore_index : bool, default False
@@ -229,6 +230,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
       letter  number  animal    name
     0      a       1    bird   polly
     1      b       2  monkey  george
+
+    Combine a dictionary of DataFrame objects horizontally:
+
+    >>> d = {'first': df1, 'second': df2}
+    >>> cudf.concat(d, axis=1)
+      first           second
+      letter  number  letter  number 
+    0      a       1       c       3
+    1      b       2       d       4
     """
     # TODO: Do we really need to have different error messages for an empty
     # list and a list of None?
@@ -286,10 +296,10 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             if axis == 0:
                 result = obj.copy()
                 if keys is not None:
-                    result.index = cudf.MultiIndex.from_product([
-                        keys,
-                        result.index
-                    ])
+                    raise NotImplementedError(
+                        "Concatenation along axis = 0 "
+                        "when passing a dictionary is not supported yet."
+                    )
             else:
                 data = obj._data.copy(deep=True)
                 if isinstance(obj, cudf.Series) and obj.name is None:
@@ -299,10 +309,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     data, index=obj.index.copy(deep=True)
                 )
                 if keys is not None:
-                    result.columns = cudf.MultiIndex.from_product([
-                        keys,
-                        result.columns
-                    ])
+                    if isinstance(result, cudf.DataFrame):
+                        k = keys[0]
+                        result.columns = cudf.MultiIndex.from_tuples(
+                            [(k, *c) if isinstance(c, tuple) else (k, c) for c in result.columns]
+                        )
                 
 
         if isinstance(result, cudf.Series) and axis == 0:
@@ -425,7 +436,14 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
 
         return df
 
+
     # If we get here, we are always concatenating along axis 0 (the rows).
+    if keys is not None:
+        raise NotImplementedError(
+            "Concatenation along axis = 0 "
+            "when passing a dictionary is not supported yet."
+        )
+
     typ = list(typs)[0]
     if len(typs) > 1:
         if allowed_typs == typs:
@@ -448,20 +466,11 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return cudf.DataFrame()
         elif len(objs) == 1:
             obj = objs[0]
-            # check if we need to construct a MultiIndex
-            if ignore_index:
-                index = cudf.RangeIndex(len(obj))
-            else:
-                if keys is None:
-                    index = obj.index.copy(deep=True)
-                else:
-                    index = cudf.MultiIndex.from_product([
-                        keys,
-                        obj.index
-                    ])
             result = cudf.DataFrame._from_data(
                 data=None if join == "inner" else obj._data.copy(deep=True),
-                index=index,
+                index=cudf.RangeIndex(len(obj))
+                if ignore_index
+                else obj.index.copy(deep=True),
             )
             return result
         else:
@@ -475,23 +484,16 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 ignore_index=ignore_index,
                 # Explicitly cast rather than relying on None being falsy.
                 sort=bool(sort),
-                keys=keys
             )
         return result
 
     elif typ is cudf.Series:
         new_objs = [obj for obj in objs if len(obj)]
         if len(new_objs) == 1 and not ignore_index:
-            new_srs = new_objs[0]
-            if keys is not None:
-                new_srs.index = cudf.MultiIndex.from_product([
-                    keys,
-                    new_srs.index
-                ])
-            return new_srs
+            return new_objs[0]
         else:
             return cudf.Series._concat(
-                objs, axis=axis, index=None if ignore_index else True, keys=keys
+                objs, axis=axis, index=None if ignore_index else True
             )
     elif typ is cudf.MultiIndex:
         return cudf.MultiIndex._concat(objs)

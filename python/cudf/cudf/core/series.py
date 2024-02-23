@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import chain
 import functools
 import inspect
 import pickle
@@ -1587,46 +1586,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @classmethod
     @_cudf_nvtx_annotate
-    def _concat(cls, objs, axis=0, index=True, keys=None):
+    def _concat(cls, objs, axis=0, index=True):
         # Concatenate index if not provided
         if index is True:
-            if keys is None:
-                if isinstance(objs[0].index, cudf.MultiIndex):
-                    index = cudf.MultiIndex._concat([o.index for o in objs])
-                else:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", FutureWarning)
-                        index = cudf.core.index.Index._concat(
-                            [o.index for o in objs]
-                        )
+            if isinstance(objs[0].index, cudf.MultiIndex):
+                index = cudf.MultiIndex._concat([o.index for o in objs])
             else:
-                if isinstance(objs[0].index, cudf.MultiIndex):
-                    # make the keys the outer index level 
-                    # since there is no good way to prepend index level values
-                    # converting the multiindex into a dataframe and then 
-                    # back into an index takes place below
-                    index = cudf.MultiIndex._concat(
-                        [
-                            (
-                                o.index
-                                .to_frame()
-                                .assign(key=k)
-                                .pipe(lambda x: x.set_index(['key', *x.columns[:-1]]))
-                                .index
-                            ) 
-                            for k,o in zip(keys, objs)
-                        ]
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", FutureWarning)
+                    index = cudf.core.index.Index._concat(
+                        [o.index for o in objs]
                     )
-                else:
-                    with warnings.catch_warnings():
-                        warnings.simplefilter("ignore", FutureWarning)
-                        # construct a MultiIndex where the outer level is the keys
-                        index = cudf.MultiIndex.from_arrays([
-                            list(chain.from_iterable([k]*len(o) for k, o in zip(keys, objs))),
-                            cudf.core.index.Index._concat(
-                                [o.index for o in objs]
-                            )
-                        ])
 
         names = {obj.name for obj in objs}
         if len(names) == 1:

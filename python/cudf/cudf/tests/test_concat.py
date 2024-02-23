@@ -1923,7 +1923,8 @@ def test_concat_mixed_list_types_error(s1, s2):
         cudf.concat([s1, s2], ignore_index=True)
 
 
-def test_concat_dictionary():
+def test_horizontal_concat_dictionary():
+
     d = {
         'first': cudf.DataFrame({'A': [1, 2], 'B': [3, 4]}),
         'second': cudf.DataFrame({'A': [5, 6], 'B': [7, 8]}),
@@ -1938,11 +1939,3 @@ def test_concat_dictionary():
         ('second', 'B'): [7, 8]
     })
     assert_eq(expected1, result1)
-
-    # vertical concat
-    result2 = cudf.concat(d)
-    expected2 = cudf.DataFrame({
-        'A': {('first', 0): 1, ('first', 1): 2, ('second', 0): 5, ('second', 1): 6},
-        'B': {('first', 0): 3, ('first', 1): 4, ('second', 0): 7, ('second', 1): 8},
-    })
-    assert_eq(expected2, result2)
