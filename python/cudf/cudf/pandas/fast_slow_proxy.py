@@ -572,7 +572,24 @@ class _FastSlowProxy:
             _raise_attribute_error(self.__class__.__name__, name)
         if name.startswith("_"):
             # private attributes always come from `._fsproxy_slow`:
-            return getattr(self._fsproxy_slow, name)
+            obj = getattr(self._fsproxy_slow, name)
+            if name.startswith("__array"):
+                # TODO: numpy methods raise when given proxy ndarray objects
+                # https://numpy.org/doc/stable/reference/arrays.classes.html#special-attributes-and-methods  # noqa:E501
+                return obj
+
+            if not _is_function_or_method(obj):
+                return _maybe_wrap_result(
+                    obj, getattr, self._fsproxy_slow, name
+                )
+
+            @functools.wraps(obj)
+            def _wrapped_private_slow(*args, **kwargs):
+                slow_args, slow_kwargs = _slow_arg(args), _slow_arg(kwargs)
+                result = obj(*slow_args, **slow_kwargs)
+                return _maybe_wrap_result(result, obj, *args, **kwargs)
+
+            return _wrapped_private_slow
         attr = _FastSlowAttribute(name)
         return attr.__get__(self)
 
