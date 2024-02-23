@@ -366,6 +366,8 @@ def test_pickle_round_trip(dataframe):
 
 
 def test_excel_round_trip(dataframe):
+    pytest.importorskip("openpyxl")
+
     pdf, df = dataframe
     excel_pdf = BytesIO()
     excel_cudf_pandas = BytesIO()
