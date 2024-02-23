@@ -24,7 +24,10 @@
 namespace cudf::detail {
 
 /// Sentinel value for `cudf::size_type`
-cudf::size_type constexpr CUDF_SIZE_TYPE_SENTINEL = -1;
+static cudf::size_type constexpr CUDF_SIZE_TYPE_SENTINEL = -1;
+
+/// Default load factor for cuco data structures
+static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
 
 /**
  * @brief Stream-ordered allocator adaptor used for cuco data structures
