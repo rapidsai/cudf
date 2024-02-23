@@ -690,8 +690,13 @@ class NumericalColumn(NumericalBaseColumn):
         index: Optional[pd.Index] = None,
         nullable: bool = False,
     ) -> pd.Series:
-        if nullable and (
-            pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(self.dtype)
+        if (
+            nullable
+            and (
+                pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+                    self.dtype
+                )
+            )
             is not None
         ):
             arrow_array = self.to_arrow()
