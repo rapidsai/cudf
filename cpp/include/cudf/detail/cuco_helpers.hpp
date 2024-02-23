@@ -21,6 +21,9 @@
 
 namespace cudf::detail {
 
+/// Default load factor for cuco data structures
+static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
+
 /**
  * @brief Stream-ordered allocator adaptor used for cuco data structures
  *
