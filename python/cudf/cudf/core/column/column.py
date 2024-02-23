@@ -963,6 +963,8 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         else:
             col = self
         if dtype == "category":
+            # TODO: Figure out why `cudf.dtype("category")`
+            # astype's different than just the string
             return col.as_categorical_column(dtype)
         was_object = dtype == object or dtype == np.dtype(object)
         dtype = cudf.dtype(dtype)
