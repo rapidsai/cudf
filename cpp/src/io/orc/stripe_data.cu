@@ -94,8 +94,8 @@ struct orc_strdict_state_s {
 };
 
 struct orc_datadec_state_s {
-  uint64_t cur_row;         // starting row of current batch
-  uint64_t end_row;         // ending row of this chunk (start_row + num_rows)
+  int64_t cur_row;          // starting row of current batch
+  int64_t end_row;          // ending row of this chunk (start_row + num_rows)
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
