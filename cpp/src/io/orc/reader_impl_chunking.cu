@@ -87,7 +87,10 @@ std::size_t gather_stream_info_and_column_desc(
   for (auto const& stream : stripefooter->streams) {
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
       // Ignore reading this stream from source.
-      cudf::logger().warn("Unexpected stream in the input ORC source. The stream will be ignored.");
+      // cudf::logger().warn("Unexpected stream in the input ORC source. The stream will be
+      // ignored.");
+      printf("Unexpected stream in the input ORC source. The stream will be ignored\n");
+      fflush(stdout);
       src_offset += stream.length;
       continue;
     }
@@ -102,6 +105,7 @@ std::size_t gather_stream_info_and_column_desc(
       auto const schema_type = types[column_id];
       if (!schema_type.subtypes.empty() && schema_type.kind == orc::STRUCT &&
           stream.kind == orc::PRESENT) {
+        printf("present stream\n");
         for (auto const& idx : schema_type.subtypes) {
           auto const child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
           if (child_idx >= 0) {

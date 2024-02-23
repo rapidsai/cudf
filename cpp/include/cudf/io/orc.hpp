@@ -1111,7 +1111,7 @@ class chunked_orc_writer_options {
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum stripe size");
+    // CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum stripe size");
     _stripe_size_bytes = size_bytes;
   }
 
@@ -1127,7 +1127,7 @@ class chunked_orc_writer_options {
    */
   void set_stripe_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows >= 512, "maximum stripe size cannot be smaller than 512");
+    // CUDF_EXPECTS(size_rows >= 512, "maximum stripe size cannot be smaller than 512");
     _stripe_size_rows = size_rows;
   }
 

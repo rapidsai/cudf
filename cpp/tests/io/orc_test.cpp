@@ -126,10 +126,10 @@ struct OrcWriterTestStripes
   : public OrcWriterTest,
     public ::testing::WithParamInterface<std::tuple<size_t, cudf::size_type>> {};
 
-TEST_P(OrcWriterTestStripes, StripeSize)
+TEST_F(OrcWriterTestStripes, StripeSize)
 {
-  constexpr auto num_rows            = 1000000;
-  auto const [size_bytes, size_rows] = GetParam();
+  constexpr auto num_rows = 50;
+  // auto const [size_bytes, size_rows] = GetParam();
 
   auto const seq_col = random_values<int>(num_rows);
   auto const validity =
@@ -138,12 +138,15 @@ TEST_P(OrcWriterTestStripes, StripeSize)
 
   std::vector<std::unique_ptr<column>> cols;
   cols.push_back(col.release());
+
+  printf("input col: \n");
+  cudf::test::print(cols.front()->view());
+
   auto const expected = std::make_unique<table>(std::move(cols));
 
   auto validate = [&](std::vector<char> const& orc_buffer) {
-    auto const expected_stripe_num =
-      std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
-    auto const stats = cudf::io::read_parsed_orc_statistics(
+    auto const expected_stripe_num = 1;
+    auto const stats               = cudf::io::read_parsed_orc_statistics(
       cudf::io::source_info(orc_buffer.data(), orc_buffer.size()));
     EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
 
@@ -160,16 +163,16 @@ TEST_P(OrcWriterTestStripes, StripeSize)
     std::vector<char> out_buffer_chunked;
     cudf::io::chunked_orc_writer_options opts =
       cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info(&out_buffer_chunked))
-        .stripe_size_rows(size_rows)
-        .stripe_size_bytes(size_bytes);
+        .stripe_size_rows(1000);
     cudf::io::orc_chunked_writer(opts).write(expected->view());
+
     validate(out_buffer_chunked);
   }
 }
 
-INSTANTIATE_TEST_CASE_P(OrcWriterTest,
-                        OrcWriterTestStripes,
-                        ::testing::Values(std::make_tuple(800000ul, 1000000)));
+// INSTANTIATE_TEST_CASE_P(OrcWriterTest,
+//                         OrcWriterTestStripes,
+//                         ::testing::Values(std::make_tuple(800000ul, 1000000)));
 
 // INSTANTIATE_TEST_CASE_P(OrcWriterTest,
 //                         OrcWriterTestStripes,

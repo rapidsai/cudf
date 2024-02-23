@@ -17,6 +17,8 @@
 // #define PRINT_DEBUG
 
 // TODO: remove
+#include <cudf_test/debug_utilities.hpp>
+
 #include <cudf/concatenate.hpp>
 //
 //
@@ -463,6 +465,8 @@ void decode_stream_data(std::size_t num_dicts,
 {
   auto const num_stripes = chunks.size().first;
   auto const num_columns = chunks.size().second;
+  printf("decode %d stripess \n", (int)num_stripes);
+
   thrust::counting_iterator<int> col_idx_it(0);
   thrust::counting_iterator<int> stripe_idx_it(0);
 
@@ -483,6 +487,7 @@ void decode_stream_data(std::size_t num_dicts,
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
   if (level > 0) {
+    printf("update_null_mask\n");
     // Update nullmasks for children if parent was a struct and had null mask
     update_null_mask(chunks, out_buffers, stream, mr);
   }
@@ -508,13 +513,15 @@ void decode_stream_data(std::size_t num_dicts,
   CUDF_EXPECTS(num_errors == 0, "ORC data decode failed");
 
   std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
-    out_buffers[col_idx].null_count() =
-      std::accumulate(stripe_idx_it + 0,
-                      stripe_idx_it + num_stripes,
-                      0,
-                      [&](auto null_count, auto const stripe_idx) {
-                        return null_count + chunks[stripe_idx][col_idx].null_count;
-                      });
+    out_buffers[col_idx].null_count() = std::accumulate(
+      stripe_idx_it + 0,
+      stripe_idx_it + num_stripes,
+      0,
+      [&](auto null_count, auto const stripe_idx) {
+        printf(
+          "null count: %d => %d\n", (int)stripe_idx, (int)chunks[stripe_idx][col_idx].null_count);
+        return null_count + chunks[stripe_idx][col_idx].null_count;
+      });
   });
 }
 
@@ -689,11 +696,17 @@ void reader::impl::decompress_and_decode()
   auto const stripe_start = stripe_chunk.start_idx;
   auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
 
-  printf("decoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
+  printf("\ndecoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 
-  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
-  auto const rows_to_read      = _file_itm_data.rows_to_read;
+  // auto const rows_to_skip      = _file_itm_data.rows_to_skip;
+  // auto const rows_to_read      = _file_itm_data.rows_to_read;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
+
+  auto const rows_to_skip = 0;
+  auto rows_to_read       = 0;
+  for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
+    rows_to_read += _metadata.per_file_metadata[0].ff.stripes[stripe_idx].numberOfRows;
+  }
 
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
@@ -780,6 +793,8 @@ void reader::impl::decompress_and_decode()
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);
 
+    printf(" use_index: %d\n", (int)use_index);
+
     // Logically view streams as columns
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
 
@@ -805,6 +820,8 @@ void reader::impl::decompress_and_decode()
 
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
       //    for (auto const& stripe : selected_stripes) {
+
+      printf("processing stripe_idx = %d\n", (int)stripe_idx);
       auto const& stripe       = selected_stripes[stripe_idx];
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
@@ -823,14 +840,18 @@ void reader::impl::decompress_and_decode()
                                                                       &chunks);
 
       auto const is_stripe_data_empty = total_data_size == 0;
+      printf("is_stripe_data_empty: %d\n", (int)is_stripe_data_empty);
+
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
       auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx].data());
 
       auto const num_rows_per_stripe = stripe_info->numberOfRows;
-      auto const rowgroup_id         = num_rowgroups;
-      auto stripe_num_rowgroups      = 0;
+      printf(" num_rows_per_stripe : %d\n", (int)num_rows_per_stripe);
+
+      auto const rowgroup_id    = num_rowgroups;
+      auto stripe_num_rowgroups = 0;
       if (use_index) {
         stripe_num_rowgroups = (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
                                _metadata.get_row_index_stride();
@@ -877,7 +898,7 @@ void reader::impl::decompress_and_decode()
         }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k] + stripe_start].dst_pos;
           }
         }
       }
@@ -968,6 +989,8 @@ void reader::impl::decompress_and_decode()
                        _mr);
 
     if (nested_cols.size()) {
+      printf("have nested col\n");
+
       // Extract information to process nested child columns
       scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
 
@@ -1031,6 +1054,7 @@ table_with_metadata reader::impl::make_output_chunk()
   std::vector<std::unique_ptr<column>> out_columns;
   auto out_metadata = make_output_metadata();
 
+#if 0
   // If no rows or stripes to read, return empty columns
   if (_file_itm_data.has_no_data() || !_chunk_read_data.has_next()) {
     std::transform(_selected_columns.levels[0].begin(),
@@ -1048,6 +1072,7 @@ table_with_metadata reader::impl::make_output_chunk()
                    });
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
+#endif
 
   // TODO: move this into decompress_and_decode
   // Create columns from buffer with respective schema information.
@@ -1059,6 +1084,7 @@ table_with_metadata reader::impl::make_output_chunk()
   for (auto& buffers : _file_itm_data.out_buffers) {
     //
     out_columns.clear();  // TODO: remove
+    out_metadata = make_output_metadata();
 
     std::transform(_selected_columns.levels[0].begin(),
                    _selected_columns.levels[0].end(),
@@ -1077,12 +1103,15 @@ table_with_metadata reader::impl::make_output_chunk()
                        col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
                    });
 
+    printf("output col: \n");
+    cudf::test::print(out_columns.front()->view());
+
     auto tbl = std::make_unique<table>(std::move(out_columns));
     tabs.push_back(std::move(tbl));
     tv.push_back(tabs.back()->view());
 
     //
-    printf(" ----- decode one chunk\n");
+    printf(" ----- decode one chunk, size = %d\n", tv.back().num_rows());
     fflush(stdout);
     //
     //
