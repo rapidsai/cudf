@@ -2555,10 +2555,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMa
   return cudf::jni::join_gather_maps(
       env, j_left_keys, j_right_keys, compare_nulls_equal,
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
-        auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right)
-          ? cudf::nullable_join::YES : cudf::nullable_join::NO;
+        auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right) ?
+                             cudf::nullable_join::YES :
+                             cudf::nullable_join::NO;
         std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                  std::unique_ptr<rmm::device_uvector<cudf::size_type>>> maps;
+                  std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+            maps;
         if (cudf::detail::has_nested_columns(right)) {
           cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
           maps = hash.inner_join();
