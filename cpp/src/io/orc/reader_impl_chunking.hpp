@@ -33,7 +33,7 @@ struct file_intermediate_data {
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
 
-  uint64_t rows_to_skip;
+  int64_t rows_to_skip;
   size_type rows_to_read;
   std::vector<metadata::stripe_source_mapping> selected_stripes;
 };
