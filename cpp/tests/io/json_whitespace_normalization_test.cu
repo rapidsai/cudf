@@ -13,15 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/io/detail/json.hpp>
-#include <cudf/io/json.hpp>
-#include <cudf/types.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/json.hpp>
+#include <cudf/io/json.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 
@@ -32,23 +34,19 @@ struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
 void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
-  rmm::device_uvector<char> device_input(
-    host_input.size(), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  CUDF_CUDA_TRY(cudaMemcpyAsync(device_input.data(),
-                                host_input.data(),
-                                host_input.size(),
-                                cudaMemcpyHostToDevice,
-                                cudf::get_default_stream().value()));
+  auto device_input = cudf::detail::make_device_uvector_async(
+    cudf::host_span<char const>{host_input.c_str(), host_input.size()},
+    cudf::get_default_stream(),
+    rmm::mr::get_current_device_resource());
+
   // Preprocessing FST
   auto device_fst_output = cudf::io::json::detail::normalize_whitespace(
     std::move(device_input), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
 
-  std::string preprocessed_host_output(device_fst_output.size(), 0);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(preprocessed_host_output.data(),
-                                device_fst_output.data(),
-                                preprocessed_host_output.size(),
-                                cudaMemcpyDeviceToHost,
-                                cudf::get_default_stream().value()));
+  auto const preprocessed_host_output =
+    cudf::detail::make_std_vector_sync(device_fst_output, cudf::get_default_stream());
+
+  ASSERT_EQ(preprocessed_host_output.size(), expected_host_output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(
     preprocessed_host_output, expected_host_output, preprocessed_host_output.size());
 }
