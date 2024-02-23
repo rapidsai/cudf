@@ -38,39 +38,17 @@ function sed_runner() {
     sed -i.bak ''"$1"'' $2 && rm -f ${2}.bak
 }
 
-# cpp update
-sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/CMakeLists.txt
-
-# Python CMakeLists updates
-sed_runner 's/'"cudf_version .*)"'/'"cudf_version ${NEXT_FULL_TAG})"'/g' python/cudf/CMakeLists.txt
-sed_runner 's/'"cudf_kafka_version .*)"'/'"cudf_kafka_version ${NEXT_FULL_TAG})"'/g' python/cudf_kafka/CMakeLists.txt
-
-# cpp libcudf_kafka update
-sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' cpp/libcudf_kafka/CMakeLists.txt
-
-# cpp cudf_jni update
-sed_runner 's/'"VERSION ${CURRENT_SHORT_TAG}.*"'/'"VERSION ${NEXT_FULL_TAG}"'/g' java/src/main/native/CMakeLists.txt
-
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
 
 # Wheel testing script
 sed_runner "s/branch-.*/branch-${NEXT_SHORT_TAG}/g" ci/test_wheel_dask_cudf.sh
 
-# rapids-cmake version
-sed_runner 's/'"branch-.*\/RAPIDS.cmake"'/'"branch-${NEXT_SHORT_TAG}\/RAPIDS.cmake"'/g' fetch_rapids.cmake
-
 # cmake-format rapids-cmake definitions
 sed_runner 's/'"branch-.*\/cmake-format-rapids-cmake.json"'/'"branch-${NEXT_SHORT_TAG}\/cmake-format-rapids-cmake.json"'/g' ci/check_style.sh
 
 # doxyfile update
 sed_runner 's/PROJECT_NUMBER         = .*/PROJECT_NUMBER         = '${NEXT_FULL_TAG}'/g' cpp/doxygen/Doxyfile
-
-# sphinx docs update
-sed_runner 's/version = .*/version = "'${NEXT_SHORT_TAG}'"/g' docs/cudf/source/conf.py
-sed_runner 's/release = .*/release = "'${NEXT_FULL_TAG}'"/g' docs/cudf/source/conf.py
-sed_runner 's/version = .*/version = "'${NEXT_SHORT_TAG}'"/g' docs/dask_cudf/source/conf.py
-sed_runner 's/release = .*/release = "'${NEXT_FULL_TAG}'"/g' docs/dask_cudf/source/conf.py
 
 DEPENDENCIES=(
   cudf
