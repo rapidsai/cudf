@@ -336,7 +336,8 @@ def test_assign():
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
     got = dgf.assign(z=newcol)
 
-    dd.assert_eq(got.loc[:, ["x", "y"]], df)
+    # TODO: Using `loc[:, ["x", "y"]]` may be broken with dask-expr API
+    dd.assert_eq(got[["x", "y"]], df)
     np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
 
 
