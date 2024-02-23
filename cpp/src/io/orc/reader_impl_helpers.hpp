@@ -52,8 +52,8 @@ struct reader_column_meta {
   std::vector<int64_t> num_child_rows_per_stripe;
 
   struct row_group_meta {
-    uint32_t num_rows;   // number of rows in a column in a row group
-    uint64_t start_row;  // start row in a column in a row group
+    size_type num_rows;  // number of rows in a column in a row group
+    int64_t start_row;   // start row in a column in a row group
   };
 
   // Row group metadata [rowgroup][column].

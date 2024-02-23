@@ -1310,8 +1310,8 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 void EncodeStripeDictionaries(stripe_dictionary const* stripes,
                               device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
-                              uint32_t num_string_columns,
-                              uint32_t num_stripes,
+                              size_type num_string_columns,
+                              size_type num_stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream)
 {

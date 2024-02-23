@@ -174,8 +174,8 @@ rmm::device_buffer decompress_stripe_data(
   host_span<orc_stream_info> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-  std::size_t num_stripes,
-  std::size_t row_index_stride,
+  size_type num_stripes,
+  size_type row_index_stride,
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
@@ -350,15 +350,15 @@ rmm::device_buffer decompress_stripe_data(
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
-  auto const num_columns = chunks.size().second;
+  size_type const num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  for (std::size_t i = 0; i < num_stripes; ++i) {
-    for (std::size_t j = 0; j < num_columns; ++j) {
+  for (size_type i = 0; i < num_stripes; ++i) {
+    for (size_type j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; ++k) {
         if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < compinfo.size()) {
@@ -484,8 +484,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
  * @param mr Device memory resource to use for device memory allocation
  */
 void decode_stream_data(std::size_t num_dicts,
-                        uint64_t skip_rows,
-                        uint64_t row_index_stride,
+                        int64_t skip_rows,
+                        size_type row_index_stride,
                         std::size_t level,
                         table_view const& tz_table,
                         cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
@@ -710,7 +710,7 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
-void reader::impl::prepare_data(uint64_t skip_rows,
+void reader::impl::prepare_data(int64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes)
 {

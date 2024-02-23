@@ -1087,8 +1087,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   gpuDecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
                                       size_type num_columns,
-                                      uint32_t num_stripes,
-                                      uint64_t first_row)
+                                      size_type num_stripes,
+                                      int64_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce  = cub::WarpReduce<uint32_t>;
@@ -1846,7 +1846,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                DictionaryEntry* global_dictionary,
                                                size_type num_columns,
-                                               uint32_t num_stripes,
+                                               size_type num_stripes,
                                                int64_t first_row,
                                                rmm::cuda_stream_view stream)
 {
@@ -1875,7 +1875,7 @@ void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   DictionaryEntry* global_dictionary,
                                   device_2dspan<RowGroup> row_groups,
                                   size_type num_columns,
-                                  uint32_t num_stripes,
+                                  size_type num_stripes,
                                   int64_t first_row,
                                   table_device_view tz_table,
                                   int64_t num_rowgroups,
