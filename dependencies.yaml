@@ -745,7 +745,7 @@ dependencies:
           - pytest-timeout
           - pyxlsb
           - s3fs
-          - scipy
+          # - scipy
           - sqlalchemy
           - tables
           - pandas-gbq

@@ -102,7 +102,6 @@ pandas-tests = [
     "python-snappy",
     "pyxlsb",
     "s3fs",
-    "scipy",
     "sqlalchemy",
     "tables",
     "tabulate",
