@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,8 @@
 #pragma once
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_scalar.hpp>
+
+#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cstdint>
 #include <sstream>
@@ -37,7 +38,8 @@ class kernel_error {
   using pointer    = value_type*;
 
  private:
-  rmm::device_scalar<value_type> _error_code;
+  rmm::cuda_stream_view _stream;
+  mutable cudf::detail::hostdevice_vector<value_type> _error_code;
 
  public:
   /**
@@ -50,12 +52,16 @@ class kernel_error {
    *
    * @param CUDA stream to use
    */
-  kernel_error(rmm::cuda_stream_view stream) : _error_code{0, stream} {}
+  kernel_error(rmm::cuda_stream_view stream) : _stream{stream}, _error_code(1, stream)
+  {
+    _error_code[0] = 0;
+    _error_code.host_to_device_async(stream);
+  }
 
   /**
    * @brief Return a pointer to the device memory for the error
    */
-  [[nodiscard]] auto data() { return _error_code.data(); }
+  [[nodiscard]] auto data() { return _error_code.device_ptr(); }
 
   /**
    * @brief Return the current value of the error
@@ -63,7 +69,11 @@ class kernel_error {
    * This uses the stream used to create this instance. This does a synchronize on the stream
    * this object was instantiated with.
    */
-  [[nodiscard]] auto value() const { return _error_code.value(_error_code.stream()); }
+  [[nodiscard]] auto value() const
+  {
+    _error_code.device_to_host_sync(_stream);
+    return _error_code[0];
+  }
 
   /**
    * @brief Return a hexadecimal string representation of the current error code
