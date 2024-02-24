@@ -104,7 +104,7 @@ struct range_window_bounds {
   range_window_bounds() = default;  // Required for use as return types from dispatch functors.
 
  private:
-  const extent_type _extent{extent_type::UNBOUNDED};
+  extent_type _extent{extent_type::UNBOUNDED};
   std::shared_ptr<scalar> _range_scalar{nullptr};  // To enable copy construction/assignment.
 
   range_window_bounds(extent_type extent_, std::unique_ptr<scalar> range_scalar_);
