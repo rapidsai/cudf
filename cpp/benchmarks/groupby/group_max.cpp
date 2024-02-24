@@ -75,9 +75,9 @@ void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 template <typename Type>
 void bench_groupby_max_cardinality(nvbench::state& state, nvbench::type_list<Type>)
 {
-  auto constexpr num_rows       = 20'000'000;
-  double const null_probability = 0.;
-  auto const cardinality        = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto constexpr num_rows         = 20'000'000;
+  auto constexpr null_probability = 0.;
+  auto const cardinality          = static_cast<cudf::size_type>(state.get_int64("cardinality"));
 
   groupby_max_helper<Type>(state, num_rows, cardinality, null_probability);
 }
