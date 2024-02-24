@@ -94,8 +94,8 @@ struct orc_strdict_state_s {
 };
 
 struct orc_datadec_state_s {
-  uint32_t cur_row;         // starting row of current batch
-  uint32_t end_row;         // ending row of this chunk (start_row + num_rows)
+  int64_t cur_row;          // starting row of current batch
+  int64_t end_row;          // ending row of this chunk (start_row + num_rows)
   uint32_t max_vals;        // max # of non-zero values to decode in this batch
   uint32_t nrows;           // # of rows in current batch (up to block_size)
   uint32_t buffered_count;  // number of buffered values in the secondary data stream
@@ -108,7 +108,7 @@ struct orcdec_state_s {
   orc_bytestream_s bs;
   orc_bytestream_s bs2;
   int is_string;
-  uint64_t num_child_rows;
+  int64_t num_child_rows;
   union {
     orc_strdict_state_s dict;
     uint32_t nulls_desc_row;  // number of rows processed for nulls.
@@ -1086,9 +1086,9 @@ template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
   gpuDecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
-                                      uint32_t num_columns,
-                                      uint32_t num_stripes,
-                                      size_t first_row)
+                                      size_type num_columns,
+                                      size_type num_stripes,
+                                      int64_t first_row)
 {
   __shared__ __align__(16) orcdec_state_s state_g;
   using warp_reduce  = cub::WarpReduce<uint32_t>;
@@ -1132,12 +1132,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         : 0;
     auto const num_elems = s->chunk.num_rows - parent_null_count;
     while (s->top.nulls_desc_row < num_elems) {
-      uint32_t nrows_max = min(num_elems - s->top.nulls_desc_row, blockDim.x * 32);
-      uint32_t nrows;
-      size_t row_in;
+      auto const nrows_max =
+        static_cast<uint32_t>(min(num_elems - s->top.nulls_desc_row, blockDim.x * 32ul));
 
       bytestream_fill(&s->bs, t);
       __syncthreads();
+
+      uint32_t nrows;
       if (s->chunk.strm_len[CI_PRESENT] > 0) {
         uint32_t nbytes = Byte_RLE(&s->bs, &s->u.rle8, s->vals.u8, (nrows_max + 7) >> 3, t);
         nrows           = min(nrows_max, nbytes * 8u);
@@ -1151,7 +1152,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       }
       __syncthreads();
 
-      row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
+      auto const row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != nullptr) {
         int64_t dst_row   = row_in - first_row;
@@ -1284,7 +1285,10 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
 
   if (t == 0) {
     if (s->chunk.skip_count != 0) {
-      s->u.rowdec.nz_count = min(min(s->chunk.skip_count, s->top.data.max_vals), blockDim.x);
+      s->u.rowdec.nz_count =
+        min(static_cast<uint32_t>(
+              min(s->chunk.skip_count, static_cast<uint64_t>(s->top.data.max_vals))),
+            blockDim.x);
       s->chunk.skip_count -= s->u.rowdec.nz_count;
       s->top.data.nrows = s->u.rowdec.nz_count;
     } else {
@@ -1297,11 +1301,12 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
   }
   while (s->u.rowdec.nz_count < s->top.data.max_vals &&
          s->top.data.cur_row + s->top.data.nrows < s->top.data.end_row) {
-    uint32_t nrows = min(s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows),
-                         min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
+    uint32_t const remaining_rows = s->top.data.end_row - (s->top.data.cur_row + s->top.data.nrows);
+    uint32_t nrows =
+      min(remaining_rows, min((row_decoder_buffer_size - s->u.rowdec.nz_count) * 2, blockDim.x));
     if (s->chunk.valid_map_base != nullptr) {
       // We have a present stream
-      uint32_t rmax       = s->top.data.end_row - min((uint32_t)first_row, s->top.data.end_row);
+      uint32_t rmax       = s->top.data.end_row - min(first_row, s->top.data.end_row);
       auto r              = (uint32_t)(s->top.data.cur_row + s->top.data.nrows + t - first_row);
       uint32_t valid      = (t < nrows && r < rmax)
                               ? (((uint8_t const*)s->chunk.valid_map_base)[r >> 3] >> (r & 7)) & 1
@@ -1364,8 +1369,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
                          DictionaryEntry* global_dictionary,
                          table_device_view tz_table,
                          device_2dspan<RowGroup> row_groups,
-                         size_t first_row,
-                         uint32_t rowidx_stride,
+                         int64_t first_row,
+                         size_type rowidx_stride,
                          size_t level,
                          size_type* error_count)
 {
@@ -1405,8 +1410,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       if (s->top.data.index.strm_offset[1] > s->chunk.strm_len[CI_DATA2]) {
         atomicAdd(error_count, 1);
       }
-      uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
-      uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
+      auto const ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
+      auto const ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
       uint32_t rowgroup_rowofs =
         (level == 0) ? (blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride
                      : s->top.data.index.start_row;
@@ -1415,14 +1420,13 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       s->chunk.strm_len[CI_DATA] -= ofs0;
       s->chunk.streams[CI_DATA2] += ofs1;
       s->chunk.strm_len[CI_DATA2] -= ofs1;
-      rowgroup_rowofs = min(rowgroup_rowofs, s->chunk.num_rows);
+      rowgroup_rowofs = min(static_cast<uint64_t>(rowgroup_rowofs), s->chunk.num_rows);
       s->chunk.start_row += rowgroup_rowofs;
       s->chunk.num_rows -= rowgroup_rowofs;
     }
-    s->is_string = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
+    s->is_string               = (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY ||
                     s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR);
-    s->top.data.cur_row =
-      max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
+    s->top.data.cur_row        = max(s->chunk.start_row, max(first_row - s->chunk.skip_count, 0ul));
     s->top.data.end_row        = s->chunk.start_row + s->chunk.num_rows;
     s->top.data.buffered_count = 0;
     if (s->top.data.end_row > first_row + max_num_rows) {
@@ -1824,7 +1828,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     if (num_rowgroups > 0) {
       row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }
-    atomicAdd(&chunks[chunk_id].num_child_rows, s->num_child_rows);
+    cuda::atomic_ref<int64_t, cuda::thread_scope_device> ref{chunks[chunk_id].num_child_rows};
+    ref.fetch_add(s->num_child_rows, cuda::std::memory_order_relaxed);
   }
 }
 
@@ -1840,9 +1845,9 @@ CUDF_KERNEL void __launch_bounds__(block_size)
  */
 void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                                DictionaryEntry* global_dictionary,
-                                               uint32_t num_columns,
-                                               uint32_t num_stripes,
-                                               size_t first_row,
+                                               size_type num_columns,
+                                               size_type num_stripes,
+                                               int64_t first_row,
                                                rmm::cuda_stream_view stream)
 {
   dim3 dim_block(block_size, 1);
@@ -1869,17 +1874,17 @@ void __host__ DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
 void __host__ DecodeOrcColumnData(ColumnDesc* chunks,
                                   DictionaryEntry* global_dictionary,
                                   device_2dspan<RowGroup> row_groups,
-                                  uint32_t num_columns,
-                                  uint32_t num_stripes,
-                                  size_t first_row,
+                                  size_type num_columns,
+                                  size_type num_stripes,
+                                  int64_t first_row,
                                   table_device_view tz_table,
-                                  uint32_t num_rowgroups,
-                                  uint32_t rowidx_stride,
+                                  int64_t num_rowgroups,
+                                  size_type rowidx_stride,
                                   size_t level,
                                   size_type* error_count,
                                   rmm::cuda_stream_view stream)
 {
-  uint32_t num_chunks = num_columns * num_stripes;
+  auto const num_chunks = num_columns * num_stripes;
   dim3 dim_block(block_size, 1);  // 1024 threads per chunk
   dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks,
                 (num_rowgroups > 0) ? num_rowgroups : 1);
