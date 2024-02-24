@@ -38,7 +38,7 @@ struct reader_column_meta {
   std::vector<std::vector<size_type>> orc_col_map;
 
   // Number of rows in child columns.
-  std::vector<uint32_t> num_child_rows;
+  std::vector<int64_t> num_child_rows;
 
   // Consists of parent column valid_map and null count.
   std::vector<column_validity_info> parent_column_data;
@@ -46,14 +46,14 @@ struct reader_column_meta {
   std::vector<size_type> parent_column_index;
 
   // Start row of child columns [stripe][column].
-  std::vector<uint32_t> child_start_row;
+  std::vector<int64_t> child_start_row;
 
   // Number of rows of child columns [stripe][column].
-  std::vector<uint32_t> num_child_rows_per_stripe;
+  std::vector<int64_t> num_child_rows_per_stripe;
 
   struct row_group_meta {
-    uint32_t num_rows;   // number of rows in a column in a row group
-    uint32_t start_row;  // start row in a column in a row group
+    size_type num_rows;  // number of rows in a column in a row group
+    int64_t start_row;   // start row in a column in a row group
   };
 
   // Row group metadata [rowgroup][column].
