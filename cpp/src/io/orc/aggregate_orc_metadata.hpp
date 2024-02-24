@@ -79,9 +79,11 @@ class aggregate_orc_metadata {
 
   [[nodiscard]] auto const& get_types() const { return per_file_metadata[0].ff.types; }
 
-  [[nodiscard]] int get_row_index_stride() const
+  [[nodiscard]] size_type get_row_index_stride() const
   {
-    return static_cast<int>(per_file_metadata[0].ff.rowIndexStride);
+    CUDF_EXPECTS(per_file_metadata[0].ff.rowIndexStride <= std::numeric_limits<size_type>::max(),
+                 "Row index stride exceeds size_type max");
+    return per_file_metadata[0].ff.rowIndexStride;
   }
 
   [[nodiscard]] auto is_row_grp_idx_present() const { return row_grp_idx_present; }
@@ -115,7 +117,7 @@ class aggregate_orc_metadata {
    */
   [[nodiscard]] std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
   select_stripes(std::vector<std::vector<size_type>> const& user_specified_stripes,
-                 uint64_t skip_rows,
+                 int64_t skip_rows,
                  std::optional<size_type> const& num_rows,
                  rmm::cuda_stream_view stream);
 
