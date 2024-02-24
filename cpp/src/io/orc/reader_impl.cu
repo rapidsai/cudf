@@ -864,6 +864,9 @@ void reader::impl::decompress_and_decode()
 
       auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx].data());
 
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
+
       auto const num_rows_per_stripe = stripe_info->numberOfRows;
       printf(" num_rows_per_stripe : %d\n", (int)num_rows_per_stripe);
 
@@ -873,6 +876,10 @@ void reader::impl::decompress_and_decode()
         stripe_num_rowgroups = (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
                                _metadata.get_row_index_stride();
       }
+
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
+
       // Update chunks to reference streams pointers
       for (std::size_t col_idx = 0; col_idx < num_columns; col_idx++) {
         auto& chunk = chunks[stripe_idx - stripe_start][col_idx];
@@ -919,11 +926,18 @@ void reader::impl::decompress_and_decode()
           }
         }
       }
+
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
+
       stripe_start_row += num_rows_per_stripe;
       num_rowgroups += stripe_num_rowgroups;
 
       //      stripe_idx++;
     }  // for (stripe : selected_stripes)
+
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
 
     if (stripe_data.empty()) { continue; }
 
@@ -946,8 +960,14 @@ void reader::impl::decompress_and_decode()
                        return meta;
                      });
     }
+
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
       auto decomp_data = decompress_stripe_data(stripe_chunk,
                                                 _file_itm_data.compinfo_map,
                                                 *_metadata.per_file_metadata[0].decompressor,
@@ -959,8 +979,12 @@ void reader::impl::decompress_and_decode()
                                                 _metadata.get_row_index_stride(),
                                                 level == 0,
                                                 _stream);
-      stripe_data.clear();
+      // stripe_data.clear();
       stripe_data.push_back(std::move(decomp_data));
+
+      printf("line %d\n", __LINE__);
+      fflush(stdout);
+
     } else {
       if (row_groups.size().first) {
         chunks.host_to_device_async(_stream);
@@ -978,6 +1002,9 @@ void reader::impl::decompress_and_decode()
       }
     }
 
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+
     for (std::size_t i = 0; i < column_types.size(); ++i) {
       bool is_nullable = false;
       for (std::size_t j = 0; j < num_stripes; ++j) {
@@ -993,6 +1020,9 @@ void reader::impl::decompress_and_decode()
       _out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
     }
 
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
+
     decode_stream_data(num_dict_entries,
                        rows_to_skip,
                        _metadata.get_row_index_stride(),
@@ -1003,6 +1033,9 @@ void reader::impl::decompress_and_decode()
                        _out_buffers[level],
                        _stream,
                        _mr);
+
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
 
     if (nested_cols.size()) {
       printf("have nested col\n");
@@ -1026,6 +1059,9 @@ void reader::impl::decompress_and_decode()
 
       if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
+
+    printf("line %d\n", __LINE__);
+    fflush(stdout);
   }  // end loop level
 }
 
@@ -1118,8 +1154,8 @@ table_with_metadata reader::impl::make_output_chunk()
                        col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
                    });
 
-    printf("output col: \n");
-    cudf::test::print(out_columns.front()->view());
+    // printf("output col: \n");
+    // cudf::test::print(out_columns.front()->view());
 
     auto tbl = std::make_unique<table>(std::move(out_columns));
     tabs.push_back(std::move(tbl));
