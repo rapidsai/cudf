@@ -715,17 +715,23 @@ void reader::impl::decompress_and_decode()
 
   printf("\ndecoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 
-  // auto const rows_to_skip      = _file_itm_data.rows_to_skip;
+  auto const rows_to_skip = _file_itm_data.rows_to_skip;
   // auto const rows_to_read      = _file_itm_data.rows_to_read;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
 
-  auto const rows_to_skip = 0;
-  auto rows_to_read       = 0;
+  // auto const rows_to_skip = 0;
+  auto rows_to_read = 0;
   for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
     auto const& stripe     = selected_stripes[stripe_idx];
     auto const stripe_info = stripe.stripe_info;
     rows_to_read += stripe_info->numberOfRows;
+
+    if (_file_itm_data.rows_to_skip > 0) {
+      CUDF_EXPECTS(_file_itm_data.rows_to_skip < stripe_info->numberOfRows, "TODO");
+    }
   }
+  rows_to_read -= rows_to_skip;
+  _file_itm_data.rows_to_skip = 0;
 
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {
@@ -1156,8 +1162,8 @@ table_with_metadata reader::impl::make_output_chunk()
                        col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
                    });
 
-    printf("output col: \n");
-    cudf::test::print(out_columns.front()->view());
+    // printf("output col: \n");
+    // cudf::test::print(out_columns.front()->view());
 
     auto tbl = std::make_unique<table>(std::move(out_columns));
     tabs.push_back(std::move(tbl));

@@ -332,6 +332,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
   if (_file_itm_data.has_no_data()) { return; }
 
+  printf("input skip rows: %d, num rows: %d\n", (int)skip_rows, (int)num_rows_opt.value_or(-1));
+  printf("actual skip rows: %d, num rows: %d\n",
+         (int)_file_itm_data.rows_to_skip,
+         (int)_file_itm_data.rows_to_read);
+
   //  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   //  auto const rows_to_read      = _file_itm_data.rows_to_read;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
