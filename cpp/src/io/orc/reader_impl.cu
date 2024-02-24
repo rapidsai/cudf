@@ -722,7 +722,9 @@ void reader::impl::decompress_and_decode()
   auto const rows_to_skip = 0;
   auto rows_to_read       = 0;
   for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
-    rows_to_read += _metadata.per_file_metadata[0].ff.stripes[stripe_idx].numberOfRows;
+    auto const& stripe     = selected_stripes[stripe_idx];
+    auto const stripe_info = stripe.stripe_info;
+    rows_to_read += stripe_info->numberOfRows;
   }
 
   // Set up table for converting timestamp columns from local to UTC time
