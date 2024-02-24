@@ -77,6 +77,7 @@ namespace {
  * @return Device buffer to decompressed page data
  */
 rmm::device_buffer decompress_stripe_data(
+  chunk const& stripe_chunk,
   stream_id_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
@@ -93,10 +94,26 @@ rmm::device_buffer decompress_stripe_data(
   std::size_t num_uncompressed_blocks = 0;
   std::size_t total_decomp_size       = 0;
 
-  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
-    0, stream_info.size(), stream);
+  // printf("decompress #stripe: %d, ")
+
+  // TODO: use lvl_stripe_stream_chunks
+  std::size_t count{0};
+  for (auto const& info : stream_info) {
+    if (info.id.stripe_idx < stripe_chunk.start_idx ||
+        info.id.stripe_idx >= stripe_chunk.start_idx + stripe_chunk.count) {
+      continue;
+    }
+    count++;
+  }
+
+  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, count, stream);
 
   for (auto const& info : stream_info) {
+    if (info.id.stripe_idx < stripe_chunk.start_idx ||
+        info.id.stripe_idx >= stripe_chunk.start_idx + stripe_chunk.count) {
+      continue;
+    }
+
 #ifdef PRINT_DEBUG
     printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
            (int)info.id.stripe_idx,
@@ -931,19 +948,18 @@ void reader::impl::decompress_and_decode()
     }
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      auto decomp_data = decompress_stripe_data(
-        _file_itm_data.compinfo_map,
-        *_metadata.per_file_metadata[0].decompressor,
-        stripe_data,
-        host_span<orc_stream_info const>(stream_info.data() + stripe_start, stripe_chunk.count),
-        chunks,
-        row_groups,
-        num_stripes,
-        _metadata.get_row_index_stride(),
-        level == 0,
-        _stream);
-      // TODO: fix this
-      // stripe_data.clear();
+      auto decomp_data = decompress_stripe_data(stripe_chunk,
+                                                _file_itm_data.compinfo_map,
+                                                *_metadata.per_file_metadata[0].decompressor,
+                                                stripe_data,
+                                                stream_info,
+                                                chunks,
+                                                row_groups,
+                                                num_stripes,
+                                                _metadata.get_row_index_stride(),
+                                                level == 0,
+                                                _stream);
+      stripe_data.clear();
       stripe_data.push_back(std::move(decomp_data));
     } else {
       if (row_groups.size().first) {
@@ -1054,9 +1070,9 @@ table_with_metadata reader::impl::make_output_chunk()
   std::vector<std::unique_ptr<column>> out_columns;
   auto out_metadata = make_output_metadata();
 
-#if 0
   // If no rows or stripes to read, return empty columns
-  if (_file_itm_data.has_no_data() || !_chunk_read_data.has_next()) {
+  if (_file_itm_data.has_no_data() /*|| !_chunk_read_data.has_next()*/) {
+    printf("has no next\n");
     std::transform(_selected_columns.levels[0].begin(),
                    _selected_columns.levels[0].end(),
                    std::back_inserter(out_columns),
@@ -1072,7 +1088,6 @@ table_with_metadata reader::impl::make_output_chunk()
                    });
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
-#endif
 
   // TODO: move this into decompress_and_decode
   // Create columns from buffer with respective schema information.
