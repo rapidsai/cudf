@@ -351,6 +351,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // Get the total number of stripes across all input files.
   auto const num_stripes = selected_stripes.size();
 
+  printf("num load stripe: %d\n", (int)num_stripes);
+
   stripe_data_read_chunks.resize(num_stripes);
   lvl_stripe_stream_chunks.resize(_selected_columns.num_levels());
 
@@ -460,6 +462,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     //    return;
   }
 
+  printf("total stripe sizes:\n");
+  for (auto& size : total_stripe_sizes) {
+    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+  }
+
   // Compute the prefix sum of stripe data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),
@@ -470,7 +477,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
-  printf("total stripe sizes:\n");
+  printf("prefix sum total stripe sizes:\n");
   for (auto& size : total_stripe_sizes) {
     printf("size: %ld, %zu\n", size.count, size.size_bytes);
   }
@@ -521,7 +528,7 @@ void reader::impl::load_data()
   auto const stripe_start = stripe_chunk.start_idx;
   auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
 
-  printf("loading data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
+  printf("\n\nloading data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 
   // Prepare the buffer to read raw data onto.
   // TODO: clear all old buffer.

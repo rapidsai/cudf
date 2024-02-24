@@ -200,6 +200,10 @@ aggregate_orc_metadata::select_stripes(
 
         // TODO: check for overflow here.
         rows_to_read += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        printf(" rows_to_read : %d / %d\n",
+               (int)per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows,
+               (int)rows_to_read);
+        printf(" stripe to read: %d-%d\n", (int)src_file_idx, (int)stripe_idx);
       }
       selected_stripes_mapping.emplace_back(static_cast<int>(src_file_idx),
                                             std::move(stripe_infos));
