@@ -730,7 +730,7 @@ void reader::impl::decompress_and_decode()
       CUDF_EXPECTS(_file_itm_data.rows_to_skip < stripe_info->numberOfRows, "TODO");
     }
   }
-  rows_to_read -= rows_to_skip;
+  rows_to_read = std::min<int64_t>(rows_to_read - rows_to_skip, _file_itm_data.rows_to_read);
   _file_itm_data.rows_to_skip = 0;
 
   // Set up table for converting timestamp columns from local to UTC time
