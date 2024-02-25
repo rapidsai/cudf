@@ -530,17 +530,19 @@ void decode_stream_data(std::size_t num_dicts,
   CUDF_EXPECTS(num_errors == 0, "ORC data decode failed");
 
   std::for_each(col_idx_it + 0, col_idx_it + num_columns, [&](auto col_idx) {
-    out_buffers[col_idx].null_count() = std::accumulate(
-      stripe_idx_it + 0,
-      stripe_idx_it + num_stripes,
-      0,
-      [&](auto null_count, auto const stripe_idx) {
-        printf(
-          "null count: %d => %d\n", (int)stripe_idx, (int)chunks[stripe_idx][col_idx].null_count);
-        printf("num child rows: %d \n", (int)chunks[stripe_idx][col_idx].num_child_rows);
+    out_buffers[col_idx].null_count() =
+      std::accumulate(stripe_idx_it + 0,
+                      stripe_idx_it + num_stripes,
+                      0,
+                      [&](auto null_count, auto const stripe_idx) {
+                        // printf(
+                        //   "null count: %d => %d\n", (int)stripe_idx,
+                        //   (int)chunks[stripe_idx][col_idx].null_count);
+                        // printf("num child rows: %d \n",
+                        // (int)chunks[stripe_idx][col_idx].num_child_rows);
 
-        return null_count + chunks[stripe_idx][col_idx].null_count;
-      });
+                        return null_count + chunks[stripe_idx][col_idx].null_count;
+                      });
   });
 }
 
@@ -786,6 +788,7 @@ void reader::impl::decompress_and_decode()
   // compared to parent column.
   auto& col_meta = *_col_meta;
 
+#if 0
   printf("num_child_rows: (size %d)\n", (int)_col_meta->num_child_rows.size());
   if (_col_meta->num_child_rows.size()) {
     for (auto x : _col_meta->num_child_rows) {
@@ -840,6 +843,8 @@ void reader::impl::decompress_and_decode()
     }
     printf("\n");
   }
+
+#endif
 
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     printf("processing level = %d\n", (int)level);
@@ -1015,16 +1020,6 @@ void reader::impl::decompress_and_decode()
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
             chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k] + stripe_start].dst_pos;
-            if (chunk.strm_len[k]) {
-              auto& info = stream_info[chunk.strm_id[k] + stripe_start];
-              printf("stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
-                     (int)info.id.stripe_idx,
-                     (int)info.id.level,
-                     (int)info.id.orc_col_idx,
-                     (int)info.id.kind);
-
-              printf("stream %d: %p\n", (int)k, chunk.streams[k]);
-            }
           }
         }
       }

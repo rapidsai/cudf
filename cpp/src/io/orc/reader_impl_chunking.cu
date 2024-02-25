@@ -105,7 +105,7 @@ std::size_t gather_stream_info_and_column_desc(
       auto const schema_type = types[column_id];
       if (!schema_type.subtypes.empty() && schema_type.kind == orc::STRUCT &&
           stream.kind == orc::PRESENT) {
-        printf("present stream\n");
+        // printf("present stream\n");
         for (auto const& idx : schema_type.subtypes) {
           auto const child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
           if (child_idx >= 0) {
@@ -138,12 +138,11 @@ std::size_t gather_stream_info_and_column_desc(
         }
         (*stream_idx)++;
       } else {  // not chunks.has_value()
-        printf("collect stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
-               (int)stripe_index,
-               (int)level,
-               (int)column_id,
-               (int)stream.kind);
-        ;
+        // printf("collect stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
+        //        (int)stripe_index,
+        //        (int)level,
+        //        (int)column_id,
+        //        (int)stream.kind);
 
         stream_info.value()->emplace_back(
           stripeinfo->offset + src_offset,
