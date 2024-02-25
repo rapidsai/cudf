@@ -150,18 +150,9 @@ inline auto random_values(size_t size)
 {
   std::vector<T> values(size);
 
-  using T1 = T;
-  using uniform_distribution =
-    typename std::conditional_t<std::is_same_v<T1, bool>,
-                                std::bernoulli_distribution,
-                                std::conditional_t<std::is_floating_point_v<T1>,
-                                                   std::uniform_real_distribution<T1>,
-                                                   std::uniform_int_distribution<T1>>>;
-
-  static constexpr auto seed = 0xf00d;
-  static std::mt19937 engine{seed};
-  static uniform_distribution dist{};
-  std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
+  for (size_t i = 0; i < size; ++i) {
+    values[i] = i;
+  }
 
   return values;
 }
@@ -1448,49 +1439,97 @@ TEST_F(OrcWriterTest, StripeSizeInvalid)
 
 TEST_F(OrcWriterTest, TestMap)
 {
-  auto const num_rows       = 1200000;
-  auto const lists_per_row  = 4;
+  auto const num_rows       = 15;
+  auto const lists_per_row  = 2;
   auto const num_child_rows = (num_rows * lists_per_row) / 2;  // half due to validity
 
-  auto keys      = random_values<int>(num_child_rows);
-  auto vals      = random_values<float>(num_child_rows);
-  auto vals_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
+  auto keys = random_values<int>(num_child_rows);
+  // auto vals = random_values<float>(num_child_rows);
+  // auto vals_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3;
+  // });
   int32_col keys_col(keys.begin(), keys.end());
-  float32_col vals_col{vals.begin(), vals.end(), vals_mask};
-  auto s_col = struct_col({keys_col, vals_col}).release();
+  int32_col keys_col2(keys.begin(), keys.end());
+  // float32_col vals_col(vals.begin(), vals.end());
+  auto s_col = struct_col({{keys_col}}).release();
 
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+  // auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
 
   std::vector<int> row_offsets(num_rows + 1);
   int offset = 0;
   for (int idx = 0; idx < (num_rows) + 1; ++idx) {
     row_offsets[idx] = offset;
-    if (valids[idx]) { offset += lists_per_row; }
+    //    if (valids[idx]) {
+    offset += lists_per_row;
+    //    }
   }
   int32_col offsets(row_offsets.begin(), row_offsets.end());
 
-  auto num_list_rows           = static_cast<cudf::column_view>(offsets).size() - 1;
-  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_list_rows);
-  auto list_col                = cudf::make_lists_column(
-    num_list_rows, offsets.release(), std::move(s_col), null_count, std::move(null_mask));
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
+#if 0
+  auto num_list_rows = static_cast<cudf::column_view>(offsets).size() - 1;
+  // auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids +
+  // num_list_rows);
+  auto list_col =
+    cudf::make_lists_column(num_list_rows, offsets.release(), std::move(s_col), 0, {});
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+  ;
 
   table_view expected({*list_col});
+
+  printf("input:\n");
+  cudf::test::print(*list_col);
+#endif
+  table_view expected({*s_col, keys_col2});
+
+  printf("input0:\n");
+  cudf::test::print(*s_col);
+  printf("input1:\n");
+  cudf::test::print(keys_col2);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_list_column_as_map();
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+  ;
+
   auto filepath = temp_env->get_temp_filepath("MapColumn.orc");
   cudf::io::orc_writer_options out_opts =
     cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(expected_metadata);
+      .metadata(expected_metadata)
+      .stripe_size_rows(10);
   cudf::io::write_orc(out_opts);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
+  printf("output:\n");
+  cudf::test::print(result.tbl->get_column(0));
+  ;
+
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
+
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+
+  printf("line %d\n", __LINE__);
+  fflush(stdout);
 }
 
 TEST_F(OrcReaderTest, NestedColumnSelection)

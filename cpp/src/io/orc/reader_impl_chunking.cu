@@ -138,6 +138,13 @@ std::size_t gather_stream_info_and_column_desc(
         }
         (*stream_idx)++;
       } else {  // not chunks.has_value()
+        printf("collect stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
+               (int)stripe_index,
+               (int)level,
+               (int)column_id,
+               (int)stream.kind);
+        ;
+
         stream_info.value()->emplace_back(
           stripeinfo->offset + src_offset,
           dst_offset,

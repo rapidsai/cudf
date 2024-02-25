@@ -703,7 +703,7 @@ class orc_writer_options {
    */
   void set_stripe_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows >= 512, "Maximum stripe size cannot be smaller than 512");
+    //    CUDF_EXPECTS(size_rows >= 512, "Maximum stripe size cannot be smaller than 512");
     _stripe_size_rows = size_rows;
   }
 

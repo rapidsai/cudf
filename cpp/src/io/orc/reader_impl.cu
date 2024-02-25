@@ -537,6 +537,8 @@ void decode_stream_data(std::size_t num_dicts,
       [&](auto null_count, auto const stripe_idx) {
         printf(
           "null count: %d => %d\n", (int)stripe_idx, (int)chunks[stripe_idx][col_idx].null_count);
+        printf("num child rows: %d \n", (int)chunks[stripe_idx][col_idx].num_child_rows);
+
         return null_count + chunks[stripe_idx][col_idx].null_count;
       });
   });
@@ -768,6 +770,8 @@ void reader::impl::decompress_and_decode()
   // compared to parent column.
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    printf("processing level = %d\n", (int)level);
+
     auto& columns_level = _selected_columns.levels[level];
 
     // TODO: do it in global step
@@ -893,12 +897,17 @@ void reader::impl::decompress_and_decode()
         auto& chunk = chunks[stripe_idx - stripe_start][col_idx];
         // start row, number of rows in a each stripe and total number of rows
         // may change in lower levels of nesting
-        chunk.start_row       = (level == 0)
-                                  ? stripe_start_row
-                                  : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
-        chunk.num_rows        = (level == 0)
-                                  ? stripe_info->numberOfRows
-                                  : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+        chunk.start_row = (level == 0)
+                            ? stripe_start_row
+                            : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
+        chunk.num_rows  = (level == 0)
+                            ? stripe_info->numberOfRows
+                            : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+        printf("col idx: %d, start_row: %d, num rows: %d\n",
+               (int)col_idx,
+               (int)chunk.start_row,
+               (int)chunk.num_rows);
+
         chunk.column_num_rows = (level == 0) ? rows_to_read : col_meta.num_child_rows[col_idx];
         chunk.parent_validity_info =
           (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
@@ -909,6 +918,9 @@ void reader::impl::decompress_and_decode()
         chunk.encoding_kind = stripe_footer->columns[columns_level[col_idx].id].kind;
         chunk.type_kind =
           _metadata.per_file_metadata[stripe.source_idx].ff.types[columns_level[col_idx].id].kind;
+
+        printf("type: %d\n", (int)chunk.type_kind);
+
         // num_child_rows for a struct column will be same, for other nested types it will be
         // calculated.
         chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
@@ -931,6 +943,16 @@ void reader::impl::decompress_and_decode()
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
             chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k] + stripe_start].dst_pos;
+            if (chunk.strm_len[k]) {
+              auto& info = stream_info[chunk.strm_id[k] + stripe_start];
+              printf("stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
+                     (int)info.id.stripe_idx,
+                     (int)info.id.level,
+                     (int)info.id.orc_col_idx,
+                     (int)info.id.kind);
+
+              printf("stream %d: %p\n", (int)k, chunk.streams[k]);
+            }
           }
         }
       }
@@ -1017,6 +1039,7 @@ void reader::impl::decompress_and_decode()
       bool is_nullable = false;
       for (std::size_t j = 0; j < num_stripes; ++j) {
         if (chunks[j][i].strm_len[gpu::CI_PRESENT] != 0) {
+          printf("   is nullable\n");
           is_nullable = true;
           break;
         }
@@ -1162,8 +1185,10 @@ table_with_metadata reader::impl::make_output_chunk()
                        col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
                    });
 
-    // printf("output col: \n");
-    // cudf::test::print(out_columns.front()->view());
+    printf("output col0: \n");
+    cudf::test::print(out_columns.front()->view());
+    printf("output col1: \n");
+    cudf::test::print(out_columns.back()->view());
 
     auto tbl = std::make_unique<table>(std::move(out_columns));
     tabs.push_back(std::move(tbl));
