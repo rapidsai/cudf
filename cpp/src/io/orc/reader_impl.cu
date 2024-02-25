@@ -591,7 +591,8 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
 /**
  * @brief Aggregate child metadata from parent column chunks.
  */
-void aggregate_child_meta(std::size_t level,
+void aggregate_child_meta(std::size_t stripe_start,
+                          std::size_t level,
                           cudf::io::orc::detail::column_hierarchy const& selected_columns,
                           cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                           cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
@@ -624,15 +625,22 @@ void aggregate_child_meta(std::size_t level,
 
   int index = 0;  // number of child column processed
 
+  printf("\n\n");
   // For each parent column, update its child column meta for each stripe.
   std::for_each(nested_cols.begin(), nested_cols.end(), [&](auto const p_col) {
+    printf("p_col.id: %d\n", (int)p_col.id);
+
     auto const parent_col_idx = col_meta.orc_col_map[level][p_col.id];
+    printf("   level: %d, parent_col_idx: %d\n", (int)level, (int)parent_col_idx);
+
     auto start_row            = 0;
     auto processed_row_groups = 0;
 
     for (std::size_t stripe_id = 0; stripe_id < num_of_stripes; stripe_id++) {
       // Aggregate num_rows and start_row from processed parent columns per row groups
       if (num_of_rowgroups) {
+        printf("   num_of_rowgroups: %d\n", (int)num_of_rowgroups);
+
         auto stripe_num_row_groups = chunks[stripe_id][parent_col_idx].num_rowgroups;
         auto processed_child_rows  = 0;
 
@@ -650,16 +658,24 @@ void aggregate_child_meta(std::size_t level,
 
       // Aggregate start row, number of rows per chunk and total number of rows in a column
       auto const child_rows = chunks[stripe_id][parent_col_idx].num_child_rows;
+      printf("     stripe_id: %d: child_rows: %d\n", (int)stripe_id, (int)child_rows);
+      printf("      p_col.num_children: %d\n", (int)p_col.num_children);
+
       for (size_type id = 0; id < p_col.num_children; id++) {
         auto const child_col_idx = index + id;
 
         // TODO: Check for overflow here.
         num_child_rows[child_col_idx] += child_rows;
-        num_child_rows_per_stripe[stripe_id][child_col_idx] = child_rows;
+        num_child_rows_per_stripe[stripe_id + stripe_start][child_col_idx] = child_rows;
         // start row could be different for each column when there is nesting at each stripe level
-        child_start_row[stripe_id][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
+        child_start_row[stripe_id + stripe_start][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
+        printf("update child_start_row (%d, %d): %d\n",
+               (int)stripe_id,
+               (int)child_col_idx,
+               (int)start_row);
       }
       start_row += child_rows;
+      printf("        start_row: %d\n", (int)start_row);
     }
 
     // Parent column null mask and null count would be required for child column
@@ -769,6 +785,62 @@ void reader::impl::decompress_and_decode()
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
   auto& col_meta = *_col_meta;
+
+  printf("num_child_rows: (size %d)\n", (int)_col_meta->num_child_rows.size());
+  if (_col_meta->num_child_rows.size()) {
+    for (auto x : _col_meta->num_child_rows) {
+      printf("%d, ", (int)x);
+    }
+    printf("\n");
+
+    _col_meta->num_child_rows.clear();
+  }
+
+  printf("parent_column_data null count: (size %d)\n", (int)_col_meta->parent_column_data.size());
+  if (_col_meta->parent_column_data.size()) {
+    for (auto x : _col_meta->parent_column_data) {
+      printf("%d, ", (int)x.null_count);
+    }
+    printf("\n");
+    _col_meta->parent_column_data.clear();
+  }
+
+  printf("parent_column_index: (size %d)\n", (int)_col_meta->parent_column_index.size());
+  if (_col_meta->parent_column_index.size()) {
+    for (auto x : _col_meta->parent_column_index) {
+      printf("%d, ", (int)x);
+    }
+    printf("\n");
+    _col_meta->parent_column_index.clear();
+  }
+
+  printf("child_start_row: (size %d)\n", (int)_col_meta->child_start_row.size());
+  if (_col_meta->child_start_row.size()) {
+    for (auto x : _col_meta->child_start_row) {
+      printf("%d, ", (int)x);
+    }
+    printf("\n");
+    _col_meta->child_start_row.clear();
+  }
+
+  printf("num_child_rows_per_stripe: (size %d)\n",
+         (int)_col_meta->num_child_rows_per_stripe.size());
+  if (_col_meta->num_child_rows_per_stripe.size()) {
+    for (auto x : _col_meta->num_child_rows_per_stripe) {
+      printf("%d, ", (int)x);
+    }
+    printf("\n");
+    _col_meta->num_child_rows_per_stripe.clear();
+  }
+
+  printf("rwgrp_meta: (size %d)\n", (int)_col_meta->rwgrp_meta.size());
+  if (_col_meta->rwgrp_meta.size()) {
+    for (auto x : _col_meta->rwgrp_meta) {
+      printf("(%d | %d), ", (int)x.start_row, (int)x.num_rows);
+    }
+    printf("\n");
+  }
+
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     printf("processing level = %d\n", (int)level);
 
@@ -1046,6 +1118,9 @@ void reader::impl::decompress_and_decode()
       }
       auto is_list_type = (column_types[i].id() == type_id::LIST);
       auto n_rows       = (level == 0) ? rows_to_read : col_meta.num_child_rows[i];
+
+      printf("  create child col, num rows: %d\n", (int)n_rows);
+
       // For list column, offset column will be always size + 1
       if (is_list_type) n_rows++;
       _out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
@@ -1075,8 +1150,14 @@ void reader::impl::decompress_and_decode()
       scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
 
       row_groups.device_to_host_sync(_stream);
-      aggregate_child_meta(
-        level, _selected_columns, chunks, row_groups, nested_cols, _out_buffers[level], col_meta);
+      aggregate_child_meta(stripe_start,
+                           level,
+                           _selected_columns,
+                           chunks,
+                           row_groups,
+                           nested_cols,
+                           _out_buffers[level],
+                           col_meta);
 
       // ORC stores number of elements at each row, so we need to generate offsets from that
       std::vector<list_buffer_data> buff_data;
@@ -1185,10 +1266,10 @@ table_with_metadata reader::impl::make_output_chunk()
                        col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
                    });
 
-    printf("output col0: \n");
-    cudf::test::print(out_columns.front()->view());
-    printf("output col1: \n");
-    cudf::test::print(out_columns.back()->view());
+    // printf("output col0: \n");
+    // cudf::test::print(out_columns.front()->view());
+    // printf("output col1: \n");
+    // cudf::test::print(out_columns.back()->view());
 
     auto tbl = std::make_unique<table>(std::move(out_columns));
     tabs.push_back(std::move(tbl));
