@@ -1289,7 +1289,26 @@ table_with_metadata reader::impl::make_output_chunk()
   // todo: remove this
   // auto out_table = std::make_unique<table>(std::move(out_columns));
   auto out_table = [&] {
-    if (tv.size() > 1) { return cudf::concatenate(tv); }
+    if (tv.size() > 1) {
+      auto tmp = cudf::concatenate(tv);
+      std::vector<bool> has_mask(tmp->num_columns(), false);
+      std::vector<bool> has_nulls(tmp->num_columns(), false);
+
+      for (int i = 0; i < tmp->num_columns(); ++i) {
+        for (int j = 0; j < (int)tv.size(); ++j) {
+          if (tv[j].column(i).nullable()) { has_mask[i] = true; }
+          if (tv[j].column(i).null_count()) { has_nulls[i] = true; }
+        }
+      }
+      for (int i = 0; i < tmp->num_columns(); ++i) {
+        if (has_mask[i] && !has_nulls[i]) {
+          tmp->get_column(i).set_null_mask(
+            cudf::create_null_mask(tmp->get_column(i).size(), cudf::mask_state::ALL_VALID), 0);
+        }
+      }
+
+      return tmp;
+    }
     return std::move(tabs.front());
   }();
   // auto out_table = std::move(tabs.front());
