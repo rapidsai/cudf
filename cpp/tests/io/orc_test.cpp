@@ -18,7 +18,6 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
@@ -150,9 +149,18 @@ inline auto random_values(size_t size)
 {
   std::vector<T> values(size);
 
-  for (size_t i = 0; i < size; ++i) {
-    values[i] = i;
-  }
+  using T1 = T;
+  using uniform_distribution =
+    typename std::conditional_t<std::is_same_v<T1, bool>,
+                                std::bernoulli_distribution,
+                                std::conditional_t<std::is_floating_point_v<T1>,
+                                                   std::uniform_real_distribution<T1>,
+                                                   std::uniform_int_distribution<T1>>>;
+
+  static constexpr auto seed = 0xf00d;
+  static std::mt19937 engine{seed};
+  static uniform_distribution dist{};
+  std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
 
   return values;
 }
@@ -198,7 +206,7 @@ struct SkipRowTest {
         .skip_rows(skip_rows)
         .num_rows(read_num_rows);
     auto result = cudf::io::read_orc(in_opts);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_result->view(), result.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
   }
 
   void test(int skip_rows, int file_num_rows)
@@ -212,7 +220,7 @@ struct SkipRowTest {
         .use_index(false)
         .skip_rows(skip_rows);
     auto result = cudf::io::read_orc(in_opts);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_result->view(), result.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected_result->view(), result.tbl->view());
   }
 };
 
@@ -236,7 +244,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumn)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
@@ -258,7 +266,7 @@ TYPED_TEST(OrcWriterNumericTypeTest, SingleColumnWithNulls)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps)
@@ -282,7 +290,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, Timestamps)
       .timestamp_type(this->type());
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
@@ -308,7 +316,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
       .timestamp_type(this->type());
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TYPED_TEST(OrcWriterTimestampTypeTest, TimestampOverflow)
@@ -332,7 +340,7 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampOverflow)
       .timestamp_type(this->type());
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, MultiColumn)
@@ -392,7 +400,7 @@ TEST_F(OrcWriterTest, MultiColumn)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -459,7 +467,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -517,7 +525,7 @@ TEST_F(OrcWriterTest, Strings)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -569,7 +577,7 @@ TEST_F(OrcWriterTest, SlicedTable)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_slice, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -596,7 +604,7 @@ TEST_F(OrcWriterTest, HostBuffer)
       .use_index(false);
   auto const result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -626,7 +634,7 @@ TEST_F(OrcWriterTest, negTimestampsNano)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     expected.column(0), result.tbl->view().column(0), cudf::test::debug_output_level::ALL_ERRORS);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, Slice)
@@ -662,7 +670,7 @@ TEST_F(OrcChunkedWriterTest, SingleTable)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *table1);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcChunkedWriterTest, SimpleTable)
@@ -682,7 +690,7 @@ TEST_F(OrcChunkedWriterTest, SimpleTable)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(OrcChunkedWriterTest, LargeTables)
@@ -702,7 +710,7 @@ TEST_F(OrcChunkedWriterTest, LargeTables)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(OrcChunkedWriterTest, ManyTables)
@@ -732,7 +740,7 @@ TEST_F(OrcChunkedWriterTest, ManyTables)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TEST_F(OrcChunkedWriterTest, Metadata)
@@ -791,7 +799,7 @@ TEST_F(OrcChunkedWriterTest, Strings)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TEST_F(OrcChunkedWriterTest, MismatchedTypes)
@@ -839,8 +847,8 @@ TEST_F(OrcChunkedWriterTest, MismatchedStructure)
 TEST_F(OrcChunkedWriterTest, ReadStripes)
 {
   srand(31337);
-  auto table1 = create_random_fixed_table<int>(1, 5, true);
-  auto table2 = create_random_fixed_table<int>(1, 6, true);
+  auto table1 = create_random_fixed_table<int>(5, 5, true);
+  auto table2 = create_random_fixed_table<int>(5, 5, true);
 
   auto full_table = cudf::concatenate(std::vector<table_view>({*table2, *table1, *table2}));
 
@@ -849,17 +857,11 @@ TEST_F(OrcChunkedWriterTest, ReadStripes)
     cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{filepath});
   cudf::io::orc_chunked_writer(opts).write(*table1).write(*table2);
 
-  printf("tab 1: \n");
-  cudf::test::print(table1->get_column(0).view());
-
-  printf("tab 2: \n");
-  cudf::test::print(table2->get_column(0).view());
-
   cudf::io::orc_reader_options read_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).stripes({{1, 0, 1}});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 TEST_F(OrcChunkedWriterTest, ReadStripesError)
@@ -919,7 +921,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
@@ -962,7 +964,7 @@ TYPED_TEST(OrcChunkedWriterNumericTypeTest, UnalignedSize2)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *expected);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
 }
 
 TEST_F(OrcReaderTest, CombinedSkipRowTest)
@@ -1121,7 +1123,7 @@ TEST_F(OrcWriterTest, SlicedValidMask)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(tbl, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(tbl, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -1139,7 +1141,7 @@ TEST_F(OrcReaderTest, SingleInputs)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{{filepath1}});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *table1);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *table1);
 }
 
 TEST_F(OrcReaderTest, zstdCompressionRegression)
@@ -1198,7 +1200,7 @@ TEST_F(OrcReaderTest, MultipleInputs)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{{filepath1, filepath2}});
   auto result = cudf::io::read_orc(read_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.tbl, *full_table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
 }
 
 struct OrcWriterTestDecimal : public OrcWriterTest,
@@ -1385,7 +1387,7 @@ TEST_P(OrcWriterTestStripes, StripeSize)
         .use_index(false);
     auto result = cudf::io::read_orc(in_opts);
 
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), result.tbl->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
   };
 
   {
@@ -1480,7 +1482,7 @@ TEST_F(OrcWriterTest, TestMap)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
@@ -1743,7 +1745,7 @@ TEST_F(OrcReaderTest, ZstdMaxCompressionRate)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, CompStats)
@@ -1844,7 +1846,7 @@ TEST_F(OrcWriterTest, EmptyRowGroup)
   cudf::io::orc_reader_options in_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(in_opts);
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, NoNullsAsNonNullable)
@@ -1882,7 +1884,7 @@ TEST_F(OrcWriterTest, SlicedStringColumn)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_slice, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected_slice, result.tbl->view());
 }
 
 TEST_F(OrcWriterTest, EmptyChildStringColumn)
@@ -1899,7 +1901,7 @@ TEST_F(OrcWriterTest, EmptyChildStringColumn)
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).use_index(false);
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 template <typename T>
@@ -1963,7 +1965,7 @@ TEST_F(OrcWriterTest, UnorderedDictionary)
     cudf::io::source_info{out_buffer_unsorted.data(), out_buffer_unsorted.size()});
   auto const from_unsorted = cudf::io::read_orc(in_opts_unsorted).tbl;
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*from_sorted, *from_unsorted);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*from_sorted, *from_unsorted);
 }
 
 TEST_F(OrcStatisticsTest, Empty)
@@ -2083,7 +2085,7 @@ TEST_P(OrcCompressionTest, Basic)
     cudf::io::source_info{out_buffer.data(), out_buffer.size()});
   auto result = cudf::io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 INSTANTIATE_TEST_CASE_P(OrcCompressionTest,
