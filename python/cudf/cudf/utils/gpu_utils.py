@@ -86,7 +86,7 @@ def validate_setup():
             minor_version = getDeviceAttribute(
                 cudaDeviceAttr.cudaDevAttrComputeCapabilityMinor, 0
             )
-            warnings.warn(
+            raise UnsupportedCUDAError(
                 "A GPU with NVIDIA Volta™ (Compute Capability 7.0) "
                 "or newer architecture is required.\n"
                 f"Detected GPU 0: {device_name}\n"

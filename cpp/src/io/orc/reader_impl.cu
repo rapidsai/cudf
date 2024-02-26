@@ -37,7 +37,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 {
 }
 
-table_with_metadata reader::impl::read(uint64_t skip_rows,
+table_with_metadata reader::impl::read(int64_t skip_rows,
                                        std::optional<size_type> const& num_rows_opt,
                                        std::vector<std::vector<size_type>> const& stripes)
 {
