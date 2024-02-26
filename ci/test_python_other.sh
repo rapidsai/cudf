@@ -30,7 +30,7 @@ pytest \
   .
 popd
 
-# Dask-expr tests should be skipped if dask_expr is not installed
+# Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
 rapids-logger "pytest dask_cudf + dask_expr"
 pushd python/dask_cudf/dask_cudf/expr
 DASK_DATAFRAME__QUERY_PLANNING=True pytest \
