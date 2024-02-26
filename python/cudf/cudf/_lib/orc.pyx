@@ -3,6 +3,7 @@
 import cudf
 from cudf.core.buffer import acquire_spill_lock
 
+from libc.stdint cimport int64_t
 from libcpp cimport bool, int
 from libcpp.map cimport map
 from libcpp.memory cimport unique_ptr
@@ -98,8 +99,8 @@ cpdef read_orc(object filepaths_or_buffers,
         filepaths_or_buffers,
         columns,
         stripes or [],
-        get_size_t_arg(skip_rows, "skip_rows"),
-        get_size_t_arg(num_rows, "num_rows"),
+        get_skiprows_arg(skip_rows),
+        get_num_rows_arg(num_rows),
         (
             type_id.EMPTY
             if timestamp_type is None else
@@ -115,6 +116,7 @@ cpdef read_orc(object filepaths_or_buffers,
     )
 
     cdef table_with_metadata c_result
+    cdef size_type nrows
 
     with nogil:
         c_result = move(libcudf_read_orc(c_orc_reader_options))
@@ -125,6 +127,12 @@ cpdef read_orc(object filepaths_or_buffers,
                                              names,
                                              skip_rows,
                                              num_rows)
+
+    if columns is not None and (isinstance(columns, list) and len(columns) == 0):
+        # When `columns=[]`, index needs to be
+        # established, but not the columns.
+        nrows = c_result.tbl.get()[0].view().num_rows()
+        return {}, cudf.RangeIndex(nrows)
 
     data, index = data_from_unique_ptr(
         move(c_result.tbl),
@@ -150,12 +158,16 @@ cpdef read_orc(object filepaths_or_buffers,
 cdef compression_type _get_comp_type(object compression):
     if compression is None or compression is False:
         return compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return compression_type.SNAPPY
     elif compression == "ZLIB":
         return compression_type.ZLIB
     elif compression == "ZSTD":
         return compression_type.ZSTD
+    elif compression == "LZ4":
+        return compression_type.LZ4
     else:
         raise ValueError(f"Unsupported `compression` type {compression}")
 
@@ -172,7 +184,6 @@ cdef tuple _get_index_from_metadata(
     range_idx = None
     if json_str != "":
         meta = json.loads(json_str)
-
         if 'index_columns' in meta and len(meta['index_columns']) > 0:
             index_col = meta['index_columns']
             if isinstance(index_col[0], dict) and \
@@ -308,15 +319,16 @@ def write_orc(
         libcudf_write_orc(c_orc_writer_options)
 
 
-cdef size_type get_size_t_arg(object arg, str name) except*:
-    if name == "skip_rows":
-        arg = 0 if arg is None else arg
-        if not isinstance(arg, int) or arg < 0:
-            raise TypeError(f"{name} must be an int >= 0")
-    else:
-        arg = -1 if arg is None else arg
-        if not isinstance(arg, int) or arg < -1:
-            raise TypeError(f"{name} must be an int >= -1")
+cdef int64_t get_skiprows_arg(object arg) except*:
+    arg = 0 if arg is None else arg
+    if not isinstance(arg, int) or arg < 0:
+        raise TypeError("skiprows must be an int >= 0")
+    return <int64_t> arg
+
+cdef size_type get_num_rows_arg(object arg) except*:
+    arg = -1 if arg is None else arg
+    if not isinstance(arg, int) or arg < -1:
+        raise TypeError("num_rows must be an int >= -1")
     return <size_type> arg
 
 
@@ -324,7 +336,7 @@ cdef orc_reader_options make_orc_reader_options(
     object filepaths_or_buffers,
     object column_names,
     object stripes,
-    size_type skip_rows,
+    int64_t skip_rows,
     size_type num_rows,
     type_id timestamp_type,
     bool use_index
@@ -352,7 +364,8 @@ cdef orc_reader_options make_orc_reader_options(
         c_column_names.reserve(len(column_names))
         for col in column_names:
             c_column_names.push_back(str(col).encode())
-        opts.set_columns(c_column_names)
+        if len(column_names) > 0:
+            opts.set_columns(c_column_names)
 
     return opts
 

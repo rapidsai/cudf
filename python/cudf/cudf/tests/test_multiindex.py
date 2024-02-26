@@ -726,15 +726,8 @@ def test_multiindex_equals():
         }
     ],
 )
-@pytest.mark.parametrize(
-    "levels",
-    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
-)
-@pytest.mark.parametrize(
-    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
-)
 @pytest.mark.parametrize("names", [["X", "Y"]])
-def test_multiindex_copy_sem(data, levels, codes, names):
+def test_multiindex_copy_sem(data, names):
     """Test semantic equality for MultiIndex.copy"""
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
@@ -743,12 +736,10 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
+    gmi_copy = gmi.copy(names=names)
 
     pmi = pdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+    pmi_copy = pmi.copy(names=names)
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
@@ -1962,13 +1953,13 @@ def test_multiindex_to_frame_allow_duplicates(
 ):
     gidx = cudf.from_pandas(pidx)
 
-    if (
+    if name is None or (
         (
             len(pidx.names) != len(set(pidx.names))
             and not all(x is None for x in pidx.names)
         )
         and not allow_duplicates
-        and (name is None or name is no_default)
+        and name is no_default
     ):
         assert_exceptions_equal(
             pidx.to_frame,
@@ -1998,22 +1989,20 @@ def test_multiindex_to_frame_allow_duplicates(
         ) or (isinstance(name, list) and len(name) != len(set(name))):
             # cudf doesn't have the ability to construct dataframes
             # with duplicate column names
-            with expect_warning_if(name is None):
-                with pytest.raises(ValueError):
-                    gidx.to_frame(
-                        index=index,
-                        name=name,
-                        allow_duplicates=allow_duplicates,
-                    )
+            with pytest.raises(ValueError):
+                gidx.to_frame(
+                    index=index,
+                    name=name,
+                    allow_duplicates=allow_duplicates,
+                )
         else:
-            with expect_warning_if(name is None):
+            with expect_warning_if(not PANDAS_GE_200 and name is None):
                 expected = pidx.to_frame(
                     index=index, name=name, allow_duplicates=allow_duplicates
                 )
-            with expect_warning_if(name is None):
-                actual = gidx.to_frame(
-                    index=index, name=name, allow_duplicates=allow_duplicates
-                )
+            actual = gidx.to_frame(
+                index=index, name=name, allow_duplicates=allow_duplicates
+            )
 
             assert_eq(expected, actual)
 

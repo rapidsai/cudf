@@ -7,6 +7,7 @@ import pytest
 from numba import cuda
 
 import cudf
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.missing import NA
 from cudf.core.udf._ops import (
     arith_ops,
@@ -183,7 +184,17 @@ def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
     )
     gdf["a"] = gdf["a"].astype(dtype_l)
     gdf["b"] = gdf["b"].astype(dtype_r)
-    run_masked_udf_test(func, gdf, nullable=False, check_dtype=False)
+
+    pdf = gdf.to_pandas()
+    expect = op(pdf["a"], pdf["b"])
+    obtain = gdf.apply(func, axis=1)
+    assert_eq(expect, obtain, check_dtype=False)
+    # TODO: After the following pandas issue is
+    # fixed, uncomment the following line and delete
+    # through `to_pandas()` statement.
+    # https://github.com/pandas-dev/pandas/issues/52411
+
+    # run_masked_udf_test(func, gdf, nullable=False, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", comparison_ops)
@@ -472,6 +483,9 @@ def test_series_apply_basic(data, name):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    PANDAS_GE_220, reason="https://github.com/pandas-dev/pandas/issues/57390"
+)
 def test_series_apply_null_conditional():
     def func(x):
         if x is NA:
@@ -496,6 +510,9 @@ def test_series_arith_masked_vs_masked(op):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    PANDAS_GE_220, reason="https://github.com/pandas-dev/pandas/issues/57390"
+)
 @pytest.mark.parametrize("op", comparison_ops)
 def test_series_compare_masked_vs_masked(op):
     """
@@ -552,6 +569,9 @@ def test_series_arith_masked_vs_constant_reflected(request, op, constant):
     run_masked_udf_series(func, data, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    PANDAS_GE_220, reason="https://github.com/pandas-dev/pandas/issues/57390"
+)
 def test_series_masked_is_null_conditional():
     def func(x):
         if x is NA:
@@ -732,8 +752,14 @@ def test_mask_udf_scalar_args_binops_series(data, op):
     ],
 )
 @pytest.mark.parametrize("op", arith_ops + comparison_ops)
-def test_masked_udf_scalar_args_binops_multiple_series(data, op):
+def test_masked_udf_scalar_args_binops_multiple_series(request, data, op):
     data = cudf.Series(data)
+    request.applymarker(
+        pytest.mark.xfail(
+            op in comparison_ops and PANDAS_GE_220 and data.dtype.kind != "b",
+            reason="https://github.com/pandas-dev/pandas/issues/57390",
+        )
+    )
 
     def func(data, c, k):
         x = op(data, c)

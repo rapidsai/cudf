@@ -697,9 +697,9 @@ class StringMethods(ColumnMethods):
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
         >>> idx = cudf.Index(data)
         >>> idx
-        StringIndex(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
+        Index(['Mouse', 'dog', 'house and parrot', '23.0', None], dtype='object')
         >>> idx.str.contains('23', regex=False)
-        GenericIndex([False, False, False, True, <NA>], dtype='bool')
+        Index([False, False, False, True, <NA>], dtype='bool')
 
         Returning 'house' or 'dog' when either expression occurs in a string.
 
@@ -2805,7 +2805,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        StringIndex(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -2878,7 +2878,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        StringIndex(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -3536,7 +3536,7 @@ class StringMethods(ColumnMethods):
 
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
-        Int64Index([0, 0, 2, 1], dtype='int64')
+        Index([0, 0, 2, 1], dtype='int64')
 
         .. pandas-compat::
             **StringMethods.count**
@@ -5593,6 +5593,21 @@ class StringColumn(column.ColumnBase):
                 ]
         return self._data
 
+    def all(self, skipna: bool = True) -> bool:
+        if skipna and self.null_count == self.size:
+            return True
+        elif not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        raise NotImplementedError("`all` not implemented for `StringColumn`")
+
+    def any(self, skipna: bool = True) -> bool:
+        if not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        elif skipna and self.null_count == self.size:
+            return False
+
+        raise NotImplementedError("`any` not implemented for `StringColumn`")
+
     def data_array_view(
         self, *, mode="write"
     ) -> cuda.devicearray.DeviceNDArray:
@@ -5733,6 +5748,10 @@ class StringColumn(column.ColumnBase):
                     self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
+        if format.endswith("%z"):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_timedelta_column(

@@ -152,7 +152,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
 )
 
 # ##################################################################################################
@@ -175,7 +175,6 @@ ConfigureTest(
   hashing/sha256_test.cpp
   hashing/sha384_test.cpp
   hashing/sha512_test.cpp
-  hashing/spark_murmurhash3_x86_32_test.cpp
   hashing/xxhash_64_test.cpp
 )
 
@@ -315,6 +314,7 @@ ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 ConfigureTest(JSON_QUOTE_NORMALIZATION io/json_quote_normalization_test.cpp)
+ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json_whitespace_normalization_test.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1

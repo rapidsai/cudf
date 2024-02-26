@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,9 +24,8 @@
 #include "parquet.hpp"
 #include "parquet_gpu.hpp"
 
-#include <cudf/io/data_sink.hpp>
-
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>

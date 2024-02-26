@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.0"]
+      cuda: ["11.8", "12.2"]
       arch: [x86_64]
     includes:
       - build_all
@@ -231,14 +231,6 @@ dependencies:
               cuda: "11.8"
             packages:
               - nvcc_linux-aarch64=11.8
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
   build_cpp:
     common:
       - output_types: conda
@@ -266,11 +258,10 @@ dependencies:
           - *cmake_ver
           - cython>=3.0.3
           - *ninja
-          # TODO: Pin to numpy<1.25 until cudf requires pandas 2
-          - &numpy numpy>=1.21,<1.25
+          - &numpy numpy>=1.21
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.1.*
+          - pyarrow==14.0.2.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -315,10 +306,10 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.1.*
-          - libarrow-dataset==14.0.1.*
-          - libarrow==14.0.1.*
-          - libparquet==14.0.1.*
+          - libarrow-acero==14.0.2.*
+          - libarrow-dataset==14.0.2.*
+          - libarrow==14.0.2.*
+          - libparquet==14.0.2.*
   libarrow_run:
     common:
       - output_types: conda
@@ -360,6 +351,10 @@ dependencies:
               cuda: "12.0"
             packages:
               - cuda-version=12.0
+          - matrix:
+              cuda: "12.2"
+            packages:
+              - cuda-version=12.2
   cuda:
     specific:
       - output_types: conda
@@ -407,6 +402,9 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              arch: aarch64
+            packages:
+          - matrix:
               cuda: "12.*"
               arch: x86_64
             packages:
@@ -437,9 +435,6 @@ dependencies:
               # so 11.2 uses 11.4 packages (the oldest available).
               - *libcufile_114
               - *libcufile_dev114
-          # Fallback matrix for aarch64, which doesn't support libcufile.
-          - matrix:
-            packages:
   develop:
     common:
       - output_types: [conda, requirements]
@@ -502,7 +497,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - *numpy
-          - pandas>=1.3,<1.6.0dev0
+          - pandas>=2.0,<2.1.5dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -588,19 +583,11 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-sanitizer-api
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-sanitizer-api=11.8.86
-          - matrix:
+          - matrix:  # Fallback for CUDA 11 or no matrix
             packages:
   test_java:
     common:

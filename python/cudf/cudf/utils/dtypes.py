@@ -172,7 +172,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
     Python dtype.
     """
 
-    if cudf.api.types.is_categorical_dtype(dtype):
+    if cudf.api.types._is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
     elif cudf.api.types.is_decimal32_dtype(dtype):
         return cudf.core.dtypes.Decimal32Dtype
@@ -213,6 +213,8 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_large_string(typ):
+        return cudf.dtype("str")
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -262,6 +264,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
     if isinstance(val, pd.Timestamp):
         if val.tz is not None:
             raise NotImplementedError(tz_error_msg)
+
         val = val.to_datetime64()
     elif isinstance(val, pd.Timedelta):
         val = val.to_timedelta64()
@@ -415,9 +418,9 @@ def get_min_float_dtype(col):
 
 
 def is_mixed_with_object_dtype(lhs, rhs):
-    if cudf.api.types.is_categorical_dtype(lhs.dtype):
+    if cudf.api.types._is_categorical_dtype(lhs.dtype):
         return is_mixed_with_object_dtype(lhs.dtype.categories, rhs)
-    elif cudf.api.types.is_categorical_dtype(rhs.dtype):
+    elif cudf.api.types._is_categorical_dtype(rhs.dtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
     return (lhs.dtype == "object" and rhs.dtype != "object") or (
@@ -517,10 +520,10 @@ def find_common_type(dtypes):
 
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
-    if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+    if any(cudf.api.types._is_categorical_dtype(dtype) for dtype in dtypes):
         if all(
             (
-                cudf.api.types.is_categorical_dtype(dtype)
+                cudf.api.types._is_categorical_dtype(dtype)
                 and (not dtype.ordered if hasattr(dtype, "ordered") else True)
             )
             for dtype in dtypes
@@ -601,7 +604,7 @@ def find_common_type(dtypes):
         dtypes = dtypes - td_dtypes
         dtypes.add(np.result_type(*td_dtypes))
 
-    common_dtype = np.find_common_type(list(dtypes), [])
+    common_dtype = np.result_type(*dtypes)
     if common_dtype == np.dtype("float16"):
         return cudf.dtype("float32")
     return cudf.dtype(common_dtype)
