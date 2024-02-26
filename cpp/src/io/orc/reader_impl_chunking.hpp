@@ -245,7 +245,7 @@ struct chunk_read_data {
  * data, but not both.
  */
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t stripe_index,
+  int64_t stripe_index,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -253,7 +253,7 @@ std::size_t gather_stream_info_and_column_desc(
   host_span<orc::SchemaType const> types,
   bool use_index,
   bool apply_struct_map,
-  std::size_t* num_dictionary_entries,
+  int64_t* num_dictionary_entries,
   std::size_t* stream_idx,
   std::optional<std::vector<orc_stream_info>*> const& stream_info,
   std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks);
