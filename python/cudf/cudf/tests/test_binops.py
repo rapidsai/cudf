@@ -1779,13 +1779,7 @@ def test_datetime_dateoffset_binaryop(
     "ignore:Discarding nonzero nanoseconds:UserWarning"
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
-def test_datetime_dateoffset_binaryop_multiple(request, date_col, kwargs, op):
-    request.applymarker(
-        pytest.mark.xfail(
-            PANDAS_GE_220 and len(kwargs) == 1 and "milliseconds" in kwargs,
-            reason="https://github.com/pandas-dev/pandas/issues/57529",
-        )
-    )
+def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
