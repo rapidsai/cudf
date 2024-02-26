@@ -349,6 +349,25 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testReadSingleQuotesJSONFileKeepQuotes() throws IOException {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "A")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .withNormalizeSingleQuotes(true)
+        .withKeepQuotes(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("\"TEST\"\"", "\"TESTER'\"") // Note that escapes are also processed
+        .build();
+         MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
   private static final byte[] NESTED_JSON_DATA_BUFFER = ("{\"a\":{\"c\":\"C1\"}}\n" +
       "{\"a\":{\"c\":\"C2\", \"b\":\"B2\"}}\n" +
       "{\"d\":[1,2,3]}\n" +

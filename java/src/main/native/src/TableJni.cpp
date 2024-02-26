@@ -1429,7 +1429,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(
     JNIEnv *env, jclass, jboolean day_first, jboolean lines, jboolean recover_with_null,
-    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jlong ds_handle) {
+    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jboolean keep_quotes,
+    jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1447,6 +1448,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource
             .lines(static_cast<bool>(lines))
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
+            .keep_quotes(keep_quotes)
             .mixed_types_as_string(mixed_types_as_string);
 
     auto result =
@@ -1459,7 +1461,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
     JNIEnv *env, jclass, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
-    jboolean recover_with_null, jboolean normalize_single_quotes, jboolean mixed_types_as_string) {
+    jboolean recover_with_null, jboolean normalize_single_quotes, jboolean mixed_types_as_string,
+    jboolean keep_quotes) {
 
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
@@ -1481,6 +1484,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
             .lines(static_cast<bool>(lines))
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
+            .keep_quotes(keep_quotes)
             .mixed_types_as_string(mixed_types_as_string);
 
     auto result =
@@ -1569,7 +1573,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_TableWithMeta_releaseTable(JNIE
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
     JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types,
     jintArray j_scales, jboolean day_first, jboolean lines, jboolean recover_with_null,
-    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jlong ds_handle) {
+    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jboolean keep_quotes,
+    jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1601,7 +1606,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
             .lines(static_cast<bool>(lines))
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
-            .mixed_types_as_string(mixed_types_as_string);
+            .mixed_types_as_string(mixed_types_as_string)
+            .keep_quotes(keep_quotes);
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
@@ -1640,7 +1646,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types,
     jintArray j_scales, jstring inputfilepath, jlong buffer, jlong buffer_length,
     jboolean day_first, jboolean lines, jboolean recover_with_null,
-    jboolean normalize_single_quotes, jboolean mixed_types_as_string) {
+    jboolean normalize_single_quotes, jboolean mixed_types_as_string, jboolean keep_quotes) {
 
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1687,7 +1693,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
             .lines(static_cast<bool>(lines))
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
-            .mixed_types_as_string(mixed_types_as_string);
+            .mixed_types_as_string(mixed_types_as_string)
+            .keep_quotes(keep_quotes);
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
