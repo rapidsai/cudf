@@ -743,10 +743,15 @@ void reader::impl::decompress_and_decode()
   for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
     auto const& stripe     = selected_stripes[stripe_idx];
     auto const stripe_info = stripe.stripe_info;
-    rows_to_read += stripe_info->numberOfRows;
+    // TODO: check overflow
+    // CUDF_EXPECTS(per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows <
+    //                static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
+    //              "TODO");
+    rows_to_read += static_cast<size_type>(stripe_info->numberOfRows);
 
     if (_file_itm_data.rows_to_skip > 0) {
-      CUDF_EXPECTS(_file_itm_data.rows_to_skip < stripe_info->numberOfRows, "TODO");
+      CUDF_EXPECTS(_file_itm_data.rows_to_skip < static_cast<int64_t>(stripe_info->numberOfRows),
+                   "TODO");
     }
   }
   rows_to_read = std::min<int64_t>(rows_to_read - rows_to_skip, _file_itm_data.rows_to_read);
@@ -955,7 +960,7 @@ void reader::impl::decompress_and_decode()
       // printf("line %d\n", __LINE__);
       // fflush(stdout);
 
-      auto const num_rows_per_stripe = stripe_info->numberOfRows;
+      auto const num_rows_per_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
       printf(" num_rows_per_stripe : %d\n", (int)num_rows_per_stripe);
 
       auto const rowgroup_id    = num_rowgroups;
@@ -977,7 +982,7 @@ void reader::impl::decompress_and_decode()
                             ? stripe_start_row
                             : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
         chunk.num_rows  = (level == 0)
-                            ? stripe_info->numberOfRows
+                            ? static_cast<int64_t>(stripe_info->numberOfRows)
                             : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
         printf("col idx: %d, start_row: %d, num rows: %d\n",
                (int)col_idx,

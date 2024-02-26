@@ -85,7 +85,7 @@ struct StripeInformation {
   uint64_t indexLength  = 0;  // the length of the indexes in bytes
   uint64_t dataLength   = 0;  // the length of the data in bytes
   uint64_t footerLength = 0;  // the length of the footer in bytes
-  int64_t numberOfRows  = 0;  // the number of rows in the stripe
+  uint64_t numberOfRows = 0;  // the number of rows in the stripe
 };
 
 struct SchemaType {

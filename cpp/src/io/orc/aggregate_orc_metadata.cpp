@@ -198,8 +198,9 @@ aggregate_orc_metadata::select_stripes(
                                 nullptr,
                                 static_cast<int>(src_file_idx)});
 
-        // TODO: check for overflow here.
-        rows_to_read += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        // TODO: change return type to int64_t
+        rows_to_read += static_cast<size_type>(
+          per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows);
         printf(" rows_to_read : %d / %d\n",
                (int)per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows,
                (int)rows_to_read);
@@ -220,7 +221,8 @@ aggregate_orc_metadata::select_stripes(
       for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
                                   count < rows_to_skip + rows_to_read;
            ++stripe_idx) {
-        count += per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        count +=
+          static_cast<int64_t>(per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows);
         if (count > rows_to_skip || count == 0) {
           stripe_infos.push_back({&per_file_metadata[src_file_idx].ff.stripes[stripe_idx],
                                   nullptr,
