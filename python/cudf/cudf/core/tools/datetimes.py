@@ -803,7 +803,7 @@ def date_range(
     name=None,
     closed: Literal["left", "right", "both", "neither"] = "both",
     *,
-    unit: str | None = None,
+    unit: Optional[str] = None,
 ):
     """Return a fixed frequency DatetimeIndex.
 
