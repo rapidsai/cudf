@@ -273,17 +273,17 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         auto const& child = (*cols)[input_col.nesting[l_idx + 1]];
 
         // the final offset for a list at level N is the size of it's child
-        int const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
+        size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
+        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1),
                                       &offset,
-                                      sizeof(offset),
+                                      sizeof(size_type),
                                       cudaMemcpyDefault,
                                       _stream.value()));
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
-        size_type const sz = static_cast<size_type>(col_string_sizes[idx]);
-        cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + out_buf.size,
+        auto const sz = static_cast<size_type>(col_string_sizes[idx]);
+        cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
                         &sz,
                         sizeof(size_type),
                         cudaMemcpyDefault,
