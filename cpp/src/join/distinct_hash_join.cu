@@ -33,6 +33,8 @@
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
 #include <thrust/fill.h>
+#include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 
 #include <cstddef>
@@ -240,6 +242,52 @@ CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
     }
   }
 }
+
+template <typename InputIt, typename HashTable>
+CUCO_KERNEL void distinct_left_join_kernel(InputIt first,
+                                           cuco::detail::index_type n,
+                                           HashTable hash_table,
+                                           cudf::size_type* output_begin)
+{
+  namespace cg = cooperative_groups;
+
+  auto constexpr cg_size = HashTable::cg_size;
+
+  auto const block       = cg::this_thread_block();
+  auto const thread_idx  = block.thread_rank();
+  auto const loop_stride = cuco::detail::grid_stride() / cg_size;
+  auto idx               = cuco::detail::global_thread_id() / cg_size;
+
+  __shared__ typename cudf::size_type output_buffer[DISTINCT_JOIN_BLOCK_SIZE / cg_size];
+
+  while (idx - thread_idx < n) {  // the whole thread block falls into the same iteration
+    if (idx < n) {
+      typename std::iterator_traits<InputIt>::value_type const& key = *(first + idx);
+      if constexpr (cg_size == 1) {
+        auto const found = hash_table.find(key);
+        /*
+         * The ld.relaxed.gpu instruction causes L1 to flush more frequently, causing increased
+         * sector stores from L2 to global memory. By writing results to shared memory and then
+         * synchronizing before writing back to global, we no longer rely on L1, preventing the
+         * increase in sector stores from L2 to global and improving performance.
+         */
+        output_buffer[thread_idx] =
+          found == hash_table.end() ? JoinNoneValue : static_cast<cudf::size_type>(found->second);
+        block.sync();
+        *(output_begin + idx) = output_buffer[thread_idx];
+      } else {
+        auto const tile  = cg::tiled_partition<cg_size>(block);
+        auto const found = hash_table.find(tile, key);
+
+        if (tile.thread_rank() == 0) {
+          *(output_begin + idx) =
+            found == hash_table.end() ? JoinNoneValue : static_cast<cudf::size_type>(found->second);
+        }
+      }
+    }
+    idx += loop_stride;
+  }
+}
 }  // namespace
 
 template <cudf::has_nested HasNested>
@@ -351,32 +399,34 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
   size_type const build_table_num_rows{this->_build.num_rows()};
   size_type const probe_table_num_rows{this->_probe.num_rows()};
 
-  // If build table is empty, return probe table
-  if (build_table_num_rows == 0) {
-    std::cout << "###################### empty build table\n";
-    auto build_indices =
-      std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
-    auto probe_indices =
-      std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
-
-    thrust::fill(
-      rmm::exec_policy_nosync(stream), build_indices->begin(), build_indices->end(), JoinNoneValue);
-    thrust::sequence(rmm::exec_policy_nosync(stream), probe_indices->begin(), probe_indices->end());
-
-    return {std::move(build_indices), std::move(probe_indices)};
-  }
-
   // If output size is zero, return empty
   if (probe_table_num_rows == 0) {
-    std::cout << "###################### empty probe table\n";
-    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+    return {std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+            std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
   }
 
   auto build_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
   auto probe_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+  thrust::sequence(rmm::exec_policy_nosync(stream), probe_indices->begin(), probe_indices->end());
+
+  // If build table is empty, return probe table
+  if (build_table_num_rows == 0) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), build_indices->begin(), build_indices->end(), JoinNoneValue);
+  } else {
+    auto const probe_row_hasher =
+      cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
+    auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+    auto const iter           = cudf::detail::make_counting_transform_iterator(
+      0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+
+    // TODO: thrust::transform_output_iterator with _hash_table.find()
+    cudf::detail::grid_1d grid{probe_table_num_rows, DISTINCT_JOIN_BLOCK_SIZE};
+    distinct_left_join_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      iter, probe_table_num_rows, this->_hash_table.ref(cuco::find), build_indices->data());
+  }
 
   return {std::move(build_indices), std::move(probe_indices)};
 }
