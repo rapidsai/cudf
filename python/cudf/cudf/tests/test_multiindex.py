@@ -17,7 +17,6 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -1854,10 +1853,7 @@ def test_pickle_roundtrip_multiindex(names):
 def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
-    if PANDAS_GE_200:
-        with pytest.warns(FutureWarning):
-            expected = getattr(pidx, func)()
-    else:
+    with pytest.warns(FutureWarning):
         expected = getattr(pidx, func)()
 
     with pytest.warns(FutureWarning):
@@ -1996,10 +1992,9 @@ def test_multiindex_to_frame_allow_duplicates(
                     allow_duplicates=allow_duplicates,
                 )
         else:
-            with expect_warning_if(not PANDAS_GE_200 and name is None):
-                expected = pidx.to_frame(
-                    index=index, name=name, allow_duplicates=allow_duplicates
-                )
+            expected = pidx.to_frame(
+                index=index, name=name, allow_duplicates=allow_duplicates
+            )
             actual = gidx.to_frame(
                 index=index, name=name, allow_duplicates=allow_duplicates
             )

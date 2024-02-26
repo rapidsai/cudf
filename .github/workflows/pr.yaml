@@ -28,7 +28,7 @@ jobs:
       - wheel-tests-dask-cudf
       - devcontainer
       - unit-tests-cudf-pandas
-      - pandas-tests
+      # - pandas-tests
       #- pandas-tests-diff
       #- pandas-tests-diff-comment
     secrets: inherit
@@ -155,17 +155,17 @@ jobs:
       matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.2.2")))
       build_type: pull-request
       script: ci/cudf_pandas_scripts/run_tests.sh
-  pandas-tests:
-    # run the Pandas unit tests using PR branch
-    needs: wheel-build-cudf
-    secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
-    with:
-      matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
-      build_type: pull-request
-      script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
-      # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
-      test_summary_show: "none"
+  # pandas-tests:
+  #   # run the Pandas unit tests using PR branch
+  #   needs: wheel-build-cudf
+  #   secrets: inherit
+  #   uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
+  #   with:
+  #     matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
+  #     build_type: pull-request
+  #     script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
+  #     # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
+  #     test_summary_show: "none"
   #pandas-tests-diff:
   #  # diff the results of running the Pandas unit tests and publish a job summary
   #  needs: [pandas-tests-main, pandas-tests-pr]

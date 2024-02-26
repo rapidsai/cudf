@@ -17,12 +17,8 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
-from cudf.testing._utils import (
-    assert_eq,
-    assert_exceptions_equal,
-    expect_warning_if,
-)
+from cudf.core._compat import PANDAS_GE_200
+from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -1269,14 +1265,14 @@ def test_csv_reader_delim_whitespace():
     # with header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
     with pytest.warns(FutureWarning):
         cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         pd_df = pd.read_csv(
             StringIO(buffer), delim_whitespace=True, header=None
         )
