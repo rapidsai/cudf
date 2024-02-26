@@ -497,7 +497,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - *numpy
-          - pandas>=2.0,<2.1.5dev0
+          - pandas>=2.0,<2.2.2dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -742,6 +742,7 @@ dependencies:
           - pytest-asyncio
           - pytest-reportlog
           - python-snappy
+          - pytest-timeout
           - pyxlsb
           - s3fs
           - scipy
