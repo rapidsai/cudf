@@ -337,6 +337,30 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
 
   return {std::move(left_indices), std::move(right_indices)};
 }
+
+template <cudf::has_nested HasNested>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr) const
+{
+  cudf::thread_range range{"distinct_hash_join::left_join"};
+
+  size_type const probe_table_num_rows{this->_probe.num_rows()};
+
+  // If output size is zero, return immediately
+  if (probe_table_num_rows == 0) {
+    return std::pair(std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
+                     std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
+  }
+
+  auto build_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+  auto probe_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+
+  return {std::move(build_indices), std::move(probe_indices)};
+}
 }  // namespace detail
 
 template <>
@@ -383,5 +407,23 @@ distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view strea
                                                      rmm::mr::device_memory_resource* mr) const
 {
   return _impl->inner_join(stream, mr);
+}
+
+template <>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+distinct_hash_join<cudf::has_nested::YES>::left_join(rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr) const
+{
+  return _impl->left_join(stream, mr);
+}
+
+template <>
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+distinct_hash_join<cudf::has_nested::NO>::left_join(rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr) const
+{
+  return _impl->left_join(stream, mr);
 }
 }  // namespace cudf
