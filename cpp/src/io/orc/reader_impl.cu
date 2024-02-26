@@ -667,9 +667,9 @@ void aggregate_child_meta(std::size_t stripe_start,
 
         // TODO: Check for overflow here.
         num_child_rows[child_col_idx] += child_rows;
-        num_child_rows_per_stripe[stripe_id + stripe_start][child_col_idx] = child_rows;
+        num_child_rows_per_stripe[stripe_id][child_col_idx] = child_rows;
         // start row could be different for each column when there is nesting at each stripe level
-        child_start_row[stripe_id + stripe_start][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
+        child_start_row[stripe_id][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
         printf("update child_start_row (%d, %d): %d\n",
                (int)stripe_id,
                (int)child_col_idx,
@@ -978,12 +978,15 @@ void reader::impl::decompress_and_decode()
         auto& chunk = chunks[stripe_idx - stripe_start][col_idx];
         // start row, number of rows in a each stripe and total number of rows
         // may change in lower levels of nesting
-        chunk.start_row = (level == 0)
-                            ? stripe_start_row
-                            : col_meta.child_start_row[stripe_idx * num_columns + col_idx];
-        chunk.num_rows  = (level == 0)
-                            ? static_cast<int64_t>(stripe_info->numberOfRows)
-                            : col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
+        chunk.start_row =
+          (level == 0)
+            ? stripe_start_row
+            : col_meta.child_start_row[(stripe_idx - stripe_start) * num_columns + col_idx];
+        chunk.num_rows =
+          (level == 0)
+            ? static_cast<int64_t>(stripe_info->numberOfRows)
+            : col_meta
+                .num_child_rows_per_stripe[(stripe_idx - stripe_start) * num_columns + col_idx];
         printf("col idx: %d, start_row: %d, num rows: %d\n",
                (int)col_idx,
                (int)chunk.start_row,
