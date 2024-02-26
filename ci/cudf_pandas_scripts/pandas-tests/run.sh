@@ -32,14 +32,12 @@ RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
-  -n 10 -v \
+  -n 10 \
   --tb=line \
   -m "not slow" \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
-  --report-log=${PANDAS_TESTS_BRANCH}.json \
-  --timeout=30 \
-  --durations=50 2>&1
+  --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
 # summarize the results and save them to artifacts:
 python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
