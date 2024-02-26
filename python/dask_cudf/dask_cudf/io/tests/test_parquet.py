@@ -13,7 +13,6 @@ from dask import dataframe as dd
 from dask.utils import natural_sort_key
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
 
 import dask_cudf
 
@@ -168,7 +167,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
     read_df = dask_cudf.read_parquet(fn)
     # Workaround until following issue is fixed:
     # https://github.com/apache/arrow/issues/33321
-    dd.assert_eq(ddf2, read_df.compute(), check_index_type=not PANDAS_GE_200)
+    dd.assert_eq(ddf2, read_df.compute(), check_index_type=False)
 
 
 @pytest.mark.parametrize("index", [False, None])

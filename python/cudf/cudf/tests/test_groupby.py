@@ -20,7 +20,7 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -188,9 +188,7 @@ def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
     gdf = gdf.groupby("y", as_index=as_index).apply(
         lambda df: df["x"].mean(), engine=engine
     )
-    kwargs = {"func": lambda df: df["x"].mean()}
-    if PANDAS_GE_220:
-        kwargs["include_groups"] = False
+    kwargs = {"func": lambda df: df["x"].mean(), "include_groups": False}
     pdf = pdf.groupby("y", as_index=as_index).apply(**kwargs)
     assert_groupby_results_equal(pdf, gdf)
 
@@ -314,12 +312,8 @@ def test_groupby_apply():
         df["out"] = df["val1"] + df["val2"]
         return df
 
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-    expect = expect_grpby.apply(foo, **kwargs)
-    got = got_grpby.apply(foo, **kwargs)
+    expect = expect_grpby.apply(foo, include_groups=False)
+    got = got_grpby.apply(foo, include_groups=False)
     assert_groupby_results_equal(expect, got)
 
 
@@ -353,12 +347,8 @@ def test_groupby_apply_args(func, args):
         ["key1", "key2"], as_index=False, group_keys=False
     )
     got_grpby = df.groupby(["key1", "key2"])
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-    expect = expect_grpby.apply(func, *args, **kwargs)
-    got = got_grpby.apply(func, *args, **kwargs)
+    expect = expect_grpby.apply(func, *args, include_groups=False)
+    got = got_grpby.apply(func, *args, include_groups=False)
     assert_groupby_results_equal(expect, got)
 
 
@@ -466,14 +456,10 @@ def run_groupby_apply_jit_test(data, func, keys, *args):
     got_groupby_obj = data.groupby(keys)
 
     # compare cuDF jit to pandas
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
     cudf_jit_result = got_groupby_obj.apply(
-        func, *args, engine="jit", **kwargs
+        func, *args, engine="jit", include_groups=False
     )
-    pandas_result = expect_groupby_obj.apply(func, *args, **kwargs)
+    pandas_result = expect_groupby_obj.apply(func, *args, include_groups=False)
     assert_groupby_results_equal(cudf_jit_result, pandas_result)
 
 
@@ -841,12 +827,9 @@ def test_groupby_apply_no_bytecode_fallback():
         return group.sum()
 
     part = partial(f)
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-    expect = pdf.groupby("a").apply(part, **kwargs)
-    got = gdf.groupby("a").apply(part, engine="auto", **kwargs)
+
+    expect = pdf.groupby("a").apply(part, include_groups=False)
+    got = gdf.groupby("a").apply(part, engine="auto", include_groups=False)
     assert_groupby_results_equal(expect, got)
 
 
@@ -867,12 +850,8 @@ def test_groupby_apply_return_col_from_df():
     def func(df):
         return df.x + df.y
 
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-    got = df.groupby("id").apply(func, **kwargs)
-    expect = pdf.groupby("id").apply(func, **kwargs)
+    got = df.groupby("id").apply(func, include_groups=False)
+    expect = pdf.groupby("id").apply(func, include_groups=False)
     # pandas seems to erroneously add an extra MI level of ids
     # TODO: Figure out how pandas groupby.apply determines the columns
     expect = pd.DataFrame(expect.droplevel(1), columns=got.columns)
@@ -887,12 +866,8 @@ def test_groupby_apply_return_df(func):
     df = cudf.DataFrame({"a": [1, 1, 2, 2], "b": [1, 2, 3, 4]})
     pdf = df.to_pandas()
 
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-    expect = pdf.groupby("a").apply(func, **kwargs)
-    got = df.groupby("a").apply(func, **kwargs)
+    expect = pdf.groupby("a").apply(func, include_groups=False)
+    got = df.groupby("a").apply(func, include_groups=False)
     assert_groupby_results_equal(expect, got)
 
 
@@ -1938,18 +1913,15 @@ def test_groupby_apply_noempty_group():
         {"a": [1, 1, 2, 2], "b": [1, 2, 1, 2], "c": [1, 2, 3, 4]}
     )
     gdf = cudf.from_pandas(pdf)
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
+
     expect = (
         pdf.groupby("a", group_keys=False)
-        .apply(lambda x: x.iloc[[0, 1]], **kwargs)
+        .apply(lambda x: x.iloc[[0, 1]], include_groups=False)
         .reset_index(drop=True)
     )
     got = (
         gdf.groupby("a")
-        .apply(lambda x: x.iloc[[0, 1]], **kwargs)
+        .apply(lambda x: x.iloc[[0, 1]], include_groups=False)
         .reset_index(drop=True)
     )
     assert_groupby_results_equal(expect, got)
@@ -2147,19 +2119,8 @@ def test_groupby_list_columns_excluded():
     )
     gdf = cudf.from_pandas(pdf)
 
-    if PANDAS_GE_200:
-        pandas_result = pdf.groupby("a").mean(numeric_only=True)
-        pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
-    else:
-        # cudf does not yet support numeric_only, so our default is False, but
-        # pandas defaults to inferring and throws a warning about it, so
-        # we need to catch that. pandas future behavior will match ours
-        # by default (at which point supporting numeric_only=True will
-        # be the open feature request).
-        with pytest.warns(FutureWarning):
-            pandas_result = pdf.groupby("a").mean()
-        with pytest.warns(FutureWarning):
-            pandas_agg_result = pdf.groupby("a").agg("mean")
+    pandas_result = pdf.groupby("a").mean(numeric_only=True)
+    pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
 
     assert_groupby_results_equal(
         pandas_result, gdf.groupby("a").mean(), check_dtype=False
@@ -2233,12 +2194,8 @@ def test_groupby_apply_return_scalars(func, args):
     )
     gdf = cudf.from_pandas(pdf)
 
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-    expected = pdf.groupby("A").apply(func, *args, **kwargs)
-    actual = gdf.groupby("A").apply(func, *args, **kwargs)
+    expected = pdf.groupby("A").apply(func, *args, include_groups=False)
+    actual = gdf.groupby("A").apply(func, *args, include_groups=False)
 
     assert_groupby_results_equal(expected, actual)
 
@@ -2281,14 +2238,10 @@ def test_groupby_apply_return_series_dataframe(func, args):
     )
     gdf = cudf.from_pandas(pdf)
 
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
     expected = pdf.groupby(["key"], group_keys=False).apply(
-        func, *args, **kwargs
+        func, *args, include_groups=False
     )
-    actual = gdf.groupby(["key"]).apply(func, *args, **kwargs)
+    actual = gdf.groupby(["key"]).apply(func, *args, include_groups=False)
 
     assert_groupby_results_equal(expected, actual)
 
@@ -2300,7 +2253,7 @@ def test_groupby_apply_return_series_dataframe(func, args):
 def test_groupby_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     if isinstance(pdf, pd.DataFrame):
-        kwargs = {"check_column_type": not PANDAS_GE_200}
+        kwargs = {"check_column_type": False}
     else:
         kwargs = {}
     assert_groupby_results_equal(
@@ -2319,7 +2272,7 @@ def test_groupby_no_keys(pdf):
 def test_groupby_apply_no_keys(pdf):
     gdf = cudf.from_pandas(pdf)
     if isinstance(pdf, pd.DataFrame):
-        kwargs = {"check_column_type": not PANDAS_GE_200}
+        kwargs = {"check_column_type": False}
     else:
         kwargs = {}
     assert_groupby_results_equal(
@@ -2790,7 +2743,7 @@ def test_groupby_fillna_multi_value(nelem):
     }
     # cudf can't fillna with a pandas.Timedelta type
     fill_values["4"] = fill_values["4"].to_numpy()
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         expect = pdf.groupby(key_col).fillna(value=fill_values)
     with pytest.warns(FutureWarning):
         got = gdf.groupby(key_col).fillna(value=fill_values)
@@ -2836,7 +2789,7 @@ def test_groupby_fillna_multi_value_df(nelem):
     # cudf can't fillna with a pandas.Timedelta type
     fill_values["4"] = fill_values["4"].to_numpy()
     fill_values = pd.DataFrame(fill_values, index=pdf.index)
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         expect = pdf.groupby(key_col).fillna(value=fill_values)
 
     fill_values = cudf.from_pandas(fill_values)
@@ -2858,9 +2811,7 @@ def test_groupby_various_by_fillna(by, data, args):
     ps = pd.Series(data)
     gs = cudf.from_pandas(ps)
 
-    with expect_warning_if(
-        (PANDAS_GE_210 and "method" in args) or PANDAS_GE_220
-    ):
+    with pytest.warns(FutureWarning):
         expect = ps.groupby(by).fillna(**args)
     if isinstance(by, pd.Grouper):
         by = cudf.Grouper(level=by.level)
@@ -3017,7 +2968,7 @@ def test_groupby_freq_week(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3050,7 +3001,7 @@ def test_groupby_freq_day(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3083,7 +3034,7 @@ def test_groupby_freq_min(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3116,7 +3067,7 @@ def test_groupby_freq_s(label, closed):
         got,
         check_like=True,
         check_dtype=False,
-        check_index_type=not PANDAS_GE_200,
+        check_index_type=False,
     )
 
 
@@ -3602,12 +3553,12 @@ def test_head_tail_empty():
 
     expected = pdf.groupby(pd.Series(values)).head()
     got = df.groupby(cudf.Series(values)).head()
-    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
+    assert_eq(expected, got, check_column_type=False)
 
     expected = pdf.groupby(pd.Series(values)).tail()
     got = df.groupby(cudf.Series(values)).tail()
 
-    assert_eq(expected, got, check_column_type=not PANDAS_GE_200)
+    assert_eq(expected, got, check_column_type=False)
 
 
 @pytest.mark.parametrize(
