@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_300
+from cudf.core._compat import PANDAS_GE_210, PANDAS_LT_300
 from cudf.testing._utils import (
     assert_eq,
     expect_warning_if,
@@ -183,10 +183,7 @@ def test_ufunc_series(request, ufunc, has_nulls, indexed):
 
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_GE_200
-            and fname.startswith("bitwise")
-            and indexed
-            and has_nulls,
+            condition=fname.startswith("bitwise") and indexed and has_nulls,
             reason="https://github.com/pandas-dev/pandas/issues/52500",
         )
     )
@@ -383,52 +380,6 @@ def test_ufunc_dataframe(request, ufunc, has_nulls, indexed):
         pytest.mark.xfail(
             condition=not hasattr(cp, fname),
             reason=f"cupy has no support for '{fname}'",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_200
-                and indexed
-                in {
-                    "add",
-                    "arctan2",
-                    "bitwise_and",
-                    "bitwise_or",
-                    "bitwise_xor",
-                    "copysign",
-                    "divide",
-                    "divmod",
-                    "float_power",
-                    "floor_divide",
-                    "fmax",
-                    "fmin",
-                    "fmod",
-                    "heaviside",
-                    "gcd",
-                    "hypot",
-                    "lcm",
-                    "ldexp",
-                    "left_shift",
-                    "logaddexp",
-                    "logaddexp2",
-                    "logical_and",
-                    "logical_or",
-                    "logical_xor",
-                    "maximum",
-                    "minimum",
-                    "multiply",
-                    "nextafter",
-                    "power",
-                    "remainder",
-                    "right_shift",
-                    "subtract",
-                }
-            ),
-            reason=(
-                "pandas<2.0 does not currently support misaligned "
-                "indexes in DataFrames"
-            ),
         )
     )
 
