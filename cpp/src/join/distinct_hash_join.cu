@@ -33,8 +33,6 @@
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
 #include <thrust/fill.h>
-#include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 
 #include <cstddef>
