@@ -713,29 +713,29 @@ dependencies:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
           # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
-          - beautifulsoup4
+          # - beautifulsoup4
           - blosc
-          - brotlipy
-          - boto3
-          - botocore>=1.24.21
+          # - brotlipy
+          # - boto3
+          # - botocore>=1.24.21
           - bottleneck
           - fastparquet
-          - flask
+          # - flask
           - fsspec
-          - html5lib
+          # - html5lib
           - hypothesis
-          - gcsfs
+          # - gcsfs
           - ipython
           - jinja2
           - lxml
           - matplotlib
-          - moto
+          # - moto
           - numba
           - numexpr
           - openpyxl
           - odfpy
           - py
-          - psycopg2-binary
+          # - psycopg2-binary
           - pyarrow
           - pymysql
           - pyreadstat
@@ -744,11 +744,11 @@ dependencies:
           - python-snappy
           - pytest-timeout
           - pyxlsb
-          - s3fs
+          # - s3fs
           # - scipy
-          - sqlalchemy
-          - tables
-          - pandas-gbq
+          # - sqlalchemy
+          # - tables
+          # - pandas-gbq
           - tabulate
           - xarray
           - xlrd
