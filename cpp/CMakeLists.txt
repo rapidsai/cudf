@@ -434,6 +434,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/distinct_hash_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
