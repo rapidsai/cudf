@@ -14,15 +14,13 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-set(cudf_version 24.04.00)
-
-include(../../fetch_rapids.cmake)
+include(../../rapids_config.cmake)
 include(rapids-cuda)
 rapids_cuda_init_architectures(cudf-python)
 
 project(
   cudf-python
-  VERSION ${cudf_version}
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES CXX CUDA
 )
 
@@ -55,7 +53,7 @@ if(FIND_CUDF_CPP)
     include(../../cpp/cmake/thirdparty/get_arrow.cmake)
   endif()
 
-  find_package(cudf ${cudf_version} REQUIRED)
+  find_package(cudf "${RAPIDS_VERSION}" REQUIRED)
 
   # an installed version of libcudf doesn't provide the dlpack headers so we need to download dlpack
   # for the interop.pyx
