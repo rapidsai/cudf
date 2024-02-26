@@ -283,6 +283,29 @@ TEST_F(DistinctJoinTest, EmptyBuildTableInnerJoin)
   this->compare_to_reference(build.view(), probe.view(), result, build.view());
 }
 
+TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
+{
+  column_wrapper<int32_t> col0_0;
+  column_wrapper<int32_t> col0_1;
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col1_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result        = distinct_join.left_join();
+
+  this->compare_to_reference(build.view(), probe.view(), result, probe.view());
+}
+
 TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
 {
   column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
@@ -302,6 +325,29 @@ TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
 
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.inner_join();
+
+  this->compare_to_reference(build.view(), probe.view(), result, probe.view());
+}
+
+TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
+{
+  column_wrapper<int32_t> col0_0{{2, 2, 0, 4, 3}};
+  column_wrapper<int32_t> col0_1{{1, 0, 1, 2, 1}, {1, 0, 1, 1, 1}};
+
+  column_wrapper<int32_t> col1_0;
+  column_wrapper<int32_t> col1_1;
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table build(std::move(cols0));
+  Table probe(std::move(cols1));
+
+  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result        = distinct_join.left_join();
 
   this->compare_to_reference(build.view(), probe.view(), result, probe.view());
 }
