@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "common_sort_impl.cuh"
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
@@ -30,7 +31,7 @@ namespace detail {
  * @tparam stable Whether to use stable sort
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
-template <bool stable>
+template <sort_method method>
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
@@ -57,7 +58,7 @@ std::unique_ptr<column> sorted_order(table_view input,
     auto const single_col = input.column(0);
     auto const col_order  = column_order.empty() ? order::ASCENDING : column_order.front();
     auto const null_prec  = null_precedence.empty() ? null_order::BEFORE : null_precedence.front();
-    return sorted_order<stable>(single_col, col_order, null_prec, stream, mr);
+    return sorted_order<method>(single_col, col_order, null_prec, stream, mr);
   }
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
@@ -71,7 +72,7 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto const do_sort = [&](auto const comparator) {
     // Compiling `thrust::*sort*` APIs is expensive.
     // Thus, we should optimize that by using constexpr condition to only compile what we need.
-    if constexpr (stable) {
+    if constexpr (method == sort_method::STABLE) {
       thrust::stable_sort(rmm::exec_policy(stream),
                           mutable_indices_view.begin<size_type>(),
                           mutable_indices_view.end<size_type>(),

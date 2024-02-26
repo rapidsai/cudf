@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "common_sort_impl.cuh"
 #include "sort_impl.cuh"
 
 #include <cudf/column/column.hpp>
@@ -34,7 +35,7 @@ std::unique_ptr<column> stable_sorted_order(table_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  return sorted_order<true>(input, column_order, null_precedence, stream, mr);
+  return sorted_order<sort_method::STABLE>(input, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<table> stable_sort(table_view const& input,
@@ -43,15 +44,12 @@ std::unique_ptr<table> stable_sort(table_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  // fast-path sort conditions: single, non-floating-point, fixed-width column with no nulls
-  if (input.num_columns() == 1 && !input.column(0).has_nulls() &&
-      cudf::is_fixed_width(input.column(0).type()) &&
-      !cudf::is_floating_point(input.column(0).type())) {
-    auto output    = std::make_unique<column>(input.column(0), stream, mr);
-    auto view      = output->mutable_view();
-    bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
+  if (inplace_column_sort_fn<sort_method::STABLE>::is_usable(input)) {
+    auto output = std::make_unique<column>(input.column(0), stream, mr);
+    auto view   = output->mutable_view();
+    auto order  = (column_order.empty() ? order::ASCENDING : column_order.front());
     cudf::type_dispatcher<dispatch_storage_type>(
-      output->type(), inplace_column_sort_fn<true>{}, view, ascending, stream);
+      output->type(), inplace_column_sort_fn<sort_method::STABLE>{}, view, order, stream);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));
