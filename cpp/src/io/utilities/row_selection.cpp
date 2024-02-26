@@ -23,8 +23,8 @@
 
 namespace cudf::io::detail {
 
-std::pair<uint64_t, size_type> skip_rows_num_rows_from_options(
-  uint64_t skip_rows, std::optional<size_type> const& num_rows, uint64_t num_source_rows)
+std::pair<int64_t, size_type> skip_rows_num_rows_from_options(
+  int64_t skip_rows, std::optional<size_type> const& num_rows, int64_t num_source_rows)
 {
   auto const rows_to_skip = std::min(skip_rows, num_source_rows);
   if (not num_rows.has_value()) {
@@ -36,7 +36,7 @@ std::pair<uint64_t, size_type> skip_rows_num_rows_from_options(
   // Limit the number of rows to the end of the input
   return {
     rows_to_skip,
-    static_cast<size_type>(std::min<uint64_t>(num_rows.value(), num_source_rows - rows_to_skip))};
+    static_cast<size_type>(std::min<int64_t>(num_rows.value(), num_source_rows - rows_to_skip))};
 }
 
 }  // namespace cudf::io::detail
