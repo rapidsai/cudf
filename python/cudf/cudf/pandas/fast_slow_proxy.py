@@ -329,7 +329,9 @@ def make_intermediate_proxy_type(
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
         else:
-            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
+            cls_dict[slow_name] = _FastSlowAttribute(
+                slow_name, private=slow_name.startswith("_")
+            )
 
     cls = types.new_class(
         name,
