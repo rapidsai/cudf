@@ -3048,6 +3048,6 @@ def test_parquet_reader_zstd_huff_tables(datadir):
     # See https://github.com/rapidsai/cudf/issues/15096
     fname = datadir / "zstd_huff_tables_bug.parquet"
 
-    # expect a failure when reading the whole file
-    with pytest.raises(RuntimeError):
-        cudf.read_parquet(fname)
+    expected = pa.parquet.read_table(fname).to_pandas()
+    actual = cudf.read_parquet(fname)
+    assert_eq(actual, expected)
