@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 # Common setup steps shared by Python test jobs
 source "$(dirname "$0")/test_python_common.sh"
@@ -32,7 +32,7 @@ popd
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
 rapids-logger "pytest dask_cudf + dask_expr"
-pushd python/dask_cudf/dask_cudf/expr
+pushd python/dask_cudf/dask_cudf
 DASK_DATAFRAME__QUERY_PLANNING=True pytest \
   --cache-clear \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
