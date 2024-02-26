@@ -74,7 +74,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
     col_string_sizes = calculate_page_string_offsets();
 
     // check for overflow
-    if (std::any_of(col_string_sizes.cbegin(), col_string_sizes.cend(), [](size_t sz) {
+    if (std::any_of(col_string_sizes.cbegin(), col_string_sizes.cend(), [](std::size_t sz) {
           return sz > std::numeric_limits<size_type>::max();
         })) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
