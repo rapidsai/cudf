@@ -224,7 +224,9 @@ def make_final_proxy_type(
         if slow_name in cls_dict or slow_name.startswith("__"):
             continue
         else:
-            cls_dict[slow_name] = _FastSlowAttribute(slow_name)
+            cls_dict[slow_name] = _FastSlowAttribute(
+                slow_name, private=slow_name.startswith("_")
+            )
 
     cls = types.new_class(
         name,
@@ -828,8 +830,9 @@ class _FastSlowAttribute:
 
     _attr: Any
 
-    def __init__(self, name: str):
+    def __init__(self, name: str, private=False):
         self._name = name
+        self._private = private
         self._attr = None
         self._doc = None
         self._dir = None
@@ -838,7 +841,12 @@ class _FastSlowAttribute:
         from .module_accelerator import disable_module_accelerator
 
         if self._attr is None:
-            fast_attr = getattr(owner._fsproxy_fast, self._name, _Unusable())
+            if self._private:
+                fast_attr = _Unusable()
+            else:
+                fast_attr = getattr(
+                    owner._fsproxy_fast, self._name, _Unusable()
+                )
             slow_attr = getattr(owner._fsproxy_slow, self._name)
 
             if _is_function_or_method(slow_attr):
@@ -859,6 +867,11 @@ class _FastSlowAttribute:
             if isinstance(self._attr, _MethodProxy):
                 return types.MethodType(self._attr, instance)
             else:
+                if self._private:
+                    return _maybe_wrap_result(
+                        getattr(instance._fsproxy_slow, self._name),
+                        None,  # type: ignore
+                    )
                 return _fast_slow_function_call(getattr, instance, self._name)[
                     0
                 ]
