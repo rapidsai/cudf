@@ -1071,7 +1071,7 @@ def _is_intermediate_type(result: Any) -> bool:
 
 
 def _is_function_or_method(obj: Any) -> bool:
-    return isinstance(
+    res = isinstance(
         obj,
         (
             types.FunctionType,
@@ -1083,6 +1083,12 @@ def _is_function_or_method(obj: Any) -> bool:
             types.BuiltinMethodType,
         ),
     )
+    if not res:
+        try:
+            return "cython_function_or_method" in str(type(obj))
+        except Exception:
+            return False
+    return res
 
 
 def _replace_closurevars(
