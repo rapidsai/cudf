@@ -2111,4 +2111,62 @@ TEST_F(OrcWriterTest, BounceBufferBug)
   cudf::io::write_orc(out_opts);
 }
 
+TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
+{
+  using cudf::test::iterators::no_nulls;
+  constexpr auto num_rows   = 500'000'000l;
+  constexpr auto num_reps   = 5;
+  constexpr auto total_rows = num_rows * num_reps;
+  static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
+
+  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 127; });
+  column_wrapper<int8_t, typename decltype(sequence)::value_type> col(sequence,
+                                                                      sequence + num_rows);
+  table_view chunk_table({col});
+
+  std::vector<char> out_buffer;
+  {
+    cudf::io::chunked_orc_writer_options write_opts =
+      cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&out_buffer});
+
+    auto writer = cudf::io::orc_chunked_writer(write_opts);
+    for (int i = 0; i < num_reps; i++) {
+      writer.write(chunk_table);
+    }
+  }
+
+  // Test reading the metadata
+  auto metadata = read_orc_metadata(cudf::io::source_info{out_buffer.data(), out_buffer.size()});
+  EXPECT_EQ(metadata.num_rows(), total_rows);
+  EXPECT_EQ(metadata.num_stripes(), total_rows / 1'000'000);
+
+  constexpr auto num_rows_to_read = 1'000'000;
+  const auto num_rows_to_skip     = metadata.num_rows() - num_rows_to_read;
+
+  // Read the last million rows
+  cudf::io::orc_reader_options skip_opts =
+    cudf::io::orc_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      .use_index(false)
+      .skip_rows(num_rows_to_skip);
+  const auto got_with_skip = cudf::io::read_orc(skip_opts).tbl;
+
+  const auto sequence_start = num_rows_to_skip % num_rows;
+  column_wrapper<int8_t, typename decltype(sequence)::value_type> skipped_col(
+    sequence + sequence_start, sequence + sequence_start + num_rows_to_read, no_nulls());
+  table_view expected({skipped_col});
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_with_skip->view());
+
+  // Read the last stripe (still the last million rows)
+  cudf::io::orc_reader_options stripe_opts =
+    cudf::io::orc_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      .use_index(false)
+      .stripes({{metadata.num_stripes() - 1}});
+  const auto got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_with_stripe_selection->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()
