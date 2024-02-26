@@ -99,7 +99,7 @@ class CSVReader(IOFuzz):
                     if dtype_val is not None:
                         dtype_val = {
                             col_name: "category"
-                            if cudf.utils.dtypes._is_categorical_dtype(dtype)
+                            if isinstance(dtype, cudf.CategoricalDtype)
                             else pandas_dtypes_to_np_dtypes[dtype]
                             for col_name, dtype in dtype_val.items()
                         }

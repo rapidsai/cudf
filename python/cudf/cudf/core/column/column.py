@@ -1394,7 +1394,7 @@ def column_empty_like(
 
     if (
         hasattr(column, "dtype")
-        and _is_categorical_dtype(column.dtype)
+        and isinstance(column.dtype, cudf.CategoricalDtype)
         and dtype == column.dtype
     ):
         catcolumn = cast("cudf.core.column.CategoricalColumn", column)

@@ -27,7 +27,7 @@ def _get_dtype_param_value(dtype_val):
     if dtype_val is not None and isinstance(dtype_val, abc.Mapping):
         processed_dtypes = {}
         for col_name, dtype in dtype_val.items():
-            if cudf.utils.dtypes._is_categorical_dtype(dtype):
+            if isinstance(dtype, cudf.CategoricalDtype):
                 processed_dtypes[col_name] = "category"
             else:
                 processed_dtypes[col_name] = str(
