@@ -283,11 +283,11 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
         auto const sz = static_cast<size_type>(col_string_sizes[idx]);
-        cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
-                        &sz,
-                        sizeof(size_type),
-                        cudaMemcpyDefault,
-                        _stream.value());
+        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
+                                      &sz,
+                                      sizeof(size_type),
+                                      cudaMemcpyDefault,
+                                      _stream.value()));
       }
     }
   }
