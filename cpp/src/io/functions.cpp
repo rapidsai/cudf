@@ -39,7 +39,6 @@
 #include <algorithm>
 
 namespace cudf::io {
-
 // Returns builder for csv_reader_options
 csv_reader_options_builder csv_reader_options::builder(source_info src)
 {
