@@ -383,12 +383,12 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
     }
   }
 
-  auto d_page_index = cudf::detail::make_device_uvector_async(
-    page_index, stream, rmm::mr::get_current_device_resource());
+  auto d_page_indexes = cudf::detail::make_device_uvector_async(
+    page_indexes, stream, rmm::mr::get_current_device_resource());
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(
-    rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_index, pages});
+    rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_indexes, pages});
 }
 
 /**
