@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,10 +27,9 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
-
-#include <cuda/std/limits>
 
 #include <type_traits>
 #include <vector>

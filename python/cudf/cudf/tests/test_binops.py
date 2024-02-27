@@ -1726,24 +1726,7 @@ def test_datetime_dateoffset_binaryop(
             reason="https://github.com/pandas-dev/pandas/issues/57448",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype in {"datetime64[ms]", "datetime64[s]"}
-            and frequency in ("microseconds", "nanoseconds")
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype == "datetime64[us]"
-            and frequency == "nanoseconds"
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
+
     date_col = [
         "2000-01-01 00:00:00.012345678",
         "2000-01-31 00:00:00.012345678",
@@ -1827,27 +1810,7 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     "dtype",
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
 )
-def test_datetime_dateoffset_binaryop_reflected(
-    request, n_periods, frequency, dtype
-):
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype in {"datetime64[ms]", "datetime64[s]"}
-            and frequency in ("microseconds", "nanoseconds")
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
-    request.applymarker(
-        pytest.mark.xfail(
-            not PANDAS_GE_220
-            and dtype == "datetime64[us]"
-            and frequency == "nanoseconds"
-            and n_periods != 0,
-            reason="https://github.com/pandas-dev/pandas/pull/55595",
-        )
-    )
+def test_datetime_dateoffset_binaryop_reflected(n_periods, frequency, dtype):
     date_col = [
         "2000-01-01 00:00:00.012345678",
         "2000-01-31 00:00:00.012345678",
@@ -1864,7 +1827,9 @@ def test_datetime_dateoffset_binaryop_reflected(
     expect = poffset + psr
     got = goffset + gsr
 
-    utils.assert_eq(expect, got)
+    # TODO: Remove check_dtype once we get some clarity on:
+    # https://github.com/pandas-dev/pandas/issues/57448
+    utils.assert_eq(expect, got, check_dtype=not PANDAS_GE_220)
 
     with pytest.raises(TypeError):
         poffset - psr
