@@ -23,11 +23,18 @@
 #include "io/orc/reader_impl_helpers.hpp"
 #include "io/utilities/config_utils.hpp"
 
+#include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -37,16 +44,152 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/pair.h>
+#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 
 #include <algorithm>
 #include <iterator>
+
+//
+//
+//
+#include <cudf_test/debug_utilities.hpp>
+
+#include <cudf/detail/utilities/linked_column.hpp>
+//
+//
+//
+namespace cudf::experimental {
+
+enum class decompose_lists_column : bool { YES, NO };
+
+auto decompose_structs(table_view table,
+                       decompose_lists_column decompose_lists,
+                       host_span<order const> column_order         = {},
+                       host_span<null_order const> null_precedence = {})
+{
+  auto linked_columns = detail::table_to_linked_columns(table);
+
+  std::vector<column_view> verticalized_columns;
+  std::vector<order> new_column_order;
+  std::vector<null_order> new_null_precedence;
+  std::vector<int> verticalized_col_depths;
+  for (size_t col_idx = 0; col_idx < linked_columns.size(); ++col_idx) {
+    detail::linked_column_view const* col = linked_columns[col_idx].get();
+    if (is_nested(col->type())) {
+      // convert and insert
+      std::vector<std::vector<detail::linked_column_view const*>> flattened;
+      std::function<void(
+        detail::linked_column_view const*, std::vector<detail::linked_column_view const*>*, int)>
+        recursive_child = [&](detail::linked_column_view const* c,
+                              std::vector<detail::linked_column_view const*>* branch,
+                              int depth) {
+          branch->push_back(c);
+          if (decompose_lists == decompose_lists_column::YES && c->type().id() == type_id::LIST) {
+            recursive_child(
+              c->children[lists_column_view::child_column_index].get(), branch, depth + 1);
+          } else if (c->type().id() == type_id::STRUCT) {
+            for (size_t child_idx = 0; child_idx < c->children.size(); ++child_idx) {
+              // When child_idx == 0, we also cut off the current branch if its first child is a
+              // lists column.
+              // In such cases, the last column of the current branch will be `Struct<List,...>` and
+              // it will be modified to empty struct type `Struct<>` later on.
+              if (child_idx > 0 || c->children[0]->type().id() == type_id::LIST) {
+                verticalized_col_depths.push_back(depth + 1);
+                branch = &flattened.emplace_back();
+              }
+              recursive_child(c->children[child_idx].get(), branch, depth + 1);
+            }
+          }
+        };
+      auto& branch = flattened.emplace_back();
+      verticalized_col_depths.push_back(0);
+      recursive_child(col, &branch, 0);
+
+      for (auto const& branch : flattened) {
+        column_view temp_col = *branch.back();
+
+        // Change `Struct<List,...>` into empty struct type `Struct<>`.
+        if (temp_col.type().id() == type_id::STRUCT &&
+            (temp_col.num_children() > 0 && temp_col.child(0).type().id() == type_id::LIST)) {
+          temp_col = column_view(temp_col.type(),
+                                 temp_col.size(),
+                                 temp_col.head(),
+                                 temp_col.null_mask(),
+                                 temp_col.null_count(),
+                                 temp_col.offset(),
+                                 {});
+        }
+
+        for (auto it = branch.crbegin() + 1; it < branch.crend(); ++it) {
+          auto const& prev_col = *(*it);
+          auto children =
+            (prev_col.type().id() == type_id::LIST)
+              ? std::vector<column_view>{*prev_col
+                                            .children[lists_column_view::offsets_column_index],
+                                         temp_col}
+              : std::vector<column_view>{temp_col};
+          temp_col = column_view(prev_col.type(),
+                                 prev_col.size(),
+                                 nullptr,
+                                 prev_col.null_mask(),
+                                 prev_col.null_count(),
+                                 prev_col.offset(),
+                                 std::move(children));
+        }
+        // Traverse upward and include any list columns in the ancestors
+        for (detail::linked_column_view* parent = branch.front()->parent; parent;
+             parent                             = parent->parent) {
+          if (parent->type().id() == type_id::LIST) {
+            // Include this parent
+            temp_col = column_view(
+              parent->type(),
+              parent->size(),
+              nullptr,  // list has no data of its own
+              nullptr,  // If we're going through this then nullmask is already in another branch
+              0,
+              parent->offset(),
+              {*parent->children[lists_column_view::offsets_column_index], temp_col});
+          } else if (parent->type().id() == type_id::STRUCT) {
+            // Replace offset with parent's offset
+            temp_col = column_view(temp_col.type(),
+                                   parent->size(),
+                                   temp_col.head(),
+                                   temp_col.null_mask(),
+                                   temp_col.null_count(),
+                                   parent->offset(),
+                                   {temp_col.child_begin(), temp_col.child_end()});
+          }
+        }
+        verticalized_columns.push_back(temp_col);
+      }
+      if (not column_order.empty()) {
+        new_column_order.insert(new_column_order.end(), flattened.size(), column_order[col_idx]);
+      }
+      if (not null_precedence.empty()) {
+        new_null_precedence.insert(
+          new_null_precedence.end(), flattened.size(), null_precedence[col_idx]);
+      }
+    } else {
+      verticalized_columns.push_back(*col);
+      verticalized_col_depths.push_back(0);
+      if (not column_order.empty()) { new_column_order.push_back(column_order[col_idx]); }
+      if (not null_precedence.empty()) { new_null_precedence.push_back(null_precedence[col_idx]); }
+    }
+  }
+  return std::make_tuple(table_view(verticalized_columns),
+                         std::move(new_column_order),
+                         std::move(new_null_precedence),
+                         std::move(verticalized_col_depths));
+}
+}  // namespace cudf::experimental
 
 namespace cudf::io::orc::detail {
 
@@ -742,6 +885,142 @@ void reader::impl::load_data()
 
   // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
   _chunk_read_data.curr_decode_stripe_chunk = 0;
+}
+
+namespace {
+
+// Default 10k rows.
+size_type constexpr SEGMENT_SIZE = 10'000;
+
+/**
+ * @brief Functor which computes the total data size for a given type of a cudf column.
+ *
+ * In the case of strings, the return size does not include the chars themselves. That
+ * information is tracked separately (see PageInfo::str_bytes).
+ *
+ * TODO
+ */
+struct column_segment_size_functor {
+  column_device_view d_col;
+  size_type size;
+
+  __device__ std::size_t num_rows(size_type start_row) const
+  {
+    return cuda::std::min(size, d_col.size() - start_row);
+  }
+
+  __device__ std::size_t validity_size(size_type start_row) const
+  {
+    return d_col.nullable()
+             ? cudf::util::div_rounding_up_safe(num_rows(start_row), std::size_t{32}) * 4ul
+             : 0ul;
+  }
+
+  template <typename T,
+            CUDF_ENABLE_IF(!cudf::is_rep_layout_compatible<T>() && !cudf::is_nested<T>() &&
+                           !std::is_same_v<T, string_view>)>
+  __device__ std::size_t operator()(size_type) const
+  {
+    CUDF_UNREACHABLE("Attempted to find size of unsupported types.");
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  __device__ std::size_t operator()(size_type start_row) const
+  {
+    auto constexpr element_size = sizeof(device_storage_type_t<T>);
+    return element_size * num_rows(start_row) + validity_size(start_row);
+  }
+
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
+  __device__ std::size_t operator()(size_type start_row) const
+  {
+    auto const offsets      = d_col.child(strings_column_view::offsets_column_index);
+    auto const offsetalator = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
+    auto const char_begin   = offsetalator[start_row];
+    auto const char_end     = offsetalator[start_row + num_rows(start_row)];
+    auto const chars_size   = char_end - char_begin;
+
+    // NOTE: Adding the + 1 offset, similar to the case of lists column.
+    auto const offset_size =
+      offsets.type().id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t);
+    return offset_size * (num_rows(start_row) + 1) + validity_size(start_row) + chars_size;
+  }
+
+  template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
+  __device__ std::size_t operator()(size_type start_row) const
+  {
+    auto constexpr element_size = sizeof(device_storage_type_t<T>);
+
+    auto col             = d_col;
+    auto col_size        = element_size + validity_size(start_row);
+    auto child_start_row = start_row;
+    auto child_size      = size;
+
+    while (col.type().id() == type_id::STRUCT || col.type().id() == type_id::LIST) {
+      if (col.type().id() == type_id::STRUCT) {
+        // Empty struct.
+        if (col.num_child_columns() == 0) { return col_size; }
+        col = col.child(0);
+      } else {
+        auto const offsets = col.child(lists_column_view::offsets_column_index);
+        col                = col.child(lists_column_view::child_column_index);
+
+        auto const child_end_row = offsets.element<size_type>(start_row + num_rows(start_row));
+        child_start_row          = offsets.element<size_type>(start_row);
+        child_size               = child_end_row - child_start_row;
+
+        // NOTE: Adding the + 1 offset here isn't strictly correct. There will only be 1 extra
+        // offset for the entire column so we will get a small over-estimate of the real size.
+        auto constexpr offset_size = sizeof(size_type);
+        col_size += offset_size * (num_rows(start_row) + 1);
+      }
+    }
+
+    return col_size + type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
+                        col.type(), column_segment_size_functor{col, child_size}, child_start_row);
+  }
+};
+
+struct table_segment_size_functor {
+  table_device_view d_table;
+  size_type size;
+
+  __device__ std::size_t operator()(size_type start_row) const
+  {
+    auto const col_size = [=](column_device_view col) {
+      return cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size}, start_row);
+    };
+
+    return thrust::transform_reduce(
+      thrust::seq, d_table.begin(), d_table.end(), col_size, 0ul, thrust::plus<>{});
+  }
+};
+
+}  // namespace
+
+void test(table_view const& input, rmm::cuda_stream_view stream)
+{
+  auto verticalized_t = std::get<0>(
+    cudf::experimental::decompose_structs(input, cudf::experimental::decompose_lists_column::YES));
+  auto d_t = table_device_view::create(verticalized_t, stream);
+
+  auto const num_segments = input.num_rows() / SEGMENT_SIZE;
+  auto output             = make_fixed_width_column(
+    data_type{type_id::UINT64}, num_segments, mask_state::UNALLOCATED, stream);
+
+  auto s = thrust::transform(
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(num_segments),
+    output->mutable_view().begin<size_t>(),
+    cuda::proclaim_return_type<std::size_t>(
+      [SEGMENT_SIZE = SEGMENT_SIZE, d_table = *d_t] __device__(auto const segment_idx) {
+        auto const start_row = segment_idx * SEGMENT_SIZE;
+        return table_segment_size_functor{d_table, SEGMENT_SIZE}(start_row);
+      }));
+
+  printf("segment size: \n");
+  cudf::test::print(output->view());
+  fflush(stdout);
 }
 
 }  // namespace cudf::io::orc::detail
