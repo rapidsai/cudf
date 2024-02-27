@@ -434,7 +434,7 @@ def read_csv(
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                if isinstance(dtype, cudf.CategoricalDtype) or dtype == "category":
+                if isinstance(cudf.dtype(v), cudf.CategoricalDtype):
                     df._data[str(k)] = df._data[str(k)].astype(v)
         elif (
             cudf.api.types.is_scalar(dtype) or
@@ -442,11 +442,11 @@ def read_csv(
                 np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
-            if isinstance(dtype, cudf.CategoricalDtype) or dtype == "category":
+            if isinstance(cudf.dtype(dtype), cudf.CategoricalDtype):
                 df = df.astype(dtype)
         elif isinstance(dtype, abc.Collection):
             for index, col_dtype in enumerate(dtype):
-                if isinstance(dtype, cudf.CategoricalDtype) or dtype == "category":
+                if isinstance(cudf.dtype(col_dtype), cudf.CategoricalDtype):
                     col_name = df._data.names[index]
                     df._data[col_name] = df._data[col_name].astype(col_dtype)
 
