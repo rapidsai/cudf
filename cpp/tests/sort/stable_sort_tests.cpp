@@ -100,6 +100,7 @@ TYPED_TEST(StableSort, WithNullMax)
 
 TYPED_TEST(StableSort, SingleColumnNoNull)
 {
+  // This test exercises the "fast-path" single column sort.
   using T = TypeParam;
   //                                             0  1   2  3  4  5  6   7  8  9
   cudf::test::fixed_width_column_wrapper<T> col{{7, 1, -2, 5, 1, 0, 1, -2, 0, 5}};
