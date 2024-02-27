@@ -1211,10 +1211,14 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
-    if (chunk_col_desc.physical_type == Type::BOOLEAN ||
-        (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY) ||
-        (chunk_col_desc.requested_encoding != column_encoding::NOT_SET &&
-         chunk_col_desc.requested_encoding != column_encoding::DICTIONARY)) {
+    auto const is_requested_non_dict =
+      chunk_col_desc.requested_encoding != column_encoding::NOT_SET &&
+      chunk_col_desc.requested_encoding != column_encoding::DICTIONARY;
+    auto const is_type_non_dict =
+      chunk_col_desc.physical_type == Type::BOOLEAN ||
+      (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY);
+
+    if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
