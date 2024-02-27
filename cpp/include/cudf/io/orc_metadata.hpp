@@ -331,7 +331,7 @@ class orc_metadata {
    * @param num_rows number of rows
    * @param num_stripes number of stripes
    */
-  orc_metadata(orc_schema schema, size_type num_rows, size_type num_stripes)
+  orc_metadata(orc_schema schema, uint64_t num_rows, size_type num_stripes)
     : _schema{std::move(schema)}, _num_rows{num_rows}, _num_stripes{num_stripes}
   {
   }
@@ -362,7 +362,7 @@ class orc_metadata {
 
  private:
   orc_schema _schema;
-  size_type _num_rows;
+  uint64_t _num_rows;
   size_type _num_stripes;
 };
 
