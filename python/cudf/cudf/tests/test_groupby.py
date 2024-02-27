@@ -914,10 +914,9 @@ def test_groupby_apply_return_reindexed_series(as_index):
     )
     pdf = df.to_pandas()
 
+    kwargs = {}
     if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
+        kwargs["include_groups"] = False
 
     expect = pdf.groupby("key", as_index=as_index).apply(pdf_func, **kwargs)
     got = df.groupby("key", as_index=as_index).apply(gdf_func, **kwargs)

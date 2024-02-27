@@ -1373,7 +1373,6 @@ class GroupBy(Serializable, Reducible, Scannable):
                     index_data[None] = grouped_values.index._column
                     result.index = cudf.MultiIndex._from_data(index_data)
             elif len(chunk_results) == len(group_names):
-                #
                 result = cudf.concat(chunk_results, axis=1).T
                 result.index = group_names
                 result.index.names = self.grouping.names
