@@ -334,13 +334,13 @@ struct page_index_info {
 
 // functor to copy page_index_info into the PageInfo struct
 struct copy_page_info {
-  device_span<page_index_info> page_info;
+  device_span<page_index_info const> page_indexes;
   device_span<PageInfo> pages;
 
   __device__ void operator()(size_type idx)
   {
     auto& pg                = pages[idx];
-    auto const& pi          = page_info[idx];
+    auto const& pi          = page_indexes[idx];
     pg.num_rows             = pi.num_rows;
     pg.chunk_row            = pi.chunk_row;
     pg.has_page_index       = true;
@@ -363,7 +363,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
                        rmm::cuda_stream_view stream)
 {
   auto const num_pages = pages.size();
-  std::vector<page_index_info> page_info(num_pages);
+  std::vector<page_index_info> page_indexes(num_pages);
 
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     auto const& chunk = chunks[c];
@@ -372,7 +372,7 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
     size_t start_row       = 0;
     page_count += chunk.num_dict_pages;
     for (size_t p = 0; p < chunk_info.pages.size(); p++, page_count++) {
-      auto& page      = page_info[page_count];
+      auto& page      = page_indexes[page_count];
       page.num_rows   = chunk_info.pages[p].num_rows;
       page.chunk_row  = start_row;
       page.num_nulls  = chunk_info.pages[p].num_nulls.value_or(0);
@@ -383,12 +383,12 @@ void fill_in_page_info(host_span<ColumnChunkDesc> chunks,
     }
   }
 
-  auto d_page_info = cudf::detail::make_device_uvector_async(
-    page_info, stream, rmm::mr::get_current_device_resource());
+  auto d_page_index = cudf::detail::make_device_uvector_async(
+    page_index, stream, rmm::mr::get_current_device_resource());
 
   auto iter = thrust::make_counting_iterator<size_type>(0);
   thrust::for_each(
-    rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_info, pages});
+    rmm::exec_policy_nosync(stream), iter, iter + num_pages, copy_page_info{d_page_index, pages});
 }
 
 /**
