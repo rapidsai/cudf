@@ -33,6 +33,7 @@
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
 #include <thrust/fill.h>
+#include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/sequence.h>
 
 #include <cstddef>
@@ -76,6 +77,14 @@ class build_keys_fn {
 
  private:
   Hasher _hash;
+};
+
+struct output_fn {
+  __device__ constexpr cudf::size_type operator()(
+    cuco::pair<hash_value_type, lhs_index_type> const& x) const
+  {
+    return static_cast<cudf::size_type>(x.second);
+  }
 };
 
 template <typename Tile>
@@ -420,10 +429,15 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
     auto const iter           = cudf::detail::make_counting_transform_iterator(
       0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
 
+    auto const output_begin =
+      thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
+    this->_hash_table.find(iter, iter + probe_table_num_rows, output_begin, stream.value());
+
     // TODO: thrust::transform_output_iterator with _hash_table.find()
-    cudf::detail::grid_1d grid{probe_table_num_rows, DISTINCT_JOIN_BLOCK_SIZE};
-    distinct_left_join_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      iter, probe_table_num_rows, this->_hash_table.ref(cuco::find), build_indices->data());
+    /*   cudf::detail::grid_1d grid{probe_table_num_rows, DISTINCT_JOIN_BLOCK_SIZE};
+       distinct_left_join_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0,
+       stream.value()>>>( iter, probe_table_num_rows, this->_hash_table.ref(cuco::find),
+       build_indices->data());*/
   }
 
   return {std::move(build_indices), std::move(probe_indices)};
