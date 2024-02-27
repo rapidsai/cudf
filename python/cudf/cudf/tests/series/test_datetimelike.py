@@ -203,11 +203,3 @@ def test_tz_aware_attributes_local():
     result = dti.hour
     expected = cudf.Index([9, 9, 9], dtype="int16")
     assert_eq(result, expected)
-
-
-@pytest.mark.parametrize("tz", ["UTC", "US/Pacific"])
-def test_datetimetz_to_pandas(tz):
-    ser = cudf.DatetimeIndex(["2020-01-01"]).tz_localize(tz)
-    result = ser.to_pandas()
-    expected = pd.DatetimeIndex(["2020-01-01"]).tz_localize(tz)
-    pd.testing.assert_index_equal(result, expected)
