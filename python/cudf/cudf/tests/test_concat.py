@@ -609,7 +609,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     if expected.shape != df.shape:
         for key, col in actual[actual.columns].items():
             if isinstance(col.dtype, cudf.CategoricalDtype):
-                if not isinstance(expected[key].dtype, cudf.CategoricalDtype):
+                if not isinstance(expected[key].dtype, pd.CategoricalDtype):
                     # TODO: Pandas bug:
                     # https://github.com/pandas-dev/pandas/issues/42840
                     expected[key] = expected[key].fillna("-1").astype("str")
@@ -1333,7 +1333,7 @@ def test_concat_join_empty_dataframes_axis_1(
     if expected.shape != df.shape:
         if axis == 0:
             for key, col in actual[actual.columns].items():
-                if isinstance(expected[key].dtype, cudf.CategoricalDtype):
+                if isinstance(expected[key].dtype, pd.CategoricalDtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")
             # if not expected.empty:
