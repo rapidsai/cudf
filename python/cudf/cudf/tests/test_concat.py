@@ -10,7 +10,6 @@ import pytest
 
 import cudf
 from cudf.api.types import _is_categorical_dtype
-from cudf.core._compat import PANDAS_GE_200
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
@@ -390,13 +389,12 @@ def test_pandas_concat_compatibility_axis1_eq_index():
     ps1 = s1.to_pandas()
     ps2 = s2.to_pandas()
 
-    with expect_warning_if(not PANDAS_GE_200):
-        assert_exceptions_equal(
-            lfunc=pd.concat,
-            rfunc=cudf.concat,
-            lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
-            rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
-        )
+    assert_exceptions_equal(
+        lfunc=pd.concat,
+        rfunc=cudf.concat,
+        lfunc_args_and_kwargs=([], {"objs": [ps1, ps2], "axis": 1}),
+        rfunc_args_and_kwargs=([], {"objs": [s1, s2], "axis": 1}),
+    )
 
 
 @pytest.mark.parametrize("name", [None, "a"])
@@ -459,7 +457,10 @@ def test_concat_mixed_input():
         [pd.Series([1, 2, 3]), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": []})],
         [pd.Series([], dtype="float64"), pd.DataFrame({"a": [1, 2]})],
-        [pd.Series([1, 2, 3.0, 1.2], name="abc"), pd.DataFrame({"a": [1, 2]})],
+        [
+            pd.Series([1, 2, 3.0, 1.2], name="abc"),
+            pd.DataFrame({"a": [1, 2]}),
+        ],
         [
             pd.Series(
                 [1, 2, 3.0, 1.2], name="abc", index=[100, 110, 120, 130]
@@ -630,7 +631,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
             expected,
             actual,
             check_index_type=not gdf.empty,
-            check_column_type=not PANDAS_GE_200,
+            check_column_type=False,
         )
 
 
@@ -1104,7 +1105,7 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
         expected,
         actual,
         check_index_type=True,
-        check_column_type=not PANDAS_GE_200,
+        check_column_type=False,
     )
 
 

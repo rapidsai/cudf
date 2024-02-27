@@ -5,7 +5,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq, expect_warning_if
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
@@ -373,7 +372,7 @@ def test_to_numeric_error(data, errors):
         ):
             cudf.to_numeric(data, errors=errors)
     else:
-        with expect_warning_if(PANDAS_GE_220 and errors == "ignore"):
+        with expect_warning_if(errors == "ignore"):
             expect = pd.to_numeric(data, errors=errors)
         with expect_warning_if(errors == "ignore"):
             got = cudf.to_numeric(data, errors=errors)

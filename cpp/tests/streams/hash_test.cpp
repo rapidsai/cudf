@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/hashing.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+
+#include <cudf/hashing.hpp>
 
 class HashTest : public cudf::test::BaseFixture {};
 
@@ -49,6 +49,6 @@ TEST_F(HashTest, MultiValue)
 
   auto const input1 = cudf::table_view({strings_col, ints_col, bools_col1, secs_col});
 
-  auto const output1 = cudf::hash(
-    input1, cudf::hash_id::HASH_MURMUR3, cudf::DEFAULT_HASH_SEED, cudf::test::get_default_stream());
+  auto const output1 = cudf::hashing::murmurhash3_x86_32(
+    input1, cudf::DEFAULT_HASH_SEED, cudf::test::get_default_stream());
 }

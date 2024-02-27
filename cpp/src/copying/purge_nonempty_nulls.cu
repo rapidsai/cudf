@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <thrust/count.h>
@@ -41,9 +42,11 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
   if ((input.size() == input.null_count()) && (input.num_children() == 0)) { return false; }
 
   // Cross-reference nullmask and offsets.
-  auto const type         = input.type().id();
-  auto const offsets      = (type == type_id::STRING) ? (strings_column_view{input}).offsets_begin()
-                                                      : (lists_column_view{input}).offsets_begin();
+  auto const type    = input.type().id();
+  auto const offsets = offsetalator_factory::make_input_iterator(
+    (type == type_id::STRING) ? strings_column_view{input}.offsets()
+                              : lists_column_view{input}.offsets(),
+    input.offset());
   auto const d_input      = cudf::column_device_view::create(input, stream);
   auto const is_dirty_row = [d_input = *d_input, offsets] __device__(size_type const& row_idx) {
     return d_input.is_null_nocheck(row_idx) && (offsets[row_idx] != offsets[row_idx + 1]);

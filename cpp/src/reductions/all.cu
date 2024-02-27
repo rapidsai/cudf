@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,12 +19,11 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
 
+#include <cuda/atomic>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
-
-#include <cuda/atomic>
 
 namespace cudf {
 namespace reduction {
