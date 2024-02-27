@@ -15,7 +15,6 @@
  */
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/default_stream.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
@@ -25,6 +24,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <string>
@@ -34,17 +34,16 @@ struct JsonWSNormalizationTest : public cudf::test::BaseFixture {};
 
 void run_test(std::string const& host_input, std::string const& expected_host_output)
 {
+  auto stream_view  = cudf::get_default_stream();
   auto device_input = cudf::detail::make_device_uvector_async(
-    cudf::host_span<char const>{host_input.c_str(), host_input.size()},
-    cudf::get_default_stream(),
-    rmm::mr::get_current_device_resource());
+    host_input, stream_view, rmm::mr::get_current_device_resource());
 
   // Preprocessing FST
   auto device_fst_output = cudf::io::json::detail::normalize_whitespace(
-    std::move(device_input), cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+    std::move(device_input), stream_view, rmm::mr::get_current_device_resource());
 
   auto const preprocessed_host_output =
-    cudf::detail::make_std_vector_sync(device_fst_output, cudf::get_default_stream());
+    cudf::detail::make_std_vector_sync(device_fst_output, stream_view);
 
   ASSERT_EQ(preprocessed_host_output.size(), expected_host_output.size());
   CUDF_TEST_EXPECT_VECTOR_EQUAL(
