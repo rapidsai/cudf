@@ -571,10 +571,11 @@ CUDF_KERNEL void __launch_bounds__(128)
 
   // if writing delta encoded values, we're going to need to know the data length to get a guess
   // at the worst case number of bytes needed to encode.
-  auto const physical_type      = col_g.physical_type;
-  auto const type_id            = col_g.leaf_column->type().id();
-  auto const is_requested_delta = col_g.requested_encoding == Encoding::DELTA_BINARY_PACKED ||
-                                  col_g.requested_encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY;
+  auto const physical_type = col_g.physical_type;
+  auto const type_id       = col_g.leaf_column->type().id();
+  auto const is_requested_delta =
+    col_g.requested_encoding == column_encoding::DELTA_BINARY_PACKED ||
+    col_g.requested_encoding == column_encoding::DELTA_LENGTH_BYTE_ARRAY;
   auto const is_fallback_to_delta =
     !ck_g.use_dictionary && write_v2_headers &&
     (physical_type == INT32 || physical_type == INT64 || physical_type == BYTE_ARRAY);
@@ -789,16 +790,16 @@ CUDF_KERNEL void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) {
             // set encoding
-            if (col_g.requested_encoding != Encoding::UNDEFINED) {
+            if (col_g.requested_encoding != column_encoding::NOT_SET) {
               switch (col_g.requested_encoding) {
-                case Encoding::PLAIN: page_g.kernel_mask = encode_kernel_mask::PLAIN; break;
-                case Encoding::RLE_DICTIONARY:
+                case column_encoding::PLAIN: page_g.kernel_mask = encode_kernel_mask::PLAIN; break;
+                case column_encoding::DICTIONARY:
                   page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
                   break;
-                case Encoding::DELTA_BINARY_PACKED:
+                case column_encoding::DELTA_BINARY_PACKED:
                   page_g.kernel_mask = encode_kernel_mask::DELTA_BINARY;
                   break;
-                case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+                case column_encoding::DELTA_LENGTH_BYTE_ARRAY:
                   page_g.kernel_mask = encode_kernel_mask::DELTA_LENGTH_BA;
                   break;
               }

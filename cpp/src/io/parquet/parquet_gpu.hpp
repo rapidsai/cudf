@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/optional>
 #include <cuda_runtime.h>
 
 #include <type_traits>
@@ -458,11 +459,11 @@ struct parquet_column_device_view : stats_column_desc {
   size_type const* level_offsets;  //!< Offset array for per-row pre-calculated rep/def level values
   uint8_t const* rep_values;       //!< Pre-calculated repetition level values
   uint8_t const* def_values;       //!< Pre-calculated definition level values
-  uint8_t const* nullability;   //!< Array of nullability of each nesting level. e.g. nullable[0] is
-                                //!< nullability of parent_column. May be different from
-                                //!< col.nullable() in case of chunked writing.
-  bool output_as_byte_array;    //!< Indicates this list column is being written as a byte array
-  Encoding requested_encoding;  //!< User specified encoding for this column.
+  uint8_t const* nullability;  //!< Array of nullability of each nesting level. e.g. nullable[0] is
+                               //!< nullability of parent_column. May be different from
+                               //!< col.nullable() in case of chunked writing.
+  bool output_as_byte_array;   //!< Indicates this list column is being written as a byte array
+  column_encoding requested_encoding;  //!< User specified encoding for this column.
 };
 
 struct EncColumnChunk;

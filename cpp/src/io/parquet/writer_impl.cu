@@ -258,24 +258,6 @@ bool is_col_fixed_width(column_view const& column)
   return is_fixed_width(column.type());
 }
 
-// Convert encoding passed in by user to the correct enum value. Returns `std::nullopt`
-// if passed an unsupported (or mistyped) encoding.
-std::optional<Encoding> string_to_encoding(std::string const& encoding)
-{
-  if (encoding == parquet_encoding::PLAIN) {
-    return Encoding::PLAIN;
-  } else if (encoding == parquet_encoding::DICTIONARY) {
-    return Encoding::RLE_DICTIONARY;
-  } else if (encoding == parquet_encoding::DELTA_BINARY_PACKED) {
-    return Encoding::DELTA_BINARY_PACKED;
-  } else if (encoding == parquet_encoding::DELTA_LENGTH_BYTE_ARRAY) {
-    return Encoding::DELTA_LENGTH_BYTE_ARRAY;
-  } else if (encoding == parquet_encoding::DELTA_BYTE_ARRAY) {
-    return Encoding::DELTA_BYTE_ARRAY;
-  }
-  return std::nullopt;
-}
-
 /**
  * @brief Extends SchemaElement to add members required in constructing parquet_column_view
  *
@@ -291,7 +273,7 @@ struct schema_tree_node : public SchemaElement {
   cudf::detail::LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
-  std::optional<Encoding> requested_encoding;
+  column_encoding requested_encoding;
 
   // TODO(fut): Think about making schema a class that holds a vector of schema_tree_nodes. The
   // function construct_schema_tree could be its constructor. It can have method to get the per
@@ -627,31 +609,36 @@ std::vector<schema_tree_node> construct_schema_tree(
       // only call this after col_schema.type has been set
       auto set_encoding = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
-        if (schema[parent_idx].name != "list" and col_meta.is_encoding_set()) {
-          auto enc = string_to_encoding(col_meta.get_encoding());
+        s.requested_encoding = column_encoding::NOT_SET;
 
-          // do some validation on the requested encoding
-          // TODO(ets): should we print a warning or error out if the requested encoding is
-          // invalid? for now just silently fall back to the default encoder.
-          if (!enc.has_value() || !is_supported_encoding(enc.value())) { return; }
-
-          switch (enc.value()) {
-            case Encoding::DELTA_BINARY_PACKED:
+        if (schema[parent_idx].name != "list" and
+            col_meta.get_encoding() != column_encoding::NOT_SET) {
+          // do some validation
+          switch (col_meta.get_encoding()) {
+            case column_encoding::DELTA_BINARY_PACKED:
               if (s.type != Type::INT32 && s.type != Type::INT64) { return; }
               break;
 
-            case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+            case column_encoding::DELTA_LENGTH_BYTE_ARRAY:
               if (s.type != Type::BYTE_ARRAY) { return; }
               break;
 
-            // this is not caught by the check for supported encodings above
-            case Encoding::DELTA_BYTE_ARRAY: return;
+            // not yet supported for write (soon...)
+            case column_encoding::DELTA_BYTE_ARRAY: return;
 
-            default: break;
+            // supported parquet encodings
+            case column_encoding::PLAIN:
+            case column_encoding::DICTIONARY: break;
+
+            // all others
+            default:
+              CUDF_LOG_WARN("Unsupported page encoding requested: {}",
+                            static_cast<int>(col_meta.get_encoding()));
+              return;
           }
 
           // requested encoding seems to be ok, set it
-          s.requested_encoding = enc;
+          s.requested_encoding = col_meta.get_encoding();
         }
       };
 
@@ -1003,7 +990,7 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
   desc.nullability        = _d_nullability.data();
   desc.max_def_level      = _max_def_level;
   desc.max_rep_level      = _max_rep_level;
-  desc.requested_encoding = schema_node.requested_encoding.value_or(Encoding::UNDEFINED);
+  desc.requested_encoding = schema_node.requested_encoding;
   return desc;
 }
 
@@ -1226,8 +1213,8 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
     auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
     if (chunk_col_desc.physical_type == Type::BOOLEAN ||
         (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY) ||
-        (chunk_col_desc.requested_encoding != Encoding::UNDEFINED &&
-         chunk_col_desc.requested_encoding != Encoding::RLE_DICTIONARY)) {
+        (chunk_col_desc.requested_encoding != column_encoding::NOT_SET &&
+         chunk_col_desc.requested_encoding != column_encoding::DICTIONARY)) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;

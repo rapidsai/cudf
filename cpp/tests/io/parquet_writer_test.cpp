@@ -1443,27 +1443,25 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
 
   cudf::io::table_input_metadata table_metadata(table);
   table_metadata.column_metadata[0].set_name("int_plain");
-  table_metadata.column_metadata[0].set_encoding(cudf::io::parquet_encoding::PLAIN);
+  table_metadata.column_metadata[0].set_encoding(cudf::io::column_encoding::PLAIN);
   table_metadata.column_metadata[1].set_name("int_dict");
-  table_metadata.column_metadata[1].set_encoding(cudf::io::parquet_encoding::DICTIONARY);
+  table_metadata.column_metadata[1].set_encoding(cudf::io::column_encoding::DICTIONARY);
   table_metadata.column_metadata[2].set_name("int_delta_binary_packed");
-  table_metadata.column_metadata[2].set_encoding(cudf::io::parquet_encoding::DELTA_BINARY_PACKED);
+  table_metadata.column_metadata[2].set_encoding(cudf::io::column_encoding::DELTA_BINARY_PACKED);
   table_metadata.column_metadata[3].set_name("int_delta_length_byte_array");
   table_metadata.column_metadata[3].set_encoding(
-    cudf::io::parquet_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  table_metadata.column_metadata[4].set_name("int_bogus");
-  table_metadata.column_metadata[4].set_encoding("no such encoding");
+    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  table_metadata.column_metadata[4].set_name("int_none");
   table_metadata.column_metadata[5].set_name("string_plain");
-  table_metadata.column_metadata[5].set_encoding(cudf::io::parquet_encoding::PLAIN);
+  table_metadata.column_metadata[5].set_encoding(cudf::io::column_encoding::PLAIN);
   table_metadata.column_metadata[6].set_name("string_dict");
-  table_metadata.column_metadata[6].set_encoding(cudf::io::parquet_encoding::DICTIONARY);
+  table_metadata.column_metadata[6].set_encoding(cudf::io::column_encoding::DICTIONARY);
   table_metadata.column_metadata[7].set_name("string_delta_length_byte_array");
   table_metadata.column_metadata[7].set_encoding(
-    cudf::io::parquet_encoding::DELTA_LENGTH_BYTE_ARRAY);
+    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
   table_metadata.column_metadata[8].set_name("string_delta_binary_packed");
-  table_metadata.column_metadata[8].set_encoding(cudf::io::parquet_encoding::DELTA_BINARY_PACKED);
-  table_metadata.column_metadata[9].set_name("string_bogus");
-  table_metadata.column_metadata[9].set_encoding("no such encoding");
+  table_metadata.column_metadata[8].set_encoding(cudf::io::column_encoding::DELTA_BINARY_PACKED);
+  table_metadata.column_metadata[9].set_name("string_none");
 
   for (auto& col_meta : table_metadata.column_metadata) {
     col_meta.set_nullability(false);
@@ -1496,7 +1494,7 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   // requested delta_length_byte_array, but should fall back to dictionary
   EXPECT_EQ(fmd.row_groups[0].columns[3].meta_data.encodings[0],
             cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
-  // requested nonsense, but should fall back to dictionary
+  // no request, should fall back to dictionary
   EXPECT_EQ(fmd.row_groups[0].columns[4].meta_data.encodings[0],
             cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
   // requested plain
@@ -1511,7 +1509,7 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   // requested delta_binary_packed, but should fall back to dictionary
   EXPECT_EQ(fmd.row_groups[0].columns[8].meta_data.encodings[0],
             cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
-  // requested nonsense, but should fall back to dictionary
+  // no request, should fall back to dictionary
   EXPECT_EQ(fmd.row_groups[0].columns[9].meta_data.encodings[0],
             cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
 }

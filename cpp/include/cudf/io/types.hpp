@@ -100,17 +100,23 @@ enum statistics_freq {
 };
 
 /**
- * @brief Valid parquet encodings for use with `column_in_metadata::set_encoding()`
+ * @brief Valid encodings for use with `column_in_metadata::set_encoding()`
  */
-struct parquet_encoding {
-  static std::string const PLAIN;       ///< Use plain encoding
-  static std::string const DICTIONARY;  ///< Use dictionary encoding
-  static std::string const
-    DELTA_BINARY_PACKED;  ///< Use DELTA_BINARY_PACKED encoding (only valid for integer columns)
-  static std::string const DELTA_LENGTH_BYTE_ARRAY;  ///< Use DELTA_LENGTH_BYTE_ARRAY encoding (only
-                                                     ///< valid for BYTE_ARRAY columns)
-  static std::string const DELTA_BYTE_ARRAY;  ///< Use DELTA_BYTE_ARRAY encoding (only valid for
-                                              ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+enum class column_encoding {
+  // common encodings
+  NOT_SET = -1,  ///< No encoding has been requested
+  DICTIONARY,    ///< Use dictionary encoding
+  // parquet encodings
+  PLAIN,                    ///< Use plain encoding
+  DELTA_BINARY_PACKED,      ///< Use DELTA_BINARY_PACKED encoding (only valid for integer columns)
+  DELTA_LENGTH_BYTE_ARRAY,  ///< Use DELTA_LENGTH_BYTE_ARRAY encoding (only
+                            ///< valid for BYTE_ARRAY columns)
+  DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
+                            ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+  // orc encodings
+  DIRECT,         ///< Use DIRECT encoding
+  DIRECT_V2,      ///< Use DIRECT_V2 encoding
+  DICTIONARY_V2,  ///< Use DICTIONARY_V2 encoding
 };
 
 /**
@@ -599,7 +605,7 @@ class column_in_metadata {
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
-  std::optional<std::string> _encoding;
+  column_encoding _encoding = column_encoding::NOT_SET;
 
  public:
   column_in_metadata() = default;
@@ -726,7 +732,7 @@ class column_in_metadata {
    * @param encoding The encoding to use
    * @return this for chaining
    */
-  column_in_metadata& set_encoding(std::string const& encoding) noexcept
+  column_in_metadata& set_encoding(column_encoding encoding) noexcept
   {
     _encoding = encoding;
     return *this;
@@ -839,20 +845,11 @@ class column_in_metadata {
   [[nodiscard]] bool is_enabled_output_as_binary() const noexcept { return _output_as_binary; }
 
   /**
-   * @brief Get whether the encoding has been set for this column.
-   *
-   * @return Boolean indicating whether and encoding has been set for this column
-   */
-  [[nodiscard]] bool is_encoding_set() const noexcept { return _encoding.has_value(); }
-
-  /**
    * @brief Get the encoding that was set for this column.
    *
-   * @throws std::bad_optional_access If encoding was not set for this
-   *         column. Check using `is_encoding_set()` first.
    * @return The encoding that was set for this column
    */
-  [[nodiscard]] std::string get_encoding() const { return _encoding.value(); }
+  [[nodiscard]] column_encoding get_encoding() const { return _encoding; }
 };
 
 /**
