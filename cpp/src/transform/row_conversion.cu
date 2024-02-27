@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -212,7 +213,7 @@ struct batch_data {
  * @return pair of device vector of size_types of the row sizes of the table and a device vector of
  * offsets into the string column
  */
-std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<strings_column_view::offset_iterator>>
+std::pair<rmm::device_uvector<size_type>, rmm::device_uvector<cudf::detail::input_offsetalator>>
 build_string_row_offsets(table_view const& tbl,
                          size_type fixed_width_and_validity_size,
                          rmm::cuda_stream_view stream)
@@ -222,20 +223,20 @@ build_string_row_offsets(table_view const& tbl,
   thrust::uninitialized_fill(rmm::exec_policy(stream), d_row_sizes.begin(), d_row_sizes.end(), 0);
 
   auto d_offsets_iterators = [&]() {
-    std::vector<strings_column_view::offset_iterator> offsets_iterators;
-    auto offsets_iter = thrust::make_transform_iterator(
-      tbl.begin(), [](auto const& col) -> strings_column_view::offset_iterator {
-        if (!is_fixed_width(col.type())) {
-          CUDF_EXPECTS(col.type().id() == type_id::STRING, "only string columns are supported!");
-          return strings_column_view(col).offsets_begin();
-        } else {
-          return nullptr;
-        }
+    std::vector<cudf::detail::input_offsetalator> offsets_iterators;
+    auto itr = thrust::make_transform_iterator(
+      tbl.begin(), [](auto const& col) -> cudf::detail::input_offsetalator {
+        return cudf::detail::offsetalator_factory::make_input_iterator(
+          strings_column_view(col).offsets(), col.offset());
       });
-    std::copy_if(offsets_iter,
-                 offsets_iter + tbl.num_columns(),
-                 std::back_inserter(offsets_iterators),
-                 [](auto const& offset_ptr) { return offset_ptr != nullptr; });
+    auto stencil = thrust::make_transform_iterator(
+      tbl.begin(), [](auto const& col) -> bool { return !is_fixed_width(col.type()); });
+    thrust::copy_if(thrust::host,
+                    itr,
+                    itr + tbl.num_columns(),
+                    stencil,
+                    std::back_inserter(offsets_iterators),
+                    thrust::identity<bool>{});
     return make_device_uvector_sync(
       offsets_iterators, stream, rmm::mr::get_current_device_resource());
   }();
@@ -858,7 +859,7 @@ CUDF_KERNEL void copy_strings_to_rows(size_type const num_rows,
                                       size_type const num_variable_columns,
                                       int8_t const** variable_input_data,
                                       size_type const* variable_col_output_offsets,
-                                      size_type const** variable_col_offsets,
+                                      cudf::detail::input_offsetalator* variable_col_offsets,
                                       size_type fixed_width_row_size,
                                       RowOffsetFunctor row_offsets,
                                       size_type const batch_row_offset,
@@ -1844,7 +1845,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(
   batch_data& batch_info,
   offsetFunctor offset_functor,
   column_info_s const& column_info,
-  std::optional<rmm::device_uvector<strings_column_view::offset_iterator>> variable_width_offsets,
+  std::optional<rmm::device_uvector<cudf::detail::input_offsetalator>> variable_width_offsets,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
