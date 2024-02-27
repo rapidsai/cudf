@@ -2670,6 +2670,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _set_columns_like(self, other: ColumnAccessor) -> None:
         """
         Modify self with the column properties of other.
+
+        * Whether .columns is a MultiIndex/RangeIndex
+        * The possible .columns.dtype
+        * The .columns.names/name (depending on if it's a MultiIndex)
         """
         if len(self._data.names) != len(other.names):
             raise ValueError(
