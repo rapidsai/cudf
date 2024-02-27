@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -78,34 +78,21 @@ TYPED_TEST(StableSort, WithNullMax)
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 10, 2, 10}, {1, 1, 0, 1, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{{1, 0, 3, 5, 4, 2}};
   std::vector<cudf::order> column_order{
     cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
   std::vector<cudf::null_order> null_precedence{
     cudf::null_order::AFTER, cudf::null_order::AFTER, cudf::null_order::AFTER};
+  auto expected = std::is_same_v<T, bool>
+                    // All the bools are true, and therefore don't affect sort order,
+                    // so this is just the sort order of the nullable string column
+                    ? cudf::test::fixed_width_column_wrapper<int32_t>{{0, 3, 5, 1, 4, 2}}
+                    : cudf::test::fixed_width_column_wrapper<int32_t>{{1, 0, 3, 5, 4, 2}};
 
   auto got = cudf::stable_sorted_order(input, column_order, null_precedence);
 
-  if (not std::is_same_v<T, bool>) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-    run_stable_sort_test(input, expected, column_order, null_precedence);
-  } else {
-    // for bools only validate that the null element landed at the back, since
-    // the rest of the values are equivalent and yields random sorted order.
-    auto to_host = [](cudf::column_view const& col) {
-      thrust::host_vector<int32_t> h_data(col.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
-      return h_data;
-    };
-    thrust::host_vector<int32_t> h_exp = to_host(expected);
-    thrust::host_vector<int32_t> h_got = to_host(got->view());
-    EXPECT_EQ(h_exp[h_exp.size() - 1], h_got[h_got.size() - 1]);
-
-    cudf::test::fixed_width_column_wrapper<int32_t> expected_for_bool{{0, 3, 5, 1, 4, 2}};
-    run_stable_sort_test(input, expected_for_bool, column_order, null_precedence);
-  }
+  run_stable_sort_test(input, expected, column_order, null_precedence);
 }
 
 TYPED_TEST(StableSort, WithNullMin)
@@ -117,32 +104,18 @@ TYPED_TEST(StableSort, WithNullMin)
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 10, 2}, {1, 1, 0, 1, 1}};
   cudf::table_view input{{col1, col2, col3}};
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
   std::vector<cudf::order> column_order{
     cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
+  auto expected = std::is_same_v<T, bool>
+                    // All the bools are true, and therefore don't affect sort order,
+                    // so this is just the sort order of the string column
+                    ? cudf::test::fixed_width_column_wrapper<int32_t>{{2, 0, 3, 1, 4}}
+                    : cudf::test::fixed_width_column_wrapper<int32_t>{{2, 1, 0, 3, 4}};
+  auto got      = cudf::stable_sorted_order(input, column_order);
 
-  auto got = cudf::stable_sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  if (!std::is_same_v<T, bool>) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
-
-    run_stable_sort_test(input, expected, column_order);
-  } else {
-    // for bools only validate that the null element landed at the front, since
-    // the rest of the values are equivalent and yields random sorted order.
-    auto to_host = [](cudf::column_view const& col) {
-      thrust::host_vector<int32_t> h_data(col.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        h_data.data(), col.data<int32_t>(), h_data.size() * sizeof(int32_t), cudaMemcpyDefault));
-      return h_data;
-    };
-    thrust::host_vector<int32_t> h_exp = to_host(expected);
-    thrust::host_vector<int32_t> h_got = to_host(got->view());
-    EXPECT_EQ(h_exp.front(), h_got.front());
-
-    cudf::test::fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 0, 3, 1, 4}};
-    run_stable_sort_test(input, expected_for_bool, column_order);
-  }
+  run_stable_sort_test(input, expected, column_order);
 }
 
 TYPED_TEST(StableSort, WithAllValid)
@@ -154,22 +127,18 @@ TYPED_TEST(StableSort, WithAllValid)
   cudf::test::fixed_width_column_wrapper<T> col3{{10, 40, 70, 10, 2}};
   cudf::table_view input{{col1, col2, col3}};
 
-  cudf::test::fixed_width_column_wrapper<int32_t> expected{{2, 1, 0, 3, 4}};
   std::vector<cudf::order> column_order{
     cudf::order::ASCENDING, cudf::order::ASCENDING, cudf::order::DESCENDING};
+  auto expected = std::is_same_v<T, bool>
+                    // All the bools are true, and therefore don't affect sort order,
+                    // so this is just the sort order of the string column
+                    ? cudf::test::fixed_width_column_wrapper<int32_t>{{2, 0, 3, 1, 4}}
+                    : cudf::test::fixed_width_column_wrapper<int32_t>{{2, 1, 0, 3, 4}};
+  auto got      = cudf::stable_sorted_order(input, column_order);
 
-  auto got = cudf::stable_sorted_order(input, column_order);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
-  // Skip validating bools order. Valid true bools are all
-  // equivalent, and yield random order after thrust::sort
-  if (!std::is_same_v<T, bool>) {
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
-
-    run_stable_sort_test(input, expected, column_order);
-  } else {
-    cudf::test::fixed_width_column_wrapper<int32_t> expected_for_bool{{2, 0, 3, 1, 4}};
-    run_stable_sort_test(input, expected_for_bool, column_order);
-  }
+  run_stable_sort_test(input, expected, column_order);
 }
 
 TYPED_TEST(StableSort, MisMatchInColumnOrderSize)
