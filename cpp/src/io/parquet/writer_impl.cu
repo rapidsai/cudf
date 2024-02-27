@@ -623,13 +623,12 @@ std::vector<schema_tree_node> construct_schema_tree(
               if (s.type != Type::BYTE_ARRAY) { return; }
               break;
 
-            // not yet supported for write (soon...)
-            case column_encoding::DELTA_BYTE_ARRAY: return;
-
             // supported parquet encodings
             case column_encoding::PLAIN:
             case column_encoding::DICTIONARY: break;
 
+            // not yet supported for write (soon...)
+            case column_encoding::DELTA_BYTE_ARRAY: [[fallthrough]];
             // all others
             default:
               CUDF_LOG_WARN("Unsupported page encoding requested: {}",
