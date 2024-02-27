@@ -1697,6 +1697,120 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private void checkLeftDistinctJoin(Table leftKeys, Table rightKeys, Table expected,
+                                     boolean compareNullsEqual) {
+    GatherMap[] maps = leftKeys.leftDistinctJoinGatherMaps(rightKeys, compareNullsEqual);
+    try {
+      verifyJoinGatherMaps(maps, expected);
+    } finally {
+      for (GatherMap map : maps) {
+        map.close();
+      }
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8, 6).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table expected = new Table.TestBuilder()
+             .column(  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3, 0) // right
+             .build()) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsWithNested() {
+    final int inv = Integer.MIN_VALUE;
+    StructType structType = new StructType(false,
+        new BasicType(false, DType.STRING),
+        new BasicType(false, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", 2),
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3)
+    };
+    StructData[] rightData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData("abc", -1),
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 2, 3, 4, 5, 6)
+             .column(0, inv, inv, 2, 0, inv, inv)
+             .build()) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsNullsEqual() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9) // left
+             .column(inv, inv, 1, inv, inv, inv, inv, 0, 0, 2) // right
+             .build()) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsWithNestedNullsEqual() {
+    final int inv = Integer.MIN_VALUE;
+    StructType structType = new StructType(true,
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        null,
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", null),
+        null,
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3),
+        new StructData(null, null),
+        new StructData(null, 1)
+    };
+    StructData[] rightData = new StructData[]{
+        null,
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData(null, null),
+        new StructData(null, 2),
+        new StructData(null, 1),
+        new StructData("xyz", null),
+        new StructData("abc", null),
+        new StructData("abc", -1)
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+             .column(1, 0, inv, inv, 7, 0, 1, inv, inv, 4, 6)
+             .build()) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
   @Test
   void testLeftHashJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;

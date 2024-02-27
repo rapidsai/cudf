@@ -608,6 +608,9 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftDistinctJoinGatherMaps(long leftKeys, long rightKeys,
+                                                          boolean compareNullsEqual) throws CudfException;
+
   private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
@@ -2922,6 +2925,30 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         leftJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of a left outer equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys. It is
+   * assumed this table instance holds the key columns from the left table, and the table argument
+   * represents the key columns from the right table. Two {@link GatherMap} instances will be
+   * returned that can be used to gather the left and right tables, respectively, to produce the
+   * result of the left outer join.
+   *
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   *
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] leftDistinctJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftDistinctJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
     return buildJoinGatherMaps(gatherMapData);
   }
 
