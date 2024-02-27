@@ -57,18 +57,14 @@ def test_series_replace_all(gsr, to_replace, value):
     else:
         pd_value = value
 
-    with expect_warning_if(
+    expect_warn = (
         isinstance(gsr.dtype, cudf.CategoricalDtype)
         and isinstance(gd_to_replace, str)
         and gd_to_replace == "one"
-    ):
+    )
+    with expect_warning_if(expect_warn):
         actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    with expect_warning_if(
-        PANDAS_GE_220
-        and isinstance(gsr.dtype, cudf.CategoricalDtype)
-        and isinstance(gd_to_replace, str)
-        and gd_to_replace == "one"
-    ):
+    with expect_warning_if(expect_warn):
         if pd_value is None:
             # TODO: Remove this workaround once cudf
             # introduces `no_default` values
@@ -93,7 +89,7 @@ def test_series_replace():
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
     with pytest.warns(FutureWarning):
@@ -102,7 +98,7 @@ def test_series_replace():
         psr4.sort_values().reset_index(drop=True),
         sr4.sort_values().reset_index(drop=True),
     )
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         psr5 = psr3.replace("one", "five")
     with pytest.warns(FutureWarning):
         sr5 = sr3.replace("one", "five")
@@ -517,7 +513,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
             pd.date_range(
                 "2010-01-01",
                 "2020-01-10",
-                freq="1YE" if PANDAS_GE_220 else "1y",
+                freq="1YE",
             )
         ),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
@@ -564,7 +560,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
             pd.date_range(
                 "2010-01-01",
                 "2020-01-10",
-                freq="1YE" if PANDAS_GE_220 else "1y",
+                freq="1YE",
             )
         )
         + pd.Timedelta("1d"),
