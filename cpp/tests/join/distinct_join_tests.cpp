@@ -40,6 +40,7 @@ using CVector        = std::vector<std::unique_ptr<cudf::column>>;
 using Table          = cudf::table;
 
 struct DistinctJoinTest : public cudf::test::BaseFixture {
+  template <cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
   void compare_to_reference(
     cudf::table_view const& build_table,
     cudf::table_view const& probe_table,
@@ -55,9 +56,8 @@ struct DistinctJoinTest : public cudf::test::BaseFixture {
     auto build_indices_col = cudf::column_view{build_indices_span};
     auto probe_indices_col = cudf::column_view{probe_indices_span};
 
-    auto constexpr oob_policy = cudf::out_of_bounds_policy::DONT_CHECK;
-    auto joined_cols          = cudf::gather(build_table, build_indices_col, oob_policy)->release();
-    auto right_cols           = cudf::gather(probe_table, probe_indices_col, oob_policy)->release();
+    auto joined_cols = cudf::gather(probe_table, probe_indices_col, oob_policy)->release();
+    auto right_cols  = cudf::gather(build_table, build_indices_col, oob_policy)->release();
 
     joined_cols.insert(joined_cols.end(),
                        std::make_move_iterator(right_cols.begin()),
@@ -303,7 +303,8 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
 
-  // this->compare_to_reference(build.view(), probe.view(), result, probe.view());
+  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
+    build.view(), probe.view(), result, probe.view());
 }
 
 TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
@@ -349,5 +350,6 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
   auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
   auto result        = distinct_join.left_join();
 
-  // this->compare_to_reference(build.view(), probe.view(), result, probe.view());
+  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
+    build.view(), probe.view(), result, probe.view());
 }
