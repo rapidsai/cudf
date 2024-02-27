@@ -79,6 +79,10 @@ class build_keys_fn {
   Hasher _hash;
 };
 
+/**
+ * @brief Device output transform functor to construct `size_type` with `cuco::pair<hash_value_type,
+ * lhs_index_type>`
+ */
 struct output_fn {
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, lhs_index_type> const& x) const
@@ -249,52 +253,6 @@ CUDF_KERNEL void distinct_join_probe_kernel(Iter iter,
     }
   }
 }
-
-template <typename InputIt, typename HashTable>
-CUCO_KERNEL void distinct_left_join_kernel(InputIt first,
-                                           cuco::detail::index_type n,
-                                           HashTable hash_table,
-                                           cudf::size_type* output_begin)
-{
-  namespace cg = cooperative_groups;
-
-  auto constexpr cg_size = HashTable::cg_size;
-
-  auto const block       = cg::this_thread_block();
-  auto const thread_idx  = block.thread_rank();
-  auto const loop_stride = cuco::detail::grid_stride() / cg_size;
-  auto idx               = cuco::detail::global_thread_id() / cg_size;
-
-  __shared__ typename cudf::size_type output_buffer[DISTINCT_JOIN_BLOCK_SIZE / cg_size];
-
-  while (idx - thread_idx < n) {  // the whole thread block falls into the same iteration
-    if (idx < n) {
-      typename std::iterator_traits<InputIt>::value_type const& key = *(first + idx);
-      if constexpr (cg_size == 1) {
-        auto const found = hash_table.find(key);
-        /*
-         * The ld.relaxed.gpu instruction causes L1 to flush more frequently, causing increased
-         * sector stores from L2 to global memory. By writing results to shared memory and then
-         * synchronizing before writing back to global, we no longer rely on L1, preventing the
-         * increase in sector stores from L2 to global and improving performance.
-         */
-        output_buffer[thread_idx] =
-          found == hash_table.end() ? JoinNoneValue : static_cast<cudf::size_type>(found->second);
-        block.sync();
-        *(output_begin + idx) = output_buffer[thread_idx];
-      } else {
-        auto const tile  = cg::tiled_partition<cg_size>(block);
-        auto const found = hash_table.find(tile, key);
-
-        if (tile.thread_rank() == 0) {
-          *(output_begin + idx) =
-            found == hash_table.end() ? JoinNoneValue : static_cast<cudf::size_type>(found->second);
-        }
-      }
-    }
-    idx += loop_stride;
-  }
-}
 }  // namespace
 
 template <cudf::has_nested HasNested>
@@ -431,13 +389,8 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
 
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
+    // TODO conditional find for nulls
     this->_hash_table.find_async(iter, iter + probe_table_num_rows, output_begin, stream.value());
-
-    // TODO: thrust::transform_output_iterator with _hash_table.find()
-    /*   cudf::detail::grid_1d grid{probe_table_num_rows, DISTINCT_JOIN_BLOCK_SIZE};
-       distinct_left_join_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0,
-       stream.value()>>>( iter, probe_table_num_rows, this->_hash_table.ref(cuco::find),
-       build_indices->data());*/
   }
 
   return {std::move(build_indices), std::move(probe_indices)};
