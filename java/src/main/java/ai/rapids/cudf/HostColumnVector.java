@@ -1179,12 +1179,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type.equals(DType.STRUCT)) {
-        if (structData == null || structData.dataRecord == null) {
+        if (structData == null || structData.isNull()) {
           return appendNull();
         } else {
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
-            appendChildOrNull(childBuilder, structData.dataRecord.get(i));
+            appendChildOrNull(childBuilder, structData.getField(i));
           }
           endStruct();
         }
@@ -2133,6 +2133,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
       } else {
         return 0;
       }
+    }
+
+    public boolean isNull() {
+      return (this.dataRecord == null);
+    }
+
+    public Object getField(int index) {
+      return this.dataRecord.get(index);
     }
   }
 
