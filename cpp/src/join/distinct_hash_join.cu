@@ -324,9 +324,9 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  auto left_indices =
+  auto build_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
-  auto right_indices =
+  auto probe_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
 
   auto const probe_row_hasher =
@@ -343,14 +343,14 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     probe_table_num_rows,
     this->_hash_table.ref(cuco::find),
     counter.data(),
-    left_indices->data(),
-    right_indices->data());
+    build_indices->data(),
+    probe_indices->data());
 
   auto const actual_size = counter.value(stream);
-  left_indices->resize(actual_size, stream);
-  right_indices->resize(actual_size, stream);
+  build_indices->resize(actual_size, stream);
+  probe_indices->resize(actual_size, stream);
 
-  return {std::move(left_indices), std::move(right_indices)};
+  return {std::move(build_indices), std::move(probe_indices)};
 }
 
 template <cudf::has_nested HasNested>

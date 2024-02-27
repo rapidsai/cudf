@@ -46,7 +46,6 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> get_left_indices(cudf::siz
   auto indices = cudf::detail::make_device_uvector_sync(
     sequence, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
   return std::make_unique<rmm::device_uvector<cudf::size_type>>(std::move(indices));
-  ;
 }
 
 struct DistinctJoinTest : public cudf::test::BaseFixture {
