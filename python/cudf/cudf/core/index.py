@@ -39,7 +39,7 @@ from cudf.api.types import (
     is_signed_integer_dtype,
 )
 from cudf.core._base_index import BaseIndex
-from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_300
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -2098,23 +2098,14 @@ class DatetimeIndex(Index):
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
-        if PANDAS_GE_200:
-            nanos = self._values
-        else:
-            # no need to convert to nanos with Pandas 2.x
-            if isinstance(self.dtype, pd.DatetimeTZDtype):
-                nanos = self._values.astype(
-                    pd.DatetimeTZDtype("ns", self.dtype.tz)
-                )
-            else:
-                nanos = self._values.astype("datetime64[ns]")
-
         freq = (
             self._freq._maybe_as_fast_pandas_offset()
             if self._freq is not None
             else None
         )
-        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name, freq=freq)
+        return pd.DatetimeIndex(
+            self._values.to_pandas(), name=self.name, freq=freq
+        )
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):

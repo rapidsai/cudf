@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -201,7 +201,7 @@ class delta_binary_packer {
     if (is_valid) { _buffer[delta::rolling_idx(pos + _current_idx + _values_in_buffer)] = value; }
     __syncthreads();
 
-    if (threadIdx.x == 0) {
+    if (num_valid > 0 && threadIdx.x == 0) {
       _values_in_buffer += num_valid;
       // if first pass write header
       if (_current_idx == 0) {

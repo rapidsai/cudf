@@ -56,11 +56,12 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core import column, df_protocol, indexing_utils, reshape
-from cudf.core._compat import PANDAS_GE_200, PANDAS_LT_300
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
+    StructColumn,
     as_column,
     build_categorical_column,
     build_column,
@@ -1338,13 +1339,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             mask = arg
             if is_list_like(mask):
                 dtype = None
-                if len(mask) == 0 and not PANDAS_GE_200:
-                    # An explicit dtype is needed to avoid pandas
-                    # warnings from empty sets of columns. This
-                    # shouldn't be needed in pandas 2.0, we don't
-                    # need to specify a dtype when we know we're not
-                    # trying to match any columns so the default is fine.
-                    dtype = "float64"
                 mask = pd.Series(mask, dtype=dtype)
             if mask.dtype == "bool":
                 return self._apply_boolean_mask(BooleanMask(mask, len(self)))
@@ -3955,7 +3949,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             Not supporting *copy* because default and only behavior is
             copy=True
         """
-
         index = self._data.to_pandas_index()
         columns = self.index.copy(deep=False)
         if self._num_columns == 0 or self._num_rows == 0:
@@ -6202,9 +6195,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         "Columns must all have the same dtype to "
                         f"perform {op=} with {axis=}"
                     )
-                return Series._from_data(
-                    {None: as_column(result)}, as_index(source._data.names)
-                )
+                if source._data.multiindex:
+                    idx = MultiIndex.from_tuples(
+                        source._data.names, names=source._data.level_names
+                    )
+                else:
+                    idx = as_index(source._data.names)
+                return Series._from_data({None: as_column(result)}, idx)
         elif axis == 1:
             return source._apply_cupy_method_axis_1(op, **kwargs)
         else:
@@ -7124,12 +7121,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "requires field name to be string. Non-string column names "
                 "will be casted to string as the field name."
             )
-        field_names = [str(name) for name in self._data.names]
-
-        col = cudf.core.column.build_struct_column(
-            names=field_names,
+        fields = {str(name): col.dtype for name, col in self._data.items()}
+        col = StructColumn(
+            data=None,
+            dtype=cudf.StructDtype(fields=fields),
             children=tuple(col.copy(deep=True) for col in self._data.columns),
             size=len(self),
+            offset=0,
         )
         return cudf.Series._from_data(
             cudf.core.column_accessor.ColumnAccessor({name: col}),
