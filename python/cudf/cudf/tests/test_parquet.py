@@ -3040,3 +3040,14 @@ def test_parquet_reader_multiindex():
 def test_parquet_reader_engine_error():
     with pytest.raises(ValueError):
         cudf.read_parquet(BytesIO(), engine="abc")
+
+
+def test_parquet_reader_zstd_huff_tables(datadir):
+    # Ensure that this zstd-compressed file does not overrun buffers. The
+    # problem was fixed in nvcomp 3.0.6.
+    # See https://github.com/rapidsai/cudf/issues/15096
+    fname = datadir / "zstd_huff_tables_bug.parquet"
+
+    expected = pa.parquet.read_table(fname).to_pandas()
+    actual = cudf.read_parquet(fname)
+    assert_eq(actual, expected)
