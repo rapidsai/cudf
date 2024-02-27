@@ -36,7 +36,8 @@ void run_stable_sort_test(cudf::table_view input,
                           std::vector<cudf::order> column_order         = {},
                           std::vector<cudf::null_order> null_precedence = {})
 {
-  auto got_sort_by_key_table      = cudf::sort_by_key(input, input, column_order, null_precedence);
+  auto got_sort_by_key_table =
+    cudf::stable_sort_by_key(input, input, column_order, null_precedence);
   auto expected_sort_by_key_table = cudf::gather(input, expected_sorted_indices);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_sort_by_key_table->view(), got_sort_by_key_table->view());
