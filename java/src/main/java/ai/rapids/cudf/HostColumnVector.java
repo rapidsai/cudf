@@ -2077,10 +2077,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static abstract class DataType {
-    abstract DType getType();
-    abstract boolean isNullable();
-    abstract DataType getChild(int index);
-    abstract int getNumChildren();
+    public abstract DType getType();
+    public abstract boolean isNullable();
+    public abstract DataType getChild(int index);
+    public abstract int getNumChildren();
   }
 
   public static class ListType extends HostColumnVector.DataType {
@@ -2093,17 +2093,17 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.LIST;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       if (index > 0) {
         return null;
       }
@@ -2111,7 +2111,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 1;
     }
   }
@@ -2150,22 +2150,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.STRUCT;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return children.get(index);
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return children.size();
     }
   }
@@ -2180,22 +2180,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return type;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return null;
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 0;
     }
   }
