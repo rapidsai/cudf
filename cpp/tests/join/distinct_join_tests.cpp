@@ -353,3 +353,135 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
   this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
     build.view(), probe.view(), result, probe.view());
 }
+
+TEST_F(DistinctJoinTest, LeftJoinNoNulls)
+{
+  column_wrapper<int32_t> col0_0({3, 1, 2, 0, 3});
+  strcol_wrapper col0_1({"s0", "s1", "s2", "s4", "s1"});
+
+  column_wrapper<int32_t> col1_0({2, 2, 0, 4, 3});
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table probe(std::move(cols0));
+  Table build(std::move(cols1));
+
+  column_wrapper<int32_t> col_gold_0({3, 1, 2, 0, 3});
+  strcol_wrapper col_gold_1({"s0", "s1", "s2", "s4", "s1"});
+  column_wrapper<int32_t> col_gold_2{{-1, -1, -1, -1, 3}, {0, 0, 0, 0, 1}};
+  strcol_wrapper col_gold_3{{"", "", "", "", "s1"}, {0, 0, 0, 0, 1}};
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result        = distinct_join.left_join();
+
+  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
+    build.view(), probe.view(), result, gold.view());
+}
+
+TEST_F(DistinctJoinTest, LeftJoinWithNulls)
+{
+  column_wrapper<int32_t> col0_0{{3, 1, 2, 0, 2}};
+  strcol_wrapper col0_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
+
+  column_wrapper<int32_t> col1_0{{2, 2, 0, 4, 3}};
+  strcol_wrapper col1_1({"s1", "s0", "s1", "s2", "s1"});
+
+  CVector cols0, cols1;
+  cols0.push_back(col0_0.release());
+  cols0.push_back(col0_1.release());
+  cols1.push_back(col1_0.release());
+  cols1.push_back(col1_1.release());
+
+  Table probe(std::move(cols0));
+  Table build(std::move(cols1));
+
+  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result        = distinct_join.left_join();
+
+  column_wrapper<int32_t> col_gold_0{{3, 1, 2, 0, 2}, {1, 1, 1, 1, 1}};
+  strcol_wrapper col_gold_1({"s1", "s1", "", "s4", "s0"}, {1, 1, 0, 1, 1});
+  column_wrapper<int32_t> col_gold_2{{3, -1, -1, -1, 2}, {1, 0, 0, 0, 1}};
+  strcol_wrapper col_gold_3{{"s1", "", "", "", "s0"}, {1, 0, 0, 0, 1}};
+
+  CVector cols_gold;
+  cols_gold.push_back(col_gold_0.release());
+  cols_gold.push_back(col_gold_1.release());
+  cols_gold.push_back(col_gold_2.release());
+  cols_gold.push_back(col_gold_3.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
+    build.view(), probe.view(), result, gold.view());
+}
+
+TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
+{
+  auto col0_names_col = strcol_wrapper{
+    "Samuel Vimes", "Carrot Ironfoundersson", "Detritus", "Samuel Vimes", "Angua von Überwald"};
+  auto col0_ages_col = column_wrapper<int32_t>{{48, 27, 351, 31, 25}};
+
+  auto col0_is_human_col = column_wrapper<bool>{{true, true, false, false, false}, {1, 1, 0, 1, 0}};
+
+  auto col0 =
+    cudf::test::structs_column_wrapper{{col0_names_col, col0_ages_col, col0_is_human_col}};
+
+  auto col1_names_col = strcol_wrapper{
+    "Samuel Vimes", "Detritus", "Detritus", "Carrot Ironfoundersson", "Angua von Überwald"};
+  auto col1_ages_col = column_wrapper<int32_t>{{48, 35, 351, 22, 25}};
+
+  auto col1_is_human_col = column_wrapper<bool>{{true, true, false, false, true}, {1, 1, 0, 1, 1}};
+
+  auto col1 =
+    cudf::test::structs_column_wrapper{{col1_names_col, col1_ages_col, col1_is_human_col}};
+
+  CVector cols0, cols1;
+  cols0.push_back(col0.release());
+  cols1.push_back(col1.release());
+
+  Table probe(std::move(cols0));
+  Table build(std::move(cols1));
+
+  auto distinct_join = cudf::distinct_hash_join<cudf::has_nested::NO>{build.view(), probe.view()};
+  auto result        = distinct_join.left_join();
+
+  auto col0_gold_names_col = strcol_wrapper{
+    "Samuel Vimes", "Detritus", "Carrot Ironfoundersson", "Samuel Vimes", "Angua von Überwald"};
+  auto col0_gold_ages_col = column_wrapper<int32_t>{{48, 351, 27, 31, 25}};
+  auto col0_gold_is_human_col =
+    column_wrapper<bool>{{true, false, true, false, false}, {1, 0, 1, 1, 0}};
+  auto col0_gold = cudf::test::structs_column_wrapper{
+    {col0_gold_names_col, col0_gold_ages_col, col0_gold_is_human_col}};
+
+  auto col1_gold_names_col = strcol_wrapper{{
+                                              "Samuel Vimes",
+                                              "Detritus",
+                                              "",
+                                              "",
+                                              "",
+                                            },
+                                            {1, 1, 0, 0, 0}};
+  auto col1_gold_ages_col  = column_wrapper<int32_t>{{48, 351, -1, -1, -1}, {1, 1, 0, 0, 0}};
+  auto col1_gold_is_human_col =
+    column_wrapper<bool>{{true, false, false, false, false}, {1, 0, 0, 0, 0}};
+  auto col1_gold = cudf::test::structs_column_wrapper{
+    {col1_gold_names_col, col1_gold_ages_col, col1_gold_is_human_col}, {1, 1, 0, 0, 0}};
+
+  CVector cols_gold;
+  cols_gold.push_back(col0_gold.release());
+  cols_gold.push_back(col1_gold.release());
+  Table gold(std::move(cols_gold));
+
+  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
+    build.view(), probe.view(), result, gold.view());
+}
