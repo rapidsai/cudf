@@ -65,7 +65,7 @@ dependencies:
 - nvcomp==3.0.5
 - nvtx>=0.2.1
 - packaging
-- pandas>=2.0,<2.1.5dev0
+- pandas>=2.0,<2.2.2dev0
 - pandoc
 - pip
 - pre-commit
