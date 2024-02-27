@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "common_sort_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
