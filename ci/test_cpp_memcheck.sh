@@ -8,8 +8,7 @@ source ./ci/test_cpp_common.sh
 
 rapids-logger "Memcheck gtests with rmm_mode=cuda"
 
-./ci/run_cudf_memcheck_ctests.sh \
- && EXITCODE=$? || EXITCODE=$?;
+./ci/run_cudf_memcheck_ctests.sh && EXITCODE=$? || EXITCODE=$?;
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}
