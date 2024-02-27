@@ -616,11 +616,21 @@ std::vector<schema_tree_node> construct_schema_tree(
           // do some validation
           switch (col_meta.get_encoding()) {
             case column_encoding::DELTA_BINARY_PACKED:
-              if (s.type != Type::INT32 && s.type != Type::INT64) { return; }
+              if (s.type != Type::INT32 && s.type != Type::INT64) {
+                CUDF_LOG_WARN(
+                  "DELTA_BINARY_PACKED encoding is only supported for INT32 and INT64 columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
               break;
 
             case column_encoding::DELTA_LENGTH_BYTE_ARRAY:
-              if (s.type != Type::BYTE_ARRAY) { return; }
+              if (s.type != Type::BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "DELTA_LENGTH_BYTE_ARRAY encoding is only supported for BYTE_ARRAY columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
               break;
 
             // supported parquet encodings
@@ -631,8 +641,9 @@ std::vector<schema_tree_node> construct_schema_tree(
             case column_encoding::DELTA_BYTE_ARRAY: [[fallthrough]];
             // all others
             default:
-              CUDF_LOG_WARN("Unsupported page encoding requested: {}",
-                            static_cast<int>(col_meta.get_encoding()));
+              CUDF_LOG_WARN(
+                "Unsupported page encoding requested: {}; the requested encoding will be ignored",
+                static_cast<int>(col_meta.get_encoding()));
               return;
           }
 
