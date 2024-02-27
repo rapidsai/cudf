@@ -490,8 +490,11 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
       // info is missing or insufficient, then just return without modifying the row_group_info.
       if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) { return; }
 
-      // if using older page indexes that lack size info, don't use
-      // TODO: might be ok if an empty page doesn't have var_byte_size set
+      // Like above, if using older page indexes that lack size info, then return without modifying
+      // the row_group_info.
+      // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
+      // check the behavior of other implementations (once there are some). Some may not set the
+      // var bytes for all null pages, so check the `null_pages` field on the column index.
       if (schema.type == BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
 
       chunk_info.pages.push_back(std::move(pg_info));
