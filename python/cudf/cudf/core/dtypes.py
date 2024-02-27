@@ -57,7 +57,7 @@ def dtype(arbitrary):
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
     if cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
         if cudf.get_option("mode.pandas_compatible"):
-            raise NotImplementedError("not supported")
+            raise NotImplementedError("Nullable types not supported in pandas compatibility mode")
         elif isinstance(pd_dtype, pd.StringDtype):
             return np.dtype("object")
         else:
