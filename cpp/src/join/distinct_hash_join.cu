@@ -361,7 +361,6 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
 {
   cudf::thread_range range{"distinct_hash_join::left_join"};
 
-  size_type const build_table_num_rows{this->_build.num_rows()};
   size_type const probe_table_num_rows{this->_probe.num_rows()};
 
   // If output size is zero, return empty
@@ -377,7 +376,7 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
   thrust::sequence(rmm::exec_policy_nosync(stream), probe_indices->begin(), probe_indices->end());
 
   // If build table is empty, return probe table
-  if (build_table_num_rows == 0) {
+  if (this->_build.num_rows() == 0) {
     thrust::fill(
       rmm::exec_policy_nosync(stream), build_indices->begin(), build_indices->end(), JoinNoneValue);
   } else {
