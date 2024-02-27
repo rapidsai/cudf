@@ -28,7 +28,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 24.02.01
+  VERSION 24.02.02
   LANGUAGES C CXX CUDA
 )
 
