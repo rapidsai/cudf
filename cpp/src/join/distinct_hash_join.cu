@@ -354,10 +354,8 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
 }
 
 template <cudf::has_nested HasNested>
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr) const
+std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::left_join(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
 {
   cudf::thread_range range{"distinct_hash_join::left_join"};
 
@@ -365,15 +363,11 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
 
   // If output size is zero, return empty
   if (probe_table_num_rows == 0) {
-    return {std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr),
-            std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr)};
+    return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
   }
 
   auto build_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
-  auto probe_indices =
-    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream), probe_indices->begin(), probe_indices->end());
 
   // If build table is empty, return probe table
   if (this->_build.num_rows() == 0) {
@@ -392,7 +386,7 @@ distinct_hash_join<HasNested>::left_join(rmm::cuda_stream_view stream,
     this->_hash_table.find_async(iter, iter + probe_table_num_rows, output_begin, stream.value());
   }
 
-  return {std::move(build_indices), std::move(probe_indices)};
+  return build_indices;
 }
 }  // namespace detail
 
@@ -443,8 +437,7 @@ distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view strea
 }
 
 template <>
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
+std::unique_ptr<rmm::device_uvector<size_type>>
 distinct_hash_join<cudf::has_nested::YES>::left_join(rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr) const
 {
@@ -452,10 +445,8 @@ distinct_hash_join<cudf::has_nested::YES>::left_join(rmm::cuda_stream_view strea
 }
 
 template <>
-std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-          std::unique_ptr<rmm::device_uvector<size_type>>>
-distinct_hash_join<cudf::has_nested::NO>::left_join(rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr) const
+std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<cudf::has_nested::NO>::left_join(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
 {
   return _impl->left_join(stream, mr);
 }

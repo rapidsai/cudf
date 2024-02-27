@@ -512,10 +512,9 @@ class distinct_hash_join {
    * the result of performing a left join between two tables with `build` and `probe`
    * as the join keys .
    */
-  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
-            std::unique_ptr<rmm::device_uvector<size_type>>>
-  left_join(rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-            rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type
