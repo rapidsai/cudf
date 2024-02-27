@@ -47,7 +47,7 @@ enum class sort_method { STABLE, UNSTABLE };
 template <sort_method method>
 struct inplace_column_sort_fn {
   /**
-   * @brief Can one use a fast-path in-place sort for this column?
+   * @brief Check if fast-path, in place sort is available for the given column.
    *
    * @param column to check
    * @return true if fast-path sort is available, false otherwise.
@@ -58,7 +58,7 @@ struct inplace_column_sort_fn {
            !cudf::is_floating_point(column.type());
   }
   /**
-   * @brief Can one use a fast-path in-place sort for this table?
+   * @brief Check if fast-path, in place sort is available for the given table.
    *
    * @param table to check
    * @return true if fast-path sort is available, false otherwise.
