@@ -9332,18 +9332,10 @@ def test_dataframe_setitem_cupy_array():
     assert_eq(pdf, gdf)
 
 
-@pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
-)
-@pytest.mark.parametrize(
-    "index",
-    [{0: 123, 1: 4, 2: 6}],
-)
-@pytest.mark.parametrize(
-    "level",
-    ["x", 0],
-)
-def test_rename_for_level_MultiIndex_dataframe(data, index, level):
+@pytest.mark.parametrize("level", ["x", 0])
+def test_rename_for_level_MultiIndex_dataframe(level):
+    data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    index = {0: 123, 1: 4, 2: 6}
     pdf = pd.DataFrame(
         data,
         index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),

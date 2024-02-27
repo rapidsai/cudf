@@ -1575,10 +1575,17 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
 
     @_cudf_nvtx_annotate
     def to_pandas(self, *, nullable: bool = False) -> pd.MultiIndex:
-        result = self.to_frame(
-            index=False, name=list(range(self.nlevels))
-        ).to_pandas(nullable=nullable)
-        return pd.MultiIndex.from_frame(result, names=self.names)
+        return pd.MultiIndex(
+            levels=[
+                level.to_pandas(nullable=nullable) for level in self.levels
+            ],
+            # np.iinfo.min used as missing code, but pandas uses -1
+            codes=[
+                cp.clip(col.values, a_min=-1, a_max=None).get()
+                for col in self._codes_frame._columns
+            ],
+            names=self.names,
+        )
 
     @classmethod
     @_cudf_nvtx_annotate
