@@ -892,6 +892,8 @@ namespace {
 // Default 10k rows.
 size_type constexpr SEGMENT_SIZE = 10'000;
 
+// size_type constexpr SEGMENT_SIZE = 1;
+
 /**
  * @brief Functor which computes the total data size for a given type of a cudf column.
  *
@@ -943,20 +945,22 @@ struct column_segment_size_functor {
     // NOTE: Adding the + 1 offset, similar to the case of lists column.
     auto const offset_size =
       offsets.type().id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t);
+    // printf("   offset sizes: %d, char size: %d\n", (int)offset_size, (int)chars_size);
+
     return offset_size * (num_rows(start_row) + 1) + validity_size(start_row) + chars_size;
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
   __device__ std::size_t operator()(size_type start_row) const
   {
-    auto constexpr element_size = sizeof(device_storage_type_t<T>);
-
     auto col             = d_col;
-    auto col_size        = element_size + validity_size(start_row);
+    auto col_size        = std::size_t{0};
     auto child_start_row = start_row;
     auto child_size      = size;
 
     while (col.type().id() == type_id::STRUCT || col.type().id() == type_id::LIST) {
+      col_size += validity_size(start_row);
+
       if (col.type().id() == type_id::STRUCT) {
         // Empty struct.
         if (col.num_child_columns() == 0) { return col_size; }
@@ -987,9 +991,18 @@ struct table_segment_size_functor {
 
   __device__ std::size_t operator()(size_type start_row) const
   {
+    // printf("line %d, start row %d\n", __LINE__, start_row);
+
     auto const col_size = [=](column_device_view col) {
       return cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size}, start_row);
     };
+
+    // for (auto col : d_table) {
+    //   auto t = cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size},
+    //   start_row); printf("start: %d, col size: %d\n", start_row, (int)t);
+    // }
+
+    // printf("line %d\n", __LINE__);
 
     return thrust::transform_reduce(
       thrust::seq, d_table.begin(), d_table.end(), col_size, 0ul, thrust::plus<>{});
@@ -1002,13 +1015,18 @@ void test(table_view const& input, rmm::cuda_stream_view stream)
 {
   auto verticalized_t = std::get<0>(
     cudf::experimental::decompose_structs(input, cudf::experimental::decompose_lists_column::YES));
+
   auto d_t = table_device_view::create(verticalized_t, stream);
 
-  auto const num_segments = input.num_rows() / SEGMENT_SIZE;
-  auto output             = make_fixed_width_column(
+  auto const num_segments = std::max(input.num_rows() / SEGMENT_SIZE, 1);
+  printf("num rows: %d, num seeg: %d\n", input.num_rows(), num_segments);
+  fflush(stdout);
+
+  auto output = make_fixed_width_column(
     data_type{type_id::UINT64}, num_segments, mask_state::UNALLOCATED, stream);
 
   auto s = thrust::transform(
+    rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(num_segments),
     output->mutable_view().begin<size_t>(),
