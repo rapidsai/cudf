@@ -22,7 +22,7 @@ import cudf
 ##
 
 
-class CudfMixin:
+class VarMixin:
     def var(
         self,
         axis=0,
@@ -47,7 +47,7 @@ class CudfMixin:
         )
 
 
-class DataFrame(CudfMixin, DXDataFrame):
+class DataFrame(VarMixin, DXDataFrame):
     @classmethod
     def from_dict(cls, *args, **kwargs):
         with config.set({"dataframe.backend": "cudf"}):
@@ -80,7 +80,7 @@ class DataFrame(CudfMixin, DXDataFrame):
         )
 
 
-class Series(CudfMixin, DXSeries):
+class Series(VarMixin, DXSeries):
     def groupby(self, by, **kwargs):
         from dask_cudf.expr._groupby import SeriesGroupBy
 

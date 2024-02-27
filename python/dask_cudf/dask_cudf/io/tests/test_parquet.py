@@ -294,7 +294,8 @@ def test_filters_at_row_group_level(tmpdir):
     assert a.npartitions == 1
     assert (a.shape[0] == 1).compute()
 
-    # Note: Use overwrite=True to ignore cache (for now)
+    # Overwrite=True can be removed for dask-expr>=0.4.1
+    # See: https://github.com/dask-contrib/dask-expr/issues/800
     ddf.to_parquet(
         tmp_path, engine="pyarrow", row_group_size=1, overwrite=True
     )
