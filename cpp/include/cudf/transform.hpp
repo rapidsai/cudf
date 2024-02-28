@@ -232,7 +232,7 @@ std::unique_ptr<column> row_bit_count(
  * accumulated by segments.
  *
  * Currently, only fixed-length segments are supported. In case the input table has number of rows
- * not divisible by segment_length, its last segment will be shorter than the others.
+ * not divisible by segment_length, its last segment is considered as shorter than the others.
  *
  * @param t The table view to perform the computation on
  * @param segment_length The number of rows in each segment for which the total size is computed
