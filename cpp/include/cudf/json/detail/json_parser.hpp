@@ -117,8 +117,8 @@ class json_parser {
                                       cudf::size_type const _json_len)
     : options(_options),
       json_start_pos(_json_start_pos),
-      curr_pos(_json_start_pos),
-      json_end_pos(_json_start_pos + _json_len)
+      json_end_pos(_json_start_pos + _json_len),
+      curr_pos(_json_start_pos)
   {
   }
 

@@ -20,6 +20,8 @@
 #include <cudf/json/json.hpp>
 
 struct JsonParserTests : public cudf::test::BaseFixture {};
+using cudf::json::detail::json_parser;
+using cudf::json::detail::json_token;
 
 template <int max_json_depth = 128>
 std::vector<json_token> parse(std::string json_str,
@@ -318,7 +320,7 @@ void test_basic(bool allow_single_quote, bool allow_control_char)
       std::vector{json_token::ERROR}),
 
   };
-  for (int i = 0; i < cases.size(); ++i) {
+  for (std::size_t i = 0; i < cases.size(); ++i) {
     std::string json_str                    = cases[i].first;
     std::vector<json_token> expected_tokens = cases[i].second;
     std::vector<json_token> actual_tokens = parse(json_str, allow_single_quote, allow_control_char);
@@ -336,7 +338,7 @@ void test_len_limitation()
   v.push_back("  -1.23e-456      ");
 
   auto error_token = std::vector<json_token>{json_token::ERROR};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,  //  bool single_quote,
                                                   true,  // control_char
@@ -351,7 +353,7 @@ void test_len_limitation()
   v.push_back(
     "   'k\n\\'\\\"5'     ");  // do not count escape char '\', actual has 5 chars: k \n ' " 5
   auto expect_str_ret = std::vector<json_token>{json_token::VALUE_STRING, json_token::SUCCESS};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,  //  bool single_quote,
                                                   true,  // control_char
@@ -365,7 +367,7 @@ void test_len_limitation()
   v.push_back("    12345            ");
   v.push_back("    -1.23e-45        ");
   auto expect_num_ret = std::vector<json_token>{json_token::VALUE_NUMBER_INT, json_token::SUCCESS};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,   //  bool single_quote,
                                                   false,  // control_char
@@ -386,7 +388,7 @@ void test_single_double_quote()
   // allow \'  \"  ' in double quote
   v.push_back("\"   \\\' \\\"   '    \'      \"");  // C++ allow \' to represent ' in string
   auto expect_ret = std::vector<json_token>{json_token::VALUE_STRING, json_token::SUCCESS};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,  //  bool single_quote,
                                                   false  // control_char
@@ -397,7 +399,7 @@ void test_single_double_quote()
   v.clear();
   v.push_back("\"     \\'      \"");  // not allow \' when single_quote is disabled
   expect_ret = std::vector<json_token>{json_token::ERROR};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   false,  //  bool single_quote,
                                                   true    // control_char
@@ -408,7 +410,7 @@ void test_single_double_quote()
   v.clear();
   v.push_back("\"     '   \\\"      \"");  // allow ' \" in double quote
   expect_ret = std::vector<json_token>{json_token::VALUE_STRING, json_token::SUCCESS};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   false,  //  bool single_quote,
                                                   true    // control_char
@@ -419,7 +421,7 @@ void test_single_double_quote()
   v.clear();
   v.push_back("      'str'      ");  // ' is not allowed to quote string
   expect_ret = std::vector<json_token>{json_token::ERROR};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   false,  //  bool single_quote,
                                                   true    // control_char
@@ -433,7 +435,7 @@ void test_max_nested_len()
   std::vector<std::string> v;
   v.push_back("[[[[[]]]]]");
   v.push_back("{'k1':{'k2':{'k3':{'k4':{'k5': 5}}}}}");
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     // set max nested len template value as 5
     std::vector<json_token> actual_tokens = parse<5>(v[i],
                                                      true,  //  bool single_quote,
@@ -445,7 +447,7 @@ void test_max_nested_len()
   v.clear();
   v.push_back("[[[[[[]]]]]]");
   v.push_back("{'k1':{'k2':{'k3':{'k4':{'k5': {'k6': 6}}}}}}");
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     // set max nested len template value as 5
     std::vector<json_token> actual_tokens = parse<5>(v[i],
                                                      true,  //  bool single_quote,
@@ -459,7 +461,7 @@ void test_control_char()
 {
   std::vector<std::string> v;
   v.push_back("'   \t   \n   \b '");  // \t \n \b are control chars
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     // set max nested len template value as 5
     std::vector<json_token> actual_tokens = parse<5>(v[i],
                                                      true,  //  bool single_quote,
@@ -468,7 +470,7 @@ void test_control_char()
     assert(actual_tokens[actual_tokens.size() - 1] == json_token::SUCCESS);
   }
 
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     // set max nested len template value as 5
     std::vector<json_token> actual_tokens = parse<5>(v[i],
                                                      true,  //  bool single_quote,
@@ -483,7 +485,7 @@ void test_allow_tailing_useless_chars()
   std::vector<std::string> v;
   v.push_back("  0xxxx        ");  // 0 is valid JSON, tailing xxxx is ignored when allow tailing
   v.push_back("  {}xxxx  ");       // tailing xxxx is ignored
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,  //  bool single_quote,
                                                   true,  // control_char
@@ -491,7 +493,7 @@ void test_allow_tailing_useless_chars()
     );
     assert(actual_tokens[actual_tokens.size() - 1] == json_token::SUCCESS);
   }
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,  //  bool single_quote,
                                                   true,  // control_char
@@ -504,7 +506,7 @@ void test_allow_tailing_useless_chars()
   v.push_back("    12345            ");
   v.push_back("    -1.23e-45        ");
   auto expect_num_ret = std::vector<json_token>{json_token::VALUE_NUMBER_INT, json_token::SUCCESS};
-  for (int i = 0; i < v.size(); ++i) {
+  for (std::size_t i = 0; i < v.size(); ++i) {
     std::vector<json_token> actual_tokens = parse(v[i],
                                                   true,   //  bool single_quote,
                                                   false,  // control_char
