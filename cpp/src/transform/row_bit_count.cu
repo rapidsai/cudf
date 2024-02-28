@@ -404,11 +404,11 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
  * @param segment_length The number of rows in each segment for which the total size is computed
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
  */
-CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
-                                   device_span<column_info const> info,
-                                   device_span<size_type> output,
-                                   size_type segment_length,
-                                   size_type max_branch_depth)
+CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> cols,
+                                       device_span<column_info const> info,
+                                       device_span<size_type> output,
+                                       size_type segment_length,
+                                       size_type max_branch_depth)
 {
   extern __shared__ row_span thread_branch_stacks[];
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
@@ -422,8 +422,11 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
   size_type branch_depth{0};
 
   // current row span - always starts at spanning over `segment_length` rows.
-  auto const num_rows = cols[0].size();
-  row_span cur_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
+  auto const num_rows             = cols[0].size();
+  auto const get_default_row_span = [=] {
+    return row_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
+  };
+  auto cur_span = get_default_row_span();
 
   // output size
   size_type& size = output[tid];
@@ -450,8 +453,7 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
     if (info[idx].depth == 0) {
       branch_depth      = 0;
       last_branch_depth = 0;
-      cur_span =
-        row_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
+      cur_span          = get_default_row_span();
     }
 
     // add the contributing size of this row
@@ -544,7 +546,7 @@ std::unique_ptr<column> segmented_bit_count(table_view const& t,
   CUDF_EXPECTS(block_size > 0, "Encountered a column hierarchy too complex for row_bit_count");
 
   cudf::detail::grid_1d grid{num_segments, block_size, 1};
-  compute_row_sizes<<<grid.num_blocks, block_size, shared_mem_size, stream.value()>>>(
+  compute_segment_sizes<<<grid.num_blocks, block_size, shared_mem_size, stream.value()>>>(
     {std::get<1>(d_cols), cols.size()},
     {d_info.data(), info.size()},
     {mcv.data<size_type>(), static_cast<std::size_t>(mcv.size())},
