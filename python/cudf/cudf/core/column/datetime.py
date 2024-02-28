@@ -313,24 +313,6 @@ class DatetimeColumn(column.ColumnBase):
     def day_of_year(self) -> ColumnBase:
         return self.get_dt_field("day_of_year")
 
-    def to_pandas(
-        self,
-        *,
-        index: Optional[pd.Index] = None,
-        nullable: bool = False,
-    ) -> pd.Series:
-        if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        # `copy=True` workaround until following issue is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-9772
-
-        return pd.Series(
-            self.to_arrow(),
-            copy=True,
-            dtype=self.dtype,
-            index=index,
-        )
-
     @property
     def values(self):
         """
