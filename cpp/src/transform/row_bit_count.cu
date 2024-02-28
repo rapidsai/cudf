@@ -467,10 +467,10 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
 
 }  // anonymous namespace
 
-std::unique_ptr<column> row_bit_count(table_view const& t,
-                                      size_type segment_length,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> segmented_bit_count(table_view const& t,
+                                            size_type segment_length,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(segment_length >= 1, "Invalid segment length.", std::invalid_argument);
 
@@ -540,23 +540,23 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return row_bit_count(t, 1 /*segment_length*/, stream, mr);
+  return segmented_bit_count(t, 1, stream, mr);
 }
 
 }  // namespace detail
 
-std::unique_ptr<column> row_bit_count(table_view const& t,
-                                      size_type segment_length,
-                                      rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> segmented_bit_count(table_view const& t,
+                                            size_type segment_length,
+                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
+  return detail::segmented_bit_count(t, segment_length, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, 1 /*segment_length*/, cudf::get_default_stream(), mr);
+  return detail::row_bit_count(t, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf
