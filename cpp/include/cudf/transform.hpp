@@ -231,7 +231,8 @@ std::unique_ptr<column> row_bit_count(
  * This is similar to counting bit size per row for the input table, except that row sizes are
  * accumulated by segments.
  *
- * Currently, only fixed-length segments are supported.
+ * Currently, only fixed-length segments are supported. In case the input table has number of rows
+ * not divisible by segment_length, its last segment will be shorter than the others.
  *
  * @param t The table view to perform the computation on
  * @param segment_length The number of rows in each segment for which the total size is computed
