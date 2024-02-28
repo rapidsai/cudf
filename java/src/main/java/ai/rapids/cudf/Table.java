@@ -608,8 +608,8 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
-  private static native long[] leftDistinctJoinGatherMaps(long leftKeys, long rightKeys,
-                                                          boolean compareNullsEqual) throws CudfException;
+  private static native long[] leftDistinctJoinGatherMap(long leftKeys, long rightKeys,
+                                                         boolean compareNullsEqual) throws CudfException;
 
   private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
@@ -2929,27 +2929,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Computes the gather maps that can be used to manifest the result of a left outer equi-join between
-   * two tables where the right table is guaranteed to not contain any duplicated join keys. It is
-   * assumed this table instance holds the key columns from the left table, and the table argument
-   * represents the key columns from the right table. Two {@link GatherMap} instances will be
-   * returned that can be used to gather the left and right tables, respectively, to produce the
-   * result of the left outer join.
+   * Computes a gather map that can be used to manifest the result of a left equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys.
+   * The left table can be used as-is to produce the left table columns resulting from the join,
+   * i.e.: left table ordering is preserved in the join result, so no gather map is required for
+   * the left table. The resulting gather map can be applied to the right table to produce the
+   * right table columns resulting from the join. It is assumed this table instance holds the
+   * key columns from the left table, and the table argument represents the key columns from the
+   * right table. A {@link GatherMap} instance will be returned that can be used to gather the
+   * right table and that result combined with the left table to produce a left outer join result.
    *
-   * It is the responsibility of the caller to close the resulting gather map instances.
+   * It is the responsibility of the caller to close the resulting gather map instance.
    *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
-   * @return left and right table gather maps
+   * @return right table gather map
    */
-  public GatherMap[] leftDistinctJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+  public GatherMap leftDistinctJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
       throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
-        leftDistinctJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildJoinGatherMaps(gatherMapData);
+        leftDistinctJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3509,7 +3512,7 @@ public final class Table implements AutoCloseable {
     return buildJoinGatherMaps(gatherMapData);
   }
 
-  private static GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+  private static GatherMap buildSingleJoinGatherMap(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -3534,7 +3537,7 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         leftSemiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3567,7 +3570,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3592,7 +3595,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3647,7 +3650,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3680,7 +3683,7 @@ public final class Table implements AutoCloseable {
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3701,7 +3704,7 @@ public final class Table implements AutoCloseable {
     }
     long[] gatherMapData =
         leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3734,7 +3737,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3759,7 +3762,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3814,7 +3817,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3847,7 +3850,7 @@ public final class Table implements AutoCloseable {
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**

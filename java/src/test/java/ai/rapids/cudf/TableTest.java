@@ -1697,14 +1697,13 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private void checkLeftDistinctJoin(Table leftKeys, Table rightKeys, Table expected,
+  private void checkLeftDistinctJoin(Table leftKeys, Table rightKeys, ColumnView expected,
                                      boolean compareNullsEqual) {
-    GatherMap[] maps = leftKeys.leftDistinctJoinGatherMaps(rightKeys, compareNullsEqual);
-    try {
-      verifyJoinGatherMaps(maps, expected);
-    } finally {
-      for (GatherMap map : maps) {
-        map.close();
+    try (GatherMap map = leftKeys.leftDistinctJoinGatherMap(rightKeys, compareNullsEqual)) {
+      int numRows = (int) expected.getRowCount();
+      assertEquals(numRows, map.getRowCount());
+      try (ColumnView view = map.toColumnView(0, numRows)) {
+        assertColumnsAreEqual(expected, view);
       }
     }
   }
@@ -1714,10 +1713,7 @@ public class TableTest extends CudfTestBase {
     final int inv = Integer.MIN_VALUE;
     try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8, 6).build();
          Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
-         Table expected = new Table.TestBuilder()
-             .column(  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10) // left
-             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3, 0) // right
-             .build()) {
+         ColumnVector expected = ColumnVector.fromInts(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3, 0)) {
       checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
     }
   }
@@ -1745,10 +1741,7 @@ public class TableTest extends CudfTestBase {
     };
     try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
          Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
-         Table expected = new Table.TestBuilder()
-             .column(0, 1, 2, 3, 4, 5, 6)
-             .column(0, inv, inv, 2, 0, inv, inv)
-             .build()) {
+         ColumnVector expected = ColumnVector.fromInts(0, inv, inv, 2, 0, inv, inv)) {
       checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
     }
   }
@@ -1762,10 +1755,7 @@ public class TableTest extends CudfTestBase {
          Table rightKeys = new Table.TestBuilder()
              .column(null, 9, 8, 10, 32)
              .build();
-         Table expected = new Table.TestBuilder()
-             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9) // left
-             .column(inv, inv, 1, inv, inv, inv, inv, 0, 0, 2) // right
-             .build()) {
+         ColumnVector expected = ColumnVector.fromInts(inv, inv, 1, inv, inv, inv, inv, 0, 0, 2)) {
       checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
     }
   }
@@ -1803,10 +1793,7 @@ public class TableTest extends CudfTestBase {
     };
     try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
          Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
-         Table expected = new Table.TestBuilder()
-             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
-             .column(1, 0, inv, inv, 7, 0, 1, inv, inv, 4, 6)
-             .build()) {
+         ColumnVector expected = ColumnVector.fromInts(1, 0, inv, inv, 7, 0, 1, inv, inv, 4, 6)) {
       checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
     }
   }

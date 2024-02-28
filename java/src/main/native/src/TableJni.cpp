@@ -2422,27 +2422,21 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftJoinGatherMaps(
       });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMaps(
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftDistinctJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
-  return cudf::jni::join_gather_maps(
+  return cudf::jni::join_gather_single_map(
       env, j_left_keys, j_right_keys, compare_nulls_equal,
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
         auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right) ?
                              cudf::nullable_join::YES :
                              cudf::nullable_join::NO;
-        std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
-                  std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
-            maps;
         if (cudf::detail::has_nested_columns(right)) {
           cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
-          maps = hash.left_join();
+          return hash.left_join();
         } else {
           cudf::distinct_hash_join<cudf::has_nested::NO> hash(right, left, has_nulls, nulleq);
-          maps = hash.left_join();
+          return hash.left_join();
         }
-        // Unique join returns {right map, left map} but all the other joins
-        // return {left map, right map}. Swap here to make it consistent.
-        return std::make_pair(std::move(maps.second), std::move(maps.first));
       });
 }
 
