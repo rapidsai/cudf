@@ -1983,10 +1983,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @_cudf_nvtx_annotate
     def to_pandas(
-        self, *, index: bool = True, nullable: bool = False
+        self,
+        *,
+        index: bool = True,
+        nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         """
-        Convert to a Pandas Series.
+        Convert to a pandas Series.
 
         Parameters
         ----------
@@ -2003,10 +2007,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             If ``nullable`` is ``False``, the resulting series will
             either convert null values to ``np.nan`` or ``None``
             depending on the dtype.
+        arrow_type : bool, Default False
+            Return the Series with a ``pandas.ArrowDtype``
 
         Returns
         -------
-        out : Pandas Series
+        out : pandas Series
+
+        Notes
+        -----
+        nullable and arrow_type cannot both be set to ``True``
 
         Examples
         --------
@@ -2048,7 +2058,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             index = self.index.to_pandas()
         else:
             index = None  # type: ignore[assignment]
-        s = self._column.to_pandas(index=index, nullable=nullable)
+        s = self._column.to_pandas(
+            index=index, nullable=nullable, arrow_type=arrow_type
+        )
         s.name = self.name
         return s
 

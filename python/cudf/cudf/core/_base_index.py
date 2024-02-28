@@ -910,7 +910,7 @@ class BaseIndex(Serializable):
         """
         raise NotImplementedError
 
-    def to_pandas(self, *, nullable: bool = False):
+    def to_pandas(self, *, nullable: bool = False, arrow_type: bool = False):
         """
         Convert to a Pandas Index.
 
@@ -924,6 +924,12 @@ class BaseIndex(Serializable):
             If ``nullable`` is ``False``, the resulting index will
             either convert null values to ``np.nan`` or ``None``
             depending on the dtype.
+        arrow_type : bool, Default False
+            Return the Index with a ``pandas.ArrowDtype``
+
+        Notes
+        -----
+        nullable and arrow_type cannot both be set to ``True``
 
         Examples
         --------

@@ -483,9 +483,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.RangeIndex:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.RangeIndex:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
+        elif arrow_type:
+            raise NotImplementedError(f"{arrow_type=} is not implemented.")
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1521,9 +1525,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self, *, nullable: bool = False) -> pd.Index:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.Index:
         return pd.Index(
-            self._values.to_pandas(nullable=nullable), name=self.name
+            self._values.to_pandas(nullable=nullable, arrow_type=arrow_type),
+            name=self.name,
         )
 
     def append(self, other):
@@ -2094,7 +2101,9 @@ class DatetimeIndex(Index):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.DatetimeIndex:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.DatetimeIndex:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
@@ -2104,7 +2113,9 @@ class DatetimeIndex(Index):
             else None
         )
         return pd.DatetimeIndex(
-            self._values.to_pandas(), name=self.name, freq=freq
+            self._values.to_pandas(arrow_type=arrow_type),
+            name=self.name,
+            freq=freq,
         )
 
     @_cudf_nvtx_annotate
@@ -2426,11 +2437,13 @@ class TimedeltaIndex(Index):
         return value
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.TimedeltaIndex:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.TimedeltaIndex:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         return pd.TimedeltaIndex(
-            self._values.to_pandas(),
+            self._values.to_pandas(arrow_type=arrow_type),
             name=self.name,
         )
 
