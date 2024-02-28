@@ -20,6 +20,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -31,8 +32,10 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/fill.h>
+#include <cuda/functional>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
+#include <thrust/transform.h>
 
 namespace cudf {
 namespace detail {
@@ -410,16 +413,17 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
   extern __shared__ row_span thread_branch_stacks[];
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-  auto const num_rows = output.size();
-  if (tid >= num_rows) { return; }
+  auto const num_segments = static_cast<size_type>(output.size());
+  if (tid >= num_segments) { return; }
 
   // my_branch_stack points to the last span prior to branching. a branch occurs only
   // when we are inside of a list contained within a struct column.
   row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
-  // current row span - always starts at segment_length rows.
-  row_span cur_span{tid * segment_length, (tid + 1) * segment_length};
+  // current row span - always starts at spanning over `segment_length` rows.
+  auto const num_rows = cols[0].size();
+  row_span cur_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
 
   // output size
   size_type& size = output[tid];
@@ -446,7 +450,8 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
     if (info[idx].depth == 0) {
       branch_depth      = 0;
       last_branch_depth = 0;
-      cur_span          = row_span{tid * segment_length, (tid + 1) * segment_length};
+      cur_span =
+        row_span{tid * segment_length, cuda::std::min((tid + 1) * segment_length, num_rows)};
     }
 
     // add the contributing size of this row
@@ -485,7 +490,7 @@ std::unique_ptr<column> segmented_bit_count(table_view const& t,
   CUDF_EXPECTS(info.size() == cols.size(), "Size/info mismatch");
 
   // create output buffer and view
-  auto const num_segments = t.num_rows() / segment_length;
+  auto const num_segments = cudf::util::div_rounding_up_safe(t.num_rows(), segment_length);
   auto output             = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, num_segments, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view mcv = output->mutable_view();
@@ -493,10 +498,23 @@ std::unique_ptr<column> segmented_bit_count(table_view const& t,
   // simple case.  if we have no complex types (lists, strings, etc), the per-row size is already
   // trivially computed
   if (h_info.complex_type_count <= 0) {
-    thrust::fill(rmm::exec_policy(stream),
-                 mcv.begin<size_type>(),
-                 mcv.end<size_type>(),
-                 h_info.simple_per_row_size * segment_length);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      thrust::make_counting_iterator(0),
+      thrust::make_counting_iterator(num_segments),
+      mcv.begin<size_type>(),
+      cuda::proclaim_return_type<size_type>(
+        [segment_length,
+         num_segments,
+         num_rows     = t.num_rows(),
+         per_row_size = h_info.simple_per_row_size] __device__(size_type const segment_idx) {
+          // Since the number of rows may not divisible by segment_length,
+          // the last segment may have different number of rows.
+          auto const current_length = segment_idx + 1 < num_segments
+                                        ? segment_length
+                                        : num_rows - segment_length * segment_idx;
+          return per_row_size * current_length;
+        }));
     return output;
   }
 
