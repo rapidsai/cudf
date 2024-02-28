@@ -1895,33 +1895,32 @@ def test_concat_mixed_list_types_error(s1, s2):
     "d",
     [
         {
-            'first': cudf.DataFrame({'A': [1, 2], 'B': [3, 4]}),
-            'second': cudf.DataFrame({'A': [5, 6], 'B': [7, 8]})
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.DataFrame({"A": [5, 6], "B": [7, 8]}),
         },
+        {"first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]})},
         {
-            'first': cudf.DataFrame({'A': [1, 2], 'B': [3, 4]})
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.DataFrame({"A": [5, 6], "B": [7, 8]}),
+            "third": cudf.DataFrame({"C": [1, 2, 3]}),
         },
-        {
-            'first': cudf.DataFrame({'A': [1, 2], 'B': [3, 4]}),
-            'second': cudf.DataFrame({'A': [5, 6], 'B': [7, 8]}),
-            'third': cudf.DataFrame({'C': [1, 2, 3]})
-        },
-        {
-            'first': cudf.Series([1, 2, 3]),
-            'second': cudf.Series([4, 5, 6])
-        }
-    ]
+        {"first": cudf.Series([1, 2, 3]), "second": cudf.Series([4, 5, 6])},
+    ],
 )
 def test_concat_dictionary(d):
     result1 = cudf.concat(d, axis=1)
-    expected1 = cudf.from_pandas(pd.concat({k: df.to_pandas() for k,df in d.items()}, axis=1))
+    expected1 = cudf.from_pandas(
+        pd.concat({k: df.to_pandas() for k, df in d.items()}, axis=1)
+    )
     assert_eq(expected1, result1)
-
 
 
 def test_concat_dict_incorrect_type():
     d = {
-            'first': cudf.Index([1, 2, 3]),
-        }
-    with pytest.raises(TypeError, match=f"cannot concatenate object of type {type(d['first'])}"):
+        "first": cudf.Index([1, 2, 3]),
+    }
+    with pytest.raises(
+        TypeError,
+        match=f"cannot concatenate object of type {type(d['first'])}",
+    ):
         cudf.concat(d, axis=1)

@@ -236,7 +236,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     >>> d = {'first': df1, 'second': df2}
     >>> cudf.concat(d, axis=1)
       first           second
-      letter  number  letter  number 
+      letter  number  letter  number
     0      a       1       c       3
     1      b       2       d       4
     """
@@ -312,13 +312,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                     if isinstance(result, cudf.DataFrame):
                         k = keys[0]
                         result.columns = cudf.MultiIndex.from_tuples(
-                            [(k, *c) if isinstance(c, tuple) else (k, c) for c in result.columns]
+                            [
+                                (k, *c) if isinstance(c, tuple) else (k, c)
+                                for c in result.columns
+                            ]
                         )
 
-                    result.columns = cudf.MultiIndex.from_product([
-                        keys,
-                        result.columns
-                    ])
+                    result.columns = cudf.MultiIndex.from_product(
+                        [keys, result.columns]
+                    )
 
         if isinstance(result, cudf.Series) and axis == 0:
             # sort has no effect for series concatted along axis 0
@@ -407,7 +409,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                 .append([obj._data.to_pandas_index() for obj in objs[1:]])
                 .unique()
             )
-        
+
         # need to create a MultiIndex column
         else:
             for k, o in zip(keys, objs):
@@ -425,7 +427,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # MultiIndex construction here
             result_columns = cudf.MultiIndex.from_tuples(df.columns)
 
-
         if ignore_index:
             # with ignore_index the column names change to numbers
             df.columns = pd.RangeIndex(len(result_columns))
@@ -438,7 +439,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             return df.head(0)
 
         return df
-
 
     # If we get here, we are always concatenating along axis 0 (the rows).
     if keys is not None:
