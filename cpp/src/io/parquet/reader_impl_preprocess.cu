@@ -407,13 +407,14 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
   //
   // We also need to preserve key-relative page ordering, so we need to use a stable sort.
   rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    unsorted_pages.begin(),
-                    unsorted_pages.end(),
-                    page_keys.begin(),
-                    [chunks = chunks.begin()] __device__(PageInfo const& page) {
-                      return chunks[page.chunk_idx].src_col_index;
-                    });
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    unsorted_pages.begin(),
+    unsorted_pages.end(),
+    page_keys.begin(),
+    cuda::proclaim_return_type<int32_t>([chunks = chunks.begin()] __device__(PageInfo const& page) {
+      return chunks[page.chunk_idx].src_col_index;
+    }));
   // we are doing this by sorting indices first and then transforming the output because nvcc
   // started generating kernels using too much shared memory when trying to sort the pages
   // directly.
@@ -431,7 +432,8 @@ cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const>
     sort_indices.begin(),
     sort_indices.end(),
     pass_pages.d_begin(),
-    [unsorted_pages = unsorted_pages.begin()] __device__(int32_t i) { return unsorted_pages[i]; });
+    cuda::proclaim_return_type<PageInfo>([unsorted_pages = unsorted_pages.begin()] __device__(
+                                           int32_t i) { return unsorted_pages[i]; }));
   stream.synchronize();
   return pass_pages;
 }
@@ -454,9 +456,11 @@ void decode_page_headers(pass_intermediate_data& pass,
     iter,
     iter + pass.chunks.size() + 1,
     chunk_page_counts.begin(),
-    [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
-      return i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages;
-    },
+    cuda::proclaim_return_type<size_t>(
+      [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
+        return static_cast<size_t>(
+          i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
+      }),
     0,
     thrust::plus<size_t>{});
   rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);

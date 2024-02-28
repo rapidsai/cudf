@@ -553,7 +553,7 @@ struct get_page_span {
 
 /**
  * @brief Return the span of page indices for a given column index
- *
+
  */
 struct get_page_span_by_column {
   cudf::device_span<size_type const> page_offsets;
@@ -578,6 +578,7 @@ struct get_span_size {
  */
 struct get_span_size_by_index {
   cudf::device_span<page_span const> page_indices;
+
   __device__ size_t operator()(size_t i) const
   {
     return i >= page_indices.size() ? 0 : page_indices[i].end - page_indices[i].start;
@@ -587,7 +588,6 @@ struct get_span_size_by_index {
 /**
  * @brief Copy page from appropriate source location (as defined by page_offsets) to the destination
  * location, and store the index mapping.
- *
  */
 struct copy_subpass_page {
   cudf::device_span<PageInfo const> src_pages;
