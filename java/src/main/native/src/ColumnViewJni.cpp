@@ -2452,7 +2452,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(
     options.set_allow_single_quotes(allow_single_quotes);
     options.set_allow_unescaped_control_chars(true); // from Jackson, keep consistent with Spark
     options.set_max_string_len(20000000); // 20000000 is from Jackson, keep consistent with Spark
-    options.set_max_num_len(1000); // 1000 is from Jackson, keep consistent with Spark
+    options.set_max_num_len(1000);        // 1000 is from Jackson, keep consistent with Spark
     options.set_allow_tailing_sub_string(true);
     options.set_strip_quotes_from_single_strings(strip_quotes_from_single_strings);
     options.set_missing_fields_as_nulls(missing_fields_as_nulls);

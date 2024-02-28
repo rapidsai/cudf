@@ -24,9 +24,9 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/json/detail/json_parser.hpp>
 #include <cudf/json/json.hpp>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/json/detail/json_parser.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -708,8 +708,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
                                         json_output& output,
                                         get_json_object_options const& options,
                                         char const* input,
-                                        size_t input_len
-                                        )
+                                        size_t input_len)
 {
   // manually maintained context stack in lieu of calling parse_json_path recursively.
   struct context {
@@ -742,9 +741,7 @@ __device__ parse_result parse_json_path(json_state& j_state,
   constexpr int max_json_nesting_depth = 1000;
   cudf::json::detail::json_parser<max_json_nesting_depth> j_parser(options, input, input_len);
   bool validation_result = j_parser.is_valid();
-  if (!validation_result) {
-    return parse_result::ERROR;
-  }
+  if (!validation_result) { return parse_result::ERROR; }
 
   parse_result last_result = parse_result::SUCCESS;
   context ctx;
