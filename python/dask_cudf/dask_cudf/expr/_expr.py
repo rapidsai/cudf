@@ -9,6 +9,8 @@ from dask_expr._shuffle import DiskShuffle
 ##
 
 
+# This can be removed after cudf#15176 is addressed.
+# See: https://github.com/rapidsai/cudf/issues/15176
 class PatchCumulativeBlockwise(CumulativeBlockwise):
     @property
     def _args(self) -> list:
@@ -24,6 +26,9 @@ CumulativeBlockwise._args = PatchCumulativeBlockwise._args
 CumulativeBlockwise._kwargs = PatchCumulativeBlockwise._kwargs
 
 
+# This can be removed if squeeze support is added to cudf,
+# or if squeeze is removed from the dask-expr logic.
+# See: https://github.com/rapidsai/cudf/issues/15177
 def _takelast(a, skipna=True):
     if not len(a):
         return a
@@ -36,19 +41,26 @@ def _takelast(a, skipna=True):
 TakeLast.operation = staticmethod(_takelast)
 
 
+# This patch accounts for differences between
+# numpy and cupy behavior. It may make sense
+# to move this logic upstream.
 _dx_reduction_aggregate = Var.reduction_aggregate
 
 
 def _reduction_aggregate(*args, **kwargs):
     result = _dx_reduction_aggregate(*args, **kwargs)
     if result.ndim == 0:
-        return result.tolist()
+        # cupy will sometimes produce a 0d array, and
+        # we need to convert it to a scalar.
+        return result.item()
     return result
 
 
 Var.reduction_aggregate = staticmethod(_reduction_aggregate)
 
 
+# This patch should be removed afer cudf#15143 is merged.
+# See: https://github.com/rapidsai/cudf/pull/15143
 def _shuffle_group(df, col, _filter, p):
     from dask.dataframe.shuffle import ensure_cleanup_on_exception
 
