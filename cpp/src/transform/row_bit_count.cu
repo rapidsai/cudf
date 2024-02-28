@@ -398,11 +398,13 @@ __device__ size_type row_size_functor::operator()<struct_view>(column_device_vie
  * @param cols An span of column_device_views representing a column hierarchy
  * @param info An span of column_info structs corresponding the elements in `cols`
  * @param output Output span of size (# rows) where per-row bit sizes are stored
+ * @param segment_length The number of rows in each segment for which the total size is computed
  * @param max_branch_depth Maximum depth of the span stack needed per-thread
  */
 CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
                                    device_span<column_info const> info,
                                    device_span<size_type> output,
+                                   size_type segment_length,
                                    size_type max_branch_depth)
 {
   extern __shared__ row_span thread_branch_stacks[];
@@ -416,8 +418,8 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
   row_span* my_branch_stack = thread_branch_stacks + (threadIdx.x * max_branch_depth);
   size_type branch_depth{0};
 
-  // current row span - always starts at 1 row.
-  row_span cur_span{tid, tid + 1};
+  // current row span - always starts at segment_length rows.
+  row_span cur_span{tid * segment_length, (tid + 1) * segment_length};
 
   // output size
   size_type& size = output[tid];
@@ -444,7 +446,7 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
     if (info[idx].depth == 0) {
       branch_depth      = 0;
       last_branch_depth = 0;
-      cur_span          = row_span{tid, tid + 1};
+      cur_span          = row_span{tid * segment_length, (tid + 1) * segment_length};
     }
 
     // add the contributing size of this row
@@ -465,14 +467,13 @@ CUDF_KERNEL void compute_row_sizes(device_span<column_device_view const> cols,
 
 }  // anonymous namespace
 
-/**
- * @copydoc cudf::detail::row_bit_count
- *
- */
 std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      size_type segment_length,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(segment_length >= 1, "Invalid segment length.", std::invalid_argument);
+
   // no rows
   if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
 
@@ -484,8 +485,9 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   CUDF_EXPECTS(info.size() == cols.size(), "Size/info mismatch");
 
   // create output buffer and view
-  auto output = cudf::make_fixed_width_column(
-    data_type{type_id::INT32}, t.num_rows(), mask_state::UNALLOCATED, stream, mr);
+  auto const num_segments = t.num_rows() / segment_length;
+  auto output             = cudf::make_fixed_width_column(
+    data_type{type_id::INT32}, num_segments, mask_state::UNALLOCATED, stream, mr);
   mutable_column_view mcv = output->mutable_view();
 
   // simple case.  if we have no complex types (lists, strings, etc), the per-row size is already
@@ -494,7 +496,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
     thrust::fill(rmm::exec_policy(stream),
                  mcv.begin<size_type>(),
                  mcv.end<size_type>(),
-                 h_info.simple_per_row_size);
+                 h_info.simple_per_row_size * segment_length);
     return output;
   }
 
@@ -523,26 +525,38 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   // should we be aborting if we reach some extremely small block size, or just if we hit 0?
   CUDF_EXPECTS(block_size > 0, "Encountered a column hierarchy too complex for row_bit_count");
 
-  cudf::detail::grid_1d grid{t.num_rows(), block_size, 1};
+  cudf::detail::grid_1d grid{num_segments, block_size, 1};
   compute_row_sizes<<<grid.num_blocks, block_size, shared_mem_size, stream.value()>>>(
     {std::get<1>(d_cols), cols.size()},
     {d_info.data(), info.size()},
-    {mcv.data<size_type>(), static_cast<std::size_t>(t.num_rows())},
+    {mcv.data<size_type>(), static_cast<std::size_t>(mcv.size())},
+    segment_length,
     h_info.max_branch_depth);
 
   return output;
 }
 
+std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  return row_bit_count(t, 1 /*segment_length*/, stream, mr);
+}
+
 }  // namespace detail
 
-/**
- * @copydoc cudf::row_bit_count
- *
- */
+std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      size_type segment_length,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
+}
+
 std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::row_bit_count(t, cudf::get_default_stream(), mr);
+  return detail::row_bit_count(t, 1 /*segment_length*/, cudf::get_default_stream(), mr);
 }
 
 }  // namespace cudf

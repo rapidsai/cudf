@@ -92,11 +92,23 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* null_mask,
                                       rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc cudf::row_bit_count
+ * @copydoc cudf::row_bit_count(table_view const&, rmm::cuda_stream_view,
+ *                              rmm::mr::device_memory_resource* )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc cudf::row_bit_count(table_view const&, size_type, rmm::cuda_stream_view,
+ *                              rmm::mr::device_memory_resource* )
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> row_bit_count(table_view const& t,
+                                      size_type segment_length,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
