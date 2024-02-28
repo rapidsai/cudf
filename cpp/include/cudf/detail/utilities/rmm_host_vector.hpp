@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/utilities/resource_ref.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cstddef>
 #include <limits>
@@ -28,7 +28,7 @@
 namespace cudf::detail {
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c a `cudf::host_resource_ref` for allocation.
+ *  that employs \c a `rmm::host_async_resource_ref` for allocation.
  *
  * This implementation is ported from pinned_host_vector in cudf.
  *
@@ -38,7 +38,7 @@ template <typename T>
 class rmm_host_allocator;
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c an `cudf::host_resource_ref` for allocation.
+ *  that employs \c an `cudf::host_async_resource_ref` for allocation.
  *
  * This implementation is ported from pinned_host_vector in cudf.
  *
@@ -63,7 +63,7 @@ class rmm_host_allocator<void> {
 };
 
 /*! \p rmm_host_allocator is a CUDA-specific host memory allocator
- *  that employs \c `rmm::mr::host_memory_resource` for allocation.
+ *  that employs \c `rmm::host_async_resource_ref` for allocation.
  *
  * This implementation is ported from pinned_host_vector in cudf.
  *
@@ -96,9 +96,9 @@ class rmm_host_allocator {
   rmm_host_allocator() = delete;
 
   /**
-   * @brief Construct from a `cudf::host_resource_ref`
+   * @brief Construct from a `cudf::host_async_resource_ref`
    */
-  rmm_host_allocator(cudf::host_resource_ref _mr) : mr(_mr) {}
+  rmm_host_allocator(rmm::host_async_resource_ref _mr) : mr(_mr) {}
 
   /**
    * @brief Copy constructor
@@ -109,17 +109,6 @@ class rmm_host_allocator {
    * @brief Move constructor
    */
   rmm_host_allocator(rmm_host_allocator&& other) : mr(std::move(other.mr)) {}
-
-  /**
-   * @brief Move operator
-   */
-  /*
-  rmm_host_allocator& operator=(rmm_host_allocator&& col)
-  {
-    mr = std::move(col.mr);
-    return *this;
-  }
-  */
 
   /**
    * @brief Assignment operator
@@ -220,7 +209,7 @@ class rmm_host_allocator {
   }
 
  private:
-  cudf::host_resource_ref mr;
+  rmm::host_async_resource_ref mr;
 };
 
 /**

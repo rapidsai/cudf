@@ -16,13 +16,28 @@
 
 #pragma once
 
-#include <cudf/utilities/resource_ref.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::io {
 
-void set_current_host_memory_resource(cudf::host_resource_ref mr);
+/**
+ * @brief Set the rmm resource to be used for host memory allocations by
+ * cudf::detail::hostdevice_vector
+ *
+ * hostdevice_vector is a utility class that uses a pair of host and device-side buffers for
+ * bouncing state between the cpu and the gpu. The resource set with this function (typically a
+ * pinned memory allocator) is what it uses to allocate space for it's host-side buffer.
+ *
+ * @param mr The rmm resource to be used for host-side allocations
+ */
+void set_current_host_memory_resource(rmm::host_async_resource_ref mr);
 
-// Should this be detail only?
-cudf::host_resource_ref get_current_host_memory_resource();
+/**
+ * @brief Get the rmm resource being used for host memory allocations by
+ * cudf::detail::hostdevice_vector
+ *
+ * @return The rmm resource used for host-side allocations
+ */
+rmm::host_async_resource_ref get_current_host_memory_resource();
 
 }  // namespace cudf::io

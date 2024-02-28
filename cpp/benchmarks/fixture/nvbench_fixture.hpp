@@ -26,9 +26,8 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/host/host_memory_resource.hpp>
-#include <rmm/mr/host/new_delete_resource.hpp>
-#include <rmm/mr/host/pinned_memory_resource.hpp>
+#include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <string>
 
@@ -82,36 +81,28 @@ struct nvbench_base_fixture {
               "\nExpecting: cuda, pool, async, arena, managed, or managed_pool");
   }
 
-  inline auto make_cuio_host_pinned()
+  inline rmm::host_async_resource_ref make_cuio_host_pinned()
   {
-    static std::shared_ptr<rmm::mr::pinned_memory_resource> mr =
-      std::make_shared<rmm::mr::pinned_memory_resource>();
-    return host_resource_ref(*mr);
+    static std::shared_ptr<rmm::mr::pinned_host_memory_resource> mr =
+      std::make_shared<rmm::mr::pinned_host_memory_resource>();
+    return *mr;
   }
 
-  inline auto make_cuio_host_pinned_pool()
+  inline rmm::host_async_resource_ref make_cuio_host_pinned_pool()
   {
-    using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_memory_resource>;
+    using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
     static std::shared_ptr<host_pooled_mr> mr = std::make_shared<host_pooled_mr>(
-      std::make_shared<rmm::mr::pinned_memory_resource>().get(), size_t{1} * 1024 * 1024 * 1024);
+      std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
+      size_t{1} * 1024 * 1024 * 1024);
 
-    return host_resource_ref(*mr);
+    return *mr;
   }
 
-  inline auto make_cuio_host_pageable_pool()
-  {
-    static std::shared_ptr<rmm::mr::new_delete_resource> mr =
-      std::make_shared<rmm::mr::new_delete_resource>();
-    return host_resource_ref(*mr);
-  }
-
-  inline host_resource_ref create_cuio_host_memory_resource(std::string const& mode)
+  inline rmm::host_async_resource_ref create_cuio_host_memory_resource(std::string const& mode)
   {
     if (mode == "pinned") return make_cuio_host_pinned();
     if (mode == "pinned_pool") return make_cuio_host_pinned_pool();
-    if (mode == "pageable") return make_cuio_host_pageable_pool();
-    CUDF_FAIL("Unknown cuio_host_mem parameter: " + mode +
-              "\nExpecting: pinned, pinned_pool, or pageable");
+    CUDF_FAIL("Unknown cuio_host_mem parameter: " + mode + "\nExpecting: pinned or pinned_pool");
   }
 
   nvbench_base_fixture(int argc, char const* const* argv)
