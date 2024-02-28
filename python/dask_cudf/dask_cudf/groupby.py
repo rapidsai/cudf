@@ -798,7 +798,6 @@ def _tree_node_agg(df, gb_cols, dropna, sort, sep):
         for name in gb.columns
     ]
     gb.columns = output_columns
-
     # Return with deterministic column ordering
     return gb[sorted(output_columns)]
 
