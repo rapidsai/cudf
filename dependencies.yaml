@@ -260,7 +260,7 @@ dependencies:
           - *ninja
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - &pyarrow pyarrow==14.0.2.*
+          - pyarrow==14.0.2.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
