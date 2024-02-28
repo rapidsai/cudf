@@ -252,7 +252,8 @@ public final class Table implements AutoCloseable {
                                         boolean dayFirst, boolean lines,
                                         boolean recoverWithNulls,
                                         boolean normalizeSingleQuotes,
-                                        boolean mixedTypesAsStrings) throws CudfException;
+                                        boolean mixedTypesAsStrings,
+                                        boolean keepStringQuotes) throws CudfException;
 
   private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
                                       int[] dTypeIds, int[] dTypeScales,
@@ -260,15 +261,22 @@ public final class Table implements AutoCloseable {
                                       boolean recoverWithNulls,
                                       boolean normalizeSingleQuotes,
                                       boolean mixedTypesAsStrings,
+                                      boolean keepStringQuotes,
                                       long dsHandle) throws CudfException;
 
   private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
                                       boolean recoverWithNulls,
                                       boolean normalizeSingleQuotes,
                                       boolean mixedTypesAsStrings,
+                                      boolean keepStringQuotes,
                                       long dsHandle) throws CudfException;
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines, boolean recoverWithNulls, boolean normalizeSingleQuotes, boolean mixedTypesAsStrings) throws CudfException;
+                                              boolean dayFirst,
+                                              boolean lines,
+                                              boolean recoverWithNulls,
+                                              boolean normalizeSingleQuotes,
+                                              boolean mixedTypesAsStrings,
+                                              boolean keepStringQuotes) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -1246,7 +1254,8 @@ public final class Table implements AutoCloseable {
                     0, 0,
                     opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
                     opts.isNormalizeSingleQuotes(),
-                    opts.isMixedTypesAsStrings()))) {
+                    opts.isMixedTypesAsStrings(),
+                opts.keepStringQuotes()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1300,7 +1309,7 @@ public final class Table implements AutoCloseable {
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
         opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
         opts.isNormalizeSingleQuotes(),
-        opts.isMixedTypesAsStrings()));
+        opts.isMixedTypesAsStrings(), opts.keepStringQuotes()));
   }
 
   /**
@@ -1316,6 +1325,7 @@ public final class Table implements AutoCloseable {
           opts.isRecoverWithNull(),
           opts.isNormalizeSingleQuotes(),
           opts.isMixedTypesAsStrings(),
+          opts.keepStringQuotes(),
           dsHandle));
         return twm;
       } finally {
@@ -1345,7 +1355,7 @@ public final class Table implements AutoCloseable {
             schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
             buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
             opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
-            opts.isMixedTypesAsStrings()))) {
+            opts.isMixedTypesAsStrings(), opts.keepStringQuotes()))) {
       return gatherJSONColumns(schema, twm);
     }
   }
@@ -1362,7 +1372,7 @@ public final class Table implements AutoCloseable {
     try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
         schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
         opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
-        opts.isMixedTypesAsStrings(), dsHandle))) {
+        opts.isMixedTypesAsStrings(), opts.keepStringQuotes(), dsHandle))) {
       return gatherJSONColumns(schema, twm);
     } finally {
       DataSourceHelper.destroyWrapperDataSource(dsHandle);
