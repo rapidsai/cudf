@@ -425,7 +425,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         df[(k, *name)] = col
 
             # MultiIndex construction here
-            result_columns = cudf.MultiIndex.from_tuples(df.columns)
+            result_columns = cudf.MultiIndex.from_tuples(df._column_names)
 
         if ignore_index:
             # with ignore_index the column names change to numbers
