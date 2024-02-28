@@ -300,7 +300,7 @@ class ListColumn(ColumnBase):
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
-        pd_series = pd.Series(self.to_arrow().to_pylist())
+        pd_series = pd.Series(self.to_arrow().to_pylist(), dtype="object")
 
         if index is not None:
             pd_series.index = index
