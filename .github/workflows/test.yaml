@@ -119,7 +119,7 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
     with:
-      matrix_filter: map(select(.ARCH == "amd64")) | max_by(.CUDA_VER) | [.]
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10")) | max_by(.CUDA_VER) | [.]
       build_type: nightly
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
