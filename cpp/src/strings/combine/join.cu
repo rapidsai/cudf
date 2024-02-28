@@ -157,9 +157,6 @@ std::unique_ptr<column> join_strings(strings_column_view const& input,
     auto joined_col = make_strings_column(indices, indices + (input.size() * 2), stream, mr);
     auto chars_data = joined_col->release().data;
     return std::move(*chars_data);
-    // auto const chars_size = chars_data->size();
-    // return std::make_unique<cudf::column>(
-    //   data_type{type_id::INT8}, chars_size, std::move(*chars_data), rmm::device_buffer{}, 0);
   }();
 
   // build the offsets: single string output has offsets [0,chars-size]
