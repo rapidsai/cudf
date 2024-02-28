@@ -25,10 +25,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
-// run on most GPUs, but large enough to allow highest throughput
-constexpr std::size_t data_size = 512 << 20;
-
 template <row_selection RowSelection,
           normalize_single_quotes NormalizeSingleQuotes,
           mixed_types_as_string MixedTypesAsString,
@@ -47,6 +43,7 @@ void BM_json_read_options(nvbench::state& state,
                                                 : cudf::io::json_recovery_mode_t::FAIL;
   size_t const num_chunks                   = state.get_int64("num_chunks");
   size_t const num_cols                     = state.get_int64("num_cols");
+  size_t const data_size                    = state.get_int64("table_size");
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -61,12 +58,14 @@ void BM_json_read_options(nvbench::state& state,
   auto const view = tbl->view();
   cudf::io::json_writer_options const write_opts =
     cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
+      .lines(true)
       .na_rep("null")
       .rows_per_chunk(100'000);
   cudf::io::write_json(write_opts);
 
   cudf::io::json_reader_options read_options =
     cudf::io::json_reader_options::builder(source_sink.make_source_info())
+      .lines(true)
       .normalize_single_quotes(normalize_single_quotes_bool)
       .mixed_types_as_string(mixed_types_as_string_bool)
       .recovery_mode(recovery_mode_enum);
@@ -112,7 +111,7 @@ void BM_json_read_options(nvbench::state& state,
 NVBENCH_BENCH_TYPES(
   BM_json_read_options,
   NVBENCH_TYPE_AXES(
-    nvbench::enum_type_list<row_selection::ALL>,
+    nvbench::enum_type_list<row_selection::ALL, row_selection::BYTE_RANGE>,
     nvbench::enum_type_list<normalize_single_quotes::NO, normalize_single_quotes::YES>,
     nvbench::enum_type_list<mixed_types_as_string::NO, mixed_types_as_string::YES>,
     nvbench::enum_type_list<recovery_mode::RECOVER_WITH_NULL, recovery_mode::FAIL>))
@@ -121,4 +120,5 @@ NVBENCH_BENCH_TYPES(
     {"row_selection", "normalize_single_quotes", "mixed_types_as_string", "recovery_mode"})
   .set_min_samples(6)
   .add_int64_axis("num_chunks", {1})
-  .add_int64_axis("num_cols", {64, 128});
+  .add_int64_axis("num_cols", {64})
+  .add_int64_power_of_two_axis("table_size", nvbench::range(26, 29, 1));
