@@ -23,7 +23,6 @@
 //
 //
 //
-
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/reader_impl.hpp"
@@ -33,6 +32,7 @@
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/timezone.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -45,6 +45,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -720,6 +721,46 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
   }
 }
 
+/**
+ * @brief TODO
+ * @param input
+ * @param size_limit
+ * @param stream
+ * @return
+ */
+std::vector<chunk> find_table_splits(table_view const& input,
+                                     std::size_t size_limit,
+                                     rmm::cuda_stream_view stream)
+{
+  // Default 10k rows.
+  size_type constexpr SEGMENT_SIZE = 10'000;
+  auto const d_segmented_sizes     = cudf::detail::segmented_bit_count(
+    input, SEGMENT_SIZE, stream, rmm::mr::get_current_device_resource());
+  auto const d_size_begin = d_segmented_sizes->view().begin<size_type>();
+
+  auto segmented_sizes =
+    cudf::detail::hostdevice_vector<cumulative_size>(d_segmented_sizes->size(), stream);
+
+  // TODO: exec_policy_nosync
+  thrust::transform(rmm::exec_policy(stream),
+                    d_size_begin,
+                    d_size_begin + d_segmented_sizes->size(),
+                    segmented_sizes.d_begin(),
+                    [SEGMENT_SIZE] __device__(auto const size) {
+                      return cumulative_size{SEGMENT_SIZE, static_cast<std::size_t>(size)};
+                    });
+  // TODO: exec_policy_nosync
+  thrust::inclusive_scan(rmm::exec_policy(stream),
+                         segmented_sizes.d_begin(),
+                         segmented_sizes.d_end(),
+                         segmented_sizes.d_begin(),
+                         cumulative_size_sum{});
+  segmented_sizes.device_to_host_sync(stream);
+
+  // Since the segment sizes are in bits, we need to multiply CHAR_BIT with the output limit.
+  return find_splits(segmented_sizes, input.num_rows(), size_limit * CHAR_BIT);
+}
+
 }  // namespace
 
 // TODO: this should be called per chunk of stripes.
@@ -1176,6 +1217,34 @@ void reader::impl::decompress_and_decode()
     // printf("line %d\n", __LINE__);
     // fflush(stdout);
   }  // end loop level
+
+  std::vector<std::unique_ptr<column>> out_columns;
+  _out_metadata = get_meta_with_user_data();
+  std::transform(
+    _selected_columns.levels[0].begin(),
+    _selected_columns.levels[0].end(),
+    std::back_inserter(out_columns),
+    [&](auto const& orc_col_meta) {
+      _out_metadata.schema_info.emplace_back("");
+      auto col_buffer = assemble_buffer(
+        orc_col_meta.id, 0, *_col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
+      return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
+    });
+  _decoded_table = std::make_unique<table>(std::move(out_columns));
+
+  // DEBUG only
+  _chunk_read_data.output_size_limit = _chunk_read_data.data_read_limit / 3;
+
+  _chunk_read_data.output_table_chunks =
+    find_table_splits(_decoded_table->view(), _chunk_read_data.output_size_limit, _stream);
+  _chunk_read_data.curr_output_table_chunk = 0;
+
+  auto& splits = _chunk_read_data.output_table_chunks;
+  printf("------------\nSplits (/total num rows = %d): \n", (int)_decoded_table->num_rows());
+  for (size_t idx = 0; idx < splits.size(); idx++) {
+    printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
+  }
+  fflush(stdout);
 }
 
 void reader::impl::prepare_data(int64_t skip_rows,
@@ -1217,7 +1286,7 @@ table_with_metadata reader::impl::make_output_chunk()
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   std::vector<std::unique_ptr<column>> out_columns;
-  auto out_metadata = make_output_metadata();
+  auto out_metadata = get_meta_with_user_data();
 
   // If no rows or stripes to read, return empty columns
   if (_file_itm_data.has_no_data() /*|| !_chunk_read_data.has_next()*/) {
@@ -1248,7 +1317,7 @@ table_with_metadata reader::impl::make_output_chunk()
   for (auto& buffers : _file_itm_data.out_buffers) {
     //
     out_columns.clear();  // TODO: remove
-    out_metadata = make_output_metadata();
+    out_metadata = get_meta_with_user_data();
 
     std::transform(_selected_columns.levels[0].begin(),
                    _selected_columns.levels[0].end(),
@@ -1334,9 +1403,9 @@ table_with_metadata reader::impl::make_output_chunk()
   return {std::move(out_table), std::move(out_metadata)};
 }
 
-table_metadata reader::impl::make_output_metadata()
+table_metadata reader::impl::get_meta_with_user_data()
 {
-  if (_out_metadata) { return table_metadata{*_out_metadata}; }
+  if (_meta_with_user_data) { return table_metadata{*_meta_with_user_data}; }
 
   // Copy user data to the output metadata.
   table_metadata out_metadata;
@@ -1357,8 +1426,8 @@ table_metadata reader::impl::make_output_metadata()
   out_metadata.user_data = {out_metadata.per_file_user_data[0].begin(),
                             out_metadata.per_file_user_data[0].end()};
 
-  // Save the output table metadata into `_out_metadata` for reuse next time.
-  _out_metadata = std::make_unique<table_metadata>(out_metadata);
+  // Save the output table metadata into `_meta_with_user_data` for reuse next time.
+  _meta_with_user_data = std::make_unique<table_metadata>(out_metadata);
 
   return out_metadata;
 }

@@ -141,7 +141,7 @@ class reader::impl {
   void decompress_and_decode();
 
   /**
-   * @brief Create the output table from the internal buffers and return it along with metadata.
+   * @brief Create the output table from the intermediate table and return it along with metadata.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
    *
@@ -150,11 +150,11 @@ class reader::impl {
   table_with_metadata make_output_chunk();
 
   /**
-   * @brief Create the output table metadata from file metadata.
+   * @brief Create the output table metadata storing user data in source metadata.
    *
-   * @return Columns' metadata to output with the table read from file
+   * @return Columns' user data to output with the table read from file
    */
-  table_metadata make_output_metadata();
+  table_metadata get_meta_with_user_data();
 
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
@@ -174,8 +174,10 @@ class reader::impl {
   column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it
   file_intermediate_data _file_itm_data;
   chunk_read_data _chunk_read_data;
-  std::unique_ptr<table_metadata> _out_metadata;
+  std::unique_ptr<table_metadata> _meta_with_user_data;
+  table_metadata _out_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
+  std::unique_ptr<cudf::table> _decoded_table;
 };
 
 }  // namespace cudf::io::orc::detail

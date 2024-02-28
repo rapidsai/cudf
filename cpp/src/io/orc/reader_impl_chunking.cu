@@ -28,13 +28,11 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/timezone.hpp>
-#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/bit.hpp>
@@ -304,26 +302,6 @@ std::size_t gather_stream_info_and_column_desc(
   return dst_offset;
 }
 
-namespace {
-
-/**
- * @brief Struct to accummulate sizes of chunks of some data such as stripe or rows.
- */
-struct cumulative_size {
-  int64_t count{0};
-  std::size_t size_bytes{0};
-};
-
-/**
- * @brief Functor to sum up cumulative sizes.
- */
-struct cumulative_size_sum {
-  __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
-  {
-    return cumulative_size{a.count + b.count, a.size_bytes + b.size_bytes};
-  }
-};
-
 #if 1
 /**
  * @brief Find the splits of the input data such that each split has cumulative size less than a
@@ -387,6 +365,8 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
   return splits;
 }
 #endif
+
+namespace {
 
 #ifdef PRINT_DEBUG
 /**
@@ -887,203 +867,6 @@ void reader::impl::load_data()
 
   // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
   _chunk_read_data.curr_decode_stripe_chunk = 0;
-}
-
-namespace {
-
-// Default 10k rows.
-size_type constexpr SEGMENT_SIZE = 10'000;
-
-// size_type constexpr SEGMENT_SIZE = 1;
-
-/**
- * @brief Functor which computes the total data size for a given type of a cudf column.
- *
- * In the case of strings, the return size does not include the chars themselves. That
- * information is tracked separately (see PageInfo::str_bytes).
- *
- * TODO
- */
-struct column_segment_size_functor {
-  column_device_view d_col;
-  size_type size;
-
-  __device__ std::size_t num_rows(size_type start_row) const
-  {
-    return cuda::std::min(size, d_col.size() - start_row);
-  }
-
-  __device__ std::size_t validity_size(size_type start_row) const
-  {
-    return d_col.nullable()
-             ? cudf::util::div_rounding_up_safe(num_rows(start_row), std::size_t{32}) * 4ul
-             : 0ul;
-  }
-
-  template <typename T,
-            CUDF_ENABLE_IF(!cudf::is_rep_layout_compatible<T>() && !cudf::is_nested<T>() &&
-                           !std::is_same_v<T, string_view>)>
-  __device__ std::size_t operator()(size_type) const
-  {
-    CUDF_UNREACHABLE("Attempted to find size of unsupported types.");
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
-  __device__ std::size_t operator()(size_type start_row) const
-  {
-    auto constexpr element_size = sizeof(device_storage_type_t<T>);
-
-    if (start_row == 0) {
-      printf("     col size: %d (valid: %d)\n",
-             (int)(element_size * num_rows(start_row) + validity_size(start_row)),
-             (int)validity_size(start_row));
-    }
-
-    return element_size * num_rows(start_row) + validity_size(start_row);
-  }
-
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, string_view>)>
-  __device__ std::size_t operator()(size_type start_row) const
-  {
-    auto const offsets      = d_col.child(strings_column_view::offsets_column_index);
-    auto const offsetalator = cudf::detail::input_offsetalator(offsets.head(), offsets.type());
-    auto const char_begin   = offsetalator[start_row];
-    auto const char_end     = offsetalator[start_row + num_rows(start_row)];
-    auto const chars_size   = char_end - char_begin;
-
-    // NOTE: Adding the + 1 offset, similar to the case of lists column.
-    auto const offset_size =
-      offsets.type().id() == type_id::INT32 ? sizeof(int32_t) : sizeof(int64_t);
-    // printf("   offset sizes: %d, char size: %d\n", (int)offset_size, (int)chars_size);
-
-    return offset_size * (num_rows(start_row) + 1) + validity_size(start_row) + chars_size;
-  }
-
-  template <typename T, CUDF_ENABLE_IF(cudf::is_nested<T>())>
-  __device__ std::size_t operator()(size_type start_row) const
-  {
-    auto col             = d_col;
-    auto col_size        = std::size_t{0};
-    auto child_start_row = start_row;
-    auto child_size      = size;
-
-    while (col.type().id() == type_id::STRUCT || col.type().id() == type_id::LIST) {
-      col_size += validity_size(start_row);
-
-      if (start_row == 0) { printf("     add valid size: %d\n", (int)validity_size(start_row)); }
-
-      if (col.type().id() == type_id::STRUCT) {
-        // Empty struct.
-        if (col.num_child_columns() == 0) { return col_size; }
-        col = col.child(0);
-
-        if (start_row == 0) { printf("   struct, move down\n"); }
-      } else {
-        auto const offsets = col.child(lists_column_view::offsets_column_index);
-        col                = col.child(lists_column_view::child_column_index);
-
-        auto const child_end_row = offsets.element<size_type>(start_row + num_rows(start_row));
-        child_start_row          = offsets.element<size_type>(start_row);
-        child_size               = child_end_row - child_start_row;
-
-        // NOTE: Adding the + 1 offset here isn't strictly correct. There will only be 1 extra
-        // offset for the entire column so we will get a small over-estimate of the real size.
-        auto constexpr offset_size = sizeof(size_type);
-        col_size += offset_size * (num_rows(start_row) + 1);
-
-        if (start_row == 0) {
-          printf("     list, add offst size: %d\n", (int)(offset_size * (num_rows(start_row) + 1)));
-        }
-      }
-    }
-
-    return col_size + type_dispatcher<cudf::experimental::dispatch_void_if_nested>(
-                        col.type(), column_segment_size_functor{col, child_size}, child_start_row);
-  }
-};
-
-struct table_segment_size_functor {
-  table_device_view d_table;
-  size_type size;
-
-  __device__ std::size_t operator()(size_type start_row) const
-  {
-    // printf("line %d, start row %d\n", __LINE__, start_row);
-
-    auto const col_size = [=](column_device_view col) {
-      if (start_row == 0) { printf("compute new col %d\n", __LINE__); }
-      return cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size}, start_row);
-    };
-
-    // if (start_row == 0) {
-    //   for (auto col : d_table) {
-    //     auto t =
-    //       cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size}, start_row);
-    //     printf("start: %d, col size: %d\n", start_row, (int)t);
-    //   }
-    // }
-
-    return thrust::transform_reduce(
-      thrust::seq, d_table.begin(), d_table.end(), col_size, 0ul, thrust::plus<>{});
-  }
-};
-
-}  // namespace
-
-void test(table_view const& input, rmm::cuda_stream_view stream)
-{
-  auto verticalized_t = std::get<0>(
-    cudf::experimental::decompose_structs(input, cudf::experimental::decompose_lists_column::YES));
-
-  auto sliced_in = std::move(cudf::slice(input, {0, 5})[0]);
-  for (auto col : sliced_in) {
-    printf("=====sliced in col: \n");
-    cudf::test::print(col);
-  }
-  fflush(stdout);
-
-  auto sliced_in_v = std::move(cudf::slice(verticalized_t, {0, 5})[0]);
-  for (auto col : sliced_in_v) {
-    printf("=====sliced_in_v: \n");
-    cudf::test::print(col);
-  }
-  fflush(stdout);
-
-  auto d_t = table_device_view::create(verticalized_t, stream);
-
-  auto const num_segments = std::max(input.num_rows() / SEGMENT_SIZE, 1);
-  printf("num rows: %d, num seeg: %d\n", input.num_rows(), num_segments);
-  fflush(stdout);
-
-  auto output = make_fixed_width_column(
-    data_type{type_id::UINT64}, num_segments, mask_state::UNALLOCATED, stream);
-
-  auto s = thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_segments),
-    output->mutable_view().begin<size_t>(),
-    cuda::proclaim_return_type<std::size_t>(
-      [SEGMENT_SIZE = SEGMENT_SIZE, d_table = *d_t] __device__(auto const segment_idx) {
-        auto const start_row = segment_idx * SEGMENT_SIZE;
-        return table_segment_size_functor{d_table, SEGMENT_SIZE}(start_row);
-      }));
-
-  printf("segment size: \n");
-  cudf::test::print(output->view());
-  fflush(stdout);
-
-  auto out = cudf::detail::segmented_bit_count(
-    input, SEGMENT_SIZE, stream, rmm::mr::get_current_device_resource());
-  thrust::transform(rmm::exec_policy(stream),
-                    out->view().begin<int>(),
-                    out->view().end<int>(),
-                    out->mutable_view().begin<int>(),
-                    cuda::proclaim_return_type<int>([] __device__(auto const x) { return x / 8; }));
-
-  printf("segment size again: \n");
-  cudf::test::print(out->view());
-  fflush(stdout);
 }
 
 }  // namespace cudf::io::orc::detail

@@ -39,10 +39,6 @@
 
 #include <type_traits>
 
-namespace cudf::io::orc::detail {
-void test(table_view const& input, rmm::cuda_stream_view stream);
-}
-
 template <typename T, typename SourceElementT = T>
 using column_wrapper =
   typename std::conditional<std::is_same_v<T, cudf::string_view>,
@@ -778,8 +774,6 @@ TEST_F(OrcChunkedWriterTest, Metadata)
   auto result = cudf::io::read_orc(read_opts);
 
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
-
-  cudf::io::orc::detail::test(expected, cudf::get_default_stream());
 }
 
 TEST_F(OrcChunkedWriterTest, Strings)
@@ -1394,8 +1388,6 @@ TEST_P(OrcWriterTestStripes, StripeSize)
     auto result = cudf::io::read_orc(in_opts);
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
-
-    cudf::io::orc::detail::test(expected->view(), cudf::get_default_stream());
   };
 
   {
@@ -1492,8 +1484,6 @@ TEST_F(OrcWriterTest, TestMap)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
-
-  cudf::io::orc::detail::test(cudf::table_view{{*list_col}}, cudf::get_default_stream());
 }
 
 TEST_F(OrcReaderTest, NestedColumnSelection)

@@ -241,6 +241,32 @@ struct chunk_read_data {
 };
 
 /**
+ * @brief Struct to accumulate sizes of chunks of some data such as stripe or rows.
+ */
+struct cumulative_size {
+  int64_t count{0};
+  std::size_t size_bytes{0};
+};
+
+/**
+ * @brief Functor to sum up cumulative sizes.
+ */
+struct cumulative_size_sum {
+  __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
+  {
+    return cumulative_size{a.count + b.count, a.size_bytes + b.size_bytes};
+  }
+};
+
+/**
+ * @brief Find the splits of the input data such that each split has cumulative size less than a
+ * given `size_limit`.
+ */
+std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
+                               int64_t total_count,
+                               size_t size_limit);
+
+/**
  * @brief Function that populates descriptors for either individual streams or chunks of column
  * data, but not both.
  */
