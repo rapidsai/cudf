@@ -633,7 +633,7 @@ dependencies:
       - output_types: pyproject
         packages:
           - msgpack
-          - &tokenizers tokenizers==0.13.1
+          - &tokenizers tokenizers==0.15.2
           - &transformers transformers==4.24.0
           - tzdata
     specific:

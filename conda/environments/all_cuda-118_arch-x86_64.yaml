@@ -97,7 +97,7 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.17
-- tokenizers==0.13.1
+- tokenizers==0.15.2
 - transformers==4.24.0
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
