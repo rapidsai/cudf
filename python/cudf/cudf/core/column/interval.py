@@ -116,6 +116,10 @@ class IntervalColumn(StructColumn):
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         elif arrow_type:

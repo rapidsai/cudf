@@ -5244,8 +5244,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> type(pdf)
         <class 'pandas.core.frame.DataFrame'>
 
-        ``nullable`` parameter can be used to control
-        whether dtype can be Pandas Nullable or not:
+        ``nullable=True`` converts the result to pandas nullable types:
 
         >>> df = cudf.DataFrame({'a': [0, None, 2], 'b': [True, False, None]})
         >>> df
@@ -5272,6 +5271,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> pdf.dtypes
         a    float64
         b     object
+        dtype: object
+
+        ``arrow_type=True`` converts the result to ``pandas.ArrowDtype``:
+
+        >>> df.to_pandas(arrow_type=True).dtypes
+        a    int64[pyarrow]
+        b     bool[pyarrow]
         dtype: object
         """
         out_data = {}

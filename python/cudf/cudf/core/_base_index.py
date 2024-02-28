@@ -943,6 +943,8 @@ class BaseIndex(Serializable):
         <class 'pandas.core.indexes.base.Index'>
         >>> type(idx)
         <class 'cudf.core.index.Index'>
+        >>> idx.to_pandas(arrow_type=True)
+        Index([-3, 10, 15, 20], dtype='int64[pyarrow]')
         """
         raise NotImplementedError
 

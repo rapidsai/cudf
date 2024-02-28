@@ -320,9 +320,13 @@ class DatetimeColumn(column.ColumnBase):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        if arrow_type:
+        elif arrow_type:
             return pd.Series(
                 pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
             )
@@ -730,9 +734,13 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        if arrow_type:
+        elif arrow_type:
             return pd.Series(
                 pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
             )

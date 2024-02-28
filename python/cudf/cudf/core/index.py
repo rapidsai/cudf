@@ -2104,19 +2104,23 @@ class DatetimeIndex(Index):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DatetimeIndex:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
-        freq = (
-            self._freq._maybe_as_fast_pandas_offset()
-            if self._freq is not None
-            else None
-        )
-        return pd.DatetimeIndex(
-            self._values.to_pandas(arrow_type=arrow_type),
-            name=self.name,
-            freq=freq,
-        )
+        result = self._values.to_pandas(arrow_type=arrow_type)
+        if arrow_type:
+            return pd.Index(result, name=self.name)
+        else:
+            freq = (
+                self._freq._maybe_as_fast_pandas_offset()
+                if self._freq is not None
+                else None
+            )
+            return pd.DatetimeIndex(result, name=self.name, freq=freq)
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -2440,12 +2444,18 @@ class TimedeltaIndex(Index):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.TimedeltaIndex:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        return pd.TimedeltaIndex(
-            self._values.to_pandas(arrow_type=arrow_type),
-            name=self.name,
-        )
+
+        result = self._values.to_pandas(arrow_type=arrow_type)
+        if arrow_type:
+            return pd.Index(result, name=self.name)
+        else:
+            return pd.TimedeltaIndex(result, name=self.name)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate

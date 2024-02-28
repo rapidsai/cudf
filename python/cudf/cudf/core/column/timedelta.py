@@ -155,10 +155,13 @@ class TimeDeltaColumn(ColumnBase):
     ) -> pd.Series:
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
-
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        if arrow_type:
+        elif arrow_type:
             return pd.Series(
                 pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
             )

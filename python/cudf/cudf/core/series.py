@@ -2031,8 +2031,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> type(pds)
         <class 'pandas.core.series.Series'>
 
-        ``nullable`` parameter can be used to control
-        whether dtype can be Pandas Nullable or not:
+        ``nullable=True`` converts the result to pandas nullable types:
 
         >>> ser = cudf.Series([10, 20, None, 30])
         >>> ser
@@ -2053,6 +2052,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     NaN
         3    30.0
         dtype: float64
+
+        ``arrow_type=True`` converts the result to ``pandas.ArrowDtype``:
+        >>> ser.to_pandas(arrow_type=True)
+        0      10
+        1      20
+        2    <NA>
+        3      30
+        dtype: int64[pyarrow]
         """
         if index is True:
             index = self.index.to_pandas()
