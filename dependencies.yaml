@@ -258,7 +258,6 @@ dependencies:
           - *cmake_ver
           - cython>=3.0.3
           - *ninja
-          - &numpy numpy>=1.21
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
           - pyarrow==14.0.2.*
@@ -496,7 +495,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - *numpy
+          - numpy>=1.21
           - pandas>=2.0,<2.2.2dev0
   run_cudf:
     common:

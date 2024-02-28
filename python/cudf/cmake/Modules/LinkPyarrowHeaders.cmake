@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -13,7 +13,7 @@
 # =============================================================================
 include_guard(GLOBAL)
 
-find_package(Python REQUIRED COMPONENTS Development NumPy)
+find_package(Python REQUIRED COMPONENTS Development)
 
 execute_process(
   COMMAND "${Python_EXECUTABLE}" -c "import pyarrow; print(pyarrow.get_include())"
@@ -33,8 +33,6 @@ endif()
 # scalar-related Cython code is removed from cudf.
 function(link_to_pyarrow_headers targets)
   foreach(target IN LISTS targets)
-    # PyArrow headers require numpy headers.
-    target_include_directories(${target} PRIVATE "${Python_NumPy_INCLUDE_DIRS}")
     target_include_directories(${target} PRIVATE "${PYARROW_INCLUDE_DIR}")
   endforeach()
 endfunction()

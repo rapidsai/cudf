@@ -6,7 +6,6 @@ requires = [
     "cmake>=3.26.4",
     "cython>=3.0.3",
     "ninja",
-    "numpy>=1.21",
     "protoc-wheel",
     "pyarrow==14.0.2.*",
     "rmm==24.4.*",
