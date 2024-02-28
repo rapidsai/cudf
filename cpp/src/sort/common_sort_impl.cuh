@@ -31,23 +31,17 @@ namespace detail {
 /**
  * @brief The enum specifying which sorting method to use (stable or unstable).
  */
-enum class sort_method { STABLE, UNSTABLE };
+enum class sort_method : bool { STABLE, UNSTABLE };
 
 /**
- * @brief Fast-path sort a column in place
+ * @brief Functor performs a fast-path, in-place sort on eligible columns
  *
- * Precondition, is_usable(column) returned true
- *
- * @tparam method Whether to use a stable sort or not.
- * @param col Column to sort, modified in place.
- * @param order Ascending or descending sort order.
- * @param stream CUDA stream used for device memory operations and kernel launches
- *
+ * @tparam method Whether to use a stable or unstable sort.
  */
 template <sort_method method>
 struct inplace_column_sort_fn {
   /**
-   * @brief Check if fast-path, in place sort is available for the given column.
+   * @brief Check if fast-path, in-place sort is available for the given column
    *
    * @param column to check
    * @return true if fast-path sort is available, false otherwise.
@@ -58,7 +52,7 @@ struct inplace_column_sort_fn {
            !cudf::is_floating_point(column.type());
   }
   /**
-   * @brief Check if fast-path, in place sort is available for the given table.
+   * @brief Check if fast-path, in-place sort is available for the given table
    *
    * @param table to check
    * @return true if fast-path sort is available, false otherwise.
@@ -68,6 +62,17 @@ struct inplace_column_sort_fn {
     return table.num_columns() == 1 && is_usable(table.column(0));
   }
 
+  /**
+   * @brief Fast-path sort a column in place
+   *
+   * Precondition, is_usable(column) returned true
+   *
+   * @tparam T column data type.
+   * @param col Column to sort, modified in place.
+   * @param order Ascending or descending sort order.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   *
+   */
   template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
   void operator()(mutable_column_view& col, order order, rmm::cuda_stream_view stream) const
   {
