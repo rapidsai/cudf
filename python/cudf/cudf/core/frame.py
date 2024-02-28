@@ -1957,8 +1957,8 @@ class Frame(BinaryOperand, Scannable):
         from dask.base import normalize_token
 
         return [
-            str(type(self)),
-            str(self._dtypes),
+            type(self),
+            self._dtypes,
             normalize_token(self.to_pandas()),
         ]
 
