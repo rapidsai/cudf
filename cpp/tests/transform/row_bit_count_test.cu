@@ -58,7 +58,7 @@ std::unique_ptr<cudf::column> accumulate_row_sizes(cudf::column_view const& row_
        num_rows = row_sizes.size(),
        d_sizes  = row_sizes.begin<cudf::size_type>()] __device__(auto const segment_idx) {
         // Since the number of rows may not divisible by segment_length,
-        // the last segment may have different number of rows.
+        // the last segment may be shorter than the others.
         auto const current_length =
           segment_idx + 1 < num_segments ? segment_length : num_rows - segment_length * segment_idx;
 

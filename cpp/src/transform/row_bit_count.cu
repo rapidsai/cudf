@@ -509,7 +509,7 @@ std::unique_ptr<column> segmented_bit_count(table_view const& t,
          num_rows     = t.num_rows(),
          per_row_size = h_info.simple_per_row_size] __device__(size_type const segment_idx) {
           // Since the number of rows may not divisible by segment_length,
-          // the last segment may have different number of rows.
+          // the last segment may be shorter than the others.
           auto const current_length = segment_idx + 1 < num_segments
                                         ? segment_length
                                         : num_rows - segment_length * segment_idx;
