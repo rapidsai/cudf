@@ -1,6 +1,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t, uint16_t
+from libc.stdint cimport uint8_t, uint16_t, uintptr_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -30,7 +30,7 @@ cdef extern from "cudf/strings/udf/udf_apis.hpp"  namespace \
         udf_string* strings, size_type size
     ) except +
     cdef void free_managed_udf_string_array(
-        managed_udf_string* strings, size_type size
+        managed_udf_string* strings, size_type size, uintptr_t TheMSys
     ) except +
     cdef unique_ptr[column] column_from_managed_udf_string_array(
         managed_udf_string* managed_strings, size_type size

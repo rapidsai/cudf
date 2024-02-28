@@ -55,11 +55,11 @@ target_compile_options(
   cudf_strings_udf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${UDF_CXX_FLAGS}>"
                            "$<$<COMPILE_LANGUAGE:CUDA>:${UDF_CUDA_FLAGS}>"
 )
-target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf)
+target_link_libraries(cudf_strings_udf PUBLIC cudf::cudf cuda cudart)
 install(TARGETS cudf_strings_udf DESTINATION ./cudf/_lib/)
 
 # Create the shim library for each architecture.
-set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true)
+set(SHIM_CUDA_FLAGS --expt-relaxed-constexpr -rdc=true -g -G)
 
 # always build a default PTX file in case RAPIDS_NO_INITIALIZE is set and the device cc can't be
 # safely queried through a context

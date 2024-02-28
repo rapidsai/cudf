@@ -20,12 +20,12 @@ from cudf.core.udf.strings_typing import (
     str_view_arg_handler,
     string_view,
 )
+from cudf.core.udf._nrt_cuda import memsys
 from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing._utils import assert_eq, sv_to_managed_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
 
 _PTX_FILE = _ptx_file()
-
 
 def get_kernels(func, dtype, size):
     """
@@ -91,7 +91,7 @@ def run_udf_test(data, func, dtype):
     with _CUDFNumbaConfig():
         sv_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = column_from_managed_udf_string_array(output)
+        result = column_from_managed_udf_string_array(output, memsys)
     else:
         result = output
 
@@ -100,7 +100,7 @@ def run_udf_test(data, func, dtype):
     with _CUDFNumbaConfig():
         udf_str_kernel.forall(len(data))(str_views, output)
     if dtype == "str":
-        result = column_from_managed_udf_string_array(output)
+        result = column_from_managed_udf_string_array(output, memsys)
     else:
         result = output
 

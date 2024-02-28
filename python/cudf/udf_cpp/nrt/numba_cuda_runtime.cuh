@@ -1,6 +1,16 @@
 #ifndef _NRT_H
 #define _NRT_H
 
+#define CUDA_CHECK( fn ) do { \
+  CUresult status = (fn); \
+  if ( CUDA_SUCCESS != status ) { \
+    const char* errstr; \
+    cuGetErrorString(status, &errstr); \
+    printf("CUDA Driver Failure (line %d of file %s):\n\t%s returned 0x%x (%s)\n", __LINE__, __FILE__, #fn, status, errstr); \
+    exit(EXIT_FAILURE); \
+  } \
+} while (0)
+
 #include <cuda/atomic>
 
 typedef __device__ void (*NRT_dtor_function)(void* ptr, size_t size, void* info);
@@ -32,11 +42,31 @@ struct NRT_MemSys {
 
 
 /* The Memory System object */
-__device__ NRT_MemSys TheMSysStruct = {0};
-__device__ NRT_MemSys* TheMSys = &TheMSysStruct;
+__device__ NRT_MemSys* TheMSys;
+
+void set_global_memsys() {
+  CUmodule module;
+  CUmodule module2;
+  CUfunction set_global_memsys_kernel;
+
+  NRT_MemSys** memsys_p = &TheMSys;
+  void *args[] = {&memsys_p};
+
+  CUDA_CHECK(cuModuleLoad(&module, "/raid/brmiller/repos/cudf/memsys.ptx"));
+  CUDA_CHECK(cuModuleLoad(&module2, "/raid/brmiller/repos/cudf/memsys.ptx"));
+  std::cout << "module: " << module << std::endl;
+  std::cout << "module2: " << module2 << std::endl;
+
+  CUDA_CHECK(cuModuleGetFunction(&set_global_memsys_kernel, module, "set_global_memsys_kernel"));
+  CUDA_CHECK(cuLaunchKernel(
+      set_global_memsys_kernel,
+      1, 1, 1,
+      1, 1, 1, 0, 0, args, 0));
+
+}
 
 
-extern "C" __device__ void* NRT_Allocate(size_t size)
+extern "C" __device__ void* NRT_Allocate(size_t size, NRT_MemSys* TheMSys)
 {
   void* ptr = NULL;
   ptr       = malloc(size);
@@ -45,7 +75,7 @@ extern "C" __device__ void* NRT_Allocate(size_t size)
 }
 
 extern "C" __device__ void NRT_MemInfo_init(
-  NRT_MemInfo* mi, void* data, size_t size, NRT_dtor_function dtor, void* dtor_info)
+  NRT_MemInfo* mi, void* data, size_t size, NRT_dtor_function dtor, void* dtor_info, NRT_MemSys* TheMSys)
 {
   mi->refct     = 1; /* starts with 1 refct */
   mi->dtor      = dtor;
@@ -58,32 +88,32 @@ extern "C" __device__ void NRT_MemInfo_init(
 __device__ NRT_MemInfo* NRT_MemInfo_new(void* data,
                                         size_t size,
                                         NRT_dtor_function dtor,
-                                        void* dtor_info)
+                                        void* dtor_info, NRT_MemSys* TheMSys)
 {
-  NRT_MemInfo* mi = (NRT_MemInfo*)NRT_Allocate(sizeof(NRT_MemInfo));
-  if (mi != NULL) { NRT_MemInfo_init(mi, data, size, dtor, dtor_info); }
+  NRT_MemInfo* mi = (NRT_MemInfo*)NRT_Allocate(sizeof(NRT_MemInfo), TheMSys);
+  if (mi != NULL) { NRT_MemInfo_init(mi, data, size, dtor, dtor_info, TheMSys); }
   return mi;
 }
 
-extern "C" __device__ void NRT_Free(void* ptr)
+extern "C" __device__ void NRT_Free(void* ptr, NRT_MemSys* TheMSys)
 {
   free(ptr);
   if (TheMSys->stats.enabled) { TheMSys->stats.free++; }
 }
 
-extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi) { NRT_Free(mi); }
+extern "C" __device__ void NRT_dealloc(NRT_MemInfo* mi, NRT_MemSys* TheMSys) { NRT_Free(mi, TheMSys); }
 
-extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi)
+extern "C" __device__ void NRT_MemInfo_destroy(NRT_MemInfo* mi, NRT_MemSys* TheMSys)
 {
-  NRT_dealloc(mi);
+  NRT_dealloc(mi, TheMSys);
   if (TheMSys->stats.enabled) { TheMSys->stats.mi_free++; }
 }
-extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
+extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi, NRT_MemSys* TheMSys)
 {
   if (mi->dtor) /* We have a destructor */
     mi->dtor(mi->data, mi->size, NULL);
   /* Clear and release MemInfo */
-  NRT_MemInfo_destroy(mi);
+  NRT_MemInfo_destroy(mi, TheMSys);
 }
 
 /*
@@ -92,10 +122,10 @@ extern "C" __device__ void NRT_MemInfo_call_dtor(NRT_MemInfo* mi)
   used by c++ APIs that accept ownership of live objects and must
   manage them going forward.
 */
-extern "C" __device__ void NRT_internal_decref(NRT_MemInfo* mi) {
+extern "C" __device__ void NRT_internal_decref(NRT_MemInfo* mi, NRT_MemSys* TheMSys) {
   mi->refct--;
   if (mi->refct == 0) {
-    NRT_MemInfo_call_dtor(mi);
+    NRT_MemInfo_call_dtor(mi, TheMSys);
   }
 }
 

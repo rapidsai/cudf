@@ -1,6 +1,6 @@
 # Copyright (c) 2022-2023, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t, uint16_t, uintptr_t
+from libc.stdint cimport uint8_t, uint16_t, uintptr_t, uint64_t
 
 from cudf._lib.cpp.strings_udf cimport (
     column_from_managed_udf_string_array as cpp_column_from_managed_udf_string_array,
@@ -55,14 +55,16 @@ def column_from_udf_string_array(DeviceBuffer d_buffer):
     return result
 
 
-def column_from_managed_udf_string_array(DeviceBuffer d_buffer):
+def column_from_managed_udf_string_array(DeviceBuffer d_buffer, memsys):
     cdef size_t size = int(d_buffer.c_size() / sizeof(managed_udf_string))
     cdef managed_udf_string* data = <managed_udf_string*>d_buffer.c_data()
     cdef unique_ptr[column] c_result
+    cdef uint64_t memsys_p = <uint64_t>memsys
+
     from cuda import cuda
     with nogil:
         c_result = move(cpp_column_from_managed_udf_string_array(data, size))
-        cpp_free_managed_udf_string_array(data, size)
+        cpp_free_managed_udf_string_array(data, size, memsys_p)
 
     result = Column.from_unique_ptr(move(c_result))
     return result

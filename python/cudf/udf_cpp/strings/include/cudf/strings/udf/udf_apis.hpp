@@ -97,7 +97,7 @@ void free_udf_string_array(udf_string* d_strings, cudf::size_type size);
  * @param managed_strings Pointer to device memory of udf_string objects
  * @param size The number of elements in the d_strings array
  */
-void free_managed_udf_string_array(managed_udf_string* managed_strings, cudf::size_type size);
+void free_managed_udf_string_array(managed_udf_string* managed_strings, cudf::size_type size, uint64_t memsys);
 
 }  // namespace udf
 }  // namespace strings

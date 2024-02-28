@@ -30,6 +30,7 @@
 
 #include <numba_cuda_runtime.cuh>
 
+
 namespace cudf {
 namespace strings {
 namespace udf {
@@ -138,12 +139,13 @@ void free_udf_string_array(cudf::strings::udf::udf_string* d_strings,
  */
 void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* managed_strings,
                                    cudf::size_type size,
+                                   NRT_MemSys* TheMSys,
                                    rmm::cuda_stream_view stream)
 {
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
                      size,
-                     [managed_strings] __device__(auto idx) {
+                     [managed_strings, TheMSys] __device__(auto idx) {
                        NRT_MemInfo* mi = reinterpret_cast<NRT_MemInfo*>(managed_strings[idx].meminfo);
 
                        // Function pointer was compiled in another module
@@ -151,7 +153,7 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
                        // that was compiled along with this code
                        mi->dtor = udf_str_dtor;
 
-                       NRT_internal_decref(mi);
+                       NRT_internal_decref(mi, TheMSys);
                      });
 }
 
@@ -182,9 +184,11 @@ void free_udf_string_array(udf_string* d_strings, cudf::size_type size)
   detail::free_udf_string_array(d_strings, size, cudf::get_default_stream());
 }
 
-void free_managed_udf_string_array(managed_udf_string* managed_strings, cudf::size_type size)
+void free_managed_udf_string_array(managed_udf_string* managed_strings, cudf::size_type size, uint64_t memsys)
 {
-  detail::free_managed_udf_string_array(managed_strings, size, cudf::get_default_stream());
+
+  NRT_MemSys* TheMSys = reinterpret_cast<NRT_MemSys*>(memsys);
+  detail::free_managed_udf_string_array(managed_strings, size, TheMSys, cudf::get_default_stream());
 }
 
 __device__ void* malloc_wrapper(size_t size) { return malloc(size); }

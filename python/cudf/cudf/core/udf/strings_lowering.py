@@ -25,6 +25,7 @@ from cudf.core.udf.strings_typing import (
     string_view,
     udf_string,
 )
+from cudf.core.udf._nrt_cuda import memsys
 
 _STR_VIEW_PTR = types.CPointer(string_view)
 _UDF_STRING_PTR = types.CPointer(udf_string)
@@ -191,12 +192,12 @@ def cast_managed_udf_string_to_string_view(
 
 # Utilities
 _new_meminfo_from_udf_str = cuda.declare_device(
-    "meminfo_from_new_udf_str", types.voidptr(_UDF_STRING_PTR)
+    "meminfo_from_new_udf_str", types.voidptr(_UDF_STRING_PTR, types.voidptr)
 )
 
 
-def new_meminfo_from_udf_str(udf_str):
-    return _new_meminfo_from_udf_str(udf_str)
+def new_meminfo_from_udf_str(udf_str, memsys):
+    return _new_meminfo_from_udf_str(udf_str, memsys)
 
 
 def _finalize_new_managed_udf_string(context, builder, managed_ptr):
@@ -204,6 +205,9 @@ def _finalize_new_managed_udf_string(context, builder, managed_ptr):
     Allocate a udf_string and a NRT_MemInfo as part of one struct
     and initialize the NRT_MemInfo with a refct=1.
     """
+    memsys_ptr = context.get_constant(
+        types.uintp, memsys
+    )
 
     # {i8*, i32, i32}*
     udf_str_ptr = builder.gep(
@@ -217,8 +221,8 @@ def _finalize_new_managed_udf_string(context, builder, managed_ptr):
     mi = context.compile_internal(
         builder,
         new_meminfo_from_udf_str,
-        types.voidptr(_UDF_STRING_PTR),
-        (udf_str_ptr,),
+        types.voidptr(_UDF_STRING_PTR, types.uintp),
+        (udf_str_ptr, memsys_ptr),
     )
 
     managed = cgutils.create_struct_proxy(managed_udf_string)(

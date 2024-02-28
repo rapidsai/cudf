@@ -3,15 +3,19 @@ from llvmlite import ir
 from numba.core import cgutils, config
 from numba.core.runtime.nrtdynmod import (
     _define_atomic_cas,
-    _define_atomic_inc_dec,
     _define_nrt_incref,
+    _define_atomic_inc_dec,
     _define_nrt_meminfo_data,
     _pointer_type,
     incref_decref_ty,
 )
-from numba.cuda import descriptor
+from numba.cuda import descriptor, get_current_device
 from numba.cuda.target import CUDATargetContext
+import cuda.cuda as cudapy
+from numba.cuda.cudadrv.nvrtc import compile
+from cudf._lib.strings_udf import NRT_MemSys_new
 
+memsys = NRT_MemSys_new()
 
 def _define_nrt_decref(module, atomic_decr):
     """
@@ -21,10 +25,11 @@ def _define_nrt_decref(module, atomic_decr):
         module, incref_decref_ty, "NRT_decref"
     )
     # Cannot inline this for refcount pruning to work
+
     fn_decref.attributes.add("noinline")
     calldtor = ir.Function(
         module,
-        ir.FunctionType(ir.VoidType(), [_pointer_type]),
+        ir.FunctionType(ir.VoidType(), [_pointer_type, _pointer_type]),
         name="NRT_MemInfo_call_dtor",
     )
 
@@ -59,7 +64,7 @@ def _define_nrt_decref(module, atomic_decr):
         # An acquire fence is used after the relevant read operation.
         # No-op on x86.  On POWER, it lowers to lwsync.
         #        builder.fence("acquire")
-        builder.call(calldtor, [ptr])
+        builder.call(calldtor, [ptr, ir.Constant.inttoptr(ir.Constant(ir.IntType(64), memsys), _pointer_type)])
     builder.ret_void()
 
 
@@ -98,6 +103,47 @@ def compile_nrt_functions(ctx):
 
     return library
 
+
+def _get_memsys_ptx():
+    custr = """
+    #include <cuda/atomic>
+    struct NRT_MemSys {
+        struct {
+            bool enabled;
+            cuda::atomic<size_t, cuda::thread_scope_device> alloc;
+            cuda::atomic<size_t, cuda::thread_scope_device> free;
+            cuda::atomic<size_t, cuda::thread_scope_device> mi_alloc;
+            cuda::atomic<size_t, cuda::thread_scope_device> mi_free;
+        } stats;
+    };
+
+    __device__ NRT_MemSys TheMSys = {
+        /* .stats = */ {true, 0, 0, 0, 0}
+    };
+    __device__ NRT_MemSys* TheMSysPtr = &TheMSys;
+
+    __device__ void nothing(NRT_MemSys* in_memsys_ptr) {}
+
+    extern "C"
+    __global__ void set_global_memsys_kernel(NRT_MemSys** in_memsys_ptr) {
+        *in_memsys_ptr = TheMSysPtr;
+    }
+    """
+    device = get_current_device()
+    cc = device.compute_capability
+    ptx, log = compile(custr, 'file.out', cc)
+    return ptx
+
+def _load_memsys_module():
+    ptx = _get_memsys_ptx()
+    with open('memsys.ptx', 'w') as f:
+        f.write(ptx)
+    err, mod = cudapy.cuModuleLoad(
+        bytes('memsys.ptx'.encode('utf-8'))
+    )
+    if err != cudapy.CUresult.CUDA_SUCCESS:
+        raise ValueError("Failed to load memsys module.")
+    return mod
 
 # enable NRT for the CUDATargetContext
 CUDATargetContext.enable_nrt = True

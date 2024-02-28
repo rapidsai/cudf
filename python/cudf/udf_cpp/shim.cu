@@ -744,17 +744,18 @@ will construct the udf_string it returns. Since one can not safely build a MemIn
 around this stack memory, we store a copy of the udf_string itself next to the MemInfo
 which manages the lifetime of the udf_string.
 */
-extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str)
+extern "C" __device__ int meminfo_from_new_udf_str(void** nb_retval, void* udf_str, void* memsys)
 {
+  NRT_MemSys* TheMSys = reinterpret_cast<NRT_MemSys*>(memsys);
   // allocate enough room for both the meminfo and udf_string
-  meminfo_and_str* mi_and_str = (meminfo_and_str*)NRT_Allocate(sizeof(meminfo_and_str));
+  meminfo_and_str* mi_and_str = (meminfo_and_str*)NRT_Allocate(sizeof(meminfo_and_str), TheMSys);
   if (mi_and_str != NULL) {
     auto mi_ptr        = &(mi_and_str->mi);
     udf_string* st_ptr = &(mi_and_str->st);
 
     // We pass a null size here because the udf_string actually exists on the stack
     // and tracks the size of the string data that it points to.
-    NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL);
+    NRT_MemInfo_init(mi_ptr, st_ptr, NULL, udf_str_dtor, NULL, TheMSys);
 
     // copy the udf_string to the extra heap space
     udf_string* in_str_ptr = reinterpret_cast<udf_string*>(udf_str);

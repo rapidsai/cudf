@@ -10,6 +10,7 @@ from numba.core.typing import signature as nb_signature
 from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.cuda.descriptor import cuda_target
+from cudf.core.udf._nrt_cuda import _load_memsys_module
 
 import rmm
 
@@ -31,6 +32,8 @@ class UDFString(types.Type):
 
 class ManagedUDFString(types.Type):
     def __init__(self):
+        # initialize the memsys module
+        mod = _load_memsys_module()
         super().__init__(name="managed_udf_string")
 
 
@@ -91,6 +94,7 @@ class managed_udf_string_model(models.StructModel):
     _members = (("meminfo", types.voidptr), ("udf_string", udf_string))
 
     def __init__(self, dmm, fe_type):
+        
         super().__init__(dmm, fe_type, self._members)
 
     def has_nrt_meminfo(self):
