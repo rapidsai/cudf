@@ -702,9 +702,9 @@ jlongArray gather_maps_to_java(JNIEnv *env,
 jlongArray gather_map_to_java(JNIEnv *env,
                               std::unique_ptr<rmm::device_uvector<cudf::size_type>> map) {
   // release the underlying device buffer to Java
-  auto gather_map_buffer = std::make_unique<rmm::device_buffer>(map->release());
   cudf::jni::native_jlongArray result(env, 3);
-  result[0] = static_cast<jlong>(gather_map_buffer->size());
+  result[0] = static_cast<jlong>(map->size() * sizeof(cudf::size_type));
+  auto gather_map_buffer = std::make_unique<rmm::device_buffer>(map->release());
   result[1] = ptr_as_jlong(gather_map_buffer->data());
   result[2] = release_as_jlong(gather_map_buffer);
   return result.get_jArray();
@@ -2554,6 +2554,30 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
       env, j_left_keys, j_right_keys, compare_nulls_equal,
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
         return cudf::inner_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_maps(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right) ?
+                             cudf::nullable_join::YES :
+                             cudf::nullable_join::NO;
+        std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                  std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+            maps;
+        if (cudf::detail::has_nested_columns(right)) {
+          cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
+          maps = hash.inner_join();
+        } else {
+          cudf::distinct_hash_join<cudf::has_nested::NO> hash(right, left, has_nulls, nulleq);
+          maps = hash.inner_join();
+        }
+        // Unique join returns {right map, left map} but all the other joins
+        // return {left map, right map}. Swap here to make it consistent.
+        return std::make_pair(std::move(maps.second), std::move(maps.first));
       });
 }
 

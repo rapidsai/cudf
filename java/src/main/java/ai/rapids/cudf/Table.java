@@ -626,6 +626,9 @@ public final class Table implements AutoCloseable {
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] innerDistinctJoinGatherMaps(long leftKeys, long rightKeys,
+                                                           boolean compareNullsEqual) throws CudfException;
+
   private static native long innerJoinRowCount(long table, long hashJoin) throws CudfException;
 
   private static native long[] innerHashJoinGatherMaps(long table, long hashJoin) throws CudfException;
@@ -2920,7 +2923,9 @@ public final class Table implements AutoCloseable {
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
    * instances will be returned that can be used to gather the left and right tables,
    * respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
@@ -2956,7 +2961,9 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @return left and right table gather maps
    */
@@ -2975,11 +2982,15 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #leftJoinRowCount(HashJoin)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @param outputRowCount number of output rows in the join result
    * @return left and right table gather maps
@@ -3013,7 +3024,9 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightTable the right side table of the join in the join
    * @param condition conditional expression to evaluate during the join
    * @return left and right table gather maps
@@ -3032,11 +3045,15 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightTable the right side table of the join in the join
    * @param condition conditional expression to evaluate during the join
    * @param outputRowCount number of output rows in the join result
@@ -3085,7 +3102,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3112,10 +3131,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedLeftJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3145,18 +3167,44 @@ public final class Table implements AutoCloseable {
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
    * instances will be returned that can be used to gather the left and right tables,
    * respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
   public GatherMap[] innerJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
         innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys. It is
+   * assumed this table instance holds the key columns from the left table, and the table argument
+   * represents the key columns from the right table. Two {@link GatherMap} instances will be
+   * returned that can be used to gather the left and right tables, respectively, to produce the
+   * result of the inner join.
+   *
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   *
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerDistinctJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerDistinctJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -3167,7 +3215,7 @@ public final class Table implements AutoCloseable {
    */
   public long innerJoinRowCount(HashJoin otherHash) {
     if (getNumberOfColumns() != otherHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "otherKeys: " + otherHash.getNumberOfColumns());
     }
     return innerJoinRowCount(getNativeView(), otherHash.getNativeView());
@@ -3179,13 +3227,15 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @return left and right table gather maps
    */
   public GatherMap[] innerJoinGatherMaps(HashJoin rightHash) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
@@ -3198,18 +3248,22 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #innerJoinRowCount(HashJoin)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @param outputRowCount number of output rows in the join result
    * @return left and right table gather maps
    */
   public GatherMap[] innerJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = innerHashJoinGatherMapsWithCount(getNativeView(),
@@ -3237,7 +3291,9 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightTable the right side table of the join
    * @param condition conditional expression to evaluate during the join
    * @return left and right table gather maps
@@ -3256,11 +3312,15 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightTable the right side table of the join in the join
    * @param condition conditional expression to evaluate during the join
    * @param outputRowCount number of output rows in the join result
@@ -3309,7 +3369,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3336,10 +3398,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedInnerJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3369,14 +3434,16 @@ public final class Table implements AutoCloseable {
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
    * instances will be returned that can be used to gather the left and right tables,
    * respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
   public GatherMap[] fullJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
@@ -3396,7 +3463,7 @@ public final class Table implements AutoCloseable {
    */
   public long fullJoinRowCount(HashJoin rightHash) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     return fullJoinRowCount(getNativeView(), rightHash.getNativeView());
@@ -3408,13 +3475,15 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @return left and right table gather maps
    */
   public GatherMap[] fullJoinGatherMaps(HashJoin rightHash) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
@@ -3427,7 +3496,9 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #fullJoinRowCount(HashJoin)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
@@ -3438,7 +3509,7 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] fullJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = fullHashJoinGatherMapsWithCount(getNativeView(),
@@ -3452,7 +3523,9 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightTable the right side table of the join
    * @param condition conditional expression to evaluate during the join
    * @return left and right table gather maps
@@ -3471,7 +3544,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3512,7 +3587,7 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftSemiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
@@ -3612,7 +3687,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left semi join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3639,10 +3716,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left semi join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedLeftSemiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3679,7 +3759,7 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftAntiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
@@ -3779,7 +3859,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left anti join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3806,10 +3888,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left anti join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedLeftAntiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
