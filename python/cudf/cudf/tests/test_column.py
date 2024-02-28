@@ -176,7 +176,7 @@ def test_column_series_multi_dim(data):
 @pytest.mark.parametrize(
     ("data", "error"),
     [
-        ([1, "1.0", "2", -3], pa.lib.ArrowInvalid),
+        ([1, "1.0", "2", -3], cudf.errors.MixedTypeError),
         ([np.nan, 0, "null", cp.nan], pa.lib.ArrowInvalid),
         (
             [np.int32(4), np.float64(1.5), np.float32(1.290994), np.int8(0)],

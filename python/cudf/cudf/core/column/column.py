@@ -1975,7 +1975,7 @@ def as_column(
             inferred_dtype = infer_dtype(arbitrary)
             if inferred_dtype in ("mixed-integer", "mixed-integer-float"):
                 raise MixedTypeError("Cannot create column with mixed types")
-            elif inferred_dtype not in (
+            elif dtype is None and inferred_dtype not in (
                 "mixed",
                 "decimal",
                 "string",
@@ -2045,6 +2045,10 @@ def as_column(
 
         # CUDF assumes values are always contiguous
         arbitrary = np.asarray(arbitrary, order="C")
+
+        if arbitrary.ndim == 0:
+            # TODO: Or treat as scalar?
+            arbitrary = arbitrary[np.newaxis]
 
         if arbitrary.dtype.kind in "OSU":
             # Handle case that `arbitrary` elements are cupy arrays
