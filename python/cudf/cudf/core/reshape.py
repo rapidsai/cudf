@@ -314,7 +314,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         result.columns = cudf.MultiIndex.from_tuples(
                             [
                                 (k, *c) if isinstance(c, tuple) else (k, c)
-                                for c in result.columns
+                                for c in result._column_names
                             ]
                         )
 
