@@ -25,8 +25,10 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/timezone.hpp>
+#include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/logger.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -930,6 +932,13 @@ struct column_segment_size_functor {
   __device__ std::size_t operator()(size_type start_row) const
   {
     auto constexpr element_size = sizeof(device_storage_type_t<T>);
+
+    if (start_row == 0) {
+      printf("     col size: %d (valid: %d)\n",
+             (int)(element_size * num_rows(start_row) + validity_size(start_row)),
+             (int)validity_size(start_row));
+    }
+
     return element_size * num_rows(start_row) + validity_size(start_row);
   }
 
@@ -961,10 +970,14 @@ struct column_segment_size_functor {
     while (col.type().id() == type_id::STRUCT || col.type().id() == type_id::LIST) {
       col_size += validity_size(start_row);
 
+      if (start_row == 0) { printf("     add valid size: %d\n", (int)validity_size(start_row)); }
+
       if (col.type().id() == type_id::STRUCT) {
         // Empty struct.
         if (col.num_child_columns() == 0) { return col_size; }
         col = col.child(0);
+
+        if (start_row == 0) { printf("   struct, move down\n"); }
       } else {
         auto const offsets = col.child(lists_column_view::offsets_column_index);
         col                = col.child(lists_column_view::child_column_index);
@@ -977,6 +990,10 @@ struct column_segment_size_functor {
         // offset for the entire column so we will get a small over-estimate of the real size.
         auto constexpr offset_size = sizeof(size_type);
         col_size += offset_size * (num_rows(start_row) + 1);
+
+        if (start_row == 0) {
+          printf("     list, add offst size: %d\n", (int)(offset_size * (num_rows(start_row) + 1)));
+        }
       }
     }
 
@@ -994,15 +1011,17 @@ struct table_segment_size_functor {
     // printf("line %d, start row %d\n", __LINE__, start_row);
 
     auto const col_size = [=](column_device_view col) {
+      if (start_row == 0) { printf("compute new col %d\n", __LINE__); }
       return cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size}, start_row);
     };
 
-    // for (auto col : d_table) {
-    //   auto t = cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size},
-    //   start_row); printf("start: %d, col size: %d\n", start_row, (int)t);
+    // if (start_row == 0) {
+    //   for (auto col : d_table) {
+    //     auto t =
+    //       cudf::type_dispatcher(col.type(), column_segment_size_functor{col, size}, start_row);
+    //     printf("start: %d, col size: %d\n", start_row, (int)t);
+    //   }
     // }
-
-    // printf("line %d\n", __LINE__);
 
     return thrust::transform_reduce(
       thrust::seq, d_table.begin(), d_table.end(), col_size, 0ul, thrust::plus<>{});
@@ -1015,6 +1034,20 @@ void test(table_view const& input, rmm::cuda_stream_view stream)
 {
   auto verticalized_t = std::get<0>(
     cudf::experimental::decompose_structs(input, cudf::experimental::decompose_lists_column::YES));
+
+  auto sliced_in = std::move(cudf::slice(input, {0, 5})[0]);
+  for (auto col : sliced_in) {
+    printf("=====sliced in col: \n");
+    cudf::test::print(col);
+  }
+  fflush(stdout);
+
+  auto sliced_in_v = std::move(cudf::slice(verticalized_t, {0, 5})[0]);
+  for (auto col : sliced_in_v) {
+    printf("=====sliced_in_v: \n");
+    cudf::test::print(col);
+  }
+  fflush(stdout);
 
   auto d_t = table_device_view::create(verticalized_t, stream);
 
@@ -1038,6 +1071,18 @@ void test(table_view const& input, rmm::cuda_stream_view stream)
 
   printf("segment size: \n");
   cudf::test::print(output->view());
+  fflush(stdout);
+
+  auto out = cudf::detail::segmented_bit_count(
+    input, SEGMENT_SIZE, stream, rmm::mr::get_current_device_resource());
+  thrust::transform(rmm::exec_policy(stream),
+                    out->view().begin<int>(),
+                    out->view().end<int>(),
+                    out->mutable_view().begin<int>(),
+                    cuda::proclaim_return_type<int>([] __device__(auto const x) { return x / 8; }));
+
+  printf("segment size again: \n");
+  cudf::test::print(out->view());
   fflush(stdout);
 }
 
