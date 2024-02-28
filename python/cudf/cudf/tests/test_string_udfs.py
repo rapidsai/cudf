@@ -15,17 +15,18 @@ from cudf._lib.strings_udf import (
     column_from_managed_udf_string_array,
     column_to_string_view_array,
 )
+from cudf.core.udf._nrt_cuda import memsys
 from cudf.core.udf.strings_typing import (
     managed_udf_string,
     str_view_arg_handler,
     string_view,
 )
-from cudf.core.udf._nrt_cuda import memsys
 from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing._utils import assert_eq, sv_to_managed_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
 
 _PTX_FILE = _ptx_file()
+
 
 def get_kernels(func, dtype, size):
     """

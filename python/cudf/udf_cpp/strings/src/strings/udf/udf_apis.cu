@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@
 #include <thrust/transform.h>
 
 #include <numba_cuda_runtime.cuh>
-
 
 namespace cudf {
 namespace strings {
@@ -146,7 +145,8 @@ void free_managed_udf_string_array(cudf::strings::udf::managed_udf_string* manag
                      thrust::make_counting_iterator(0),
                      size,
                      [managed_strings, TheMSys] __device__(auto idx) {
-                       NRT_MemInfo* mi = reinterpret_cast<NRT_MemInfo*>(managed_strings[idx].meminfo);
+                       NRT_MemInfo* mi =
+                         reinterpret_cast<NRT_MemInfo*>(managed_strings[idx].meminfo);
 
                        // Function pointer was compiled in another module
                        // so can't call it directly, need to replace it with one
@@ -184,32 +184,30 @@ void free_udf_string_array(udf_string* d_strings, cudf::size_type size)
   detail::free_udf_string_array(d_strings, size, cudf::get_default_stream());
 }
 
-void free_managed_udf_string_array(managed_udf_string* managed_strings, cudf::size_type size, uint64_t memsys)
+void free_managed_udf_string_array(managed_udf_string* managed_strings,
+                                   cudf::size_type size,
+                                   uint64_t memsys)
 {
-
   NRT_MemSys* TheMSys = reinterpret_cast<NRT_MemSys*>(memsys);
   detail::free_managed_udf_string_array(managed_strings, size, TheMSys, cudf::get_default_stream());
 }
 
-__device__ void* malloc_wrapper(size_t size) { return malloc(size); }
-
-__device__ void free_wrapper(void* ptr) { free(ptr); }
-
-__global__ void initialize_memsys(NRT_MemSys* TheMSys) {
-  TheMSys->stats.enabled = true;
+__global__ void initialize_memsys(NRT_MemSys* TheMSys)
+{
+  TheMSys->stats.enabled  = true;
   TheMSys->stats.mi_alloc = 0;
-  TheMSys->stats.mi_free = 0;
-  TheMSys->stats.alloc = 0;
-  TheMSys->stats.free = 0;
+  TheMSys->stats.mi_free  = 0;
+  TheMSys->stats.alloc    = 0;
+  TheMSys->stats.free     = 0;
 }
 
-NRT_MemSys* NRT_MemSys_new() {
-    NRT_MemSys* TheMSys;
-    cudaMalloc((void**)&TheMSys, sizeof(NRT_MemSys));
-    initialize_memsys<<<1,1>>>(TheMSys);
-    return TheMSys;
+NRT_MemSys* NRT_MemSys_new()
+{
+  NRT_MemSys* TheMSys;
+  cudaMalloc((void**)&TheMSys, sizeof(NRT_MemSys));
+  initialize_memsys<<<1, 1>>>(TheMSys);
+  return TheMSys;
 }
-
 
 }  // namespace udf
 }  // namespace strings

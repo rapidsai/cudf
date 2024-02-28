@@ -221,4 +221,3 @@ class _CUDFNumbaConfig:
             self.CUDA_LOW_OCCUPANCY_WARNINGS
         )
         numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS
-
