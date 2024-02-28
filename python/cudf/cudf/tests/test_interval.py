@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_220
 from cudf.testing._utils import assert_eq
 
 
@@ -167,10 +166,6 @@ def test_interval_index_unique():
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(
-    condition=not PANDAS_GE_220,
-    reason="TODO: Remove this once pandas-2.2 support is added",
-)
 @pytest.mark.parametrize("box", [pd.Series, pd.IntervalIndex])
 @pytest.mark.parametrize("tz", ["US/Eastern", None])
 def test_interval_with_datetime(tz, box):

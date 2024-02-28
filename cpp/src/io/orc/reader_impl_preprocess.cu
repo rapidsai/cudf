@@ -77,7 +77,7 @@ std::size_t gather_stream_info(std::size_t stripe_index,
                                host_span<orc::SchemaType const> types,
                                bool use_index,
                                bool apply_struct_map,
-                               std::size_t* num_dictionary_entries,
+                               int64_t* num_dictionary_entries,
                                std::vector<orc_stream_info>& stream_info,
                                cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks)
 {
@@ -174,8 +174,8 @@ rmm::device_buffer decompress_stripe_data(
   host_span<orc_stream_info> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-  std::size_t num_stripes,
-  std::size_t row_index_stride,
+  size_type num_stripes,
+  size_type row_index_stride,
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
@@ -350,15 +350,15 @@ rmm::device_buffer decompress_stripe_data(
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
-  auto const num_columns = chunks.size().second;
+  size_type const num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  for (std::size_t i = 0; i < num_stripes; ++i) {
-    for (std::size_t j = 0; j < num_columns; ++j) {
+  for (size_type i = 0; i < num_stripes; ++i) {
+    for (size_type j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; ++k) {
         if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < compinfo.size()) {
@@ -377,7 +377,6 @@ rmm::device_buffer decompress_stripe_data(
                             chunks.base_device_ptr(),
                             num_columns,
                             num_stripes,
-                            row_groups.size().first,
                             row_index_stride,
                             use_base_stride,
                             stream);
@@ -485,8 +484,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
  * @param mr Device memory resource to use for device memory allocation
  */
 void decode_stream_data(std::size_t num_dicts,
-                        std::size_t skip_rows,
-                        std::size_t row_index_stride,
+                        int64_t skip_rows,
+                        size_type row_index_stride,
                         std::size_t level,
                         table_view const& tz_table,
                         cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
@@ -622,9 +621,9 @@ void aggregate_child_meta(std::size_t level,
   col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
   col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
 
-  auto child_start_row = cudf::detail::host_2dspan<uint32_t>(
+  auto child_start_row = cudf::detail::host_2dspan<int64_t>(
     col_meta.child_start_row.data(), num_of_stripes, num_child_cols);
-  auto num_child_rows_per_stripe = cudf::detail::host_2dspan<uint32_t>(
+  auto num_child_rows_per_stripe = cudf::detail::host_2dspan<int64_t>(
     col_meta.num_child_rows_per_stripe.data(), num_of_stripes, num_child_cols);
   auto rwgrp_meta = cudf::detail::host_2dspan<reader_column_meta::row_group_meta>(
     col_meta.rwgrp_meta.data(), num_of_rowgroups, num_child_cols);
@@ -634,7 +633,7 @@ void aggregate_child_meta(std::size_t level,
   // For each parent column, update its child column meta for each stripe.
   std::for_each(nested_cols.begin(), nested_cols.end(), [&](auto const p_col) {
     auto const parent_col_idx = col_meta.orc_col_map[level][p_col.id];
-    auto start_row            = 0;
+    int64_t start_row         = 0;
     auto processed_row_groups = 0;
 
     for (std::size_t stripe_id = 0; stripe_id < num_of_stripes; stripe_id++) {
@@ -711,7 +710,7 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 
 }  // namespace
 
-void reader::impl::prepare_data(uint64_t skip_rows,
+void reader::impl::prepare_data(int64_t skip_rows,
                                 std::optional<size_type> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes)
 {
@@ -813,7 +812,7 @@ void reader::impl::prepare_data(uint64_t skip_rows,
       // Only use if we don't have much work with complete columns & stripes
       // TODO: Consider nrows, gpu, and tune the threshold
       (rows_to_read > _metadata.get_row_index_stride() && !(_metadata.get_row_index_stride() & 7) &&
-       _metadata.get_row_index_stride() > 0 && num_columns * total_num_stripes < 8 * 128) &&
+       _metadata.get_row_index_stride() != 0 && num_columns * total_num_stripes < 8 * 128) &&
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);
@@ -833,10 +832,10 @@ void reader::impl::prepare_data(uint64_t skip_rows,
     // Tracker for eventually deallocating compressed and uncompressed data
     auto& stripe_data = lvl_stripe_data[level];
 
-    std::size_t stripe_start_row = 0;
-    std::size_t num_dict_entries = 0;
-    std::size_t num_rowgroups    = 0;
-    int stripe_idx               = 0;
+    int64_t stripe_start_row = 0;
+    int64_t num_dict_entries = 0;
+    int64_t num_rowgroups    = 0;
+    size_type stripe_idx     = 0;
 
     std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
     for (auto const& stripe_source_mapping : selected_stripes) {
@@ -1003,7 +1002,6 @@ void reader::impl::prepare_data(uint64_t skip_rows,
                                 chunks.base_device_ptr(),
                                 num_columns,
                                 total_num_stripes,
-                                num_rowgroups,
                                 _metadata.get_row_index_stride(),
                                 level == 0,
                                 _stream);
