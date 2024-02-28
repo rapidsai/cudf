@@ -1263,20 +1263,28 @@ def test_csv_reader_delim_whitespace():
     buffer = "1    2  3\n4  5 6"
 
     # with header row
-    cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    with pytest.warns(FutureWarning):
+        cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
+    with pytest.warns(FutureWarning):
+        pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
-    cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    with pytest.warns(FutureWarning):
+        cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    with pytest.warns(FutureWarning):
+        pd_df = pd.read_csv(
+            StringIO(buffer), delim_whitespace=True, header=None
+        )
     assert pd_df.shape == cu_df.shape
 
     # should raise an error if used with delimiter or sep
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
+        with pytest.warns(FutureWarning):
+            read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
+        with pytest.warns(FutureWarning):
+            read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
 
 
 def test_csv_reader_unnamed_cols():

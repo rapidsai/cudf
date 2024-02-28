@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <nvtext/detail/generate_ngrams.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -32,14 +30,15 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/detail/generate_ngrams.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform_scan.h>
-
-#include <cuda/functional>
 
 namespace nvtext {
 namespace detail {
@@ -104,11 +103,8 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
-    cudf::column_view offsets_view(cudf::data_type{cudf::type_id::INT32},
-                                   strings_count + 1,
-                                   strings.offsets_begin(),
-                                   nullptr,
-                                   0);
+    cudf::column_view offsets_view(
+      strings.offsets().type(), strings_count + 1, strings.offsets().head(), nullptr, 0);
     auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {

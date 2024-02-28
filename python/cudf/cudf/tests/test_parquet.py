@@ -291,7 +291,7 @@ def test_parquet_reader_empty_pandas_dataframe(tmpdir, engine):
     expect = expect.reset_index(drop=True)
     got = got.reset_index(drop=True)
 
-    assert_eq(expect, got, check_column_type=not PANDAS_GE_200)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("has_null", [False, True])
@@ -2412,7 +2412,6 @@ def run_parquet_index(pdf, index):
         expected,
         actual,
         check_index_type=True,
-        check_column_type=not PANDAS_GE_200,
     )
 
 
@@ -2685,18 +2684,17 @@ def test_parquet_writer_column_validation():
         with pytest.warns(UserWarning):
             df.to_parquet(cudf_parquet)
 
-    if PANDAS_GE_200:
-        with pytest.warns(UserWarning):
-            pdf.to_parquet(pandas_parquet)
+    with pytest.warns(UserWarning):
+        pdf.to_parquet(pandas_parquet)
 
-        assert_eq(
-            pd.read_parquet(cudf_parquet),
-            cudf.read_parquet(pandas_parquet),
-        )
-        assert_eq(
-            cudf.read_parquet(cudf_parquet),
-            pd.read_parquet(pandas_parquet),
-        )
+    assert_eq(
+        pd.read_parquet(cudf_parquet),
+        cudf.read_parquet(pandas_parquet),
+    )
+    assert_eq(
+        cudf.read_parquet(cudf_parquet),
+        pd.read_parquet(pandas_parquet),
+    )
 
     with cudf.option_context("mode.pandas_compatible", False):
         with pytest.raises(ValueError):
@@ -2722,16 +2720,6 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
 
     got = pd.read_parquet(fname)
     nullable = num_rows > 0
-
-    if not PANDAS_GE_200:
-        # BUG in pre-2.0.1:
-        # https://github.com/pandas-dev/pandas/issues/52449
-        gdf["col_datetime64[ms]"] = gdf["col_datetime64[ms]"].astype(
-            "datetime64[ns]"
-        )
-        gdf["col_datetime64[us]"] = gdf["col_datetime64[us]"].astype(
-            "datetime64[ns]"
-        )
 
     if nullable:
         gdf = gdf.drop(columns="col_datetime64[ms]")
@@ -3042,7 +3030,7 @@ def test_parquet_roundtrip_time_delta():
     df.to_parquet(buffer)
     # TODO: Remove `check_dtype` once following issue is fixed in arrow:
     # https://github.com/apache/arrow/issues/33321
-    assert_eq(df, cudf.read_parquet(buffer), check_dtype=not PANDAS_GE_200)
+    assert_eq(df, cudf.read_parquet(buffer), check_dtype=False)
 
 
 def test_parquet_reader_malformed_file(datadir):
@@ -3124,3 +3112,34 @@ def test_parquet_reader_multiindex():
 def test_parquet_reader_engine_error():
     with pytest.raises(ValueError):
         cudf.read_parquet(BytesIO(), engine="abc")
+
+
+def test_reader_lz4():
+    pdf = pd.DataFrame({"ints": [1, 2] * 5001})
+
+    buffer = BytesIO()
+    pdf.to_parquet(buffer, compression="LZ4")
+
+    got = cudf.read_parquet(buffer)
+    assert_eq(pdf, got)
+
+
+def test_writer_lz4():
+    gdf = cudf.DataFrame({"ints": [1, 2] * 5001})
+
+    buffer = BytesIO()
+    gdf.to_parquet(buffer, compression="LZ4")
+
+    got = pd.read_parquet(buffer)
+    assert_eq(gdf, got)
+
+
+def test_parquet_reader_zstd_huff_tables(datadir):
+    # Ensure that this zstd-compressed file does not overrun buffers. The
+    # problem was fixed in nvcomp 3.0.6.
+    # See https://github.com/rapidsai/cudf/issues/15096
+    fname = datadir / "zstd_huff_tables_bug.parquet"
+
+    expected = pa.parquet.read_table(fname).to_pandas()
+    actual = cudf.read_parquet(fname)
+    assert_eq(actual, expected)

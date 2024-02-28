@@ -3,7 +3,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["11.8", "12.0"]
+      cuda: ["11.8", "12.2"]
       arch: [x86_64]
     includes:
       - build_all
@@ -231,14 +231,6 @@ dependencies:
               cuda: "11.8"
             packages:
               - nvcc_linux-aarch64=11.8
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
   build_cpp:
     common:
       - output_types: conda
@@ -251,7 +243,7 @@ dependencies:
           - libkvikio==24.4.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
-          - nvcomp==3.0.5
+          - nvcomp==3.0.6
           - spdlog>=1.12.0,<1.13
   build_wheels:
     common:
@@ -269,7 +261,7 @@ dependencies:
           - &numpy numpy>=1.21
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.1.*
+          - pyarrow==14.0.2.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -314,10 +306,10 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.1.*
-          - libarrow-dataset==14.0.1.*
-          - libarrow==14.0.1.*
-          - libparquet==14.0.1.*
+          - libarrow-acero==14.0.2.*
+          - libarrow-dataset==14.0.2.*
+          - libarrow==14.0.2.*
+          - libparquet==14.0.2.*
   libarrow_run:
     common:
       - output_types: conda
@@ -359,6 +351,10 @@ dependencies:
               cuda: "12.0"
             packages:
               - cuda-version=12.0
+          - matrix:
+              cuda: "12.2"
+            packages:
+              - cuda-version=12.2
   cuda:
     specific:
       - output_types: conda
@@ -406,6 +402,9 @@ dependencies:
       - output_types: conda
         matrices:
           - matrix:
+              arch: aarch64
+            packages:
+          - matrix:
               cuda: "12.*"
               arch: x86_64
             packages:
@@ -436,9 +435,6 @@ dependencies:
               # so 11.2 uses 11.4 packages (the oldest available).
               - *libcufile_114
               - *libcufile_dev114
-          # Fallback matrix for aarch64, which doesn't support libcufile.
-          - matrix:
-            packages:
   develop:
     common:
       - output_types: [conda, requirements]
@@ -501,7 +497,7 @@ dependencies:
         packages:
           - fsspec>=0.6.0
           - *numpy
-          - pandas>=2.0,<2.1.5dev0
+          - pandas>=2.0,<2.2.2dev0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -587,19 +583,11 @@ dependencies:
               cuda: "12.*"
             packages:
               - cuda-sanitizer-api
-          - matrix:  # Fallback for CUDA 11 or no matrix
-            packages:
-      - output_types: conda
-        matrices:
-          - matrix:
-              cuda: "12.0"
-            packages:
-              - cuda-version=12.0
           - matrix:
               cuda: "11.8"
             packages:
               - cuda-sanitizer-api=11.8.86
-          - matrix:
+          - matrix:  # Fallback for CUDA 11 or no matrix
             packages:
   test_java:
     common:
@@ -624,7 +612,6 @@ dependencies:
           - hypothesis
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - python-snappy>=0.6.0
           - scipy
       - output_types: conda
         packages:
@@ -724,48 +711,8 @@ dependencies:
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
-          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
-          - beautifulsoup4
-          - blosc
-          - brotlipy
-          - boto3
-          - botocore>=1.24.21
-          - bottleneck
-          - fastparquet
-          - flask
-          - fsspec
-          - html5lib
-          - hypothesis
-          - gcsfs
-          - ipython
-          - jinja2
-          - lxml
-          - matplotlib
-          - moto
-          - numba
-          - numexpr
-          - openpyxl
-          - odfpy
-          - py
-          - psycopg2-binary
-          - pyarrow
-          - pymysql
-          - pyreadstat
-          - pytest-asyncio
-          - pytest-reportlog
-          - python-snappy
-          - pyxlsb
-          - s3fs
-          - scipy
-          - sqlalchemy
-          - tables
-          - pandas-gbq
-          - tabulate
-          - xarray
-          - xlrd
-          - xlsxwriter
-          - xlwt
-          - zstandard
+          # pandas[all] includes all of the required dependencies
+          - pandas[all]
   test_python_cudf_pandas:
     common:
       - output_types: pyproject

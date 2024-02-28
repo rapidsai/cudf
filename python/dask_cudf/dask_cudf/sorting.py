@@ -16,7 +16,7 @@ from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
-import cudf as gd
+import cudf
 from cudf.api.types import _is_categorical_dtype
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
 
@@ -118,7 +118,7 @@ def merge_quantiles(finalq, qs, vals):
         return val
 
     # Sort by calculated quantile values, then number of observations.
-    combined_vals_counts = gd.core.reshape._merge_sorted(
+    combined_vals_counts = cudf.core.reshape._merge_sorted(
         [*map(_append_counts, vals, counts)]
     )
     combined_counts = cupy.asnumpy(combined_vals_counts["_counts"].values)
@@ -180,7 +180,7 @@ def _approximate_quantile(df, q):
 
     if len(qs) == 0:
         name = "quantiles-" + token
-        empty_index = gd.Index([], dtype=float)
+        empty_index = cudf.Index([], dtype=float)
         return Series(
             {
                 (name, 0): final_type(
@@ -305,7 +305,7 @@ def sort_values(
 
     # Step 2 - Perform repartitioning shuffle
     meta = df._meta._constructor_sliced([0])
-    if not isinstance(divisions, (gd.Series, gd.DataFrame)):
+    if not isinstance(divisions, (cudf.Series, cudf.DataFrame)):
         dtype = df[by[0]].dtype
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
@@ -330,7 +330,7 @@ def sort_values(
 
     # Step 3 - Return final sorted df
     df4 = df3.map_partitions(sort_function, **sort_kwargs)
-    if not isinstance(divisions, gd.DataFrame) and set_divisions:
+    if not isinstance(divisions, cudf.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = tuple(methods.tolist(divisions))
 

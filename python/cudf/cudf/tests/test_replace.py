@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -57,13 +57,20 @@ def test_series_replace_all(gsr, to_replace, value):
     else:
         pd_value = value
 
-    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    if pd_value is None:
-        # TODO: Remove this workaround once cudf
-        # introduces `no_default` values
-        expected = psr.replace(to_replace=pd_to_replace)
-    else:
-        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    expect_warn = (
+        isinstance(gsr.dtype, cudf.CategoricalDtype)
+        and isinstance(gd_to_replace, str)
+        and gd_to_replace == "one"
+    )
+    with expect_warning_if(expect_warn):
+        actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    with expect_warning_if(expect_warn):
+        if pd_value is None:
+            # TODO: Remove this workaround once cudf
+            # introduces `no_default` values
+            expected = psr.replace(to_replace=pd_to_replace)
+        else:
+            expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(
         expected.sort_values().reset_index(drop=True),
@@ -82,16 +89,19 @@ def test_series_replace():
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
-    psr4 = psr3.replace("one", "two")
+    with pytest.warns(FutureWarning):
+        psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
-    sr4 = sr3.replace("one", "two")
+    with pytest.warns(FutureWarning):
+        sr4 = sr3.replace("one", "two")
     assert_eq(
         psr4.sort_values().reset_index(drop=True),
         sr4.sort_values().reset_index(drop=True),
     )
-
-    psr5 = psr3.replace("one", "five")
-    sr5 = sr3.replace("one", "five")
+    with pytest.warns(FutureWarning):
+        psr5 = psr3.replace("one", "five")
+    with pytest.warns(FutureWarning):
+        sr5 = sr3.replace("one", "five")
 
     assert_eq(psr5, sr5)
 
@@ -236,11 +246,26 @@ def test_dataframe_replace(df, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    if pd_value is None:
-        expected = pdf.replace(to_replace=pd_to_replace)
-    else:
-        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
-    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
+    with expect_warning_if(
+        PANDAS_GE_220
+        and isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        and isinstance(to_replace, str)
+        and to_replace == "two"
+        and isinstance(value, str)
+        and value == "three"
+    ):
+        if pd_value is None:
+            expected = pdf.replace(to_replace=pd_to_replace)
+        else:
+            expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    with expect_warning_if(
+        isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        and isinstance(to_replace, str)
+        and to_replace == "two"
+        and isinstance(value, str)
+        and value == "three"
+    ):
+        actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
@@ -484,7 +509,13 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
 @pytest.mark.parametrize(
     "psr_data",
     [
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y")),
+        pd.Series(
+            pd.date_range(
+                "2010-01-01",
+                "2020-01-10",
+                freq="1YE",
+            )
+        ),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
             [
@@ -525,7 +556,13 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
     "fill_value",
     [
         pd.Timestamp("2010-01-02"),
-        pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
+        pd.Series(
+            pd.date_range(
+                "2010-01-01",
+                "2020-01-10",
+                freq="1YE",
+            )
+        )
         + pd.Timedelta("1d"),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
         pd.Series(
@@ -1330,7 +1367,8 @@ def test_series_replace_errors():
     ],
 )
 def test_replace_nulls(gsr, old, new, expected):
-    actual = gsr.replace(old, new)
+    with expect_warning_if(isinstance(gsr.dtype, cudf.CategoricalDtype)):
+        actual = gsr.replace(old, new)
     assert_eq(
         expected.sort_values().reset_index(drop=True),
         actual.sort_values().reset_index(drop=True),

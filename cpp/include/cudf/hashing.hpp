@@ -63,7 +63,7 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
  *
  * @returns A column where each row is the hash of a column from the input
  */
-std::unique_ptr<column> hash(
+[[deprecated]] std::unique_ptr<column> hash(
   table_view const& input,
   hash_id hash_function               = hash_id::HASH_MURMUR3,
   uint32_t seed                       = DEFAULT_HASH_SEED,
@@ -115,6 +115,8 @@ std::unique_ptr<table> murmurhash3_x64_128(
 /**
  * @brief Computes the MurmurHash3 32-bit hash value of each row in the given table
  *
+ * @deprecated Since 24.04
+ *
  * This function computes the hash similar to MurmurHash3_x86_32 with special processing
  * to match Spark's implementation results.
  *
@@ -125,7 +127,7 @@ std::unique_ptr<table> murmurhash3_x64_128(
  *
  * @returns A column where each row is the hash of a row from the input
  */
-std::unique_ptr<column> spark_murmurhash3_x86_32(
+[[deprecated]] std::unique_ptr<column> spark_murmurhash3_x86_32(
   table_view const& input,
   uint32_t seed                       = DEFAULT_HASH_SEED,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
