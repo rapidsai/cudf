@@ -32,6 +32,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean recoverWithNull;
   private final boolean normalizeSingleQuotes;
   private final boolean mixedTypesAsStrings;
+  private final boolean keepStringQuotes;
 
   private JSONOptions(Builder builder) {
     super(builder);
@@ -40,6 +41,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     recoverWithNull = builder.recoverWithNull;
     normalizeSingleQuotes = builder.normalizeSingleQuotes;
     mixedTypesAsStrings = builder.mixedTypesAsStrings;
+    keepStringQuotes = builder.keepQuotes;
   }
 
   public boolean isDayFirst() {
@@ -63,6 +65,10 @@ public final class JSONOptions extends ColumnFilterOptions {
     return mixedTypesAsStrings;
   }
 
+  public boolean keepStringQuotes() {
+    return keepStringQuotes;
+  }
+
   @Override
   String[] getIncludeColumnNames() {
     throw new UnsupportedOperationException("JSON reader didn't support column prune");
@@ -80,6 +86,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean normalizeSingleQuotes = false;
 
     private boolean mixedTypesAsStrings = false;
+    private boolean keepQuotes = false;
 
     /**
      * Whether to parse dates as DD/MM versus MM/DD
@@ -132,6 +139,16 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withMixedTypesAsStrings(boolean mixedTypesAsStrings) {
       this.mixedTypesAsStrings = mixedTypesAsStrings;
+      return this;
+    }
+
+    /**
+     * Set whether the reader should keep quotes of string values.
+     * @param keepQuotes true to keep them, else false.
+     * @return this for chaining.
+     */
+    public Builder withKeepQuotes(boolean keepQuotes) {
+      this.keepQuotes = keepQuotes;
       return this;
     }
 
