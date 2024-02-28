@@ -22,6 +22,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
@@ -43,7 +44,7 @@ namespace {
 std::unique_ptr<cudf::column> accumulate_row_sizes(cudf::column_view const& row_sizes,
                                                    cudf::size_type segment_length)
 {
-  auto const num_segments = row_sizes.size() / segment_length;
+  auto const num_segments = cudf::util::div_rounding_up_safe(row_sizes.size(), segment_length);
   auto output = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_segments);
 
   thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
