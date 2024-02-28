@@ -634,7 +634,7 @@ dependencies:
         packages:
           - msgpack
           - &tokenizers tokenizers==0.15.2
-          - &transformers transformers==4.24.0
+          - &transformers transformers==4.38.1
           - tzdata
     specific:
       - output_types: conda
