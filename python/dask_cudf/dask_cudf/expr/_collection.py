@@ -22,6 +22,8 @@ import cudf
 ##
 
 
+# VarMixin can be removed if cudf#15179 is addressed.
+# See: https://github.com/rapidsai/cudf/issues/15179
 class VarMixin:
     def var(
         self,

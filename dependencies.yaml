@@ -648,7 +648,7 @@ dependencies:
         packages:
           - dask-cuda==24.4.*
           - *numba
-          - dask-expr==0.4.0
+          - dask-expr
   depends_on_cudf:
     common:
       - output_types: conda
