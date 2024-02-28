@@ -734,7 +734,7 @@ TEST_F(RowBitCount, Table)
 
   // Test when num_rows % segment_length == 0
   {
-    auto constexpr segment_length = 4;
+    auto constexpr segment_length = 3;
     EXPECT_EQ(t.num_rows() % segment_length, 0);
     auto const result_segment_sizes   = cudf::segmented_bit_count(t, segment_length);
     auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
@@ -743,7 +743,7 @@ TEST_F(RowBitCount, Table)
 
   // Test when num_rows % segment_length != 0
   {
-    auto constexpr segment_length = 5;
+    auto constexpr segment_length = 4;
     EXPECT_NE(t.num_rows() % segment_length, 0);
     auto const result_segment_sizes   = cudf::segmented_bit_count(t, segment_length);
     auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
