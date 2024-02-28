@@ -119,10 +119,10 @@ struct pass_intermediate_data {
   // 1 1 1 1 1 2 2 2
   //
   // page_offsets would be 0, 5, 8
-  rmm::device_uvector<size_type> page_offsets{0, rmm::cuda_stream_default};
+  rmm::device_uvector<size_type> page_offsets{0, cudf::get_default_stream()};
 
-  rmm::device_buffer decomp_dict_data{0, rmm::cuda_stream_default};
-  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
+  rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
+  rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
   int level_type_size{0};
 
