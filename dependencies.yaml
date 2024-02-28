@@ -267,7 +267,7 @@ dependencies:
       - output_types: pyproject
         packages:
           # Hard pin the patch version used during the build.
-          # Keep in sync with runtime constraint.
+          # Sync with conda build constraint & wheel run constraint.
           - numpy==1.23.*
       - output_types: [requirements, pyproject]
         packages:
