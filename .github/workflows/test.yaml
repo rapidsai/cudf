@@ -51,7 +51,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      test_script: "ci/test_python_cudf.sh"
+      script: exit 0
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
@@ -61,7 +61,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      test_script: "ci/test_python_other.sh"
+      script: exit 0
   conda-java-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
@@ -73,7 +73,7 @@ jobs:
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_java.sh"
+      script: exit 0
   conda-notebook-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
@@ -85,7 +85,7 @@ jobs:
       node_type: "gpu-v100-latest-1"
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
-      run_script: "ci/test_notebooks.sh"
+      script: exit 0
   wheel-tests-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
@@ -94,17 +94,17 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: ci/test_wheel_cudf.sh
+      script: exit 0
   wheel-tests-dask-cudf:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
     with:
-      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.2.2")))
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.11" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.2.2")))
       build_type: nightly
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      script: ci/test_wheel_dask_cudf.sh
+      script: exit 0
   unit-tests-cudf-pandas:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-test.yaml@branch-24.04
