@@ -69,9 +69,17 @@ struct subpass_intermediate_data {
   rmm::device_buffer decomp_page_data;
 
   rmm::device_buffer level_decode_data{};
-  cudf::detail::hostdevice_vector<PageInfo> pages{};
+  cudf::detail::hostdevice_span<PageInfo> pages{};
+
+  // optimization. if the single_subpass flag is set, it means we will only be doing
+  // one subpass for the entire pass. this allows us to skip various pieces of work
+  // during processing. notably, page_buf will not be allocated to hold a compacted
+  // copy of the pages specific to the subpass.
+  bool single_subpass{false};
+  cudf::detail::hostdevice_vector<PageInfo> page_buf{};
+
   // for each page in the subpass, the index of our source page in the pass
-  cudf::detail::hostdevice_vector<size_t> page_src_index{};
+  rmm::device_uvector<size_t> page_src_index{0, cudf::get_default_stream()};
   // for each column in the file (indexed by _input_columns.size())
   // the number of associated pages for this subpass
   std::vector<size_t> column_page_count;
@@ -111,10 +119,10 @@ struct pass_intermediate_data {
   // 1 1 1 1 1 2 2 2
   //
   // page_offsets would be 0, 5, 8
-  cudf::detail::hostdevice_vector<size_type> page_offsets{};
+  rmm::device_uvector<size_type> page_offsets{0, cudf::get_default_stream()};
 
-  rmm::device_buffer decomp_dict_data{0, rmm::cuda_stream_default};
-  rmm::device_uvector<string_index_pair> str_dict_index{0, rmm::cuda_stream_default};
+  rmm::device_buffer decomp_dict_data{0, cudf::get_default_stream()};
+  rmm::device_uvector<string_index_pair> str_dict_index{0, cudf::get_default_stream()};
 
   int level_type_size{0};
 
