@@ -101,18 +101,18 @@ struct DictionaryEntry {
 struct ColumnDesc {
   uint8_t const* streams[CI_NUM_STREAMS];  // ptr to data stream index
   uint32_t strm_id[CI_NUM_STREAMS];        // stream ids
-  uint32_t strm_len[CI_NUM_STREAMS];       // stream length
+  int64_t strm_len[CI_NUM_STREAMS];        // stream length
   uint32_t* valid_map_base;                // base pointer of valid bit map for this column
   void* column_data_base;                  // base pointer of column data
-  uint32_t start_row;                      // starting row of the stripe
-  uint32_t num_rows;                       // number of rows in stripe
-  uint32_t column_num_rows;                // number of rows in whole column
-  uint32_t num_child_rows;                 // store number of child rows if it's list column
+  int64_t start_row;                       // starting row of the stripe
+  int64_t num_rows;                        // number of rows in stripe
+  int64_t column_num_rows;                 // number of rows in whole column
+  int64_t num_child_rows;                  // store number of child rows if it's list column
   uint32_t num_rowgroups;                  // number of rowgroups in the chunk
-  uint32_t dictionary_start;               // start position in global dictionary
+  int64_t dictionary_start;                // start position in global dictionary
   uint32_t dict_len;                       // length of local dictionary
-  uint32_t null_count;                     // number of null values in this stripe's column
-  uint32_t skip_count;                     // number of non-null values to skip
+  int64_t null_count;                      // number of null values in this stripe's column
+  int64_t skip_count;                      // number of non-null values to skip
   uint32_t rowgroup_id;                    // row group position
   ColumnEncodingKind encoding_kind;        // column encoding kind
   TypeKind type_kind;                      // column data type
@@ -129,10 +129,10 @@ struct ColumnDesc {
  */
 struct RowGroup {
   uint32_t chunk_id;        // Column chunk this entry belongs to
-  uint32_t strm_offset[2];  // Index offset for CI_DATA and CI_DATA2 streams
+  int64_t strm_offset[2];   // Index offset for CI_DATA and CI_DATA2 streams
   uint16_t run_pos[2];      // Run position for CI_DATA and CI_DATA2
   uint32_t num_rows;        // number of rows in rowgroup
-  uint32_t start_row;       // starting row of the rowgroup
+  int64_t start_row;        // starting row of the rowgroup
   uint32_t num_child_rows;  // number of rows of children in rowgroup in case of list type
 };
 
@@ -140,9 +140,9 @@ struct RowGroup {
  * @brief Struct to describe an encoder data chunk
  */
 struct EncChunk {
-  uint32_t start_row;                // start row of this chunk
+  int64_t start_row;                 // start row of this chunk
   uint32_t num_rows;                 // number of rows in this chunk
-  uint32_t null_mask_start_row;      // adjusted to multiple of 8
+  int64_t null_mask_start_row;       // adjusted to multiple of 8
   uint32_t null_mask_num_rows;       // adjusted to multiple of 8
   ColumnEncodingKind encoding_kind;  // column encoding kind
   TypeKind type_kind;                // column data type
@@ -253,7 +253,7 @@ constexpr uint32_t encode_block_size = 512;
  */
 void ParseCompressedStripeData(CompressedStreamInfo* strm_info,
                                int32_t num_streams,
-                               uint32_t compression_block_size,
+                               uint64_t compression_block_size,
                                uint32_t log2maxcr,
                                rmm::cuda_stream_view stream);
 
@@ -276,7 +276,6 @@ void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
  * @param[in] chunks ColumnDesc device array [stripe][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
- * @param[in] num_rowgroups Number of row groups
  * @param[in] rowidx_stride Row index stride
  * @param[in] use_base_stride Whether to use base stride obtained from meta or use the computed
  * value
@@ -285,10 +284,9 @@ void PostDecompressionReassemble(CompressedStreamInfo* strm_info,
 void ParseRowGroupIndex(RowGroup* row_groups,
                         CompressedStreamInfo* strm_info,
                         ColumnDesc* chunks,
-                        uint32_t num_columns,
-                        uint32_t num_stripes,
-                        uint32_t num_rowgroups,
-                        uint32_t rowidx_stride,
+                        size_type num_columns,
+                        size_type num_stripes,
+                        size_type rowidx_stride,
                         bool use_base_stride,
                         rmm::cuda_stream_view stream);
 
@@ -304,9 +302,9 @@ void ParseRowGroupIndex(RowGroup* row_groups,
  */
 void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
                                       DictionaryEntry* global_dictionary,
-                                      uint32_t num_columns,
-                                      uint32_t num_stripes,
-                                      size_t first_row,
+                                      size_type num_columns,
+                                      size_type num_stripes,
+                                      int64_t first_row,
                                       rmm::cuda_stream_view stream);
 
 /**
@@ -329,12 +327,12 @@ void DecodeNullsAndStringDictionaries(ColumnDesc* chunks,
 void DecodeOrcColumnData(ColumnDesc* chunks,
                          DictionaryEntry* global_dictionary,
                          device_2dspan<RowGroup> row_groups,
-                         uint32_t num_columns,
-                         uint32_t num_stripes,
-                         size_t first_row,
+                         size_type num_columns,
+                         size_type num_stripes,
+                         int64_t first_row,
                          table_device_view tz_table,
-                         uint32_t num_rowgroups,
-                         uint32_t rowidx_stride,
+                         int64_t num_rowgroups,
+                         size_type rowidx_stride,
                          size_t level,
                          size_type* error_count,
                          rmm::cuda_stream_view stream);
@@ -364,8 +362,8 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 void EncodeStripeDictionaries(stripe_dictionary const* stripes,
                               device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
-                              uint32_t num_string_columns,
-                              uint32_t num_stripes,
+                              size_type num_string_columns,
+                              size_type num_stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream);
 
