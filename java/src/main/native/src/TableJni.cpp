@@ -702,9 +702,9 @@ jlongArray gather_maps_to_java(JNIEnv *env,
 jlongArray gather_map_to_java(JNIEnv *env,
                               std::unique_ptr<rmm::device_uvector<cudf::size_type>> map) {
   // release the underlying device buffer to Java
-  auto gather_map_buffer = std::make_unique<rmm::device_buffer>(map->release());
   cudf::jni::native_jlongArray result(env, 3);
-  result[0] = static_cast<jlong>(gather_map_buffer->size());
+  result[0] = static_cast<jlong>(map->size() * sizeof(cudf::size_type));
+  auto gather_map_buffer = std::make_unique<rmm::device_buffer>(map->release());
   result[1] = ptr_as_jlong(gather_map_buffer->data());
   result[2] = release_as_jlong(gather_map_buffer);
   return result.get_jArray();
@@ -1430,7 +1430,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_endWriteCSVToBuffer(JNIEnv *env
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource(
     JNIEnv *env, jclass, jboolean day_first, jboolean lines, jboolean recover_with_null,
     jboolean normalize_single_quotes, jboolean normalize_whitespace, jboolean mixed_types_as_string,
-    jlong ds_handle) {
+    jboolean keep_quotes, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1449,7 +1449,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
             .normalize_whitespace(static_cast<bool>(normalize_whitespace))
-            .mixed_types_as_string(mixed_types_as_string);
+            .mixed_types_as_string(mixed_types_as_string)
+            .keep_quotes(keep_quotes);
 
     auto result =
         std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1462,7 +1463,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSONFromDataSource
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
     JNIEnv *env, jclass, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines,
     jboolean recover_with_null, jboolean normalize_single_quotes, jboolean normalize_whitespace,
-    jboolean mixed_types_as_string) {
+    jboolean mixed_types_as_string, jboolean keep_quotes) {
 
   JNI_NULL_CHECK(env, buffer, "buffer cannot be null", 0);
   if (buffer_length <= 0) {
@@ -1485,7 +1486,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readAndInferJSON(
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
             .normalize_whitespace(static_cast<bool>(normalize_whitespace))
-            .mixed_types_as_string(mixed_types_as_string);
+            .mixed_types_as_string(mixed_types_as_string)
+            .keep_quotes(keep_quotes);
 
     auto result =
         std::make_unique<cudf::io::table_with_metadata>(cudf::io::read_json(opts.build()));
@@ -1574,7 +1576,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
     JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types,
     jintArray j_scales, jboolean day_first, jboolean lines, jboolean recover_with_null,
     jboolean normalize_single_quotes, jboolean normalize_whitespace, jboolean mixed_types_as_string,
-    jlong ds_handle) {
+    jboolean keep_quotes, jlong ds_handle) {
 
   JNI_NULL_CHECK(env, ds_handle, "no data source handle given", 0);
 
@@ -1607,7 +1609,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSONFromDataSource(
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
             .normalize_whitespace(static_cast<bool>(normalize_whitespace))
-            .mixed_types_as_string(mixed_types_as_string);
+            .mixed_types_as_string(mixed_types_as_string)
+            .keep_quotes(keep_quotes);
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
@@ -1646,8 +1649,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
     JNIEnv *env, jclass, jintArray j_num_children, jobjectArray col_names, jintArray j_types,
     jintArray j_scales, jstring inputfilepath, jlong buffer, jlong buffer_length,
     jboolean day_first, jboolean lines, jboolean recover_with_null,
-    jboolean normalize_single_quotes, jboolean normalize_whitespace,
-    jboolean mixed_types_as_string) {
+    jboolean normalize_single_quotes, jboolean normalize_whitespace, jboolean mixed_types_as_string,
+    jboolean keep_quotes) {
 
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1695,7 +1698,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_readJSON(
             .recovery_mode(recovery_mode)
             .normalize_single_quotes(static_cast<bool>(normalize_single_quotes))
             .normalize_whitespace(static_cast<bool>(normalize_whitespace))
-            .mixed_types_as_string(mixed_types_as_string);
+            .mixed_types_as_string(mixed_types_as_string)
+            .keep_quotes(keep_quotes);
 
     if (!n_types.is_null()) {
       if (n_types.size() != n_scales.size()) {
@@ -2555,6 +2559,30 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerJoinGatherMaps(
       env, j_left_keys, j_right_keys, compare_nulls_equal,
       [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
         return cudf::inner_join(left, right, nulleq);
+      });
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_innerDistinctJoinGatherMaps(
+    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jboolean compare_nulls_equal) {
+  return cudf::jni::join_gather_maps(
+      env, j_left_keys, j_right_keys, compare_nulls_equal,
+      [](cudf::table_view const &left, cudf::table_view const &right, cudf::null_equality nulleq) {
+        auto has_nulls = cudf::has_nested_nulls(left) || cudf::has_nested_nulls(right) ?
+                             cudf::nullable_join::YES :
+                             cudf::nullable_join::NO;
+        std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
+                  std::unique_ptr<rmm::device_uvector<cudf::size_type>>>
+            maps;
+        if (cudf::detail::has_nested_columns(right)) {
+          cudf::distinct_hash_join<cudf::has_nested::YES> hash(right, left, has_nulls, nulleq);
+          maps = hash.inner_join();
+        } else {
+          cudf::distinct_hash_join<cudf::has_nested::NO> hash(right, left, has_nulls, nulleq);
+          maps = hash.inner_join();
+        }
+        // Unique join returns {right map, left map} but all the other joins
+        // return {left map, right map}. Swap here to make it consistent.
+        return std::make_pair(std::move(maps.second), std::move(maps.first));
       });
 }
 
