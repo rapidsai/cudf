@@ -169,7 +169,7 @@ class get_json_object_options {
   [[nodiscard]] CUDF_HOST_DEVICE int get_max_num_len() const { return max_num_len; }
 
   /**
-   * @brief Retuns whether allow tailing useless sub-string in JSON.
+   * @brief Returns whether allow tailing useless sub-string in JSON.
    *
    * If true, e.g., the following invalid JSON is allowed, because prefix {'k' : 'v'} is valid.
    *   {'k' : 'v'}_extra_tail_sub_string

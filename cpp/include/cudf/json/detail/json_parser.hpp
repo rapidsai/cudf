@@ -97,7 +97,7 @@ enum class json_token {
  *     "\'" , "\"" ,  '\'' , '\"' , '"' , "'"
  *
  *  When `allow_single_quotes` is false:
- *   Inalid string examples:
+ *   Invalid string examples:
  *     "\'"
  *
  *  When `allow_unescaped_control_chars` is true:
@@ -414,7 +414,7 @@ class json_parser {
    */
   CUDF_HOST_DEVICE inline bool try_skip_escape_part()
   {
-    // already skiped the first '\'
+    // already skipped the first '\'
     // try skip second part
     if (!eof()) {
       switch (*curr_pos) {
@@ -729,7 +729,7 @@ class json_parser {
   }
 
   /**
-   * continute parsing the next token and update curent token
+   * continute parsing the next token and update current token
    * Note: only parse one token at a time
    */
   CUDF_HOST_DEVICE inline json_token parse_next_token()
@@ -750,7 +750,7 @@ class json_parser {
           parse_first_token_in_value();
         } else {
           if (options.get_allow_tailing_sub_string()) {
-            // privious token is not INIT, means already get a token; stack is empty;
+            // previous token is not INIT, means already get a token; stack is empty;
             // Successfully parsed.
             // Note: ignore the tailing sub-string
             curr_token = json_token::SUCCESS;
