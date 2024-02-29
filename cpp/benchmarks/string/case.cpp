@@ -45,7 +45,9 @@ void bench_case(nvbench::state& state)
       cudf::type_id::INT8, distribution_id::UNIFORM, 32, 126);  // nice ASCII range
     auto input        = cudf::strings_column_view(col_view);
     auto ascii_column = create_random_column(
-      cudf::type_id::INT8, row_count{input.chars_size(cudf::get_default_stream())}, ascii_profile);
+      cudf::type_id::INT8,
+      row_count{static_cast<cudf::size_type>(input.chars_size(cudf::get_default_stream()))},
+      ascii_profile);
     auto ascii_data = ascii_column->view();
 
     col_view = cudf::column_view(col_view.type(),

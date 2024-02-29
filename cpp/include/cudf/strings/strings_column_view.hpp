@@ -112,7 +112,7 @@ class strings_column_view : private column_view {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Number of bytes in the chars child column
    */
-  [[nodiscard]] size_type chars_size(rmm::cuda_stream_view stream) const noexcept;
+  [[nodiscard]] int64_t chars_size(rmm::cuda_stream_view stream) const noexcept;
 
   /**
    * @brief Return an iterator for the chars child column.
