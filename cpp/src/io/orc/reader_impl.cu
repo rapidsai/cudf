@@ -1420,7 +1420,10 @@ reader::impl::impl(std::size_t output_size_limit,
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
-    _chunk_read_data{output_size_limit, data_read_limit, output_row_granularity}
+    _chunk_read_data{
+      output_size_limit,
+      data_read_limit,
+      output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY}
 {
   printf("construct reader , limit = %d, %d, gradunarity %d \n",
 
