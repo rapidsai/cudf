@@ -1905,6 +1905,10 @@ def test_concat_mixed_list_types_error(s1, s2):
             "third": cudf.DataFrame({"C": [1, 2, 3]}),
         },
         {"first": cudf.Series([1, 2, 3]), "second": cudf.Series([4, 5, 6])},
+        {
+            "first": cudf.DataFrame({"A": [1, 2], "B": [3, 4]}),
+            "second": cudf.Series([5, 6], name="C"),
+        },
     ],
 )
 def test_concat_dictionary(d):
