@@ -135,9 +135,7 @@ double non_fixed_width_size<cudf::list_view>(data_profile const& profile)
   auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
 
   // Each nesting level includes offsets, this is the sum of all levels
-  // Also include an additional offset per level for the size of the last element
-  auto const total_offset_count =
-    geometric_sum(dist_params.max_depth, single_level_mean) + dist_params.max_depth;
+  auto const total_offset_count = geometric_sum(dist_params.max_depth, single_level_mean);
 
   return sizeof(cudf::size_type) * total_offset_count + element_size * element_count;
 }
