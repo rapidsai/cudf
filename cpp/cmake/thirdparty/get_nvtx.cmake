@@ -21,7 +21,6 @@ function(find_and_configure_nvtx)
       GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
       GIT_TAG v3.1.0
       GIT_SHALLOW TRUE
-      DOWNLOAD_ONLY TRUE
       SOURCE_SUBDIR c
   )
 endfunction()
