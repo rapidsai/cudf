@@ -207,7 +207,7 @@ def test_set_index(nelem):
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
 
-@skip_dask_expr()
+@xfail_dask_expr("missing support for divisions='quantile'")
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
@@ -388,7 +388,7 @@ def test_setitem_scalar_datetime():
     np.testing.assert_array_equal(got["z"], df["z"])
 
 
-@skip_dask_expr()
+@skip_dask_expr("Not relevant for dask-expr")
 @pytest.mark.parametrize(
     "func",
     [
@@ -426,7 +426,6 @@ def test_repr(func):
         assert gddf._repr_html_()
 
 
-@skip_dask_expr()
 @pytest.mark.skip(reason="datetime indexes not fully supported in cudf")
 @pytest.mark.parametrize("start", ["1d", "5d", "1w", "12h"])
 @pytest.mark.parametrize("stop", ["1d", "3d", "8h"])

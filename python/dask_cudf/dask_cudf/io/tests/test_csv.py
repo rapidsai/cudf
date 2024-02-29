@@ -14,7 +14,6 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
 
 
 @pytest.fixture
@@ -59,12 +58,12 @@ def test_csv_roundtrip_backend_dispatch(tmp_path):
     ddf = dask_cudf.from_cudf(df, npartitions=2)
     csv_path = str(tmp_path / "data-*.csv")
     ddf.to_csv(csv_path, index=False)
-    ddf2 = dask_cudf.read_csv(csv_path)
+    with dask.config.set({"dataframe.backend": "cudf"}):
+        ddf2 = dd.read_csv(csv_path)
     assert isinstance(ddf2, dask_cudf.DataFrame)
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)
 
 
-@skip_dask_expr()
 def test_csv_roundtrip(tmp_path):
     df = cudf.DataFrame({"x": [1, 2, 3, 4], "id": ["a", "b", "c", "d"]})
     ddf = dask_cudf.from_cudf(df, npartitions=2)
