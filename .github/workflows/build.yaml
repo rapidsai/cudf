@@ -92,7 +92,7 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.04
     with:
-      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.10" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.2.2")))
+      matrix_filter: map(select(.ARCH == "amd64" and .PY_VER == "3.11" and (.CUDA_VER == "11.8.0" or .CUDA_VER == "12.2.2")))
       build_type: ${{ inputs.build_type || 'branch' }}
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}

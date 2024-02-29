@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <cuda/std/utility>
 
 #include <algorithm>
 #include <cassert>
@@ -82,12 +83,43 @@ constexpr inline auto is_supported_construction_value_type()
 
 // Helper functions for `fixed_point` type
 namespace detail {
+
 /**
- * @brief A function for integer exponentiation by squaring
+ * @brief Recursively computes integer exponentiation
  *
- * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
- * Note: this is the iterative equivalent of the recursive definition (faster) <br>
- * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+ * @note This is intended to be run at compile time
+ *
+ * @tparam Rep Representation type for return type
+ * @tparam Base The base to be exponentiated
+ * @param exp The exponent to be used for exponentiation
+ * @return Result of `Base` to the power of `exponent` of type `Rep`
+ */
+template <typename Rep, int32_t Base>
+CUDF_HOST_DEVICE inline constexpr Rep get_power(int32_t exp)
+{
+  // Compute power recursively
+  return (exp > 0) ? Rep(Base) * get_power<Rep, Base>(exp - 1) : 1;
+}
+
+/**
+ * @brief Implementation of integer exponentiation by array lookup
+ *
+ * @tparam Rep Representation type for return type
+ * @tparam Base The base to be exponentiated
+ * @tparam Exponents The exponents for the array entries
+ * @param exponent The exponent to be used for exponentiation
+ * @return Result of `Base` to the power of `exponent` of type `Rep`
+ */
+template <typename Rep, int32_t Base, std::size_t... Exponents>
+CUDF_HOST_DEVICE inline Rep ipow_impl(int32_t exponent, cuda::std::index_sequence<Exponents...>)
+{
+  // Compute powers at compile time, storing into array
+  static constexpr Rep powers[] = {get_power<Rep, Base>(Exponents)...};
+  return powers[exponent];
+}
+
+/**
+ * @brief A function for integer exponentiation by array lookup
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
@@ -102,19 +134,16 @@ template <typename Rep,
 CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
-  if (exponent == 0) { return static_cast<Rep>(1); }
+  if constexpr (Base == numeric::Radix::BASE_2) {
+    return static_cast<Rep>(1) << exponent;
+  } else {  // BASE_10
+    // Build index sequence for building power array at compile time
+    static constexpr auto max_exp   = cuda::std::numeric_limits<Rep>::digits10;
+    static constexpr auto exponents = cuda::std::make_index_sequence<max_exp + 1>{};
 
-  auto extra  = static_cast<Rep>(1);
-  auto square = static_cast<Rep>(Base);
-  while (exponent > 1) {
-    if (exponent & 1 /* odd */) {
-      extra *= square;
-      exponent -= 1;
-    }
-    exponent /= 2;
-    square *= square;
+    // Get compile-time result
+    return ipow_impl<Rep, static_cast<int32_t>(Base)>(exponent, exponents);
   }
-  return square * extra;
 }
 
 /** @brief Function that performs a `right shift` scale "times" on the `val`
