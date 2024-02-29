@@ -612,7 +612,6 @@ dependencies:
           - hypothesis
           - pytest-benchmark
           - pytest-cases>=3.8.2
-          - python-snappy>=0.6.0
           - scipy
       - output_types: conda
         packages:
@@ -712,49 +711,8 @@ dependencies:
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
-          # TODO: When pandas 2.0 is the minimum version, can just specify pandas[all]
-          - beautifulsoup4
-          - blosc
-          - brotlipy
-          - boto3
-          - botocore>=1.24.21
-          - bottleneck
-          - fastparquet
-          - flask
-          - fsspec
-          - html5lib
-          - hypothesis
-          - gcsfs
-          - ipython
-          - jinja2
-          - lxml
-          - matplotlib
-          - moto
-          - numba
-          - numexpr
-          - openpyxl
-          - odfpy
-          - py
-          - psycopg2-binary
-          - pyarrow
-          - pymysql
-          - pyreadstat
-          - pytest-asyncio
-          - pytest-reportlog
-          - python-snappy
-          - pytest-timeout
-          - pyxlsb
-          - s3fs
-          - scipy
-          - sqlalchemy
-          - tables
-          - pandas-gbq
-          - tabulate
-          - xarray
-          - xlrd
-          - xlsxwriter
-          - xlwt
-          - zstandard
+          # pandas[all] includes all of the required dependencies
+          - pandas[all]
   test_python_cudf_pandas:
     common:
       - output_types: pyproject

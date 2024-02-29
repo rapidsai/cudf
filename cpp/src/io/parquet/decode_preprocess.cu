@@ -385,8 +385,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 /**
  * @copydoc cudf::io::parquet::gpu::ComputePageSizes
  */
-void ComputePageSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                      cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void ComputePageSizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                       size_t min_row,
                       size_t num_rows,
                       bool compute_num_rows,
