@@ -363,13 +363,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df.groupby(by=["a"]).indices
         {10: array([0, 1]), 40: array([2])}
         """
-        group_names, offsets, _, grouped_values = self._grouped()
+        offsets, group_keys, (indices,) = self._groupby.groups(
+            [
+                cudf.core.column.as_column(
+                    range(len(self.obj)), dtype=size_type_dtype
+                )
+            ]
+        )
 
+        group_keys = libcudf.stream_compaction.drop_duplicates(group_keys)
+        if len(group_keys) > 1:
+            index = cudf.MultiIndex.from_arrays(group_keys)
+        else:
+            (group_keys,) = group_keys
+            index = cudf.Index(group_keys)
         return dict(
-            zip(
-                group_names.to_pandas(),
-                np.split(grouped_values.index.values, offsets[1:-1]),
-            )
+            zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
         )
 
     @_cudf_nvtx_annotate
@@ -414,8 +423,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
-
-        return obj.loc[self.groups[name].drop_duplicates()]
+        return obj.iloc[self.indices[name]]
 
     @_cudf_nvtx_annotate
     def size(self):
