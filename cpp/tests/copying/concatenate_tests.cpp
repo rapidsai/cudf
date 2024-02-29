@@ -237,10 +237,12 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
     input_cols.push_back(input);
   }
   auto result = cudf::concatenate(input_cols);
-  std::cout << result->view().size() << "\n";
-  auto sv = cudf::strings_column_view(result->view());
-  std::cout << sv.chars_size(cudf::get_default_stream()) << "\n";
-  std::cout << (int)sv.offsets().type().id() << "\n";
+  auto sv     = cudf::strings_column_view(result->view());
+  EXPECT_EQ(sv.size(), 100'000'000);
+  // std::cout << sv.chars_size(cudf::get_default_stream()) << "\n";
+  // std::cout << (int)sv.offsets().type().id() << "\n";
+  EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+
   auto sliced = cudf::split(result->view(),
                             {10'000'000,
                              20'000'000,
@@ -251,7 +253,6 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
                              70'000'000,
                              80'000'000,
                              90'000'000});
-  std::cout << sliced.size() << "\n";
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
