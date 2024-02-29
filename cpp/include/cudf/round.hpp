@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,8 +32,9 @@ namespace cudf {
 /**
  * @brief Different rounding methods for `cudf::round`
  *
- * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_up
- * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Round_half_to_even
+ * Info on HALF_EVEN rounding: https://en.wikipedia.org/wiki/Rounding#Rounding_half_to_even
+ * Info on HALF_UP   rounding: https://en.wikipedia.org/wiki/Rounding#Rounding_half_away_from_zero
+ * Note: HALF_UP means up in MAGNITUDE: Away from zero! Because of how Java and python define it
  */
 enum class rounding_method : int32_t { HALF_UP, HALF_EVEN };
 
