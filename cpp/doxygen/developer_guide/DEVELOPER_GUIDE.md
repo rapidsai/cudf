@@ -129,6 +129,10 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
 
 Additional style guidelines for libcudf code include:
 
+ * Prefer "east const", placing `const` after the type. This is not
+   automatically enforced by `clang-format` because the option
+   `QualifierAlignment: Right` has been observed to produce false negatives and
+   false positives.
  * [NL.11: Make Literals
    Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
    Decimal values should use integer separators every thousands place, like
@@ -655,10 +659,14 @@ defaults.
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. libcudf has a convenience macro `CUDF_FUNC_RANGE()` that
-automatically annotates the lifetime of the enclosing function and uses the function's name as
-the name of the NVTX range. For more information about NVTX, see
-[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
+should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::thread_range`
+for declaring NVTX ranges in the current scope:
+- Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
+NVTX range
+- Use `cudf::thread_range rng{"custom_name"};` to provide a custom name for the current scope's
+NVTX range
+
+For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
 
@@ -1197,17 +1205,15 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 ## Strings columns
 
-Strings are represented in much the same way as lists, except that the data child column is always
-a non-nullable column of `INT8` data. The parent column's type is `STRING` and contains no data,
+Strings are represented as a column with a data device buffer and a child offsets column.
+The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
 but its size represents the number of strings in the column, and its null mask represents the
 validity of each string. To summarize, the strings column children are:
 
 1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-   string in a dense column of all characters.
-2. A non-nullable column of `INT8` elements of all the characters across all the strings packed
-   together.
+   string in a dense data buffer of all characters.
 
-With this representation, `characters[offsets[i]]` is the first character of string `i`, and the
+With this representation, `data[offsets[i]]` is the first character of string `i`, and the
 size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
 this compound column representation of strings.
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+#include "io/utilities/column_buffer.hpp"
 #include "page_decode.cuh"
-
-#include <io/utilities/column_buffer.hpp>
 
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
@@ -421,7 +421,7 @@ static __device__ void gpuOutputGeneric(
  * @param error_code Error code to set if an error is encountered
  */
 template <int lvl_buf_size, typename level_t>
-__global__ void __launch_bounds__(decode_block_size)
+CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodePageData(PageInfo* pages,
                     device_span<ColumnChunkDesc const> chunks,
                     size_t min_row,

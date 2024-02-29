@@ -200,6 +200,7 @@ class orc_reader_options {
   void set_skip_rows(uint64_t rows)
   {
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
+    CUDF_EXPECTS(rows <= std::numeric_limits<int64_t>::max(), "skip_rows is too large");
     _skip_rows = rows;
   }
 
@@ -393,6 +394,7 @@ class orc_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata.
  *
@@ -400,6 +402,7 @@ class orc_reader_options_builder {
  */
 table_with_metadata read_orc(
   orc_reader_options const& options,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
@@ -864,8 +867,10 @@ class orc_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  */
-void write_orc(orc_writer_options const& options);
+void write_orc(orc_writer_options const& options,
+               rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /**
  * @brief Builds settings to use for `write_orc_chunked()`.
@@ -1287,8 +1292,10 @@ class orc_chunked_writer {
    * @brief Constructor with chunked writer options
    *
    * @param[in] options options used to write table
+   * @param[in] stream CUDA stream used for device memory operations and kernel launches
    */
-  orc_chunked_writer(chunked_orc_writer_options const& options);
+  orc_chunked_writer(chunked_orc_writer_options const& options,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
    * @brief Writes table to output.

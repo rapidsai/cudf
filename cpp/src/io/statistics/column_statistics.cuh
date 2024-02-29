@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,11 +21,9 @@
 
 #pragma once
 
-#include "temp_storage_wrapper.cuh"
-
-#include "typed_statistics_chunk.cuh"
-
 #include "statistics.cuh"
+#include "temp_storage_wrapper.cuh"
+#include "typed_statistics_chunk.cuh"
 
 namespace cudf {
 namespace io {
@@ -289,7 +287,7 @@ __device__ void cooperative_load(T& destination, T const* source = nullptr)
  * @tparam IO File format for which statistics calculation is being done
  */
 template <int block_size, detail::io_file_format IO>
-__global__ void __launch_bounds__(block_size, 1)
+CUDF_KERNEL void __launch_bounds__(block_size, 1)
   gpu_calculate_group_statistics(statistics_chunk* chunks,
                                  statistics_group const* groups,
                                  bool const int96_timestamps)
@@ -368,7 +366,7 @@ void calculate_group_statistics(statistics_chunk* chunks,
  * @tparam IO File format for which statistics calculation is being done
  */
 template <int block_size, detail::io_file_format IO>
-__global__ void __launch_bounds__(block_size, 1)
+CUDF_KERNEL void __launch_bounds__(block_size, 1)
   gpu_merge_group_statistics(statistics_chunk* chunks_out,
                              statistics_chunk const* chunks_in,
                              statistics_merge_group const* groups)

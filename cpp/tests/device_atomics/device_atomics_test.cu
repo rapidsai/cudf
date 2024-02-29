@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+
 #include <thrust/host_vector.h>
 
 #include <algorithm>
 
 template <typename T>
-__global__ void gpu_atomic_test(T* result, T* data, size_t size)
+CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
 {
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;
@@ -79,7 +79,7 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
 }
 
 template <typename T>
-__global__ void gpu_atomicCAS_test(T* result, T* data, size_t size)
+CUDF_KERNEL void gpu_atomicCAS_test(T* result, T* data, size_t size)
 {
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;

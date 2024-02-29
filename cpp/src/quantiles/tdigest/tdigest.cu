@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <quantiles/tdigest/tdigest_util.cuh>
+#include "quantiles/tdigest/tdigest_util.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -39,8 +40,6 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
-
-#include <cuda/functional>
 
 using namespace cudf::tdigest;
 
@@ -68,13 +67,13 @@ struct make_centroid {
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
 template <typename CentroidIter>
-__global__ void compute_percentiles_kernel(device_span<size_type const> tdigest_offsets,
-                                           column_device_view percentiles,
-                                           CentroidIter centroids_,
-                                           double const* min_,
-                                           double const* max_,
-                                           double const* cumulative_weight_,
-                                           double* output)
+CUDF_KERNEL void compute_percentiles_kernel(device_span<size_type const> tdigest_offsets,
+                                            column_device_view percentiles,
+                                            CentroidIter centroids_,
+                                            double const* min_,
+                                            double const* max_,
+                                            double const* cumulative_weight_,
+                                            double* output)
 {
   auto const tid = cudf::detail::grid_1d::global_thread_id();
 

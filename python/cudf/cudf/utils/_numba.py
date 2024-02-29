@@ -1,28 +1,27 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import glob
 import os
 import sys
-import warnings
+from functools import lru_cache
 
 from numba import config as numba_config
 
-try:
-    from pynvjitlink.patch import (
-        patch_numba_linker as patch_numba_linker_pynvjitlink,
+
+# Use an lru_cache with a single value to allow a delayed import of
+# strings_udf. This is the easiest way to break an otherwise circular import
+# loop of _lib.*->cudautils->_numba->_lib.strings_udf
+@lru_cache
+def _get_cc_60_ptx_file():
+    from cudf._lib import strings_udf
+
+    return os.path.join(
+        os.path.dirname(strings_udf.__file__),
+        "..",
+        "core",
+        "udf",
+        "shim_60.ptx",
     )
-except ImportError:
-
-    def patch_numba_linker_pynvjitlink():
-        warnings.warn(
-            "CUDA Toolkit is newer than CUDA driver. "
-            "Numba features will not work in this configuration. "
-        )
-
-
-CC_60_PTX_FILE = os.path.join(
-    os.path.dirname(__file__), "../core/udf/shim_60.ptx"
-)
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
@@ -105,11 +104,13 @@ def _setup_numba():
     version of the CUDA Toolkit used to build the PTX files shipped
     with the user cuDF package.
     """
-    # ptxcompiler is a requirement for cuda 11.x packages but not
-    # cuda 12.x packages. However its version checking machinery
-    # is still necessary. If a user happens to have ptxcompiler
-    # in a cuda 12 environment, it's use for the purposes of
-    # checking the driver and runtime versions is harmless
+
+    # Either ptxcompiler, or our vendored version (_ptxcompiler.py)
+    # is needed to determine the driver and runtime CUDA versions in
+    # the environment. In a CUDA 11.x environment, ptxcompiler is used
+    # to provide MVC directly, whereas for CUDA 12.x this is provided
+    # through pynvjitlink. The presence of either package does not
+    # perturb cuDF's operation in situations where they aren't used.
     try:
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
@@ -119,7 +120,9 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        ptx_toolkit_version = _get_cuda_version_from_ptx_file(CC_60_PTX_FILE)
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(
+            _get_cc_60_ptx_file()
+        )
 
         # MVC is required whenever any PTX is newer than the driver
         # This could be the shipped PTX file or the PTX emitted by
@@ -131,7 +134,9 @@ def _setup_numba():
             if driver_version < (12, 0):
                 patch_numba_linker_cuda_11()
             else:
-                patch_numba_linker_pynvjitlink()
+                from pynvjitlink.patch import patch_numba_linker
+
+                patch_numba_linker()
 
 
 def _get_cuda_version_from_ptx_file(path):

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
@@ -52,8 +53,6 @@
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <cuda/functional>
 
 #include <algorithm>
 #include <cstdint>
@@ -540,7 +539,7 @@ std::unique_ptr<cudf::column> create_random_utf8_string_column(data_profile cons
   return cudf::make_strings_column(
     num_rows,
     std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
-    std::make_unique<cudf::column>(std::move(chars), rmm::device_buffer{}, 0),
+    chars.release(),
     null_count,
     profile.get_null_probability().has_value() ? std::move(result_bitmask) : rmm::device_buffer{});
 }

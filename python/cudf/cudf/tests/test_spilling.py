@@ -1,5 +1,6 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
+import contextlib
 import importlib
 import random
 import time
@@ -34,7 +35,7 @@ from cudf.core.buffer.spill_manager import (
 )
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
-    SpillableBufferSlice,
+    SpillableBufferOwner,
     SpillLock,
 )
 from cudf.testing._utils import assert_eq
@@ -196,10 +197,10 @@ def test_creations(manager: SpillManager):
 def test_spillable_df_groupby(manager: SpillManager):
     df = cudf.DataFrame({"a": [1, 1, 1]})
     gb = df.groupby("a")
-    assert len(single_column_df_base_data(df)._spill_locks) == 0
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 0
     gb._groupby
     # `gb._groupby`, which is cached on `gb`, holds a spill lock
-    assert len(single_column_df_base_data(df)._spill_locks) == 1
+    assert len(single_column_df_base_data(df).owner._spill_locks) == 1
     assert not single_column_df_data(df).spillable
     del gb
     assert single_column_df_data(df).spillable
@@ -215,45 +216,66 @@ def test_spilling_buffer(manager: SpillManager):
         buf.spill(target="cpu")
 
 
-def test_environment_variables(monkeypatch):
-    def reload_options():
-        # In order to enabling monkey patching of the environment variables
-        # mark the global manager as uninitialized.
-        set_global_manager(None)
-        cudf.core.buffer.spill_manager._global_manager_uninitialized = True
-        importlib.reload(cudf.options)
+def _reload_options():
+    # In order to enabling monkey patching of the environment variables
+    # mark the global manager as uninitialized.
+    set_global_manager(None)
+    cudf.core.buffer.spill_manager._global_manager_uninitialized = True
+    importlib.reload(cudf.options)
 
-    monkeypatch.setenv("CUDF_SPILL_ON_DEMAND", "off")
-    monkeypatch.setenv("CUDF_SPILL", "off")
-    reload_options()
-    assert get_global_manager() is None
 
-    monkeypatch.setenv("CUDF_SPILL", "on")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager._spill_on_demand is False
-    assert manager._device_memory_limit is None
-    assert manager.statistics.level == 0
+@contextlib.contextmanager
+def _get_manager_in_env(monkeypatch, var_vals):
+    with monkeypatch.context() as m:
+        for var, val in var_vals:
+            m.setenv(var, val)
+        _reload_options()
+        yield get_global_manager()
+    _reload_options()
 
-    monkeypatch.setenv("CUDF_SPILL_DEVICE_LIMIT", "1000")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager._device_memory_limit == 1000
-    assert manager.statistics.level == 0
 
-    monkeypatch.setenv("CUDF_SPILL_STATS", "1")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager.statistics.level == 1
+def test_environment_variables_spill_off(monkeypatch):
+    with _get_manager_in_env(
+        monkeypatch,
+        [("CUDF_SPILL", "off"), ("CUDF_SPILL_ON_DEMAND", "off")],
+    ) as manager:
+        assert manager is None
 
-    monkeypatch.setenv("CUDF_SPILL_STATS", "2")
-    reload_options()
-    manager = get_global_manager()
-    assert isinstance(manager, SpillManager)
-    assert manager.statistics.level == 2
+
+def test_environment_variables_spill_on(monkeypatch):
+    with _get_manager_in_env(
+        monkeypatch,
+        [("CUDF_SPILL", "on")],
+    ) as manager:
+        assert isinstance(manager, SpillManager)
+        assert manager._spill_on_demand is True
+        assert manager._device_memory_limit is None
+        assert manager.statistics.level == 0
+
+
+def test_environment_variables_device_limit(monkeypatch):
+    with _get_manager_in_env(
+        monkeypatch,
+        [("CUDF_SPILL", "on"), ("CUDF_SPILL_DEVICE_LIMIT", "1000")],
+    ) as manager:
+        assert isinstance(manager, SpillManager)
+        assert manager._device_memory_limit == 1000
+        assert manager.statistics.level == 0
+
+
+@pytest.mark.parametrize("level", (1, 2))
+def test_environment_variables_spill_stats(monkeypatch, level):
+    with _get_manager_in_env(
+        monkeypatch,
+        [
+            ("CUDF_SPILL", "on"),
+            ("CUDF_SPILL_DEVICE_LIMIT", "1000"),
+            ("CUDF_SPILL_STATS", f"{level}"),
+        ],
+    ) as manager:
+        assert isinstance(manager, SpillManager)
+        assert manager._device_memory_limit == 1000
+        assert manager.statistics.level == level
 
 
 def test_spill_device_memory(manager: SpillManager):
@@ -375,7 +397,7 @@ def test_get_ptr(manager: SpillManager, target):
         mem = np.empty(10, dtype="u1")
     buf = as_buffer(data=mem, exposed=False)
     assert buf.spillable
-    assert len(buf._spill_locks) == 0
+    assert len(buf.owner._spill_locks) == 0
     with acquire_spill_lock():
         buf.get_ptr(mode="read")
         assert not buf.spillable
@@ -496,8 +518,8 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     header, frames = protocol.serialize(
         df1, serializers=("cuda",), on_error="raise"
     )
-    buf: SpillableBufferSlice = single_column_df_data(df1)
-    assert len(buf._base._spill_locks) == 1
+    buf: SpillableBuffer = single_column_df_data(df1)
+    assert len(buf.owner._spill_locks) == 1
     assert len(frames) == 1
     assert isinstance(frames[0], Buffer)
     assert frames[0].get_ptr(mode="read") == buf.get_ptr(mode="read")
@@ -507,6 +529,10 @@ def test_serialize_cuda_dataframe(manager: SpillManager):
     assert_eq(df1, df2)
 
 
+@pytest.mark.skip(
+    reason="This test is not safe because other tests may have enabled"
+    "spilling and already modified rmm's global state"
+)
 def test_get_rmm_memory_resource_stack():
     mr1 = rmm.mr.get_current_device_resource()
     assert all(
@@ -543,13 +569,14 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
     data = cupy.arange(10, dtype="u1")
     b1 = as_buffer(data, exposed=False)
     assert isinstance(b1, SpillableBuffer)
-    assert b1.owner is data
+    assert isinstance(b1.owner, SpillableBufferOwner)
+    assert b1.owner.owner is data
     b2 = as_buffer(b1)
     assert b1 is b2
 
     with pytest.raises(
         ValueError,
-        match="buffer must either be exposed or spilled locked",
+        match="owning spillable buffer must either be exposed or spill locked",
     ):
         # Use `memory_info` to access device point _without_ making
         # the buffer unspillable.
@@ -557,21 +584,21 @@ def test_as_buffer_of_spillable_buffer(manager: SpillManager):
 
     with acquire_spill_lock():
         b3 = as_buffer(b1.get_ptr(mode="read"), size=b1.size, owner=b1)
-    assert isinstance(b3, SpillableBufferSlice)
-    assert b3.owner is b1
+    assert isinstance(b3, SpillableBuffer)
+    assert b3.owner is b1.owner
 
     b4 = as_buffer(
         b1.get_ptr(mode="write") + data.itemsize,
         size=b1.size - data.itemsize,
         owner=b3,
     )
-    assert isinstance(b4, SpillableBufferSlice)
-    assert b4.owner is b1
+    assert isinstance(b4, SpillableBuffer)
+    assert b4.owner is b1.owner
     assert all(cupy.array(b4.memoryview()) == data[1:])
 
     b5 = as_buffer(b4.get_ptr(mode="write"), size=b4.size - 1, owner=b4)
-    assert isinstance(b5, SpillableBufferSlice)
-    assert b5.owner is b1
+    assert isinstance(b5, SpillableBuffer)
+    assert b5.owner is b1.owner
     assert all(cupy.array(b5.memoryview()) == data[1:-1])
 
 

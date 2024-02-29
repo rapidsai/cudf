@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
-
-#include <cudf/io/orc_types.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -648,8 +647,8 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
       if (t_nrows == 0) return 0;
       if (mask == nullptr) return 0xff;
 
-      auto const begin_offset = row + offset;
-      auto const end_offset   = min(begin_offset + 8, offset + column.size());
+      size_type const begin_offset = row + offset;
+      auto const end_offset        = min(begin_offset + 8, offset + column.size());
       auto const mask_word = cudf::detail::get_mask_offset_word(mask, 0, begin_offset, end_offset);
       return mask_word & 0xff;
     };
@@ -723,7 +722,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
  */
 // blockDim {`encode_block_size`,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpuEncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
                          device_2dspan<encoder_chunk_streams> streams)
 {
@@ -1008,7 +1007,7 @@ __global__ void __launch_bounds__(block_size)
  */
 // blockDim {512,1,1}
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   gpuEncodeStringDictionaries(stripe_dictionary const* stripes,
                               device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
@@ -1091,7 +1090,7 @@ __global__ void __launch_bounds__(block_size)
  * @param[in,out] streams List of encoder chunk streams [column][rowgroup]
  */
 // blockDim {compact_streams_block_size,1,1}
-__global__ void __launch_bounds__(compact_streams_block_size)
+CUDF_KERNEL void __launch_bounds__(compact_streams_block_size)
   gpuCompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams)
 {
@@ -1136,7 +1135,7 @@ __global__ void __launch_bounds__(compact_streams_block_size)
  * @param[in] comp_block_align Required alignment for compressed blocks
  */
 // blockDim {256,1,1}
-__global__ void __launch_bounds__(256)
+CUDF_KERNEL void __launch_bounds__(256)
   gpuInitCompressionBlocks(device_2dspan<StripeStream const> strm_desc,
                            device_2dspan<encoder_chunk_streams> streams,  // const?
                            device_span<device_span<uint8_t const>> inputs,
@@ -1191,7 +1190,7 @@ __global__ void __launch_bounds__(256)
  * @param[in] max_comp_blk_size Max size of any block after compression
  */
 // blockDim {1024,1,1}
-__global__ void __launch_bounds__(1024)
+CUDF_KERNEL void __launch_bounds__(1024)
   gpuCompactCompressedBlocks(device_2dspan<StripeStream> strm_desc,
                              device_span<device_span<uint8_t const> const> inputs,
                              device_span<device_span<uint8_t> const> outputs,
@@ -1274,8 +1273,8 @@ struct decimal_column_element_sizes {
 // Converts sizes of individual decimal elements to offsets within each row group
 // Conversion is done in-place
 template <int block_size>
-__global__ void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows const> rg_bounds,
-                                                device_span<decimal_column_element_sizes> sizes)
+CUDF_KERNEL void decimal_sizes_to_offsets_kernel(device_2dspan<rowgroup_rows const> rg_bounds,
+                                                 device_span<decimal_column_element_sizes> sizes)
 {
   using block_scan = cub::BlockScan<uint32_t, block_size>;
   __shared__ typename block_scan::TempStorage scan_storage;
@@ -1310,8 +1309,8 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 void EncodeStripeDictionaries(stripe_dictionary const* stripes,
                               device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
-                              uint32_t num_string_columns,
-                              uint32_t num_stripes,
+                              size_type num_string_columns,
+                              size_type num_stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream)
 {
@@ -1390,6 +1389,12 @@ std::optional<writer_compression_statistics> CompressOrcDataStreams(
       CUDF_FAIL("Compression error: " + reason.value());
     }
     nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
+  } else if (compression == LZ4) {
+    if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+        reason) {
+      CUDF_FAIL("Compression error: " + reason.value());
+    }
+    nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
   } else if (compression != NONE) {
     CUDF_FAIL("Unsupported compression type");
   }

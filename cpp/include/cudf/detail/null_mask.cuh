@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,15 +29,13 @@
 
 #include <cub/block/block_reduce.cuh>
 #include <cub/device/device_segmented_reduce.cuh>
-
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <cuda/functional>
 
 #include <algorithm>
 #include <iterator>
@@ -61,12 +59,12 @@ namespace detail {
  * @param count_ptr Pointer to counter of set bits
  */
 template <int block_size, typename Binop>
-__global__ void offset_bitmask_binop(Binop op,
-                                     device_span<bitmask_type> destination,
-                                     device_span<bitmask_type const* const> source,
-                                     device_span<size_type const> source_begin_bits,
-                                     size_type source_size_bits,
-                                     size_type* count_ptr)
+CUDF_KERNEL void offset_bitmask_binop(Binop op,
+                                      device_span<bitmask_type> destination,
+                                      device_span<bitmask_type const* const> source,
+                                      device_span<size_type const> source_begin_bits,
+                                      size_type source_size_bits,
+                                      size_type* count_ptr)
 {
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -214,11 +212,11 @@ enum class count_bits_policy : bool {
  * in each range is updated.
  */
 template <typename OffsetIterator, typename OutputIterator>
-__global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
-                                                          size_type num_ranges,
-                                                          OffsetIterator first_bit_indices,
-                                                          OffsetIterator last_bit_indices,
-                                                          OutputIterator null_counts)
+CUDF_KERNEL void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
+                                                           size_type num_ranges,
+                                                           OffsetIterator first_bit_indices,
+                                                           OffsetIterator last_bit_indices,
+                                                           OutputIterator null_counts)
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
 

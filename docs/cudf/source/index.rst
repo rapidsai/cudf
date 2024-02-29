@@ -29,4 +29,5 @@ other operations.
 
    user_guide/index
    cudf_pandas/index
+   libcudf_docs/index
    developer_guide/index

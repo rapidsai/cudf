@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import os
 from glob import glob
@@ -11,7 +11,6 @@ import cudf
 
 
 def read_text(path, chunksize="256 MiB", **kwargs):
-
     if isinstance(chunksize, str):
         chunksize = parse_bytes(chunksize)
 

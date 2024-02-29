@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,14 +37,13 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace detail {
@@ -106,7 +105,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column),
+                             std::move(chars_column->release().data.release()[0]),
                              input.null_count(),
                              std::move(cudf::detail::copy_bitmask(input.parent(), stream, mr)));
 }

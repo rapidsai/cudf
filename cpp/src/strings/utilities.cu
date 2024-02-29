@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/char_flags.h>
+#include "strings/char_types/char_cases.h"
+#include "strings/char_types/char_flags.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -127,6 +127,15 @@ special_case_mapping const* get_special_case_mapping_table()
     CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
     return table;
   });
+}
+
+int64_t get_offset64_threshold()
+{
+  auto const threshold  = std::getenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+  std::size_t const rtn = threshold != nullptr ? std::atol(threshold) : 0;
+  return (rtn > 0 && rtn < std::numeric_limits<int32_t>::max())
+           ? rtn
+           : std::numeric_limits<int32_t>::max();
 }
 
 int64_t get_offset_value(cudf::column_view const& offsets,

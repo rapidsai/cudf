@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <quantiles/tdigest/tdigest_util.cuh>
+#include "quantiles/tdigest/tdigest_util.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -33,6 +33,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/advance.h>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
@@ -51,8 +52,6 @@
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace tdigest {
@@ -370,15 +369,15 @@ std::unique_ptr<scalar> to_tdigest_scalar(std::unique_ptr<column>&& tdigest,
  */
 
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
-__global__ void generate_cluster_limits_kernel(int delta,
-                                               size_type num_groups,
-                                               NearestWeightFunc nearest_weight,
-                                               GroupInfo group_info,
-                                               CumulativeWeight cumulative_weight,
-                                               double* group_cluster_wl,
-                                               size_type* group_num_clusters,
-                                               size_type const* group_cluster_offsets,
-                                               bool has_nulls)
+CUDF_KERNEL void generate_cluster_limits_kernel(int delta,
+                                                size_type num_groups,
+                                                NearestWeightFunc nearest_weight,
+                                                GroupInfo group_info,
+                                                CumulativeWeight cumulative_weight,
+                                                double* group_cluster_wl,
+                                                size_type* group_num_clusters,
+                                                size_type const* group_cluster_offsets,
+                                                bool has_nulls)
 {
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
