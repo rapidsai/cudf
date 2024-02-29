@@ -5,7 +5,7 @@ Welcome to the cuDF documentation!
     :width: 300px
     :align: center
 
-**cuDF** (pronounced "KOO dee-eff") is a Python GPU DataFrame library (built
+**cuDF** (pronounced "KOO-dee-eff") is a Python GPU DataFrame library (built
 on the `Apache Arrow <https://arrow.apache.org/>`_ columnar memory format)
 for loading, joining, aggregating, filtering, and otherwise manipulating data.
 cuDF also provides a pandas-like API that will be familiar to data engineers

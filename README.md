@@ -2,7 +2,7 @@
 
 ## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
 
-cuDF (pronounced "KOO dee-eff") is a GPU DataFrame library
+cuDF (pronounced "KOO-dee-eff") is a GPU DataFrame library
 for loading, joining, aggregating, filtering, and otherwise
 manipulating data. cuDF leverages
 [libcudf](https://docs.rapids.ai/api/libcudf/stable/), a
