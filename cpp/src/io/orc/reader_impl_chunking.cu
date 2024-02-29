@@ -311,7 +311,10 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
                                int64_t total_count,
                                size_t size_limit)
 {
-  // if (size_limit == 0) { return {chunk{0, total_count}}; }
+  // if (size_limit == 0) {
+  //   printf("0 limit: output chunk = 0, %d\n", (int)total_count);
+  //   return {chunk{0, total_count}};
+  // }
   CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
 
   std::vector<chunk> splits;
@@ -592,10 +595,13 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       chunk{last_read_size, static_cast<int64_t>(read_info.size() - last_read_size)};
   }
 
+  _chunk_read_data.curr_load_stripe_chunk = 0;
+
   // Load all chunks if there is no read limit.
   if (_chunk_read_data.data_read_limit == 0) {
+    printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_stripes);
     _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
-    //    return;
+    return;
   }
 
   printf("total stripe sizes:\n");
@@ -620,7 +626,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   // DEBUG only
   // TODO: use 0.3 constant
-  _chunk_read_data.data_read_limit = total_stripe_sizes.back().size_bytes / 3;
+  // _chunk_read_data.data_read_limit = total_stripe_sizes.back().size_bytes / 3;
 
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
@@ -811,11 +817,14 @@ void reader::impl::load_data()
 
   }  // end loop level
 
+  // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
+  _chunk_read_data.curr_decode_stripe_chunk = 0;
+
   // Decode all chunks if there is no read limit.
   if (_chunk_read_data.data_read_limit == 0) {
     _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
     // TODO: DEBUG only
-    //    return;
+    return;
   }
 
   // Compute the prefix sum of stripe data sizes.
@@ -829,7 +838,7 @@ void reader::impl::load_data()
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
   // DEBUG only
-  _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
+  // _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
 
   // TODO: only decode stripes enough for output.
   _chunk_read_data.decode_stripe_chunks =
@@ -865,9 +874,6 @@ void reader::impl::load_data()
 
   // lvl_stripe_data.clear();
   // _file_itm_data.compinfo_ready = true;
-
-  // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
-  _chunk_read_data.curr_decode_stripe_chunk = 0;
 }
 
 }  // namespace cudf::io::orc::detail

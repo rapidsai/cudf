@@ -185,7 +185,6 @@ class reader::impl {
   std::unique_ptr<table_metadata> _meta_with_user_data;
   table_metadata _out_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
-  std::unique_ptr<cudf::table> _decoded_table;
 
   static constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
 };

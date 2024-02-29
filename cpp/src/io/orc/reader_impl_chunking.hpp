@@ -122,9 +122,6 @@ struct range {
  * @brief Struct to store file-level data that remains constant for all chunks being output.
  */
 struct file_intermediate_data {
-  // TODO: remove
-  std::vector<std::unique_ptr<cudf::table>> out_tables;
-
   int64_t rows_to_skip;
   size_type rows_to_read;
   std::vector<metadata::OrcStripeInfo> selected_stripes;

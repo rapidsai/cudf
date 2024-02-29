@@ -1235,19 +1235,23 @@ void reader::impl::decompress_and_decode()
         orc_col_meta.id, 0, *_col_meta, _metadata, _selected_columns, _out_buffers, _stream, _mr);
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
-  _decoded_table = std::make_unique<table>(std::move(out_columns));
+  _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
 
   // DEBUG only
-  _chunk_read_data.output_size_limit = _chunk_read_data.data_read_limit / 3;
+  // _chunk_read_data.output_size_limit = _chunk_read_data.data_read_limit / 3;
 
-  _chunk_read_data.output_table_chunks     = find_table_splits(_decoded_table->view(),
-                                                           _chunk_read_data.output_row_granularity,
-                                                           _chunk_read_data.output_size_limit,
-                                                           _stream);
   _chunk_read_data.curr_output_table_chunk = 0;
+  _chunk_read_data.output_table_chunks =
+    _chunk_read_data.output_size_limit == 0
+      ? std::vector<chunk>{chunk{0, _chunk_read_data.decoded_table->num_rows()}}
+      : find_table_splits(_chunk_read_data.decoded_table->view(),
+                          _chunk_read_data.output_row_granularity,
+                          _chunk_read_data.output_size_limit,
+                          _stream);
 
   auto& splits = _chunk_read_data.output_table_chunks;
-  printf("------------\nSplits (/total num rows = %d): \n", (int)_decoded_table->num_rows());
+  printf("------------\nSplits decoded table (/total num rows = %d): \n",
+         (int)_chunk_read_data.decoded_table->num_rows());
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
   }
@@ -1268,16 +1272,18 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
   global_preprocess(skip_rows, num_rows_opt, stripes);
 
-  // TODO: only load data if there is no loaded stripe ready to decode.
-  // load_data();
-  while (_chunk_read_data.more_stripe_to_load()) {
-    load_data();
+  if (!_chunk_read_data.more_table_chunk_to_output()) {
+    if (!_chunk_read_data.more_stripe_to_decode() && _chunk_read_data.more_stripe_to_load()) {
+      printf("load more data\n\n");
+      load_data();
+    }
 
-    while (_chunk_read_data.more_stripe_to_decode()) {
+    if (_chunk_read_data.more_stripe_to_decode()) {
+      printf("decode more data\n\n");
       decompress_and_decode();
-      _file_itm_data.out_tables.push_back(std::move(_decoded_table));
     }
   }
+
   printf("done load and decode data\n\n");
 
   // decompress_and_decode();
@@ -1293,7 +1299,7 @@ table_with_metadata reader::impl::make_output_chunk()
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   // If no rows or stripes to read, return empty columns
-  if (_file_itm_data.has_no_data() /*|| !_chunk_read_data.has_next()*/) {
+  if (_file_itm_data.has_no_data() || !_chunk_read_data.more_table_chunk_to_output()) {
     printf("has no next\n");
     std::vector<std::unique_ptr<column>> out_columns;
     auto out_metadata = get_meta_with_user_data();
@@ -1313,50 +1319,7 @@ table_with_metadata reader::impl::make_output_chunk()
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
-  std::vector<cudf::table_view> tv;
-
-  for (auto& table : _file_itm_data.out_tables) {
-    tv.push_back(table->view());
-
-    //
-    printf(" ----- decode one chunk, size = %d\n", tv.back().num_rows());
-    fflush(stdout);
-    //
-    //
-    //
-    //
-  }
-  printf(" ----- decode total %d chunks\n", (int)tv.size());
-  fflush(stdout);
-
-  // todo: remove this
-  // auto out_table = std::make_unique<table>(std::move(out_columns));
-  auto out_table = [&] {
-    if (tv.size() > 1) {
-      auto tmp = cudf::concatenate(tv);
-      std::vector<bool> has_mask(tmp->num_columns(), false);
-      std::vector<bool> has_nulls(tmp->num_columns(), false);
-
-      for (int i = 0; i < tmp->num_columns(); ++i) {
-        for (int j = 0; j < (int)tv.size(); ++j) {
-          if (tv[j].column(i).nullable()) { has_mask[i] = true; }
-          if (tv[j].column(i).null_count()) { has_nulls[i] = true; }
-        }
-      }
-      for (int i = 0; i < tmp->num_columns(); ++i) {
-        if (has_mask[i] && !has_nulls[i]) {
-          tmp->get_column(i).set_null_mask(
-            cudf::create_null_mask(tmp->get_column(i).size(), cudf::mask_state::ALL_VALID), 0);
-        }
-      }
-
-      return tmp;
-    }
-    return std::move(_file_itm_data.out_tables.front());
-  }();
-  // auto out_table = std::move(tabs.front());
-
-#if 0
+#if 1
   auto out_table = [&] {
     if (_chunk_read_data.output_table_chunks.size() == 1) {
       return std::move(_chunk_read_data.decoded_table);
@@ -1365,11 +1328,11 @@ table_with_metadata reader::impl::make_output_chunk()
     auto const out_chunk =
       _chunk_read_data.output_table_chunks[_chunk_read_data.curr_output_table_chunk++];
     auto const out_tview =
-      cudf::slice(_chunk_read_data.decoded_table->view(),
-                  {static_cast<size_type>(out_chunk.start_idx),
-                   static_cast<size_type>(out_chunk.start_idx + out_chunk.count)},
-                  _stream)[0];
-    return std::make_unique<table>(out_tview);
+      cudf::detail::slice(_chunk_read_data.decoded_table->view(),
+                          {static_cast<size_type>(out_chunk.start_idx),
+                           static_cast<size_type>(out_chunk.start_idx + out_chunk.count)},
+                          _stream)[0];
+    return std::make_unique<table>(out_tview, _stream, _mr);
   }();
 
 #endif
