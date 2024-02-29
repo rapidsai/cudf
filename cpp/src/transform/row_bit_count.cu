@@ -35,7 +35,7 @@
 #include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
-#include <thrust/transform.h>
+#include <thrust/tabulate.h>
 
 namespace cudf {
 namespace detail {
@@ -500,11 +500,10 @@ std::unique_ptr<column> segmented_bit_count(table_view const& t,
   // simple case.  if we have no complex types (lists, strings, etc), the per-row size is already
   // trivially computed
   if (h_info.complex_type_count <= 0) {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(num_segments),
+    thrust::tabulate(
+      rmm::exec_policy_nosync(stream),
       mcv.begin<size_type>(),
+      mcv.end<size_type>(),
       cuda::proclaim_return_type<size_type>(
         [segment_length,
          num_segments,
