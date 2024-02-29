@@ -668,6 +668,7 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     dd.assert_eq(gf, pf)
 
 
+@xfail_dask_expr("Newer dask-expr version needed")
 @pytest.mark.parametrize(
     "aggregations", [(sum, "sum"), (max, "max"), (min, "min")]
 )
