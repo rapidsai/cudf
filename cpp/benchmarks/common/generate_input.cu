@@ -116,7 +116,7 @@ template <>
 double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
-  return get_distribution_mean(dist) + sizeof(cudf::size_type);
+  return get_distribution_mean(dist) * profile.get_valid_probability() + sizeof(cudf::size_type);
 }
 
 double geometric_sum(size_t n, double p)
@@ -128,8 +128,9 @@ double geometric_sum(size_t n, double p)
 template <>
 double non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
-  auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
-  auto const single_level_mean = get_distribution_mean(dist_params.length_params);
+  auto const dist_params = profile.get_distribution_params<cudf::list_view>();
+  auto const single_level_mean =
+    get_distribution_mean(dist_params.length_params) * profile.get_valid_probability();
 
   auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
   auto const element_count = std::pow(single_level_mean, dist_params.max_depth);

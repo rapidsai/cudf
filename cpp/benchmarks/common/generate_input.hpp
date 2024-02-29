@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -184,7 +184,8 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_vi
 
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
-struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {};
+struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
+};
 
 /**
  * @brief Returns a vector of types, corresponding to the input type or a type group.
@@ -313,8 +314,9 @@ class data_profile {
     }
   }
 
-  auto get_bool_probability_true() const { return bool_probability_true; }
-  auto get_null_probability() const { return null_probability; };
+  [[nodiscard]] auto get_bool_probability_true() const { return bool_probability_true; }
+  [[nodiscard]] auto get_null_probability() const { return null_probability; };
+  [[nodiscard]] auto get_valid_probability() const { return 1. - null_probability.value_or(0.); };
   [[nodiscard]] auto get_cardinality() const { return cardinality; };
   [[nodiscard]] auto get_avg_run_length() const { return avg_run_length; };
 
