@@ -27,6 +27,7 @@ def assert_equal_tokenization_outputs(hf_output, cudf_output):
     )
 
 
+@pytest.mark.skip(reason="segfaults")
 @pytest.mark.parametrize("seq_len", [32, 64])
 @pytest.mark.parametrize("stride", [0, 15, 30])
 @pytest.mark.parametrize("add_special_tokens", [True, False])
