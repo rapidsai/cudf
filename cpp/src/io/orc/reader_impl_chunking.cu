@@ -831,6 +831,7 @@ void reader::impl::load_data()
   // DEBUG only
   _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
 
+  // TODO: only decode stripes enough for output.
   _chunk_read_data.decode_stripe_chunks =
     find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
