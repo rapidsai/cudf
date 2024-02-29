@@ -474,10 +474,10 @@ CUDF_KERNEL void compute_segment_sizes(device_span<column_device_view const> col
 
 }  // anonymous namespace
 
-std::unique_ptr<column> segmented_bit_count(table_view const& t,
-                                            size_type segment_length,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
+                                                size_type segment_length,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(segment_length >= 1 && segment_length <= t.num_rows(),
                "Invalid segment length.",
@@ -561,17 +561,17 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return segmented_bit_count(t, 1, stream, mr);
+  return segmented_row_bit_count(t, 1, stream, mr);
 }
 
 }  // namespace detail
 
-std::unique_ptr<column> segmented_bit_count(table_view const& t,
-                                            size_type segment_length,
-                                            rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
+                                                size_type segment_length,
+                                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_bit_count(t, segment_length, cudf::get_default_stream(), mr);
+  return detail::segmented_row_bit_count(t, segment_length, cudf::get_default_stream(), mr);
 }
 
 std::unique_ptr<column> row_bit_count(table_view const& t, rmm::mr::device_memory_resource* mr)

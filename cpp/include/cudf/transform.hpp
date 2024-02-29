@@ -228,21 +228,21 @@ std::unique_ptr<column> row_bit_count(
  * @brief Returns an approximate cumulative size in bits of all columns in the `table_view` for
  * each segment of rows.
  *
- * This is similar to counting bit size per row for the input table, except that row sizes are
- * accumulated by segments.
+ * This is similar to counting bit size per row for the input table in `cudf::row_bit_count`,
+ * except that row sizes are accumulated by segments.
  *
  * Currently, only fixed-length segments are supported. In case the input table has number of rows
- * not divisible by segment_length, its last segment is considered as shorter than the others.
+ * not divisible by `segment_length`, its last segment is considered as shorter than the others.
  *
- * @throw std::invalid_argument if the input segment_length is non-positive or larger than the
+ * @throw std::invalid_argument if the input `segment_length` is non-positive or larger than the
  * number of rows in the input table.
  *
  * @param t The table view to perform the computation on
  * @param segment_length The number of rows in each segment for which the total size is computed
  * @param mr Device memory resource used to allocate the returned columns' device memory
- * @return A 32-bit integer column containing the per-row bit counts
+ * @return A 32-bit integer column containing the bit counts for each segment of rows
  */
-std::unique_ptr<column> segmented_bit_count(
+std::unique_ptr<column> segmented_row_bit_count(
   table_view const& t,
   size_type segment_length,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
