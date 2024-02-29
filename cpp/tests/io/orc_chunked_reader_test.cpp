@@ -161,19 +161,17 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 
   {
     auto const [expected, filepath] = generate_input(false);
-    auto const [result, num_chunks] = chunked_read(filepath, 240'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
     auto const [expected, filepath] = generate_input(true);
-    auto const [result, num_chunks] = chunked_read(filepath, 240'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
-
-  exit(0);
 }
 
 #if 0

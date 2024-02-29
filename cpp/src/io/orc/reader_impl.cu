@@ -760,7 +760,7 @@ std::vector<chunk> find_table_splits(table_view const& input,
   segmented_sizes.device_to_host_sync(stream);
   printf("total row sizes by segment = %d:\n", (int)segment_length);
   for (auto& size : segmented_sizes) {
-    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+    printf("size: %ld, %zu\n", size.count, size.size_bytes / CHAR_BIT);
   }
 
   // TODO: exec_policy_nosync
