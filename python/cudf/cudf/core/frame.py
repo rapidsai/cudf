@@ -1958,7 +1958,7 @@ class Frame(BinaryOperand, Scannable):
 
         return [
             type(self),
-            normalize_token(self._dtypes),
+            str(self._dtypes),
             normalize_token(self.to_pandas()),
         ]
 
