@@ -50,7 +50,8 @@ cpdef Column stable_sorted_order(
     list column_order,
     list null_precedence,
 ):
-    """Computes the row indices required to sort the table stably.
+    """Computes the row indices required to sort the table,
+    preserving order of equal elements.
 
     Parameters
     ----------
@@ -206,7 +207,8 @@ cpdef Table stable_segmented_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key stably, within segments.
+    """Sorts the table by key preserving order of equal elements,
+    within segments.
 
     Parameters
     ----------
@@ -287,7 +289,7 @@ cpdef Table stable_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key stably.
+    """Sorts the table by key preserving order of equal elements.
 
     Parameters
     ----------
@@ -352,7 +354,7 @@ cpdef Table sort(Table source_table, list column_order, list null_precedence):
 
 
 cpdef Table stable_sort(Table source_table, list column_order, list null_precedence):
-    """Sorts the table stably.
+    """Sorts the table preserving order of equal elements.
 
     Parameters
     ----------
