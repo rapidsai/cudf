@@ -87,7 +87,7 @@ using `.from_arrow()` or `.from_pandas()`.
 
 ## Result ordering
 
-By default, `join` (or `merge`) and `groupby` operations in cuDF
+By default, `join` (or `merge`), `value_counts` and `groupby` operations in cuDF
 do *not* guarantee output ordering.
 Compare the results obtained from Pandas and cuDF below:
 
