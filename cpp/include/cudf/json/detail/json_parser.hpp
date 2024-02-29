@@ -373,7 +373,7 @@ class json_parser {
     // scan string content
     while (!eof()) {
       char c = *curr_pos;
-      int v = static_cast<int>(c);
+      int v  = static_cast<int>(c);
       if (c == quote_char) {
         // path 1: close string
         curr_pos++;
