@@ -242,7 +242,10 @@ class SingleColumnFrame(Frame, NotIterable):
         try:
             return self._column.__cuda_array_interface__
         except NotImplementedError:
-            raise AttributeError
+            raise AttributeError(
+                f"'{type(self).__name__}' object has no attribute "
+                "'__cuda_array_interface__'"
+            )
 
     @_cudf_nvtx_annotate
     def factorize(self, sort=False, use_na_sentinel=True):
