@@ -377,8 +377,9 @@ class json_parser {
         // path 1: close string
         curr_pos++;
         return verify_max_string_len(curr_str_len);
-      } else if (c >= 0 && c < 32 && options.get_allow_unescaped_control_chars()) {
+      } else if (c >= '\0' && c < ' ' && options.get_allow_unescaped_control_chars()) {
         // path 2: unescaped control char
+        // ASCII 0 is '\0', ASCII 32 is space ' '
         curr_pos++;
         curr_str_len++;
         continue;
