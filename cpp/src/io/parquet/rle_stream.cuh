@@ -158,6 +158,7 @@ struct rle_run {
   uint8_t const* start;
   int level_run;  // level_run header value
   int remaining;  // number of output items remaining to be decoded
+  int run_offset;
 };
 
 // a stream of rle_runs
@@ -189,6 +190,9 @@ struct rle_stream {
   int fill_index;
   int decode_index;
 
+  int last_run_bytes;
+  int last_run_remaining;
+
   __device__ rle_stream(rle_run<level_t>* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
@@ -214,6 +218,9 @@ struct rle_stream {
     cur_values   = 0;
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
+
+    last_run_bytes = 0;
+    last_run_remaining = 0;
   }
 
   __device__ inline void fill_run_batch()
@@ -229,30 +236,48 @@ struct rle_stream {
       auto& run = runs[rolling_index<run_buffer_size>(fill_index)];
 
       // Encoding::RLE
-
       // bytes for the varint header
-      uint8_t const* _cur = cur;
-      int const level_run = get_vlq32(_cur, end);
-      // run_bytes includes the header size
-      int run_bytes = _cur - cur;
+      if (last_run_remaining == 0) {
+        uint8_t const* _cur = cur;
+        int const level_run = get_vlq32(_cur, end);
+        // run_bytes includes the header size
+        int run_bytes = _cur - cur;
 
-      // literal run
-      if (is_literal_run(level_run)) {
-        // from the parquet spec: literal runs always come in multiples of 8 values.
-        run.size = (level_run >> 1) * 8;
-        run_bytes += ((run.size * level_bits) + 7) >> 3;
+        // literal run
+        if (is_literal_run(level_run)) {
+          // from the parquet spec: literal runs always come in multiples of 8 values.
+          run.size = (level_run >> 1) * 8;
+          run_bytes += ((run.size * level_bits) + 7) >> 3;
+        }
+        // repeated value run
+        else {
+          run.size = (level_run >> 1);
+          run_bytes += ((level_bits) + 7) >> 3;
+        }
+        last_run_bytes = run_bytes;
+        last_run_remaining = run.size;
+        int const batch = min(96, last_run_remaining);
+        run.output_pos = output_pos;
+        run.start      = _cur;
+        run.level_run  = level_run;
+        run.remaining  = batch;
+        run.run_offset = run.size - last_run_remaining;
+        last_run_remaining -= batch;
+      } else {
+        auto& prior = runs[rolling_index<run_buffer_size>(fill_index - 1)];
+        int const batch = min(96, last_run_remaining);
+        run.output_pos = prior.output_pos;
+        run.start      = prior.start;
+        run.level_run  = prior.level_run;
+        run.remaining  = batch;
+        run.size       = prior.size;
+        run.run_offset = run.size - last_run_remaining;
+        last_run_remaining -= batch;
       }
-      // repeated value run
-      else {
-        run.size = (level_run >> 1);
-        run_bytes += ((level_bits) + 7) >> 3;
+      if (last_run_remaining == 0) {
+        cur += last_run_bytes;
+        output_pos += run.size;
       }
-      run.output_pos = output_pos;
-      run.start      = _cur;
-      run.level_run  = level_run;
-      run.remaining  = run.size;
-      cur += run_bytes;
-      output_pos += run.size;
       fill_index++;
     }
   }
@@ -324,7 +349,7 @@ struct rle_stream {
         // if it's supposed to fit in this call to `decode_next`.
         if (max_count > run.output_pos) {
           int remaining        = run.remaining;
-          int const run_offset = run.size - remaining;
+          int run_offset = run.run_offset;
           // last_run_pos is the absolute position of the run, including
           // what was decoded last time.
           int const last_run_pos = run.output_pos + run_offset;
@@ -358,6 +383,8 @@ struct rle_stream {
               decode_index_shared = run_index + 1;
             }
             run.remaining = remaining;
+            run_offset += batch_len;
+            run.run_offset = run_offset;
           }
         }
       }
