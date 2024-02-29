@@ -123,7 +123,7 @@ struct range {
  */
 struct file_intermediate_data {
   // TODO: remove
-  std::vector<std::vector<std::vector<cudf::io::detail::column_buffer>>> out_buffers;
+  std::vector<std::unique_ptr<cudf::table>> out_tables;
 
   int64_t rows_to_skip;
   size_type rows_to_read;

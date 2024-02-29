@@ -820,6 +820,7 @@ void reader::impl::decompress_and_decode()
 
   // TODO: move this to global step
   lvl_chunks.resize(_selected_columns.num_levels());
+  _out_buffers.clear();
   _out_buffers.resize(_selected_columns.num_levels());
 
   //
@@ -1268,7 +1269,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
     while (_chunk_read_data.more_stripe_to_decode()) {
       decompress_and_decode();
-      _file_itm_data.out_buffers.push_back(std::move(_out_buffers));
+      _file_itm_data.out_tables.push_back(std::move(_decoded_table));
     }
   }
   printf("done load and decode data\n\n");
@@ -1285,12 +1286,11 @@ table_with_metadata reader::impl::make_output_chunk()
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
-  std::vector<std::unique_ptr<column>> out_columns;
-  auto out_metadata = get_meta_with_user_data();
-
   // If no rows or stripes to read, return empty columns
   if (_file_itm_data.has_no_data() /*|| !_chunk_read_data.has_next()*/) {
     printf("has no next\n");
+    std::vector<std::unique_ptr<column>> out_columns;
+    auto out_metadata = get_meta_with_user_data();
     std::transform(_selected_columns.levels[0].begin(),
                    _selected_columns.levels[0].end(),
                    std::back_inserter(out_columns),
@@ -1307,43 +1307,10 @@ table_with_metadata reader::impl::make_output_chunk()
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
-  // TODO: move this into decompress_and_decode
-  // Create columns from buffer with respective schema information.
-
-  // TODO: remove
-  std::vector<std::unique_ptr<table>> tabs;
   std::vector<cudf::table_view> tv;
 
-  for (auto& buffers : _file_itm_data.out_buffers) {
-    //
-    out_columns.clear();  // TODO: remove
-    out_metadata = get_meta_with_user_data();
-
-    std::transform(_selected_columns.levels[0].begin(),
-                   _selected_columns.levels[0].end(),
-                   std::back_inserter(out_columns),
-                   [&](auto const& orc_col_meta) {
-                     out_metadata.schema_info.emplace_back("");
-                     auto col_buffer = assemble_buffer(orc_col_meta.id,
-                                                       0,
-                                                       *_col_meta,
-                                                       _metadata,
-                                                       _selected_columns,
-                                                       buffers, /*_out_buffers*/
-                                                       _stream,
-                                                       _mr);
-                     return make_column(
-                       col_buffer, &out_metadata.schema_info.back(), std::nullopt, _stream);
-                   });
-
-    // printf("output col0: \n");
-    // cudf::test::print(out_columns.front()->view());
-    // printf("output col1: \n");
-    // cudf::test::print(out_columns.back()->view());
-
-    auto tbl = std::make_unique<table>(std::move(out_columns));
-    tabs.push_back(std::move(tbl));
-    tv.push_back(tabs.back()->view());
+  for (auto& table : _file_itm_data.out_tables) {
+    tv.push_back(table->view());
 
     //
     printf(" ----- decode one chunk, size = %d\n", tv.back().num_rows());
@@ -1379,7 +1346,7 @@ table_with_metadata reader::impl::make_output_chunk()
 
       return tmp;
     }
-    return std::move(tabs.front());
+    return std::move(_file_itm_data.out_tables.front());
   }();
   // auto out_table = std::move(tabs.front());
 
@@ -1400,7 +1367,7 @@ table_with_metadata reader::impl::make_output_chunk()
   }();
 
 #endif
-  return {std::move(out_table), std::move(out_metadata)};
+  return {std::move(out_table), _out_metadata};
 }
 
 table_metadata reader::impl::get_meta_with_user_data()
