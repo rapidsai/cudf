@@ -1444,12 +1444,16 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
 bool reader::impl::has_next()
 {
+  printf("==================query has next \n");
   prepare_data();
+
+  printf("has next: %d\n", (int)_chunk_read_data.has_next());
   return _chunk_read_data.has_next();
 }
 
 table_with_metadata reader::impl::read_chunk()
 {
+  printf("==================call read chunk\n");
   prepare_data();
   return make_output_chunk();
 }

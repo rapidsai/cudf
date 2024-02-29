@@ -150,31 +150,46 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 {
   auto constexpr num_rows = 40'000;
 
-  auto const generate_input = [num_rows](bool nullable) {
+  auto const generate_input = [num_rows](bool nullable, std::size_t stripe_rows) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
 
-    return write_file(input_columns, "chunked_read_simple", nullable);
+    return write_file(input_columns,
+                      "chunked_read_simple",
+                      nullable,
+                      cudf::io::default_stripe_size_bytes,
+                      stripe_rows);
   };
 
   {
-    auto const [expected, filepath] = generate_input(false);
+    auto const [expected, filepath] = generate_input(false, 1'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+  {
+    auto const [expected, filepath] = generate_input(false, cudf::io::default_stripe_size_rows);
     auto const [result, num_chunks] = chunked_read(filepath, 245'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [expected, filepath] = generate_input(true);
+    auto const [expected, filepath] = generate_input(true, 1'000);
+    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+  {
+    auto const [expected, filepath] = generate_input(true, cudf::io::default_stripe_size_rows);
     auto const [result, num_chunks] = chunked_read(filepath, 245'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 }
 
-#if 0
 TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 {
   // Tests some specific boundary conditions in the split calculations.
@@ -259,6 +274,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
   }
 }
 
+#if 0
 TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 {
   auto constexpr num_rows = 60'000;
