@@ -22,6 +22,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -71,6 +72,19 @@ std::unique_ptr<column> create_chars_child_column(cudf::size_type total_bytes,
 {
   return make_numeric_column(
     data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
+}
+
+std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
+                                                    size_type count,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
+{
+  return make_numeric_column(
+    chars_bytes < get_offset64_threshold() ? data_type{type_id::INT32} : data_type{type_id::INT64},
+    count,
+    mask_state::UNALLOCATED,
+    stream,
+    mr);
 }
 
 namespace {

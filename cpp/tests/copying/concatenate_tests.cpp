@@ -32,6 +32,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -224,6 +226,35 @@ TEST_F(StringColumnTest, ConcatenateTooLarge)
     input_cols.push_back(input);
   }
   EXPECT_THROW(cudf::concatenate(input_cols), std::overflow_error);
+}
+
+TEST_F(StringColumnTest, ConcatenateLargeStrings)
+{
+  auto itr = thrust::constant_iterator<std::string_view>("abcdefghijklmnopqrstuvwxy");  // 25 bytes
+  auto input = cudf::test::strings_column_wrapper(itr, itr + 10'000'000);               // 250MB
+  std::vector<cudf::column_view> input_cols;
+  for (int i = 0; i < 10; ++i) {  // 2500MB > 2GB
+    input_cols.push_back(input);
+  }
+  auto result = cudf::concatenate(input_cols);
+  std::cout << result->view().size() << "\n";
+  auto sv = cudf::strings_column_view(result->view());
+  std::cout << sv.chars_size(cudf::get_default_stream()) << "\n";
+  std::cout << (int)sv.offsets().type().id() << "\n";
+  auto sliced = cudf::split(result->view(),
+                            {10'000'000,
+                             20'000'000,
+                             30'000'000,
+                             40'000'000,
+                             50'000'000,
+                             60'000'000,
+                             70'000'000,
+                             80'000'000,
+                             90'000'000});
+  std::cout << sliced.size() << "\n";
+  for (auto c : sliced) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
+  }
 }
 
 struct TableTest : public cudf::test::BaseFixture {};
