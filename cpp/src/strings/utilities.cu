@@ -150,16 +150,6 @@ int64_t get_offset_value(cudf::column_view const& offsets,
                                 : cudf::detail::get_value<int32_t>(offsets, index, stream);
 }
 
-std::unique_ptr<column> create_offsets_child_column(int64_t total_bytes,
-                                                    size_type offset_count,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
-{
-  auto const offset_type =
-    total_bytes < get_offset64_threshold() ? data_type{type_id::INT32} : data_type{type_id::INT64};
-  return make_numeric_column(offset_type, offset_count, mask_state::UNALLOCATED, stream, mr);
-}
-
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
