@@ -479,12 +479,12 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
 {
+  // If there is no rows, segment_length will not be checked.
+  if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
+
   CUDF_EXPECTS(segment_length >= 1 && segment_length <= t.num_rows(),
                "Invalid segment length.",
                std::invalid_argument);
-
-  // no rows
-  if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
 
   // flatten the hierarchy and determine some information about it.
   std::vector<cudf::column_view> cols;
