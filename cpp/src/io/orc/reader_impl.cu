@@ -733,6 +733,8 @@ std::vector<chunk> find_table_splits(table_view const& input,
                                      std::size_t size_limit,
                                      rmm::cuda_stream_view stream)
 {
+  printf("find table split, seg length = %d, limit = %d \n", segment_length, (int)size_limit);
+
   // If segment_length is zero: we don't have any limit on granularity.
   // As such, set segment length to the number of rows.
   if (segment_length == 0) { segment_length = input.num_rows(); }
@@ -753,6 +755,14 @@ std::vector<chunk> find_table_splits(table_view const& input,
                     [segment_length] __device__(auto const size) {
                       return cumulative_size{segment_length, static_cast<std::size_t>(size)};
                     });
+
+  // TODO: remove:
+  segmented_sizes.device_to_host_sync(stream);
+  printf("total row sizes by segment = %d:\n", (int)segment_length);
+  for (auto& size : segmented_sizes) {
+    printf("size: %ld, %zu\n", size.count, size.size_bytes);
+  }
+
   // TODO: exec_policy_nosync
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          segmented_sizes.d_begin(),
@@ -1412,6 +1422,13 @@ reader::impl::impl(std::size_t output_size_limit,
     _selected_columns{_metadata.select_columns(options.get_columns())},
     _chunk_read_data{output_size_limit, data_read_limit, output_row_granularity}
 {
+  printf("construct reader , limit = %d, %d, gradunarity %d \n",
+
+         (int)output_size_limit,
+         (int)data_read_limit,
+         (int)output_row_granularity
+
+  );
 }
 
 table_with_metadata reader::impl::read(int64_t skip_rows,
