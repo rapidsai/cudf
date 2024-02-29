@@ -2700,3 +2700,11 @@ def test_series_dtype_astypes(data):
     result = cudf.Series(data, dtype="float64")
     expected = cudf.Series([1.0, 2.0, 3.0])
     assert_eq(result, expected)
+
+
+def test_series_from_large_string():
+    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
+    got = cudf.Series(pa_large_string_array)
+    expected = pd.Series(pa_large_string_array)
+
+    assert_eq(expected, got)

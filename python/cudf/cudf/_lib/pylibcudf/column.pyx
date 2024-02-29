@@ -1,14 +1,18 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.cpp.column.column cimport column, column_contents
+from cudf._lib.cpp.column.column_factories cimport make_column_from_scalar
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
+from .scalar cimport Scalar
 from .types cimport DataType, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
@@ -195,6 +199,28 @@ cdef class Column:
             cv.offset(),
             children,
         )
+
+    @staticmethod
+    def from_scalar(Scalar slr, size_type size):
+        """Create a Column from a Scalar.
+
+        Parameters
+        ----------
+        slr : Scalar
+            The scalar to create a column from.
+        size : size_type
+            The number of elements in the column.
+
+        Returns
+        -------
+        Column
+            A Column containing the scalar repeated `size` times.
+        """
+        cdef const scalar* c_scalar = slr.get()
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(make_column_from_scalar(dereference(c_scalar), size))
+        return Column.from_libcudf(move(c_result))
 
     cpdef DataType type(self):
         """The type of data in the column."""

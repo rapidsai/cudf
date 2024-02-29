@@ -17,8 +17,7 @@
 #pragma once
 
 #include "aggregate_orc_metadata.hpp"
-
-#include <io/utilities/column_buffer.hpp>
+#include "io/utilities/column_buffer.hpp"
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/orc.hpp>
@@ -61,7 +60,7 @@ class reader::impl {
    * @param stripes Indices of individual stripes to load if non-empty
    * @return The set of columns along with metadata
    */
-  table_with_metadata read(uint64_t skip_rows,
+  table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
 
@@ -73,7 +72,7 @@ class reader::impl {
    * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
    * @param stripes Indices of individual stripes to load if non-empty
    */
-  void prepare_data(uint64_t skip_rows,
+  void prepare_data(int64_t skip_rows,
                     std::optional<size_type> const& num_rows_opt,
                     std::vector<std::vector<size_type>> const& stripes);
 
