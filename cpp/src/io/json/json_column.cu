@@ -392,6 +392,19 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   return to_host(d_column_names->view());
 }
 
+/**
+ * @brief Checks if all strings in each string column in the tree are nulls.
+ * For non-string columns, it's set as true. If any of rows in a string column is false, it's set as
+ * false.
+ *
+ * @param input Input JSON string device data
+ * @param d_column_tree column tree representation of JSON string
+ * @param tree Node tree representation of the JSON string
+ * @param col_ids Column ids of the nodes in the tree
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Array of bytes where each byte indicate if it is all nulls string column.
+ */
 rmm::device_uvector<uint8_t> is_all_nulls_str_column(device_span<SymbolT const> input,
                                                      tree_meta_t const& d_column_tree,
                                                      tree_meta_t const& tree,
