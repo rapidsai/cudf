@@ -63,6 +63,14 @@ class reader::impl {
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
 
+  explicit impl(std::size_t output_size_limit,
+                std::size_t data_read_limit,
+                size_type output_row_granularity,
+                std::vector<std::unique_ptr<datasource>>&& sources,
+                orc_reader_options const& options,
+                rmm::cuda_stream_view stream,
+                rmm::mr::device_memory_resource* mr);
+
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
    *
@@ -178,6 +186,8 @@ class reader::impl {
   table_metadata _out_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
   std::unique_ptr<cudf::table> _decoded_table;
+
+  static constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
 };
 
 }  // namespace cudf::io::orc::detail

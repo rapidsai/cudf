@@ -452,12 +452,36 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
  * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader
  */
 chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+  : chunked_orc_reader(output_size_limit, 0UL, options, stream, mr)
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
                                        std::size_t data_read_limit,
                                        orc_reader_options const& options,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
   : reader{std::make_unique<orc::detail::chunked_reader>(output_size_limit,
                                                          data_read_limit,
+                                                         make_datasources(options.get_source()),
+                                                         options,
+                                                         stream,
+                                                         mr)}
+{
+}
+
+chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
+                                       std::size_t data_read_limit,
+                                       size_type output_row_granularity,
+                                       orc_reader_options const& options,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
+  : reader{std::make_unique<orc::detail::chunked_reader>(output_size_limit,
+                                                         data_read_limit,
+                                                         output_row_granularity,
                                                          make_datasources(options.get_source()),
                                                          options,
                                                          stream,

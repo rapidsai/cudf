@@ -423,6 +423,12 @@ class chunked_orc_reader {
    */
   chunked_orc_reader() = default;
 
+  // TODO
+  chunked_orc_reader(std::size_t output_size_limit,
+                     orc_reader_options const& options,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
   /**
    * @brief Constructor for chunked reader.
    *
@@ -442,6 +448,14 @@ class chunked_orc_reader {
    */
   chunked_orc_reader(std::size_t output_size_limit,
                      std::size_t data_read_limit,
+                     orc_reader_options const& options,
+                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+  // TODO
+  chunked_orc_reader(std::size_t output_size_limit,
+                     std::size_t data_read_limit,
+                     size_type output_row_granularity,
                      orc_reader_options const& options,
                      rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

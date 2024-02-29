@@ -729,13 +729,13 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
  * @return
  */
 std::vector<chunk> find_table_splits(table_view const& input,
+                                     size_type segment_length,
                                      std::size_t size_limit,
                                      rmm::cuda_stream_view stream)
 {
   // Default 10k rows.
-  size_type constexpr SEGMENT_SIZE = 10'000;
-  auto const d_segmented_sizes     = cudf::detail::segmented_bit_count(
-    input, SEGMENT_SIZE, stream, rmm::mr::get_current_device_resource());
+  auto const d_segmented_sizes = cudf::detail::segmented_bit_count(
+    input, segment_length, stream, rmm::mr::get_current_device_resource());
   auto const d_size_begin = d_segmented_sizes->view().begin<size_type>();
 
   auto segmented_sizes =
@@ -746,8 +746,8 @@ std::vector<chunk> find_table_splits(table_view const& input,
                     d_size_begin,
                     d_size_begin + d_segmented_sizes->size(),
                     segmented_sizes.d_begin(),
-                    [SEGMENT_SIZE] __device__(auto const size) {
-                      return cumulative_size{SEGMENT_SIZE, static_cast<std::size_t>(size)};
+                    [segment_length] __device__(auto const size) {
+                      return cumulative_size{segment_length, static_cast<std::size_t>(size)};
                     });
   // TODO: exec_policy_nosync
   thrust::inclusive_scan(rmm::exec_policy(stream),
@@ -1236,8 +1236,10 @@ void reader::impl::decompress_and_decode()
   // DEBUG only
   _chunk_read_data.output_size_limit = _chunk_read_data.data_read_limit / 3;
 
-  _chunk_read_data.output_table_chunks =
-    find_table_splits(_decoded_table->view(), _chunk_read_data.output_size_limit, _stream);
+  _chunk_read_data.output_table_chunks     = find_table_splits(_decoded_table->view(),
+                                                           _chunk_read_data.output_row_granularity,
+                                                           _chunk_read_data.output_size_limit,
+                                                           _stream);
   _chunk_read_data.curr_output_table_chunk = 0;
 
   auto& splits = _chunk_read_data.output_table_chunks;
@@ -1413,6 +1415,23 @@ reader::impl::impl(std::size_t output_size_limit,
                    orc_reader_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
+  : reader::impl::impl(output_size_limit,
+                       data_read_limit,
+                       DEFAULT_OUTPUT_ROW_GRANULARITY,
+                       std::move(sources),
+                       options,
+                       stream,
+                       mr)
+{
+}
+
+reader::impl::impl(std::size_t output_size_limit,
+                   std::size_t data_read_limit,
+                   size_type output_row_granularity,
+                   std::vector<std::unique_ptr<datasource>>&& sources,
+                   orc_reader_options const& options,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
     _config{options.get_timestamp_type(),
@@ -1423,7 +1442,7 @@ reader::impl::impl(std::size_t output_size_limit,
     _sources(std::move(sources)),
     _metadata{_sources, stream},
     _selected_columns{_metadata.select_columns(options.get_columns())},
-    _chunk_read_data{output_size_limit, data_read_limit}
+    _chunk_read_data{output_size_limit, data_read_limit, output_row_granularity}
 {
 }
 

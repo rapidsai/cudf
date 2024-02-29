@@ -201,14 +201,20 @@ struct file_intermediate_data {
  * @brief Struct to store all data necessary for chunked reading.
  */
 struct chunk_read_data {
-  explicit chunk_read_data(std::size_t output_size_limit_ = 0, std::size_t data_read_limit_ = 0)
-    : output_size_limit{output_size_limit_}, data_read_limit(data_read_limit_)
+  explicit chunk_read_data(std::size_t output_size_limit_,
+                           std::size_t data_read_limit_,
+                           size_type output_row_granularity_)
+    : output_size_limit{output_size_limit_},
+      data_read_limit{data_read_limit_},
+      output_row_granularity{output_row_granularity_}
   {
   }
 
+  // TODO: const for 3 below?
   std::size_t output_size_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
   std::size_t data_read_limit;    // approximate maximum size (in bytes) used for store
                                   // intermediate data, or 0 for no limit
+  size_type output_row_granularity;  // TODO
 
   // Chunks of stripes that can be load into memory such that their data size is within a size
   // limit.
