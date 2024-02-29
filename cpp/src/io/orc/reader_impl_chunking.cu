@@ -628,6 +628,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // TODO: use 0.3 constant
   // _chunk_read_data.data_read_limit = total_stripe_sizes.back().size_bytes / 3;
 
+  // TODO: handle case for extremely large files.
+
   _chunk_read_data.load_stripe_chunks =
     find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
 
@@ -820,8 +822,8 @@ void reader::impl::load_data()
   // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
   _chunk_read_data.curr_decode_stripe_chunk = 0;
 
-  // Decode all chunks if there is no read limit.
-  if (_chunk_read_data.data_read_limit == 0) {
+  // Decode all chunks if there is no read and no output limit.
+  if (_chunk_read_data.data_read_limit == 0 && _chunk_read_data.output_size_limit == 0) {
     _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
     // TODO: DEBUG only
     return;
@@ -840,9 +842,19 @@ void reader::impl::load_data()
   // DEBUG only
   // _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
 
-  // TODO: only decode stripes enough for output.
+  // TODO: Check and turn this 1.0.
+  // If there is no read limit, we still do not decode all stripes.
+  // Typically, the limit below will result in a very large number of stripes
+  // since their data is compressed to be much smaller than the actual data.
+  // However, it is still better than decoding all stripes, which may be a huge number.
+  auto const decode_size_limit = _chunk_read_data.data_read_limit > 0
+                                   ? _chunk_read_data.data_read_limit
+                                   : _chunk_read_data.output_size_limit;
+
+  printf("decode size limit: %d\n", (int)decode_size_limit);
+
   _chunk_read_data.decode_stripe_chunks =
-    find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
+    find_splits(stripe_decomp_sizes, stripe_chunk.count, decode_size_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
     chunk.start_idx += stripe_chunk.start_idx;
   }
