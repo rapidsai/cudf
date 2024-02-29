@@ -319,7 +319,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         )
 
                     result.columns = cudf.MultiIndex.from_product(
-                        [keys, result.columns]
+                        [keys, result._column_names]
                     )
 
         if isinstance(result, cudf.Series) and axis == 0:
