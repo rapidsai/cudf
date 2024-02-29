@@ -479,7 +479,9 @@ std::unique_ptr<column> segmented_bit_count(table_view const& t,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(segment_length >= 1, "Invalid segment length.", std::invalid_argument);
+  CUDF_EXPECTS(segment_length >= 1 && segment_length <= t.num_rows(),
+               "Invalid segment length.",
+               std::invalid_argument);
 
   // no rows
   if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
