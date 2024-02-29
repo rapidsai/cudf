@@ -733,6 +733,10 @@ std::vector<chunk> find_table_splits(table_view const& input,
                                      std::size_t size_limit,
                                      rmm::cuda_stream_view stream)
 {
+  // If segment_length is zero: we don't have any limit on granularity.
+  // As such, set segment length to the number of rows.
+  if (segment_length == 0) { segment_length = input.num_rows(); }
+
   // Default 10k rows.
   auto const d_segmented_sizes = cudf::detail::segmented_bit_count(
     input, segment_length, stream, rmm::mr::get_current_device_resource());

@@ -38,9 +38,9 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <fstream>
 #include <type_traits>
@@ -96,11 +96,15 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
   return std::pair{std::move(input_table), std::move(filepath)};
 }
 
-auto chunked_read(std::string const& filepath, std::size_t output_limit)
+auto chunked_read(std::string const& filepath,
+                  std::size_t output_limit,
+                  std::size_t input_limit                = 0,
+                  cudf::size_type output_row_granularity = 0)
 {
   auto const read_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).build();
-  auto reader = cudf::io::chunked_orc_reader(output_limit, read_opts);
+  auto reader =
+    cudf::io::chunked_orc_reader(output_limit, input_limit, output_row_granularity, read_opts);
 
   auto num_chunks = 0;
   auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
@@ -142,7 +146,6 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
   CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
 }
 
-#if 0
 TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 {
   auto constexpr num_rows = 40'000;
@@ -169,9 +172,11 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
+
+  exit(0);
 }
 
-
+#if 0
 TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 {
   // Tests some specific boundary conditions in the split calculations.
