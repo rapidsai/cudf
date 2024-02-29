@@ -405,12 +405,12 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Array of bytes where each byte indicate if it is all nulls string column.
  */
-rmm::device_uvector<uint8_t> is_all_nulls_str_column(device_span<SymbolT const> input,
-                                                     tree_meta_t const& d_column_tree,
-                                                     tree_meta_t const& tree,
-                                                     device_span<NodeIndexT> col_ids,
-                                                     cudf::io::json_reader_options const& options,
-                                                     rmm::cuda_stream_view stream)
+rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const> input,
+                                                      tree_meta_t const& d_column_tree,
+                                                      tree_meta_t const& tree,
+                                                      device_span<NodeIndexT> col_ids,
+                                                      cudf::io::json_reader_options const& options,
+                                                      rmm::cuda_stream_view stream)
 {
   auto const num_nodes = col_ids.size();
   auto const num_cols  = d_column_tree.node_categories.size();
@@ -603,7 +603,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<uint8_t> is_str_column_all_nulls{};
   if (is_enabled_mixed_types_as_string) {
     is_str_column_all_nulls = cudf::detail::make_std_vector_async(
-      is_all_nulls_str_column(input, d_column_tree, tree, col_ids, options, stream), stream);
+      is_all_nulls_each_column(input, d_column_tree, tree, col_ids, options, stream), stream);
   }
 
   // use hash map because we may skip field name's col_ids
