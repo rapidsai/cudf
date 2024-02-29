@@ -107,7 +107,6 @@ requirements:
     - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
     - packaging
-    - cachetools
     - rich
 
 test:

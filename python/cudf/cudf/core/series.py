@@ -77,6 +77,10 @@ from cudf.core.indexed_frame import (
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import _get_scalar_kernel
+from cudf.core.udf.utils import (
+    JIT_SUPPORTED_TYPES,
+    _masked_array_type_from_col,
+)
 from cudf.errors import MixedTypeError
 from cudf.utils import docutils
 from cudf.utils.docutils import copy_docstring
@@ -2577,7 +2581,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if convert_dtype is not True:
             raise ValueError("Series.apply only supports convert_dtype=True")
 
-        result = self._apply(func, _get_scalar_kernel, *args, **kwargs)
+        if str(self.dtype) in JIT_SUPPORTED_TYPES:
+            masked_array_column_types = (
+                _masked_array_type_from_col(self._column),
+            )
+        else:
+            # TODO: Probably should just raise?
+            masked_array_column_types = tuple()
+        kernel, retty = _get_scalar_kernel(
+            series_dtype=self.dtype,
+            masked_array_column_types=masked_array_column_types,
+            has_mask=self._column.mask is not None,
+            func=func,
+            args=args,
+        )
+        result = self._apply(kernel, retty, *args, **kwargs)
         result.name = self.name
         return result
 

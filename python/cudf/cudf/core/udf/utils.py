@@ -1,10 +1,10 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
 
 import functools
 import os
-from typing import Any, Callable, Dict
+from collections.abc import Callable
 
-import cachetools
 import cupy as cp
 import llvmlite.binding as ll
 import numpy as np
@@ -19,7 +19,6 @@ from numba.types import CPointer, Poison, Record, Tuple, boolean, int64, void
 import rmm
 
 from cudf._lib import strings_udf
-from cudf.api.types import is_scalar
 from cudf.core.column.column import as_column
 from cudf.core.dtypes import dtype
 from cudf.core.udf.masked_typing import MaskedType
@@ -58,8 +57,7 @@ JIT_SUPPORTED_TYPES = (
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
-precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-launch_arg_getters: Dict[Any, Any] = {}
+# precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 @functools.cache
@@ -167,7 +165,7 @@ def _masked_array_type_from_col(col):
         return Tuple((col_type, libcudf_bitmask_type[::1]))
 
 
-def _construct_signature(frame, return_type, args):
+def _construct_signature(masked_array_column_types: tuple, return_type, args):
     """
     Build the signature of numba types that will be used to
     actually JIT the kernel itself later, accounting for types
@@ -179,12 +177,8 @@ def _construct_signature(frame, return_type, args):
         return_type = return_type[::1]
     # Tuple of arrays, first the output data array, then the mask
     return_type = Tuple((return_type, boolean[::1]))
-    offsets = []
-    sig = [return_type, int64]
-    for col in _supported_cols_from_frame(frame).values():
-        sig.append(_masked_array_type_from_col(col))
-        offsets.append(int64)
-
+    offsets = [int64] * len(masked_array_column_types)
+    sig = [return_type, int64, *masked_array_column_types]
     # return_type, size, data, masks, offsets, extra args
     sig = void(*(sig + offsets + [typeof(arg) for arg in args]))
 
@@ -235,54 +229,6 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
         scalar_argtypes,
         suffix,
     )
-
-
-@_cudf_nvtx_annotate
-def _compile_or_get(
-    frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
-):
-    """
-    Return a compiled kernel in terms of MaskedTypes that launches a
-    kernel equivalent of `f` for the dtypes of `df`. The kernel uses
-    a thread for each row and calls `f` using that rows data / mask
-    to produce an output value and output validity for each row.
-
-    If the UDF has already been compiled for this requested dtypes,
-    a cached version will be returned instead of running compilation.
-
-    CUDA kernels are void and do not return values. Thus, we need to
-    preallocate a column of the correct dtype and pass it in as one of
-    the kernel arguments. This creates a chicken-and-egg problem where
-    we need the column type to compile the kernel, but normally we would
-    be getting that type FROM compiling the kernel (and letting numba
-    determine it as a return value). As a workaround, we compile the UDF
-    itself outside the final kernel to invoke a full typing pass, which
-    unfortunately is difficult to do without running full compilation.
-    we then obtain the return type from that separate compilation and
-    use it to allocate an output column of the right dtype.
-    """
-    if not all(is_scalar(arg) for arg in args):
-        raise TypeError("only scalar valued args are supported by apply")
-
-    # check to see if we already compiled this function
-    cache_key = _generate_cache_key(frame, func, args, suffix=suffix)
-    if precompiled.get(cache_key) is not None:
-        kernel, masked_or_scalar = precompiled[cache_key]
-        return kernel, masked_or_scalar
-
-    # precompile the user udf to get the right return type.
-    # could be a MaskedType or a scalar type.
-
-    kernel, scalar_return_type = kernel_getter(frame, func, args)
-    np_return_type = (
-        numpy_support.as_dtype(scalar_return_type)
-        if scalar_return_type.is_internal
-        else scalar_return_type.np_dtype
-    )
-
-    precompiled[cache_key] = (kernel, np_return_type)
-
-    return kernel, np_return_type
 
 
 def _get_kernel(kernel_string, globals_, sig, func):

@@ -1,4 +1,9 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+from __future__ import annotations
+
+import functools
+from collections.abc import Callable
+from typing import Any
 
 from numba import cuda
 from numba.np import numpy_support
@@ -19,7 +24,7 @@ from cudf.core.udf.utils import (
 )
 
 
-def _scalar_kernel_string_from_template(sr, args):
+def _scalar_kernel_string_from_template(has_mask: bool, args):
     """
     Function to write numba kernels for `Series.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -39,7 +44,7 @@ def _scalar_kernel_string_from_template(sr, args):
 
     masked_initializer = (
         masked_input_initializer_template
-        if sr._column.mask
+        if has_mask
         else unmasked_input_initializer_template
     ).format(idx=0)
 
@@ -48,13 +53,24 @@ def _scalar_kernel_string_from_template(sr, args):
     )
 
 
-def _get_scalar_kernel(sr, func, args):
+@functools.lru_cache(maxsize=8)
+def _get_scalar_kernel(
+    series_dtype,
+    masked_array_column_types: tuple,
+    has_mask: bool,
+    func: Callable,
+    args: tuple[Any, ...],
+):
     sr_type = MaskedType(
-        string_view if sr.dtype == "O" else numpy_support.from_dtype(sr.dtype)
+        string_view
+        if series_dtype == "O"
+        else numpy_support.from_dtype(series_dtype)
     )
     scalar_return_type = _get_udf_return_type(sr_type, func, args)
 
-    sig = _construct_signature(sr, scalar_return_type, args=args)
+    sig = _construct_signature(
+        masked_array_column_types, scalar_return_type, args=args
+    )
     f_ = cuda.jit(device=True)(func)
     global_exec_context = {
         "f_": f_,
@@ -63,7 +79,12 @@ def _get_scalar_kernel(sr, func, args):
         "_mask_get": _mask_get,
         "pack_return": pack_return,
     }
-    kernel_string = _scalar_kernel_string_from_template(sr, args=args)
+    kernel_string = _scalar_kernel_string_from_template(has_mask, args=args)
     kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
 
-    return kernel, scalar_return_type
+    np_return_type = (
+        numpy_support.as_dtype(scalar_return_type)
+        if scalar_return_type.is_internal
+        else scalar_return_type.np_dtype
+    )
+    return kernel, np_return_type

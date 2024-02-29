@@ -61,7 +61,6 @@ from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import _Resampler
 from cudf.core.udf.utils import (
-    _compile_or_get,
     _get_input_args_from_frame,
     _post_process_output_col,
     _return_arr_from_dtype,
@@ -3307,18 +3306,12 @@ class IndexedFrame(Frame):
 
     @acquire_spill_lock()
     @_cudf_nvtx_annotate
-    def _apply(self, func, kernel_getter, *args, **kwargs):
+    def _apply(self, kernel, retty, *args, **kwargs):
         """Apply `func` across the rows of the frame."""
+        if not all(is_scalar(arg) for arg in args):
+            raise TypeError("only scalar valued args are supported by apply")
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
-        try:
-            kernel, retty = _compile_or_get(
-                self, func, args, kernel_getter=kernel_getter
-            )
-        except Exception as e:
-            raise ValueError(
-                "user defined function compilation failed."
-            ) from e
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))

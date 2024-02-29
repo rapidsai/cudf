@@ -1,5 +1,6 @@
 # Copyright (c) 2022-2024, NVIDIA CORPORATION.
-
+import functools
+from typing import TYPE_CHECKING
 
 import cupy as cp
 import numpy as np
@@ -22,7 +23,6 @@ from cudf.core.udf.templates import (
 from cudf.core.udf.utils import (
     UDFError,
     _all_dtypes_from_frame,
-    _compile_or_get,
     _get_extensionty_size,
     _get_kernel,
     _get_udf_return_type,
@@ -31,6 +31,9 @@ from cudf.core.udf.utils import (
 )
 from cudf.utils._numba import _CUDFNumbaConfig
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _get_frame_groupby_type(dtype, index_dtype):
@@ -79,39 +82,44 @@ def _get_frame_groupby_type(dtype, index_dtype):
     return GroupByJITDataFrame(fields, offset, _is_aligned_struct)
 
 
-def _groupby_apply_kernel_string_from_template(frame, args):
+def _groupby_apply_kernel_string_from_template(
+    supported_column_names: tuple, args: tuple
+):
     """
     Function to write numba kernels for `Groupby.apply` as a string.
     Workaround until numba supports functions that use `*args`
     """
     # Create argument list for kernel
-    frame = _supported_cols_from_frame(
-        frame, supported_types=SUPPORTED_GROUPBY_NUMPY_TYPES
+    input_columns = ", ".join(
+        [f"input_col_{i}" for i in range(len(supported_column_names))]
     )
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(frame))])
     extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
 
     # Generate the initializers for each device function argument
-    initializers = []
-    for i, colname in enumerate(frame.keys()):
-        initializers.append(
-            group_initializer_template.format(idx=i, name=colname)
-        )
-
+    group_initializers = "\n".join(
+        group_initializer_template.format(idx=i, name=colname)
+        for i, colname in supported_column_names
+    )
     return groupby_apply_kernel_template.format(
         input_columns=input_columns,
         extra_args=extra_args,
-        group_initializers="\n".join(initializers),
+        group_initializers=group_initializers,
     )
 
 
-def _get_groupby_apply_kernel(frame, func, args):
-    np_field_types = np.dtype(list(_all_dtypes_from_frame(frame).items()))
-    dataframe_group_type = _get_frame_groupby_type(
-        np_field_types, frame.index.dtype
-    )
-
+@functools.lru_cache(maxsize=8)
+def _get_groupby_apply_kernel(
+    dataframe_group_type: GroupByJITDataFrame,
+    supported_column_names: tuple,
+    func: Callable,
+    args: tuple,
+):
     return_type = _get_udf_return_type(dataframe_group_type, func, args)
+    np_return_type = (
+        numpy_support.as_dtype(return_type)
+        if return_type.is_internal
+        else return_type.np_dtype
+    )
 
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
@@ -120,10 +128,12 @@ def _get_groupby_apply_kernel(frame, func, args):
         "dataframe_group_type": dataframe_group_type,
         "types": types,
     }
-    kernel_string = _groupby_apply_kernel_string_from_template(frame, args)
+    kernel_string = _groupby_apply_kernel_string_from_template(
+        supported_column_names, args
+    )
     kernel = _get_kernel(kernel_string, global_exec_context, None, func)
 
-    return kernel, return_type
+    return kernel, np_return_type
 
 
 @_cudf_nvtx_annotate
@@ -142,13 +152,22 @@ def jit_groupby_apply(offsets, grouped_values, function, *args):
     function : callable
         The user-defined function to execute
     """
-
-    kernel, return_type = _compile_or_get(
-        grouped_values,
+    np_field_types = np.dtype(
+        list(_all_dtypes_from_frame(grouped_values).items())
+    )
+    dataframe_group_type = _get_frame_groupby_type(
+        np_field_types, grouped_values.index.dtype
+    )
+    supported_column_names = tuple(
+        colname
+        for colname, col in grouped_values._data.items()
+        if str(col.dtype) in SUPPORTED_GROUPBY_NUMPY_TYPES
+    )
+    kernel, return_type = _get_groupby_apply_kernel(
+        dataframe_group_type,
+        supported_column_names,
         function,
         args,
-        kernel_getter=_get_groupby_apply_kernel,
-        suffix="__GROUPBY_APPLY_UDF",
     )
 
     offsets = cp.asarray(offsets)

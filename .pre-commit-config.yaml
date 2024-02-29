@@ -38,7 +38,6 @@ repos:
     rev: 'v1.3.0'
     hooks:
       - id: mypy
-        additional_dependencies: [types-cachetools]
         args: ["--config-file=pyproject.toml",
                "python/cudf/cudf",
                "python/custreamz/custreamz",

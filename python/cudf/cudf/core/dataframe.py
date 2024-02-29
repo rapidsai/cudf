@@ -84,7 +84,13 @@ from cudf.core.missing import NA
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
-from cudf.core.udf.row_function import _get_row_kernel
+from cudf.core.udf.row_function import _get_frame_row_type, _get_row_kernel
+from cudf.core.udf.utils import (
+    JIT_SUPPORTED_TYPES,
+    _all_dtypes_from_frame,
+    _masked_array_type_from_col,
+    _supported_dtypes_from_frame,
+)
 from cudf.errors import MixedTypeError
 from cudf.utils import applyutils, docutils, ioutils, queryutils
 from cudf.utils.docutils import copy_docstring
@@ -4552,7 +4558,29 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("The `raw` kwarg is not yet supported.")
         if result_type is not None:
             raise ValueError("The `result_type` kwarg is not yet supported.")
-
+        all_frame_row_type = _get_frame_row_type(
+            np.dtype(list(_all_dtypes_from_frame(self).items()))
+        )
+        np_field_types = np.dtype(
+            list(_supported_dtypes_from_frame(self).items())
+        )
+        supported_row_type = _get_frame_row_type(np_field_types)
+        masked_array_column_types = tuple(
+            _masked_array_type_from_col(col)
+            for col in self._data.columns
+            if str(col.dtype) in JIT_SUPPORTED_TYPES
+        )
+        masked_array_column_has_mask = tuple(
+            (colname, col.mask) is not None
+            for colname, col in self._data.items()
+            if str(col.dtype) in JIT_SUPPORTED_TYPES
+        )
+        kernel, retty = _get_row_kernel(
+            all_frame_row_type,
+            masked_array_column_types,
+            supported_row_type,
+            masked_array_column_has_mask,
+        )
         return self._apply(func, _get_row_kernel, *args, **kwargs)
 
     def applymap(
