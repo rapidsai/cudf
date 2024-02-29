@@ -116,7 +116,7 @@ template <>
 double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
-  return get_distribution_mean(dist);
+  return get_distribution_mean(dist) + sizeof(cudf::size_type);
 }
 
 double geometric_sum(size_t n, double p)
