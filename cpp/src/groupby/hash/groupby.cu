@@ -59,6 +59,8 @@ namespace detail {
 namespace hash {
 namespace {
 
+// TODO: similar to `contains_table`, using larger CG size like 2 or 4 for nested
+// types and `cg_size = 1`for flat data to improve performance
 using probing_scheme_type = cuco::linear_probing<
   1,  ///< Number of threads used to handle each input key
   cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
