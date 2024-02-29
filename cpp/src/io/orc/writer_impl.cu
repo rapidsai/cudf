@@ -1833,7 +1833,7 @@ orc_table_view make_orc_table_view(table_view const& table,
                        thrust::make_reverse_iterator(d_table.end()),
                        thrust::make_reverse_iterator(d_table.begin()),
                        [&stack](column_device_view const& c) {
-                         stack.push({&c, thrust::nullopt});
+                         stack.push({&c, thrust::optional<uint32_t>{}});
                        });
 
       uint32_t idx = 0;
