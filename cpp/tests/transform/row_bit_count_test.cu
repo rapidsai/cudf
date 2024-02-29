@@ -59,11 +59,8 @@ std::unique_ptr<cudf::column> accumulate_row_sizes(cudf::column_view const& row_
        d_sizes  = row_sizes.begin<cudf::size_type>()] __device__(auto const segment_idx) {
         // Since the number of rows may not divisible by segment_length,
         // the last segment may be shorter than the others.
-        auto const current_length =
-          segment_idx + 1 < num_segments ? segment_length : num_rows - segment_length * segment_idx;
-
         auto const size_begin = d_sizes + segment_idx * segment_length;
-        auto const size_end   = size_begin + current_length;
+        auto const size_end   = std::min(size_begin + segment_length, d_sizes + num_rows);
         return thrust::reduce(thrust::seq, size_begin, size_end);
       }));
   return output;
