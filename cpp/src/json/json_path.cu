@@ -522,7 +522,7 @@ struct path_operator {
 };
 
 /**
- * @brief Enum to specify whether parsing values enclosed within brackets, like `['book']`
+ * @brief Enum to specify whether parsing values enclosed within brackets, like `['book']`.
  */
 enum class bracket_state : bool {
   INSIDE,  ///< Parsing inside brackets
