@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "common_sort_impl.cuh"
 #include "sort_column_impl.cuh"
 
 #include <cudf/column/column_factories.hpp>
@@ -30,11 +31,11 @@ namespace detail {
  * sorted_order(column_view&,order,null_order,rmm::cuda_stream_view,rmm::mr::device_memory_resource*)
  */
 template <>
-std::unique_ptr<column> sorted_order<true>(column_view const& input,
-                                           order column_order,
-                                           null_order null_precedence,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> sorted_order<sort_method::STABLE>(column_view const& input,
+                                                          order column_order,
+                                                          null_order null_precedence,
+                                                          rmm::cuda_stream_view stream,
+                                                          rmm::mr::device_memory_resource* mr)
 {
   auto sorted_indices = cudf::make_numeric_column(
     data_type(type_to_id<size_type>()), input.size(), mask_state::UNALLOCATED, stream, mr);
@@ -42,7 +43,7 @@ std::unique_ptr<column> sorted_order<true>(column_view const& input,
   thrust::sequence(
     rmm::exec_policy(stream), indices_view.begin<size_type>(), indices_view.end<size_type>(), 0);
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),
-                                               column_sorted_order_fn<true>{},
+                                               column_sorted_order_fn<sort_method::STABLE>{},
                                                input,
                                                indices_view,
                                                column_order == order::ASCENDING,
