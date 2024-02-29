@@ -373,13 +373,13 @@ class json_parser {
     // scan string content
     while (!eof()) {
       char c = *curr_pos;
+      int v = static_cast<int>(c);
       if (c == quote_char) {
         // path 1: close string
         curr_pos++;
         return verify_max_string_len(curr_str_len);
-      } else if (c >= '\0' && c < ' ' && options.get_allow_unescaped_control_chars()) {
+      } else if (v >= 0 && v < 32 && options.get_allow_unescaped_control_chars()) {
         // path 2: unescaped control char
-        // ASCII 0 is '\0', ASCII 32 is space ' '
         curr_pos++;
         curr_str_len++;
         continue;
@@ -464,7 +464,8 @@ class json_parser {
     // 2. the char is not \, here satisfy, do not need to check again
 
     // 3. chars not in [0, 32)
-    if (!(c >= 0 && c < 32)) {
+    int v = static_cast<int>(c);
+    if (!(v >= 0 && v < 32)) {
       curr_pos++;
       return true;
     } else {
