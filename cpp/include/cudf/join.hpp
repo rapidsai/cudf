@@ -485,7 +485,7 @@ class distinct_hash_join {
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * Returns the row indices that can be used to construct the result of performing
+   * @brief Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join().
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -501,8 +501,8 @@ class distinct_hash_join {
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
   /**
-   * Returns the build table indices that can be used to construct the result of performing
-   * a left join between two tables
+   * @brief Returns the build table indices that can be used to construct the result of performing
+   * a left join between two tables.
    *
    * @note For a given row index `i` of the probe table, the resulting `build_indices[i]` contains
    * the row index of the matched row from the build table if there is a match. Otherwise, contains
