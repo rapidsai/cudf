@@ -712,6 +712,7 @@ dependencies:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
           # pandas[all] includes all of the required dependencies
+          - psycopg2-binary
           - pandas[all]
   test_python_cudf_pandas:
     common:
