@@ -379,7 +379,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::l
 
     auto const output_begin =
       thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
-    // TODO conditional find for nulls
+    // TODO conditional find for nulls once `cuco::static_set::find_if` is added
     this->_hash_table.find_async(iter, iter + probe_table_num_rows, output_begin, stream.value());
   }
 
