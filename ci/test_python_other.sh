@@ -31,14 +31,11 @@ rapids-logger "pytest dask_cudf"
 
 # Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
 rapids-logger "pytest dask_cudf + dask_expr"
-pushd python/dask_cudf/dask_cudf
-DASK_DATAFRAME__QUERY_PLANNING=True pytest \
-  --cache-clear \
+DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
   --numprocesses=8 \
   --dist=loadscope \
   .
-popd
 
 rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \
