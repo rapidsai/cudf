@@ -1322,6 +1322,7 @@ table_with_metadata reader::impl::make_output_chunk()
 #if 1
   auto out_table = [&] {
     if (_chunk_read_data.output_table_chunks.size() == 1) {
+      _chunk_read_data.curr_output_table_chunk++;
       return std::move(_chunk_read_data.decoded_table);
     }
 
