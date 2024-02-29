@@ -175,7 +175,7 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  * @return ArrowSchema generated from `input`
  *
  * @note For decimals, since the precision is not stored for them in libcudf,
- * it will be converted to an Arrow decimal128 that has the widest-precision the cudf decimal type
+ * it will be converted to an Arrow decimal128 that has the widest precision the cudf decimal type
  * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
  * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
  * converted to Arrow decimal128 of the precision 38.
