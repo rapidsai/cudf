@@ -78,7 +78,7 @@ void test_basic(bool allow_single_quote, bool allow_control_char)
 
     std::make_pair(
       // test numbers
-      std::string{R"(    
+      std::string{R"(
             [
               0, 102, -0, -102, 0.3, -0.3000, 1e-050, -1e-5, 1.0e-5, -1.0010e-050, 1E+5, 1e0, 1E0, 1.3e5, -1e01, 1e00000
             ]
@@ -116,14 +116,14 @@ void test_basic(bool allow_single_quote, bool allow_control_char)
       std::vector{json_token::START_ARRAY, json_token::END_ARRAY, json_token::SUCCESS}),
     std::make_pair(
       // test nesting arrays
-      std::string{R"(    
-            [    
-              1 ,    
-              [    
-                2 ,    
-                [    
-                  3 ,        
-                  [    
+      std::string{R"(
+            [
+              1 ,
+              [
+                2 ,
+                [
+                  3 ,
+                  [
                     41 , 42 , 43
                   ]
                 ]
@@ -147,15 +147,15 @@ void test_basic(bool allow_single_quote, bool allow_control_char)
                   json_token::SUCCESS}),
     std::make_pair(
       // test nesting objects
-      std::string{R"(    
-            {    
-              "k1" : "v1" ,    
-              "k2" : {    
-                "k3" : {    
-                  "k4" : {    
-                    "k51" : "v51" ,    
-                    "k52" : "v52"    
-                  }    
+      std::string{R"(
+            {
+              "k1" : "v1" ,
+              "k2" : {
+                "k3" : {
+                  "k4" : {
+                    "k51" : "v51" ,
+                    "k52" : "v52"
+                  }
                 }
               }
             }
@@ -180,16 +180,16 @@ void test_basic(bool allow_single_quote, bool allow_control_char)
                   json_token::SUCCESS}),
     std::make_pair(
       // test nesting objects and arrays
-      std::string{R"(    
+      std::string{R"(
             {
               "k1" : "v1",
-              "k2" : [    
+              "k2" : [
                 1, {
                   "k21" : "v21",
                   "k22" : [1 , 2 , -1.5]
-                }    
+                }
               ]
-            }    
+            }
           )"},
       std::vector{json_token::START_OBJECT,
                   json_token::FIELD_NAME,
