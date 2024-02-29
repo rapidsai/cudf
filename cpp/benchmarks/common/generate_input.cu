@@ -71,7 +71,7 @@ auto deterministic_engine(unsigned seed) { return thrust::minstd_rand{seed}; }
  *  Computes the mean value for a distribution of given type and value bounds.
  */
 template <typename T>
-T get_distribution_mean(distribution_params<T> const& dist)
+double get_distribution_mean(distribution_params<T> const& dist)
 {
   switch (dist.id) {
     case distribution_id::NORMAL:
@@ -97,23 +97,23 @@ T get_distribution_mean(distribution_params<T> const& dist)
  * the element size of non-fixed-width columns. For lists and structs, `avg_element_size` is called
  * recursively to determine the size of nested columns.
  */
-size_t avg_element_size(data_profile const& profile, cudf::data_type dtype);
+double avg_element_size(data_profile const& profile, cudf::data_type dtype);
 
 // Utilities to determine the mean size of an element, given the data profile
 template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
-size_t non_fixed_width_size(data_profile const& profile)
+double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("Should not be called, use `size_of` for this type instead");
 }
 
 template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
-size_t non_fixed_width_size(data_profile const& profile)
+double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
 }
 
 template <>
-size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
   return get_distribution_mean(dist);
@@ -126,7 +126,7 @@ double geometric_sum(size_t n, double p)
 }
 
 template <>
-size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
@@ -143,7 +143,7 @@ size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 }
 
 template <>
-size_t non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
   return std::accumulate(dist_params.leaf_types.cbegin(),
@@ -156,13 +156,13 @@ size_t non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
 
 struct non_fixed_width_size_fn {
   template <typename T>
-  size_t operator()(data_profile const& profile)
+  double operator()(data_profile const& profile)
   {
     return non_fixed_width_size<T>(profile);
   }
 };
 
-size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
+double avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
   if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
   return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
@@ -825,13 +825,17 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  size_t const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
+  auto const avg_row_bytes =
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0., [&](size_t sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
-  cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
+  std::size_t const num_rows = std::lround(table_bytes.size / avg_row_bytes);
+  CUDF_EXPECTS(num_rows > 0, "Table size is too small for the given data types");
+  CUDF_EXPECTS(num_rows < std::numeric_limits<cudf::size_type>::max(),
+               "Table size is too large for the given data types");
 
-  return create_random_table(dtype_ids, row_count{num_rows}, profile, seed);
+  return create_random_table(
+    dtype_ids, row_count{static_cast<cudf::size_type>(num_rows)}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,
