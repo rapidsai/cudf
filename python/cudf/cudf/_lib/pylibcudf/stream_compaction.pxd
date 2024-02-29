@@ -48,13 +48,13 @@ cpdef Table stable_distinct(
 )
 
 cpdef size_type unique_count(
-    Column source_table,
+    Column column,
     null_policy null_handling,
     nan_policy nan_handling
 )
 
 cpdef size_type distinct_count(
-    Column source_table,
+    Column column,
     null_policy null_handling,
     nan_policy nan_handling
 )

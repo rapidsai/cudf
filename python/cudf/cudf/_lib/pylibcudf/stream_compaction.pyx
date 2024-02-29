@@ -52,21 +52,21 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
 
 
 cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
-    """Filters out rows from the input table based on the presence of nans.
+    """Filters out rows from the input table based on the presence of NaNs.
 
     Parameters
     ----------
     source_table : Table
         The input table to filter.
     keys : List[size_type]
-        The list of column indexes to consider for null filtering.
+        The list of column indexes to consider for NaN filtering.
     keep_threshold : size_type
-        The minimum number of non-nans required to keep a row.
+        The minimum number of non-NaNs required to keep a row.
 
     Returns
     -------
     Table
-        A new table with rows removed based on nans.
+        A new table with rows removed based on NaNs.
     """
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
@@ -243,8 +243,8 @@ cpdef Table stable_distinct(
     Returns
     -------
     Table
-        A new table with distinct rows from the input table. In the
-        same order as the input table.
+        A new table with distinct rows from the input table, preserving
+        the input table order.
     """
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
@@ -258,7 +258,7 @@ cpdef Table stable_distinct(
 
 
 cpdef size_type unique_count(
-    Column source_table,
+    Column source,
     null_policy null_handling,
     nan_policy nan_handling
 ):
@@ -266,7 +266,7 @@ cpdef size_type unique_count(
 
     Parameters
     ----------
-    source_table : Column
+    source : Column
         The input column to count the unique elements of.
     null_handling : null_policy
         Flag to include or exclude nulls from the count.
@@ -284,20 +284,20 @@ cpdef size_type unique_count(
     same result as distinct_count, but faster.
     """
     return cpp_stream_compaction.unique_count(
-        source_table.view(), null_handling, nan_handling
+        source.view(), null_handling, nan_handling
     )
 
 
 cpdef size_type distinct_count(
-    Column source_table,
+    Column source,
     null_policy null_handling,
     nan_policy nan_handling
 ):
-    """Returns the number of unique elements in the input column.
+    """Returns the number of distinct elements in the input column.
 
     Parameters
     ----------
-    source_table : Column
+    source : Column
         The input column to count the unique elements of.
     null_handling : null_policy
         Flag to include or exclude nulls from the count.
@@ -307,8 +307,8 @@ cpdef size_type distinct_count(
     Returns
     -------
     size_type
-        The number of unique elements in the input column.
+        The number of distinct elements in the input column.
     """
     return cpp_stream_compaction.distinct_count(
-        source_table.view(), null_handling, nan_handling
+        source.view(), null_handling, nan_handling
     )
