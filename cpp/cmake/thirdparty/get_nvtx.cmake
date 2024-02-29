@@ -15,15 +15,14 @@
 # This function finds NVTX and sets any additional necessary environment variables.
 function(find_and_configure_nvtx)
   rapids_cpm_find(
-    nvtx 3.1.0
-    GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
-    GIT_TAG v3.1.0
-    GIT_SHALLOW TRUE
-    DOWNLOAD_ONLY TRUE
-  )
-  set(NVTX_INCLUDE_DIR
-      "${nvtx_SOURCE_DIR}/c/include"
-      PARENT_SCOPE
+    NVTX3 3.1.0
+    GLOBAL_TARGETS nvtx3-c nvtx3-cpp
+    CPM_ARGS
+      GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
+      GIT_TAG v3.1.0
+      GIT_SHALLOW TRUE
+      DOWNLOAD_ONLY TRUE
+      SOURCE_SUBDIR c
   )
 endfunction()
 
