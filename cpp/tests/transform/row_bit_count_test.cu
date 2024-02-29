@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,51 +22,18 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/functional>
 #include <thrust/fill.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
 #include <numeric>
-
-namespace {
-
-// Sum up sizes for each segment of rows.
-std::unique_ptr<cudf::column> accumulate_row_sizes(cudf::column_view const& row_sizes,
-                                                   cudf::size_type segment_length)
-{
-  auto const num_segments = cudf::util::div_rounding_up_safe(row_sizes.size(), segment_length);
-  auto output = cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, num_segments);
-
-  thrust::transform(
-    rmm::exec_policy(cudf::get_default_stream()),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(num_segments),
-    output->mutable_view().begin<cudf::size_type>(),
-    cuda::proclaim_return_type<cudf::size_type>(
-      [segment_length,
-       num_segments,
-       num_rows = row_sizes.size(),
-       d_sizes  = row_sizes.begin<cudf::size_type>()] __device__(auto const segment_idx) {
-        // Since the number of rows may not divisible by segment_length,
-        // the last segment may be shorter than the others.
-        auto const size_begin = d_sizes + segment_idx * segment_length;
-        auto const size_end   = std::min(size_begin + segment_length, d_sizes + num_rows);
-        return thrust::reduce(thrust::seq, size_begin, size_end);
-      }));
-  return output;
-}
-
-}  // namespace
 
 template <typename T>
 struct RowBitCountTyped : public cudf::test::BaseFixture {};
@@ -157,12 +124,8 @@ TYPED_TEST(RowBitCountTyped, Lists)
 
   cudf::table_view t({*col});
   auto result = cudf::row_bit_count(t);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes, *result);
 
-  auto constexpr segment_length     = 3;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes, *result);
 }
 
 TYPED_TEST(RowBitCountTyped, ListsWithNulls)
@@ -199,11 +162,6 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
     ((4 + 4) * CHAR_BIT) + (type_size * 1) + 2,
     ((4 + 8) * CHAR_BIT) + (type_size * 3) + 5};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
 }
 
 struct RowBitCount : public cudf::test::BaseFixture {};
@@ -223,12 +181,8 @@ TEST_F(RowBitCount, Strings)
   });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(size_iter,
                                                                    size_iter + strings.size());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, StringsWithNulls)
@@ -252,12 +206,8 @@ TEST_F(RowBitCount, StringsWithNulls)
   });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(size_iter,
                                                                    size_iter + strings.size());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 namespace {
@@ -311,20 +261,15 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   auto structs_column = cudf::make_structs_column(num_rows, std::move(struct_members), 0, {});
 
   // Compute row_bit_count, and compare.
-  auto const t        = cudf::table_view{{structs_column->view()}};
-  auto row_bit_counts = cudf::row_bit_count(t);
+  auto row_bit_counts = cudf::row_bit_count(cudf::table_view{{structs_column->view()}});
   auto expected_row_bit_counts =
     cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
   thrust::fill_n(rmm::exec_policy(cudf::get_default_stream()),
                  expected_row_bit_counts->mutable_view().begin<int32_t>(),
                  num_rows,
                  CHAR_BIT * (2 * sizeof(int32_t) + sizeof(cudf::size_type)));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(row_bit_counts->view(), expected_row_bit_counts->view());
 
-  auto constexpr segment_length     = 100;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*row_bit_counts, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(row_bit_counts->view(), expected_row_bit_counts->view());
 }
 
 std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>> build_struct_column()
@@ -368,12 +313,8 @@ TEST_F(RowBitCount, StructsNoNulls)
   });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(size_iter,
                                                                    size_iter + t.num_rows());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, StructsNulls)
@@ -381,12 +322,8 @@ TEST_F(RowBitCount, StructsNulls)
   auto [struct_col, expected_sizes] = build_struct_column();
   cudf::table_view t({*struct_col});
   auto result = cudf::row_bit_count(t);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes, *result);
 
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes, *result);
 }
 
 TEST_F(RowBitCount, StructsNested)
@@ -407,11 +344,6 @@ TEST_F(RowBitCount, StructsNested)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(size_iter,
                                                                    size_iter + t.num_rows());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
-
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
 }
 
 std::unique_ptr<cudf::column> build_nested_column1(std::vector<bool> const& struct_validity)
@@ -533,18 +465,6 @@ TEST_F(RowBitCount, NestedTypes)
     //
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes_no_nulls, *no_nulls_result);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_sizes_with_nulls, *nulls_result);
-
-    auto constexpr segment_length = 2;
-    {
-      auto const result_segment_sizes   = cudf::segmented_row_bit_count(no_nulls_t, segment_length);
-      auto const expected_segment_sizes = accumulate_row_sizes(*no_nulls_result, segment_length);
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
-    }
-    {
-      auto const result_segment_sizes   = cudf::segmented_row_bit_count(nulls_t, segment_length);
-      auto const expected_segment_sizes = accumulate_row_sizes(*nulls_result, segment_length);
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
-    }
   }
 
   // List<Struct<List<List<int>>, Struct<int16>>>
@@ -563,18 +483,6 @@ TEST_F(RowBitCount, NestedTypes)
     // same explanation as above
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes_no_nuls, *no_nulls_result);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes_with_nuls, *nulls_result);
-
-    auto constexpr segment_length = 2;
-    {
-      auto const result_segment_sizes   = cudf::segmented_row_bit_count(no_nulls_t, segment_length);
-      auto const expected_segment_sizes = accumulate_row_sizes(*no_nulls_result, segment_length);
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
-    }
-    {
-      auto const result_segment_sizes   = cudf::segmented_row_bit_count(nulls_t, segment_length);
-      auto const expected_segment_sizes = accumulate_row_sizes(*nulls_result, segment_length);
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
-    }
   }
 
   // test pushing/popping multiple times within one struct, and branch depth > 1
@@ -618,12 +526,8 @@ TEST_F(RowBitCount, NestedTypes)
     auto result = cudf::row_bit_count(t);
 
     cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_sizes{648, 568, 664, 568};
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *result);
 
-    auto constexpr segment_length     = 3;
-    auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-    auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_sizes, *result);
   }
 }
 
@@ -645,15 +549,9 @@ TEST_F(RowBitCount, NullsInStringsList)
     cudf::test::strings_column_wrapper{strings.begin(), strings.end(), valids.begin()}.release(),
     0,
     {});
-  auto const t      = cudf::table_view{{lists_col->view()}};
-  auto const result = cudf::row_bit_count(t);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
-    result->view(), cudf::test::fixed_width_column_wrapper<cudf::size_type>{138, 106, 130, 130});
-
-  auto constexpr segment_length     = 3;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    cudf::row_bit_count(cudf::table_view{{lists_col->view()}})->view(),
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>{138, 106, 130, 130});
 }
 
 TEST_F(RowBitCount, EmptyChildColumnInListOfStrings)
@@ -728,24 +626,6 @@ TEST_F(RowBitCount, Table)
       cv0.data<cudf::size_type>(), cv1.data<cudf::size_type>(), cv2.data<cudf::size_type>()});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
-
-  // Test when num_rows % segment_length == 0
-  {
-    auto constexpr segment_length = 3;
-    EXPECT_EQ(t.num_rows() % segment_length, 0);
-    auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-    auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
-  }
-
-  // Test when num_rows % segment_length != 0
-  {
-    auto constexpr segment_length = 4;
-    EXPECT_NE(t.num_rows() % segment_length, 0);
-    auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-    auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
-  }
 }
 
 TEST_F(RowBitCount, DepthJump)
@@ -795,12 +675,8 @@ TEST_F(RowBitCount, SlicedColumnsFixedWidth)
   auto result = cudf::row_bit_count(t);
 
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected{16, 16, 16, 16, 16, 16, 16};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 3;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, SlicedColumnsStrings)
@@ -820,12 +696,8 @@ TEST_F(RowBitCount, SlicedColumnsStrings)
   });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(size_iter + 3,
                                                                    size_iter + 3 + slice_size);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 3;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, SlicedColumnsLists)
@@ -842,12 +714,8 @@ TEST_F(RowBitCount, SlicedColumnsLists)
   auto result = cudf::row_bit_count(t);
 
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected{408, 320};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, SlicedColumnsStructs)
@@ -873,12 +741,8 @@ TEST_F(RowBitCount, SlicedColumnsStructs)
   });
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected(size_iter + 3,
                                                                    size_iter + 3 + slice_size);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 
-  auto constexpr segment_length     = 2;
-  auto const result_segment_sizes   = cudf::segmented_row_bit_count(t, segment_length);
-  auto const expected_segment_sizes = accumulate_row_sizes(*result, segment_length);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_segment_sizes, *result_segment_sizes);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
 TEST_F(RowBitCount, EmptyTable)
@@ -887,10 +751,6 @@ TEST_F(RowBitCount, EmptyTable)
     cudf::table_view empty;
     auto result = cudf::row_bit_count(empty);
     EXPECT_TRUE(result != nullptr && result->size() == 0);
-
-    auto constexpr segment_length   = 3;
-    auto const result_segment_sizes = cudf::segmented_row_bit_count(empty, segment_length);
-    EXPECT_TRUE(result_segment_sizes != nullptr && result_segment_sizes->size() == 0);
   }
 
   {
@@ -900,9 +760,5 @@ TEST_F(RowBitCount, EmptyTable)
 
     auto result = cudf::row_bit_count(empty);
     EXPECT_TRUE(result != nullptr && result->size() == 0);
-
-    auto constexpr segment_length   = 3;
-    auto const result_segment_sizes = cudf::segmented_row_bit_count(empty, segment_length);
-    EXPECT_TRUE(result_segment_sizes != nullptr && result_segment_sizes->size() == 0);
   }
 }
