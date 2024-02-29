@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1179,12 +1179,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
     private ColumnBuilder append(StructData structData) {
       assert type.isNestedType();
       if (type.equals(DType.STRUCT)) {
-        if (structData == null || structData.dataRecord == null) {
+        if (structData == null || structData.isNull()) {
           return appendNull();
         } else {
           for (int i = 0; i < structData.getNumFields(); i++) {
             ColumnBuilder childBuilder = childBuilders.get(i);
-            appendChildOrNull(childBuilder, structData.dataRecord.get(i));
+            appendChildOrNull(childBuilder, structData.getField(i));
           }
           endStruct();
         }
@@ -2077,10 +2077,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   public static abstract class DataType {
-    abstract DType getType();
-    abstract boolean isNullable();
-    abstract DataType getChild(int index);
-    abstract int getNumChildren();
+    public abstract DType getType();
+    public abstract boolean isNullable();
+    public abstract DataType getChild(int index);
+    public abstract int getNumChildren();
   }
 
   public static class ListType extends HostColumnVector.DataType {
@@ -2093,17 +2093,17 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.LIST;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       if (index > 0) {
         return null;
       }
@@ -2111,7 +2111,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 1;
     }
   }
@@ -2134,6 +2134,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
         return 0;
       }
     }
+
+    public boolean isNull() {
+      return (this.dataRecord == null);
+    }
+
+    public Object getField(int index) {
+      return this.dataRecord.get(index);
+    }
   }
 
   public static class StructType extends HostColumnVector.DataType {
@@ -2150,22 +2158,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return DType.STRUCT;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return children.get(index);
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return children.size();
     }
   }
@@ -2180,22 +2188,22 @@ public final class HostColumnVector extends HostColumnVectorCore {
     }
 
     @Override
-    DType getType() {
+    public DType getType() {
       return type;
     }
 
     @Override
-    boolean isNullable() {
+    public boolean isNullable() {
       return isNullable;
     }
 
     @Override
-    HostColumnVector.DataType getChild(int index) {
+    public HostColumnVector.DataType getChild(int index) {
       return null;
     }
 
     @Override
-    int getNumChildren() {
+    public int getNumChildren() {
       return 0;
     }
   }
