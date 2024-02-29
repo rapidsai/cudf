@@ -44,7 +44,6 @@ cudf = "dask_cudf.backends:CudfDXBackendEntrypoint"
 [project.optional-dependencies]
 test = [
     "dask-cuda==24.4.*",
-    "dask-expr",
     "numba>=0.57",
     "pytest-cov",
     "pytest-xdist",

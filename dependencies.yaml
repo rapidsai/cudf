@@ -648,8 +648,6 @@ dependencies:
         packages:
           - dask-cuda==24.4.*
           - *numba
-          # TODO: Remove once dask-expr is in rapids-dask-dependency
-          - dask-expr
   depends_on_cudf:
     common:
       - output_types: conda
