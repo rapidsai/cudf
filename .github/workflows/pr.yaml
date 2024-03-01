@@ -39,7 +39,7 @@ jobs:
     with:
       enable_check_generated_files: false
   conda-cpp-build:
-    needs: devcontainer
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@feat/reduce_runs
     with:
@@ -64,7 +64,7 @@ jobs:
     with:
       build_type: pull-request
   conda-python-cudf-tests:
-    needs: [conda-python-build, wheel-tests-cudf]
+    needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@feat/reduce_runs
     with:
@@ -72,7 +72,7 @@ jobs:
       test_script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
-    needs: [conda-python-build, wheel-tests-dask-cudf]
+    needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@feat/reduce_runs
     with:
@@ -89,7 +89,7 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
   conda-notebook-tests:
-    needs: [conda-python-build, wheel-tests-cudf]
+    needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@feat/reduce_runs
     with:
@@ -99,7 +99,7 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_notebooks.sh"
   docs-build:
-    needs: [conda-python-build, wheel-tests-cudf]
+    needs: conda-python-build
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@feat/reduce_runs
     with:
@@ -109,7 +109,7 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
   wheel-build-cudf:
-    needs: devcontainer
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@feat/reduce_runs
     with:
