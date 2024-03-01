@@ -109,7 +109,7 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/build_docs.sh"
   wheel-build-cudf:
-    needs: checks
+    needs: devcontainer
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@feat/reduce_runs
     with:
