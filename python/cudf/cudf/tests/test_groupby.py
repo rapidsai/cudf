@@ -55,12 +55,12 @@ def assert_groupby_results_equal(
             if isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
                 expect = expect.sort_values(by=by).reset_index(drop=True)
             else:
-                expect = expect.sort_values().reset_index(drop=True)
+                expect = expect.sort_values(by=by).reset_index(drop=True)
 
             if isinstance(got, cudf.DataFrame):
                 got = got.sort_values(by=by).reset_index(drop=True)
             else:
-                got = got.sort_values().reset_index(drop=True)
+                got = got.sort_values(by=by).reset_index(drop=True)
 
     assert_eq(expect, got, **kwargs)
 
@@ -179,7 +179,7 @@ def test_groupby_agg_min_max_dictlist(nelem):
 def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     gdf = gdf.groupby("y", as_index=as_index).agg({"x": "mean"})
     pdf = pdf.groupby("y", as_index=as_index).agg({"x": "mean"})
-    assert_groupby_results_equal(pdf, gdf)
+    assert_groupby_results_equal(pdf, gdf, as_index=as_index, by="y")
 
 
 @pytest.mark.parametrize("engine", ["cudf", "jit"])
@@ -190,7 +190,7 @@ def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
     )
     kwargs = {"func": lambda df: df["x"].mean(), "include_groups": False}
     pdf = pdf.groupby("y", as_index=as_index).apply(**kwargs)
-    assert_groupby_results_equal(pdf, gdf)
+    assert_groupby_results_equal(pdf, gdf, as_index=as_index, by="y")
 
 
 @pytest.mark.parametrize("as_index", [True, False])
@@ -3714,7 +3714,13 @@ def test_group_by_value_counts(normalize, sort, ascending, dropna, as_index):
 
     # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
     assert_groupby_results_equal(
-        actual, expected, check_names=False, check_index_type=False
+        actual,
+        expected,
+        check_names=False,
+        check_index_type=False,
+        as_index=as_index,
+        by=["gender", "education"],
+        sort=sort,
     )
 
 
