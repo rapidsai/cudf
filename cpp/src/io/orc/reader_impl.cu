@@ -740,7 +740,7 @@ std::vector<chunk> find_table_splits(table_view const& input,
   if (segment_length == 0) { segment_length = input.num_rows(); }
 
   // Default 10k rows.
-  auto const d_segmented_sizes = cudf::detail::segmented_bit_count(
+  auto const d_segmented_sizes = cudf::detail::segmented_row_bit_count(
     input, segment_length, stream, rmm::mr::get_current_device_resource());
   auto const d_size_begin = d_segmented_sizes->view().begin<size_type>();
 

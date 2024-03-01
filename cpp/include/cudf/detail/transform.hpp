@@ -101,14 +101,14 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc cudf::segmented_bit_count
+ * @copydoc cudf::segmented_row_bit_count
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> segmented_bit_count(table_view const& t,
-                                            size_type segment_length,
-                                            rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
+                                                size_type segment_length,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf
