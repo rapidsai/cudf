@@ -38,7 +38,6 @@ class kernel_error {
   using pointer    = value_type*;
 
  private:
-  rmm::cuda_stream_view _stream;
   mutable cudf::detail::hostdevice_vector<value_type> _error_code;
 
  public:
@@ -52,7 +51,7 @@ class kernel_error {
    *
    * @param CUDA stream to use
    */
-  kernel_error(rmm::cuda_stream_view stream) : _stream{stream}, _error_code(1, stream)
+  kernel_error(rmm::cuda_stream_view stream) : _error_code(1, stream)
   {
     _error_code[0] = 0;
     _error_code.host_to_device_async(stream);
@@ -66,24 +65,25 @@ class kernel_error {
   /**
    * @brief Return the current value of the error
    *
-   * This uses the stream used to create this instance. This does a synchronize on the stream
-   * this object was instantiated with.
+   * @param stream The CUDA stream to synchronize with
    */
-  [[nodiscard]] auto value() const
+  [[nodiscard]] auto value_sync(rmm::cuda_stream_view stream) const
   {
-    _error_code.device_to_host_sync(_stream);
+    _error_code.device_to_host_sync(stream);
     return _error_code[0];
   }
 
   /**
-   * @brief Return a hexadecimal string representation of the current error code
+   * @brief Return a hexadecimal string representation of an error code
    *
    * Returned string will have "0x" prepended.
+   *
+   * @param value The error code to convert to a string
    */
-  [[nodiscard]] std::string str() const
+  [[nodiscard]] static std::string to_string(value_type value)
   {
     std::stringstream sstream;
-    sstream << std::hex << value();
+    sstream << std::hex << value;
     return "0x" + sstream.str();
   }
 };

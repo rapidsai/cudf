@@ -246,11 +246,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  if (error_code.value() != 0) {
-    CUDF_FAIL("Parquet data decode failed with code(s) " + error_code.str());
+  if (auto const error = error_code.value_sync(_stream); error != 0) {
+    CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
-  // error_code.value() is synchronous; explicitly sync here for better visibility
-  _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
