@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -42,8 +43,6 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
-
-#include <cuda/functional>
 
 #include <limits>
 #include <memory>

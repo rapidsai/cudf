@@ -32,16 +32,15 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/climits>
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/generate.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/optional.h>
 #include <thrust/transform.h>
-
-#include <cuda/std/climits>
-#include <cuda/std/limits>
-#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {

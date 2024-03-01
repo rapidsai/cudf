@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <strings/regex/regex.cuh>
+#include "strings/regex/regex.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>

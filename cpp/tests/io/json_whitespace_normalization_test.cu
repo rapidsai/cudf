@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/hostdevice_vector.hpp>
-
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/types.hpp>
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/hostdevice_vector.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/testing_main.hpp>
+
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream.hpp>
 #include <rmm/cuda_stream_view.hpp>

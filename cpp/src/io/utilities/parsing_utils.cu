@@ -19,9 +19,9 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/pair.h>
-
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/pair.h>
 
 #include <algorithm>
 
