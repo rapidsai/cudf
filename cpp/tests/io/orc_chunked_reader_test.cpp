@@ -46,6 +46,10 @@
 #include <type_traits>
 
 namespace {
+enum class output_limit : std::size_t {};
+enum class input_limit : std::size_t {};
+enum class output_row_granularity : cudf::size_type {};
+
 // Global environment for temporary files
 auto const temp_env = reinterpret_cast<cudf::test::TempDirTestEnvironment*>(
   ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
@@ -101,14 +105,16 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 // This means if the input file has more than 10k rows then the output chunk will never
 // have less than 10k rows.
 auto chunked_read(std::string const& filepath,
-                  std::size_t output_limit,
-                  std::size_t input_limit                = 0,
-                  cudf::size_type output_row_granularity = 10'000)
+                  output_limit output_limit_bytes,
+                  input_limit input_limit_bytes             = input_limit{0},
+                  output_row_granularity output_granularity = output_row_granularity{10'000})
 {
   auto const read_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).build();
-  auto reader =
-    cudf::io::chunked_orc_reader(output_limit, input_limit, output_row_granularity, read_opts);
+  auto reader = cudf::io::chunked_orc_reader(static_cast<std::size_t>(output_limit_bytes),
+                                             static_cast<std::size_t>(input_limit_bytes),
+                                             static_cast<cudf::size_type>(output_granularity),
+                                             read_opts);
 
   auto num_chunks = 0;
   auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
@@ -133,10 +139,10 @@ auto chunked_read(std::string const& filepath,
 }
 
 auto chunked_read(std::string const& filepath,
-                  std::size_t output_limit,
-                  cudf::size_type output_row_granularity)
+                  output_limit output_limit_bytes,
+                  output_row_granularity output_granularity)
 {
-  return chunked_read(filepath, output_limit, 0UL, output_row_granularity);
+  return chunked_read(filepath, output_limit_bytes, input_limit{0UL}, output_granularity);
 }
 
 }  // namespace
@@ -150,7 +156,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
   input_columns.emplace_back(int64s_col{}.release());
 
   auto const [expected, filepath] = write_file(input_columns, "chunked_read_empty", false);
-  auto const [result, num_chunks] = chunked_read(filepath, 1'000);
+  auto const [result, num_chunks] = chunked_read(filepath, output_limit{1'000});
   EXPECT_EQ(num_chunks, 1);
   EXPECT_EQ(result->num_rows(), 0);
   EXPECT_EQ(result->num_columns(), 2);
@@ -176,26 +182,26 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadSimpleData)
 
   {
     auto const [expected, filepath] = generate_input(false, 1'000);
-    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
   {
     auto const [expected, filepath] = generate_input(false, cudf::io::default_stripe_size_rows);
-    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
     auto const [expected, filepath] = generate_input(true, 1'000);
-    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
   {
     auto const [expected, filepath] = generate_input(true, cudf::io::default_stripe_size_rows);
-    auto const [result, num_chunks] = chunked_read(filepath, 245'000);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{245'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -216,14 +222,14 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 1UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{1UL});
     // Number of chunks is 4 because of using default `output_row_granularity = 10k`.
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
@@ -231,27 +237,29 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 
   // Test with a very small limit: 1 byte, and small value of `output_row_granularity`.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 1UL, 1'000);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{1UL}, output_row_granularity{1'000});
     EXPECT_EQ(num_chunks, 40);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a very small limit: 1 byte, and large value of `output_row_granularity`.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 1UL, 30'000);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{1UL}, output_row_granularity{30'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
   // Test with a very large limit
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
   // Test with a limit slightly less than one granularity segment of data
   // (output_row_granularity = 10k rows = 40'000 bytes).
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 39'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{39'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -259,7 +267,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
   // Test with a limit exactly the size one granularity segment of data
   // (output_row_granularity = 10k rows = 40'000 bytes).
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 40'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{40'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -267,49 +275,49 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
   // Test with a limit slightly more than one granularity segment of data
   // (output_row_granularity = 10k rows = 40'000 bytes).
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 41'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{41'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a limit slightly less than two granularity segments of data
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 79'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{79'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a limit exactly the size of two granularity segments of data minus 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 79'999UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{79'999UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a limit exactly the size of two granularity segments of data.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 80'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{80'000UL});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a limit slightly more the size two granularity segments of data.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 81'000);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{81'000});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a limit exactly the size of the input minus 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 159'999UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{159'999UL});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a limit exactly the size of the input.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 160'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{160'000UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -317,8 +325,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 {
-  auto constexpr num_rows               = 60'000;
-  auto constexpr output_row_granularity = 20'000;
+  auto constexpr num_rows           = 60'000;
+  auto constexpr output_granularity = output_row_granularity{20'000};
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
@@ -357,37 +365,38 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath_no_null, output_limit{1UL}, output_granularity);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_with_nulls, 1UL, output_row_granularity);
+      chunked_read(filepath_with_nulls, output_limit{1UL}, output_granularity);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very large limit.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -396,24 +405,24 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_no_null, 500'000UL, output_row_granularity);
+      chunked_read(filepath_no_null, output_limit{500'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_with_nulls, 500'000UL, output_row_granularity);
+      chunked_read(filepath_with_nulls, output_limit{500'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1'000'000UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1'000'000UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -421,8 +430,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithString)
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
 {
-  auto constexpr num_rows               = 100'000;
-  auto constexpr output_row_granularity = 20'000;
+  auto constexpr num_rows           = 100'000;
+  auto constexpr output_granularity = output_row_granularity{20'000};
 
   auto const generate_input = [num_rows](bool nullable) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
@@ -447,25 +456,26 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath_no_null, output_limit{1UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_with_nulls, 1UL, output_row_granularity);
+      chunked_read(filepath_with_nulls, output_limit{1UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -473,13 +483,13 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
   // Test with a very large limit.
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_no_null, 2L << 40, output_row_granularity);
+      chunked_read(filepath_no_null, output_limit{2L << 40}, output_granularity);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_with_nulls, 2L << 40, output_row_granularity);
+      chunked_read(filepath_with_nulls, output_limit{2L << 40}, output_granularity);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -488,13 +498,13 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
 
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_no_null, 500'000UL, output_row_granularity);
+      chunked_read(filepath_no_null, output_limit{500'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
     auto const [result, num_chunks] =
-      chunked_read(filepath_with_nulls, 500'000UL, output_row_granularity);
+      chunked_read(filepath_with_nulls, output_limit{500'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -502,8 +512,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructs)
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsNoNulls)
 {
-  auto constexpr num_rows               = 100'000;
-  auto constexpr output_row_granularity = 20'000;
+  auto constexpr num_rows           = 100'000;
+  auto constexpr output_granularity = output_row_granularity{20'000};
 
   auto const [expected, filepath] = [num_rows]() {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
@@ -529,49 +539,54 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsNoNulls)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 1UL, output_row_granularity);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{1UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a very large limit.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 2L << 40UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{2L << 40UL}, output_granularity);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size slightly less than 1 row segment (forcing it to be at least 1 segment per read).
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 199'999UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{199'999UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size exactly 1 row segment.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 200'000UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{200'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size == size of 2 segments. Totally have 3 chunks.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 400'000UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{400'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size == size of 2 segment minus one byte: each chunk will be just one segment.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 399'999UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{399'999UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -579,8 +594,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsNoNulls)
 
 TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
 {
-  auto constexpr num_rows               = 100'000;
-  auto constexpr output_row_granularity = 20'000;
+  auto constexpr num_rows           = 100'000;
+  auto constexpr output_granularity = output_row_granularity{20'000};
 
   auto const [expected, filepath] = [num_rows]() {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
@@ -610,49 +625,54 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 1UL, output_row_granularity);
+    auto const [result, num_chunks] = chunked_read(filepath, output_limit{1UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Test with a very large limit.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 2L << 40, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{2L << 40}, output_granularity);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size slightly less than 1 row segment (forcing it to be at least 1 segment per read).
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 142'499UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{142'499UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size exactly 1 row segment.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 142'500UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{142'500UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size == size of 2 segments. Totally have 3 chunks.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 285'000UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{285'000UL}, output_granularity);
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   // Chunk size == size of 2 segment minus one byte: each chunk will be just one segment.
   {
-    auto const [result, num_chunks] = chunked_read(filepath, 284'999UL, output_row_granularity);
+    auto const [result, num_chunks] =
+      chunked_read(filepath, output_limit{284'999UL}, output_granularity);
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
@@ -698,36 +718,36 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructsOfLists)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1UL});
     EXPECT_EQ(num_chunks, 10);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1UL});
     EXPECT_EQ(num_chunks, 10);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very large limit.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -735,49 +755,49 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithStructsOfLists)
   // Other tests:
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1'000'000UL});
     EXPECT_EQ(num_chunks, 10);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'500'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1'500'000UL});
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{2'000'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 5'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{5'000'000UL});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1'000'000UL});
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'500'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1'500'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{2'000'000UL});
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 5'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{5'000'000UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -830,36 +850,36 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   // Test with zero limit: everything will be read in one chunk.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{0UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very small limit: 1 byte.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1UL});
     EXPECT_EQ(num_chunks, 10);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1UL});
     EXPECT_EQ(num_chunks, 10);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   // Test with a very large limit.
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2L << 40);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{2L << 40});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -867,49 +887,49 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsOfStructs)
   // Other tests.
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1'000'000UL});
     EXPECT_EQ(num_chunks, 7);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'500'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{1'500'000UL});
     EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 2'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{2'000'000UL});
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_no_null, 5'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_no_null, output_limit{5'000'000UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1'000'000UL});
     EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'500'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{1'500'000UL});
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{2'000'000UL});
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
   {
-    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 5'000'000UL);
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls, output_limit{5'000'000UL});
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
@@ -987,8 +1007,8 @@ void input_limit_test_write(std::vector<std::string> const& test_files,
 void input_limit_test_read(int test_location,
                            std::vector<std::string> const& test_files,
                            cudf::table_view const& input,
-                           size_t output_limit,
-                           size_t input_limit,
+                           output_limit output_limit_bytes,
+                           input_limit input_limit_bytes,
                            int const* expected_chunk_counts)
 {
   CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
@@ -997,7 +1017,8 @@ void input_limit_test_read(int test_location,
   for (size_t idx = 0; idx < test_files.size(); idx++) {
     SCOPED_TRACE("Original line of failure: " + std::to_string(test_location) +
                  ", file idx: " + std::to_string(idx));
-    auto const [result, num_chunks] = chunked_read(test_files[idx], output_limit, input_limit);
+    auto const [result, num_chunks] =
+      chunked_read(test_files[idx], output_limit_bytes, input_limit_bytes);
     EXPECT_EQ(expected_chunk_counts[idx], num_chunks);
     // TODO: equal
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, input);
@@ -1022,17 +1043,20 @@ TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
   // Some small limit.
   {
     int constexpr expected[] = {100, 100, 100};
-    input_limit_test_read(__LINE__, test_files, input, 0UL, 1UL, expected);
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
   }
 
   if (0) {
     int constexpr expected[] = {15, 20, 9};
-    input_limit_test_read(__LINE__, test_files, input, 0UL, 2 * 1024 * 1024UL, expected);
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
 
   // Limit of 1 byte.
   if (0) {
     int constexpr expected[] = {1, 50, 50};
-    input_limit_test_read(__LINE__, test_files, input, 0UL, 1UL, expected);
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
   }
 }
