@@ -71,13 +71,13 @@ ArrowType id_to_arrow_type(cudf::type_id id)
 
 struct dispatch_to_arrow_type {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  int operator()(column_view, column_metadata const&, struct ArrowSchema&)
+  int operator()(column_view, column_metadata const&, ArrowSchema&)
   {
     CUDF_FAIL("Unsupported type for to_arrow_schema");
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  int operator()(column_view input_view, column_metadata const&, struct ArrowSchema& out)
+  int operator()(column_view input_view, column_metadata const&, ArrowSchema& out)
   {
     cudf::type_id id = input_view.type().id();
     switch (id) {
@@ -111,7 +111,7 @@ struct dispatch_to_arrow_type {
 };
 
 template <typename DeviceType>
-int decimals_to_arrow(column_view input, struct ArrowSchema& out)
+int decimals_to_arrow(column_view input, ArrowSchema& out)
 {
   return ArrowSchemaSetTypeDecimal(&out,
                                    NANOARROW_TYPE_DECIMAL128,
@@ -122,7 +122,7 @@ int decimals_to_arrow(column_view input, struct ArrowSchema& out)
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
                                                            column_metadata const&,
-                                                           struct ArrowSchema& out)
+                                                           ArrowSchema& out)
 {
   using DeviceType = int32_t;
   return decimals_to_arrow<DeviceType>(input, out);
@@ -131,7 +131,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal32>(column_view input,
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
                                                            column_metadata const&,
-                                                           struct ArrowSchema& out)
+                                                           ArrowSchema& out)
 {
   using DeviceType = int64_t;
   return decimals_to_arrow<DeviceType>(input, out);
@@ -140,7 +140,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal64>(column_view input,
 template <>
 int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
                                                             column_metadata const&,
-                                                            struct ArrowSchema& out)
+                                                            ArrowSchema& out)
 {
   using DeviceType = __int128_t;
   return decimals_to_arrow<DeviceType>(input, out);
@@ -149,7 +149,7 @@ int dispatch_to_arrow_type::operator()<numeric::decimal128>(column_view input,
 template <>
 int dispatch_to_arrow_type::operator()<cudf::string_view>(column_view input,
                                                           column_metadata const&,
-                                                          struct ArrowSchema& out)
+                                                          ArrowSchema& out)
 {
   return ArrowSchemaSetType(&out, NANOARROW_TYPE_STRING);
 }
@@ -157,17 +157,17 @@ int dispatch_to_arrow_type::operator()<cudf::string_view>(column_view input,
 template <>
 int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
                                                         column_metadata const& metadata,
-                                                        struct ArrowSchema& out);
+                                                        ArrowSchema& out);
 
 template <>
 int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
                                                            column_metadata const& metadata,
-                                                           struct ArrowSchema& out);
+                                                           ArrowSchema& out);
 
 template <>
 int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
                                                           column_metadata const& metadata,
-                                                          struct ArrowSchema& out)
+                                                          ArrowSchema& out)
 {
   CUDF_EXPECTS(metadata.children_meta.size() == static_cast<std::size_t>(input.num_children()),
                "Number of field names and number of children doesn't match\n");
@@ -177,6 +177,7 @@ int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
     auto child = out.children[i];
     auto col   = input.child(i);
     NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(child, metadata.name.c_str()));
+
     child->flags = col.nullable() ? ARROW_FLAG_NULLABLE : 0;
 
     if (col.type().id() == cudf::type_id::EMPTY) {
@@ -194,17 +195,18 @@ int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
 template <>
 int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
                                                         column_metadata const& metadata,
-                                                        struct ArrowSchema& out)
+                                                        ArrowSchema& out)
 {
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(&out, NANOARROW_TYPE_LIST));
   auto child = input.child(0);
   if (child.type().id() == cudf::type_id::EMPTY) {
     return ArrowSchemaSetType(out.children[0], NANOARROW_TYPE_NA);
   }
-  out.flags = child.nullable() ? ARROW_FLAG_NULLABLE : 0;
-
   auto child_meta =
     metadata.children_meta.empty() ? column_metadata{"element"} : metadata.children_meta[0];
+
+  out.flags = child.nullable() ? ARROW_FLAG_NULLABLE : 0;
+
   return cudf::type_dispatcher(
     child.type(), detail::dispatch_to_arrow_type{}, child, child_meta, *out.children[0]);
 }
@@ -212,11 +214,11 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
 template <>
 int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
                                                            column_metadata const& metadata,
-                                                           struct ArrowSchema& out)
+                                                           ArrowSchema& out)
 {
   cudf::dictionary_column_view dview{input};
-  NANOARROW_RETURN_NOT_OK(ArrowSchemaAllocateDictionary(&out));
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(&out, id_to_arrow_type(dview.indices().type().id())));
+  NANOARROW_RETURN_NOT_OK(ArrowSchemaAllocateDictionary(&out));
 
   auto dict_keys = dview.keys();
   return cudf::type_dispatcher(
@@ -235,7 +237,7 @@ void device_buffer_finalize(ArrowBufferAllocator* allocator, uint8_t*, int64_t)
 }
 
 template <typename T>
-int set_buffer(std::unique_ptr<T> device_buf, int64_t i, struct ArrowArray* out)
+int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
 {
   ArrowBuffer* buf = ArrowArrayBuffer(out, i);
   buf->data        = reinterpret_cast<uint8_t*>(device_buf->data());
@@ -247,28 +249,39 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, struct ArrowArray* out)
                            new std::unique_ptr<T>(std::move(device_buf))));
 }
 
+template <typename T>
+int set_buffer(std::unique_ptr<rmm::device_scalar<T>> device_mem, int64_t i, ArrowArray* out)
+{
+  ArrowBuffer* buf = ArrowArrayBuffer(out, i);
+  buf->data        = reinterpret_cast<uint8_t*>(device_mem->data());
+  buf->size_bytes  = sizeof(T);
+  // we make a new unique_ptr and move to it in case there was a custom deleter
+  return ArrowBufferSetAllocator(
+    buf,
+    ArrowBufferDeallocator(&device_buffer_finalize<rmm::device_scalar<T>>,
+                           new std::unique_ptr<rmm::device_scalar<T>>(std::move(device_mem))));
+}
+
 struct dispatch_to_arrow_device {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   int operator()(cudf::column&,
-                 cudf::type_id,
                  rmm::cuda_stream_view,
                  rmm::mr::device_memory_resource*,
-                 struct ArrowArray*)
+                 ArrowArray*)
   {
     CUDF_FAIL("Unsupported type for to_arrow_device");
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
   int operator()(cudf::column& column,
-                 cudf::type_id id,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr,
-                 struct ArrowArray* out)
+                 ArrowArray* out)
   {
     nanoarrow::UniqueArray tmp;
 
     const ArrowType storage_type = [&] {
-      switch (id) {
+      switch (column.type().id()) {
         case cudf::type_id::TIMESTAMP_SECONDS:
         case cudf::type_id::TIMESTAMP_MILLISECONDS:
         case cudf::type_id::TIMESTAMP_MICROSECONDS:
@@ -277,7 +290,7 @@ struct dispatch_to_arrow_device {
         case cudf::type_id::DURATION_MILLISECONDS:
         case cudf::type_id::DURATION_MICROSECONDS:
         case cudf::type_id::DURATION_NANOSECONDS: return NANOARROW_TYPE_DURATION;
-        default: return id_to_arrow_type(id);
+        default: return id_to_arrow_type(column.type().id());
       }
     }();
 
@@ -306,7 +319,7 @@ int unsupported_decimals_to_arrow(cudf::column& input,
                                   int32_t precision,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr,
-                                  struct ArrowArray* out)
+                                  ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_DECIMAL128));
@@ -352,10 +365,9 @@ int unsupported_decimals_to_arrow(cudf::column& input,
 
 template <>
 int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column& column,
-                                                             cudf::type_id,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
-                                                             struct ArrowArray* out)
+                                                             ArrowArray* out)
 {
   using DeviceType = int32_t;
   return unsupported_decimals_to_arrow<DeviceType>(
@@ -364,10 +376,9 @@ int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column& colum
 
 template <>
 int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column& column,
-                                                             cudf::type_id id,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
-                                                             struct ArrowArray* out)
+                                                             ArrowArray* out)
 {
   using DeviceType = int64_t;
   return unsupported_decimals_to_arrow<DeviceType>(
@@ -376,10 +387,9 @@ int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column& colum
 
 template <>
 int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column& column,
-                                                              cudf::type_id id,
                                                               rmm::cuda_stream_view stream,
                                                               rmm::mr::device_memory_resource* mr,
-                                                              struct ArrowArray* out)
+                                                              ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_DECIMAL128));
@@ -403,10 +413,9 @@ int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column& colu
 
 template <>
 int dispatch_to_arrow_device::operator()<bool>(cudf::column& column,
-                                               cudf::type_id id,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr,
-                                               struct ArrowArray* out)
+                                               ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_BOOL));
@@ -430,64 +439,171 @@ int dispatch_to_arrow_device::operator()<bool>(cudf::column& column,
 
 template <>
 int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column& column,
-                                                            cudf::type_id id,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr,
-                                                            struct ArrowArray* out)
+                                                            ArrowArray* out)
 {
-  CUDF_FAIL("Unsupported type for to_arrow_device");
+  nanoarrow::UniqueArray tmp;
+  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRING));
+  tmp->length     = column.size();
+  tmp->null_count = column.null_count();
+
+  if (column.size() == 0) {
+    auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
+    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), kFixedWidthDataBufferIdx, tmp.get()));
+    NANOARROW_RETURN_NOT_OK(
+      ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+    ArrowArrayMove(tmp.get(), out);
+    return NANOARROW_OK;
+  }
+
+  auto contents = column.release();
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(
+      set_buffer(std::move(contents.null_mask), kValidityBufferIdx, tmp.get()));
+  }
+
+  auto offsets_contents =
+    contents.children[cudf::strings_column_view::offsets_column_index]->release();
+  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
+  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), 2, tmp.get()));
+
+  NANOARROW_RETURN_NOT_OK(
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+  ArrowArrayMove(tmp.get(), out);
+  return NANOARROW_OK;
 }
 
 template <>
 int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
-                                                          cudf::type_id id,
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr,
-                                                          struct ArrowArray* out);
+                                                          ArrowArray* out);
 
 template <>
 int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& column,
-                                                             cudf::type_id id,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
-                                                             struct ArrowArray* out);
+                                                             ArrowArray* out);
 
 template <>
 int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column& column,
-                                                            cudf::type_id id,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr,
-                                                            struct ArrowArray* out)
+                                                            ArrowArray* out)
 {
-  CUDF_FAIL("Unsupported type for to_arrow_device");
+  nanoarrow::UniqueArray tmp;
+  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRUCT));
+  NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateChildren(tmp.get(), column.num_children()));
+  tmp->length     = column.size();
+  tmp->null_count = column.null_count();
+
+  auto contents = column.release();
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(
+      set_buffer(std::move(contents.null_mask), kValidityBufferIdx, tmp.get()));
+  }
+
+  ArrowArray* child_ptr = tmp->children[0];
+  for (auto&& child : contents.children) {
+    if (child->type().id() == cudf::type_id::EMPTY) {
+      NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(child_ptr, NANOARROW_TYPE_NA));
+      child_ptr->length     = child->size();
+      child_ptr->null_count = child->size();
+    } else {
+      NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+        child->type(), dispatch_to_arrow_device{}, *child, stream, mr, child_ptr));
+    }
+
+    child_ptr++;
+  }
+
+  NANOARROW_RETURN_NOT_OK(
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+  ArrowArrayMove(tmp.get(), out);
+  return NANOARROW_OK;
 }
 
 template <>
 int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
-                                                          cudf::type_id id,
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr,
-                                                          struct ArrowArray* out)
+                                                          ArrowArray* out)
 {
-  CUDF_FAIL("Unsupported type for to_arrow_device");
+  nanoarrow::UniqueArray tmp;
+  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_LIST));
+  tmp->length     = column.size();
+  tmp->null_count = column.null_count();
+
+  auto contents = column.release();
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(
+      set_buffer(std::move(contents.null_mask), kValidityBufferIdx, tmp.get()));
+  }
+  auto offsets_contents =
+    contents.children[cudf::lists_column_view::offsets_column_index]->release();
+  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
+
+  std::unique_ptr<cudf::column>& child =
+    contents.children[cudf::lists_column_view::child_column_index];
+  if (child->type().id() == cudf::type_id::EMPTY) {
+    NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp->children[0], NANOARROW_TYPE_NA));
+    tmp->children[0]->length     = 0;
+    tmp->children[0]->null_count = 0;
+  } else {
+    NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+      child->type(), dispatch_to_arrow_device{}, *child, stream, mr, tmp->children[0]));
+  }
+
+  NANOARROW_RETURN_NOT_OK(
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+  ArrowArrayMove(tmp.get(), out);
+  return NANOARROW_OK;
 }
 
 template <>
 int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& column,
-                                                             cudf::type_id id,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
-                                                             struct ArrowArray* out)
+                                                             ArrowArray* out)
 {
-  CUDF_FAIL("Unsupported type for to_arrow_device");
+  nanoarrow::UniqueArray tmp;
+  NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(
+    tmp.get(),
+    id_to_arrow_type(
+      column.child(cudf::dictionary_column_view::indices_column_index).type().id())));
+  NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateDictionary(tmp.get()));
+  tmp->length     = column.size();
+  tmp->null_count = column.null_count();
+
+  auto contents = column.release();
+  if (contents.null_mask) {
+    NANOARROW_RETURN_NOT_OK(
+      set_buffer(std::move(contents.null_mask), kValidityBufferIdx, tmp.get()));
+  }
+
+  auto indices_contents =
+    contents.children[cudf::dictionary_column_view::indices_column_index]->release();
+  NANOARROW_RETURN_NOT_OK(
+    set_buffer(std::move(indices_contents.data), kFixedWidthDataBufferIdx, tmp.get()));
+
+  std::unique_ptr<cudf::column>& keys =
+    contents.children[cudf::dictionary_column_view::keys_column_index];
+  NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
+    keys->type(), dispatch_to_arrow_device{}, *keys, stream, mr, tmp->dictionary));
+
+  NANOARROW_RETURN_NOT_OK(
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+  ArrowArrayMove(tmp.get(), out);
+  return NANOARROW_OK;
 }
 
 struct ArrowDeviceArrayPrivateData {
-  struct ArrowArray parent;
+  ArrowArray parent;
   cudaEvent_t sync_event;
 };
 
-void ArrowDeviceArrayRelease(struct ArrowArray* array)
+void ArrowDeviceArrayRelease(ArrowArray* array)
 {
   auto private_data = reinterpret_cast<ArrowDeviceArrayPrivateData*>(array->private_data);
   cudaEventDestroy(private_data->sync_event);
@@ -530,7 +646,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
   return result;
 }
 
-struct ArrowDeviceArray to_arrow_device(cudf::table&& table,
+ArrowDeviceArray to_arrow_device(cudf::table&& table,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
@@ -554,8 +670,11 @@ struct ArrowDeviceArray to_arrow_device(cudf::table&& table,
     }
 
     NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-      col->type(), detail::dispatch_to_arrow_device{}, *col, col->type().id(), stream, mr, child));
+      col->type(), detail::dispatch_to_arrow_device{}, *col, stream, mr, child));
   }
+
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
 
   auto private_data = std::make_unique<detail::ArrowDeviceArrayPrivateData>();
   cudaEventCreate(&private_data->sync_event);

@@ -39,6 +39,8 @@
 
 #include <nanoarrow/nanoarrow.hpp>
 
+// from Arrow C Device Data Interface
+// https://arrow.apache.org/docs/format/CDeviceDataInterface.html
 #ifndef ARROW_C_DEVICE_DATA_INTERFACE
 #define ARROW_C_DEVICE_DATA_INTERFACE
 
@@ -257,7 +259,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
  * @note Copies will be performed in the cases where cudf differs from Arrow
  * such as in the representation of bools (Arrow uses a bitmap, cudf uses 1-byte per value).
  */
-struct ArrowDeviceArray to_arrow_device(
+ArrowDeviceArray to_arrow_device(
   cudf::table&& table,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
