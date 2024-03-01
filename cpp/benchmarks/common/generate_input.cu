@@ -108,7 +108,7 @@ int num_direct_parents(int num_lvls, int num_leaf_columns)
   int const num_children_max = num_children_min + 1;
 
   // Minimum number of columns needed so that their number of children does not exceed the maximum
-  int const min_for_current_nesting = std::ceil((double)num_leaf_columns / num_children_max);
+  int const min_for_current_nesting = std::ceil(static_cast<double>(num_leaf_columns) / num_children_max);
   // Minimum number of columns needed so that columns at the higher levels have at least the minimum
   // number of children
   int const min_for_upper_nesting = std::pow(num_children_min, num_lvls - 1);
