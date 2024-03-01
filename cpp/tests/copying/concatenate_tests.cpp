@@ -246,15 +246,14 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
 
   auto sliced = cudf::split(result->view(),
                             {5'000'000,
-                              10'000'000,
-                              15'000'000,
+                             10'000'000,
+                             15'000'000,
                              20'000'000,
                              25'000'000,
                              30'000'000,
                              35'000'000,
                              40'000'000,
-                             45'000'000
-                             });
+                             45'000'000});
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
