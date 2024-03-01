@@ -195,6 +195,10 @@ class parquet_reader_options {
   /**
    * @brief Sets AST based filter for predicate pushdown.
    *
+   * The filter can utilize cudf::ast::column_name_reference to reference a column by its name,
+   * even if it's not necessarily present in the requested projected columns.
+   * To refer to output column indices, you can use cudf::ast::column_reference.
+   *
    * @param filter AST expression to use as filter
    */
   void set_filter(ast::expression const& filter) { _filter = filter; }
@@ -292,9 +296,13 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
+   * @brief Sets AST based filter for predicate pushdown.
    *
-   * @param filter Vector of row groups to read
+   * The filter can utilize cudf::ast::column_name_reference to reference a column by its name,
+   * even if it's not necessarily present in the requested projected columns.
+   * To refer to output column indices, you can use cudf::ast::column_reference.
+   *
+   * @param filter AST expression to use as filter
    * @return this for chaining
    */
   parquet_reader_options_builder& filter(ast::expression const& filter)
