@@ -100,7 +100,7 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
 auto chunked_read(std::string const& filepath,
                   std::size_t output_limit,
                   std::size_t input_limit                = 0,
-                  cudf::size_type output_row_granularity = 0)
+                  cudf::size_type output_row_granularity = 10'000)
 {
   auto const read_opts =
     cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).build();
@@ -214,7 +214,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
   // Test with a very small limit: 1 byte
   {
     auto const [result, num_chunks] = chunked_read(filepath, 1);
-    EXPECT_EQ(num_chunks, 2);
+    // Number of chunks is 4 because of using default output_row_granularity=10k.
+    EXPECT_EQ(num_chunks, 4);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
