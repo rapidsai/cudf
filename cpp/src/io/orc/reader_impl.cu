@@ -746,19 +746,26 @@ std::vector<chunk> find_table_splits(table_view const& input,
   // Default 10k rows.
   auto const d_segmented_sizes = cudf::detail::segmented_row_bit_count(
     input, segment_length, stream, rmm::mr::get_current_device_resource());
-  auto const d_size_begin = d_segmented_sizes->view().begin<size_type>();
 
   auto segmented_sizes =
     cudf::detail::hostdevice_vector<cumulative_size>(d_segmented_sizes->size(), stream);
 
   // TODO: exec_policy_nosync
-  thrust::transform(rmm::exec_policy(stream),
-                    d_size_begin,
-                    d_size_begin + d_segmented_sizes->size(),
-                    segmented_sizes.d_begin(),
-                    [segment_length] __device__(auto const size) {
-                      return cumulative_size{segment_length, static_cast<std::size_t>(size)};
-                    });
+  thrust::transform(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(d_segmented_sizes->size()),
+    segmented_sizes.d_begin(),
+    [segment_length,
+     num_rows = input.num_rows(),
+     d_sizes  = d_segmented_sizes->view().begin<size_type>()] __device__(auto const segment_idx) {
+      // Since the number of rows may not divisible by segment_length,
+      // the last segment may be shorter than the others.
+      auto const current_length =
+        cuda::std::min(segment_length, num_rows - segment_length * segment_idx);
+      auto const size = d_sizes[segment_idx];
+      return cumulative_size{current_length, static_cast<std::size_t>(size)};
+    });
 
   // TODO: remove:
   segmented_sizes.device_to_host_sync(stream);
