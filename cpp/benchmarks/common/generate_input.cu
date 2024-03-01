@@ -116,6 +116,12 @@ int num_direct_parents(int num_lvls, int num_leaf_columns)
   return std::max(min_for_current_nesting, min_for_upper_nesting);
 }
 
+// Size of the null mask for each row, in bytes
+[[nodiscard]] double row_null_mask_size(data_profile const& profile)
+{
+  return profile.get_null_probability().has_value() ? 1. / 8 : 0.;
+}
+
 /**
  * @brief Computes the average element size in a column, given the data profile.
  *
@@ -141,10 +147,9 @@ double non_fixed_width_size(data_profile const& profile)
 template <>
 double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
-  auto const dist           = profile.get_distribution_params<cudf::string_view>().length_params;
-  auto const null_mask_size = profile.get_null_probability().has_value() ? 1. / 8 : 0.;
+  auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
   return get_distribution_mean(dist) * profile.get_valid_probability() + sizeof(cudf::size_type) +
-         null_mask_size;
+         row_null_mask_size(profile);
 }
 
 double geometric_sum(size_t n, double p)
@@ -160,20 +165,18 @@ double non_fixed_width_size<cudf::list_view>(data_profile const& profile)
   auto const single_level_mean =
     get_distribution_mean(dist_params.length_params) * profile.get_valid_probability();
 
+  // Leaf column size
   auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
   auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
 
+  auto const offset_size = avg_element_size(profile, cudf::data_type{cudf::type_id::INT32});
   // Each nesting level includes offsets, this is the sum of all levels
   auto const total_offset_count = geometric_sum(dist_params.max_depth, single_level_mean);
 
-  auto const total_null_mask_size =
-    profile.get_null_probability().has_value() ? dist_params.max_depth * 1. / 8 : 0.;
-
-  return sizeof(cudf::size_type) * total_offset_count + element_size * element_count +
-         total_null_mask_size;
+  return element_size * element_count + offset_size * total_offset_count;
 }
 
-cudf::size_type num_struct_columns(data_profile const& profile)
+[[nodiscard]] cudf::size_type num_struct_columns(data_profile const& profile)
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
 
@@ -190,15 +193,18 @@ template <>
 double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
-  auto const structs_null_mask_size =
-    profile.get_null_probability().has_value() ? num_struct_columns(profile) * 1. / 8 : 0;
-  return struct_null_mask_size +
-         std::accumulate(dist_params.leaf_types.cbegin(),
-                         dist_params.leaf_types.cend(),
-                         0ul,
-                         [&](auto& sum, auto type_id) {
-                           return sum + avg_element_size(profile, cudf::data_type{type_id});
-                         });
+  auto const total_children_size =
+    std::accumulate(dist_params.leaf_types.cbegin(),
+                    dist_params.leaf_types.cend(),
+                    0ul,
+                    [&](auto& sum, auto type_id) {
+                      return sum + avg_element_size(profile, cudf::data_type{type_id});
+                    });
+
+  // struct columns have a null mask for each row
+  auto const structs_null_mask_size = num_struct_columns(profile) * row_null_mask_size(profile);
+
+  return total_children_size + structs_null_mask_size;
 }
 
 struct non_fixed_width_size_fn {
@@ -211,9 +217,7 @@ struct non_fixed_width_size_fn {
 
 double avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
-  if (cudf::is_fixed_width(dtype)) {
-    return cudf::size_of(dtype) + profile.get_null_probability().has_value() * 1. / 8;
-  }
+  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype) + row_null_mask_size(profile); }
   return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
 
