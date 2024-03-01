@@ -67,7 +67,9 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   }
 
   /**
-   * @briefreturn{Upstream* to the upstream memory resource}
+   * @brief Return pointer to the upstream resource.
+   *
+   * @return Pointer to the upstream resource.
    */
   [[deprecated("Use get_upstream_resource instead")]] [[nodiscard]] Upstream* get_upstream()
     const noexcept
