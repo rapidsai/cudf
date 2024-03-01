@@ -375,7 +375,7 @@ reader::impl::impl(std::size_t chunk_read_limit,
                               _timestamp_type.id());
 
   // Find the name, and dtypes of parquet root level schema. (save it in _metadata.)
-  _metadata->get_schema_dtypes(_strings_to_categorical, _timestamp_type.id());
+  _metadata->cache_root_dtypes_names(_strings_to_categorical, _timestamp_type.id());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   for (auto const& buff : _output_buffers) {

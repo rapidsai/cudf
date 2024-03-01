@@ -374,12 +374,12 @@ class stats_expression_converter : public ast::detail::expression_transformer {
 };
 }  // namespace
 
-std::tuple<host_span<data_type const>, host_span<std::string const>>
-aggregate_reader_metadata::get_schema_dtypes(bool strings_to_categorical, type_id timestamp_type_id)
+void aggregate_reader_metadata::cache_root_dtypes_names(bool strings_to_categorical,
+                                                        type_id timestamp_type_id)
 {
   // TODO, get types and names for only names present in filter.? and their col_idx.
   // create root column types and names as vector
-  if (!_root_level_types.empty()) return {_root_level_types, _root_level_names};
+  if (!_root_level_types.empty()) return;
   std::function<cudf::data_type(int)> get_dtype = [strings_to_categorical,
                                                    timestamp_type_id,
                                                    &get_dtype,
@@ -408,8 +408,6 @@ aggregate_reader_metadata::get_schema_dtypes(bool strings_to_categorical, type_i
     _root_level_types.push_back(get_dtype(schema_idx));
     _root_level_names.push_back(get_schema(schema_idx).name);
   }
-  return {_root_level_types, _root_level_names};
-  ;
 }
 
 std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::filter_row_groups(

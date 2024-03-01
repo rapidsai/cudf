@@ -170,8 +170,13 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
-  std::tuple<host_span<data_type const>, host_span<std::string const>> get_schema_dtypes(
-    bool strings_to_categorical, type_id timestamp_type_id);
+  /**
+   * @brief Extract root level column data types and names and caches them.
+   *
+   * @param strings_to_categorical Type conversion parameter
+   * @param timestamp_type_id Type conversion parameter
+   */
+  void cache_root_dtypes_names(bool strings_to_categorical, type_id timestamp_type_id);
 
   /**
    * @brief Filters the row groups based on predicate filter
@@ -241,15 +246,15 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   {
     if (!expr.has_value()) return;
     // create map for column name.
-    std::transform(
-      thrust::make_zip_iterator(metadata.schema_info.cbegin(),
-                                thrust::counting_iterator<size_t>(0)),
-      thrust::make_zip_iterator(metadata.schema_info.cend(),
-                                thrust::counting_iterator(metadata.schema_info.size())),
-      std::inserter(column_name_to_index, column_name_to_index.end()),
-      [](auto const& name_index) {
-        return std::make_pair(thrust::get<0>(name_index).name, thrust::get<1>(name_index));
-      });
+    auto it_name_id = thrust::make_zip_iterator(metadata.schema_info.cbegin(),
+                                                thrust::counting_iterator<size_t>(0));
+    std::transform(it_name_id,
+                   it_name_id + metadata.schema_info.size(),
+                   std::inserter(column_name_to_index, column_name_to_index.end()),
+                   [](auto const& name_index) {
+                     return std::make_pair(thrust::get<0>(name_index).name,
+                                           thrust::get<1>(name_index));
+                   });
 
     expr.value().get().accept(*this);
   }
