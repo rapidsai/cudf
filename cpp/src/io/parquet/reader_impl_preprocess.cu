@@ -312,7 +312,8 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
 /**
  * @brief Count the total number of pages using page index information.
  */
-[[nodiscard]] size_t count_page_headers_with_pgidx(host_span<ColumnChunkDesc> chunks)
+[[nodiscard]] size_t count_page_headers_with_pgidx(
+  cudf::detail::hostdevice_vector<ColumnChunkDesc>& chunks, rmm::cuda_stream_view stream)
 {
   size_t total_pages = 0;
   for (auto& chunk : chunks) {
@@ -322,6 +323,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
     chunk.num_data_pages   = chunk_info.pages.size();
     total_pages += chunk.num_data_pages + chunk.num_dict_pages;
   }
+
+  // count_page_headers() also pushes chunks to device, so not using thrust here
+  chunks.host_to_device_async(stream);
+
   return total_pages;
 }
 
@@ -988,8 +993,8 @@ void reader::impl::read_compressed_data()
   }
 
   // Process dataset chunk pages into output columns
-  auto const total_pages =
-    _has_page_index ? count_page_headers_with_pgidx(chunks) : count_page_headers(chunks, _stream);
+  auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
+                                           : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
   rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
 
