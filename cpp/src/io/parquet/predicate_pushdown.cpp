@@ -570,4 +570,40 @@ named_to_reference_converter::visit_operands(
   return transformed_operands;
 }
 
+// extract column names from expression
+std::reference_wrapper<ast::expression const> names_from_expression::visit(ast::literal const& expr)
+{
+  return expr;
+}
+
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::column_reference const& expr)
+{
+  return expr;
+}
+
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::column_name_reference const& expr)
+{
+  // collect column names
+  auto col_name = expr.get_column_name();
+  if (_skip_names.count(col_name) == 0) { _column_names.insert(col_name); }
+  return expr;
+}
+
+std::reference_wrapper<ast::expression const> names_from_expression::visit(
+  ast::operation const& expr)
+{
+  visit_operands(expr.get_operands());
+  return expr;
+}
+
+void names_from_expression::visit_operands(
+  std::vector<std::reference_wrapper<ast::expression const>> operands)
+{
+  for (auto const& operand : operands) {
+    operand.get().accept(*this);
+  }
+}
+
 }  // namespace cudf::io::parquet::detail

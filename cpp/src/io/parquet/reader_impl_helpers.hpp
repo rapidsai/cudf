@@ -30,6 +30,7 @@
 
 #include <list>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -211,6 +212,7 @@ class aggregate_reader_metadata {
    *
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
+   * @param filter_columns_names List of paths of column names that are present only in filter
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
@@ -222,6 +224,7 @@ class aggregate_reader_metadata {
                            std::vector<cudf::io::detail::inline_column_buffer>,
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 std::optional<std::vector<std::string>> const& filter_columns_names,
                  bool include_index,
                  bool strings_to_categorical,
                  type_id timestamp_type_id) const;
@@ -304,6 +307,55 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
+};
+
+/**
+ * @brief Converts named columns to index reference columns
+ *
+ */
+class names_from_expression : public ast::detail::expression_transformer {
+ public:
+  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                        std::vector<std::string> const& skip_names)
+    : _skip_names(skip_names.cbegin(), skip_names.cend())
+  {
+    if (!expr.has_value()) return;
+    expr.value().get().accept(*this);
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns the column names in AST.
+   *
+   * @return AST operation expression
+   */
+  [[nodiscard]] std::vector<std::string> get_column_names() const
+  {
+    return {_column_names.begin(), _column_names.end()};
+  }
+
+ private:
+  void visit_operands(std::vector<std::reference_wrapper<ast::expression const>> operands);
+
+  std::unordered_set<std::string> _column_names;
+  std::unordered_set<std::string> _skip_names;
 };
 
 }  // namespace cudf::io::parquet::detail

@@ -364,6 +364,9 @@ class reader::impl {
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
 
+  // number of extra filter columns
+  std::size_t _num_filter_columns{0};
+
   bool _strings_to_categorical = false;
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};

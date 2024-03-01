@@ -1417,11 +1417,11 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   auto filter_expr     = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index, lit);
 
   auto predicate       = cudf::compute_column(src, filter_expr);
-  auto projected_table = cudf::table_view{{src.get_column(2), src.get_column(0)}};
+  auto projected_table = cudf::table_view{{src.get_column(2)}};
   auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
 
   auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                     .columns({"col_double", "col_uint32"})
+                     .columns({"col_double"})
                      .filter(read_expr);
   auto result = cudf::io::read_parquet(read_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
