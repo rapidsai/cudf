@@ -508,7 +508,6 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
       mcv.end<size_type>(),
       cuda::proclaim_return_type<size_type>(
         [segment_length,
-         num_segments,
          num_rows     = t.num_rows(),
          per_row_size = h_info.simple_per_row_size] __device__(size_type const segment_idx) {
           // Since the number of rows may not divisible by segment_length,
