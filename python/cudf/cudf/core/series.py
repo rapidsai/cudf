@@ -2054,6 +2054,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: float64
 
         ``arrow_type=True`` converts the result to ``pandas.ArrowDtype``:
+
         >>> ser.to_pandas(arrow_type=True)
         0      10
         1      20
