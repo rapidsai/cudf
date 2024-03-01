@@ -20,6 +20,7 @@
 #include <cudf/detail/utilities/stacktrace.hpp>
 
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <iostream>
 
@@ -58,11 +59,21 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     default;
 
   /**
-   * @brief Return pointer to the upstream resource.
-   *
-   * @return Pointer to the upstream resource.
+   * @briefreturn{rmm::device_async_resource_ref to the upstream resource}
    */
-  Upstream* get_upstream() const noexcept { return upstream_; }
+  [[nodiscard]] rmm::device_async_resource_ref get_upstream_resource() const noexcept
+  {
+    return upstream_;
+  }
+
+  /**
+   * @briefreturn{Upstream* to the upstream memory resource}
+   */
+  [[deprecated("Use get_upstream_resource instead")]] [[nodiscard]] Upstream* get_upstream()
+    const noexcept
+  {
+    return upstream_;
+  }
 
  private:
   /**
@@ -110,8 +121,8 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   {
     if (this == &other) { return true; }
     auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);
-    return cast != nullptr ? upstream_->is_equal(*cast->get_upstream())
-                           : upstream_->is_equal(other);
+    if (cast == nullptr) { return upstream_->is_equal(other); }
+    return get_upstream_resource() == cast->get_upstream_resource();
   }
 
   /**
