@@ -24,9 +24,6 @@
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
-#include <cudf/interop/nanoarrow/nanoarrow.h>
-#include <cudf/interop/nanoarrow/nanoarrow.hpp>
-#include <cudf/interop/nanoarrow/nanoarrow_device.h>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -43,7 +40,9 @@
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
+
+#include <nanoarrow/nanoarrow.h>
+#include <nanoarrow/nanoarrow.hpp>
 
 namespace cudf {
 namespace detail {
@@ -509,7 +508,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
   nanoarrow::UniqueSchema result;
   ArrowSchemaInit(result.get());
   NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(result.get(), input.num_columns()));
-  
+
   // what i would give for a zip iterator....
   // thrust::zip_iterator doesn't implement begin/end so I can't use it
   // for the range-based for loop

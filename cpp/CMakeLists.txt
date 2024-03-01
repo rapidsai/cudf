@@ -209,11 +209,17 @@ include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
 
+FetchContent_Declare(nanoarrow 
+                     GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
+                     GIT_TAG 7cf50a3208c0d55f5cd230f611bef808d8683832
+                     GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(nanoarrow)
+
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -228,6 +234,8 @@ if(NOT BUILD_SHARED_LIBS)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
 endif()
+
+install(TARGETS nanoarrow EXPORT cudf-exports)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -357,8 +365,6 @@ add_library(
   src/interop/to_arrow.cu
   src/interop/to_arrow_device.cu
   src/interop/detail/arrow_allocator.cpp
-  src/interop/vendor/nanoarrow/nanoarrow.c
-  src/interop/vendor/nanoarrow/nanoarrow_device.c
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
   src/io/avro/reader_impl.cu
@@ -733,6 +739,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -781,7 +788,7 @@ target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
   PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
