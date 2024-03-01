@@ -647,8 +647,8 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
 }
 
 ArrowDeviceArray to_arrow_device(cudf::table&& table,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRUCT));
