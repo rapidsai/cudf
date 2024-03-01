@@ -739,6 +739,10 @@ std::vector<chunk> find_table_splits(table_view const& input,
   // As such, set segment length to the number of rows.
   if (segment_length == 0) { segment_length = input.num_rows(); }
 
+  // If we have small number of rows, need to adjust segment_length before calling to
+  // `segmented_row_bit_count`.
+  segment_length = std::min(segment_length, input.num_rows());
+
   // Default 10k rows.
   auto const d_segmented_sizes = cudf::detail::segmented_row_bit_count(
     input, segment_length, stream, rmm::mr::get_current_device_resource());
