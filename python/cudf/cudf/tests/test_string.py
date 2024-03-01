@@ -891,7 +891,7 @@ def test_string_repeat(data, repeats):
 )
 @pytest.mark.parametrize("repl", ["qwerty", "", " "])
 @pytest.mark.parametrize("case,case_raise", [(None, 0), (True, 1), (False, 1)])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (re.U, 1)])
 def test_string_replace(
     ps_gs, pat, repl, case, case_raise, flags, flags_raise, regex
 ):
