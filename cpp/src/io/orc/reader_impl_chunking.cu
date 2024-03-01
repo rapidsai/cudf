@@ -763,7 +763,7 @@ void reader::impl::load_data()
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
                (int)info.id.stripe_idx,
                (int)info.id.level,
-               (int)info.id.orc_cold_idx,
+               (int)info.id.orc_col_idx,
                (int)info.id.kind,
                info.dst_pos,
                info.length);
@@ -823,9 +823,14 @@ void reader::impl::load_data()
   _chunk_read_data.curr_decode_stripe_chunk = 0;
 
   // Decode all chunks if there is no read and no output limit.
-  if (_chunk_read_data.data_read_limit == 0 && _chunk_read_data.output_size_limit == 0) {
+  // In theory, we should just decode enough stripes for output one table chunk.
+  // However, we do not know the output size of each stripe after decompressing and decoding,
+  // thus we have to process all loaded chunks.
+  // That is because the estimated `max_uncompressed_size` of stream data from
+  // `ParseCompressedStripeData` is just the approximate of the maximum possible size, not the
+  // actual size, which can be much smaller in practice.
+  if (_chunk_read_data.data_read_limit == 0) {
     _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
-    // TODO: DEBUG only
     return;
   }
 
@@ -842,19 +847,8 @@ void reader::impl::load_data()
   // DEBUG only
   // _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
 
-  // TODO: Check and turn this 1.0.
-  // If there is no read limit, we still do not decode all stripes.
-  // Typically, the limit below will result in a very large number of stripes
-  // since their data is compressed to be much smaller than the actual data.
-  // However, it is still better than decoding all stripes, which may be a huge number.
-  auto const decode_size_limit = _chunk_read_data.data_read_limit > 0
-                                   ? _chunk_read_data.data_read_limit
-                                   : _chunk_read_data.output_size_limit;
-
-  printf("decode size limit: %d\n", (int)decode_size_limit);
-
   _chunk_read_data.decode_stripe_chunks =
-    find_splits(stripe_decomp_sizes, stripe_chunk.count, decode_size_limit);
+    find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
     chunk.start_idx += stripe_chunk.start_idx;
   }

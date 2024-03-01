@@ -62,13 +62,10 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::size_t stripe_size_bytes    = cudf::io::default_stripe_size_bytes,
                 cudf::size_type stripe_size_rows = cudf::io::default_stripe_size_rows)
 {
-  // Just shift nulls of the next column by one position to avoid having all nulls in the same
-  // table rows.
   if (nullable) {
     // Generate deterministic bitmask instead of random bitmask for easy computation of data size.
     auto const valid_iter = cudf::detail::make_counting_transform_iterator(
       0, [](cudf::size_type i) { return i % 4 != 3; });
-
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
       auto const [null_mask, null_count] =
@@ -79,6 +76,10 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         std::move(col),
         cudf::get_default_stream(),
         rmm::mr::get_current_device_resource());
+
+      // Shift nulls of the next column by one position, to avoid having all nulls
+      // in the same table rows.
+      ++offset;
     }
   }
 
