@@ -946,3 +946,59 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNullCount)
     EXPECT_EQ(reader.read_chunk().tbl->get_column(0).null_count(), stripe_limit_rows / 4UL);
   } while (reader.has_next());
 }
+
+namespace {
+
+constexpr size_t input_limit_expected_file_count = 3;
+
+std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
+{
+  return {base_filename + "_a.orc", base_filename + "_b.orc", base_filename + "_c.orc"};
+}
+
+void input_limit_test_write_one(std::string const& filepath,
+                                cudf::table_view const& input,
+                                cudf::io::compression_type compression)
+{
+  auto const out_opts = cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input)
+                          .compression(compression)
+                          .build();
+  cudf::io::write_orc(out_opts);
+}
+
+void input_limit_test_write(std::vector<std::string> const& test_filenames,
+                            cudf::table_view const& input)
+{
+  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+               "Unexpected count of test filenames.");
+
+  // No compression
+  input_limit_test_write_one(test_filenames[0], input, cudf::io::compression_type::NONE);
+
+  // Compression with a codec that uses a lot of scratch space at decode time (2.5x the total
+  // decompressed buffer size).
+  input_limit_test_write_one(test_filenames[1], input, cudf::io::compression_type::ZSTD);
+
+  // Compression with a codec that uses no scratch space at decode time.
+  input_limit_test_write_one(test_filenames[2], input, cudf::io::compression_type::SNAPPY);
+}
+
+void input_limit_test_read(std::vector<std::string> const& test_filenames,
+                           cudf::table_view const& input,
+                           size_t output_limit,
+                           size_t input_limit,
+                           int const* expected_chunk_counts)
+{
+  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+               "Unexpected count of test filenames.");
+
+  for (size_t idx = 0; idx < test_filenames.size(); idx++) {
+    auto const result = chunked_read(test_filenames[idx], output_limit, input_limit);
+    EXPECT_EQ(expected_chunk_counts[idx], result.second)
+      << "Unexpected number of chunks produced in chunk read.";
+    // TODO: equal
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, input);
+  }
+}
+
+}  // namespace
