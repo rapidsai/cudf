@@ -184,8 +184,7 @@ struct distribution_params<T, std::enable_if_t<std::is_same_v<T, cudf::struct_vi
 
 // Present for compilation only. To be implemented once reader/writers support the fixed width type.
 template <typename T>
-struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
-};
+struct distribution_params<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {};
 
 /**
  * @brief Returns a vector of types, corresponding to the input type or a type group.
