@@ -42,7 +42,7 @@ strings_column_view::offset_iterator strings_column_view::offsets_begin() const
 
 strings_column_view::offset_iterator strings_column_view::offsets_end() const
 {
-  return offsets_begin() + size() + 1;
+  return offsets().begin<size_type>() + offset() + size() + 1;
 }
 
 size_type strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
