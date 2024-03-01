@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
