@@ -949,7 +949,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNullCount)
 
 namespace {
 
-constexpr size_t input_limit_expected_file_count = 3;
+std::size_t constexpr input_limit_expected_file_count = 3;
 
 std::vector<std::string> input_limit_get_test_names(std::string const& base_filename)
 {
@@ -962,43 +962,77 @@ void input_limit_test_write_one(std::string const& filepath,
 {
   auto const out_opts = cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input)
                           .compression(compression)
+                          .stripe_size_rows(10'000)  // intentionally write small stripes
                           .build();
   cudf::io::write_orc(out_opts);
 }
 
-void input_limit_test_write(std::vector<std::string> const& test_filenames,
+void input_limit_test_write(std::vector<std::string> const& test_files,
                             cudf::table_view const& input)
 {
-  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+  CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames.");
 
   // No compression
-  input_limit_test_write_one(test_filenames[0], input, cudf::io::compression_type::NONE);
+  input_limit_test_write_one(test_files[0], input, cudf::io::compression_type::NONE);
 
   // Compression with a codec that uses a lot of scratch space at decode time (2.5x the total
   // decompressed buffer size).
-  input_limit_test_write_one(test_filenames[1], input, cudf::io::compression_type::ZSTD);
+  input_limit_test_write_one(test_files[1], input, cudf::io::compression_type::ZSTD);
 
   // Compression with a codec that uses no scratch space at decode time.
-  input_limit_test_write_one(test_filenames[2], input, cudf::io::compression_type::SNAPPY);
+  input_limit_test_write_one(test_files[2], input, cudf::io::compression_type::SNAPPY);
 }
 
-void input_limit_test_read(std::vector<std::string> const& test_filenames,
+void input_limit_test_read(int test_location,
+                           std::vector<std::string> const& test_files,
                            cudf::table_view const& input,
                            size_t output_limit,
                            size_t input_limit,
                            int const* expected_chunk_counts)
 {
-  CUDF_EXPECTS(test_filenames.size() == input_limit_expected_file_count,
+  CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames.");
 
-  for (size_t idx = 0; idx < test_filenames.size(); idx++) {
-    auto const result = chunked_read(test_filenames[idx], output_limit, input_limit);
-    EXPECT_EQ(expected_chunk_counts[idx], result.second)
-      << "Unexpected number of chunks produced in chunk read.";
+  for (size_t idx = 0; idx < test_files.size(); idx++) {
+    SCOPED_TRACE("Original line of failure: " + std::to_string(test_location) +
+                 ", file idx: " + std::to_string(idx));
+    auto const [result, num_chunks] = chunked_read(test_files[idx], output_limit, input_limit);
+    EXPECT_EQ(expected_chunk_counts[idx], num_chunks);
     // TODO: equal
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result.first, input);
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, input);
   }
 }
 
 }  // namespace
+
+struct OrcChunkedReaderInputLimitTest : public cudf::test::BaseFixture {};
+
+TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
+{
+  auto constexpr num_rows = 1'000'000;
+  auto const iter1        = thrust::make_constant_iterator(15);
+  auto const col1         = cudf::test::fixed_width_column_wrapper<double>(iter1, iter1 + num_rows);
+  auto const input        = cudf::table_view{{col1}};
+
+  auto const filename   = std::string{"single_col_fixed_width"};
+  auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
+  input_limit_test_write(test_files, input);
+
+  // Some small limit.
+  {
+    int constexpr expected[] = {100, 100, 100};
+    input_limit_test_read(__LINE__, test_files, input, 0UL, 1UL, expected);
+  }
+
+  if (0) {
+    int constexpr expected[] = {15, 20, 9};
+    input_limit_test_read(__LINE__, test_files, input, 0UL, 2 * 1024 * 1024UL, expected);
+  }
+
+  // Limit of 1 byte.
+  if (0) {
+    int constexpr expected[] = {1, 50, 50};
+    input_limit_test_read(__LINE__, test_files, input, 0UL, 1UL, expected);
+  }
+}
