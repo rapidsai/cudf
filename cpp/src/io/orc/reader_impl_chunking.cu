@@ -487,6 +487,7 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   // Logically view streams as columns
   _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
 
+  // TODO: handle large number of stripes.
   // Get the total number of stripes across all input files.
   auto const num_stripes = selected_stripes.size();
 
@@ -624,14 +625,13 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     printf("size: %ld, %zu\n", size.count, size.size_bytes);
   }
 
-  // DEBUG only
-  // TODO: use 0.3 constant
-  // _chunk_read_data.data_read_limit = total_stripe_sizes.back().size_bytes / 3;
-
   // TODO: handle case for extremely large files.
-
-  _chunk_read_data.load_stripe_chunks =
-    find_splits(total_stripe_sizes, num_stripes, _chunk_read_data.data_read_limit);
+  auto const load_limit = [&] {
+    auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
+                                              chunk_read_data::load_limit_ratio);
+    return tmp > 0UL ? tmp : 1UL;
+  }();
+  _chunk_read_data.load_stripe_chunks = find_splits(total_stripe_sizes, num_stripes, load_limit);
 
 #ifndef PRINT_DEBUG
   auto& splits = _chunk_read_data.load_stripe_chunks;
@@ -844,11 +844,13 @@ void reader::impl::load_data()
 
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
-  // DEBUG only
-  // _chunk_read_data.data_read_limit = stripe_decomp_sizes.back().size_bytes / 3;
-
+  auto const decode_limit = [&] {
+    auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
+                                              (1.0 - chunk_read_data::load_limit_ratio));
+    return tmp > 0UL ? tmp : 1UL;
+  }();
   _chunk_read_data.decode_stripe_chunks =
-    find_splits(stripe_decomp_sizes, stripe_chunk.count, _chunk_read_data.data_read_limit);
+    find_splits(stripe_decomp_sizes, stripe_chunk.count, decode_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
     chunk.start_idx += stripe_chunk.start_idx;
   }
