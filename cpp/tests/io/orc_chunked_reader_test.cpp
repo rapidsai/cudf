@@ -130,6 +130,10 @@ auto chunked_read(std::string const& filepath,
     out_tables.emplace_back(std::move(chunk.tbl));
   } while (reader.has_next());
 
+  if (num_chunks > 1) {
+    CUDF_EXPECTS(out_tables.front()->num_rows() != 0, "Number of rows in the new chunk is zero.");
+  }
+
   auto out_tviews = std::vector<cudf::table_view>{};
   for (auto const& tbl : out_tables) {
     out_tviews.emplace_back(tbl->view());
