@@ -59,7 +59,9 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     default;
 
   /**
-   * @briefreturn{rmm::device_async_resource_ref to the upstream resource}
+   * @brief Return rmm::device_resource_ref of the upstream resource.
+   *
+   * @return rmm::device_resource_ref of the upstream resource.
    */
   [[nodiscard]] rmm::device_async_resource_ref get_upstream_resource() const noexcept
   {
