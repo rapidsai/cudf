@@ -1112,7 +1112,6 @@ struct value_gen {
   __device__ T operator()(int i) const { return i % 1024; }
 };
 
-#if 0
 struct char_values {
   __device__ int8_t operator()(int i) const
   {
@@ -1121,7 +1120,6 @@ struct char_values {
     return index == 0 ? 'a' : (index == 1 ? 'b' : 'c');
   }
 };
-#endif
 
 }  // namespace
 
@@ -1156,15 +1154,10 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   auto const filename   = std::string{"list_type"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
   auto const input      = cudf::table_view{{*lists_col}};
-  input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
-  {
-    // Although we set `stripe_size_rows` to be very large, the writer only write
-    // 250k rows per stripe. Thus, we have 200 stripes in total.
-    int constexpr expected[] = {200, 200, 200};
-    input_limit_test_read(
-      __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
-  }
+  // Although we set `stripe_size_rows` to be very large, the writer only write
+  // 250k rows per stripe. Thus, we have 200 stripes in total.
+  input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
   {
     int constexpr expected[] = {2, 34, 2};
@@ -1179,6 +1172,88 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
                           input,
                           output_limit{128 * 1024 * 1024UL},
                           input_limit{5 * 1024 * 1024UL},
+                          expected);
+  }
+}
+
+TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
+{
+  int constexpr num_rows  = 50'000'000;
+  int constexpr list_size = 4;
+  int constexpr str_size  = 3;
+
+  auto const stream = cudf::get_default_stream();
+  auto const iter   = thrust::make_counting_iterator(0);
+
+  // list<int>
+  auto offset_col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_rows + 1,
+                    offset_col->mutable_view().begin<int>(),
+                    offset_gen{list_size});
+
+  int constexpr num_ints = num_rows * list_size;
+  auto value_col         = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_ints,
+                    value_col->mutable_view().begin<int>(),
+                    value_gen<int>{});
+
+  auto const lists_col =
+    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {}, stream);
+
+  // strings
+  int constexpr num_chars = num_rows * str_size;
+  auto str_offset_col     = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_rows + 1,
+                    str_offset_col->mutable_view().begin<int>(),
+                    offset_gen{str_size});
+  rmm::device_buffer str_chars(num_chars, stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_chars,
+                    static_cast<int8_t*>(str_chars.data()),
+                    char_values{});
+  auto const str_col =
+    cudf::make_strings_column(num_rows, std::move(str_offset_col), std::move(str_chars), 0, {});
+
+  // doubles
+  auto const double_col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::FLOAT64}, num_rows, cudf::mask_state::UNALLOCATED);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_rows,
+                    double_col->mutable_view().begin<double>(),
+                    value_gen<double>{});
+
+  auto const filename   = std::string{"mixed_cols_having_list"};
+  auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
+  auto const input      = cudf::table_view{{*lists_col, *str_col, *double_col}};
+
+  // Although we set `stripe_size_rows` to be very large, the writer only write
+  // 250k rows per stripe. Thus, we have 200 stripes in total.
+  input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
+
+  {
+    int constexpr expected[] = {11, 7, 5};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{128 * 1024 * 1024UL}, expected);
+  }
+
+  {
+    int constexpr expected[] = {21, 13, 14};
+    input_limit_test_read(__LINE__,
+                          test_files,
+                          input,
+                          output_limit{128 * 1024 * 1024UL},
+                          input_limit{128 * 1024 * 1024UL},
                           expected);
   }
 }
