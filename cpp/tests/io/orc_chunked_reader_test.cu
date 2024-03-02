@@ -39,6 +39,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -1038,10 +1039,10 @@ TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
   auto constexpr num_rows = 1'000'000;
   auto const iter1        = thrust::make_constant_iterator(15);
   auto const col1         = cudf::test::fixed_width_column_wrapper<double>(iter1, iter1 + num_rows);
-  auto const input        = cudf::table_view{{col1}};
 
   auto const filename   = std::string{"single_col_fixed_width"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
+  auto const input      = cudf::table_view{{col1}};
   input_limit_test_write(test_files, input);
 
   {
@@ -1075,7 +1076,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
   });
   auto const col3     = strings_col(str_iter, str_iter + num_rows);
 
-  auto const filename   = std::string{"single_col_fixed_width"};
+  auto const filename   = std::string{"mixed_columns"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
   auto const input      = cudf::table_view{{col1, col2, col3}};
   input_limit_test_write(test_files, input);
@@ -1090,5 +1091,70 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
     int constexpr expected[] = {15, 100, 21};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
+  }
+}
+
+namespace {
+
+struct offset_gen {
+  int const group_size;
+  __device__ int operator()(int i) const { return i * group_size; }
+};
+
+template <typename T>
+struct value_gen {
+  __device__ T operator()(int i) const { return i % 1024; }
+};
+
+#if 0
+struct char_values {
+  __device__ int8_t operator()(int i) const
+  {
+    int const index = (i / 2) % 3;
+    // Generate repeating 3-runs of 2 values each: "aabbccaabbcc...".
+    return index == 0 ? 'a' : (index == 1 ? 'b' : 'c');
+  }
+};
+#endif
+
+}  // namespace
+
+TEST_F(OrcChunkedReaderInputLimitTest, ListType)
+{
+  int constexpr num_rows  = 50'000'000;
+  int constexpr list_size = 4;
+
+  auto const stream = cudf::get_default_stream();
+  auto const iter   = thrust::make_counting_iterator(0);
+
+  auto offset_col = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_rows + 1, cudf::mask_state::UNALLOCATED);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_rows + 1,
+                    offset_col->mutable_view().begin<int>(),
+                    offset_gen{list_size});
+
+  int constexpr num_ints = num_rows * list_size;
+  auto value_col         = cudf::make_fixed_width_column(
+    cudf::data_type{cudf::type_id::INT32}, num_ints, cudf::mask_state::UNALLOCATED);
+  thrust::transform(rmm::exec_policy(stream),
+                    iter,
+                    iter + num_ints,
+                    value_col->mutable_view().begin<int>(),
+                    value_gen<int>{});
+
+  auto const lists_col =
+    cudf::make_lists_column(num_rows, std::move(offset_col), std::move(value_col), 0, {}, stream);
+
+  auto const filename   = std::string{"list_type"};
+  auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
+  auto const input      = cudf::table_view{{*lists_col}};
+  input_limit_test_write(test_files, input);
+
+  {
+    int constexpr expected[] = {5000, 5000, 5000};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
   }
 }
