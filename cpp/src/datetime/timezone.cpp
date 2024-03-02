@@ -62,6 +62,38 @@ struct dst_transition_s {
 };
 #pragma pack(pop)
 
+[[nodiscard]] std::pair<std::ifstream, size_t> open_tz_file(
+  std::optional<std::string_view> tzif_dir, std::string_view timezone_name)
+{
+  using std::ios_base;
+
+  std::vector<std::filesystem::path> search_paths;
+  if (tzif_dir.has_value()) {
+    search_paths.push_back(tzif_dir.value());
+  } else {
+    auto const conda_prefix = std::getenv("CONDA_PREFIX");
+    if (conda_prefix != nullptr) {
+      search_paths.push_back(std::filesystem::path{conda_prefix} / "share" / "zoneinfo");
+    }
+    search_paths.push_back(tzif_system_directory);
+  }
+
+  for (auto const& path : search_paths) {
+    auto const tz_filename = path / timezone_name;
+    if (std::filesystem::exists(tz_filename)) {
+      std::ifstream fin;
+      fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
+      if (fin.is_open()) {
+        auto const file_size = fin.tellg();
+        fin.seekg(0);
+        return {std::move(fin), file_size};
+      }
+    }
+  }
+
+  CUDF_FAIL("Timezone file not found.");
+}
+
 struct timezone_file {
   timezone_file_header header;
   bool is_header_from_64bit = false;
@@ -130,16 +162,7 @@ struct timezone_file {
 
   timezone_file(std::optional<std::string_view> tzif_dir, std::string_view timezone_name)
   {
-    using std::ios_base;
-
-    // Open the input file
-    auto const tz_filename =
-      std::filesystem::path{tzif_dir.value_or(tzif_system_directory)} / timezone_name;
-    std::ifstream fin;
-    fin.open(tz_filename, ios_base::in | ios_base::binary | ios_base::ate);
-    CUDF_EXPECTS(fin, "Failed to open the timezone file.");
-    auto const file_size = fin.tellg();
-    fin.seekg(0);
+    auto [fin, file_size] = open_tz_file(tzif_dir, timezone_name);
 
     read_header(fin, file_size);
 
@@ -173,7 +196,7 @@ struct timezone_file {
     // Read posix TZ string
     fin.seekg(header.charcnt + header.leapcnt * leap_second_rec_size(is_header_from_64bit) +
                 header.isstdcnt + header.isutccnt,
-              ios_base::cur);
+              std::ios_base::cur);
     auto const file_pos = fin.tellg();
     if (file_size - file_pos > 1) {
       posix_tz_string.resize(file_size - file_pos);
