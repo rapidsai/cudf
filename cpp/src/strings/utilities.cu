@@ -79,8 +79,13 @@ std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
+  auto const threshold = get_offset64_threshold();
+  if (!is_large_strings_enabled()) {
+    CUDF_EXPECTS(
+      chars_bytes < threshold, "Size of output exceeds the column size limit", std::overflow_error);
+  }
   return make_numeric_column(
-    chars_bytes < get_offset64_threshold() ? data_type{type_id::INT32} : data_type{type_id::INT64},
+    chars_bytes < threshold ? data_type{type_id::INT32} : data_type{type_id::INT64},
     count,
     mask_state::UNALLOCATED,
     stream,
@@ -145,12 +150,14 @@ special_case_mapping const* get_special_case_mapping_table()
 
 int64_t get_offset64_threshold()
 {
-  auto const threshold  = std::getenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
-  std::size_t const rtn = threshold != nullptr ? std::atol(threshold) : 0;
+  auto const threshold = std::getenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+  int64_t const rtn    = threshold != nullptr ? std::atol(threshold) : 0L;
   return (rtn > 0 && rtn < std::numeric_limits<int32_t>::max())
            ? rtn
            : std::numeric_limits<int32_t>::max();
 }
+
+bool is_large_strings_enabled() { return std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED") != nullptr; }
 
 int64_t get_offset_value(cudf::column_view const& offsets,
                          size_type index,

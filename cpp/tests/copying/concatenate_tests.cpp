@@ -230,6 +230,7 @@ TEST_F(StringColumnTest, ConcatenateTooLarge)
 
 TEST_F(StringColumnTest, ConcatenateLargeStrings)
 {
+  setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "1", 1);
   auto itr = thrust::constant_iterator<std::string_view>(
     "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
   auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
@@ -257,6 +258,7 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
+  unsetenv("LIBCUDF_LARGE_STRINGS_ENABLED");
 }
 
 struct TableTest : public cudf::test::BaseFixture {};

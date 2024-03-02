@@ -82,6 +82,13 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 int64_t get_offset64_threshold();
 
 /**
+ * @brief Return if large strings are supported
+ *
+ * This checks the setting in the environment variable LIBCUDF_LARGE_STRINGS_ENABLED.
+ */
+bool is_large_strings_enabled();
+
+/**
  * @brief Return a normalized offset value from a strings offsets column
  *
  * The maximum value returned is `std::numeric_limits<int32_t>::max()`.
