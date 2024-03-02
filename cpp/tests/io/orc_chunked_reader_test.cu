@@ -983,17 +983,20 @@ std::vector<std::string> input_limit_get_test_names(std::string const& base_file
 
 void input_limit_test_write_one(std::string const& filepath,
                                 cudf::table_view const& input,
+                                cudf::size_type stripe_size_rows,
                                 cudf::io::compression_type compression)
 {
   auto const out_opts = cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input)
                           .compression(compression)
-                          .stripe_size_rows(10'000)  // intentionally write small stripes
+                          .stripe_size_rows(stripe_size_rows)
                           .build();
   cudf::io::write_orc(out_opts);
 }
 
-void input_limit_test_write(std::vector<std::string> const& test_files,
-                            cudf::table_view const& input)
+void input_limit_test_write(
+  std::vector<std::string> const& test_files,
+  cudf::table_view const& input,
+  cudf::size_type stripe_size_rows = 10'000 /*write small stripes by default*/)
 {
   CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames.");
@@ -1004,9 +1007,12 @@ void input_limit_test_write(std::vector<std::string> const& test_files,
   // That is because ZSTD may use a lot of scratch space at decode time
   // (2.5x the total decompressed buffer size).
   // As such, we may see smaller output chunks for the input data compressed by ZSTD.
-  input_limit_test_write_one(test_files[0], input, cudf::io::compression_type::NONE);
-  input_limit_test_write_one(test_files[1], input, cudf::io::compression_type::ZSTD);
-  input_limit_test_write_one(test_files[2], input, cudf::io::compression_type::SNAPPY);
+  input_limit_test_write_one(
+    test_files[0], input, stripe_size_rows, cudf::io::compression_type::NONE);
+  input_limit_test_write_one(
+    test_files[1], input, stripe_size_rows, cudf::io::compression_type::ZSTD);
+  input_limit_test_write_one(
+    test_files[2], input, stripe_size_rows, cudf::io::compression_type::SNAPPY);
 }
 
 void input_limit_test_read(int test_location,
