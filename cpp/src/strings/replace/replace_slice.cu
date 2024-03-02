@@ -93,12 +93,12 @@ std::unique_ptr<column> replace_slice(strings_column_view const& input,
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     replace_slice_fn{*d_strings, d_repl, start, stop}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
