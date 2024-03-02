@@ -142,7 +142,14 @@ std::size_t gather_stream_info_and_column_desc(
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
           if (index_type < gpu::CI_NUM_STREAMS) {
-            auto& chunk                = (*chunks.value())[stripe_index][col];
+            auto& chunk = (*chunks.value())[stripe_index][col];
+            // printf("use stream id: %d, stripe: %d, level: %d, col idx: %d, kind: %d\n",
+            //        (int)(*stream_idx),
+            //        (int)stripe_index,
+            //        (int)level,
+            //        (int)column_id,
+            //        (int)stream.kind);
+
             chunk.strm_id[index_type]  = *stream_idx;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
@@ -155,6 +162,7 @@ std::size_t gather_stream_info_and_column_desc(
             }
           }
         }
+
         (*stream_idx)++;
       } else {  // not chunks.has_value()
         // printf("collect stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
@@ -302,6 +310,8 @@ void verify_splits(host_span<chunk const> splits,
 }
 #endif
 
+}  // namespace
+
 /**
  * @brief Find range of the data span by a given chunk of chunks.
  *
@@ -326,8 +336,6 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
 
   return {begin, end};
 }
-
-}  // namespace
 
 void reader::impl::global_preprocess(uint64_t skip_rows,
                                      std::optional<size_type> const& num_rows_opt,
@@ -556,6 +564,7 @@ void reader::impl::load_data()
     auto& stripe_data  = lvl_stripe_data[level];
     auto& stripe_sizes = lvl_stripe_sizes[level];
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
+      // TODO: only do this if it was not allocated before.
       stripe_data[stripe_idx] = rmm::device_buffer(
         cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
     }
@@ -666,7 +675,7 @@ void reader::impl::load_data()
           stream_compinfo->max_uncompressed_size;
 #ifdef PRINT_DEBUG
         printf("cache info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-               (int)stream_id.id.stripe_idx,
+               (int)stream_id.stripe_idx,
                (int)stream_id.level,
                (int)stream_id.orc_col_idx,
                (int)stream_id.kind,
@@ -681,8 +690,8 @@ void reader::impl::load_data()
       stream_compinfo_map.clear();
 
     } else {
-      // printf("no compression \n");
-      // fflush(stdout);
+      printf("no compression \n");
+      fflush(stdout);
 
       // Set decompression size equal to the input size.
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {

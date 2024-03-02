@@ -270,6 +270,10 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
                                int64_t total_count,
                                size_t size_limit);
 
+// TODO
+std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
+                                      chunk const& selected_chunks);
+
 /**
  * @brief Function that populates descriptors for either individual streams or chunks of column
  * data, but not both.

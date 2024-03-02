@@ -512,6 +512,19 @@ void decode_stream_data(std::size_t num_dicts,
   auto const tz_table_dptr = table_device_view::create(tz_table, stream);
   rmm::device_scalar<size_type> error_count(0, stream);
   // Update the null map for child columns
+
+  // printf(
+  //   "num col: %d, num stripe: %d, skip row: %d, row_groups size: %d, row index stride: %d, "
+  //   "level: "
+  //   "%d\n",
+  //   (int)num_columns,
+  //   (int)num_stripes,
+  //   (int)skip_rows,
+  //   (int)row_groups.size().first,
+  //   (int)row_index_stride,
+  //   (int)level
+  // );
+
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
                            row_groups,
@@ -917,8 +930,13 @@ void reader::impl::decompress_and_decode()
 
 #endif
 
+  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
+
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     printf("processing level = %d\n", (int)level);
+
+    auto const& stripe_stream_chunks      = lvl_stripe_stream_chunks[level];
+    auto const [stream_begin, stream_end] = get_range(stripe_stream_chunks, stripe_chunk);
 
     auto& columns_level = _selected_columns.levels[level];
 
@@ -1002,6 +1020,10 @@ void reader::impl::decompress_and_decode()
       auto const& stripe       = selected_stripes[stripe_idx];
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
+
+      // printf("stripeinfo->indexLength: %d, data: %d\n",
+      //        (int)stripe_info->indexLength,
+      //        (int)stripe_info->dataLength);
 
       auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx - stripe_start,
                                                                       level,
@@ -1088,12 +1110,20 @@ void reader::impl::decompress_and_decode()
                                 ? sizeof(size_type)
                                 : cudf::size_of(column_types[col_idx]);
         chunk.num_rowgroups = stripe_num_rowgroups;
+        // printf("stripe_num_rowgroups: %d\n", (int)stripe_num_rowgroups);
+
         if (chunk.type_kind == orc::TIMESTAMP) {
           chunk.timestamp_type_id = _config.timestamp_type.id();
         }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k] + stripe_start].dst_pos;
+            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k] + stream_begin].dst_pos;
+            // printf("chunk.streams[%d] of chunk.strm_id[%d], stripe %d | %d, collect from %d\n",
+            //        (int)k,
+            //        (int)chunk.strm_id[k],
+            //        (int)stripe_idx,
+            //        (int)stripe_start,
+            //        (int)(chunk.strm_id[k] + stream_begin));
           }
         }
       }
@@ -1137,8 +1167,9 @@ void reader::impl::decompress_and_decode()
 
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      // printf("decompress----------------------\n");
       // printf("line %d\n", __LINE__);
-      // fflush(stdout);
+      fflush(stdout);
       auto decomp_data = decompress_stripe_data(stripe_chunk,
                                                 _file_itm_data.compinfo_map,
                                                 *_metadata.per_file_metadata[0].decompressor,
@@ -1157,7 +1188,11 @@ void reader::impl::decompress_and_decode()
       // fflush(stdout);
 
     } else {
+      // printf("no decompression----------------------\n");
+
       if (row_groups.size().first) {
+        // printf("line %d\n", __LINE__);
+        // fflush(stdout);
         chunks.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
@@ -1187,7 +1222,7 @@ void reader::impl::decompress_and_decode()
       auto is_list_type = (column_types[i].id() == type_id::LIST);
       auto n_rows       = (level == 0) ? rows_to_read : col_meta.num_child_rows[i];
 
-      // printf("  create child col, num rows: %d\n", (int)n_rows);
+      // printf("  create col, num rows: %d\n", (int)n_rows);
 
       // For list column, offset column will be always size + 1
       if (is_list_type) n_rows++;
@@ -1257,6 +1292,9 @@ void reader::impl::decompress_and_decode()
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
+
+  // printf("col: \n");
+  // cudf::test::print(_chunk_read_data.decoded_table->get_column(0).view());
 
   // DEBUG only
   // _chunk_read_data.output_size_limit = _chunk_read_data.data_read_limit / 3;
