@@ -996,7 +996,7 @@ void input_limit_test_write_one(std::string const& filepath,
 void input_limit_test_write(
   std::vector<std::string> const& test_files,
   cudf::table_view const& input,
-  cudf::size_type stripe_size_rows = 10'000 /*write small stripes by default*/)
+  cudf::size_type stripe_size_rows = 20'000 /*write relatively small stripes by default*/)
 {
   CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames.");
@@ -1052,13 +1052,13 @@ TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
   input_limit_test_write(test_files, input);
 
   {
-    int constexpr expected[] = {100, 100, 100};
+    int constexpr expected[] = {50, 50, 50};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
   }
 
   {
-    int constexpr expected[] = {15, 20, 9};
+    int constexpr expected[] = {17, 10, 9};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
@@ -1088,13 +1088,13 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
   input_limit_test_write(test_files, input);
 
   {
-    int constexpr expected[] = {100, 100, 100};
+    int constexpr expected[] = {50, 50, 50};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
   }
 
   {
-    int constexpr expected[] = {15, 100, 21};
+    int constexpr expected[] = {17, 50, 14};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
@@ -1156,11 +1156,29 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   auto const filename   = std::string{"list_type"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
   auto const input      = cudf::table_view{{*lists_col}};
-  input_limit_test_write(test_files, input);
+  input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
   {
-    int constexpr expected[] = {5000, 5000, 5000};
+    // Although we set `stripe_size_rows` to be very large, the writer only write
+    // 250k rows per stripe. Thus, we have 200 stripes in total.
+    int constexpr expected[] = {200, 200, 200};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
+  }
+
+  {
+    int constexpr expected[] = {2, 34, 2};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{5 * 1024 * 1024UL}, expected);
+  }
+
+  {
+    int constexpr expected[] = {8, 34, 8};
+    input_limit_test_read(__LINE__,
+                          test_files,
+                          input,
+                          output_limit{128 * 1024 * 1024UL},
+                          input_limit{5 * 1024 * 1024UL},
+                          expected);
   }
 }
