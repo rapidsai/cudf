@@ -997,14 +997,14 @@ void input_limit_test_write(std::vector<std::string> const& test_files,
   CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames.");
 
-  // No compression
+  // ZSTD yields a very small decompression size, can be much smaller than SNAPPY.
+  // However, ORC reader typically over-estimates the decompression size of data
+  // compressed by ZSTD to be very large, can be much larger than that of SNAPPY.
+  // That is because ZSTD may use a lot of scratch space at decode time
+  // (2.5x the total decompressed buffer size).
+  // As such, we may see smaller output chunks for the input data compressed by ZSTD.
   input_limit_test_write_one(test_files[0], input, cudf::io::compression_type::NONE);
-
-  // Compression with a codec that uses a lot of scratch space at decode time (2.5x the total
-  // decompressed buffer size).
   input_limit_test_write_one(test_files[1], input, cudf::io::compression_type::ZSTD);
-
-  // Compression with a codec that uses no scratch space at decode time.
   input_limit_test_write_one(test_files[2], input, cudf::io::compression_type::SNAPPY);
 }
 
@@ -1018,7 +1018,7 @@ void input_limit_test_read(int test_location,
   CUDF_EXPECTS(test_files.size() == input_limit_expected_file_count,
                "Unexpected count of test filenames.");
 
-  for (size_t idx = 0; idx < test_files.size(); idx++) {
+  for (size_t idx = 0; idx < test_files.size(); ++idx) {
     SCOPED_TRACE("Original line of failure: " + std::to_string(test_location) +
                  ", file idx: " + std::to_string(idx));
     auto const [result, num_chunks] =
@@ -1044,23 +1044,51 @@ TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
   input_limit_test_write(test_files, input);
 
-  // Some small limit.
   {
     int constexpr expected[] = {100, 100, 100};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
   }
 
-  if (0) {
+  {
     int constexpr expected[] = {15, 20, 9};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
+}
 
-  // Limit of 1 byte.
-  if (0) {
-    int constexpr expected[] = {1, 50, 50};
+TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
+{
+  auto constexpr num_rows = 1'000'000;
+
+  auto const iter1 = thrust::make_counting_iterator<int>(0);
+  auto const col1  = cudf::test::fixed_width_column_wrapper<int>(iter1, iter1 + num_rows);
+
+  auto const iter2 = thrust::make_counting_iterator<double>(0);
+  auto const col2  = cudf::test::fixed_width_column_wrapper<double>(iter2, iter2 + num_rows);
+
+  auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
+  auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
+    if (i < 250000) { return strings[0]; }
+    if (i < 750000) { return strings[1]; }
+    return strings[2];
+  });
+  auto const col3     = strings_col(str_iter, str_iter + num_rows);
+
+  auto const filename   = std::string{"single_col_fixed_width"};
+  auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
+  auto const input      = cudf::table_view{{col1, col2, col3}};
+  input_limit_test_write(test_files, input);
+
+  {
+    int constexpr expected[] = {100, 100, 100};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{1UL}, expected);
+  }
+
+  {
+    int constexpr expected[] = {15, 100, 21};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
 }
