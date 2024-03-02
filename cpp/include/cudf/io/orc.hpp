@@ -423,7 +423,21 @@ class chunked_orc_reader {
    */
   chunked_orc_reader() = default;
 
-  // TODO
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `orc_reader_option` parameter as in
+   * `cudf::read_orc()`, and additional parameters to specify the size byte limits of the
+   * output table for each reading.
+   *
+   * TODO: data read limit
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
   chunked_orc_reader(std::size_t output_size_limit,
                      orc_reader_options const& options,
                      rmm::cuda_stream_view stream        = cudf::get_default_stream(),
@@ -452,7 +466,24 @@ class chunked_orc_reader {
                      rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-  // TODO
+  /**
+   * @brief Constructor for chunked reader.
+   *
+   * This constructor requires the same `orc_reader_option` parameter as in
+   * `cudf::read_orc()`, and additional parameters to specify the size byte limits of the
+   * output table for each reading.
+   *
+   * TODO: data read limit
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
+   *        of input, or `0` if there is no limit
+   * @param output_row_granularity  TODO
+   * @param options The options used to read Parquet file
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
   chunked_orc_reader(std::size_t output_size_limit,
                      std::size_t data_read_limit,
                      size_type output_row_granularity,

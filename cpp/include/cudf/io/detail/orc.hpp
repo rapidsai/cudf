@@ -120,6 +120,34 @@ class chunked_reader : private reader {
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr);
 
+  /**
+   * @brief Constructor from size limits and an array of data sources with reader options.
+   *
+   * The typical usage should be similar to this:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
+   *
+   * ```
+   *
+   * If `output_size_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
+   * whole file and return a table containing all rows.
+   *
+   * TODO: data read limit
+   * TODO: granularity
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   *        or `0` if there is no limit
+   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
+   *        of input, or `0` if there is no limit
+   * @param output_row_granularity  TODO
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behavior
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
   explicit chunked_reader(std::size_t output_size_limit,
                           std::size_t data_read_limit,
                           size_type output_row_granularity,
