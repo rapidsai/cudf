@@ -132,6 +132,7 @@ cdef class DeviceScalar:
         if isinstance(pa_type, pa.ListType) and value is None:
             # pyarrow doesn't correctly handle None values for list types, so
             # we have to create this one manually.
+            # https://github.com/apache/arrow/issues/40319
             pa_array = pa.array([None], type=pa_type)
         else:
             pa_array = pa.array([pa.scalar(value, type=pa_type)])
