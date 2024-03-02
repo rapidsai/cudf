@@ -490,8 +490,11 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   }
 
   printf("total stripe sizes:\n");
+  int count{0};
   for (auto& size : total_stripe_sizes) {
+    ++count;
     printf("size: %ld, %zu\n", size.count, size.size_bytes);
+    if (count > 5) break;
   }
 
   // Compute the prefix sum of stripe data sizes.
@@ -504,9 +507,12 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
 
   total_stripe_sizes.device_to_host_sync(_stream);
 
+  count = 0;
   printf("prefix sum total stripe sizes:\n");
   for (auto& size : total_stripe_sizes) {
+    ++count;
     printf("size: %ld, %zu\n", size.count, size.size_bytes);
+    if (count > 5) break;
   }
 
   // TODO: handle case for extremely large files.
@@ -740,8 +746,10 @@ void reader::impl::load_data()
     chunk.start_idx += stripe_chunk.start_idx;
   }
 
+  int count{0};
   for (auto& size : stripe_decomp_sizes) {
     printf("decomp size: %ld, %zu\n", size.count, size.size_bytes);
+    if (count++ > 5) break;
   }
 
 #ifndef PRINT_DEBUG
