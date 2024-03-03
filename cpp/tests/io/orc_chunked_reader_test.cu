@@ -1028,6 +1028,8 @@ void input_limit_test_read(int test_location,
   for (size_t idx = 0; idx < test_files.size(); ++idx) {
     SCOPED_TRACE("Original line of failure: " + std::to_string(test_location) +
                  ", file idx: " + std::to_string(idx));
+    // TODO: remove
+    printf("file_idx %d\n", (int)idx);
     auto const [result, num_chunks] =
       chunked_read(test_files[idx], output_limit_bytes, input_limit_bytes);
     EXPECT_EQ(expected_chunk_counts[idx], num_chunks);
@@ -1255,5 +1257,12 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
                           output_limit{128 * 1024 * 1024UL},
                           input_limit{128 * 1024 * 1024UL},
                           expected);
+  }
+
+  // TODO: remove
+  {
+    int constexpr expected[] = {1, 1, 1};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{0UL}, expected);
   }
 }
