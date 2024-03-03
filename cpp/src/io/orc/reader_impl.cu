@@ -1216,6 +1216,8 @@ void reader::impl::decompress_and_decode()
         _stream);
       // stripe_data.clear();
       // stripe_data.push_back(std::move(decomp_data));
+
+      // TODO: only reset each one if the new size/type are different.
       stripe_data[stripe_start - load_stripe_start] = std::move(decomp_data);
       for (int64_t i = 1; i < stripe_chunk.count; ++i) {
         stripe_data[i + stripe_start - load_stripe_start] = {};
@@ -1261,6 +1263,17 @@ void reader::impl::decompress_and_decode()
                 << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
     }
 
+    // TODO: do not clear but reset each one.
+    // and only reset if the new size/type are different.
+    _out_buffers[level].clear();
+
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
+
     for (std::size_t i = 0; i < column_types.size(); ++i) {
       bool is_nullable = false;
       for (std::size_t j = 0; j < num_stripes; ++j) {
@@ -1289,7 +1302,8 @@ void reader::impl::decompress_and_decode()
       {
         _stream.synchronize();
         auto peak_mem = mem_stats_logger.peak_memory_usage();
-        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+        std::cout << __LINE__ << ", buffer size: " << n_rows
+                  << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
                   << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
       }
     }
@@ -1378,6 +1392,13 @@ void reader::impl::decompress_and_decode()
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
+
+  // TODO: do not clear but reset each one.
+  // and only reset if the new size/type are different.
+  // This clear is just to check if there is memory leak.
+  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    _out_buffers[level].clear();
+  }
 
   {
     _stream.synchronize();
@@ -1489,6 +1510,7 @@ table_with_metadata reader::impl::make_output_chunk()
   auto out_table = [&] {
     if (_chunk_read_data.output_table_chunks.size() == 1) {
       _chunk_read_data.curr_output_table_chunk++;
+      printf("one chunk, no more table---------------------------------\n");
       return std::move(_chunk_read_data.decoded_table);
     }
 
@@ -1633,6 +1655,13 @@ bool reader::impl::has_next()
 table_with_metadata reader::impl::read_chunk()
 {
   printf("==================call read chunk\n");
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << "\n\n\nstart read chunk, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
+
   prepare_data();
 
   {
