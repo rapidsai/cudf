@@ -24,6 +24,7 @@
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/statistics_resource_adaptor.hpp>  // TODO: remove
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -32,6 +33,26 @@
 #include <vector>
 
 namespace cudf::io::orc::detail {
+
+class memory_stats_logger {
+ public:
+  explicit memory_stats_logger(rmm::mr::device_memory_resource* mr)
+    : existing_mr(mr), statistics_mr(rmm::mr::make_statistics_adaptor(existing_mr))
+  {
+    rmm::mr::set_current_device_resource(&statistics_mr);
+  }
+
+  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
+
+  [[nodiscard]] size_t peak_memory_usage() const noexcept
+  {
+    return statistics_mr.get_bytes_counter().peak;
+  }
+
+ private:
+  rmm::mr::device_memory_resource* existing_mr;
+  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
+};
 
 struct reader_column_meta;
 
@@ -187,6 +208,8 @@ class reader::impl {
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 
   static constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
+
+  memory_stats_logger mem_stats_logger;
 };
 
 }  // namespace cudf::io::orc::detail

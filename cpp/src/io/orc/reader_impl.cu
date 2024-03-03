@@ -1396,6 +1396,11 @@ table_with_metadata reader::impl::make_output_chunk()
   }();
 
 #endif
+
+  auto peak_mem = mem_stats_logger.peak_memory_usage();
+  std::cout << "peak_memory_usage: " << peak_mem << "(" << (peak_mem * 1.0) / (1024.0 * 1024.0)
+            << " MB)" << std::endl;
+
   return {std::move(out_table), _out_metadata};
 }
 
@@ -1472,7 +1477,8 @@ reader::impl::impl(std::size_t output_size_limit,
     _chunk_read_data{
       output_size_limit,
       data_read_limit,
-      output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY}
+      output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY},
+    mem_stats_logger(mr)
 {
   printf("construct reader , limit = %d, %d, gradunarity %d \n",
 
