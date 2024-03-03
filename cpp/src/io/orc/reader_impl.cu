@@ -1398,6 +1398,16 @@ void reader::impl::decompress_and_decode()
   // This clear is just to check if there is memory leak.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     _out_buffers[level].clear();
+
+    auto& stripe_data = lvl_stripe_data[level];
+
+    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      stripe_data[stripe_start - load_stripe_start] = {};
+    } else {
+      for (int64_t i = 0; i < stripe_chunk.count; ++i) {
+        stripe_data[i + stripe_start - load_stripe_start] = {};
+      }
+    }
   }
 
   {
@@ -1658,8 +1668,26 @@ table_with_metadata reader::impl::read_chunk()
   {
     _stream.synchronize();
     auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "\n\n\nstart read chunk, peak_memory_usage: " << peak_mem << "("
+    std::cout << "\n\n\n------------start read chunk, peak_memory_usage: " << peak_mem << "("
               << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
+
+  {
+    static int count{0};
+    ++count;
+
+#if 0
+    if (count == 3) {
+      _file_itm_data.lvl_stripe_data.clear();
+      {
+        _stream.synchronize();
+        auto peak_mem = mem_stats_logger.peak_memory_usage();
+        std::cout << "clear all, peak_memory_usage: " << peak_mem << "("
+                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+      }
+      exit(0);
+    }
+#endif
   }
 
   prepare_data();
