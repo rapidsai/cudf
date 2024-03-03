@@ -778,6 +778,10 @@ void reader::impl::load_data()
 
   // lvl_stripe_data.clear();
   // _file_itm_data.compinfo_ready = true;
+
+  auto peak_mem = mem_stats_logger.peak_memory_usage();
+  std::cout << "load, peak_memory_usage: " << peak_mem << "("
+            << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
 }
 
 }  // namespace cudf::io::orc::detail

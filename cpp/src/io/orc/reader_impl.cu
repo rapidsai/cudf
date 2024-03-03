@@ -814,6 +814,9 @@ void reader::impl::decompress_and_decode()
   auto const stripe_start = stripe_chunk.start_idx;
   auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
 
+  auto const load_stripe_start =
+    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk - 1].start_idx;
+
   printf("\ndecoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 
   auto const rows_to_skip = _file_itm_data.rows_to_skip;
@@ -938,6 +941,13 @@ void reader::impl::decompress_and_decode()
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     printf("processing level = %d\n", (int)level);
 
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
+
     auto const& stripe_stream_chunks      = lvl_stripe_stream_chunks[level];
     auto const [stream_begin, stream_end] = get_range(stripe_stream_chunks, stripe_chunk);
 
@@ -978,6 +988,13 @@ void reader::impl::decompress_and_decode()
     auto& chunks           = lvl_chunks[level];
     chunks = cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(num_stripes, num_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
+
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
 
     const bool use_index =
       _config.use_index &&
@@ -1047,7 +1064,9 @@ void reader::impl::decompress_and_decode()
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx - stripe_start].data());
+      // TODO: Wrong?
+      // stripe load_stripe_start?
+      auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
 
       // printf("line %d\n", __LINE__);
       // fflush(stdout);
@@ -1175,6 +1194,13 @@ void reader::impl::decompress_and_decode()
       // fflush(stdout);
       CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_chunk > 0, "ERRRRR");
 
+      {
+        _stream.synchronize();
+        auto peak_mem = mem_stats_logger.peak_memory_usage();
+        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+      }
+
       auto decomp_data = decompress_stripe_data(
         _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk - 1],
         stripe_chunk,
@@ -1189,7 +1215,18 @@ void reader::impl::decompress_and_decode()
         level == 0,
         _stream);
       // stripe_data.clear();
-      stripe_data.push_back(std::move(decomp_data));
+      // stripe_data.push_back(std::move(decomp_data));
+      stripe_data[stripe_start - load_stripe_start] = std::move(decomp_data);
+      for (int64_t i = 1; i < stripe_chunk.count; ++i) {
+        stripe_data[i + stripe_start - load_stripe_start] = {};
+      }
+
+      {
+        _stream.synchronize();
+        auto peak_mem = mem_stats_logger.peak_memory_usage();
+        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+      }
 
       // printf("line %d\n", __LINE__);
       // fflush(stdout);
@@ -1217,6 +1254,13 @@ void reader::impl::decompress_and_decode()
     // printf("line %d\n", __LINE__);
     // fflush(stdout);
 
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
+
     for (std::size_t i = 0; i < column_types.size(); ++i) {
       bool is_nullable = false;
       for (std::size_t j = 0; j < num_stripes; ++j) {
@@ -1231,13 +1275,34 @@ void reader::impl::decompress_and_decode()
 
       // printf("  create col, num rows: %d\n", (int)n_rows);
 
+      {
+        _stream.synchronize();
+        auto peak_mem = mem_stats_logger.peak_memory_usage();
+        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+      }
+
       // For list column, offset column will be always size + 1
       if (is_list_type) n_rows++;
       _out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
+
+      {
+        _stream.synchronize();
+        auto peak_mem = mem_stats_logger.peak_memory_usage();
+        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+      }
     }
 
     // printf("line %d\n", __LINE__);
     // fflush(stdout);
+
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
 
     decode_stream_data(num_dict_entries,
                        rows_to_skip,
@@ -1249,6 +1314,13 @@ void reader::impl::decompress_and_decode()
                        _out_buffers[level],
                        _stream,
                        _mr);
+
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
 
     // printf("line %d\n", __LINE__);
     // fflush(stdout);
@@ -1286,6 +1358,13 @@ void reader::impl::decompress_and_decode()
     // fflush(stdout);
   }  // end loop level
 
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
+
   std::vector<std::unique_ptr<column>> out_columns;
   _out_metadata = get_meta_with_user_data();
   std::transform(
@@ -1299,6 +1378,13 @@ void reader::impl::decompress_and_decode()
       return make_column(col_buffer, &_out_metadata.schema_info.back(), std::nullopt, _stream);
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
+
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
 
   // printf("col: \n");
   // cudf::test::print(_chunk_read_data.decoded_table->get_column(0).view());
@@ -1322,6 +1408,13 @@ void reader::impl::decompress_and_decode()
     printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
   }
   fflush(stdout);
+
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << "decomp and decode, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
 }
 
 void reader::impl::prepare_data(int64_t skip_rows,
@@ -1361,6 +1454,13 @@ void reader::impl::prepare_data(int64_t skip_rows,
 
 table_with_metadata reader::impl::make_output_chunk()
 {
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << "start to make out, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
+
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
@@ -1392,6 +1492,13 @@ table_with_metadata reader::impl::make_output_chunk()
       return std::move(_chunk_read_data.decoded_table);
     }
 
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << "prepare to make out, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
+
     auto const out_chunk =
       _chunk_read_data.output_table_chunks[_chunk_read_data.curr_output_table_chunk++];
     auto const out_tview =
@@ -1399,14 +1506,24 @@ table_with_metadata reader::impl::make_output_chunk()
                           {static_cast<size_type>(out_chunk.start_idx),
                            static_cast<size_type>(out_chunk.start_idx + out_chunk.count)},
                           _stream)[0];
+    {
+      _stream.synchronize();
+      auto peak_mem = mem_stats_logger.peak_memory_usage();
+      std::cout << "done make out, peak_memory_usage: " << peak_mem << "("
+                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
+
     return std::make_unique<table>(out_tview, _stream, _mr);
   }();
 
 #endif
 
-  auto peak_mem = mem_stats_logger.peak_memory_usage();
-  std::cout << "peak_memory_usage: " << peak_mem << "(" << (peak_mem * 1.0) / (1024.0 * 1024.0)
-            << " MB)" << std::endl;
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << "done, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
 
   return {std::move(out_table), _out_metadata};
 }
@@ -1517,6 +1634,14 @@ table_with_metadata reader::impl::read_chunk()
 {
   printf("==================call read chunk\n");
   prepare_data();
+
+  {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << "done prepare data, peak_memory_usage: " << peak_mem << "("
+              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  }
+
   return make_output_chunk();
 }
 

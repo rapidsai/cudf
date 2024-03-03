@@ -46,7 +46,7 @@ class memory_stats_logger {
 
   [[nodiscard]] size_t peak_memory_usage() const noexcept
   {
-    return statistics_mr.get_bytes_counter().peak;
+    return statistics_mr.get_bytes_counter().value;
   }
 
  private:
