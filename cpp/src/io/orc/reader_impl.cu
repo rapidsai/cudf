@@ -78,6 +78,7 @@ namespace {
  * @return Device buffer to decompressed page data
  */
 rmm::device_buffer decompress_stripe_data(
+  chunk const& load_stripe_chunk,
   chunk const& stripe_chunk,
   stream_id_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
@@ -127,7 +128,9 @@ rmm::device_buffer decompress_stripe_data(
 #endif
 
     compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx].data()) + info.dst_pos,
+      static_cast<uint8_t const*>(
+        stripe_data[info.id.stripe_idx - load_stripe_chunk.start_idx].data()) +
+        info.dst_pos,
       info.length));
 
     //    printf("line %d\n", __LINE__);
@@ -1044,7 +1047,7 @@ void reader::impl::decompress_and_decode()
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx].data());
+      auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx - stripe_start].data());
 
       // printf("line %d\n", __LINE__);
       // fflush(stdout);
@@ -1169,18 +1172,22 @@ void reader::impl::decompress_and_decode()
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       // printf("decompress----------------------\n");
       // printf("line %d\n", __LINE__);
-      fflush(stdout);
-      auto decomp_data = decompress_stripe_data(stripe_chunk,
-                                                _file_itm_data.compinfo_map,
-                                                *_metadata.per_file_metadata[0].decompressor,
-                                                stripe_data,
-                                                stream_info,
-                                                chunks,
-                                                row_groups,
-                                                num_stripes,
-                                                _metadata.get_row_index_stride(),
-                                                level == 0,
-                                                _stream);
+      // fflush(stdout);
+      CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_chunk > 0, "ERRRRR");
+
+      auto decomp_data = decompress_stripe_data(
+        _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk - 1],
+        stripe_chunk,
+        _file_itm_data.compinfo_map,
+        *_metadata.per_file_metadata[0].decompressor,
+        stripe_data,
+        stream_info,
+        chunks,
+        row_groups,
+        num_stripes,
+        _metadata.get_row_index_stride(),
+        level == 0,
+        _stream);
       // stripe_data.clear();
       stripe_data.push_back(std::move(decomp_data));
 

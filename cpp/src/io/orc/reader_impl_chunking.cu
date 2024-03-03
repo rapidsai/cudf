@@ -401,8 +401,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
       col_meta.orc_col_map[level][col.id] = col_id++;
     }
 
-    auto& stripe_data = lvl_stripe_data[level];
-    stripe_data.resize(num_stripes);
+    // auto& stripe_data = lvl_stripe_data[level];
+    // stripe_data.resize(num_stripes);
 
     auto& stream_info      = _file_itm_data.lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
@@ -567,11 +567,13 @@ void reader::impl::load_data()
   // Prepare the buffer to read raw data onto.
   // TODO: clear all old buffer.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    auto& stripe_data  = lvl_stripe_data[level];
+    auto& stripe_data = lvl_stripe_data[level];
+    stripe_data.resize(stripe_chunk.count);
+
     auto& stripe_sizes = lvl_stripe_sizes[level];
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
       // TODO: only do this if it was not allocated before.
-      stripe_data[stripe_idx] = rmm::device_buffer(
+      stripe_data[stripe_idx - stripe_start] = rmm::device_buffer(
         cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
     }
   }
@@ -585,7 +587,7 @@ void reader::impl::load_data()
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read  = read_info[read_idx];
     auto& stripe_data = lvl_stripe_data[read.level];
-    auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx].data());
+    auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx - stripe_start].data());
 
     if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
           read.length)) {
@@ -646,7 +648,8 @@ void reader::impl::load_data()
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         compinfo.push_back(gpu::CompressedStreamInfo(
-          static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx].data()) + info.dst_pos,
+          static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx - stripe_start].data()) +
+            info.dst_pos,
           info.length));
         stream_compinfo_map[stream_id_info{
           info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind}] = &compinfo.back();
