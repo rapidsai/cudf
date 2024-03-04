@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import functools
 import operator
@@ -41,6 +41,8 @@ def test_create_list_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
 
 
 @pytest.mark.parametrize(
