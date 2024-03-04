@@ -1,7 +1,12 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 set -euo pipefail
+
+# Use gha-tools fork
+wget https://github.com/bdice/gha-tools/archive/refs/heads/wheel-python-pure.zip
+unzip wheel-python-pure.zip
+cp gha-tools-wheel-python-pure/tools/* /usr/local/bin
 
 . /opt/conda/etc/profile.d/conda.sh
 
