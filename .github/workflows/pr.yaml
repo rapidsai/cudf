@@ -43,7 +43,6 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-cpp-build.yaml@compute-matrix-fail-if-empty
     with:
-      matrix_filter: map(select(.ARCH == "some-nonexistent-architecture"))
       build_type: pull-request
 # conda-cpp-checks:
 #   needs: conda-cpp-build
@@ -114,7 +113,6 @@ jobs:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@compute-matrix-fail-if-empty
     with:
-      matrix_filter: map(select(.ARCH == "some-nonexistent-architecture"))
       build_type: pull-request
       build-2_28-wheels: "true"
       script: "ci/build_wheel_cudf.sh"
