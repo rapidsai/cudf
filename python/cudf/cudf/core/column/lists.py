@@ -6,6 +6,7 @@ from functools import cached_property
 from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 from typing_extensions import Self
 
@@ -287,6 +288,23 @@ class ListColumn(ColumnBase):
                 children=(o, lc),
             )
         return lc
+
+    def to_pandas(
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+    ) -> pd.Series:
+        # Can't rely on Column.to_pandas implementation for lists.
+        # Need to perform `to_pylist` to preserve list types.
+        if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+
+        pd_series = pd.Series(self.to_arrow().to_pylist(), dtype="object")
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
 
 class ListMethods(ColumnMethods):
