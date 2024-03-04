@@ -3012,43 +3012,31 @@ def test_series_rename():
 @pytest.mark.parametrize("data_type", dtypes)
 @pytest.mark.parametrize("nelem", [0, 100])
 def test_head_tail(nelem, data_type):
-    def check_index_equality(left, right):
-        assert left.index.equals(right.index)
-
-    def check_values_equality(left, right):
-        if len(left) == 0 and len(right) == 0:
-            return None
-
-        np.testing.assert_array_equal(left.to_pandas(), right.to_pandas())
-
-    def check_frame_series_equality(left, right):
-        check_index_equality(left, right)
-        check_values_equality(left, right)
-
-    gdf = cudf.DataFrame(
+    pdf = pd.DataFrame(
         {
             "a": np.random.randint(0, 1000, nelem).astype(data_type),
             "b": np.random.randint(0, 1000, nelem).astype(data_type),
         }
     )
+    gdf = cudf.from_pandas(pdf)
 
-    check_frame_series_equality(gdf.head(), gdf[:5])
-    check_frame_series_equality(gdf.head(3), gdf[:3])
-    check_frame_series_equality(gdf.head(-2), gdf[:-2])
-    check_frame_series_equality(gdf.head(0), gdf[0:0])
+    assert_eq(gdf.head(), pdf.head())
+    assert_eq(gdf.head(3), pdf.head(3))
+    assert_eq(gdf.head(-2), pdf.head(-2))
+    assert_eq(gdf.head(0), pdf.head(0))
 
-    check_frame_series_equality(gdf["a"].head(), gdf["a"][:5])
-    check_frame_series_equality(gdf["a"].head(3), gdf["a"][:3])
-    check_frame_series_equality(gdf["a"].head(-2), gdf["a"][:-2])
+    assert_eq(gdf["a"].head(), pdf["a"].head())
+    assert_eq(gdf["a"].head(3), pdf["a"].head(3))
+    assert_eq(gdf["a"].head(-2), pdf["a"].head(-2))
 
-    check_frame_series_equality(gdf.tail(), gdf[-5:])
-    check_frame_series_equality(gdf.tail(3), gdf[-3:])
-    check_frame_series_equality(gdf.tail(-2), gdf[2:])
-    check_frame_series_equality(gdf.tail(0), gdf[0:0])
+    assert_eq(gdf.tail(), pdf.tail())
+    assert_eq(gdf.tail(3), pdf.tail(3))
+    assert_eq(gdf.tail(-2), pdf.tail(-2))
+    assert_eq(gdf.tail(0), pdf.tail(0))
 
-    check_frame_series_equality(gdf["a"].tail(), gdf["a"][-5:])
-    check_frame_series_equality(gdf["a"].tail(3), gdf["a"][-3:])
-    check_frame_series_equality(gdf["a"].tail(-2), gdf["a"][2:])
+    assert_eq(gdf["a"].tail(), pdf["a"].tail())
+    assert_eq(gdf["a"].tail(3), pdf["a"].tail(3))
+    assert_eq(gdf["a"].tail(-2), pdf["a"].tail(-2))
 
 
 def test_tail_for_string():
@@ -4321,6 +4309,17 @@ def test_as_column_types():
 def test_one_row_head():
     gdf = cudf.DataFrame({"name": ["carl"], "score": [100]}, index=[123])
     pdf = gdf.to_pandas()
+
+    head_gdf = gdf.head()
+    head_pdf = pdf.head()
+
+    assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("index", [None, [123], ["a", "b"]])
+def test_no_cols_head(index):
+    pdf = pd.DataFrame(index=index)
+    gdf = cudf.from_pandas(pdf)
 
     head_gdf = gdf.head()
     head_pdf = pdf.head()

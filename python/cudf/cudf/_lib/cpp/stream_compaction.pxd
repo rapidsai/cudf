@@ -30,21 +30,28 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
                                       vector[size_type] keys,
                                       size_type keep_threshold) except +
 
+    cdef unique_ptr[table] drop_nans(table_view source_table,
+                                     vector[size_type] keys,
+                                     size_type keep_threshold) except +
+
     cdef unique_ptr[table] apply_boolean_mask(
         table_view source_table,
         column_view boolean_mask
     ) except +
 
-    cdef size_type distinct_count(
-        column_view source_table,
-        null_policy null_handling,
-        nan_policy nan_handling) except +
-
-    cdef unique_ptr[table] stable_distinct(
+    cdef unique_ptr[table] unique(
         table_view input,
         vector[size_type] keys,
         duplicate_keep_option keep,
         null_equality nulls_equal,
+    ) except +
+
+    cdef unique_ptr[table] distinct(
+        table_view input,
+        vector[size_type] keys,
+        duplicate_keep_option keep,
+        null_equality nulls_equal,
+        nan_equality nans_equals,
     ) except +
 
     cdef unique_ptr[column] distinct_indices(
@@ -53,3 +60,29 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         null_equality nulls_equal,
         nan_equality nans_equal,
     ) except +
+
+    cdef unique_ptr[table] stable_distinct(
+        table_view input,
+        vector[size_type] keys,
+        duplicate_keep_option keep,
+        null_equality nulls_equal,
+        nan_equality nans_equal,
+    ) except +
+
+    cdef size_type unique_count(
+        column_view column,
+        null_policy null_handling,
+        nan_policy nan_handling) except +
+
+    cdef size_type unique_count(
+        table_view source_table,
+        null_policy null_handling) except +
+
+    cdef size_type distinct_count(
+        column_view column,
+        null_policy null_handling,
+        nan_policy nan_handling) except +
+
+    cdef size_type distinct_count(
+        table_view source_table,
+        null_policy null_handling) except +
