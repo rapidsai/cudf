@@ -11,7 +11,7 @@ from .column cimport Column
 from .scalar cimport Scalar
 from .types cimport DataType
 
-from cudf._lib.cpp.filling import (
+from cudf._lib.cpp.filling cimport (
     fill as cpp_fill,
     fill_in_place as cpp_fill_in_place,
 )
@@ -47,7 +47,7 @@ cpdef Column fill(
     with nogil:
         result = move(
                 cpp_fill(
-                (<Column> destination),
+                (<Column> destination).view(),
                 begin,
                 end,
                 dereference((<Scalar> value).c_obj)
@@ -79,7 +79,7 @@ cpdef void fill_in_place(
 
     with nogil:
         cpp_fill_in_place(
-            (<Column> destination),
+            (<Column> destination).mutable_view(),
             begin,
             end,
             dereference((<Scalar> value).c_obj)
