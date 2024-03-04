@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "common_sort_impl.cuh"
 #include "sort_impl.cuh"
 
 #include <cudf/column/column.hpp>
@@ -37,7 +38,7 @@ std::unique_ptr<column> sorted_order(table_view const& input,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  return sorted_order<false>(input, column_order, null_precedence, stream, mr);
+  return sorted_order<sort_method::UNSTABLE>(input, column_order, null_precedence, stream, mr);
 }
 
 std::unique_ptr<table> sort_by_key(table_view const& values,
@@ -61,47 +62,24 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
                         mr);
 }
 
-struct inplace_column_sort_fn {
-  template <typename T, std::enable_if_t<cudf::is_fixed_width<T>()>* = nullptr>
-  void operator()(mutable_column_view& col, bool ascending, rmm::cuda_stream_view stream) const
-  {
-    CUDF_EXPECTS(!col.has_nulls(), "Nulls not supported for in-place sort");
-    if (ascending) {
-      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::less<T>());
-    } else {
-      thrust::sort(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), thrust::greater<T>());
-    }
-  }
-
-  template <typename T, std::enable_if_t<!cudf::is_fixed_width<T>()>* = nullptr>
-  void operator()(mutable_column_view&, bool, rmm::cuda_stream_view) const
-  {
-    CUDF_FAIL("Column type must be relationally comparable and fixed-width");
-  }
-};
-
 std::unique_ptr<table> sort(table_view const& input,
                             std::vector<order> const& column_order,
                             std::vector<null_order> const& null_precedence,
                             rmm::cuda_stream_view stream,
                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
   // fast-path sort conditions: single, non-floating-point, fixed-width column with no nulls
-  if (input.num_columns() == 1 && !input.column(0).has_nulls() &&
-      cudf::is_fixed_width(input.column(0).type()) &&
-      !cudf::is_floating_point(input.column(0).type())) {
-    auto output    = std::make_unique<column>(input.column(0), stream, mr);
-    auto view      = output->mutable_view();
-    bool ascending = (column_order.empty() ? true : column_order.front() == order::ASCENDING);
+  if (inplace_column_sort_fn<sort_method::UNSTABLE>::is_usable(input)) {
+    auto output = std::make_unique<column>(input.column(0), stream, mr);
+    auto view   = output->mutable_view();
+    auto order  = (column_order.empty() ? order::ASCENDING : column_order.front());
     cudf::type_dispatcher<dispatch_storage_type>(
-      output->type(), inplace_column_sort_fn{}, view, ascending, stream);
+      output->type(), inplace_column_sort_fn<sort_method::UNSTABLE>{}, view, order, stream);
     std::vector<std::unique_ptr<column>> columns;
     columns.emplace_back(std::move(output));
     return std::make_unique<table>(std::move(columns));
   }
-  return detail::sort_by_key(
-    input, input, column_order, null_precedence, cudf::get_default_stream(), mr);
+  return detail::sort_by_key(input, input, column_order, null_precedence, stream, mr);
 }
 
 }  // namespace detail
