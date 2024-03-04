@@ -1099,7 +1099,7 @@ struct datetime_formatter_fn {
 };
 
 //
-using strings_children = std::pair<std::unique_ptr<cudf::column>, std::unique_ptr<cudf::column>>;
+using strings_children = std::pair<std::unique_ptr<cudf::column>, rmm::device_uvector<char>>;
 struct dispatch_from_timestamps_fn {
   template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   strings_children operator()(column_device_view const& d_timestamps,
@@ -1148,17 +1148,17 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   auto const d_timestamps   = column_device_view::create(timestamps, stream);
 
   // dispatcher is called to handle the different timestamp types
-  auto [offsets_column, chars_column] = cudf::type_dispatcher(timestamps.type(),
-                                                              dispatch_from_timestamps_fn(),
-                                                              *d_timestamps,
-                                                              *d_names,
-                                                              d_format_items,
-                                                              stream,
-                                                              mr);
+  auto [offsets_column, chars] = cudf::type_dispatcher(timestamps.type(),
+                                                       dispatch_from_timestamps_fn(),
+                                                       *d_timestamps,
+                                                       *d_names,
+                                                       d_format_items,
+                                                       stream,
+                                                       mr);
 
   return make_strings_column(timestamps.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              timestamps.null_count(),
                              cudf::detail::copy_bitmask(timestamps, stream, mr));
 }
