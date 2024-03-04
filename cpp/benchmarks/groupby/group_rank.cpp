@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,12 @@ static void nvbench_groupby_rank(nvbench::state& state,
 
   bool const is_sorted              = state.get_int64("is_sorted");
   cudf::size_type const column_size = state.get_int64("data_size");
-  constexpr int num_groups          = 100;
+  auto const cardinality            = static_cast<cudf::size_type>(state.get_int64("cardinality"));
 
-  data_profile const profile = data_profile_builder().cardinality(0).no_validity().distribution(
-    dtype, distribution_id::UNIFORM, 0, num_groups);
+  data_profile const profile = data_profile_builder()
+                                 .cardinality(cardinality)
+                                 .no_validity()
+                                 .distribution(dtype, distribution_id::UNIFORM, 0, column_size);
 
   auto source_table = create_random_table({dtype, dtype}, row_count{column_size}, profile);
 
@@ -100,5 +102,5 @@ NVBENCH_BENCH_TYPES(nvbench_groupby_rank, NVBENCH_TYPE_AXES(methods))
                     10000000,   // 10M
                     100000000,  // 100M
                   })
-
+  .add_int64_axis("cardinality", {0})
   .add_int64_axis("is_sorted", {0, 1});
