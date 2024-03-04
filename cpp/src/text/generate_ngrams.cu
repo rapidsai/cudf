@@ -103,11 +103,8 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
 
   // first create a new offsets vector removing nulls and empty strings from the input column
   std::unique_ptr<cudf::column> non_empty_offsets_column = [&] {
-    cudf::column_view offsets_view(cudf::data_type{cudf::type_id::INT32},
-                                   strings_count + 1,
-                                   strings.offsets_begin(),
-                                   nullptr,
-                                   0);
+    cudf::column_view offsets_view(
+      strings.offsets().type(), strings_count + 1, strings.offsets().head(), nullptr, 0);
     auto table_offsets = cudf::detail::copy_if(
                            cudf::table_view({offsets_view}),
                            [d_strings, strings_count] __device__(cudf::size_type idx) {
@@ -138,15 +135,12 @@ std::unique_ptr<cudf::column> generate_ngrams(cudf::strings_column_view const& s
   // compute the number of strings of ngrams
   auto const ngrams_count = strings_count - ngrams + 1;
 
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(ngrams_count,
-                                   std::move(offsets_column),
-                                   std::move(chars_column->release().data.release()[0]),
-                                   0,
-                                   rmm::device_buffer{});
+  return cudf::make_strings_column(
+    ngrams_count, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -238,14 +232,11 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                "Insufficient number of characters in each string to generate ngrams");
 
   character_ngram_generator_fn generator{d_strings, ngrams, ngram_offsets.data()};
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     generator, strings_count, total_ngrams, stream, mr);
 
-  return cudf::make_strings_column(total_ngrams,
-                                   std::move(offsets_column),
-                                   std::move(chars_column->release().data.release()[0]),
-                                   0,
-                                   rmm::device_buffer{});
+  return cudf::make_strings_column(
+    total_ngrams, std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 namespace {
