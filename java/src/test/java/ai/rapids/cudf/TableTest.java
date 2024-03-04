@@ -3745,9 +3745,9 @@ public class TableTest extends CudfTestBase {
     // this test packes ~2MB worth of long into a 1MB bounce buffer
     // this is 3 iterations because of the validity buffer
     Long[] longs = new Long[256*1024];
-    for (int i = 0; i < longs.length; i++) {
-      // fill the column and set every other value to null
-      longs[i] = i % 2 == 0 ? null : (long)i;
+    // Initialize elements at odd-numbered indices
+    for (int i = 1; i < longs.length; i += 2) {
+      longs[i] = (long)i;
     }
     try (Table t1 = new Table.TestBuilder().column(longs).build();
          DeviceMemoryBuffer bounceBuffer = DeviceMemoryBuffer.allocate(1L*1024*1024);
