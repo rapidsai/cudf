@@ -15,19 +15,21 @@ from .table cimport Table
 
 cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold)
 
-cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask)
+cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold)
 
-cpdef size_type distinct_count(
-    Column source_table,
-    null_policy null_handling,
-    nan_policy nan_handling
-)
-
-cpdef Table stable_distinct(
+cpdef Table unique(
     Table input,
     list keys,
     duplicate_keep_option keep,
     null_equality nulls_equal,
+)
+
+cpdef Table distinct(
+    Table input,
+    list keys,
+    duplicate_keep_option keep,
+    null_equality nulls_equal,
+    nan_equality nans_equal,
 )
 
 cpdef Column distinct_indices(
@@ -35,4 +37,24 @@ cpdef Column distinct_indices(
     duplicate_keep_option keep,
     null_equality nulls_equal,
     nan_equality nans_equal,
+)
+
+cpdef Table stable_distinct(
+    Table input,
+    list keys,
+    duplicate_keep_option keep,
+    null_equality nulls_equal,
+    nan_equality nans_equal,
+)
+
+cpdef size_type unique_count(
+    Column column,
+    null_policy null_handling,
+    nan_policy nan_handling
+)
+
+cpdef size_type distinct_count(
+    Column column,
+    null_policy null_handling,
+    nan_policy nan_handling
 )
