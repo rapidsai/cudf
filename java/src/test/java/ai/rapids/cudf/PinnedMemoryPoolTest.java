@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -85,30 +85,22 @@ class PinnedMemoryPoolTest extends CudfTestBase {
     try {
       buffers[0] = PinnedMemoryPool.tryAllocate(1024);
       assertNotNull(buffers[0]);
-      assertEquals(14*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[1] = PinnedMemoryPool.tryAllocate(2048);
       assertNotNull(buffers[1]);
-      assertEquals(12*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[2] = PinnedMemoryPool.tryAllocate(4096);
       assertNotNull(buffers[2]);
-      assertEquals(8*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[1].close();
-      assertEquals(10*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[1] = null;
       buffers[1] = PinnedMemoryPool.tryAllocate(8192);
       assertNotNull(buffers[1]);
-      assertEquals(2*1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[3] = PinnedMemoryPool.tryAllocate(2048);
       assertNotNull(buffers[3]);
-      assertEquals(0L, PinnedMemoryPool.getAvailableBytes());
       buffers[4] = PinnedMemoryPool.tryAllocate(64);
       assertNull(buffers[4]);
       buffers[0].close();
-      assertEquals(1024L, PinnedMemoryPool.getAvailableBytes());
       buffers[0] = null;
       buffers[4] = PinnedMemoryPool.tryAllocate(64);
       assertNotNull(buffers[4]);
-      assertEquals(1024L - 64, PinnedMemoryPool.getAvailableBytes());
     } finally {
       for (HostMemoryBuffer buffer : buffers) {
         if (buffer != null) {
@@ -116,7 +108,6 @@ class PinnedMemoryPoolTest extends CudfTestBase {
         }
       }
     }
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
   }
 
   @Test

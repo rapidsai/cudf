@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -581,4 +581,12 @@ public class Rmm {
   static native long releaseEventHandlerResourceAdaptor(long handle, boolean debug);
 
   private static native void setCurrentDeviceResourceInternal(long newHandle);
+
+  public static native long newPinnedPoolMemoryResource(long initSize, long maxSize);
+
+  public static native void releasePinnedPoolMemoryResource(long poolPtr);
+
+  public static native long allocFromPinnedPool(long poolPtr, long size);
+
+  public static native void freeFromPinnedPool(long poolPtr, long ptr, long size);
 }
