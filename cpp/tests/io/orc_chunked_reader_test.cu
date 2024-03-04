@@ -1270,11 +1270,15 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   }
 }
 
+#define LOCAL_TEST
+
+// This test is extremely heavy, thus it should be disabled by default.
+#ifdef LOCAL_TEST
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
   using cudf::test::iterators::no_nulls;
 
-  int64_t constexpr num_rows    = 500'000'000l;
+  int64_t constexpr num_rows    = 1'000'000'000l;
   int constexpr rows_per_stripe = 1'000'000;
   int constexpr num_reps        = 5l;
   int64_t constexpr total_rows  = num_rows * num_reps;
@@ -1310,6 +1314,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
   int constexpr num_rows_to_read = 5'000'000;
   const auto num_rows_to_skip    = metadata.num_rows() - num_rows_to_read;
+  // - 123456 /*just shift the read data region back by a random offset*/;
 
   // Check validity of the last 5 million rows.
   const auto sequence_start = num_rows_to_skip % num_rows;
@@ -1345,3 +1350,4 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
   printf("num chunk: %d\n", num_chunks);
 }
+#endif

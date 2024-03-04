@@ -1460,6 +1460,8 @@ void reader::impl::prepare_data(int64_t skip_rows,
   // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return; }
 
+  std::cout << "call global, skip = " << skip_rows << std::endl;
+
   global_preprocess(skip_rows, num_rows_opt, stripes);
 
   if (!_chunk_read_data.more_table_chunk_to_output()) {
@@ -1625,7 +1627,10 @@ reader::impl::impl(std::size_t output_size_limit,
     _config{options.get_timestamp_type(),
             options.is_enabled_use_index(),
             options.is_enabled_use_np_dtypes(),
-            options.get_decimal128_columns()},
+            options.get_decimal128_columns(),
+            options.get_skip_rows(),
+            options.get_num_rows(),
+            options.get_stripes()},
     _col_meta{std::make_unique<reader_column_meta>()},
     _sources(std::move(sources)),
     _metadata{_sources, stream},
@@ -1656,7 +1661,7 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 bool reader::impl::has_next()
 {
   printf("==================query has next \n");
-  prepare_data();
+  prepare_data(_config.skip_rows, _config.num_read_rows, _config.selected_stripes);
 
   printf("has next: %d\n", (int)_chunk_read_data.has_next());
   return _chunk_read_data.has_next();
@@ -1690,7 +1695,7 @@ table_with_metadata reader::impl::read_chunk()
 #endif
   }
 
-  prepare_data();
+  prepare_data(_config.skip_rows, _config.num_read_rows, _config.selected_stripes);
 
   {
     _stream.synchronize();

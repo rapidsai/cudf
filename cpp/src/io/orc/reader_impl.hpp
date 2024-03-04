@@ -190,10 +190,15 @@ class reader::impl {
 
   // Reader configs
   struct {
-    data_type timestamp_type;  // Override output timestamp resolution
-    bool use_index;            // Enable or disable attempt to use row index for parsing
-    bool use_np_dtypes;        // Enable or disable the conversion to numpy-compatible dtypes
-    std::vector<std::string> decimal128_columns;  // Control decimals conversion
+    data_type timestamp_type;  // override output timestamp resolution
+    bool use_index;            // enable or disable attempt to use row index for parsing
+    bool use_np_dtypes;        // enable or disable the conversion to numpy-compatible dtypes
+    std::vector<std::string> decimal128_columns;  // control decimals conversion
+
+    // User specified reading rows/stripes selection.
+    uint64_t const skip_rows;
+    std::optional<size_type> num_read_rows;
+    std::vector<std::vector<size_type>> const selected_stripes;
   } const _config;
 
   // Intermediate data for internal processing.
