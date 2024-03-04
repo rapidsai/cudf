@@ -16,6 +16,8 @@
 
 #include "join_common.hpp"
 
+#include <benchmarks/fixture/nvbench_criterion.hpp>
+
 template <typename key_type, typename payload_type, bool Nullable>
 void distinct_inner_join(nvbench::state& state,
                          nvbench::type_list<key_type, payload_type, nvbench::enum_type<Nullable>>)
@@ -43,7 +45,7 @@ NVBENCH_BENCH_TYPES(distinct_inner_join,
                                       nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<false>))
   .set_name("distinct_inner_join_32bit")
-  .set_stopping_criterion("entropy")
+  .set_stopping_criterion("fixed")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("Probe Table Size",
@@ -54,7 +56,7 @@ NVBENCH_BENCH_TYPES(distinct_inner_join,
                                       nvbench::type_list<nvbench::int64_t>,
                                       nvbench::enum_type_list<false>))
   .set_name("distinct_inner_join_64bit")
-  .set_stopping_criterion("entropy")
+  .set_stopping_criterion("fixed")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {40'000'000, 50'000'000})
   .add_int64_axis("Probe Table Size", {50'000'000, 120'000'000});
@@ -64,7 +66,7 @@ NVBENCH_BENCH_TYPES(distinct_inner_join,
                                       nvbench::type_list<nvbench::int32_t>,
                                       nvbench::enum_type_list<true>))
   .set_name("distinct_inner_join_32bit_nulls")
-  .set_stopping_criterion("entropy")
+  .set_stopping_criterion("fixed")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {100'000, 10'000'000, 80'000'000, 100'000'000})
   .add_int64_axis("Probe Table Size",
@@ -75,7 +77,7 @@ NVBENCH_BENCH_TYPES(distinct_inner_join,
                                       nvbench::type_list<nvbench::int64_t>,
                                       nvbench::enum_type_list<true>))
   .set_name("distinct_inner_join_64bit_nulls")
-  .set_stopping_criterion("entropy")
+  .set_stopping_criterion("fixed")
   .set_type_axes_names({"Key Type", "Payload Type", "Nullable"})
   .add_int64_axis("Build Table Size", {40'000'000, 50'000'000})
   .add_int64_axis("Probe Table Size", {50'000'000, 120'000'000});
