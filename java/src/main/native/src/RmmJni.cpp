@@ -751,7 +751,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIEnv *env,
                                                                             jclass clazz,
-                                                                            jlong init, 
+                                                                            jlong init,
                                                                             jlong max) {
   try {
     cudf::jni::auto_set_device(env);
@@ -771,7 +771,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(J
   CATCH_STD(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv *env, 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv *env,
                                                                     jclass clazz,
                                                                     jlong pool_ptr,
                                                                     jlong size) {

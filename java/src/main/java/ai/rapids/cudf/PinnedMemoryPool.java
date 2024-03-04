@@ -138,7 +138,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   /**
-   * Shut down the RMM pool_memory_resource, nulling out our reference. Any allocation 
+   * Shut down the RMM pool_memory_resource, nulling out our reference. Any allocation
    * or free that is in flight will fail after this.
    */
   public static synchronized void shutdown() {
