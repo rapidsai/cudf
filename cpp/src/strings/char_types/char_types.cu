@@ -200,13 +200,13 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
   rmm::device_buffer null_mask = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
 
   // this utility calls filterer to build the offsets and chars columns
-  auto [offsets_column, chars_column] =
+  auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(filterer, strings_count, stream, mr);
 
   // return new strings column
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              strings.null_count(),
                              std::move(null_mask));
 }

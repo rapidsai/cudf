@@ -116,12 +116,12 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  auto [offsets_column, chars_column] = make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
