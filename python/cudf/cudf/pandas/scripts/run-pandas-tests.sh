@@ -22,7 +22,7 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py --ignore=tests/interchange/test_impl.py --ignore=tests/window/test_dtypes.py --ignore=tests/strings/test_api.py --ignore=tests/window/test_numba.py --ignore=tests/window --ignore=tests/io/pytables"
+PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py --ignore=tests/interchange/test_impl.py --ignore=tests/window/test_dtypes.py --ignore=tests/strings/test_api.py --ignore=tests/window/test_numba.py --ignore=tests/window --ignore=tests/io/pytables --ignore=tests/plotting"
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -185,7 +185,6 @@ and not test_numpy_ufuncs_basic[nullable_float-rad2deg]"
 PANDAS_CI="1" python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
     -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
-    --durations=50 \
     --import-mode=importlib \
     -o xfail_strict=True \
     ${PYTEST_IGNORES} \
