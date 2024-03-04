@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,18 +20,15 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/hashing/detail/hash_functions.cuh>
 #include <cudf/hashing/detail/hashing.hpp>
-#include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/limits>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
-
-#include <limits>
 
 namespace cudf {
 
@@ -470,7 +467,9 @@ class element_hasher {
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   __device__ hash_value_type operator()(column_device_view col, size_type row_index) const
   {
-    if (has_nulls && col.is_null(row_index)) { return std::numeric_limits<hash_value_type>::max(); }
+    if (has_nulls && col.is_null(row_index)) {
+      return cuda::std::numeric_limits<hash_value_type>::max();
+    }
     return hash_function<T>{}(col.element<T>(row_index));
   }
 
@@ -554,7 +553,7 @@ class element_hasher_with_seed {
 
  private:
   uint32_t _seed{DEFAULT_HASH_SEED};
-  hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
+  hash_value_type _null_hash{cuda::std::numeric_limits<hash_value_type>::max()};
   Nullate _has_nulls;
 };
 

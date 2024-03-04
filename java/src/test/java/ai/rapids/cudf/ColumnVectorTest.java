@@ -6405,6 +6405,22 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 }
 
+@Test
+void testGetJSONObjectWithInvalidQueries() {
+  String jsonString =  "{" +
+        "\'a\': \'A\"\'" +
+      "}";
+
+  GetJsonObjectOptions options = GetJsonObjectOptions.builder().allowSingleQuotes(true).build();
+  try (ColumnVector json = ColumnVector.fromStrings(jsonString, jsonString);
+       Scalar nullString = Scalar.fromString(null);
+       ColumnVector expectedAuthors = ColumnVector.fromScalar(nullString, 2);
+       Scalar path = Scalar.fromString(".");
+       ColumnVector gotAuthors = json.getJSONObject(path, options)) {
+    assertColumnsAreEqual(expectedAuthors, gotAuthors);
+  }
+}
+
   @Test
   void testMakeStructEmpty() {
     final int numRows = 10;
