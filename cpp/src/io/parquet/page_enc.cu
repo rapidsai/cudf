@@ -794,7 +794,18 @@ CUDF_KERNEL void __launch_bounds__(128)
               switch (col_g.requested_encoding) {
                 case column_encoding::PLAIN: page_g.kernel_mask = encode_kernel_mask::PLAIN; break;
                 case column_encoding::DICTIONARY:
-                  page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
+                  // user may have requested dict, but we may not be able to use it
+                  // TODO: when DELTA_BYTE_ARRAY is added, rework the fallback logic so there
+                  // isn't duplicated code here and below.
+                  if (ck_g.use_dictionary) {
+                    page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
+                  } else if (is_fallback_to_delta) {
+                    page_g.kernel_mask = physical_type == BYTE_ARRAY
+                                           ? encode_kernel_mask::DELTA_LENGTH_BA
+                                           : encode_kernel_mask::DELTA_BINARY;
+                  } else {
+                    page_g.kernel_mask = encode_kernel_mask::PLAIN;
+                  }
                   break;
                 case column_encoding::DELTA_BINARY_PACKED:
                   page_g.kernel_mask = encode_kernel_mask::DELTA_BINARY;

@@ -1248,6 +1248,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary
+  bool cannot_honor_request = false;
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() -> std::pair<bool, uint8_t> {
@@ -1274,6 +1275,19 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
       return {true, nbits};
     }();
+    // If dictionary encoding was requested, but it cannot be used, then print a warning. It will
+    // actually be disabled in gpuInitPages.
+    if (not ck.use_dictionary) {
+      auto const& chunk_col_desc = col_desc[ck.col_desc_id];
+      if (chunk_col_desc.requested_encoding == column_encoding::DICTIONARY) {
+        cannot_honor_request = true;
+      }
+    }
+  }
+
+  // warn if we have to ignore requested encoding
+  if (cannot_honor_request) {
+    CUDF_LOG_WARN("DICTIONARY encoding was requested, but resource constraints prevent its use");
   }
 
   // TODO: (enh) Deallocate hash map storage for chunks that don't use dict and clear pointers.
