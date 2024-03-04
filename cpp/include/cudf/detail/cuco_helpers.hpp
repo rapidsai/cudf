@@ -16,10 +16,15 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
 namespace cudf::detail {
+
+/// Sentinel value for `cudf::size_type`
+static cudf::size_type constexpr CUDF_SIZE_TYPE_SENTINEL = -1;
 
 /// Default load factor for cuco data structures
 static double constexpr CUCO_DESIRED_LOAD_FACTOR = 0.5;
