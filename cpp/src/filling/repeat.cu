@@ -55,13 +55,8 @@ struct count_accessor {
   std::enable_if_t<std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view stream)
   {
     using ScalarType = cudf::scalar_type_t<T>;
-#if 1
-    // TODO: temporary till cudf::scalar's value() function is marked as const
-    auto p_count = const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_scalar));
-#else
-    auto p_count = static_cast<ScalarType const*>(this->p_scalar);
-#endif
-    auto count = p_count->value(stream);
+    auto p_count     = static_cast<ScalarType const*>(this->p_scalar);
+    auto count       = p_count->value(stream);
     // static_cast is necessary due to bool
     CUDF_EXPECTS(static_cast<int64_t>(count) <= std::numeric_limits<cudf::size_type>::max(),
                  "count should not exceed the column size limit",
