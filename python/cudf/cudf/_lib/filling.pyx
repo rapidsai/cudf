@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -16,39 +16,29 @@ from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
+from cudf._lib import pylibcudf
+from cudf._lib.scalar import as_device_scalar
 
 @acquire_spill_lock()
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
-    cdef mutable_column_view c_destination = destination.mutable_view()
-    cdef size_type c_begin = <size_type> begin
-    cdef size_type c_end = <size_type> end
-    cdef const scalar* c_value = value.get_raw_ptr()
-
-    cpp_filling.fill_in_place(
-        c_destination,
-        c_begin,
-        c_end,
-        c_value[0]
+    pylibcudf.fill_in_place(
+        destination.to_pylibcudf(mode='write'),
+        begin,
+        end,
+        <DeviceScalar> as_device_scalar(value)
     )
 
 
 @acquire_spill_lock()
 def fill(Column destination, int begin, int end, DeviceScalar value):
-    cdef column_view c_destination = destination.view()
-    cdef size_type c_begin = <size_type> begin
-    cdef size_type c_end = <size_type> end
-    cdef const scalar* c_value = value.get_raw_ptr()
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_filling.fill(
-            c_destination,
-            c_begin,
-            c_end,
-            c_value[0]
-        ))
-
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        pylibcudf.fill(
+            destination.to_pylibcudf(mode='read'),
+            begin,
+            end,
+            <DeviceScalar> as_device_scalar(value)
+        )
+    )
 
 
 @acquire_spill_lock()

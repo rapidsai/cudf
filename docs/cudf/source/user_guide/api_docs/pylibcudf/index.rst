@@ -13,6 +13,7 @@ This page provides API documentation for pylibcudf.
     column
     concatenate
     copying
+    filling
     gpumemoryview
     groupby
     join
