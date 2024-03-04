@@ -15,6 +15,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/groupby.hpp>
 
@@ -55,11 +56,14 @@ void groupby_max_helper(nvbench::state& state,
   requests[0].values = vals->view();
   requests[0].aggregations.push_back(cudf::make_max_aggregation<cudf::groupby_aggregation>());
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto const result = gb_obj.aggregate(requests); });
   auto const elapsed_time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(num_rows) / elapsed_time / 1'000'000., "Mrows/s");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 template <typename Type>
