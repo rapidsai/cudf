@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import glob
 import math
@@ -165,7 +165,9 @@ def test_dask_timeseries_from_pandas(tmpdir):
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
-    dd.assert_eq(ddf2, read_df.compute())
+    # Workaround until following issue is fixed:
+    # https://github.com/apache/arrow/issues/33321
+    dd.assert_eq(ddf2, read_df.compute(), check_index_type=False)
 
 
 @pytest.mark.parametrize("index", [False, None])

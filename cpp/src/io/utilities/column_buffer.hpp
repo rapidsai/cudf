@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -252,6 +252,16 @@ std::unique_ptr<column> empty_like(column_buffer_base<string_policy>& buffer,
                                    column_name_info* schema_info,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Given a column_buffer, produce a formatted name string describing the type.
+ *
+ * @param buffer The column buffer
+ *
+ * @return A string describing the type of the buffer suitable for printing
+ */
+template <class string_policy>
+std::string type_to_name(column_buffer_base<string_policy> const& buffer);
 
 }  // namespace detail
 }  // namespace io

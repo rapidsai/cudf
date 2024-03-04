@@ -19,9 +19,9 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
-#include <io/csv/durations.hpp>
-#include <io/utilities/parsing_utils.cuh>
-#include <lists/utilities.hpp>
+#include "io/csv/durations.hpp"
+#include "io/utilities/parsing_utils.cuh"
+#include "lists/utilities.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -48,6 +48,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
@@ -55,8 +56,6 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/tabulate.h>
-
-#include <cuda/functional>
 
 #include <algorithm>
 #include <memory>
@@ -170,12 +169,12 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
   {
-    auto [offsets_column, chars_column] =
+    auto [offsets_column, chars] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
     return make_strings_column(column_v.size(),
                                std::move(offsets_column),
-                               std::move(chars_column->release().data.release()[0]),
+                               chars.release(),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream, mr));
   }

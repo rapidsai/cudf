@@ -1064,7 +1064,6 @@ TEST_F(ParquetWriterTest, DictionaryAdaptiveTest)
   auto const expected = table_view{{col0, col1}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryAdaptiveTest.parquet");
-  // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)
@@ -1116,7 +1115,6 @@ TEST_F(ParquetWriterTest, DictionaryAlwaysTest)
   auto const expected = table_view{{col0, col1}};
 
   auto const filepath = temp_env->get_temp_filepath("DictionaryAlwaysTest.parquet");
-  // no compression so we can easily read page data
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .compression(cudf::io::compression_type::ZSTD)
@@ -1428,19 +1426,30 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
             static_cast<int64_t>(num_rows * sizeof(column_type)));
 }
 
-// See #14772.
-// zStandard compression cannot currently be used with V2 page headers due to buffer
-// alignment issues.
-// TODO: Remove this test when #14781 is closed.
-TEST_F(ParquetWriterTest, ZstdWithV2Header)
+TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
 {
-  auto const expected = table_view{};
+  // test that the DELTA_BINARY_PACKED writer can properly encode a column that begins with
+  // more than 129 nulls
+  constexpr int num_rows  = 500;
+  constexpr int num_nulls = 150;
 
-  cudf::io::parquet_writer_options const out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{"14772.pq"}, expected)
-      .compression(cudf::io::compression_type::ZSTD)
-      .write_v2_headers(true);
-  EXPECT_THROW(cudf::io::write_parquet(out_opts), cudf::logic_error);
+  auto const ones = thrust::make_constant_iterator(1);
+  auto valids     = cudf::detail::make_counting_transform_iterator(
+    0, [num_nulls](auto i) { return i >= num_nulls; });
+  auto const col      = cudf::test::fixed_width_column_wrapper<int>{ones, ones + num_rows, valids};
+  auto const expected = table_view({col});
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryStartsWithNulls.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 /////////////////////////////////////////////////////////////

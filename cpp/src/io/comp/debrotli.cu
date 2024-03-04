@@ -56,8 +56,7 @@ THE SOFTWARE.
 
 #include "brotli_dict.hpp"
 #include "gpuinflate.hpp"
-
-#include <io/utilities/block_utils.cuh>
+#include "io/utilities/block_utils.cuh"
 
 #include <cudf/utilities/error.hpp>
 

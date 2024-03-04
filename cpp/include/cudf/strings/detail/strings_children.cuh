@@ -34,7 +34,7 @@ namespace strings {
 namespace detail {
 
 /**
- * @brief Creates child offsets and chars columns by applying the template function that
+ * @brief Creates child offsets and chars data by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
  * @throws std::overflow_error if the output strings column exceeds the column size limit
@@ -49,7 +49,7 @@ namespace detail {
  * @param strings_count Number of strings.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned columns' device memory.
- * @return offsets child column and chars child column for a strings column
+ * @return Offsets child column and chars data for a strings column
  */
 template <typename SizeAndExecuteFunction>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
@@ -84,18 +84,17 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                std::overflow_error);
 
   // Now build the chars column
-  std::unique_ptr<column> chars_column =
-    create_chars_child_column(static_cast<size_type>(bytes), stream, mr);
+  rmm::device_uvector<char> chars(bytes, stream, mr);
 
   // Execute the function fn again to fill the chars column.
   // Note that if the output chars column has zero size, the function fn should not be called to
   // avoid accidentally overwriting the offsets.
   if (bytes > 0) {
-    size_and_exec_fn.d_chars = chars_column->mutable_view().template data<char>();
+    size_and_exec_fn.d_chars = chars.data();
     for_each_fn(size_and_exec_fn);
   }
 
-  return std::pair(std::move(offsets_column), std::move(chars_column));
+  return std::pair(std::move(offsets_column), std::move(chars));
 }
 
 /**
@@ -165,7 +164,7 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
   auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
   // Use the sizes-to-offsets iterator to compute the total number of elements
   auto const total_elements =
-    sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
+    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
 
   // TODO: replace exception with if-statement when enabling creating INT64 offsets
   CUDF_EXPECTS(total_elements <= size_type_max,

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 import cupy
 import numpy as np
 import pandas as pd
@@ -86,7 +86,6 @@ def test_search_sorted_dataframe_unequal_number_of_columns():
 
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted_categorical(side):
-
     cat1 = pd.Categorical(
         ["a", "a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
     )
@@ -106,7 +105,6 @@ def test_searchsorted_categorical(side):
 
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted_datetime(side):
-
     psr1 = pd.Series(
         pd.date_range("20190101", "20200101", freq="400h", name="times")
     )

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regex.cuh>
-#include <strings/regex/regex_program_impl.h>
+#include "strings/regex/regex.cuh"
+#include "strings/regex/regex_program_impl.h"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -185,7 +185,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   auto found_ranges = rmm::device_uvector<found_range>(d_progs.size() * input.size(), stream);
 
-  auto [offsets_column, chars_column] = make_strings_children(
+  auto [offsets_column, chars] = make_strings_children(
     replace_multi_regex_fn{*d_strings, d_progs, found_ranges.data(), *d_repls},
     input.size(),
     stream,
@@ -193,7 +193,7 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

@@ -30,14 +30,18 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean dayFirst;
   private final boolean lines;
   private final boolean recoverWithNull;
+  private final boolean normalizeSingleQuotes;
   private final boolean mixedTypesAsStrings;
+  private final boolean keepStringQuotes;
 
   private JSONOptions(Builder builder) {
     super(builder);
     dayFirst = builder.dayFirst;
     lines = builder.lines;
     recoverWithNull = builder.recoverWithNull;
+    normalizeSingleQuotes = builder.normalizeSingleQuotes;
     mixedTypesAsStrings = builder.mixedTypesAsStrings;
+    keepStringQuotes = builder.keepQuotes;
   }
 
   public boolean isDayFirst() {
@@ -53,8 +57,16 @@ public final class JSONOptions extends ColumnFilterOptions {
     return recoverWithNull;
   }
 
+  public boolean isNormalizeSingleQuotes() {
+    return normalizeSingleQuotes;
+  }
+
   public boolean isMixedTypesAsStrings() {
     return mixedTypesAsStrings;
+  }
+
+  public boolean keepStringQuotes() {
+    return keepStringQuotes;
   }
 
   @Override
@@ -71,8 +83,10 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean lines = true;
 
     private boolean recoverWithNull = false;
+    private boolean normalizeSingleQuotes = false;
 
     private boolean mixedTypesAsStrings = false;
+    private boolean keepQuotes = false;
 
     /**
      * Whether to parse dates as DD/MM versus MM/DD
@@ -110,6 +124,14 @@ public final class JSONOptions extends ColumnFilterOptions {
     }
 
     /**
+     * Should the single quotes be normalized.
+     */
+    public Builder withNormalizeSingleQuotes(boolean normalizeSingleQuotes) {
+      this.normalizeSingleQuotes = normalizeSingleQuotes;
+      return this;
+    }
+
+    /**
      * Specify how to handle columns that contain mixed types.
      *
      * @param mixedTypesAsStrings true: return unparsed JSON, false: throw exception
@@ -117,6 +139,16 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withMixedTypesAsStrings(boolean mixedTypesAsStrings) {
       this.mixedTypesAsStrings = mixedTypesAsStrings;
+      return this;
+    }
+
+    /**
+     * Set whether the reader should keep quotes of string values.
+     * @param keepQuotes true to keep them, else false.
+     * @return this for chaining.
+     */
+    public Builder withKeepQuotes(boolean keepQuotes) {
+      this.keepQuotes = keepQuotes;
       return this;
     }
 
