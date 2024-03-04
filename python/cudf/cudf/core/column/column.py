@@ -199,6 +199,7 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         """Convert object to pandas type.
 
@@ -206,13 +207,23 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
         """
         # This default implementation does not handle nulls in any meaningful
         # way
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        pd_series = self.to_arrow().to_pandas()
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(pa_array), index=index
+            )
+        else:
+            pd_series = pa_array.to_pandas()
 
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+            if index is not None:
+                pd_series.index = index
+            return pd_series
 
     @property
     def values_host(self) -> "np.ndarray":
