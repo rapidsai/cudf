@@ -298,10 +298,12 @@ class ListColumn(ColumnBase):
     ) -> pd.Series:
         # Can't rely on Column.to_pandas implementation for lists.
         # Need to perform `to_pylist` to preserve list types.
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        elif arrow_type:
-            raise NotImplementedError(f"{arrow_type=} is not implemented.")
         pa_array = self.to_arrow()
         if arrow_type:
             return pd.Series(

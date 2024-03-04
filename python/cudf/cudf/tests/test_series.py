@@ -2726,7 +2726,7 @@ def test_series_from_large_string():
 def test_series_to_pandas_arrow_type_nullable_raises(scalar):
     pa_array = pa.array([scalar, None])
     ser = cudf.Series(pa_array)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match=".* cannot both be set"):
         ser.to_pandas(nullable=True, arrow_type=True)
 
 
