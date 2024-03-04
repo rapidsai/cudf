@@ -217,7 +217,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
       cudf::strings::detail::make_strings_children(converter, input.size(), stream, mr);
     return make_strings_column(input.size(),
                                std::move(offsets),
-                               std::move(chars->release().data.release()[0]),
+                               chars.release(),
                                input.null_count(),
                                cudf::detail::copy_bitmask(input.parent(), stream, mr));
   }
