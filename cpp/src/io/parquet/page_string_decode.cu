@@ -549,6 +549,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
     auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
+    __syncwarp();
     auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cub::Max());
 
     if (lane_id == 0) {
