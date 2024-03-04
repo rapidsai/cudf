@@ -18,10 +18,9 @@ function(find_and_configure_nvtx)
     NVTX3 3.1.0
     GLOBAL_TARGETS nvtx3-c nvtx3-cpp
     CPM_ARGS
-      GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
-      GIT_TAG v3.1.0
-      GIT_SHALLOW TRUE
-      SOURCE_SUBDIR c
+    GIT_REPOSITORY https://github.com/NVIDIA/NVTX.git
+    GIT_TAG v3.1.0
+    GIT_SHALLOW TRUE SOURCE_SUBDIR c
   )
 endfunction()
 
