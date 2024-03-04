@@ -2872,6 +2872,8 @@ class IndexedFrame(Frame):
             self._column_names,
             None if has_range_index or not keep_index else self._index.names,
         )
+        result._data.label_dtype = self._data.label_dtype
+        result._data.rangeindex = self._data.rangeindex
 
         if keep_index and has_range_index:
             result.index = self.index[start:stop]
@@ -3053,7 +3055,7 @@ class IndexedFrame(Frame):
 
     @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True) -> Self:
-        return self._from_columns_like_self(
+        result = self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
                 [
                     *(self._index._data.columns if keep_index else ()),
@@ -3063,6 +3065,9 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if keep_index else None,
         )
+        result._data.label_dtype = self._data.label_dtype
+        result._data.rangeindex = self._data.rangeindex
+        return result
 
     def _split(self, splits, keep_index=True):
         if self._num_rows == 0:
