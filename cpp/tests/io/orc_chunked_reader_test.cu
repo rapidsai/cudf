@@ -58,13 +58,14 @@ auto const temp_env = reinterpret_cast<cudf::test::TempDirTestEnvironment*>(
 
 using int32s_col       = cudf::test::fixed_width_column_wrapper<int32_t>;
 using int64s_col       = cudf::test::fixed_width_column_wrapper<int64_t>;
+using doubles_col      = cudf::test::fixed_width_column_wrapper<double>;
 using strings_col      = cudf::test::strings_column_wrapper;
 using structs_col      = cudf::test::structs_column_wrapper;
 using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
 
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
-                bool nullable,
+                bool nullable                    = false,
                 std::size_t stripe_size_bytes    = cudf::io::default_stripe_size_bytes,
                 cudf::size_type stripe_size_rows = cudf::io::default_stripe_size_rows)
 {
@@ -161,7 +162,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNoData)
   input_columns.emplace_back(int32s_col{}.release());
   input_columns.emplace_back(int64s_col{}.release());
 
-  auto const [expected, filepath] = write_file(input_columns, "chunked_read_empty", false);
+  auto const [expected, filepath] = write_file(input_columns, "chunked_read_empty");
   auto const [result, num_chunks] = chunked_read(filepath, output_limit{1'000});
   EXPECT_EQ(num_chunks, 1);
   EXPECT_EQ(result->num_rows(), 0);
@@ -223,7 +224,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadBoundaryCases)
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
-    return write_file(input_columns, "chunked_read_simple_boundary", false /*nullable*/);
+    return write_file(input_columns, "chunked_read_simple_boundary");
   }();
 
   // Test with zero limit: everything will be read in one chunk.
@@ -540,7 +541,7 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     input_columns.emplace_back(
       std::move(cudf::gather(cudf::table_view{{template_lists}}, gather_map)->release().front()));
 
-    return write_file(input_columns, "chunked_read_with_lists_no_null", false /*nullable*/);
+    return write_file(input_columns, "chunked_read_with_lists_no_null");
   }();
 
   // Test with zero limit: everything will be read in one chunk.
@@ -948,9 +949,8 @@ TEST_F(OrcChunkedReaderTest, TestChunkedReadNullCount)
   auto const sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
   auto const validity =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 4 != 3; });
-  cudf::test::fixed_width_column_wrapper<int32_t> col{sequence, sequence + num_rows, validity};
   std::vector<std::unique_ptr<cudf::column>> cols;
-  cols.push_back(col.release());
+  cols.push_back(int32s_col{sequence, sequence + num_rows, validity}.release());
   auto const expected = std::make_unique<cudf::table>(std::move(cols));
 
   auto const filepath          = temp_env->get_temp_filepath("chunked_reader_null_count.orc");
@@ -1047,7 +1047,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
 {
   auto constexpr num_rows = 1'000'000;
   auto const iter1        = thrust::make_constant_iterator(15);
-  auto const col1         = cudf::test::fixed_width_column_wrapper<double>(iter1, iter1 + num_rows);
+  auto const col1         = doubles_col(iter1, iter1 + num_rows);
 
   auto const filename   = std::string{"single_col_fixed_width"};
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
@@ -1072,10 +1072,10 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
   auto constexpr num_rows = 1'000'000;
 
   auto const iter1 = thrust::make_counting_iterator<int>(0);
-  auto const col1  = cudf::test::fixed_width_column_wrapper<int>(iter1, iter1 + num_rows);
+  auto const col1  = int32s_col(iter1, iter1 + num_rows);
 
   auto const iter2 = thrust::make_counting_iterator<double>(0);
-  auto const col2  = cudf::test::fixed_width_column_wrapper<double>(iter2, iter2 + num_rows);
+  auto const col2  = doubles_col(iter2, iter2 + num_rows);
 
   auto const strings  = std::vector<std::string>{"abc", "de", "fghi"};
   auto const str_iter = cudf::detail::make_counting_transform_iterator(0, [&](int32_t i) {
@@ -1270,15 +1270,77 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   }
 }
 
+TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
+{
+  int64_t constexpr num_rows    = 100'000'000l;
+  int constexpr rows_per_stripe = 100'000;
+
+  auto const it    = thrust::make_counting_iterator(0);
+  auto const col   = int32s_col(it, it + num_rows);
+  auto const input = cudf::table_view{{col}};
+
+  auto const filepath = temp_env->get_temp_filepath("chunk_read_with_row_selection.orc");
+  auto const write_opts =
+    cudf::io::orc_writer_options::builder(cudf::io::sink_info{filepath}, input)
+      .stripe_size_rows(rows_per_stripe)
+      .build();
+  cudf::io::write_orc(write_opts);
+
+  // Verify metadata.
+  auto const metadata = cudf::io::read_orc_metadata(cudf::io::source_info{filepath});
+  EXPECT_EQ(metadata.num_rows(), num_rows);
+  EXPECT_EQ(metadata.num_stripes(), num_rows / rows_per_stripe);
+
+  int constexpr random_val = 123456;
+
+  // Read some random number or rows that is not stripe size.
+  int constexpr num_rows_to_read = rows_per_stripe * 5 + random_val;
+
+  // Just shift the read data region back by a random offset.
+  const auto num_rows_to_skip = num_rows - num_rows_to_read - random_val;
+
+  const auto sequence_start = num_rows_to_skip % num_rows;
+  auto const skipped_col = int32s_col(it + sequence_start, it + sequence_start + num_rows_to_read);
+  auto const expected    = cudf::table_view{{skipped_col}};
+
+  auto const read_opts = cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath})
+                           .use_index(false)
+                           .skip_rows(num_rows_to_skip)
+                           .num_rows(num_rows_to_read)
+                           .build();
+
+  auto reader = cudf::io::chunked_orc_reader(
+    60'000UL * sizeof(int) /*output limit, equal to 60k rows, less than rows in 1 stripe*/,
+    rows_per_stripe * sizeof(int) /*input limit, around size of 1 stripe's decoded data*/,
+    50'000 /*output granularity, or minimum number of rows for the output chunk*/,
+    read_opts);
+
+  auto num_chunks  = 0;
+  auto read_tables = std::vector<std::unique_ptr<cudf::table>>{};
+  auto tviews      = std::vector<cudf::table_view>{};
+
+  do {
+    auto chunk = reader.read_chunk();
+    // Each output chunk should have either exactly 50k rows, or num_rows_to_read % 50k.
+    EXPECT_TRUE(chunk.tbl->num_rows() == 50000 ||
+                chunk.tbl->num_rows() == num_rows_to_read % 50000);
+
+    tviews.emplace_back(chunk.tbl->view());
+    read_tables.emplace_back(std::move(chunk.tbl));
+    ++num_chunks;
+  } while (reader.has_next());
+
+  auto const read_result = cudf::concatenate(tviews);
+  EXPECT_EQ(num_chunks, 13);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
+}
+
 #define LOCAL_TEST
 
 // This test is extremely heavy, thus it should be disabled by default.
 #ifdef LOCAL_TEST
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
-  using cudf::test::iterators::no_nulls;
-  using int64s_col = cudf::test::fixed_width_column_wrapper<int64_t>;
-
   int64_t constexpr num_rows    = 500'000'000l;
   int constexpr rows_per_stripe = 1'000'000;
   int constexpr num_reps        = 10l;
@@ -1302,15 +1364,15 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     }
   }
 
-  // Test reading the metadata
+  // Verify metadata.
   auto const metadata =
     cudf::io::read_orc_metadata(cudf::io::source_info{data_buffer.data(), data_buffer.size()});
   EXPECT_EQ(metadata.num_rows(), total_rows);
   EXPECT_EQ(metadata.num_stripes(), total_rows / rows_per_stripe);
 
   int constexpr num_rows_to_read = 5'000'000;
-  const auto num_rows_to_skip    = metadata.num_rows() - num_rows_to_read;
-  // - 123456 /*just shift the read data region back by a random offset*/;
+  const auto num_rows_to_skip    = metadata.num_rows() - num_rows_to_read -
+                                123456 /*just shift the read data region back by a random offset*/;
 
   // Check validity of the last 5 million rows.
   const auto sequence_start = num_rows_to_skip % num_rows;
@@ -1321,6 +1383,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
                            cudf::io::source_info{data_buffer.data(), data_buffer.size()})
                            .use_index(false)
                            .skip_rows(num_rows_to_skip)
+                           .num_rows(num_rows_to_read)
                            .build();
   auto reader = cudf::io::chunked_orc_reader(
     600'000UL * sizeof(int64_t) /*output limit, equal to 600k int64_t rows */,
