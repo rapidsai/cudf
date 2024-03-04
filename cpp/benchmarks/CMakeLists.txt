@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil
+         cudftestutil nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
