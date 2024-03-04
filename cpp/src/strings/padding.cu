@@ -112,7 +112,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  auto [offsets_column, chars_column] = [&] {
+  auto [offsets_column, chars] = [&] {
     if (side == side_type::LEFT) {
       auto fn = pad_fn<side_type::LEFT>{*d_strings, width, fill_char_size, d_fill_char};
       return make_strings_children(fn, input.size(), stream, mr);
@@ -126,7 +126,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -151,12 +151,12 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
-  auto [offsets_column, chars_column] =
+  auto [offsets_column, chars] =
     make_strings_children(zfill_fn{*d_strings, width}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

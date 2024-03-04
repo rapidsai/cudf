@@ -549,6 +549,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
     auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
+    __syncwarp();
     auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cub::Max());
 
     if (lane_id == 0) {
@@ -1112,8 +1113,8 @@ struct page_tform_functor {
 /**
  * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
  */
-void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                            cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                            cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                             rmm::device_uvector<uint8_t>& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
@@ -1157,7 +1158,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes = thrust::any_of(
-    rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), [] __device__(auto& page) {
+    rmm::exec_policy(stream), pages.device_begin(), pages.device_end(), [] __device__(auto& page) {
       return page.temp_string_size != 0;
     });
 
@@ -1165,8 +1166,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     // sum up all of the temp_string_sizes
     auto const page_sizes = [] __device__(PageInfo const& page) { return page.temp_string_size; };
     auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                     pages.d_begin(),
-                                                     pages.d_end(),
+                                                     pages.device_begin(),
+                                                     pages.device_end(),
                                                      page_sizes,
                                                      0L,
                                                      thrust::plus<int64_t>{});
@@ -1175,8 +1176,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     // page's chunk of the temp buffer
     rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
     thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream),
-                                     pages.d_begin(),
-                                     pages.d_end(),
+                                     pages.device_begin(),
+                                     pages.device_end(),
                                      page_string_offsets.begin(),
                                      page_sizes,
                                      0L,
@@ -1187,10 +1188,10 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 
     // now use the offsets array to set each page's temp_string_buf pointers
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      pages.d_begin(),
-                      pages.d_end(),
+                      pages.device_begin(),
+                      pages.device_end(),
                       page_string_offsets.begin(),
-                      pages.d_begin(),
+                      pages.device_begin(),
                       page_tform_functor{temp_string_buf.data()});
   }
 }
@@ -1198,8 +1199,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::detail::DecodeStringPageData
  */
-void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                   cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void __host__ DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,
