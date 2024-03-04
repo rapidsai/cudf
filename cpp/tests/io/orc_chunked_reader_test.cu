@@ -1060,7 +1060,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SingleFixedWidthColumn)
   }
 
   {
-    int constexpr expected[] = {17, 10, 9};
+    int constexpr expected[] = {10, 13, 10};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
@@ -1096,7 +1096,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumns)
   }
 
   {
-    int constexpr expected[] = {17, 50, 14};
+    int constexpr expected[] = {10, 50, 15};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{2 * 1024 * 1024UL}, expected);
   }
@@ -1163,13 +1163,13 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
   {
-    int constexpr expected[] = {2, 34, 2};
+    int constexpr expected[] = {2, 40, 3};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{5 * 1024 * 1024UL}, expected);
   }
 
   {
-    int constexpr expected[] = {8, 34, 8};
+    int constexpr expected[] = {8, 40, 9};
     input_limit_test_read(__LINE__,
                           test_files,
                           input,
@@ -1246,13 +1246,13 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
   {
-    int constexpr expected[] = {11, 7, 5};
+    int constexpr expected[] = {8, 8, 6};
     input_limit_test_read(
       __LINE__, test_files, input, output_limit{0UL}, input_limit{128 * 1024 * 1024UL}, expected);
   }
 
   {
-    int constexpr expected[] = {21, 13, 14};
+    int constexpr expected[] = {16, 15, 17};
     input_limit_test_read(__LINE__,
                           test_files,
                           input,
