@@ -37,7 +37,7 @@ else
       --cache-clear \
       --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
       --numprocesses=8 \
-      --dist=loadscope \
+      --dist=worksteal \
       .
     popd
 fi

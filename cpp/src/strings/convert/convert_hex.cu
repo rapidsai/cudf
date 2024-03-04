@@ -180,12 +180,12 @@ struct dispatch_integers_to_hex_fn {
   {
     auto const d_column = column_device_view::create(input, stream);
 
-    auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+    auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
       integer_to_hex_fn<IntegerType>{*d_column}, input.size(), stream, mr);
 
     return make_strings_column(input.size(),
                                std::move(offsets_column),
-                               std::move(chars_column->release().data.release()[0]),
+                               chars.release(),
                                input.null_count(),
                                cudf::detail::copy_bitmask(input, stream, mr));
   }

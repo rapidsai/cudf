@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,8 @@
  */
 
 #pragma once
+
+#include "common_sort_impl.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/table/experimental/row_operators.cuh>
@@ -36,7 +38,7 @@ namespace detail {
  * This API offers fast sorting for primitive types. It cannot handle nested types and will not
  * consider `NaN` as equivalent to other `NaN`.
  *
- * @tparam stable Whether to use stable sort
+ * @tparam method Whether to use stable sort
  * @param input Column to sort. The column data is not modified.
  * @param column_order Ascending or descending sort order
  * @param null_precedence How null rows are to be ordered
@@ -45,7 +47,7 @@ namespace detail {
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Sorted indices for the input column.
  */
-template <bool stable>
+template <sort_method method>
 std::unique_ptr<column> sorted_order(column_view const& input,
                                      order column_order,
                                      null_order null_precedence,
@@ -78,7 +80,7 @@ struct simple_comparator {
   null_order null_precedence{};
 };
 
-template <bool stable>
+template <sort_method method>
 struct column_sorted_order_fn {
   /**
    * @brief Compile time check for allowing faster sort.
@@ -121,7 +123,7 @@ struct column_sorted_order_fn {
     auto const do_sort = [&](auto const comp) {
       // Compiling `thrust::*sort*` APIs is expensive.
       // Thus, we should optimize that by using constexpr condition to only compile what we need.
-      if constexpr (stable) {
+      if constexpr (method == sort_method::STABLE) {
         thrust::stable_sort_by_key(rmm::exec_policy(stream),
                                    d_col.begin<T>(),
                                    d_col.end<T>(),
@@ -165,7 +167,7 @@ struct column_sorted_order_fn {
     auto comp = simple_comparator<T>{*keys, input.has_nulls(), ascending, null_precedence};
     // Compiling `thrust::*sort*` APIs is expensive.
     // Thus, we should optimize that by using constexpr condition to only compile what we need.
-    if constexpr (stable) {
+    if constexpr (method == sort_method::STABLE) {
       thrust::stable_sort(
         rmm::exec_policy(stream), indices.begin<size_type>(), indices.end<size_type>(), comp);
     } else {
