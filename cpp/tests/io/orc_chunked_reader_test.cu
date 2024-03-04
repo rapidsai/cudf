@@ -1182,7 +1182,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
 
 TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
 {
-  int constexpr num_rows  = 1'000'000;
+  int constexpr num_rows  = 50'000'000;
   int constexpr list_size = 4;
   int constexpr str_size  = 3;
 
@@ -1241,367 +1241,33 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   auto const test_files = input_limit_get_test_names(temp_env->get_temp_filepath(filename));
   auto const input      = cudf::table_view{{*lists_col, *str_col, *double_col}};
 
-  for (int iters = 1; iters <= 100; ++iters) {
-    {
-      auto const write_opts =
-        cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{test_files[0]})
-          .stripe_size_rows(cudf::io::default_stripe_size_rows)
-          .build();
+  // Although we set `stripe_size_rows` to be very large, the writer only write
+  // 250k rows (top level) per stripe due to having nested type.
+  // Thus, we have 200 stripes in total.
+  input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
-      auto writer = cudf::io::orc_chunked_writer(write_opts);
-      for (int i = 0; i < iters; ++i) {
-        writer.write(input);
-      }
-    }
+  {
+    int constexpr expected[] = {8, 8, 6};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{128 * 1024 * 1024UL}, expected);
+  }
 
-    // Although we set `stripe_size_rows` to be very large, the writer only write
-    // 250k rows (top level) per stripe due to having nested type.
-    // Thus, we have 200 stripes in total.
-    // input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
+  {
+    int constexpr expected[] = {16, 15, 17};
+    input_limit_test_read(__LINE__,
+                          test_files,
+                          input,
+                          output_limit{128 * 1024 * 1024UL},
+                          input_limit{128 * 1024 * 1024UL},
+                          expected);
+  }
 
-    if (0) {
-      int constexpr expected[] = {8, 8, 6};
-      auto const [result, num_chunks] =
-        chunked_read(test_files[0], output_limit{0UL}, input_limit{128 * 1024 * 1024UL});
-      EXPECT_EQ(expected[0], num_chunks);
-      printf("num_chunks: %d\n", (int)num_chunks);
-
-      // TODO: equal
-      // CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, input);
-
-      // input_limit_test_read(
-      //   __LINE__, test_files, input, output_limit{0UL}, input_limit{128 * 1024 * 1024UL},
-      //   expected);
-    }
-
-    // clang-format off
-  /*
-complete, 1, peak_memory_usage: 24870400 , MB = 23.7183
-complete, 2, peak_memory_usage: 49739984 , MB = 47.4357
-complete, 3, peak_memory_usage: 74609600 , MB = 71.1533
-complete, 4, peak_memory_usage: 99479184 , MB = 94.8707
-complete, 5, peak_memory_usage: 124348528 , MB = 118.588
-complete, 6, peak_memory_usage: 149218128 , MB = 142.305
-complete, 7, peak_memory_usage: 174087728 , MB = 166.023
-complete, 8, peak_memory_usage: 198957312 , MB = 189.74
-complete, 9, peak_memory_usage: 223826672 , MB = 213.458
-complete, 10, peak_memory_usage: 248696256 , MB = 237.175
-complete, 11, peak_memory_usage: 224912432 , MB = 214.493
-complete, 12, peak_memory_usage: 225455472 , MB = 215.011
-complete, 13, peak_memory_usage: 225998192 , MB = 215.529
-complete, 14, peak_memory_usage: 226541072 , MB = 216.046
-complete, 15, peak_memory_usage: 227084080 , MB = 216.564
-complete, 16, peak_memory_usage: 227626832 , MB = 217.082
-complete, 17, peak_memory_usage: 228169712 , MB = 217.6
-complete, 18, peak_memory_usage: 228712592 , MB = 218.117
-complete, 19, peak_memory_usage: 248696256 , MB = 237.175
-complete, 20, peak_memory_usage: 229798352 , MB = 219.153
-complete, 21, peak_memory_usage: 230341600 , MB = 219.671
-complete, 22, peak_memory_usage: 230884096 , MB = 220.188
-complete, 23, peak_memory_usage: 231427152 , MB = 220.706
-complete, 24, peak_memory_usage: 231970080 , MB = 221.224
-complete, 25, peak_memory_usage: 232513136 , MB = 221.742
-complete, 26, peak_memory_usage: 233056016 , MB = 222.26
-complete, 27, peak_memory_usage: 233598624 , MB = 222.777
-complete, 28, peak_memory_usage: 248696256 , MB = 237.175
-complete, 29, peak_memory_usage: 234684480 , MB = 223.813
-complete, 30, peak_memory_usage: 235227984 , MB = 224.331
-complete, 31, peak_memory_usage: 235770208 , MB = 224.848
-complete, 32, peak_memory_usage: 236313040 , MB = 225.366
-complete, 33, peak_memory_usage: 236855888 , MB = 225.883
-complete, 34, peak_memory_usage: 237399504 , MB = 226.402
-complete, 35, peak_memory_usage: 237941776 , MB = 226.919
-complete, 36, peak_memory_usage: 238485504 , MB = 227.438
-complete, 37, peak_memory_usage: 248696256 , MB = 237.175
-complete, 38, peak_memory_usage: 239570400 , MB = 228.472
-complete, 39, peak_memory_usage: 240113728 , MB = 228.99
-complete, 40, peak_memory_usage: 240656512 , MB = 229.508
-complete, 41, peak_memory_usage: 241198848 , MB = 230.025
-complete, 42, peak_memory_usage: 241742608 , MB = 230.544
-complete, 43, peak_memory_usage: 242285536 , MB = 231.061
-complete, 44, peak_memory_usage: 242828368 , MB = 231.579
-complete, 45, peak_memory_usage: 243371008 , MB = 232.097
-complete, 46, peak_memory_usage: 248696256 , MB = 237.175
-complete, 47, peak_memory_usage: 244456448 , MB = 233.132
-complete, 48, peak_memory_usage: 245000016 , MB = 233.65
-complete, 49, peak_memory_usage: 245542256 , MB = 234.167
-complete, 50, peak_memory_usage: 246085472 , MB = 234.685
-complete, 51, peak_memory_usage: 246628768 , MB = 235.204
-complete, 52, peak_memory_usage: 247171088 , MB = 235.721
-complete, 53, peak_memory_usage: 247714240 , MB = 236.239
-complete, 54, peak_memory_usage: 248257248 , MB = 236.757
-complete, 55, peak_memory_usage: 248799808 , MB = 237.274
-complete, 56, peak_memory_usage: 249342880 , MB = 237.792
-complete, 57, peak_memory_usage: 249885808 , MB = 238.31
-complete, 58, peak_memory_usage: 250428960 , MB = 238.828
-complete, 59, peak_memory_usage: 250971984 , MB = 239.346
-complete, 60, peak_memory_usage: 251514080 , MB = 239.863
-complete, 61, peak_memory_usage: 252057616 , MB = 240.381
-complete, 62, peak_memory_usage: 252599968 , MB = 240.898
-complete, 63, peak_memory_usage: 253142992 , MB = 241.416
-complete, 64, peak_memory_usage: 253686064 , MB = 241.934
-complete, 65, peak_memory_usage: 254227872 , MB = 242.451
-complete, 66, peak_memory_usage: 254771152 , MB = 242.969
-complete, 67, peak_memory_usage: 255313872 , MB = 243.486
-complete, 68, peak_memory_usage: 255856912 , MB = 244.004
-complete, 69, peak_memory_usage: 256400048 , MB = 244.522
-complete, 70, peak_memory_usage: 256943040 , MB = 245.04
-complete, 71, peak_memory_usage: 257485520 , MB = 245.557
-complete, 72, peak_memory_usage: 258029520 , MB = 246.076
-complete, 73, peak_memory_usage: 258572064 , MB = 246.594
-complete, 74, peak_memory_usage: 259115328 , MB = 247.112
-complete, 75, peak_memory_usage: 259657776 , MB = 247.629
-complete, 76, peak_memory_usage: 260200864 , MB = 248.147
-complete, 77, peak_memory_usage: 260742832 , MB = 248.664
-complete, 78, peak_memory_usage: 261286496 , MB = 249.182
-complete, 79, peak_memory_usage: 261828432 , MB = 249.699
-complete, 80, peak_memory_usage: 262371920 , MB = 250.217
-complete, 81, peak_memory_usage: 262914432 , MB = 250.735
-complete, 82, peak_memory_usage: 263458960 , MB = 251.254
-complete, 83, peak_memory_usage: 264000816 , MB = 251.771
-complete, 84, peak_memory_usage: 264543056 , MB = 252.288
-complete, 85, peak_memory_usage: 265085984 , MB = 252.806
-complete, 86, peak_memory_usage: 265630256 , MB = 253.325
-complete, 87, peak_memory_usage: 266171696 , MB = 253.841
-complete, 88, peak_memory_usage: 266714432 , MB = 254.359
-complete, 89, peak_memory_usage: 267257392 , MB = 254.877
-complete, 90, peak_memory_usage: 267800176 , MB = 255.394
-complete, 91, peak_memory_usage: 268343536 , MB = 255.912
-complete, 92, peak_memory_usage: 268886256 , MB = 256.43
-complete, 93, peak_memory_usage: 269429968 , MB = 256.948
-complete, 94, peak_memory_usage: 269971904 , MB = 257.465
-complete, 95, peak_memory_usage: 270516528 , MB = 257.985
-complete, 96, peak_memory_usage: 271058992 , MB = 258.502
-complete, 97, peak_memory_usage: 271601616 , MB = 259.019
-complete, 98, peak_memory_usage: 272145536 , MB = 259.538
-complete, 99, peak_memory_usage: 272686496 , MB = 260.054
-complete, 100, peak_memory_usage: 273230448 , MB = 260.573
-
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 1
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 2
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 3
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 4
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 5
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 6
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 7
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 8
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 9
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 10
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-num_chunks: 11
-
-   */
-    // clang-format on
-
-    printf("\n\n\n\n read full\n");
-    fflush(stdout);
-    // TODO: remove
-    {
-      int constexpr expected[] = {1, 1, 1};
-      // input_limit_test_read(
-      //   __LINE__, test_files, input, output_limit{0UL}, input_limit{0UL}, expected);
-      auto const [result, num_chunks] =
-        chunked_read(test_files[0], output_limit{0UL}, input_limit{0UL});
-      EXPECT_EQ(expected[0], num_chunks);
-      printf("num_chunks: %d\n", (int)num_chunks);
-      // TODO: equal
-      // CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*result, input);
-    }
-
-    // clang-format off
-/*
-complete, 1, peak_memory_usage: 24870400 , MB = 23.7183
-complete, 2, peak_memory_usage: 49739984 , MB = 47.4357
-complete, 3, peak_memory_usage: 74609600 , MB = 71.1533
-complete, 4, peak_memory_usage: 99479184 , MB = 94.8707
-complete, 5, peak_memory_usage: 124348528 , MB = 118.588
-complete, 6, peak_memory_usage: 149218128 , MB = 142.305
-complete, 7, peak_memory_usage: 174087728 , MB = 166.023
-complete, 8, peak_memory_usage: 198957312 , MB = 189.74
-complete, 9, peak_memory_usage: 223826672 , MB = 213.458
-complete, 10, peak_memory_usage: 248696256 , MB = 237.175
-complete, 11, peak_memory_usage: 273565872 , MB = 260.893
-complete, 12, peak_memory_usage: 298435456 , MB = 284.61
-complete, 13, peak_memory_usage: 323304800 , MB = 308.327
-complete, 14, peak_memory_usage: 348174400 , MB = 332.045
-complete, 15, peak_memory_usage: 373044000 , MB = 355.762
-complete, 16, peak_memory_usage: 397913584 , MB = 379.48
-complete, 17, peak_memory_usage: 422782944 , MB = 403.197
-complete, 18, peak_memory_usage: 447652528 , MB = 426.915
-complete, 19, peak_memory_usage: 472522144 , MB = 450.632
-complete, 20, peak_memory_usage: 497391728 , MB = 474.35
-complete, 21, peak_memory_usage: 522261072 , MB = 498.067
-complete, 22, peak_memory_usage: 547130672 , MB = 521.784
-complete, 23, peak_memory_usage: 572000272 , MB = 545.502
-complete, 24, peak_memory_usage: 596869856 , MB = 569.219
-complete, 25, peak_memory_usage: 621739216 , MB = 592.937
-complete, 26, peak_memory_usage: 646608800 , MB = 616.654
-complete, 27, peak_memory_usage: 671478416 , MB = 640.372
-complete, 28, peak_memory_usage: 696348000 , MB = 664.089
-complete, 29, peak_memory_usage: 721217344 , MB = 687.806
-complete, 30, peak_memory_usage: 746086944 , MB = 711.524
-complete, 31, peak_memory_usage: 770956544 , MB = 735.241
-complete, 32, peak_memory_usage: 795826128 , MB = 758.959
-complete, 33, peak_memory_usage: 820695488 , MB = 782.676
-complete, 34, peak_memory_usage: 845565072 , MB = 806.394
-complete, 35, peak_memory_usage: 870434688 , MB = 830.111
-complete, 36, peak_memory_usage: 895304272 , MB = 853.829
-complete, 37, peak_memory_usage: 920173616 , MB = 877.546
-complete, 38, peak_memory_usage: 945043216 , MB = 901.263
-complete, 39, peak_memory_usage: 969912816 , MB = 924.981
-complete, 40, peak_memory_usage: 994782400 , MB = 948.698
-complete, 41, peak_memory_usage: 1019651760 , MB = 972.416
-complete, 42, peak_memory_usage: 1044521344 , MB = 996.133
-complete, 43, peak_memory_usage: 1069390960 , MB = 1019.85
-complete, 44, peak_memory_usage: 1094260544 , MB = 1043.57
-complete, 45, peak_memory_usage: 1119129888 , MB = 1067.29
-complete, 46, peak_memory_usage: 1143999488 , MB = 1091
-complete, 47, peak_memory_usage: 1168869088 , MB = 1114.72
-complete, 48, peak_memory_usage: 1193738672 , MB = 1138.44
-complete, 49, peak_memory_usage: 1218608032 , MB = 1162.16
-complete, 50, peak_memory_usage: 1243477616 , MB = 1185.87
-complete, 51, peak_memory_usage: 1268347232 , MB = 1209.59
-complete, 52, peak_memory_usage: 1293216816 , MB = 1233.31
-complete, 53, peak_memory_usage: 1318086160 , MB = 1257.02
-complete, 54, peak_memory_usage: 1342955760 , MB = 1280.74
-complete, 55, peak_memory_usage: 1367825360 , MB = 1304.46
-complete, 56, peak_memory_usage: 1392694944 , MB = 1328.18
-complete, 57, peak_memory_usage: 1417564560 , MB = 1351.89
-complete, 58, peak_memory_usage: 1442433888 , MB = 1375.61
-complete, 59, peak_memory_usage: 1467303504 , MB = 1399.33
-complete, 60, peak_memory_usage: 1492173088 , MB = 1423.05
-complete, 61, peak_memory_usage: 1517042688 , MB = 1446.76
-complete, 62, peak_memory_usage: 1541912032 , MB = 1470.48
-complete, 63, peak_memory_usage: 1566781632 , MB = 1494.2
-complete, 64, peak_memory_usage: 1591651216 , MB = 1517.92
-complete, 65, peak_memory_usage: 1616520832 , MB = 1541.63
-complete, 66, peak_memory_usage: 1641390160 , MB = 1565.35
-complete, 67, peak_memory_usage: 1666259776 , MB = 1589.07
-complete, 68, peak_memory_usage: 1691129360 , MB = 1612.79
-complete, 69, peak_memory_usage: 1715998960 , MB = 1636.5
-complete, 70, peak_memory_usage: 1740868304 , MB = 1660.22
-complete, 71, peak_memory_usage: 1765737904 , MB = 1683.94
-complete, 72, peak_memory_usage: 1790607488 , MB = 1707.66
-complete, 73, peak_memory_usage: 1815477104 , MB = 1731.37
-complete, 74, peak_memory_usage: 1840346432 , MB = 1755.09
-complete, 75, peak_memory_usage: 1865216048 , MB = 1778.81
-complete, 76, peak_memory_usage: 1890085632 , MB = 1802.53
-complete, 77, peak_memory_usage: 1914955232 , MB = 1826.24
-complete, 78, peak_memory_usage: 1939824576 , MB = 1849.96
-complete, 79, peak_memory_usage: 1964694176 , MB = 1873.68
-complete, 80, peak_memory_usage: 1989563760 , MB = 1897.4
-complete, 81, peak_memory_usage: 2014433376 , MB = 1921.11
-complete, 82, peak_memory_usage: 2039302704 , MB = 1944.83
-complete, 83, peak_memory_usage: 2064172320 , MB = 1968.55
-complete, 84, peak_memory_usage: 2089041904 , MB = 1992.27
-complete, 85, peak_memory_usage: 2113911504 , MB = 2015.98
-complete, 86, peak_memory_usage: 2138780848 , MB = 2039.7
-complete, 87, peak_memory_usage: 2163650448 , MB = 2063.42
-complete, 88, peak_memory_usage: 2188520032 , MB = 2087.14
-complete, 89, peak_memory_usage: 2213389648 , MB = 2110.85
-complete, 90, peak_memory_usage: 2238258976 , MB = 2134.57
-complete, 91, peak_memory_usage: 2263128592 , MB = 2158.29
-complete, 92, peak_memory_usage: 2287998176 , MB = 2182.01
-complete, 93, peak_memory_usage: 2312867776 , MB = 2205.72
-complete, 94, peak_memory_usage: 2337737120 , MB = 2229.44
-complete, 95, peak_memory_usage: 2362606720 , MB = 2253.16
-complete, 96, peak_memory_usage: 2387476304 , MB = 2276.87
-complete, 97, peak_memory_usage: 2412345920 , MB = 2300.59
-complete, 98, peak_memory_usage: 2437215248 , MB = 2324.31
-complete, 99, peak_memory_usage: 2462084864 , MB = 2348.03
-complete, 100, peak_memory_usage: 2486954448 , MB = 2371.74
-*/
-    // clang-format on
-
-  }  // end iters
+  // TODO: remove
+  {
+    int constexpr expected[] = {1, 1, 1};
+    input_limit_test_read(
+      __LINE__, test_files, input, output_limit{0UL}, input_limit{0UL}, expected);
+  }
 }
 
 TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
