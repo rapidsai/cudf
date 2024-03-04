@@ -69,7 +69,7 @@ void groupby_max_helper(nvbench::state& state,
 template <typename Type>
 void bench_groupby_max(nvbench::state& state, nvbench::type_list<Type>)
 {
-  auto constexpr cardinality  = 0;
+  auto const cardinality      = static_cast<cudf::size_type>(state.get_int64("cardinality"));
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const null_probability = state.get_float64("null_probability");
 
@@ -89,6 +89,7 @@ void bench_groupby_max_cardinality(nvbench::state& state, nvbench::type_list<Typ
 NVBENCH_BENCH_TYPES(bench_groupby_max,
                     NVBENCH_TYPE_AXES(nvbench::type_list<int32_t, int64_t, float, double>))
   .set_name("groupby_max")
+  .add_int64_axis("cardinality", {0})
   .add_int64_power_of_two_axis("num_rows", {12, 18, 24})
   .add_float64_axis("null_probability", {0, 0.1, 0.9});
 
