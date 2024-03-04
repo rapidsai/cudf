@@ -18,6 +18,7 @@
 
 package ai.rapids.cudf;
 
+import java.nio.ByteBuffer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -80,7 +81,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   void testFragmentationAndExhaustion() {
     final long poolSize = 15 * 1024L;
     PinnedMemoryPool.initialize(poolSize);
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
     HostMemoryBuffer[] buffers = new HostMemoryBuffer[5];
     try {
       buffers[0] = PinnedMemoryPool.tryAllocate(1024);
@@ -111,15 +112,32 @@ class PinnedMemoryPoolTest extends CudfTestBase {
   }
 
   @Test
+  void testTouchPinnedMemory() {
+    final long poolSize = 15 * 1024L;
+    PinnedMemoryPool.initialize(poolSize);
+    int bufLength = 256;
+    try(HostMemoryBuffer hmb = PinnedMemoryPool.allocate(bufLength); 
+        HostMemoryBuffer hmb2 = PinnedMemoryPool.allocate(bufLength)) {
+      ByteBuffer bb = hmb.asByteBuffer(0, bufLength);
+      for (int i = 0; i < bufLength; i++) {
+        bb.put(i, (byte)i);
+      }
+      hmb2.copyFromHostBuffer(0, hmb, 0, bufLength);
+      ByteBuffer bb2 = hmb2.asByteBuffer(0, bufLength);
+      for (int i = 0; i < bufLength; i++) {
+        assertEquals(bb.get(i), bb2.get(i));
+      }
+    }
+  }
+
+  @Test
   void testZeroSizedAllocation() {
     final long poolSize = 4 * 1024L;
     PinnedMemoryPool.initialize(poolSize);
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
     try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(0)) {
       assertNotNull(buffer);
       assertEquals(0, buffer.getLength());
-      assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
     }
-    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
   }
 }
