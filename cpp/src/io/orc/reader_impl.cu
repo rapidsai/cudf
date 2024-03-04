@@ -1552,11 +1552,18 @@ table_with_metadata reader::impl::make_output_chunk()
 
 #endif
 
-  {
+  if (!_chunk_read_data.has_next()) {
+    static int count{0};
+    count++;
     _stream.synchronize();
     auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "done, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    std::cout << "complete, " << count << ", peak_memory_usage: " << peak_mem
+              << " , MB = " << (peak_mem * 1.0) / (1024.0 * 1024.0) << std::endl;
+  } else {
+    _stream.synchronize();
+    auto peak_mem = mem_stats_logger.peak_memory_usage();
+    std::cout << "done, partial, peak_memory_usage: " << peak_mem
+              << " , MB = " << (peak_mem * 1.0) / (1024.0 * 1024.0) << std::endl;
   }
 
   return {std::move(out_table), _out_metadata};
