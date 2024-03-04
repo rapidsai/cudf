@@ -4,7 +4,6 @@ channels:
 - rapidsai
 - rapidsai-nightly
 - dask/label/dev
-- pytorch
 - conda-forge
 - nvidia
 dependencies:
@@ -58,7 +57,7 @@ dependencies:
 - ninja
 - notebook
 - numba>=0.57
-- numpy>=1.21
+- numpy>=1.23
 - numpydoc
 - nvcomp==3.0.6
 - nvtx>=0.2.1
@@ -77,8 +76,8 @@ dependencies:
 - pytest-xdist
 - pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
-- python>=3.9,<3.11
-- pytorch<1.12.0
+- python>=3.9,<3.12
+- pytorch>=2.1.0
 - rapids-dask-dependency==24.4.*
 - rich
 - rmm==24.4.*
@@ -94,8 +93,8 @@ dependencies:
 - sphinxcontrib-websupport
 - streamz
 - sysroot_linux-64==2.17
-- tokenizers==0.13.1
-- transformers==4.24.0
+- tokenizers==0.15.2
+- transformers==4.38.1
 - typing_extensions>=4.0.0
 - zlib>=1.2.13
 - pip:
