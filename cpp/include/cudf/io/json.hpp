@@ -118,6 +118,9 @@ class json_reader_options {
   // Normalize single quotes
   bool _normalize_single_quotes = false;
 
+  // Normalize unquoted spaces and tabs
+  bool _normalize_whitespace = false;
+
   // Whether to recover after an invalid JSON line
   json_recovery_mode_t _recovery_mode = json_recovery_mode_t::FAIL;
 
@@ -266,6 +269,13 @@ class json_reader_options {
   bool is_enabled_normalize_single_quotes() const { return _normalize_single_quotes; }
 
   /**
+   * @brief Whether the reader should normalize unquoted whitespace characters
+   *
+   * @returns true if the reader should normalize whitespace, false otherwise
+   */
+  bool is_enabled_normalize_whitespace() const { return _normalize_whitespace; }
+
+  /**
    * @brief Queries the JSON reader's behavior on invalid JSON lines.
    *
    * @returns An enum that specifies the JSON reader's behavior on invalid JSON lines.
@@ -357,6 +367,14 @@ class json_reader_options {
    * strings
    */
   void enable_normalize_single_quotes(bool val) { _normalize_single_quotes = val; }
+
+  /**
+   * @brief Set whether the reader should enable normalization of unquoted whitespace
+   *
+   * @param val Boolean value to indicate whether the reader should normalize unquoted whitespace
+   * characters i.e. tabs and spaces
+   */
+  void enable_normalize_whitespace(bool val) { _normalize_whitespace = val; }
 
   /**
    * @brief Specifies the JSON reader's behavior on invalid JSON lines.
@@ -530,6 +548,19 @@ class json_reader_options_builder {
   json_reader_options_builder& normalize_single_quotes(bool val)
   {
     options._normalize_single_quotes = val;
+    return *this;
+  }
+
+  /**
+   * @brief Set whether the reader should normalize unquoted whitespace
+   *
+   * @param val Boolean value to indicate whether the reader should normalize unquoted
+   * whitespace
+   * @return this for chaining
+   */
+  json_reader_options_builder& normalize_whitespace(bool val)
+  {
+    options._normalize_whitespace = val;
     return *this;
   }
 
