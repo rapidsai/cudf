@@ -18,25 +18,20 @@
 
 #include "parquet_gpu.hpp"
 
-namespace cudf {
-namespace io {
-namespace parquet {
-namespace detail {
-void DecodePageDataFixed(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                         cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+namespace cudf::io::parquet::detail {
+
+void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
+                         cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                          std::size_t num_rows,
                          size_t min_row,
                          int level_type_size,
                          rmm::cuda_stream_view stream);
 
-void DecodePageDataFixedDict(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              std::size_t num_rows,
                              size_t min_row,
                              int level_type_size,
                              rmm::cuda_stream_view stream);
 
-}  // namespace detail
-}  // namespace parquet
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::parquet::detail

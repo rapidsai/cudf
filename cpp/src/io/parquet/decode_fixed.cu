@@ -17,6 +17,7 @@
 #include "page_decode.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
+#include <cudf/detail/utilities/cuda.cuh>
 
 namespace cudf::io::parquet::detail {
 
@@ -32,8 +33,8 @@ template <bool nullable, typename level_t, typename state_buf>
 static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
   int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t)
 {
-  constexpr int num_warps      = decode_block_size / 32;
-  constexpr int max_batch_size = num_warps * 32;
+  constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
+  constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
   auto& ni = s->nesting_info[0];
 
@@ -96,11 +97,11 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
       if (write_start >= 0) {
         uint32_t const warp_validity_mask = ballot(is_valid);
         // lane 0 from each warp writes out validity
-        if (!(t % 32)) {
+        if (!(t % cudf::detail::warp_size)) {
           int const vindex = (value_count + thread_value_count) - 1;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
                                  first_row;  // absolute bit offset into the output validity map
-          int const write_end = 32 - __clz(in_write_row_bounds);  // last bit in the warp to store
+          int const write_end = cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
           int const bit_count = write_end - write_start;
           warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
@@ -126,7 +127,6 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
     if (is_valid) {
       int const dst_pos = (value_count + thread_value_count) - 1;
       int const src_pos = (valid_count + thread_valid_count) - 1;
-      auto ix           = rolling_index<state_buf::nz_buf_size>(src_pos);
       sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] = dst_pos;
     }
 
@@ -151,8 +151,8 @@ template <typename state_buf>
 __device__ inline void gpuDecodeValues(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
 {
-  constexpr int num_warps      = decode_block_size / 32;
-  constexpr int max_batch_size = num_warps * 32;
+  constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
+  constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
   int const dtype                          = s->col.data_type & 7;
@@ -166,7 +166,6 @@ __device__ inline void gpuDecodeValues(
     int const src_pos    = pos + t;
 
     // the position in the output column/buffer
-    auto nz_idx = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)];
     int dst_pos = sb->nz_idx[rolling_index<state_buf::nz_buf_size>(src_pos)] - s->first_row;
 
     // target_pos will always be properly bounded by num_rows, but dst_pos may be negative (values
@@ -283,15 +282,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  //
-  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
-  // starts before this page and ends after this page:
-  //       P0        P1        P2
-  //  |---------|---------|----------|
-  //        ^------------------^
-  //      row start           row end
-  // P1 will contain 0 rows
-  //
   if (s->num_rows == 0) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
@@ -382,15 +372,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
 
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
-  //
-  // corner case: in the case of lists, we can have pages that contain "0" rows if the current row
-  // starts before this page and ends after this page:
-  //       P0        P1        P2
-  //  |---------|---------|----------|
-  //        ^------------------^
-  //      row start           row end
-  // P1 will contain 0 rows
-  //
   if (s->num_rows == 0) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
@@ -448,8 +429,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
 }  // anonymous namespace
 
-void __host__ DecodePageDataFixed(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                  cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
+                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                   size_t num_rows,
                                   size_t min_row,
                                   int level_type_size,
@@ -468,8 +449,8 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_vector<PageInfo>& pag
 }
 
 void __host__
-DecodePageDataFixedDict(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                        cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
+                        cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                         size_t num_rows,
                         size_t min_row,
                         int level_type_size,
