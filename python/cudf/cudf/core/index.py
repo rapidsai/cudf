@@ -483,9 +483,13 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return _maybe_convert_to_default_type(dtype)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.RangeIndex:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.RangeIndex:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
+        elif arrow_type:
+            raise NotImplementedError(f"{arrow_type=} is not implemented.")
         return pd.RangeIndex(
             start=self._start,
             stop=self._stop,
@@ -1521,9 +1525,12 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
     def any(self):
         return self._values.any()
 
-    def to_pandas(self, *, nullable: bool = False) -> pd.Index:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.Index:
         return pd.Index(
-            self._values.to_pandas(nullable=nullable), name=self.name
+            self._values.to_pandas(nullable=nullable, arrow_type=arrow_type),
+            name=self.name,
         )
 
     def append(self, other):
@@ -2094,18 +2101,26 @@ class DatetimeIndex(Index):
         return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.DatetimeIndex:
-        if nullable:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.DatetimeIndex:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
-        freq = (
-            self._freq._maybe_as_fast_pandas_offset()
-            if self._freq is not None
-            else None
-        )
-        return pd.DatetimeIndex(
-            self._values.to_pandas(), name=self.name, freq=freq
-        )
+        result = self._values.to_pandas(arrow_type=arrow_type)
+        if arrow_type:
+            return pd.Index(result, name=self.name)
+        else:
+            freq = (
+                self._freq._maybe_as_fast_pandas_offset()
+                if self._freq is not None
+                else None
+            )
+            return pd.DatetimeIndex(result, name=self.name, freq=freq)
 
     @_cudf_nvtx_annotate
     def _get_dt_field(self, field):
@@ -2426,13 +2441,21 @@ class TimedeltaIndex(Index):
         return value
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.TimedeltaIndex:
-        if nullable:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.TimedeltaIndex:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        return pd.TimedeltaIndex(
-            self._values.to_pandas(),
-            name=self.name,
-        )
+
+        result = self._values.to_pandas(arrow_type=arrow_type)
+        if arrow_type:
+            return pd.Index(result, name=self.name)
+        else:
+            return pd.TimedeltaIndex(result, name=self.name)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
