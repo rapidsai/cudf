@@ -10,6 +10,7 @@ libcudf:
 CMake:
   - '**/CMakeLists.txt'
   - '**/cmake/**'
+  - '**/*.cmake'
 
 cuDF (Java):
   - 'java/**'
