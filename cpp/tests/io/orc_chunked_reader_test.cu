@@ -1158,7 +1158,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, ListType)
   auto const input      = cudf::table_view{{*lists_col}};
 
   // Although we set `stripe_size_rows` to be very large, the writer only write
-  // 250k rows per stripe. Thus, we have 200 stripes in total.
+  // 250k rows (top level) per stripe due to having nested type.
+  // Thus, we have 200 stripes in total.
   input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
   {
@@ -1240,7 +1241,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
   auto const input      = cudf::table_view{{*lists_col, *str_col, *double_col}};
 
   // Although we set `stripe_size_rows` to be very large, the writer only write
-  // 250k rows per stripe. Thus, we have 200 stripes in total.
+  // 250k rows (top level) per stripe due to having nested type.
+  // Thus, we have 200 stripes in total.
   input_limit_test_write(test_files, input, cudf::io::default_stripe_size_rows);
 
   {
