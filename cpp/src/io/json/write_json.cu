@@ -169,12 +169,12 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
   {
-    auto [offsets_column, chars_column] =
+    auto [offsets_column, chars] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
     return make_strings_column(column_v.size(),
                                std::move(offsets_column),
-                               std::move(chars_column->release().data.release()[0]),
+                               chars.release(),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream, mr));
   }
