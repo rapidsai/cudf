@@ -195,7 +195,11 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    # TODO: This test fails with PyTorch 2. Is it still expected to be valid?
+    # TODO: This test fails with PyTorch 2. It appears that PyTorch
+    # checks that the pointer is device-accessible even when the
+    # size is zero. See
+    # https://github.com/pytorch/pytorch/issues/98133
+    #
     # index = cudf.Index([], dtype="float64")
     # tensor = torch.tensor(index)
     # got = cudf.Index(tensor)
