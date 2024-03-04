@@ -51,6 +51,34 @@ cpdef Table drop_nulls(Table source_table, list keys, size_type keep_threshold):
     return Table.from_libcudf(move(c_result))
 
 
+cpdef Table drop_nans(Table source_table, list keys, size_type keep_threshold):
+    """Filters out rows from the input table based on the presence of NaNs.
+
+    Parameters
+    ----------
+    source_table : Table
+        The input table to filter.
+    keys : List[size_type]
+        The list of column indexes to consider for NaN filtering.
+    keep_threshold : size_type
+        The minimum number of non-NaNs required to keep a row.
+
+    Returns
+    -------
+    Table
+        A new table with rows removed based on NaNs.
+    """
+    cdef unique_ptr[table] c_result
+    cdef vector[size_type] c_keys = keys
+    with nogil:
+        c_result = move(
+            cpp_stream_compaction.drop_nulls(
+                source_table.view(), c_keys, keep_threshold
+            )
+        )
+    return Table.from_libcudf(move(c_result))
+
+
 cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
     """Filters out rows from the input table based on a boolean mask.
 
@@ -76,39 +104,55 @@ cpdef Table apply_boolean_mask(Table source_table, Column boolean_mask):
     return Table.from_libcudf(move(c_result))
 
 
-cpdef size_type distinct_count(
-    Column source_table,
-    null_policy null_handling,
-    nan_policy nan_handling
-):
-    """Returns the number of unique elements in the input column.
-
-    Parameters
-    ----------
-    source_table : Column
-        The input column to count the unique elements of.
-    null_handling : null_policy
-        Flag to include or exclude nulls from the count.
-    nan_handling : nan_policy
-        Flag to include or exclude NaNs from the count.
-
-    Returns
-    -------
-    size_type
-        The number of unique elements in the input column.
-    """
-    return cpp_stream_compaction.distinct_count(
-        source_table.view(), null_handling, nan_handling
-    )
-
-
-cpdef Table stable_distinct(
+cpdef Table unique(
     Table input,
     list keys,
     duplicate_keep_option keep,
     null_equality nulls_equal,
 ):
-    """Get the distinct rows from the input table, preserving input order.
+    """Filter duplicate consecutive rows from the input table.
+
+    Parameters
+    ----------
+    input : Table
+        The input table to filter
+    keys : list[int]
+        The list of column indexes to consider for filtering.
+    keep : duplicate_keep_option
+        The option to specify which rows to keep in the case of duplicates.
+    nulls_equal : null_equality
+        The option to specify how nulls are handled in the comparison.
+
+    Returns
+    -------
+    Table
+        New Table with unique rows from each sequence of equivalent rows
+        as specified by keep. In the same order as the input table.
+
+    Notes
+    -----
+    If the input columns to be filtered on are sorted, then
+    unique can produce the same result as stable_distinct, but faster.
+    """
+    cdef unique_ptr[table] c_result
+    cdef vector[size_type] c_keys = keys
+    with nogil:
+        c_result = move(
+            cpp_stream_compaction.unique(
+                input.view(), c_keys, keep, nulls_equal
+            )
+        )
+    return Table.from_libcudf(move(c_result))
+
+
+cpdef Table distinct(
+    Table input,
+    list keys,
+    duplicate_keep_option keep,
+    null_equality nulls_equal,
+    nan_equality nans_equal,
+):
+    """Get the distinct rows from the input table.
 
     Parameters
     ----------
@@ -120,18 +164,21 @@ cpdef Table stable_distinct(
         The option to specify which rows to keep in the case of duplicates.
     nulls_equal : null_equality
         The option to specify how nulls are handled in the comparison.
+    nans_equal : nan_equality
+        The option to specify how NaNs are handled in the comparison.
 
     Returns
     -------
     Table
-        A new table with distinct rows from the input table.
+        A new table with distinct rows from the input table. The
+        output will not necessarily be in the same order as the input.
     """
     cdef unique_ptr[table] c_result
     cdef vector[size_type] c_keys = keys
     with nogil:
         c_result = move(
-            cpp_stream_compaction.stable_distinct(
-                input.view(), c_keys, keep, nulls_equal
+            cpp_stream_compaction.distinct(
+                input.view(), c_keys, keep, nulls_equal, nans_equal
             )
         )
     return Table.from_libcudf(move(c_result))
@@ -169,3 +216,99 @@ cpdef Column distinct_indices(
             )
         )
     return Column.from_libcudf(move(c_result))
+
+
+cpdef Table stable_distinct(
+    Table input,
+    list keys,
+    duplicate_keep_option keep,
+    null_equality nulls_equal,
+    nan_equality nans_equal,
+):
+    """Get the distinct rows from the input table, preserving input order.
+
+    Parameters
+    ----------
+    input : Table
+        The input table to filter.
+    keys : list
+        The list of column indexes to consider for distinct filtering.
+    keep : duplicate_keep_option
+        The option to specify which rows to keep in the case of duplicates.
+    nulls_equal : null_equality
+        The option to specify how nulls are handled in the comparison.
+    nans_equal : nan_equality
+        The option to specify how NaNs are handled in the comparison.
+
+    Returns
+    -------
+    Table
+        A new table with distinct rows from the input table, preserving
+        the input table order.
+    """
+    cdef unique_ptr[table] c_result
+    cdef vector[size_type] c_keys = keys
+    with nogil:
+        c_result = move(
+            cpp_stream_compaction.stable_distinct(
+                input.view(), c_keys, keep, nulls_equal, nans_equal
+            )
+        )
+    return Table.from_libcudf(move(c_result))
+
+
+cpdef size_type unique_count(
+    Column source,
+    null_policy null_handling,
+    nan_policy nan_handling
+):
+    """Returns the number of unique consecutive elements in the input column.
+
+    Parameters
+    ----------
+    source : Column
+        The input column to count the unique elements of.
+    null_handling : null_policy
+        Flag to include or exclude nulls from the count.
+    nan_handling : nan_policy
+        Flag to include or exclude NaNs from the count.
+
+    Returns
+    -------
+    size_type
+        The number of unique consecutive elements in the input column.
+
+    Notes
+    -----
+    If the input column is sorted, then unique_count can produce the
+    same result as distinct_count, but faster.
+    """
+    return cpp_stream_compaction.unique_count(
+        source.view(), null_handling, nan_handling
+    )
+
+
+cpdef size_type distinct_count(
+    Column source,
+    null_policy null_handling,
+    nan_policy nan_handling
+):
+    """Returns the number of distinct elements in the input column.
+
+    Parameters
+    ----------
+    source : Column
+        The input column to count the unique elements of.
+    null_handling : null_policy
+        Flag to include or exclude nulls from the count.
+    nan_handling : nan_policy
+        Flag to include or exclude NaNs from the count.
+
+    Returns
+    -------
+    size_type
+        The number of distinct elements in the input column.
+    """
+    return cpp_stream_compaction.distinct_count(
+        source.view(), null_handling, nan_handling
+    )
