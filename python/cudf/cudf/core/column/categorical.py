@@ -734,8 +734,8 @@ class CategoricalColumn(column.ColumnBase):
                 )
             return other
 
-        ary = column.full(
-            len(self), self._encode(other), dtype=self.codes.dtype
+        ary = column.as_column(
+            self._encode(other), length=len(self), dtype=self.codes.dtype
         )
         return column.build_categorical_column(
             categories=self.dtype.categories._values,
@@ -1444,11 +1444,9 @@ def _create_empty_categorical_column(
     return column.build_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
-            column.full(
-                categorical_column.size,
-                _DEFAULT_CATEGORICAL_VALUE,
-                categorical_column.codes.dtype,
-            )
+            _DEFAULT_CATEGORICAL_VALUE,
+            length=categorical_column.size,
+            dtype=categorical_column.codes.dtype,
         ),
         offset=categorical_column.offset,
         size=categorical_column.size,

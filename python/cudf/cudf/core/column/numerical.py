@@ -42,7 +42,6 @@ from cudf.core.column import (
     as_column,
     build_column,
     column,
-    full,
     string,
 )
 from cudf.core.dtypes import CategoricalDtype
@@ -513,7 +512,7 @@ class NumericalColumn(NumericalBaseColumn):
             )
         if len(replacement_col) == 1 and len(to_replace_col) > 1:
             replacement_col = column.as_column(
-                full(len(to_replace_col), replacement[0], self.dtype)
+                replacement[0], length=len(to_replace_col), dtype=self.dtype
             )
         elif len(replacement_col) == 1 and len(to_replace_col) == 0:
             return self.copy()
