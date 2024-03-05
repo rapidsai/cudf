@@ -112,38 +112,34 @@ auto chunked_read(std::string const& filepath,
                   input_limit input_limit_bytes             = input_limit{0},
                   output_row_granularity output_granularity = output_row_granularity{10'000})
 {
+  auto const read_opts =
+    cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).build();
+  auto reader = cudf::io::chunked_orc_reader(static_cast<std::size_t>(output_limit_bytes),
+                                             static_cast<std::size_t>(input_limit_bytes),
+                                             static_cast<cudf::size_type>(output_granularity),
+                                             read_opts);
+
   auto num_chunks = 0;
   auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
+
+  do {
+    auto chunk = reader.read_chunk();
+    // If the input file is empty, the first call to `read_chunk` will return an empty table.
+    // Thus, we only check for non-empty output table from the second call.
+    if (num_chunks > 0) {
+      CUDF_EXPECTS(chunk.tbl->num_rows() != 0, "Number of rows in the new chunk is zero.");
+    }
+    ++num_chunks;
+    out_tables.emplace_back(std::move(chunk.tbl));
+  } while (reader.has_next());
+
+  if (num_chunks > 1) {
+    CUDF_EXPECTS(out_tables.front()->num_rows() != 0, "Number of rows in the new chunk is zero.");
+  }
+
   auto out_tviews = std::vector<cudf::table_view>{};
-
-  // TODO: remove this scope, when we get rid of mem stat in the reader.
-  // This is to avoid use-after-free of memory resource created by the mem stat object.
-  {
-    auto const read_opts =
-      cudf::io::orc_reader_options::builder(cudf::io::source_info{filepath}).build();
-    auto reader = cudf::io::chunked_orc_reader(static_cast<std::size_t>(output_limit_bytes),
-                                               static_cast<std::size_t>(input_limit_bytes),
-                                               static_cast<cudf::size_type>(output_granularity),
-                                               read_opts);
-
-    do {
-      auto chunk = reader.read_chunk();
-      // If the input file is empty, the first call to `read_chunk` will return an empty table.
-      // Thus, we only check for non-empty output table from the second call.
-      if (num_chunks > 0) {
-        CUDF_EXPECTS(chunk.tbl->num_rows() != 0, "Number of rows in the new chunk is zero.");
-      }
-      ++num_chunks;
-      out_tables.emplace_back(std::move(chunk.tbl));
-    } while (reader.has_next());
-
-    if (num_chunks > 1) {
-      CUDF_EXPECTS(out_tables.front()->num_rows() != 0, "Number of rows in the new chunk is zero.");
-    }
-
-    for (auto const& tbl : out_tables) {
-      out_tviews.emplace_back(tbl->view());
-    }
+  for (auto const& tbl : out_tables) {
+    out_tviews.emplace_back(tbl->view());
   }
 
   return std::pair(cudf::concatenate(out_tviews), num_chunks);
