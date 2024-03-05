@@ -104,8 +104,8 @@ enum statistics_freq {
  */
 enum class column_encoding {
   // common encodings
-  NOT_SET = -1,  ///< No encoding has been requested
-  DICTIONARY,    ///< Use dictionary encoding
+  USE_DEFAULT = -1,  ///< No encoding has been requested, use default encoding
+  DICTIONARY,        ///< Use dictionary encoding
   // parquet encodings
   PLAIN,                    ///< Use plain encoding
   DELTA_BINARY_PACKED,      ///< Use DELTA_BINARY_PACKED encoding (only valid for integer columns)
@@ -605,7 +605,7 @@ class column_in_metadata {
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
-  column_encoding _encoding = column_encoding::NOT_SET;
+  column_encoding _encoding = column_encoding::USE_DEFAULT;
 
  public:
   column_in_metadata() = default;

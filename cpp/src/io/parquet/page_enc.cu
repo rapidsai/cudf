@@ -790,7 +790,7 @@ CUDF_KERNEL void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) {
             // set encoding
-            if (col_g.requested_encoding != column_encoding::NOT_SET) {
+            if (col_g.requested_encoding != column_encoding::USE_DEFAULT) {
               switch (col_g.requested_encoding) {
                 case column_encoding::PLAIN: page_g.kernel_mask = encode_kernel_mask::PLAIN; break;
                 case column_encoding::DICTIONARY:
