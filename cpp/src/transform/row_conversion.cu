@@ -39,23 +39,13 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/barrier>
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
-
-#include <type_traits>
-
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-#define ASYNC_MEMCPY_SUPPORTED
-#endif
-
-#if !defined(__CUDA_ARCH__) || defined(ASYNC_MEMCPY_SUPPORTED)
-#include <cuda/barrier>
-#endif  // #if !defined(__CUDA_ARCH__) || defined(ASYNC_MEMCPY_SUPPORTED)
-
-#include <cuda/functional>
 
 #include <algorithm>
 #include <cstdarg>
@@ -65,6 +55,7 @@
 #include <limits>
 #include <optional>
 #include <tuple>
+#include <type_traits>
 
 namespace {
 
@@ -89,13 +80,6 @@ using namespace cudf;
 using detail::make_device_uvector_async;
 using detail::make_device_uvector_sync;
 using rmm::device_uvector;
-
-#ifdef ASYNC_MEMCPY_SUPPORTED
-using cuda::aligned_size_t;
-#else
-template <std::size_t>
-using aligned_size_t = size_t;  // Local stub for cuda::aligned_size_t.
-#endif  // ASYNC_MEMCPY_SUPPORTED
 
 namespace cudf {
 namespace detail {
@@ -569,12 +553,6 @@ CUDF_KERNEL void copy_to_rows_fixed_width_optimized(const size_type start_row,
   }
 }
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
-#define MEMCPY(dst, src, size, barrier) cuda::memcpy_async(dst, src, size, barrier)
-#else
-#define MEMCPY(dst, src, size, barrier) memcpy(dst, src, size)
-#endif  // ASYNC_MEMCPY_SUPPORTED
-
 /**
  * @brief copy data from cudf columns into JCUDF format, which is row-based
  *
@@ -615,11 +593,9 @@ CUDF_KERNEL void copy_to_rows(const size_type num_rows,
   auto const warp  = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
   extern __shared__ int8_t shared_data[];
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier;
   if (group.thread_rank() == 0) { init(&tile_barrier, group.size()); }
   group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 
   auto const tile                   = tile_infos[blockIdx.x];
   auto const num_tile_cols          = tile.num_cols();
@@ -702,21 +678,11 @@ CUDF_KERNEL void copy_to_rows(const size_type num_rows,
     auto const src = &shared_data[tile_row_size * copy_row];
     auto const dst = tile_output_buffer + row_offsets(copy_row + tile.start_row, row_batch_start) +
                      starting_column_offset;
-#ifdef ASYNC_MEMCPY_SUPPORTED
     cuda::memcpy_async(warp, dst, src, tile_row_size, tile_barrier);
-#else
-    for (int b = warp.thread_rank(); b < tile_row_size; b += warp.size()) {
-      dst[b] = src[b];
-    }
-#endif
   }
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait on the last copies to complete
   tile_barrier.arrive_and_wait();
-#else
-  group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 }
 
 /**
@@ -752,12 +718,10 @@ CUDF_KERNEL void copy_validity_to_rows(const size_type num_rows,
   auto const group = cooperative_groups::this_thread_block();
   auto const warp  = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
   __shared__ cuda::barrier<cuda::thread_scope_block> shared_tile_barrier;
   if (group.thread_rank() == 0) { init(&shared_tile_barrier, group.size()); }
   group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 
   auto tile                = tile_infos[blockIdx.x];
   auto const num_tile_cols = tile.num_cols();
@@ -822,21 +786,11 @@ CUDF_KERNEL void copy_validity_to_rows(const size_type num_rows,
        relative_row += warp.meta_group_size()) {
     auto const src = &shared_data[validity_data_row_length * relative_row];
     auto const dst = output_data_base + row_offsets(relative_row + tile.start_row, row_batch_start);
-#ifdef ASYNC_MEMCPY_SUPPORTED
     cuda::memcpy_async(warp, dst, src, row_bytes, shared_tile_barrier);
-#else
-    for (int b = warp.thread_rank(); b < row_bytes; b += warp.size()) {
-      dst[b] = src[b];
-    }
-#endif
   }
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait for tile of data to arrive
   shared_tile_barrier.arrive_and_wait();
-#else
-  group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 }
 
 /**
@@ -871,9 +825,7 @@ CUDF_KERNEL void copy_strings_to_rows(size_type const num_rows,
   // memcpy of the string data.
   auto const my_block = cooperative_groups::this_thread_block();
   auto const warp     = cooperative_groups::tiled_partition<cudf::detail::warp_size>(my_block);
-#ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
-#endif
 
   auto const start_row =
     blockIdx.x * NUM_STRING_ROWS_PER_BLOCK_TO_ROWS + warp.meta_group_rank() + batch_row_offset;
@@ -896,13 +848,7 @@ CUDF_KERNEL void copy_strings_to_rows(size_type const num_rows,
       auto string_output_dest = &output_data[base_row_offset + offset];
       auto string_output_src  = &variable_input_data[col][string_start_offset];
       warp.sync();
-#ifdef ASYNC_MEMCPY_SUPPORTED
       cuda::memcpy_async(warp, string_output_dest, string_output_src, string_length, block_barrier);
-#else
-      for (int c = warp.thread_rank(); c < string_length; c += warp.size()) {
-        string_output_dest[c] = string_output_src[c];
-      }
-#endif
       offset += string_length;
     }
   }
@@ -950,12 +896,10 @@ CUDF_KERNEL void copy_from_rows(const size_type num_rows,
   auto const warp  = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
   extern __shared__ int8_t shared[];
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
   __shared__ cuda::barrier<cuda::thread_scope_block> tile_barrier;
   if (group.thread_rank() == 0) { init(&tile_barrier, group.size()); }
   group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 
   {
     auto const fetch_tile           = tile_infos[blockIdx.x];
@@ -973,13 +917,7 @@ CUDF_KERNEL void copy_from_rows(const size_type num_rows,
       auto dst           = &shared[shared_offset];
       auto src = &input_data[row_offsets(absolute_row, row_batch_start) + starting_col_offset];
       // copy the data
-#ifdef ASYNC_MEMCPY_SUPPORTED
       cuda::memcpy_async(warp, dst, src, fetch_tile_row_size, tile_barrier);
-#else
-      for (int b = warp.thread_rank(); b < fetch_tile_row_size; b += warp.size()) {
-        dst[b] = src[b];
-      }
-#endif
     }
   }
 
@@ -989,12 +927,8 @@ CUDF_KERNEL void copy_from_rows(const size_type num_rows,
     auto const cols_in_tile  = tile.num_cols();
     auto const tile_row_size = tile.get_shared_row_size(col_offsets, col_sizes);
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
     // ensure our data is ready
     tile_barrier.arrive_and_wait();
-#else
-    group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 
     // Now we copy from shared memory to final destination. The data is laid out in rows in shared
     // memory, so the reads for a column will be "vertical". Because of this and the different sizes
@@ -1017,17 +951,13 @@ CUDF_KERNEL void copy_from_rows(const size_type num_rows,
         int8_t* shmem_src = &shared[shared_memory_offset];
         int8_t* dst       = &output_data[absolute_col][absolute_row * column_size];
 
-        MEMCPY(dst, shmem_src, column_size, tile_barrier);
+        cuda::memcpy_async(dst, shmem_src, column_size, tile_barrier);
       }
     }
   }
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait on the last copies to complete
   tile_barrier.arrive_and_wait();
-#else
-  group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 }
 
 /**
@@ -1077,12 +1007,10 @@ CUDF_KERNEL void copy_validity_from_rows(const size_type num_rows,
   auto const group = cooperative_groups::this_thread_block();
   auto const warp  = cooperative_groups::tiled_partition<cudf::detail::warp_size>(group);
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // Initialize cuda barriers for each tile.
   __shared__ cuda::barrier<cuda::thread_scope_block> shared_tile_barrier;
   if (group.thread_rank() == 0) { init(&shared_tile_barrier, group.size()); }
   group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 
   auto const tile           = tile_infos[blockIdx.x];
   auto const tile_start_col = tile.start_col;
@@ -1147,22 +1075,12 @@ CUDF_KERNEL void copy_validity_from_rows(const size_type num_rows,
     auto const src =
       reinterpret_cast<bitmask_type*>(&shared[validity_data_col_length * relative_col]);
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
     cuda::memcpy_async(
-      warp, dst, src, aligned_size_t<4>(validity_data_col_length), shared_tile_barrier);
-#else
-    for (int b = warp.thread_rank(); b < col_words; b += warp.size()) {
-      dst[b] = src[b];
-    }
-#endif
+      warp, dst, src, cuda::aligned_size_t<4>(validity_data_col_length), shared_tile_barrier);
   }
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
   // wait for tile of data to arrive
   shared_tile_barrier.arrive_and_wait();
-#else
-  group.sync();
-#endif  // ASYNC_MEMCPY_SUPPORTED
 }
 
 /**
@@ -1193,9 +1111,7 @@ CUDF_KERNEL void copy_strings_from_rows(RowOffsetFunctor row_offsets,
   // Traversing in row-major order to coalesce the offsets and size reads.
   auto my_block = cooperative_groups::this_thread_block();
   auto warp     = cooperative_groups::tiled_partition<cudf::detail::warp_size>(my_block);
-#ifdef ASYNC_MEMCPY_SUPPORTED
   cuda::barrier<cuda::thread_scope_block> block_barrier;
-#endif
 
   // workaround for not being able to take a reference to a constexpr host variable
   auto const ROWS_PER_BLOCK = NUM_STRING_ROWS_PER_BLOCK_FROM_ROWS;
@@ -1216,13 +1132,7 @@ CUDF_KERNEL void copy_strings_from_rows(RowOffsetFunctor row_offsets,
       auto const src = &row_data[row_offsets(row, 0) + str_row_off[row]];
       auto dst       = &str_col_data[str_col_off[row]];
 
-#ifdef ASYNC_MEMCPY_SUPPORTED
       cuda::memcpy_async(warp, dst, src, str_len[row], block_barrier);
-#else
-      for (int c = warp.thread_rank(); c < str_len[row]; c += warp.size()) {
-        dst[c] = src[c];
-      }
-#endif
     }
   }
 }
