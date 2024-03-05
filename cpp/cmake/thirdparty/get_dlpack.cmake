@@ -36,6 +36,6 @@ function(find_and_configure_dlpack VERSION)
   endif()
 endfunction()
 
-set(CUDF_MIN_VERSION_dlpack 0.5)
+set(CUDF_MIN_VERSION_dlpack 0.8)
 
 find_and_configure_dlpack(${CUDF_MIN_VERSION_dlpack})
