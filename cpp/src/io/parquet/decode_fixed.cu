@@ -17,6 +17,7 @@
 #include "page_decode.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
+
 #include <cudf/detail/utilities/cuda.cuh>
 
 namespace cudf::io::parquet::detail {
@@ -101,7 +102,8 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
           int const vindex = (value_count + thread_value_count) - 1;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
                                  first_row;  // absolute bit offset into the output validity map
-          int const write_end = cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
+          int const write_end =
+            cudf::detail::warp_size - __clz(in_write_row_bounds);  // last bit in the warp to store
           int const bit_count = write_end - write_start;
           warp_null_count     = bit_count - __popc(warp_validity_mask >> write_start);
 
@@ -295,12 +297,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   }
   __syncthreads();
 
-  // We use two counters in the loop below: processed_count and valid_count. 
-  // - processed_count: number of rows out of num_input_values that we have decoded so far. 
+  // We use two counters in the loop below: processed_count and valid_count.
+  // - processed_count: number of rows out of num_input_values that we have decoded so far.
   //   the definition stream returns the number of total rows it has processed in each call
   //   to decode_next and we accumulate in process_count.
-  // - valid_count: number of non-null rows we have decoded so far. In each iteration of the 
-  //   loop below, we look at the number of valid items (which could be all for non-nullable), 
+  // - valid_count: number of non-null rows we have decoded so far. In each iteration of the
+  //   loop below, we look at the number of valid items (which could be all for non-nullable),
   //   and valid_count is that running count.
   int processed_count = 0;
   int valid_count     = 0;
@@ -322,8 +324,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
     // nz_idx.  gpuDecodeValues would be the only work that happens.
     else {
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-      next_valid_count =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(processed_count, s, sb, nullptr, t);
+      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(
+        processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
@@ -369,7 +371,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   rle_stream<level_t, decode_block_size, rolling_buf_size> def_decoder{def_runs};
 
-  __shared__ rle_run<uint32_t> dict_runs[rle_run_buffer_size]; 
+  __shared__ rle_run<uint32_t> dict_runs[rle_run_buffer_size];
   rle_stream<uint32_t, decode_block_size, rolling_buf_size> dict_stream{dict_runs};
 
   bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
@@ -391,12 +393,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
     s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
   __syncthreads();
 
-  // We use two counters in the loop below: processed_count and valid_count. 
-  // - processed_count: number of rows out of num_input_values that we have decoded so far. 
+  // We use two counters in the loop below: processed_count and valid_count.
+  // - processed_count: number of rows out of num_input_values that we have decoded so far.
   //   the definition stream returns the number of total rows it has processed in each call
   //   to decode_next and we accumulate in process_count.
-  // - valid_count: number of non-null rows we have decoded so far. In each iteration of the 
-  //   loop below, we look at the number of valid items (which could be all for non-nullable), 
+  // - valid_count: number of non-null rows we have decoded so far. In each iteration of the
+  //   loop below, we look at the number of valid items (which could be all for non-nullable),
   //   and valid_count is that running count.
   int processed_count = 0;
   int valid_count     = 0;
@@ -421,13 +423,13 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
     // nz_idx.  gpuDecodeValues would be the only work that happens.
     else {
       processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
-      next_valid_count =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(processed_count, s, sb, nullptr, t);
+      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(
+        processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
-    // We want to limit the number of dictionary items we decode, that correspond to 
-    // the rows we have processed in this iteration that are valid. 
+    // We want to limit the number of dictionary items we decode, that correspond to
+    // the rows we have processed in this iteration that are valid.
     // We know the number of valid rows to process with: next_valid_count - valid_count.
     dict_stream.decode_next(t, next_valid_count - valid_count);
     __syncthreads();
@@ -461,13 +463,12 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
   }
 }
 
-void __host__
-DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
-                        cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
-                        size_t num_rows,
-                        size_t min_row,
-                        int level_type_size,
-                        rmm::cuda_stream_view stream)
+void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
+                                      cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                                      size_t num_rows,
+                                      size_t min_row,
+                                      int level_type_size,
+                                      rmm::cuda_stream_view stream)
 {
   //  dim3 dim_block(decode_block_size, 1); // decode_block_size = 128 threads per block
   // 1 full warp, and 1 warp of 1 thread

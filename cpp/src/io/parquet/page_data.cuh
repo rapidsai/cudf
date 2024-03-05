@@ -397,4 +397,4 @@ static __device__ void gpuOutputGeneric(
     }
   }
 }
-}
+}  // namespace cudf::io::parquet::detail

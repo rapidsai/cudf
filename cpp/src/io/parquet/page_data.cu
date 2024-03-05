@@ -17,6 +17,7 @@
 #include "page_data.cuh"
 
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
