@@ -15,6 +15,15 @@
  */
 
 #include "common_utils.cuh"
+#include "cudf/column/column_device_view.cuh"
+#include "cudf/detail/utilities/vector_factories.hpp"
+#include "cudf/null_mask.hpp"
+#include "cudf_test/column_utilities.hpp"
+#include "thrust/detail/copy.h"
+#include "thrust/device_vector.h"
+#include "thrust/host_vector.h"
+#include <stream_compaction/stream_compaction_common.cuh>
+#include <stream_compaction/stream_compaction_common.hpp>
 
 #include <stream_compaction/stream_compaction_common.cuh>
 
@@ -70,6 +79,10 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
       has_nulls(keys)) {
     _keys_pre_sorted = sorted::NO;
   }
+  if (_keys_pre_sorted == sorted::YES)
+    is_using_hashing = false;
+  else
+    is_using_hashing = true;
 };
 
 size_type sort_groupby_helper::num_keys(rmm::cuda_stream_view stream)
@@ -86,6 +99,100 @@ size_type sort_groupby_helper::num_keys(rmm::cuda_stream_view stream)
   }
 
   return _num_keys;
+}
+
+void print_view(column_view view, rmm::cuda_stream_view stream)
+{
+  // cudf::test::print(view);
+}
+
+void sort_groupby_helper::hash_sorter(rmm::cuda_stream_view stream)
+{
+  using namespace cudf::detail;
+  auto input = (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys))
+                 ?  // SQL style
+                 _keys
+                 : table_view({table_view({keys_bitmask_column(stream)}), _keys});
+  constexpr auto nulls_equal = null_equality::EQUAL;
+  auto map                   = hash_map_type{compute_hash_table_size(input.num_rows()),
+                           cuco::empty_key{COMPACTION_EMPTY_KEY_SENTINEL},
+                           cuco::empty_value{COMPACTION_EMPTY_VALUE_SENTINEL},
+                           hash_table_allocator_type{default_allocator<char>{}, stream},
+                           stream.value()};
+
+  auto const preprocessed_input =
+    cudf::experimental::row::hash::preprocessed_table::create(input, stream);
+  auto const has_nulls          = nullate::DYNAMIC{cudf::has_nested_nulls(input)};
+  auto const has_nested_columns = cudf::detail::has_nested_columns(input);
+
+  auto const row_hasher = cudf::experimental::row::hash::row_hasher(preprocessed_input);
+  auto const key_hasher =
+    cudf::detail::experimental::compaction_hash(row_hasher.device_hasher(has_nulls));
+
+  auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
+
+  // TODO: return value as std::numerical_limits::max() for nulls so that it goes to last while
+  // sorting labels.
+  auto const pair_iter = cudf::detail::make_counting_transform_iterator(
+    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+  auto const count_iter = thrust::make_counting_iterator(size_type{0});
+
+  using nan_equal_comparator =
+    cudf::experimental::row::equality::nan_equal_physical_equality_comparator;
+  nan_equal_comparator value_comp{};
+
+  _unsorted_keys_labels = make_numeric_column(
+    data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::UNALLOCATED, stream);
+  auto unsorted_keys_labels_begin = _unsorted_keys_labels->mutable_view().data<size_type>();
+
+  if (has_nested_columns) {
+    auto const key_equal = row_comp.equal_to<true>(has_nulls, nulls_equal, value_comp);
+    // should I use insert_if?
+    // if (_include_null_keys == null_policy::EXCLUDE and has_nulls(_keys));
+    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    map.find(count_iter,
+             count_iter + input.num_rows(),
+             unsorted_keys_labels_begin,
+             key_hasher,
+             key_equal,
+             stream.value());
+  } else {
+    auto const key_equal = row_comp.equal_to<false>(has_nulls, nulls_equal, value_comp);
+    map.insert(pair_iter, pair_iter + input.num_rows(), key_hasher, key_equal, stream.value());
+    map.find(count_iter,
+             count_iter + input.num_rows(),
+             unsorted_keys_labels_begin,
+             key_hasher,
+             key_equal,
+             stream.value());
+    // TODO check if insert_and_find device function is faster, if so, use it
+  }
+  // how to find null's label and exclude it?
+  // copy bitmask to _unsorted_keys_labels, and use it to sort for _key_sorted_order, and also
+  // group_labels.
+  auto const any_nulls = _include_null_keys == null_policy::EXCLUDE and cudf::has_nulls(_keys);
+  if (any_nulls)
+    _unsorted_keys_labels->set_null_mask(
+      cudf::detail::copy_bitmask(
+        keys_bitmask_column(stream), stream, rmm::mr::get_current_device_resource()),
+      keys_bitmask_column(stream).null_count());
+  auto sort_key = _unsorted_keys_labels->view();
+  // auto _unsorted_keys_labels_view = _unsorted_keys_labels->view();
+  // auto sort_key = column_view{_unsorted_keys_labels_view.type(),
+  //             _unsorted_keys_labels_view.size(),
+  //             _unsorted_keys_labels_view.head(),
+  //             any_nulls ? keys_bitmask_column(stream).null_mask() :
+  //             _unsorted_keys_labels_view.null_mask(), any_nulls ?
+  //             keys_bitmask_column(stream).null_count() : _unsorted_keys_labels_view.null_count(),
+  //             _unsorted_keys_labels_view.offset()};
+  // pushes nulls to last.
+  _key_sorted_order = cudf::detail::stable_sorted_order(table_view{{sort_key}},
+                                                        {},
+                                                        {null_order::AFTER},
+                                                        stream,
+                                                        rmm::mr::get_current_device_resource());
+  // print_view(_key_sorted_order->view(), stream); std::cout<<"^_kso\n";
+  // print_view(_unsorted_keys_labels->view(), stream); std::cout<<"^_ukl\n";
 }
 
 column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
@@ -105,7 +212,10 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     return sliced_key_sorted_order();
   }
 
-  if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
+  // if (is_using_hashing)
+  if (std::getenv("USE_HASHING"))
+    hash_sorter(stream);
+  else if (_include_null_keys == null_policy::INCLUDE || !cudf::has_nulls(_keys)) {  // SQL style
     auto const precedence = _null_precedence.empty()
                               ? std::vector(_keys.num_columns(), null_order::AFTER)
                               : _null_precedence;
@@ -131,6 +241,10 @@ column_view sort_groupby_helper::key_sort_order(rmm::cuda_stream_view stream)
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
 
+  print_view(sliced_key_sorted_order(), stream);
+  std::cout << "^kso\n";
+  print_view(unsorted_keys_labels(stream), stream);
+  std::cout << "^ukl\n";
   return sliced_key_sorted_order();
 }
 
@@ -206,7 +320,10 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_labels(
 
 column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stream)
 {
-  if (_unsorted_keys_labels) return _unsorted_keys_labels->view();
+  if (_unsorted_keys_labels) {
+    // print_view(_unsorted_keys_labels->view(), stream); std::cout<<"^ukl\n";
+    return _unsorted_keys_labels->view();
+  }
 
   column_ptr temp_labels = make_numeric_column(
     data_type(type_to_id<size_type>()), _keys.num_rows(), mask_state::ALL_NULL, stream);
@@ -228,6 +345,7 @@ column_view sort_groupby_helper::unsorted_keys_labels(rmm::cuda_stream_view stre
 
   _unsorted_keys_labels = std::move(t_unsorted_keys_labels->release()[0]);
 
+  // print_view(_unsorted_keys_labels->view(), stream); std::cout<<"^ukl\n";
   return _unsorted_keys_labels->view();
 }
 

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/sorting.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
@@ -193,9 +194,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
     auto const [final_keys, final_vals] =
       merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 
   // One step merging:
@@ -203,9 +209,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInput)
     auto const [final_keys, final_vals] = merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys},
                                                    vcol_views{*out1_vals, *out2_vals, *out3_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 }
 
@@ -252,9 +263,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
     auto const [final_keys, final_vals] =
       merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 
   // One step merging:
@@ -262,9 +278,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SimpleInputHavingNegativeValues)
     auto const [final_keys, final_vals] = merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys},
                                                    vcol_views{*out1_vals, *out2_vals, *out3_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 }
 
@@ -312,9 +333,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
     auto const [final_keys, final_vals] =
       merge_M2(vcol_views{*out3_keys, *out4_keys}, vcol_views{*out3_vals, *out4_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 
   // One step merging:
@@ -322,9 +348,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHasNulls)
     auto const [final_keys, final_vals] = merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys},
                                                    vcol_views{*out1_vals, *out2_vals, *out3_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 }
 
@@ -377,9 +408,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
     auto const [final_keys, final_vals] =
       merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 
   // One step merging:
@@ -388,9 +424,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, InputHaveNullsAndNaNs)
       merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys, *out4_keys},
                vcol_views{*out1_vals, *out2_vals, *out3_vals, *out4_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 }
 
@@ -459,9 +500,14 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
     auto const [final_keys, final_vals] =
       merge_M2(vcol_views{*out5_keys, *out6_keys}, vcol_views{*out5_vals, *out6_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 
   // One step merging:
@@ -470,8 +516,13 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
       merge_M2(vcol_views{*out1_keys, *out2_keys, *out3_keys, *out4_keys},
                vcol_views{*out1_vals, *out2_vals, *out3_vals, *out4_vals});
 
-    auto const out_M2s = final_vals->child(2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, *final_keys, verbosity);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, out_M2s, verbosity);
+    auto const out_M2s    = final_vals->child(2);
+    auto const sort_order = cudf::sorted_order(cudf::table_view{{final_keys->view()}});
+    auto const sorted_out =
+      cudf::gather(cudf::table_view{{final_keys->view(), out_M2s}}, *sort_order);
+    auto const [sorted_keys, sorted_vals] =
+      std::pair{sorted_out->get_column(0), sorted_out->get_column(1)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_keys, sorted_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_M2s, sorted_vals, verbosity);
   }
 }
