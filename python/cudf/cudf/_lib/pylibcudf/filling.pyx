@@ -144,7 +144,7 @@ cpdef Table repeat(
 
     cdef unique_ptr[table] result
 
-    if count is Column:
+    if ColumnOrSize is Column:
         with nogil:
             result = move(
                 cpp_repeat(
@@ -152,7 +152,7 @@ cpdef Table repeat(
                     count.view()
                 )
             )
-    if count is size_type:
+    if ColumnOrSize is size_type:
         with nogil:
             result = move(
                 cpp_repeat(

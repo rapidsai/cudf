@@ -36,6 +36,8 @@ def fill(Column destination, int begin, int end, DeviceScalar value):
 @acquire_spill_lock()
 def repeat(list inp, object count):
     ctbl = pylibcudf.Table([col.to_pylibcudf(mode="read") for col in inp])
+    if isinstance(count, Column):
+        count = count.to_pylibcudf(mode="read")
     return columns_from_pylibcudf_table(
         pylibcudf.filling.repeat(
             ctbl,
