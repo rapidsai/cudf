@@ -2,8 +2,9 @@
 
 from dask import config
 
-# Check if dask-dataframe is using dask-expr
-QUERY_PLANNING_ON = config.get("dataframe.query-planning", False)
+# Check if dask-dataframe is using dask-expr.
+# For dask>=2024.3.0, a null value will default to True
+QUERY_PLANNING_ON = config.get("dataframe.query-planning", None) is not False
 
 # Register custom expressions and collections
 try:
