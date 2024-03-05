@@ -20,7 +20,7 @@ from pyarrow import dataset as ds
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import build_categorical_column, column_empty, full
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
@@ -762,9 +762,9 @@ def _parquet_to_frame(
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = full(
-                    size=_len,
-                    fill_value=partition_categories[name].index(value),
+                codes = as_column(
+                    partition_categories[name].index(value),
+                    length=_len,
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -788,10 +788,10 @@ def _parquet_to_frame(
                         masked=True,
                     )
                 else:
-                    dfs[-1][name] = full(
-                        size=_len,
-                        fill_value=value,
+                    dfs[-1][name] = as_column(
+                        value,
                         dtype=_dtype,
+                        length=_len,
                     )
 
     if len(dfs) > 1:
