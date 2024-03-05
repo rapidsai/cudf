@@ -140,10 +140,11 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
   return find_first_delimiter(buffer, delimiter, stream);
 }
 
-bool should_load_whole_source(json_reader_options const& reader_opts)
+bool should_load_whole_source(json_reader_options const& opts, size_t source_size)
 {
-  return reader_opts.get_byte_range_offset() == 0 and  //
-         reader_opts.get_byte_range_size() == 0;
+  auto const range_offset = opts.get_byte_range_offset();
+  auto const range_size   = opts.get_byte_range_size();
+  return range_offset == 0 and (range_size == 0 or range_size >= source_size);
 }
 
 /**
@@ -168,7 +169,7 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                  reader_opts.get_byte_range_offset(),
                                  reader_opts.get_byte_range_size(),
                                  stream);
-  if (should_load_whole_source(reader_opts)) return buffer;
+  if (should_load_whole_source(reader_opts, sources[0]->size())) return buffer;
   auto first_delim_pos =
     reader_opts.get_byte_range_offset() == 0 ? 0 : find_first_delimiter(buffer, '\n', stream);
   if (first_delim_pos == -1) {
@@ -212,7 +213,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     return legacy::read_json(sources, reader_opts, stream, mr);
   }
 
-  if (not should_load_whole_source(reader_opts)) {
+  if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
                  "Specifying a byte range is supported only for JSON Lines");
     CUDF_EXPECTS(sources.size() == 1,
