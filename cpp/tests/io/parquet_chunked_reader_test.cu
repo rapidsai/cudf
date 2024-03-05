@@ -62,6 +62,7 @@ using int32s_lists_col = cudf::test::lists_column_wrapper<int32_t>;
 auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::string const& filename,
                 bool nullable,
+                bool delta_encoding,
                 std::size_t max_page_size_bytes = cudf::io::default_max_page_size_bytes,
                 std::size_t max_page_size_rows  = cudf::io::default_max_page_size_rows)
 {
@@ -88,14 +89,22 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
   }
 
   auto input_table = std::make_unique<cudf::table>(std::move(input_columns));
-  auto filepath =
-    temp_env->get_temp_filepath(nullable ? filename + "_nullable.parquet" : filename + ".parquet");
 
+  auto file_name = filename;
+  if (nullable) { file_name = file_name + "_nullable"; }
+  if (delta_encoding) { file_name = file_name + "_delta"; }
+  auto const filepath = temp_env->get_temp_filepath(file_name + ".parquet");
+
+  auto const dict_policy =
+    delta_encoding ? cudf::io::dictionary_policy::NEVER : cudf::io::dictionary_policy::ALWAYS;
+  auto const v2_headers = delta_encoding;
   auto const write_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *input_table)
       .max_page_size_bytes(max_page_size_bytes)
       .max_page_size_rows(max_page_size_rows)
       .max_page_fragment_size(cudf::io::default_max_page_fragment_size)
+      .dictionary_policy(dict_policy)
+      .write_v2_headers(v2_headers)
       .build();
   cudf::io::write_parquet(write_opts);
 
@@ -142,7 +151,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNoData)
   input_columns.emplace_back(int32s_col{}.release());
   input_columns.emplace_back(int64s_col{}.release());
 
-  auto const [expected, filepath] = write_file(input_columns, "chunked_read_empty", false);
+  auto const [expected, filepath] = write_file(input_columns, "chunked_read_empty", false, false);
   auto const [result, num_chunks] = chunked_read(filepath, 1'000);
   EXPECT_EQ(num_chunks, 1);
   EXPECT_EQ(result->num_rows(), 0);
@@ -154,24 +163,38 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadSimpleData)
 {
   auto constexpr num_rows = 40'000;
 
-  auto const generate_input = [num_rows](bool nullable) {
+  auto const generate_input = [num_rows](bool nullable, bool use_delta) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
     input_columns.emplace_back(int64s_col(value_iter, value_iter + num_rows).release());
 
-    return write_file(input_columns, "chunked_read_simple", nullable);
+    return write_file(input_columns, "chunked_read_simple", nullable, false);
   };
 
   {
-    auto const [expected, filepath] = generate_input(false);
+    auto const [expected, filepath] = generate_input(false, false);
     auto const [result, num_chunks] = chunked_read(filepath, 240'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
   }
 
   {
-    auto const [expected, filepath] = generate_input(true);
+    auto const [expected, filepath] = generate_input(false, true);
+    auto const [result, num_chunks] = chunked_read(filepath, 240'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [expected, filepath] = generate_input(true, false);
+    auto const [result, num_chunks] = chunked_read(filepath, 240'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
+  }
+
+  {
+    auto const [expected, filepath] = generate_input(true, true);
     auto const [result, num_chunks] = chunked_read(filepath, 240'000);
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *result);
@@ -188,7 +211,8 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadBoundaryCases)
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
     input_columns.emplace_back(int32s_col(value_iter, value_iter + num_rows).release());
-    return write_file(input_columns, "chunked_read_simple_boundary", false /*nullable*/);
+    return write_file(
+      input_columns, "chunked_read_simple_boundary", false /*nullable*/, false /*delta_encoding*/);
   }();
 
   // Test with zero limit: everything will be read in one chunk
@@ -266,7 +290,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
 {
   auto constexpr num_rows = 60'000;
 
-  auto const generate_input = [num_rows](bool nullable) {
+  auto const generate_input = [num_rows](bool nullable, bool use_delta) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
     auto const value_iter = thrust::make_counting_iterator(0);
 
@@ -298,13 +322,16 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     return write_file(input_columns,
                       "chunked_read_with_strings",
                       nullable,
+                      use_delta,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
   };
 
-  auto const [expected_no_null, filepath_no_null]       = generate_input(false);
-  auto const [expected_with_nulls, filepath_with_nulls] = generate_input(true);
+  auto const [expected_no_null, filepath_no_null]                   = generate_input(false, false);
+  auto const [expected_with_nulls, filepath_with_nulls]             = generate_input(true, false);
+  auto const [expected_no_null_delta, filepath_no_null_delta]       = generate_input(false, true);
+  auto const [expected_with_nulls_delta, filepath_with_nulls_delta] = generate_input(true, true);
 
   // Test with zero limit: everything will be read in one chunk
   {
@@ -316,6 +343,16 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 0);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 0);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 0);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
   }
 
   // Test with a very small limit: 1 byte
@@ -329,6 +366,16 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     EXPECT_EQ(num_chunks, 3);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 1);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 1);
+    EXPECT_EQ(num_chunks, 3);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
+  }
 
   // Test with a very large limit
   {
@@ -340,6 +387,16 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 2L << 40);
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 2L << 40);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 2L << 40);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
   }
 
   // Other tests:
@@ -354,6 +411,16 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     EXPECT_EQ(num_chunks, 2);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 500'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 500'000);
+    EXPECT_EQ(num_chunks, 2);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
+  }
 
   {
     auto const [result, num_chunks] = chunked_read(filepath_no_null, 1'000'000);
@@ -365,13 +432,23 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithString)
     EXPECT_EQ(num_chunks, 1);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_no_null_delta, 1'000'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_no_null_delta, *result);
+  }
+  {
+    auto const [result, num_chunks] = chunked_read(filepath_with_nulls_delta, 1'000'000);
+    EXPECT_EQ(num_chunks, 1);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls_delta, *result);
+  }
 }
 
 TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStringPrecise)
 {
   auto constexpr num_rows = 60'000;
 
-  auto const generate_input = [num_rows](bool nullable) {
+  auto const generate_input = [num_rows](bool nullable, bool use_delta) {
     std::vector<std::unique_ptr<cudf::column>> input_columns;
 
     // strings                                                 Page    total bytes   cumulative
@@ -390,12 +467,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStringPrecise)
     return write_file(input_columns,
                       "chunked_read_with_strings_precise",
                       nullable,
+                      use_delta,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
   };
 
-  auto const [expected_no_null, filepath_no_null] = generate_input(false);
+  auto const [expected_no_null, filepath_no_null] = generate_input(false, false);
 
   // a chunk limit of 1 byte less than 2 pages should force it to produce 3 chunks:
   // each 1 page in size
@@ -436,6 +514,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructs)
     return write_file(input_columns,
                       "chunked_read_with_structs",
                       nullable,
+                      false /*delta_encoding*/,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
@@ -517,6 +596,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsNoNulls)
     return write_file(input_columns,
                       "chunked_read_with_lists_no_null",
                       false /*nullable*/,
+                      false /*delta_encoding*/,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
@@ -599,6 +679,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsHavingNulls)
     return write_file(input_columns,
                       "chunked_read_with_lists_nulls",
                       true /*nullable*/,
+                      false /*delta_encoding*/,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
@@ -687,6 +768,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithStructsOfLists)
     return write_file(input_columns,
                       "chunked_read_with_structs_of_lists",
                       nullable,
+                      false /*delta_encoding*/,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
@@ -827,6 +909,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
     return write_file(input_columns,
                       "chunked_read_with_lists_of_structs",
                       nullable,
+                      false /*delta_encoding*/,
                       512 * 1024,  // 512KB per page
                       20000        // 20k rows per page
     );
