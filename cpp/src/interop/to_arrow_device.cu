@@ -16,17 +16,16 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/copying.hpp>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -268,7 +267,7 @@ int initialize_array(ArrowArray* arr, ArrowType storage_type, const cudf::column
 
 struct dispatch_to_arrow_device {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
-  int operator()(cudf::column&,
+  int operator()(cudf::column&&,
                  rmm::cuda_stream_view,
                  rmm::mr::device_memory_resource*,
                  ArrowArray*)
@@ -277,7 +276,7 @@ struct dispatch_to_arrow_device {
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
-  int operator()(cudf::column& column,
+  int operator()(cudf::column&& column,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr,
                  ArrowArray* out)
@@ -317,7 +316,7 @@ struct dispatch_to_arrow_device {
 };
 
 template <typename DeviceType>
-int unsupported_decimals_to_arrow(cudf::column& input,
+int unsupported_decimals_to_arrow(cudf::column&& input,
                                   int32_t precision,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr,
@@ -363,29 +362,29 @@ int unsupported_decimals_to_arrow(cudf::column& input,
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column&& column,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
                                                              ArrowArray* out)
 {
   using DeviceType = int32_t;
   return unsupported_decimals_to_arrow<DeviceType>(
-    column, cudf::detail::max_precision<DeviceType>(), stream, mr, out);
+    std::move(column), cudf::detail::max_precision<DeviceType>(), stream, mr, out);
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column&& column,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
                                                              ArrowArray* out)
 {
   using DeviceType = int64_t;
   return unsupported_decimals_to_arrow<DeviceType>(
-    column, cudf::detail::max_precision<DeviceType>(), stream, mr, out);
+    std::move(column), cudf::detail::max_precision<DeviceType>(), stream, mr, out);
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column&& column,
                                                               rmm::cuda_stream_view stream,
                                                               rmm::mr::device_memory_resource* mr,
                                                               ArrowArray* out)
@@ -409,7 +408,7 @@ int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column& colu
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<bool>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<bool>(cudf::column&& column,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr,
                                                ArrowArray* out)
@@ -433,7 +432,7 @@ int dispatch_to_arrow_device::operator()<bool>(cudf::column& column,
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& column,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr,
                                                             ArrowArray* out)
@@ -468,19 +467,19 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column& column
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr,
                                                           ArrowArray* out);
 
 template <>
-int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& column,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
                                                              ArrowArray* out);
 
 template <>
-int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& column,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr,
                                                             ArrowArray* out)
@@ -503,7 +502,7 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column& column
       child_ptr->null_count = child->size();
     } else {
       NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-        child->type(), dispatch_to_arrow_device{}, *child, stream, mr, child_ptr));
+        child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
     }
 
     child_ptr++;
@@ -516,7 +515,7 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column& column
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
                                                           rmm::cuda_stream_view stream,
                                                           rmm::mr::device_memory_resource* mr,
                                                           ArrowArray* out)
@@ -533,15 +532,14 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
     contents.children[cudf::lists_column_view::offsets_column_index]->release();
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
 
-  auto& child =
-    contents.children[cudf::lists_column_view::child_column_index];
+  auto& child = contents.children[cudf::lists_column_view::child_column_index];
   if (child->type().id() == cudf::type_id::EMPTY) {
     NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp->children[0], NANOARROW_TYPE_NA));
     tmp->children[0]->length     = 0;
     tmp->children[0]->null_count = 0;
   } else {
     NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-      child->type(), dispatch_to_arrow_device{}, *child, stream, mr, tmp->children[0]));
+      child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
   }
 
   NANOARROW_RETURN_NOT_OK(
@@ -551,7 +549,7 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
 }
 
 template <>
-int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& column,
+int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& column,
                                                              rmm::cuda_stream_view stream,
                                                              rmm::mr::device_memory_resource* mr,
                                                              ArrowArray* out)
@@ -574,10 +572,9 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& colum
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(indices_contents.data), kFixedWidthDataBufferIdx, tmp.get()));
 
-  auto& keys =
-    contents.children[cudf::dictionary_column_view::keys_column_index];
+  auto& keys = contents.children[cudf::dictionary_column_view::keys_column_index];
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
-    keys->type(), dispatch_to_arrow_device{}, *keys, stream, mr, tmp->dictionary));
+    keys->type(), dispatch_to_arrow_device{}, std::move(*keys), stream, mr, tmp->dictionary));
 
   NANOARROW_RETURN_NOT_OK(
     ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
@@ -657,7 +654,7 @@ ArrowDeviceArray to_arrow_device(cudf::table&& table,
     }
 
     NANOARROW_THROW_NOT_OK(cudf::type_dispatcher(
-      col->type(), detail::dispatch_to_arrow_device{}, *col, stream, mr, child));
+      col->type(), detail::dispatch_to_arrow_device{}, std::move(*col), stream, mr, child));
   }
 
   NANOARROW_THROW_NOT_OK(
