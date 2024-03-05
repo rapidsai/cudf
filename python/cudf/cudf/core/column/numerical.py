@@ -689,8 +689,17 @@ class NumericalColumn(NumericalBaseColumn):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if (
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        elif (
             nullable
             and (
                 pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(

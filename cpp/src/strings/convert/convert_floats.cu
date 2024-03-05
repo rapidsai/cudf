@@ -408,7 +408,7 @@ struct dispatch_from_floats_fn {
 
     return make_strings_column(strings_count,
                                std::move(offsets),
-                               std::move(chars->release().data.release()[0]),
+                               chars.release(),
                                floats.null_count(),
                                std::move(null_mask));
   }
