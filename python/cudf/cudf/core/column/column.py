@@ -2160,8 +2160,6 @@ def as_column(
         return as_column(
             np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
         )
-    elif isinstance(arbitrary, cudf.Scalar):
-        data = ColumnBase.from_scalar(arbitrary, length if length else 1)
     # Start of arbitrary that's not handed above but dtype provided
     elif isinstance(dtype, pd.DatetimeTZDtype):
         raise NotImplementedError(
