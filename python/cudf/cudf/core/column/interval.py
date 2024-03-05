@@ -105,14 +105,24 @@ class IntervalColumn(StructColumn):
             raise ValueError("dtype must be IntervalDtype")
 
     def to_pandas(
-        self, *, index: Optional[pd.Index] = None, nullable: bool = False
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         # Note: This does not handle null values in the interval column.
         # However, this exact sequence (calling __from_arrow__ on the output of
         # self.to_arrow) is currently the best known way to convert interval
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
         if nullable:
+            raise NotImplementedError(f"{nullable=} is not implemented.")
+        elif arrow_type:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         return pd.Series(
             self.dtype.to_pandas().__from_arrow__(self.to_arrow()), index=index

@@ -5791,8 +5791,17 @@ class StringColumn(column.ColumnBase):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        elif nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
             pd_series = pd.Series(pandas_array, copy=False)
         else:
