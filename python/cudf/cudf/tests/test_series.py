@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
+import datetime
 import decimal
 import hashlib
 import operator
@@ -2708,3 +2708,44 @@ def test_series_from_large_string():
     expected = pd.Series(pa_large_string_array)
 
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    with pytest.raises(ValueError):
+        ser.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    result = ser.to_pandas(arrow_type=True)
+    expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
+    pd.testing.assert_series_equal(result, expected)
