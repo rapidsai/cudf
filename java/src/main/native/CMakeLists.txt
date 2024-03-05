@@ -95,6 +95,10 @@ set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
 rapids_find_package(cudf REQUIRED)
 
 # ##################################################################################################
+# * nvtx3-------------------------------------------------------------------------------------------
+include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvtx.cmake)
+
+# ##################################################################################################
 # * nvcomp------------------------------------------------------------------------------------------
 
 if(NOT DEFINED nvcomp_DIR)
@@ -235,7 +239,7 @@ endif()
 # When nvcomp is installed we need to use nvcomp::nvcomp but from the cudf build directory it will
 # just be nvcomp.
 target_link_libraries(
-  cudfjni ${CUDF_LINK} PRIVATE $<TARGET_NAME_IF_EXISTS:nvcomp>
+  cudfjni ${CUDF_LINK} PRIVATE nvtx3-cpp $<TARGET_NAME_IF_EXISTS:nvcomp>
                                $<TARGET_NAME_IF_EXISTS:nvcomp::nvcomp>
 )
 
