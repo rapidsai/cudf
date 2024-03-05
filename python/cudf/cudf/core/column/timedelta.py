@@ -510,7 +510,7 @@ class TimeDeltaColumn(ColumnBase):
                 break
 
         for name in keys_list:
-            res_col = cudf.core.column.full(len(self), 0, dtype="int64")
+            res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             data[name] = res_col
@@ -599,7 +599,7 @@ class TimeDeltaColumn(ColumnBase):
         # of nanoseconds.
 
         if self._time_unit != "ns":
-            res_col = cudf.core.column.full(len(self), 0, dtype="int64")
+            res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             return cast("cudf.core.column.NumericalColumn", res_col)
