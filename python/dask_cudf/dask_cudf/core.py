@@ -722,6 +722,7 @@ from_cudf.__doc__ = (
     )
     # TODO: `dd.from_pandas.__doc__` is empty when
     # `DASK_DATAFRAME__QUERY_PLANNING=True`
+    # since dask-expr does not provide a docstring for from_pandas.
     + textwrap.dedent(dd.from_pandas.__doc__ or "")
 )
 

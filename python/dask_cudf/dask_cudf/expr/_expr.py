@@ -59,25 +59,3 @@ def _reduction_aggregate(*args, **kwargs):
 Var.reduction_aggregate = staticmethod(_reduction_aggregate)
 
 
-# This patch should be removed afer cudf#15143 is merged.
-# See: https://github.com/rapidsai/cudf/pull/15143
-def _shuffle_group(df, col, _filter, p):
-    from dask.dataframe.shuffle import ensure_cleanup_on_exception
-
-    with ensure_cleanup_on_exception(p):
-        g = df.groupby(col)
-        if hasattr(g, "_grouped"):
-            # Avoid `get_group` for cudf data.
-            # See: https://github.com/rapidsai/cudf/issues/14955
-            keys, part_offsets, _, grouped_df = df.groupby(col)._grouped()
-            d = {
-                k: grouped_df.iloc[part_offsets[i] : part_offsets[i + 1]]
-                for i, k in enumerate(keys.to_pandas())
-                if k in _filter
-            }
-        else:
-            d = {i: g.get_group(i) for i in g.groups if i in _filter}
-        p.append(d, fsync=True)
-
-
-DiskShuffle._shuffle_group = staticmethod(_shuffle_group)
