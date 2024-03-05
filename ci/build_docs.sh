@@ -3,11 +3,6 @@
 
 set -euo pipefail
 
-# Use gha-tools fork
-wget https://github.com/bdice/gha-tools/archive/refs/heads/wheel-python-pure.zip
-unzip wheel-python-pure.zip
-cp gha-tools-wheel-python-pure/tools/* /usr/local/bin
-
 export RAPIDS_VERSION_NUMBER="$(rapids-generate-version)"
 
 rapids-logger "Create test conda environment"

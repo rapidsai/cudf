@@ -5,11 +5,6 @@
 
 set -eoxu pipefail
 
-# Use gha-tools fork
-wget https://github.com/bdice/gha-tools/archive/refs/heads/wheel-python-pure.zip
-unzip wheel-python-pure.zip
-cp gha-tools-wheel-python-pure/tools/* /usr/local/bin
-
 # Function to display script usage
 function display_usage {
     echo "Usage: $0 [--no-cudf]"

@@ -3,11 +3,6 @@
 
 set -eou pipefail
 
-# Use gha-tools fork
-wget https://github.com/bdice/gha-tools/archive/refs/heads/wheel-python-pure.zip
-unzip wheel-python-pure.zip
-cp gha-tools-wheel-python-pure/tools/* /usr/local/bin
-
 # Set the manylinux version used for downloading the wheels so that we test the
 # newer ABI wheels on the newer images that support their installation.
 # Need to disable pipefail for the head not to fail, see
