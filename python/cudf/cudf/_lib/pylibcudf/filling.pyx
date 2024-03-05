@@ -31,6 +31,7 @@ cpdef Column fill(
     :py:class:`~cudf._lib.pylibcudf.column.Column`. ``value`` must be a
     :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
     For details, see :cpp:func:`fill`.
+
     Parameters
     ----------
     destination : Column
@@ -39,6 +40,7 @@ cpdef Column fill(
         The index to begin filling from.
     end : size_type
         The index at which to stop filling.
+
     Returns
     -------
     pylibcudf.Column
@@ -135,7 +137,7 @@ cpdef Table repeat(
         The table to be repeated
     count : Union[Column, size_type]
         Integer value to repeat each row by or
-        Non-nullable column of an integral type
+        non-nullable column of an integral type
     Returns
     -------
     pylibcudf.Table
