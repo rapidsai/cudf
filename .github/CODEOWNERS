@@ -11,6 +11,7 @@ python/dask_cudf/  @rapidsai/cudf-dask-codeowners
 cpp/CMakeLists.txt               @rapidsai/cudf-cmake-codeowners
 cpp/libcudf_kafka/CMakeLists.txt @rapidsai/cudf-cmake-codeowners
 **/cmake/                        @rapidsai/cudf-cmake-codeowners
+*.cmake                          @rapidsai/cudf-cmake-codeowners
 
 #java code owners
 java/              @rapidsai/cudf-java-codeowners
