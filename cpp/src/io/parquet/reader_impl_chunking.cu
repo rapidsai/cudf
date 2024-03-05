@@ -21,6 +21,7 @@
 #include "reader_impl_chunking.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -32,6 +33,7 @@
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/sort.h>
+#include <thrust/transform_scan.h>
 #include <thrust/unique.h>
 
 #include <numeric>
@@ -549,8 +551,64 @@ struct get_page_span {
   }
 };
 
+/**
+ * @brief Return the span of page indices for a given column index
+
+ */
+struct get_page_span_by_column {
+  cudf::device_span<size_type const> page_offsets;
+
+  __device__ page_span operator()(size_t i) const
+  {
+    return {static_cast<size_t>(page_offsets[i]), static_cast<size_t>(page_offsets[i + 1])};
+  }
+};
+
+/**
+ * @brief Return the size of a span
+ *
+ */
 struct get_span_size {
-  __device__ size_t operator()(page_span const& s) const { return s.end - s.start; }
+  CUDF_HOST_DEVICE size_t operator()(page_span const& s) const { return s.end - s.start; }
+};
+
+/**
+ * @brief Return the size of a span in an array of spans, handling out-of-bounds indices.
+ *
+ */
+struct get_span_size_by_index {
+  cudf::device_span<page_span const> page_indices;
+
+  __device__ size_t operator()(size_t i) const
+  {
+    return i >= page_indices.size() ? 0 : page_indices[i].end - page_indices[i].start;
+  }
+};
+
+/**
+ * @brief Copy page from appropriate source location (as defined by page_offsets) to the destination
+ * location, and store the index mapping.
+ */
+struct copy_subpass_page {
+  cudf::device_span<PageInfo const> src_pages;
+  cudf::device_span<PageInfo> dst_pages;
+  cudf::device_span<size_t> page_src_index;
+  cudf::device_span<size_t const> page_offsets;
+  cudf::device_span<page_span const> page_indices;
+
+  __device__ void operator()(size_t i) const
+  {
+    auto const index =
+      thrust::lower_bound(thrust::seq, page_offsets.begin(), page_offsets.end(), i) -
+      page_offsets.begin();
+    auto const col_index = page_offsets[index] == i ? index : index - 1;
+    // index within the pages for the column
+    auto const col_page_index = i - page_offsets[col_index];
+    auto const src_page_index = page_indices[col_index].start + col_page_index;
+
+    dst_pages[i]      = src_pages[src_page_index];
+    page_src_index[i] = src_page_index;
+  }
 };
 
 /**
@@ -575,7 +633,7 @@ struct get_span_size {
  * expected memory usage (including scratch space)
  *
  */
-std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
+std::tuple<rmm::device_uvector<page_span>, size_t, size_t> compute_next_subpass(
   device_span<cumulative_page_info const> c_info,
   device_span<PageInfo const> pages,
   device_span<size_type const> page_offsets,
@@ -618,9 +676,8 @@ std::tuple<std::vector<page_span>, size_t, size_t> compute_next_subpass(
   size_t const total_pages =
     thrust::reduce(rmm::exec_policy(stream), page_count_iter, page_count_iter + num_columns);
 
-  return {cudf::detail::make_std_vector_sync(page_bounds, stream),
-          total_pages,
-          h_aggregated_info[end_index].size_bytes - cumulative_size};
+  return {
+    std::move(page_bounds), total_pages, h_aggregated_info[end_index].size_bytes - cumulative_size};
 }
 
 std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_info const> c_info,
@@ -674,11 +731,13 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
  * @return Device buffer to decompressed page data
  */
 [[nodiscard]] rmm::device_buffer decompress_page_data(
-  cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
-  cudf::detail::hostdevice_vector<PageInfo>& pages,
+  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+  cudf::detail::hostdevice_span<PageInfo> pages,
   bool dict_pages,
   rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   auto for_each_codec_page = [&](Compression codec, std::function<void(size_t)> const& f) {
     for (size_t p = 0; p < pages.size(); p++) {
       if (chunks[pages[p].chunk_idx].codec == codec &&
@@ -715,8 +774,8 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
              return codec == cstats.compression_type;
            }) != codecs.end();
   };
-  CUDF_EXPECTS(std::all_of(chunks.begin(),
-                           chunks.end(),
+  CUDF_EXPECTS(std::all_of(chunks.host_begin(),
+                           chunks.host_end(),
                            [&is_codec_supported](auto const& chunk) {
                              return is_codec_supported(chunk.codec);
                            }),
@@ -910,6 +969,8 @@ void detect_malformed_pages(device_span<PageInfo const> pages,
                             std::optional<size_t> expected_row_count,
                             rmm::cuda_stream_view stream)
 {
+  CUDF_FUNC_RANGE();
+
   // sum row counts for all non-dictionary, non-list columns. other columns will be indicated as 0
   rmm::device_uvector<size_type> row_counts(pages.size(),
                                             stream);  // worst case:  num keys == num pages
@@ -1221,7 +1282,9 @@ void reader::impl::setup_next_pass(bool uses_custom_row_bounds)
 
     // if we are doing subpass reading, generate more accurate num_row estimates for list columns.
     // this helps us to generate more accurate subpass splits.
-    if (_input_pass_read_limit != 0) { generate_list_column_row_count_estimates(); }
+    if (pass.has_compressed_data && _input_pass_read_limit != 0) {
+      generate_list_column_row_count_estimates();
+    }
 
 #if defined(PARQUET_CHUNK_LOGGING)
     printf("Pass: row_groups(%'lu), chunks(%'lu), pages(%'lu)\n",
@@ -1266,21 +1329,21 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
       ? min_subpass_size
       : _input_pass_read_limit - pass.base_mem_size;
 
+  // page_indices is an array of spans where each element N is the
+  // indices into the pass.pages array that represents the subset of pages
+  // for column N to use for the subpass.
   auto [page_indices, total_pages, total_expected_size] =
-    [&]() -> std::tuple<std::vector<page_span>, size_t, size_t> {
-    // special case:  if we contain no compressed data, or if we have no input limit, we can always
-    // just do 1 subpass since what we already have loaded is all the temporary memory we will ever
-    // use.
+    [&]() -> std::tuple<rmm::device_uvector<page_span>, size_t, size_t> {
     if (!pass.has_compressed_data || _input_pass_read_limit == 0) {
-      std::vector<page_span> page_indices;
-      page_indices.reserve(num_columns);
+      rmm::device_uvector<page_span> page_indices(
+        num_columns, _stream, rmm::mr::get_current_device_resource());
       auto iter = thrust::make_counting_iterator(0);
-      std::transform(
-        iter, iter + num_columns, std::back_inserter(page_indices), [&](size_t i) -> page_span {
-          return {static_cast<size_t>(pass.page_offsets[i]),
-                  static_cast<size_t>(pass.page_offsets[i + 1])};
-        });
-      return {page_indices, pass.pages.size(), 0};
+      thrust::transform(rmm::exec_policy_nosync(_stream),
+                        iter,
+                        iter + num_columns,
+                        page_indices.begin(),
+                        get_page_span_by_column{pass.page_offsets});
+      return {std::move(page_indices), pass.pages.size(), size_t{0}};
     }
     // otherwise we have to look forward and choose a batch of pages
 
@@ -1319,36 +1382,49 @@ void reader::impl::setup_next_subpass(bool uses_custom_row_bounds)
                                 _stream);
   }();
 
-  // fill out the subpass struct
-  subpass.pages = cudf::detail::hostdevice_vector<PageInfo>(0, total_pages, _stream);
-  subpass.page_src_index =
-    cudf::detail::hostdevice_vector<size_t>(total_pages, total_pages, _stream);
-  // copy the appropriate subset of pages from each column
-  size_t page_count = 0;
-  for (size_t c_idx = 0; c_idx < num_columns; c_idx++) {
-    auto const num_column_pages = page_indices[c_idx].end - page_indices[c_idx].start;
-    subpass.column_page_count.push_back(num_column_pages);
-    std::copy(pass.pages.begin() + page_indices[c_idx].start,
-              pass.pages.begin() + page_indices[c_idx].end,
-              std::back_inserter(subpass.pages));
+  // check to see if we are processing the entire pass (enabling us to skip a bunch of work)
+  subpass.single_subpass = total_pages == pass.pages.size();
 
-    // mapping back to original pages in the pass
-    thrust::sequence(thrust::host,
-                     subpass.page_src_index.begin() + page_count,
-                     subpass.page_src_index.begin() + page_count + num_column_pages,
-                     page_indices[c_idx].start);
-    page_count += num_column_pages;
+  // in the single pass case, no page copying is necessary - just use what's in the pass itself
+  if (subpass.single_subpass) {
+    subpass.pages = pass.pages;
   }
-  // print_hostdevice_vector(subpass.page_src_index);
+  // copy the appropriate subset of pages from each column and store the mapping back to the source
+  // (pass) pages
+  else {
+    subpass.page_buf = cudf::detail::hostdevice_vector<PageInfo>(total_pages, total_pages, _stream);
+    subpass.page_src_index = rmm::device_uvector<size_t>(total_pages, _stream);
+    auto iter              = thrust::make_counting_iterator(0);
+    rmm::device_uvector<size_t> dst_offsets(num_columns + 1, _stream);
+    thrust::transform_exclusive_scan(rmm::exec_policy_nosync(_stream),
+                                     iter,
+                                     iter + num_columns + 1,
+                                     dst_offsets.begin(),
+                                     get_span_size_by_index{page_indices},
+                                     0,
+                                     thrust::plus<size_t>{});
+    thrust::for_each(
+      rmm::exec_policy_nosync(_stream),
+      iter,
+      iter + total_pages,
+      copy_subpass_page{
+        pass.pages, subpass.page_buf, subpass.page_src_index, dst_offsets, page_indices});
+    subpass.pages = subpass.page_buf;
+  }
+
+  std::vector<page_span> h_spans = cudf::detail::make_std_vector_async(page_indices, _stream);
+  subpass.pages.device_to_host_async(_stream);
+
+  _stream.synchronize();
+
+  subpass.column_page_count = std::vector<size_t>(num_columns);
+  std::transform(
+    h_spans.begin(), h_spans.end(), subpass.column_page_count.begin(), get_span_size{});
 
   // decompress the data for the pages in this subpass.
   if (pass.has_compressed_data) {
     subpass.decomp_page_data = decompress_page_data(pass.chunks, subpass.pages, false, _stream);
   }
-
-  subpass.pages.host_to_device_async(_stream);
-  subpass.page_src_index.host_to_device_async(_stream);
-  _stream.synchronize();
 
   // buffers needed by the decode kernels
   {
@@ -1541,7 +1617,7 @@ void reader::impl::compute_output_chunks_for_subpass()
   // generate row_indices and cumulative output sizes for all pages
   rmm::device_uvector<cumulative_page_info> c_info(subpass.pages.size(), _stream);
   auto page_input =
-    thrust::make_transform_iterator(subpass.pages.d_begin(), get_page_output_size{});
+    thrust::make_transform_iterator(subpass.pages.device_begin(), get_page_output_size{});
   auto page_keys = make_page_key_iterator(subpass.pages);
   thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(_stream),
                                 page_keys,

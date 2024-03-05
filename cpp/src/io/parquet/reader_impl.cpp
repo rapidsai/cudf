@@ -60,7 +60,7 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   // TODO: This step is somewhat redundant if size info has already been calculated (nested schema,
   // chunked reader).
   auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
-  std::vector<size_t> col_sizes(_input_columns.size(), 0L);
+  std::vector<size_t> col_string_sizes(_input_columns.size(), 0L);
   if (has_strings) {
     ComputePageStringSizes(subpass.pages,
                            pass.chunks,
@@ -71,10 +71,10 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
                            kernel_mask,
                            _stream);
 
-    col_sizes = calculate_page_string_offsets();
+    col_string_sizes = calculate_page_string_offsets();
 
     // check for overflow
-    if (std::any_of(col_sizes.cbegin(), col_sizes.cend(), [](size_t sz) {
+    if (std::any_of(col_string_sizes.cbegin(), col_string_sizes.cend(), [](std::size_t sz) {
           return sz > std::numeric_limits<size_type>::max();
         })) {
       CUDF_FAIL("String column exceeds the column size limit", std::overflow_error);
@@ -157,8 +157,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         valids[idx] = out_buf.null_mask();
         data[idx]   = out_buf.data();
         // only do string buffer for leaf
-        if (out_buf.string_size() == 0 && col_sizes[pass.chunks[c].src_col_index] > 0) {
-          out_buf.create_string_data(col_sizes[pass.chunks[c].src_col_index], _stream);
+        if (idx == max_depth - 1 and out_buf.string_size() == 0 and
+            col_string_sizes[pass.chunks[c].src_col_index] > 0) {
+          out_buf.create_string_data(col_string_sizes[pass.chunks[c].src_col_index], _stream);
         }
         if (has_strings) { str_data[idx] = out_buf.string_data(); }
         out_buf.user_data |=
@@ -272,21 +273,21 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
         auto const& child = (*cols)[input_col.nesting[l_idx + 1]];
 
         // the final offset for a list at level N is the size of it's child
-        int const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
-        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + (out_buf.size - 1),
+        size_type const offset = child.type.id() == type_id::LIST ? child.size - 1 : child.size;
+        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + (out_buf.size - 1),
                                       &offset,
-                                      sizeof(offset),
+                                      sizeof(size_type),
                                       cudaMemcpyDefault,
                                       _stream.value()));
         out_buf.user_data |= PARQUET_COLUMN_BUFFER_FLAG_LIST_TERMINATED;
       } else if (out_buf.type.id() == type_id::STRING) {
         // need to cap off the string offsets column
-        size_type const sz = static_cast<size_type>(col_sizes[idx]);
-        cudaMemcpyAsync(static_cast<int32_t*>(out_buf.data()) + out_buf.size,
-                        &sz,
-                        sizeof(size_type),
-                        cudaMemcpyDefault,
-                        _stream.value());
+        auto const sz = static_cast<size_type>(col_string_sizes[idx]);
+        CUDF_CUDA_TRY(cudaMemcpyAsync(static_cast<size_type*>(out_buf.data()) + out_buf.size,
+                                      &sz,
+                                      sizeof(size_type),
+                                      cudaMemcpyDefault,
+                                      _stream.value()));
       }
     }
   }
