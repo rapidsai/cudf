@@ -4,10 +4,10 @@ import types
 from contextlib import ExitStack as does_not_raise
 
 import cupy
+import numba.cuda
 import numpy as np
 import pandas as pd
 import pytest
-from numba import cuda
 
 import cudf
 from cudf.core.buffer.spill_manager import get_global_manager
@@ -25,7 +25,7 @@ def test_cuda_array_interface_interop_in(dtype, module):
         if dtype in DATETIME_TYPES:
             expectation = pytest.raises(ValueError)
     elif module == "numba":
-        module_constructor = cuda.to_device
+        module_constructor = numba.cuda.to_device
 
     with expectation:
         module_data = module_constructor(np_data)
@@ -55,7 +55,7 @@ def test_cuda_array_interface_interop_out(dtype, module):
             return cupy.asnumpy(x)
 
     elif module == "numba":
-        module_constructor = cuda.as_cuda_array
+        module_constructor = numba.cuda.as_cuda_array
 
         def to_host_function(x):
             return x.copy_to_host()
@@ -89,7 +89,7 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
 
     elif module == "numba":
         expectation = pytest.raises(NotImplementedError)
-        module_constructor = cuda.as_cuda_array
+        module_constructor = numba.cuda.as_cuda_array
 
         def to_host_function(x):
             return x.copy_to_host()
@@ -135,9 +135,11 @@ def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
 
     if mask_type == "bools":
         if nulls == "some":
-            obj.__cuda_array_interface__["mask"] = cuda.to_device(mask)
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(mask)
         elif nulls == "all":
-            obj.__cuda_array_interface__["mask"] = cuda.to_device([False] * 10)
+            obj.__cuda_array_interface__["mask"] = numba.cuda.to_device(
+                [False] * 10
+            )
 
     expect = sr
     got = cudf.Series(obj)
@@ -193,7 +195,11 @@ def test_cuda_array_interface_pytorch():
 
     assert_eq(got, cudf.Series(buffer, dtype=np.bool_))
 
-    # TODO: This test fails with PyTorch 2. Is it still expected to be valid?
+    # TODO: This test fails with PyTorch 2. It appears that PyTorch
+    # checks that the pointer is device-accessible even when the
+    # size is zero. See
+    # https://github.com/pytorch/pytorch/issues/98133
+    #
     # index = cudf.Index([], dtype="float64")
     # tensor = torch.tensor(index)
     # got = cudf.Index(tensor)
