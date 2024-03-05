@@ -123,7 +123,7 @@ class IntervalColumn(StructColumn):
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         elif arrow_type:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
+            raise NotImplementedError(f"{arrow_type=} is not implemented.")
         return pd.Series(
             self.dtype.to_pandas().__from_arrow__(self.to_arrow()), index=index
         )

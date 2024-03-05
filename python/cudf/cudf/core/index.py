@@ -1231,9 +1231,9 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             )
 
         needle = as_column(target)
-        result = cudf.core.column.full(
-            len(needle),
-            fill_value=-1,
+        result = as_column(
+            -1,
+            length=len(needle),
             dtype=libcudf.types.size_type_dtype,
         )
 
