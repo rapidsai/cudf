@@ -3,6 +3,7 @@
 """
 Test related to Index
 """
+import datetime
 import operator
 import re
 
@@ -3138,3 +3139,40 @@ def test_from_pandas_rangeindex_return_rangeindex():
 def test_index_to_pandas_nullable_notimplemented(idx):
     with pytest.raises(NotImplementedError):
         idx.to_pandas(nullable=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+    ],
+)
+def test_index_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    idx = cudf.Index(pa_array)
+    with pytest.raises(ValueError):
+        idx.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+    ],
+)
+def test_index_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    idx = cudf.Index(pa_array)
+    result = idx.to_pandas(arrow_type=True)
+    expected = pd.Index(pd.arrays.ArrowExtensionArray(pa_array))
+    pd.testing.assert_index_equal(result, expected)
