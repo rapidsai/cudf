@@ -105,10 +105,8 @@ def _get_non_empty_data(s):
         categories = (
             s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
         )
-        codes = cudf.core.column.as_column(
-            0,
-            dtype=cudf._lib.types.size_type_dtype,
-            length=2,
+        codes = cudf.core.column.full(
+            size=2, fill_value=0, dtype=cudf._lib.types.size_type_dtype
         )
         ordered = s.ordered
         data = cudf.core.column.build_categorical_column(

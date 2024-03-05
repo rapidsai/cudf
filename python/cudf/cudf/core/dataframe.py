@@ -1407,7 +1407,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             allow_non_unique=True,
                         )
                     if is_scalar(value):
-                        self._data[arg] = as_column(value, length=len(self))
+                        self._data[arg] = column.full(len(self), value)
                     else:
                         value = as_column(value)
                         self._data[arg] = value
@@ -1455,8 +1455,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 else:
                     for col in arg:
                         if is_scalar(value):
-                            self._data[col] = as_column(
-                                value, length=len(self)
+                            self._data[col] = column.full(
+                                size=len(self), fill_value=value
                             )
                         else:
                             self._data[col] = column.as_column(value)
@@ -3205,16 +3205,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         if _is_scalar_or_zero_d_array(value):
-            dtype = None
-            if isinstance(value, (np.ndarray, cupy.ndarray)):
-                dtype = value.dtype
-                value = value.item()
-            if libcudf.scalar._is_null_host_scalar(value):
-                dtype = "str"
-            value = as_column(
+            value = column.full(
+                len(self),
                 value,
-                length=len(self),
-                dtype=dtype,
+                "str" if libcudf.scalar._is_null_host_scalar(value) else None,
             )
 
         if len(self) == 0:
@@ -5918,7 +5912,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fill_value = cudf.Scalar(False)
 
         def make_false_column_like_self():
-            return column.as_column(fill_value, length=len(self), dtype="bool")
+            return column.full(len(self), fill_value, "bool")
 
         # Preprocess different input types into a mapping from column names to
         # a list of values to check.
@@ -6037,7 +6031,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 {
                     name: filtered._data[name]._get_mask_as_column()
                     if filtered._data[name].nullable
-                    else as_column(True, length=len(filtered._data[name]))
+                    else column.full(len(filtered._data[name]), True)
                     for name in filtered._data.names
                 }
             )
@@ -7828,8 +7822,8 @@ def _make_replacement_func(value):
             return output
 
         for name in uncommon_columns:
-            output._data[name] = as_column(
-                value, length=len(output), dtype="bool"
+            output._data[name] = column.full(
+                size=len(output), fill_value=value, dtype="bool"
             )
         return output
 

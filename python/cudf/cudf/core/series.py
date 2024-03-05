@@ -55,6 +55,7 @@ from cudf.core.column import (
     IntervalColumn,
     TimeDeltaColumn,
     as_column,
+    full,
 )
 from cudf.core.column.categorical import (
     CategoricalAccessor as CategoricalAccessor,
@@ -1310,7 +1311,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 {
                     "x": arg.keys(),
                     "s": arg.values(),
-                    "bool": as_column(True, length=len(arg), dtype=self.dtype),
+                    "bool": full(len(arg), True, dtype=self.dtype),
                 }
             )
             res = lhs.merge(rhs, on="x", how="left").sort_values(
@@ -1332,7 +1333,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 {
                     "x": arg.keys(),
                     "s": arg,
-                    "bool": as_column(True, length=len(arg), dtype=self.dtype),
+                    "bool": full(len(arg), True, dtype=self.dtype),
                 }
             )
             res = lhs.merge(rhs, on="x", how="left").sort_values(
