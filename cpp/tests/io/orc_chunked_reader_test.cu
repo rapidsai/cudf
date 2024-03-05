@@ -122,6 +122,10 @@ auto chunked_read(std::string const& filepath,
   auto num_chunks = 0;
   auto out_tables = std::vector<std::unique_ptr<cudf::table>>{};
 
+  // TODO: remove this scope, when we get rid of mem stat in the reader.
+  // This is to avoid use-after-free of memory resource created by the mem stat object.
+  auto mr = rmm::mr::get_current_device_resource();
+
   do {
     auto chunk = reader.read_chunk();
     // If the input file is empty, the first call to `read_chunk` will return an empty table.
@@ -142,7 +146,10 @@ auto chunked_read(std::string const& filepath,
     out_tviews.emplace_back(tbl->view());
   }
 
-  return std::pair(cudf::concatenate(out_tviews), num_chunks);
+  // return std::pair(cudf::concatenate(out_tviews), num_chunks);
+
+  // TODO: remove this
+  return std::pair(cudf::concatenate(out_tviews, cudf::get_default_stream(), mr), num_chunks);
 }
 
 auto chunked_read(std::string const& filepath,
