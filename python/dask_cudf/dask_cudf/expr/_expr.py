@@ -2,7 +2,6 @@
 
 from dask_expr._cumulative import CumulativeBlockwise, TakeLast
 from dask_expr._reductions import Var
-from dask_expr._shuffle import DiskShuffle
 
 ##
 ## Custom expression patching
@@ -57,5 +56,3 @@ def _reduction_aggregate(*args, **kwargs):
 
 
 Var.reduction_aggregate = staticmethod(_reduction_aggregate)
-
-
