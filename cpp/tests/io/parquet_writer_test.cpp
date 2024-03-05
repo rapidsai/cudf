@@ -1426,8 +1426,52 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
             static_cast<int64_t>(num_rows * sizeof(column_type)));
 }
 
+TEST_F(ParquetWriterTest, UserRequestedDictFallback)
+{
+  constexpr int num_rows = 100;
+  constexpr char const* big_string =
+    "a "
+    "very very very very very very very very very very very very very very very very very very "
+    "very very very very very very very very very very very very very very very very very very "
+    "very very very very very very very very very very very very very very very very very very "
+    "very very very very very very very very very very very very very very very very very very "
+    "very very very very very very very very very very very very very very very very very very "
+    "very very very very very very very very very very very very very very very very very very "
+    "long string";
+
+  auto const max_dict_size = strlen(big_string) * num_rows / 2;
+
+  auto elements1 = cudf::detail::make_counting_transform_iterator(
+    0, [big_string](auto i) { return big_string + std::to_string(i); });
+  auto const col1  = cudf::test::strings_column_wrapper(elements1, elements1 + num_rows);
+  auto const table = table_view({col1});
+
+  cudf::io::table_input_metadata table_metadata(table);
+  table_metadata.column_metadata[0]
+    .set_name("big_strings")
+    .set_encoding(cudf::io::column_encoding::DICTIONARY)
+    .set_nullability(false);
+
+  auto const filepath = temp_env->get_temp_filepath("UserRequestedDictFallback.parquet");
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
+      .metadata(table_metadata)
+      .max_dictionary_size(max_dict_size);
+  cudf::io::write_parquet(opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // encoding should have fallen back to PLAIN
+  EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::PLAIN);
+}
+
 TEST_F(ParquetWriterTest, UserRequestedEncodings)
 {
+  using cudf::io::column_encoding;
+  using cudf::io::parquet::detail::Encoding;
   constexpr int num_rows = 500;
 
   auto const ones = thrust::make_constant_iterator(1);
@@ -1442,25 +1486,21 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
     {col, col, col, col, col, string_col, string_col, string_col, string_col, string_col});
 
   cudf::io::table_input_metadata table_metadata(table);
-  table_metadata.column_metadata[0].set_name("int_plain");
-  table_metadata.column_metadata[0].set_encoding(cudf::io::column_encoding::PLAIN);
-  table_metadata.column_metadata[1].set_name("int_dict");
-  table_metadata.column_metadata[1].set_encoding(cudf::io::column_encoding::DICTIONARY);
-  table_metadata.column_metadata[2].set_name("int_delta_binary_packed");
-  table_metadata.column_metadata[2].set_encoding(cudf::io::column_encoding::DELTA_BINARY_PACKED);
-  table_metadata.column_metadata[3].set_name("int_delta_length_byte_array");
-  table_metadata.column_metadata[3].set_encoding(
-    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+
+  auto const set_meta = [&table_metadata](int idx, std::string const& name, column_encoding enc) {
+    table_metadata.column_metadata[idx].set_name(name).set_encoding(enc);
+  };
+
+  set_meta(0, "int_plain", column_encoding::PLAIN);
+  set_meta(1, "int_dict", column_encoding::DICTIONARY);
+  set_meta(2, "int_db", column_encoding::DELTA_BINARY_PACKED);
+  set_meta(3, "int_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
   table_metadata.column_metadata[4].set_name("int_none");
-  table_metadata.column_metadata[5].set_name("string_plain");
-  table_metadata.column_metadata[5].set_encoding(cudf::io::column_encoding::PLAIN);
-  table_metadata.column_metadata[6].set_name("string_dict");
-  table_metadata.column_metadata[6].set_encoding(cudf::io::column_encoding::DICTIONARY);
-  table_metadata.column_metadata[7].set_name("string_delta_length_byte_array");
-  table_metadata.column_metadata[7].set_encoding(
-    cudf::io::column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  table_metadata.column_metadata[8].set_name("string_delta_binary_packed");
-  table_metadata.column_metadata[8].set_encoding(cudf::io::column_encoding::DELTA_BINARY_PACKED);
+
+  set_meta(5, "string_plain", column_encoding::PLAIN);
+  set_meta(6, "string_dict", column_encoding::DICTIONARY);
+  set_meta(7, "string_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  set_meta(8, "string_db", column_encoding::DELTA_BINARY_PACKED);
   table_metadata.column_metadata[9].set_name("string_none");
 
   for (auto& col_meta : table_metadata.column_metadata) {
@@ -1482,36 +1522,30 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
 
   // no nulls and no repetition, so the only encoding used should be for the data.
   // since we're writing v1, both dict and data pages should use PLAIN_DICTIONARY.
+  auto const expect_enc = [&fmd](int idx, cudf::io::parquet::detail::Encoding enc) {
+    EXPECT_EQ(fmd.row_groups[0].columns[idx].meta_data.encodings[0], enc);
+  };
+
   // requested plain
-  EXPECT_EQ(fmd.row_groups[0].columns[0].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN);
+  expect_enc(0, Encoding::PLAIN);
   // requested dictionary
-  EXPECT_EQ(fmd.row_groups[0].columns[1].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  expect_enc(1, Encoding::PLAIN_DICTIONARY);
   // requested delta_binary_packed
-  EXPECT_EQ(fmd.row_groups[0].columns[2].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::DELTA_BINARY_PACKED);
+  expect_enc(2, Encoding::DELTA_BINARY_PACKED);
   // requested delta_length_byte_array, but should fall back to dictionary
-  EXPECT_EQ(fmd.row_groups[0].columns[3].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  expect_enc(3, Encoding::PLAIN_DICTIONARY);
   // no request, should fall back to dictionary
-  EXPECT_EQ(fmd.row_groups[0].columns[4].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  expect_enc(4, Encoding::PLAIN_DICTIONARY);
   // requested plain
-  EXPECT_EQ(fmd.row_groups[0].columns[5].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN);
+  expect_enc(5, Encoding::PLAIN);
   // requested dictionary
-  EXPECT_EQ(fmd.row_groups[0].columns[6].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  expect_enc(6, Encoding::PLAIN_DICTIONARY);
   // requested delta_length_byte_array
-  EXPECT_EQ(fmd.row_groups[0].columns[7].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::DELTA_LENGTH_BYTE_ARRAY);
+  expect_enc(7, Encoding::DELTA_LENGTH_BYTE_ARRAY);
   // requested delta_binary_packed, but should fall back to dictionary
-  EXPECT_EQ(fmd.row_groups[0].columns[8].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  expect_enc(8, Encoding::PLAIN_DICTIONARY);
   // no request, should fall back to dictionary
-  EXPECT_EQ(fmd.row_groups[0].columns[9].meta_data.encodings[0],
-            cudf::io::parquet::detail::Encoding::PLAIN_DICTIONARY);
+  expect_enc(9, Encoding::PLAIN_DICTIONARY);
 }
 
 TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
