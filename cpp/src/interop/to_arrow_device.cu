@@ -587,7 +587,7 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column& colum
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(indices_contents.data), kFixedWidthDataBufferIdx, tmp.get()));
 
-  std::unique_ptr<cudf::column>& keys =
+  auto& keys =
     contents.children[cudf::dictionary_column_view::keys_column_index];
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys->type(), dispatch_to_arrow_device{}, *keys, stream, mr, tmp->dictionary));
