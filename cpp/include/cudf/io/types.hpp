@@ -103,17 +103,17 @@ enum statistics_freq {
  * @brief Valid encodings for use with `column_in_metadata::set_encoding()`
  */
 enum class column_encoding {
-  // common encodings
+  // Common encodings:
   USE_DEFAULT = -1,  ///< No encoding has been requested, use default encoding
   DICTIONARY,        ///< Use dictionary encoding
-  // parquet encodings
+  // Parquet encodings:
   PLAIN,                    ///< Use plain encoding
   DELTA_BINARY_PACKED,      ///< Use DELTA_BINARY_PACKED encoding (only valid for integer columns)
   DELTA_LENGTH_BYTE_ARRAY,  ///< Use DELTA_LENGTH_BYTE_ARRAY encoding (only
                             ///< valid for BYTE_ARRAY columns)
   DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
                             ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
-  // orc encodings
+  // ORC encodings:
   DIRECT,         ///< Use DIRECT encoding
   DIRECT_V2,      ///< Use DIRECT_V2 encoding
   DICTIONARY_V2,  ///< Use DICTIONARY_V2 encoding
