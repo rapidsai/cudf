@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ public class MultiBufferDataSource extends DataSource {
   private final long sizeInBytes;
   private final HostMemoryBuffer[] hostBuffers;
   private final long[] startOffsets;
-  private final HostMemoryAllocator allocator;
 
   // Metrics
   private long hostReads = 0;
@@ -39,15 +38,6 @@ public class MultiBufferDataSource extends DataSource {
    * @param buffers the buffers that will back the data source.
    */
   public MultiBufferDataSource(HostMemoryBuffer ... buffers) {
-    this(DefaultHostMemoryAllocator.get(), buffers);
-  }
-
-  /**
-   * Create a new data source backed by multiple buffers.
-   * @param allocator the allocator to use for host buffers, if needed.
-   * @param buffers the buffers that will back the data source.
-   */
-  public MultiBufferDataSource(HostMemoryAllocator allocator, HostMemoryBuffer ... buffers) {
     int numBuffers = buffers.length;
     hostBuffers = new HostMemoryBuffer[numBuffers];
     startOffsets = new long[numBuffers];
@@ -61,7 +51,6 @@ public class MultiBufferDataSource extends DataSource {
       currentOffset += hmb.getLength();
     }
     sizeInBytes = currentOffset;
-    this.allocator = allocator;
   }
 
   @Override
@@ -159,7 +148,7 @@ public class MultiBufferDataSource extends DataSource {
     } else {
       // We will have to allocate a new buffer and copy data into it.
       boolean success = false;
-      HostMemoryBuffer ret = allocator.allocate(realAmount, true);
+      HostMemoryBuffer ret = HostMemoryBuffer.allocate(realAmount, true);
       try {
         long amountRead = read(offset, ret, HostMemoryBuffer::copyFromHostBuffer);
         assert(amountRead == realAmount);

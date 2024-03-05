@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -100,8 +100,7 @@ jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
 /**
  * Allocate a HostMemoryBuffer
  */
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned,
-                             jobject host_memory_allocator);
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
 
 /**
  * Get the address of a HostMemoryBuffer

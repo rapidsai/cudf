@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -215,9 +215,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
     byte[] result = new byte[data.length];
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
-         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(data.length, true);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
-         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+         HostMemoryBuffer hostBuffer2 = HostMemoryBuffer.allocate(data.length, true)) {
       hostBuffer.setBytes(0, data, 0, data.length);
       devBuffer.copyFromHostBuffer(hostBuffer, stream1);
       hostBuffer2.copyFromDeviceBuffer(devBuffer, stream2);
@@ -236,9 +236,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
          Cuda.Stream stream2 = new Cuda.Stream(true);
          Cuda.Event event1 = new Cuda.Event();
          Cuda.Event event2 = new Cuda.Event();
-         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(data.length, true);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
-         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+         HostMemoryBuffer hostBuffer2 = HostMemoryBuffer.allocate(data.length, true)) {
       hostBuffer.setBytes(0, data, 0, data.length);
       devBuffer.copyFromHostBufferAsync(hostBuffer, stream1);
       event1.record(stream1);
@@ -261,9 +261,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
          Cuda.Stream stream2 = new Cuda.Stream(true);
          Cuda.Event event1 = new Cuda.Event();
          Cuda.Event event2 = new Cuda.Event();
-         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(data.length, true);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
-         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+         HostMemoryBuffer hostBuffer2 = HostMemoryBuffer.allocate(data.length, true)) {
       hostBuffer.setBytes(0, data, 0, data.length);
       devBuffer.copyFromHostBufferAsync(hostBuffer, stream1);
       event1.record(stream1);
@@ -286,9 +286,9 @@ public class HostMemoryBufferTest extends CudfTestBase {
     byte[] result = new byte[data.length];
     try (Cuda.Stream stream1 = new Cuda.Stream(true);
          Cuda.Stream stream2 = new Cuda.Stream(true);
-         HostMemoryBuffer hostBuffer = PinnedMemoryPool.allocate(data.length);
+         HostMemoryBuffer hostBuffer = HostMemoryBuffer.allocate(data.length, true);
          DeviceMemoryBuffer devBuffer = DeviceMemoryBuffer.allocate(data.length);
-         HostMemoryBuffer hostBuffer2 = PinnedMemoryPool.allocate(data.length)) {
+         HostMemoryBuffer hostBuffer2 = HostMemoryBuffer.allocate(data.length, true)) {
       hostBuffer.setBytes(0, data, 0, data.length);
       devBuffer.copyFromHostBufferAsync(hostBuffer, stream1);
       stream1.sync();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,6 +46,7 @@ constexpr bool is_ptds_enabled{false};
 #endif
 
 static jclass Host_memory_buffer_jclass;
+static jmethodID Host_buffer_allocate;
 static jfieldID Host_buffer_address;
 static jfieldID Host_buffer_length;
 
@@ -55,6 +56,11 @@ static jfieldID Host_buffer_length;
 static bool cache_host_memory_buffer_jni(JNIEnv *env) {
   jclass cls = env->FindClass(HOST_MEMORY_BUFFER_CLASS);
   if (cls == nullptr) {
+    return false;
+  }
+
+  Host_buffer_allocate = env->GetStaticMethodID(cls, "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
+  if (Host_buffer_allocate == nullptr) {
     return false;
   }
 
@@ -80,14 +86,9 @@ static void release_host_memory_buffer_jni(JNIEnv *env) {
   Host_memory_buffer_jclass = del_global_ref(env, Host_memory_buffer_jclass);
 }
 
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned,
-                             jobject host_memory_allocator) {
-  auto const host_memory_allocator_class = env->GetObjectClass(host_memory_allocator);
-  auto const allocateMethodId =
-      env->GetMethodID(host_memory_allocator_class, "allocate", HOST_MEMORY_BUFFER_SIG("JZ"));
-  jobject ret =
-      env->CallObjectMethod(host_memory_allocator, allocateMethodId, amount, prefer_pinned);
-
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned) {
+  jobject ret = env->CallStaticObjectMethod(Host_memory_buffer_jclass, Host_buffer_allocate, amount,
+                                            prefer_pinned);
   if (env->ExceptionCheck()) {
     throw std::runtime_error("allocateHostBuffer threw an exception");
   }

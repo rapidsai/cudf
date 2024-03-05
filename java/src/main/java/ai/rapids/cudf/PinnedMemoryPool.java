@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -166,14 +166,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   /**
-   * Used to indicate that memory was allocated from a reservation. This primarily is for
-   * keeping track of outstanding allocations.
-   */
-  private static void reserveAllocInternal(MemorySection section) {
-    Objects.requireNonNull(getSingleton()).reserveAllocHappened(section);
-  }
-
-  /**
    * Initialize the pool.
    *
    * @param poolSize size of the pool to initialize.
@@ -236,47 +228,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   /**
-   * Factory method to create a pinned host memory reservation.
-   *
-   * @param bytes size in bytes to reserve
-   * @return newly created reservation or null if insufficient pinned memory to cover it.
-   */
-  public static HostMemoryReservation tryReserve(long bytes) {
-    HostMemoryReservation result = null;
-    PinnedMemoryPool pool = getSingleton();
-    if (pool != null) {
-      result = pool.tryReserveInternal(bytes);
-    }
-    return result;
-  }
-
-  /**
-   * Factory method to create a host buffer but preferably pointing to pinned memory.
-   * It is not guaranteed that the returned buffer will be pointer to pinned memory.
-   *
-   * @param bytes size in bytes to allocate
-   * @return newly created buffer
-   */
-  public static HostMemoryBuffer allocate(long bytes, HostMemoryAllocator hostMemoryAllocator) {
-    HostMemoryBuffer result = tryAllocate(bytes);
-    if (result == null) {
-      result = hostMemoryAllocator.allocate(bytes, false);
-    }
-    return result;
-  }
-
-  /**
-   * Factory method to create a host buffer but preferably pointing to pinned memory.
-   * It is not guaranteed that the returned buffer will be pointer to pinned memory.
-   *
-   * @param bytes size in bytes to allocate
-   * @return newly created buffer
-   */
-  public static HostMemoryBuffer allocate(long bytes) {
-    return allocate(bytes, DefaultHostMemoryAllocator.get());
-  }
-
-  /**
    * Get the number of bytes free in the pinned memory pool.
    *
    * @return amount of free memory in bytes or 0 if the pool is not initialized
@@ -319,8 +270,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
   }
 
   /**
-   * Pads a length of bytes to the alignment the CPU wants in the worst case. This helps to
-   * calculate the size needed for a reservation if there are multiple buffers.
+   * Pads a length of bytes to the alignment the CPU wants in the worst case.
    * @param bytes the size in bytes
    * @return the new padded size in bytes.
    */
@@ -374,62 +324,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
   }
 
-  private class PinnedReservation implements HostMemoryReservation {
-    private MemorySection section = null;
-
-    public PinnedReservation(MemorySection section) {
-      this.section = section;
-    }
-
-    @Override
-    public synchronized HostMemoryBuffer allocate(long bytes, boolean preferPinned) {
-      return this.allocate(bytes);
-    }
-
-    @Override
-    public synchronized HostMemoryBuffer allocate(long bytes) {
-      if (section == null || section.size < bytes) {
-        throw new OutOfMemoryError("Reservation didn't have enough space " + bytes + " / " +
-                (section == null ? 0 : section.size));
-      }
-      long alignedSize = padToCpuAlignment(bytes);
-      MemorySection allocated;
-      if (section.size >= bytes && section.size <= alignedSize) {
-        allocated = section;
-        section = null;
-        // No need for reserveAllocInternal because the original section is already tracked
-      } else {
-        allocated = section.splitOff(alignedSize);
-        PinnedMemoryPool.reserveAllocInternal(allocated);
-      }
-      return new HostMemoryBuffer(allocated.baseAddress, bytes,
-              new PinnedHostBufferCleaner(allocated, bytes));
-    }
-
-    @Override
-    public synchronized void close() throws Exception {
-      if (section != null) {
-        try {
-          PinnedMemoryPool.freeInternal(section);
-        } finally {
-          // Always mark the resource as freed even if an exception is thrown.
-          // We cannot know how far it progressed before the exception, and
-          // therefore it is unsafe to retry.
-          section = null;
-        }
-      }
-    }
-  }
-
-  private HostMemoryReservation tryReserveInternal(long bytes) {
-    MemorySection allocated = tryGetInternal(bytes, "allocate");
-    if (allocated == null) {
-      return null;
-    } else {
-      return new PinnedReservation(allocated);
-    }
-  }
-
   private synchronized void free(MemorySection section) {
     log.debug("Freeing {} with {} outstanding {}", section, freeHeap, numAllocatedSections);
     availableBytes += section.size;
@@ -444,12 +338,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
     freeHeap.add(section);
     numAllocatedSections--;
     log.debug("After freeing {} outstanding {}", freeHeap, numAllocatedSections);
-  }
-
-  private synchronized void reserveAllocHappened(MemorySection section) {
-    if (section != null && section.size > 0) {
-      numAllocatedSections++;
-    }
   }
 
   private synchronized long getAvailableBytesInternal() {
