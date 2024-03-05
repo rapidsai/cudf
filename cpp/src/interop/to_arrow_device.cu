@@ -544,7 +544,7 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column& column,
     contents.children[cudf::lists_column_view::offsets_column_index]->release();
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
 
-  std::unique_ptr<cudf::column>& child =
+  auto& child =
     contents.children[cudf::lists_column_view::child_column_index];
   if (child->type().id() == cudf::type_id::EMPTY) {
     NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(tmp->children[0], NANOARROW_TYPE_NA));
