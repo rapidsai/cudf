@@ -318,18 +318,27 @@ class DatetimeColumn(column.ColumnBase):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        # `copy=True` workaround until following issue is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-9772
-
-        return pd.Series(
-            self.to_arrow(),
-            copy=True,
-            dtype=self.dtype,
-            index=index,
-        )
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        else:
+            # `copy=True` workaround until following issue is fixed:
+            # https://issues.apache.org/jira/browse/ARROW-9772
+            return pd.Series(
+                self.to_arrow(),
+                copy=True,
+                dtype=self.dtype,
+                index=index,
+            )
 
     @property
     def values(self):
@@ -723,15 +732,25 @@ class DatetimeTZColumn(DatetimeColumn):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        series = self._local_time.to_pandas().dt.tz_localize(
-            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
-        )
-        if index is not None:
-            series.index = index
-        return series
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        else:
+            series = self._local_time.to_pandas().dt.tz_localize(
+                self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+            )
+            if index is not None:
+                series.index = index
+            return series
 
     def to_arrow(self):
         return pa.compute.assume_timezone(
