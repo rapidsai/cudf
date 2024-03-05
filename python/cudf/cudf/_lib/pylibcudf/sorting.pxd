@@ -59,3 +59,5 @@ cpdef Table stable_sort_by_key(
 )
 
 cpdef Table sort(Table source_table, list column_order, list null_precedence)
+
+cpdef Table stable_sort(Table source_table, list column_order, list null_precedence)
