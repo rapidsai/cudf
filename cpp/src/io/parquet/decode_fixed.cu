@@ -286,7 +286,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
 
-  level_t* def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   if (nullable) {
     def_decoder.init(s->col.level_bits[level_type::DEFINITION],
                      s->abs_lvl_start[level_type::DEFINITION],
@@ -361,12 +361,10 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   }
 
   // the level stream decoders
-  // rolling_buf_size = 256
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   rle_stream<level_t, decode_block_size, rolling_buf_size> def_decoder{def_runs};
 
-  // should the size be 1/2 (128?)
-  __shared__ rle_run<uint32_t> dict_runs[rle_run_buffer_size];  // should be array of 6
+  __shared__ rle_run<uint32_t> dict_runs[rle_run_buffer_size]; 
   rle_stream<uint32_t, decode_block_size, rolling_buf_size> dict_stream{dict_runs};
 
   bool const nullable = s->col.max_level[level_type::DEFINITION] > 0;
@@ -375,13 +373,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   if (s->num_rows == 0) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
-  level_t* def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   if (nullable) {
-    // col.level_bits - 1
     def_decoder.init(s->col.level_bits[level_type::DEFINITION],
                      s->abs_lvl_start[level_type::DEFINITION],
                      s->abs_lvl_end[level_type::DEFINITION],
-                     def,  // 2048 sized
+                     def,
                      s->page.num_input_values);
   }
 
