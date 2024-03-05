@@ -8,7 +8,7 @@ from libcpp.utility cimport move
 cimport cudf._lib.cpp.filling as cpp_filling
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
+from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -19,24 +19,25 @@ from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 from cudf._lib import pylibcudf
 from cudf._lib.scalar import as_device_scalar
 
+
 @acquire_spill_lock()
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
-    pylibcudf.fill_in_place(
+    pylibcudf.filling.fill_in_place(
         destination.to_pylibcudf(mode='write'),
         begin,
         end,
-        <DeviceScalar> as_device_scalar(value)
+        (<DeviceScalar> as_device_scalar(value, dtype=destination.dtype)).c_value
     )
 
 
 @acquire_spill_lock()
 def fill(Column destination, int begin, int end, DeviceScalar value):
     return Column.from_pylibcudf(
-        pylibcudf.fill(
+        pylibcudf.filling.fill(
             destination.to_pylibcudf(mode='read'),
             begin,
             end,
-            <DeviceScalar> as_device_scalar(value)
+            (<DeviceScalar> as_device_scalar(value)).c_value
         )
     )
 
