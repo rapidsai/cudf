@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
+#include "io/comp/io_uncomp.hpp"
+#include "io/json/legacy/read_json.hpp"
+#include "io/json/nested_json.hpp"
 #include "read_json.hpp"
-
-#include <io/comp/io_uncomp.hpp>
-#include <io/json/legacy/read_json.hpp>
-#include <io/json/nested_json.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -234,6 +233,13 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
   if (reader_opts.is_enabled_normalize_single_quotes()) {
     buffer =
       normalize_single_quotes(std::move(buffer), stream, rmm::mr::get_current_device_resource());
+  }
+
+  // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
+  // enabled, invoke pre-processing FST
+  if (reader_opts.is_enabled_normalize_whitespace()) {
+    buffer =
+      normalize_whitespace(std::move(buffer), stream, rmm::mr::get_current_device_resource());
   }
 
   return device_parse_nested_json(buffer, reader_opts, stream, mr);

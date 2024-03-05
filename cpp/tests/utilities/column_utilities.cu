@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
@@ -49,8 +50,6 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 #include <numeric>
 #include <sstream>
@@ -939,6 +938,81 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                        return cudf::bit_is_set(expected_mask.data(), index) ==
                               cudf::bit_is_set(got_mask.data(), index);
                      });
+}
+
+template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>*>
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
+{
+  using namespace numeric;
+  using Rep = typename T::rep;
+
+  auto host_rep_types = thrust::host_vector<Rep>(c.size());
+
+  CUDF_CUDA_TRY(
+    cudaMemcpy(host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDefault));
+
+  auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
+  auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
+  auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
+
+  return {host_fixed_points, bitmask_to_host(c)};
+}
+
+template std::pair<thrust::host_vector<numeric::decimal32>, std::vector<bitmask_type>> to_host(
+  column_view c);
+template std::pair<thrust::host_vector<numeric::decimal64>, std::vector<bitmask_type>> to_host(
+  column_view c);
+template std::pair<thrust::host_vector<numeric::decimal128>, std::vector<bitmask_type>> to_host(
+  column_view c);
+
+namespace {
+struct strings_to_host_fn {
+  template <typename OffsetType,
+            std::enable_if_t<std::is_same_v<OffsetType, int32_t> ||
+                             std::is_same_v<OffsetType, int64_t>>* = nullptr>
+  void operator()(thrust::host_vector<std::string>& host_data,
+                  char const* chars,
+                  cudf::column_view const& offsets,
+                  rmm::cuda_stream_view stream)
+  {
+    auto const h_offsets = cudf::detail::make_std_vector_sync(
+      cudf::device_span<OffsetType const>(offsets.data<OffsetType>(), offsets.size()), stream);
+    // build std::string vector from chars and offsets
+    std::transform(std::begin(h_offsets),
+                   std::end(h_offsets) - 1,
+                   std::begin(h_offsets) + 1,
+                   host_data.begin(),
+                   [&](auto start, auto end) { return std::string(chars + start, end - start); });
+  }
+
+  template <typename OffsetType,
+            std::enable_if_t<!std::is_same_v<OffsetType, int32_t> &&
+                             !std::is_same_v<OffsetType, int64_t>>* = nullptr>
+  void operator()(thrust::host_vector<std::string>&,
+                  char const*,
+                  cudf::column_view const&,
+                  rmm::cuda_stream_view)
+  {
+    CUDF_FAIL("invalid offsets type");
+  }
+};
+}  // namespace
+
+template <>
+std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
+{
+  thrust::host_vector<std::string> host_data(c.size());
+  auto stream = cudf::get_default_stream();
+  if (c.size() > c.null_count()) {
+    auto const scv     = strings_column_view(c);
+    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
+    auto offsets =
+      cudf::slice(scv.offsets(), {scv.offset(), scv.offset() + scv.size() + 1}).front();
+    cudf::type_dispatcher(
+      offsets.type(), strings_to_host_fn{}, host_data, h_chars.data(), offsets, stream);
+  }
+  return {std::move(host_data), bitmask_to_host(c)};
 }
 
 }  // namespace test

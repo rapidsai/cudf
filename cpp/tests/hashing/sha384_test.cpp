@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include <cudf/hashing.hpp>
-#include <cudf/utilities/error.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/hashing.hpp>
+#include <cudf/utilities/error.hpp>
 
 class SHA384HashTest : public cudf::test::BaseFixture {};
 

@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <text/subword/detail/cp_data.h>
+#include "text/subword/detail/cp_data.h"
 
 #include <cudf/types.hpp>
 

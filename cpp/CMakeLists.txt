@@ -14,7 +14,7 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../fetch_rapids.cmake)
+include(../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -26,7 +26,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 24.04.00
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -376,7 +376,7 @@ add_library(
   src/io/functions.cpp
   src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_quote_normalization.cu
+  src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
@@ -434,6 +434,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/distinct_hash_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
@@ -570,6 +571,7 @@ add_library(
   src/strings/convert/convert_lists.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
+  src/strings/copying/copy_range.cu
   src/strings/copying/shift.cu
   src/strings/count_matches.cu
   src/strings/extract/extract.cu
@@ -586,7 +588,9 @@ add_library(
   src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
+  src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu
+  src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu

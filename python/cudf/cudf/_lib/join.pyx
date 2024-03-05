@@ -20,6 +20,7 @@ def join(list lhs, list rhs, how=None):
     left_rows, right_rows = join_func(
         pylibcudf.Table([c.to_pylibcudf(mode="read") for c in lhs]),
         pylibcudf.Table([c.to_pylibcudf(mode="read") for c in rhs]),
+        pylibcudf.types.NullEquality.EQUAL
     )
     return Column.from_pylibcudf(left_rows), Column.from_pylibcudf(right_rows)
 
@@ -37,5 +38,6 @@ def semi_join(list lhs, list rhs, how=None):
         join_func(
             pylibcudf.Table([c.to_pylibcudf(mode="read") for c in lhs]),
             pylibcudf.Table([c.to_pylibcudf(mode="read") for c in rhs]),
+            pylibcudf.types.NullEquality.EQUAL
         )
     ), None

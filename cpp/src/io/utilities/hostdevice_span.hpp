@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,30 @@ class hostdevice_span {
   hostdevice_span(hostdevice_span&&)      = default;  ///< Move constructor
 
   hostdevice_span(T* cpu_data, T* gpu_data, size_t size)
-    : _size(size), _host_data(cpu_data), _device_data(gpu_data)
+    : _size(size), _device_data(gpu_data), _host_data(cpu_data)
+  {
+  }
+
+  /// Constructor from container
+  /// @param in The container to construct the span from
+  template <typename C,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<std::is_convertible_v<
+              std::remove_pointer_t<decltype(std::declval<C&>().host_ptr())> (*)[],
+              T (*)[]>>* = nullptr>
+  constexpr hostdevice_span(C& in) : hostdevice_span(in.host_ptr(), in.device_ptr(), in.size())
+  {
+  }
+
+  /// Constructor from const container
+  /// @param in The container to construct the span from
+  template <typename C,
+            // Only supported containers of types convertible to T
+            std::enable_if_t<std::is_convertible_v<
+              std::remove_pointer_t<decltype(std::declval<C&>().host_ptr())> (*)[],
+              T (*)[]>>* = nullptr>
+  constexpr hostdevice_span(C const& in)
+    : hostdevice_span(in.host_ptr(), in.device_ptr(), in.size())
   {
   }
 
@@ -50,10 +73,15 @@ class hostdevice_span {
    * @tparam T The device span type.
    * @return A typed device span of the hostdevice view's data.
    */
-  [[nodiscard]] operator cudf::device_span<T>() const
-  {
-    return cudf::device_span(_device_data, size());
-  }
+  [[nodiscard]] operator cudf::device_span<T>() { return {_device_data, size()}; }
+
+  /**
+   * @brief Converts a hostdevice view into a device span of const data.
+   *
+   * @tparam T The device span type.
+   * @return A const typed device span of the hostdevice view's data.
+   */
+  [[nodiscard]] operator cudf::device_span<T const>() const { return {_device_data, size()}; }
 
   /**
    * @brief Returns the underlying device data.

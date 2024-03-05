@@ -14,17 +14,15 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-set(cudf_kafka_version 24.04.00)
-
-include(../../fetch_rapids.cmake)
+include(../../rapids_config.cmake)
 
 project(
   cudf-kafka-python
-  VERSION ${cudf_kafka_version}
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES CXX
 )
 
-find_package(cudf_kafka ${cudf_kafka_version} REQUIRED)
+find_package(cudf_kafka "${RAPIDS_VERSION}" REQUIRED)
 
 if(NOT cudf_kafka_FOUND)
   message(

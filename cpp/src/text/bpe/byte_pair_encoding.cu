@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <text/bpe/byte_pair_encoding.cuh>
-
-#include <nvtext/byte_pair_encoding.hpp>
+#include "text/bpe/byte_pair_encoding.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -31,6 +29,8 @@
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <nvtext/byte_pair_encoding.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>

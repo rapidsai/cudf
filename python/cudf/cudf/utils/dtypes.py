@@ -213,6 +213,8 @@ def cudf_dtype_from_pa_type(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
         return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_large_string(typ):
+        return cudf.dtype("str")
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 

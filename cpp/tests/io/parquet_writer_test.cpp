@@ -1426,6 +1426,32 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
             static_cast<int64_t>(num_rows * sizeof(column_type)));
 }
 
+TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
+{
+  // test that the DELTA_BINARY_PACKED writer can properly encode a column that begins with
+  // more than 129 nulls
+  constexpr int num_rows  = 500;
+  constexpr int num_nulls = 150;
+
+  auto const ones = thrust::make_constant_iterator(1);
+  auto valids     = cudf::detail::make_counting_transform_iterator(
+    0, [num_nulls](auto i) { return i >= num_nulls; });
+  auto const col      = cudf::test::fixed_width_column_wrapper<int>{ones, ones + num_rows, valids};
+  auto const expected = table_view({col});
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaBinaryStartsWithNulls.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 /////////////////////////////////////////////////////////////
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>

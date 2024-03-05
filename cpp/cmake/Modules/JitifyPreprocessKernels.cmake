@@ -69,3 +69,18 @@ add_custom_target(
   DEPENDS ${JIT_PREPROCESSED_FILES}
   COMMENT "Target representing jitified files."
 )
+
+# when a user requests CMake to clean the build directory
+#
+# * `cmake --build <dir> --target clean`
+# * `cmake --build <dir> --clean-first`
+# * ninja clean
+#
+# We also remove the jitify2 program cache as well. This ensures that we don't keep older versions
+# of the programs in cache
+set(cache_path "$ENV{HOME}/.cudf")
+if(ENV{LIBCUDF_KERNEL_CACHE_PATH})
+  set(cache_path "$ENV{LIBCUDF_KERNEL_CACHE_PATH}")
+endif()
+cmake_path(APPEND cache_path "${CUDF_VERSION}/")
+set_target_properties(jitify_preprocess_run PROPERTIES ADDITIONAL_CLEAN_FILES "${cache_path}")

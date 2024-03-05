@@ -25,7 +25,7 @@ from cudf.api.extensions import no_default
 from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
-from cudf.core.column.column import ColumnBase, as_column
+from cudf.core.column.column import ColumnBase, StructDtype, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.mixins import Reducible, Scannable
@@ -109,11 +109,11 @@ Falcon    350.0
 Parrot     30.0
 Parrot     20.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(level=0).mean()
+>>> ser.groupby(level=0, sort=True).mean()
 Falcon    370.0
 Parrot     25.0
 Name: Max Speed, dtype: float64
->>> ser.groupby(ser > 100).mean()
+>>> ser.groupby(ser > 100, sort=True).mean()
 Max Speed
 False     25.0
 True     370.0
@@ -133,7 +133,7 @@ Name: Max Speed, dtype: float64
 1  Falcon      370.0
 2  Parrot       24.0
 3  Parrot       26.0
->>> df.groupby(['Animal']).mean()
+>>> df.groupby(['Animal'], sort=True).mean()
         Max Speed
 Animal
 Falcon      375.0
@@ -151,22 +151,22 @@ Falcon Captive      390.0
         Wild         350.0
 Parrot Captive       30.0
         Wild          20.0
->>> df.groupby(level=0).mean()
+>>> df.groupby(level=0, sort=True).mean()
         Max Speed
 Animal
 Falcon      370.0
 Parrot       25.0
->>> df.groupby(level="Type").mean()
+>>> df.groupby(level="Type", sort=True).mean()
         Max Speed
 Type
-Wild         185.0
 Captive      210.0
+Wild         185.0
 
 >>> df = cudf.DataFrame({{'A': 'a a b'.split(),
 ...                      'B': [1,2,3],
 ...                      'C': [4,6,5]}})
->>> g1 = df.groupby('A', group_keys=False)
->>> g2 = df.groupby('A', group_keys=True)
+>>> g1 = df.groupby('A', group_keys=False, sort=True)
+>>> g2 = df.groupby('A', group_keys=True, sort=True)
 
 Notice that ``g1`` have ``g2`` have two groups, ``a`` and ``b``, and only
 differ in their ``group_keys`` argument. Calling `apply` in various ways,
@@ -539,11 +539,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg('sum')
+        >>> a.groupby('a', sort=True).agg('sum')
            b  c
         a
-        2  3  1
         1  3  4
+        2  3  1
 
         Specifying a list of aggregations to perform on each column.
 
@@ -553,12 +553,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg(['sum', 'min'])
+        >>> a.groupby('a', sort=True).agg(['sum', 'min'])
             b       c
           sum min sum min
         a
-        2   3   3   1   1
         1   3   1   4   2
+        2   3   3   1   1
 
         Using a dict to specify aggregations to perform per column.
 
@@ -568,12 +568,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         ...     'b': [1, 2, 3],
         ...     'c': [2, 2, 1]
         ... })
-        >>> a.groupby('a').agg({'a': 'max', 'b': ['min', 'mean']})
+        >>> a.groupby('a', sort=True).agg({'a': 'max', 'b': ['min', 'mean']})
             a   b
           max min mean
         a
-        2   2   3  3.0
         1   1   1  1.5
+        2   2   3  3.0
 
         Using lambdas/callables to specify aggregations taking parameters.
 
@@ -1178,20 +1178,25 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
         return cls(obj, grouping, **kwargs)
 
-    def _grouped(self):
+    def _grouped(self, *, include_groups: bool = True):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
         grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
+            to_drop = self.grouping.keys.names
         else:
             grouped_keys.name = self.grouping.keys.name
+            to_drop = (self.grouping.keys.name,)
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
             column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
+        if not include_groups:
+            for col_name in to_drop:
+                del grouped_values[col_name]
         group_names = grouped_keys.unique().sort_values()
         return (group_names, offsets, grouped_keys, grouped_values)
 
@@ -1348,13 +1353,25 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index.names = self.grouping.names
             # When the UDF is like df.x + df.y, the result for each
             # group is the same length as the original group
-            elif len(self.obj) == sum(len(chk) for chk in chunk_results):
+            elif (total_rows := sum(len(chk) for chk in chunk_results)) in {
+                len(self.obj),
+                len(group_names),
+            }:
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", FutureWarning)
                     result = cudf.concat(chunk_results)
-                index_data = group_keys._data.copy(deep=True)
-                index_data[None] = grouped_values.index._column
-                result.index = cudf.MultiIndex._from_data(index_data)
+                if total_rows == len(group_names):
+                    result.index = group_names
+                    # TODO: Is there a better way to determine what
+                    # the column name should be, especially if we applied
+                    # a nameless UDF.
+                    result = result.to_frame(
+                        name=grouped_values._data.names[0]
+                    )
+                else:
+                    index_data = group_keys._data.copy(deep=True)
+                    index_data[None] = grouped_values.index._column
+                    result.index = cudf.MultiIndex._from_data(index_data)
             else:
                 raise TypeError(
                     "Error handling Groupby apply output with input of "
@@ -1372,7 +1389,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         return result
 
     @_cudf_nvtx_annotate
-    def apply(self, function, *args, engine="auto"):
+    def apply(
+        self, function, *args, engine="auto", include_groups: bool = True
+    ):
         """Apply a python transformation function over the grouped chunk.
 
         Parameters
@@ -1396,6 +1415,10 @@ class GroupBy(Serializable, Reducible, Scannable):
           The default value `auto` will attempt to use the numba JIT pipeline
           where possible and will fall back to the iterative algorithm if
           necessary.
+        include_groups : bool, default True
+            When True, will attempt to apply ``func`` to the groupings in
+            the case that they are columns of the DataFrame. In the future,
+            this will default to ``False``.
 
         Examples
         --------
@@ -1444,15 +1467,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 ...     'c': [1, 2, 3, 4],
                 ... })
                 >>> gdf = cudf.from_pandas(df)
-                >>> df.groupby('a').apply(lambda x: x.iloc[[0]])
-                     a  b  c
+                >>> df.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                     b  c
                 a
-                1 0  1  1  1
-                2 2  2  1  3
-                >>> gdf.groupby('a').apply(lambda x: x.iloc[[0]])
-                   a  b  c
-                0  1  1  1
-                2  2  1  3
+                1 0  1  1
+                2 2  1  3
+                >>> gdf.groupby('a')[["b", "c"]].apply(lambda x: x.iloc[[0]])
+                   b  c
+                0  1  1
+                2  1  3
 
         ``engine='jit'`` may be used to accelerate certain functions,
         initially those that contain reductions and arithmetic operations
@@ -1487,7 +1510,9 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         if not callable(function):
             raise TypeError(f"type {type(function)} is not callable")
-        group_names, offsets, group_keys, grouped_values = self._grouped()
+        group_names, offsets, group_keys, grouped_values = self._grouped(
+            include_groups=include_groups
+        )
 
         if engine == "auto":
             if _can_be_jitted(grouped_values, function, args):
@@ -2011,10 +2036,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 )
                 x, y = str(x), str(y)
 
-            column_pair_structs[(x, y)] = cudf.core.column.build_struct_column(
-                names=(x, y),
+            column_pair_structs[(x, y)] = cudf.core.column.StructColumn(
+                data=None,
+                dtype=StructDtype(
+                    fields={x: self.obj._data[x].dtype, y: self.obj._data[y]}
+                ),
                 children=(self.obj._data[x], self.obj._data[y]),
                 size=len(self.obj),
+                offset=0,
             )
 
         column_pair_groupby = cudf.DataFrame._from_data(

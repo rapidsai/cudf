@@ -18,7 +18,6 @@
 #include "in_reg_array.cuh"
 
 #include <cub/cub.cuh>
-
 #include <thrust/execution_policy.h>
 #include <thrust/sequence.h>
 

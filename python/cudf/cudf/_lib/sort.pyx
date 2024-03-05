@@ -6,29 +6,21 @@ from cudf.core.buffer import acquire_spill_lock
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from libcpp.utility cimport move, pair
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.aggregation cimport rank_method
 from cudf._lib.cpp.column.column cimport column
-from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.search cimport lower_bound, upper_bound
-from cudf._lib.cpp.sorting cimport (
-    is_sorted as cpp_is_sorted,
-    rank,
-    segmented_sort_by_key as cpp_segmented_sort_by_key,
-    sort as cpp_sort,
-    sort_by_key as cpp_sort_by_key,
-    sorted_order,
-    stable_segmented_sort_by_key as cpp_stable_segmented_sort_by_key,
-    stable_sort_by_key as cpp_stable_sort_by_key,
-    stable_sorted_order,
-)
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order as cpp_order
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.cpp.types cimport null_order, order as cpp_order
+from cudf._lib.utils cimport (
+    columns_from_pylibcudf_table,
+    table_view_from_columns,
+)
+
+from cudf._lib import pylibcudf
 
 
 @acquire_spill_lock()
@@ -60,58 +52,42 @@ def is_sorted(
         ``null_position``, False otherwise.
     """
 
-    cdef vector[cpp_order] column_order
-    cdef vector[null_order] null_precedence
-
     if ascending is None:
-        column_order = vector[cpp_order](
-            len(source_columns), cpp_order.ASCENDING
-        )
+        column_order = [pylibcudf.types.Order.ASCENDING] * len(source_columns)
     else:
         if len(ascending) != len(source_columns):
             raise ValueError(
                 f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(ascending)} for `ascending`"
             )
-        column_order = vector[cpp_order](
-            len(source_columns), cpp_order.DESCENDING
-        )
+        column_order = [pylibcudf.types.Order.DESCENDING] * len(source_columns)
         for idx, val in enumerate(ascending):
             if val:
-                column_order[idx] = cpp_order.ASCENDING
+                column_order[idx] = pylibcudf.types.Order.ASCENDING
 
     if null_position is None:
-        null_precedence = vector[null_order](
-            len(source_columns), null_order.AFTER
-        )
+        null_precedence = [pylibcudf.types.NullOrder.AFTER] * len(source_columns)
     else:
         if len(null_position) != len(source_columns):
             raise ValueError(
                 f"Expected a list-like of length {len(source_columns)}, "
                 f"got length {len(null_position)} for `null_position`"
             )
-        null_precedence = vector[null_order](
-            len(source_columns), null_order.AFTER
-        )
+        null_precedence = [pylibcudf.types.NullOrder.AFTER] * len(source_columns)
         for idx, val in enumerate(null_position):
             if val:
-                null_precedence[idx] = null_order.BEFORE
+                null_precedence[idx] = pylibcudf.types.NullOrder.BEFORE
 
-    cdef bool c_result
-    cdef table_view source_table_view = table_view_from_columns(source_columns)
-    with nogil:
-        c_result = cpp_is_sorted(
-            source_table_view,
-            column_order,
-            null_precedence
-        )
-
-    return c_result
+    return pylibcudf.sorting.is_sorted(
+        pylibcudf.Table(
+            [c.to_pylibcudf(mode="read") for c in source_columns]
+        ),
+        column_order,
+        null_precedence
+    )
 
 
-cdef pair[vector[cpp_order], vector[null_order]] ordering(
-    column_order, null_precedence
-):
+def ordering(column_order, null_precedence):
     """
     Construct order and null order vectors
 
@@ -128,21 +104,19 @@ cdef pair[vector[cpp_order], vector[null_order]] ordering(
     -------
     pair of vectors (order, and null_order)
     """
-    cdef vector[cpp_order] c_column_order
-    cdef vector[null_order] c_null_precedence
+    c_column_order = []
+    c_null_precedence = []
     for asc, null in zip(column_order, null_precedence):
-        c_column_order.push_back(
-            cpp_order.ASCENDING if asc else cpp_order.DESCENDING
+        c_column_order.append(
+            pylibcudf.types.Order.ASCENDING if asc else pylibcudf.types.Order.DESCENDING
         )
         if asc ^ (null == "first"):
-            c_null_precedence.push_back(null_order.AFTER)
+            c_null_precedence.append(pylibcudf.types.NullOrder.AFTER)
         elif asc ^ (null == "last"):
-            c_null_precedence.push_back(null_order.BEFORE)
+            c_null_precedence.append(pylibcudf.types.NullOrder.BEFORE)
         else:
             raise ValueError(f"Invalid null precedence {null}")
-    return pair[vector[cpp_order], vector[null_order]](
-        c_column_order, c_null_precedence
-    )
+    return c_column_order, c_null_precedence
 
 
 @acquire_spill_lock()
@@ -174,25 +148,18 @@ def order_by(
     -------
     Column of indices that sorts the table
     """
-    cdef table_view source_table_view = table_view_from_columns(
-        columns_from_table
-    )
-    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
-        ascending, repeat(na_position)
-    )
-    cdef unique_ptr[column] c_result
-    if stable:
-        with nogil:
-            c_result = move(stable_sorted_order(source_table_view,
-                                                order.first,
-                                                order.second))
-    else:
-        with nogil:
-            c_result = move(sorted_order(source_table_view,
-                                         order.first,
-                                         order.second))
+    order = ordering(ascending, repeat(na_position))
+    func = getattr(pylibcudf.sorting, f"{'stable_' if stable else ''}sorted_order")
 
-    return Column.from_unique_ptr(move(c_result))
+    return Column.from_pylibcudf(
+        func(
+            pylibcudf.Table(
+                [c.to_pylibcudf(mode="read") for c in columns_from_table],
+            ),
+            order[0],
+            order[1],
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -216,22 +183,18 @@ def sort(
         Sequence of "first" or "last" values (default "first")
         indicating the position of null values when sorting the keys.
     """
-    cdef table_view values_view = table_view_from_columns(values)
-    cdef unique_ptr[table] result
     ncol = len(values)
-    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
+    order = ordering(
         column_order or repeat(True, ncol),
         null_precedence or repeat("first", ncol),
     )
-    with nogil:
-        result = move(
-            cpp_sort(
-                values_view,
-                order.first,
-                order.second,
-            )
+    return columns_from_pylibcudf_table(
+        pylibcudf.sorting.sort(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in values]),
+            order[0],
+            order[1],
         )
-    return columns_from_unique_ptr(move(result))
+    )
 
 
 @acquire_spill_lock()
@@ -267,26 +230,16 @@ def sort_by_key(
     list[Column]
         list of value columns sorted by keys
     """
-    cdef table_view value_view = table_view_from_columns(values)
-    cdef table_view key_view = table_view_from_columns(keys)
-    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
-        ascending, na_position
+    order = ordering(ascending, na_position)
+    func = getattr(pylibcudf.sorting, f"{'stable_' if stable else ''}sort_by_key")
+    return columns_from_pylibcudf_table(
+        func(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in values]),
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in keys]),
+            order[0],
+            order[1],
+        )
     )
-    cdef unique_ptr[table] c_result
-    if stable:
-        with nogil:
-            c_result = move(cpp_stable_sort_by_key(value_view,
-                                                   key_view,
-                                                   order.first,
-                                                   order.second))
-    else:
-        with nogil:
-            c_result = move(cpp_sort_by_key(value_view,
-                                            key_view,
-                                            order.first,
-                                            order.second))
-
-    return columns_from_unique_ptr(move(c_result))
 
 
 @acquire_spill_lock()
@@ -325,38 +278,24 @@ def segmented_sort_by_key(
     list[Column]
         list of value columns sorted by keys
     """
-    cdef table_view values_view = table_view_from_columns(values)
-    cdef table_view keys_view = table_view_from_columns(keys)
-    cdef column_view offsets_view = segment_offsets.view()
-    cdef unique_ptr[table] result
     ncol = len(values)
-    cdef pair[vector[cpp_order], vector[null_order]] order = ordering(
+    order = ordering(
         column_order or repeat(True, ncol),
         null_precedence or repeat("first", ncol),
     )
-    if stable:
-        with nogil:
-            result = move(
-                cpp_stable_segmented_sort_by_key(
-                    values_view,
-                    keys_view,
-                    offsets_view,
-                    order.first,
-                    order.second,
-                )
-            )
-    else:
-        with nogil:
-            result = move(
-                cpp_segmented_sort_by_key(
-                    values_view,
-                    keys_view,
-                    offsets_view,
-                    order.first,
-                    order.second,
-                )
-            )
-    return columns_from_unique_ptr(move(result))
+    func = getattr(
+        pylibcudf.sorting,
+        f"{'stable_' if stable else ''}segmented_sort_by_key"
+    )
+    return columns_from_pylibcudf_table(
+        func(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in values]),
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in keys]),
+            segment_offsets.to_pylibcudf(mode="read"),
+            order[0],
+            order[1],
+        )
+    )
 
 
 @acquire_spill_lock()
@@ -417,10 +356,10 @@ def rank_columns(list source_columns, rank_method method, str na_option,
     """
     Compute numerical data ranks (1 through n) of each column in the dataframe
     """
-    cdef cpp_order column_order = (
-        cpp_order.ASCENDING
+    column_order = (
+        pylibcudf.types.Order.ASCENDING
         if ascending
-        else cpp_order.DESCENDING
+        else pylibcudf.types.Order.DESCENDING
     )
     # ascending
     #    #top    = na_is_smallest
@@ -430,41 +369,32 @@ def rank_columns(list source_columns, rank_method method, str na_option,
     #    #top    = na_is_largest
     #    #bottom = na_is_smallest
     #    #keep   = na_is_smallest
-    cdef null_order null_precedence
     if ascending:
         if na_option == 'top':
-            null_precedence = null_order.BEFORE
+            null_precedence = pylibcudf.types.NullOrder.BEFORE
         else:
-            null_precedence = null_order.AFTER
+            null_precedence = pylibcudf.types.NullOrder.AFTER
     else:
         if na_option == 'top':
-            null_precedence = null_order.AFTER
+            null_precedence = pylibcudf.types.NullOrder.AFTER
         else:
-            null_precedence = null_order.BEFORE
-    cdef null_policy c_null_handling = (
-        null_policy.EXCLUDE
+            null_precedence = pylibcudf.types.NullOrder.BEFORE
+    c_null_handling = (
+        pylibcudf.types.NullPolicy.EXCLUDE
         if na_option == 'keep'
-        else null_policy.INCLUDE
+        else pylibcudf.types.NullPolicy.INCLUDE
     )
-    cdef bool percentage = pct
 
-    cdef vector[unique_ptr[column]] c_results
-    cdef column_view c_view
-    cdef Column col
-    for col in source_columns:
-        c_view = col.view()
-        with nogil:
-            c_results.push_back(move(
-                rank(
-                    c_view,
-                    method,
-                    column_order,
-                    c_null_handling,
-                    null_precedence,
-                    percentage
-                )
-            ))
-
-    return [Column.from_unique_ptr(
-        move(c_results[i])
-    ) for i in range(c_results.size())]
+    return [
+        Column.from_pylibcudf(
+            pylibcudf.sorting.rank(
+                col.to_pylibcudf(mode="read"),
+                method,
+                column_order,
+                c_null_handling,
+                null_precedence,
+                pct,
+            )
+        )
+        for col in source_columns
+    ]

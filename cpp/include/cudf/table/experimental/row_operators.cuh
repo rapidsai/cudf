@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/detail/use_default.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -45,9 +47,6 @@
 #include <thrust/logical.h>
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
-
-#include <cuda/std/tuple>
-#include <cuda/std/utility>
 
 #include <limits>
 #include <memory>

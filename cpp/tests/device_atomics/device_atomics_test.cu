@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/utilities/device_atomics.cuh>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/wrappers/timestamps.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 
 #include <thrust/host_vector.h>
 

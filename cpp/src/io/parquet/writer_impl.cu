@@ -21,14 +21,13 @@
 
 #include "compact_protocol_reader.hpp"
 #include "compact_protocol_writer.hpp"
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/statistics/column_statistics.cuh"
+#include "io/utilities/column_utils.cuh"
+#include "io/utilities/config_utils.hpp"
 #include "parquet_common.hpp"
 #include "parquet_gpu.cuh"
 #include "writer_impl.hpp"
-
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/statistics/column_statistics.cuh>
-#include <io/utilities/column_utils.cuh>
-#include <io/utilities/config_utils.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
@@ -192,6 +191,9 @@ Compression to_parquet_compression(compression_type compression)
     case compression_type::AUTO:
     case compression_type::SNAPPY: return Compression::SNAPPY;
     case compression_type::ZSTD: return Compression::ZSTD;
+    case compression_type::LZ4:
+      // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+      return Compression::LZ4_RAW;
     case compression_type::NONE: return Compression::UNCOMPRESSED;
     default: CUDF_FAIL("Unsupported compression type");
   }
@@ -1020,6 +1022,8 @@ auto to_nvcomp_compression_type(Compression codec)
 {
   if (codec == Compression::SNAPPY) return nvcomp::compression_type::SNAPPY;
   if (codec == Compression::ZSTD) return nvcomp::compression_type::ZSTD;
+  // Parquet refers to LZ4 as "LZ4_RAW"; Parquet's "LZ4" is not standard LZ4
+  if (codec == Compression::LZ4_RAW) return nvcomp::compression_type::LZ4;
   CUDF_FAIL("Unsupported compression type");
 }
 
@@ -1366,7 +1370,14 @@ void encode_pages(hostdevice_2dvector<EncColumnChunk>& chunks,
         CUDF_FAIL("Compression error: " + reason.value());
       }
       nvcomp::batched_compress(nvcomp::compression_type::ZSTD, comp_in, comp_out, comp_res, stream);
-
+      break;
+    }
+    case Compression::LZ4_RAW: {
+      if (auto const reason = nvcomp::is_compression_disabled(nvcomp::compression_type::LZ4);
+          reason) {
+        CUDF_FAIL("Compression error: " + reason.value());
+      }
+      nvcomp::batched_compress(nvcomp::compression_type::LZ4, comp_in, comp_out, comp_res, stream);
       break;
     }
     case Compression::UNCOMPRESSED: break;

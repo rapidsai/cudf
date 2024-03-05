@@ -18,13 +18,11 @@ from cudf._lib.cpp.lists.contains cimport contains, index_of as cpp_index_of
 from cudf._lib.cpp.lists.count_elements cimport (
     count_elements as cpp_count_elements,
 )
-from cudf._lib.cpp.lists.explode cimport explode_outer as cpp_explode_outer
 from cudf._lib.cpp.lists.extract cimport extract_list_element
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.cpp.lists.sorting cimport sort_lists as cpp_sort_lists
 from cudf._lib.cpp.lists.stream_compaction cimport distinct as cpp_distinct
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport (
     nan_equality,
@@ -34,7 +32,12 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
+from cudf._lib.utils cimport (
+    columns_from_pylibcudf_table,
+    table_view_from_columns,
+)
+
+from cudf._lib import pylibcudf
 
 
 @acquire_spill_lock()
@@ -55,18 +58,13 @@ def count_elements(Column col):
 
 
 @acquire_spill_lock()
-def explode_outer(
-    list source_columns, int explode_column_idx
-):
-    cdef table_view c_table_view = table_view_from_columns(source_columns)
-    cdef size_type c_explode_column_idx = explode_column_idx
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(cpp_explode_outer(c_table_view, c_explode_column_idx))
-
-    return columns_from_unique_ptr(move(c_result))
+def explode_outer(list source_columns, int explode_column_idx):
+    return columns_from_pylibcudf_table(
+        pylibcudf.lists.explode_outer(
+            pylibcudf.Table([c.to_pylibcudf(mode="read") for c in source_columns]),
+            explode_column_idx,
+        )
+    )
 
 
 @acquire_spill_lock()

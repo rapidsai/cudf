@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Copyright 2018-2019 BlazingDB, Inc.
  *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
@@ -19,9 +19,10 @@
 
 #pragma once
 
+#include <cudf/utilities/traits.hpp>
+
 #include <cmath>
 #include <cstdint>
-#include <cudf/utilities/traits.hpp>
 #include <type_traits>
 
 namespace cudf {
