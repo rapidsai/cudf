@@ -9,11 +9,11 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.types import size_type_dtype
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype_matching import match_join_types
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
     _ColumnIndexer,
     _IndexIndexer,
-    _match_join_keys,
 )
 
 
@@ -259,20 +259,9 @@ class Merge:
         for left_key, right_key in zip(self._left_keys, self._right_keys):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
-            lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
+            lcol_casted, rcol_casted = match_join_types(lcol, rcol)
             left_join_cols.append(lcol_casted)
             right_join_cols.append(rcol_casted)
-
-            # Categorical dtypes must be cast back from the underlying codes
-            # type that was returned by _match_join_keys.
-            if (
-                self.how == "inner"
-                and isinstance(lcol.dtype, cudf.CategoricalDtype)
-                and isinstance(rcol.dtype, cudf.CategoricalDtype)
-            ):
-                lcol_casted = lcol_casted.astype("category")
-                rcol_casted = rcol_casted.astype("category")
-
             left_key.set(self.lhs, lcol_casted, validate=False)
             right_key.set(self.rhs, rcol_casted, validate=False)
 

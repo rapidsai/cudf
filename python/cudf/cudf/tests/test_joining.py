@@ -1,5 +1,6 @@
 # Copyright (c) 2018-2023, NVIDIA CORPORATION.
 
+import contextlib
 from itertools import combinations, product, repeat
 
 import numpy as np
@@ -981,7 +982,14 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+    ltype = dtype_l
+    rtype = dtype_r
+    exp_dtype = np.promote_types(ltype, rtype)
+    if exp_dtype.kind in {"c", "f"}:
+        # We don't allow promotion into float
+        context = pytest.raises(ValueError)
+    else:
+        context = contextlib.nullcontext()
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
@@ -995,9 +1003,10 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
         }
     )
 
-    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+    with context:
+        got = gdf_l.merge(gdf_r, on="join_col", how="inner")
 
-    assert_join_results_equal(expect, got, how="inner")
+        assert_join_results_equal(expect, got, how="inner")
 
 
 @pytest.mark.parametrize("dtype_l", ["float32", "float64"])
@@ -1038,10 +1047,12 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
 @pytest.mark.parametrize("dtype_l", NUMERIC_TYPES)
 @pytest.mark.parametrize("dtype_r", NUMERIC_TYPES)
 def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
-    if (
-        ("int" in dtype_l or "long" in dtype_l)
-        and ("int" in dtype_r or "long" in dtype_r)
-    ) or ("float" in dtype_l and "float" in dtype_r):
+    ltype = np.dtype(dtype_l)
+    rtype = np.dtype(dtype_r)
+    if {ltype.kind, rtype.kind}.issubset({"i", "u"}) or {
+        ltype.kind,
+        rtype.kind,
+    }.issubset({"f"}):
         pytest.skip("like types not tested in this function")
 
     other_data = ["a", "b", "c", "d", "e", "f"]
@@ -1052,7 +1063,12 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+    exp_dtype = np.promote_types(ltype, rtype)
+    if {ltype.kind, rtype.kind} & {"i", "u"} and exp_dtype.kind == "f":
+        # Mixed kind promotion not allowed
+        context = pytest.raises(ValueError)
+    else:
+        context = contextlib.nullcontext()
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]
@@ -1066,9 +1082,10 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
         }
     )
 
-    got = gdf_l.merge(gdf_r, on="join_col", how="inner")
+    with context:
+        got = gdf_l.merge(gdf_r, on="join_col", how="inner")
 
-    assert_join_results_equal(expect, got, how="inner")
+        assert_join_results_equal(expect, got, how="inner")
 
 
 def test_typecast_on_join_no_float_round():
@@ -1090,9 +1107,10 @@ def test_typecast_on_join_no_float_round():
         {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
     )
 
-    got = gdf_l.merge(gdf_r, on="join_col", how="left")
+    with pytest.raises(ValueError):
+        got = gdf_l.merge(gdf_r, on="join_col", how="left")
 
-    assert_join_results_equal(expect, got, how="left")
+        assert_join_results_equal(expect, got, how="left")
 
 
 @pytest.mark.parametrize(
