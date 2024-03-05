@@ -9,7 +9,6 @@ from pandas.api.indexers import BaseIndexer
 import cudf
 from cudf import _lib as libcudf
 from cudf.api.types import is_integer, is_number
-from cudf.core import column
 from cudf.core.buffer import acquire_spill_lock
 from cudf.core.column.column import as_column
 from cudf.core.mixins import Reducible
@@ -236,8 +235,8 @@ class Rolling(GetAttrGetItemMixin, Reducible):
             window = None
         else:
             preceding_window = as_column(self.window)
-            following_window = column.full(
-                self.window.size, 0, dtype=self.window.dtype
+            following_window = as_column(
+                0, length=self.window.size, dtype=self.window.dtype
             )
             window = None
 
