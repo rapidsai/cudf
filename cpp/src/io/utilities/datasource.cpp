@@ -18,7 +18,6 @@
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -27,7 +26,6 @@
 
 #include <rmm/device_buffer.hpp>
 
-#include <arrow/io/memory.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
@@ -338,6 +336,33 @@ class device_buffer_source final : public datasource {
   cudf::device_span<std::byte const> _d_buffer;  ///< A non-owning view of the existing device data
 };
 
+// zero-copy host buffer source
+class host_buffer_source final : public datasource {
+ public:
+  explicit host_buffer_source(cudf::host_span<std::byte const> h_buffer) : _h_buffer{h_buffer} {}
+
+  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    std::memcpy(dst, _h_buffer.data() + offset, count);
+    return count;
+  }
+
+  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  {
+    auto const count = std::min(size, this->size() - offset);
+    return std::make_unique<non_owning_buffer>(
+      reinterpret_cast<uint8_t const*>(_h_buffer.data() + offset), count);
+  }
+
+  [[nodiscard]] bool supports_device_read() const override { return false; }
+
+  [[nodiscard]] size_t size() const override { return _h_buffer.size(); }
+
+ private:
+  cudf::host_span<std::byte const> _h_buffer;  ///< A non-owning view of the existing host data
+};
+
 /**
  * @brief Wrapper class for user implemented data sources
  *
@@ -424,9 +449,7 @@ std::unique_ptr<datasource> datasource::create(host_buffer const& buffer)
 
 std::unique_ptr<datasource> datasource::create(cudf::host_span<std::byte const> buffer)
 {
-  // Use Arrow IO buffer class for zero-copy reads of host memory
-  return std::make_unique<arrow_io_source>(std::make_shared<arrow::io::BufferReader>(
-    reinterpret_cast<uint8_t const*>(buffer.data()), buffer.size()));
+  return std::make_unique<host_buffer_source>(buffer);
 }
 
 std::unique_ptr<datasource> datasource::create(cudf::device_span<std::byte const> buffer)
