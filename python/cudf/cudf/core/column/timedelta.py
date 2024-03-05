@@ -147,20 +147,31 @@ class TimeDeltaColumn(ColumnBase):
         )
 
     def to_pandas(
-        self, *, index: Optional[pd.Index] = None, nullable: bool = False
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         # `copy=True` workaround until following issue is fixed:
         # https://issues.apache.org/jira/browse/ARROW-9772
-
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        return pd.Series(
-            self.to_arrow(),
-            copy=True,
-            dtype=self.dtype,
-            index=index,
-        )
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        else:
+            return pd.Series(
+                self.to_arrow(),
+                copy=True,
+                dtype=self.dtype,
+                index=index,
+            )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
@@ -499,7 +510,7 @@ class TimeDeltaColumn(ColumnBase):
                 break
 
         for name in keys_list:
-            res_col = cudf.core.column.full(len(self), 0, dtype="int64")
+            res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             data[name] = res_col
@@ -588,7 +599,7 @@ class TimeDeltaColumn(ColumnBase):
         # of nanoseconds.
 
         if self._time_unit != "ns":
-            res_col = cudf.core.column.full(len(self), 0, dtype="int64")
+            res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             return cast("cudf.core.column.NumericalColumn", res_col)
