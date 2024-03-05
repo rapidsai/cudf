@@ -10,21 +10,21 @@ ctypedef fused ColumnOrSize:
     size_type
 
 cpdef Column fill(
-    object destination,
-    size_type c_begin,
-    size_type c_end,
-    object value,
+    Column destination,
+    size_type begin,
+    size_type end,
+    Scalar value,
 )
 cpdef void fill_in_place(
-    object destination,
+    Column destination,
     size_type c_begin,
     size_type c_end,
-    object value,
+    Scalar value,
 )
 cpdef Column sequence(
     size_type size,
-    object init,
-    object step,
+    Scalar init,
+    Scalar step,
 )
 cpdef Table repeat(
     Table input_table,

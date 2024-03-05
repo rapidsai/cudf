@@ -20,10 +20,10 @@ from .table cimport Table
 
 
 cpdef Column fill(
-    object destination,
+    Column destination,
     size_type begin,
     size_type end,
-    object value,
+    Scalar value,
 ):
 
     """Fill destination column from begin to end with value.
@@ -58,10 +58,10 @@ cpdef Column fill(
     return Column.from_libcudf(move(result))
 
 cpdef void fill_in_place(
-    object destination,
+    Column destination,
     size_type begin,
     size_type end,
-    object value,
+    Scalar value,
 ):
 
     """Fill destination column in place from begin to end with value.
@@ -81,13 +81,13 @@ cpdef void fill_in_place(
 
     with nogil:
         cpp_fill_in_place(
-            (<Column> destination).mutable_view(),
+            destination.mutable_view(),
             begin,
             end,
-            dereference((<Scalar> value).c_obj)
+            dereference(value.c_obj)
         )
 
-cpdef Column sequence(size_type size, object init, object step):
+cpdef Column sequence(size_type size, Scalar init, Scalar step):
     """Create a sequence column of size `size` with initial value `init` and
     step `step`.
     Parameters
@@ -110,8 +110,8 @@ cpdef Column sequence(size_type size, object init, object step):
         result = move(
             cpp_sequence(
                 c_size,
-                dereference((<Scalar> init).c_obj),
-                dereference((<Scalar> step).c_obj),
+                dereference(init.c_obj),
+                dereference(step.c_obj),
             )
         )
     return Column.from_libcudf(move(result))
