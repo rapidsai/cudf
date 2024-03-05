@@ -353,8 +353,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   // the size of the rolling batch buffer
-  level_t* rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
-  level_t* def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t *const rep = reinterpret_cast<level_t *>(pp->lvl_decode_buf[level_type::REPETITION]);
+  level_t *const def = reinterpret_cast<level_t *>(pp->lvl_decode_buf[level_type::DEFINITION]);
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],

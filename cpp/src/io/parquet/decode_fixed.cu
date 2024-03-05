@@ -113,7 +113,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
       // valid_count) because valid_count also includes rows that potentially start before our row
       // bounds. if we could come up with a way to clean that up, we could remove this and just
       // compute it directly at the end of the kernel.
-      size_type block_null_count =
+      size_type const block_null_count =
         cudf::detail::single_lane_block_sum_reduce<decode_block_size, 0>(warp_null_count);
       if (!t) { ni.null_count += block_null_count; }
     }
@@ -172,7 +172,7 @@ __device__ inline void gpuDecodeValues(
     // before first_row) in the flat hierarchy case.
     if (src_pos < target_pos && dst_pos >= 0) {
       // nesting level that is storing actual leaf values
-      int leaf_level_index = s->col.max_nesting_depth - 1;
+      int const leaf_level_index = s->col.max_nesting_depth - 1;
 
       uint32_t dtype_len = s->dtype_len;
       void* dst =
