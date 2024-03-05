@@ -22,6 +22,7 @@ This page provides API documentation for pylibcudf.
     reduce
     rolling
     scalar
+    search
     stream_compaction
     sorting
     replace
