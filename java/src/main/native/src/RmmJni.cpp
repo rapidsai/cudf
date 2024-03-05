@@ -751,8 +751,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIEnv *env,
                                                                             jclass clazz,
-                                                                            jlong init,
-                                                                            jlong max) {
+                                                                            jlong init, jlong max) {
   try {
     cudf::jni::auto_set_device(env);
     auto pool = new rmm_pinned_pool_t(new rmm::mr::pinned_host_memory_resource(), init, max);
@@ -766,37 +765,30 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(J
                                                                                jlong pool_ptr) {
   try {
     cudf::jni::auto_set_device(env);
-    delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    delete reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
   }
   CATCH_STD(env, )
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv *env,
-                                                                    jclass clazz,
-                                                                    jlong pool_ptr,
-                                                                    jlong size) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv *env, jclass clazz,
+                                                                    jlong pool_ptr, jlong size) {
   try {
     cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    auto pool = reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
     void *ret = pool->allocate(size);
     return reinterpret_cast<jlong>(ret);
-  }
-  catch (const std::exception& unused) {
-    return -1;
-  }
+  } catch (const std::exception &unused) { return -1; }
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(JNIEnv *env, jclass clazz,
-                                                                  jlong pool_ptr,
-                                                                  jlong ptr,
+                                                                  jlong pool_ptr, jlong ptr,
                                                                   jlong size) {
   try {
     cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    auto pool = reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
     void *cptr = reinterpret_cast<void *>(ptr);
     pool->deallocate(cptr, size);
   }
   CATCH_STD(env, )
 }
-
 }

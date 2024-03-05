@@ -116,7 +116,7 @@ class PinnedMemoryPoolTest extends CudfTestBase {
     final long poolSize = 15 * 1024L;
     PinnedMemoryPool.initialize(poolSize);
     int bufLength = 256;
-    try(HostMemoryBuffer hmb = PinnedMemoryPool.allocate(bufLength); 
+    try(HostMemoryBuffer hmb = PinnedMemoryPool.allocate(bufLength);
         HostMemoryBuffer hmb2 = PinnedMemoryPool.allocate(bufLength)) {
       ByteBuffer bb = hmb.asByteBuffer(0, bufLength);
       for (int i = 0; i < bufLength; i++) {
