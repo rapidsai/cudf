@@ -71,7 +71,7 @@ auto deterministic_engine(unsigned seed) { return thrust::minstd_rand{seed}; }
  *  Computes the mean value for a distribution of given type and value bounds.
  */
 template <typename T>
-T get_distribution_mean(distribution_params<T> const& dist)
+double get_distribution_mean(distribution_params<T> const& dist)
 {
   switch (dist.id) {
     case distribution_id::NORMAL:
@@ -91,32 +91,66 @@ T get_distribution_mean(distribution_params<T> const& dist)
 }
 
 /**
+ * @brief Calculates the number of direct parents needed to generate a struct column hierarchy with
+ * lowest maximum number of children in any nested column.
+ *
+ * Used to generate an "evenly distributed" struct column hierarchy with the given number of leaf
+ * columns and nesting levels. The column tree is considered evenly distributed if all columns have
+ * nearly the same number of child columns (difference not larger than one).
+ */
+int num_direct_parents(int num_lvls, int num_leaf_columns)
+{
+  // Estimated average number of children in the hierarchy;
+  auto const num_children_avg = std::pow(num_leaf_columns, 1. / num_lvls);
+  // Minimum number of children columns for any column in the hierarchy
+  int const num_children_min = std::floor(num_children_avg);
+  // Maximum number of children columns for any column in the hierarchy
+  int const num_children_max = num_children_min + 1;
+
+  // Minimum number of columns needed so that their number of children does not exceed the maximum
+  int const min_for_current_nesting =
+    std::ceil(static_cast<double>(num_leaf_columns) / num_children_max);
+  // Minimum number of columns needed so that columns at the higher levels have at least the minimum
+  // number of children
+  int const min_for_upper_nesting = std::pow(num_children_min, num_lvls - 1);
+  // Both conditions need to be satisfied
+  return std::max(min_for_current_nesting, min_for_upper_nesting);
+}
+
+// Size of the null mask for each row, in bytes
+[[nodiscard]] double row_null_mask_size(data_profile const& profile)
+{
+  return profile.get_null_probability().has_value() ? 1. / 8 : 0.;
+}
+
+/**
  * @brief Computes the average element size in a column, given the data profile.
  *
  * Random distribution parameters like average string length and maximum list nesting level affect
  * the element size of non-fixed-width columns. For lists and structs, `avg_element_size` is called
  * recursively to determine the size of nested columns.
  */
-size_t avg_element_size(data_profile const& profile, cudf::data_type dtype);
+double avg_element_size(data_profile const& profile, cudf::data_type dtype);
 
 // Utilities to determine the mean size of an element, given the data profile
 template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
-size_t non_fixed_width_size(data_profile const& profile)
+double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("Should not be called, use `size_of` for this type instead");
 }
 
 template <typename T, CUDF_ENABLE_IF(!cudf::is_fixed_width<T>())>
-size_t non_fixed_width_size(data_profile const& profile)
+double non_fixed_width_size(data_profile const& profile)
 {
   CUDF_FAIL("not implemented!");
 }
 
 template <>
-size_t non_fixed_width_size<cudf::string_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::string_view>(data_profile const& profile)
 {
   auto const dist = profile.get_distribution_params<cudf::string_view>().length_params;
-  return get_distribution_mean(dist);
+  return get_distribution_mean(dist) * profile.get_valid_probability() + sizeof(cudf::size_type) +
+         row_null_mask_size(profile);
 }
 
 double geometric_sum(size_t n, double p)
@@ -126,45 +160,65 @@ double geometric_sum(size_t n, double p)
 }
 
 template <>
-size_t non_fixed_width_size<cudf::list_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::list_view>(data_profile const& profile)
 {
-  auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
-  auto const single_level_mean = get_distribution_mean(dist_params.length_params);
+  auto const dist_params = profile.get_distribution_params<cudf::list_view>();
+  auto const single_level_mean =
+    get_distribution_mean(dist_params.length_params) * profile.get_valid_probability();
 
+  // Leaf column size
   auto const element_size  = avg_element_size(profile, cudf::data_type{dist_params.element_type});
   auto const element_count = std::pow(single_level_mean, dist_params.max_depth);
 
+  auto const offset_size = avg_element_size(profile, cudf::data_type{cudf::type_id::INT32});
   // Each nesting level includes offsets, this is the sum of all levels
-  // Also include an additional offset per level for the size of the last element
-  auto const total_offset_count =
-    geometric_sum(dist_params.max_depth, single_level_mean) + dist_params.max_depth;
+  auto const total_offset_count = geometric_sum(dist_params.max_depth, single_level_mean);
 
-  return sizeof(cudf::size_type) * total_offset_count + element_size * element_count;
+  return element_size * element_count + offset_size * total_offset_count;
+}
+
+[[nodiscard]] cudf::size_type num_struct_columns(data_profile const& profile)
+{
+  auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
+
+  cudf::size_type children_count     = dist_params.leaf_types.size();
+  cudf::size_type total_parent_count = 0;
+  for (cudf::size_type lvl = dist_params.max_depth; lvl > 0; --lvl) {
+    children_count = num_direct_parents(lvl, children_count);
+    total_parent_count += children_count;
+  }
+  return total_parent_count;
 }
 
 template <>
-size_t non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
+double non_fixed_width_size<cudf::struct_view>(data_profile const& profile)
 {
   auto const dist_params = profile.get_distribution_params<cudf::struct_view>();
-  return std::accumulate(dist_params.leaf_types.cbegin(),
-                         dist_params.leaf_types.cend(),
-                         0ul,
-                         [&](auto& sum, auto type_id) {
-                           return sum + avg_element_size(profile, cudf::data_type{type_id});
-                         });
+  auto const total_children_size =
+    std::accumulate(dist_params.leaf_types.cbegin(),
+                    dist_params.leaf_types.cend(),
+                    0ul,
+                    [&](auto& sum, auto type_id) {
+                      return sum + avg_element_size(profile, cudf::data_type{type_id});
+                    });
+
+  // struct columns have a null mask for each row
+  auto const structs_null_mask_size = num_struct_columns(profile) * row_null_mask_size(profile);
+
+  return total_children_size + structs_null_mask_size;
 }
 
 struct non_fixed_width_size_fn {
   template <typename T>
-  size_t operator()(data_profile const& profile)
+  double operator()(data_profile const& profile)
   {
     return non_fixed_width_size<T>(profile);
   }
 };
 
-size_t avg_element_size(data_profile const& profile, cudf::data_type dtype)
+double avg_element_size(data_profile const& profile, cudf::data_type dtype)
 {
-  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype); }
+  if (cudf::is_fixed_width(dtype)) { return cudf::size_of(dtype) + row_null_mask_size(profile); }
   return cudf::type_dispatcher(dtype, non_fixed_width_size_fn{}, profile);
 }
 
@@ -596,32 +650,6 @@ struct create_rand_col_fn {
   }
 };
 
-/**
- * @brief Calculates the number of direct parents needed to generate a struct column hierarchy with
- * lowest maximum number of children in any nested column.
- *
- * Used to generate an "evenly distributed" struct column hierarchy with the given number of leaf
- * columns and nesting levels. The column tree is considered evenly distributed if all columns have
- * nearly the same number of child columns (difference not larger than one).
- */
-int num_direct_parents(int num_lvls, int num_leaf_columns)
-{
-  // Estimated average number of children in the hierarchy;
-  auto const num_children_avg = std::pow(num_leaf_columns, 1. / num_lvls);
-  // Minimum number of children columns for any column in the hierarchy
-  int const num_children_min = std::floor(num_children_avg);
-  // Maximum number of children columns for any column in the hierarchy
-  int const num_children_max = num_children_min + 1;
-
-  // Minimum number of columns needed so that their number of children does not exceed the maximum
-  int const min_for_current_nesting = std::ceil((double)num_leaf_columns / num_children_max);
-  // Minimum number of columns needed so that columns at the higher levels have at least the minimum
-  // number of children
-  int const min_for_upper_nesting = std::pow(num_children_min, num_lvls - 1);
-  // Both conditions need to be satisfied
-  return std::max(min_for_current_nesting, min_for_upper_nesting);
-}
-
 template <>
 std::unique_ptr<cudf::column> create_random_column<cudf::struct_view>(data_profile const& profile,
                                                                       thrust::minstd_rand& engine,
@@ -825,13 +853,17 @@ std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> cons
                                                  data_profile const& profile,
                                                  unsigned seed)
 {
-  size_t const avg_row_bytes =
-    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0ul, [&](size_t sum, auto tid) {
+  auto const avg_row_bytes =
+    std::accumulate(dtype_ids.begin(), dtype_ids.end(), 0., [&](size_t sum, auto tid) {
       return sum + avg_element_size(profile, cudf::data_type(tid));
     });
-  cudf::size_type const num_rows = table_bytes.size / avg_row_bytes;
+  std::size_t const num_rows = std::lround(table_bytes.size / avg_row_bytes);
+  CUDF_EXPECTS(num_rows > 0, "Table size is too small for the given data types");
+  CUDF_EXPECTS(num_rows < std::numeric_limits<cudf::size_type>::max(),
+               "Table size is too large for the given data types");
 
-  return create_random_table(dtype_ids, row_count{num_rows}, profile, seed);
+  return create_random_table(
+    dtype_ids, row_count{static_cast<cudf::size_type>(num_rows)}, profile, seed);
 }
 
 std::unique_ptr<cudf::table> create_random_table(std::vector<cudf::type_id> const& dtype_ids,

@@ -153,17 +153,7 @@ static __device__ uint8_t* StoreCopy(uint8_t* dst,
  */
 static inline __device__ uint32_t HashMatchAny(uint32_t v, uint32_t t)
 {
-#if (__CUDA_ARCH__ >= 700)
   return __match_any_sync(~0, v);
-#else
-  uint32_t err_map = 0;
-  for (uint32_t i = 0; i < hash_bits; i++, v >>= 1) {
-    uint32_t b       = v & 1;
-    uint32_t match_b = ballot(b);
-    err_map |= match_b ^ -(int32_t)b;
-  }
-  return ~err_map;
-#endif
 }
 
 /**
