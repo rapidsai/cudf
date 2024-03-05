@@ -285,7 +285,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   if (s->num_rows == 0) { return; }
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
-
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   if (nullable) {
     def_decoder.init(s->col.level_bits[level_type::DEFINITION],
@@ -296,10 +295,17 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   }
   __syncthreads();
 
-  // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to gpuUpdatePageSizes
+  // We use two counters in the loop below: processed_count and valid_count. 
+  // - processed_count: number of rows out of num_input_values that we have decoded so far. 
+  //   the definition stream returns the number of total rows it has processed in each call
+  //   to decode_next and we accumulate in process_count.
+  // - valid_count: number of non-null rows we have decoded so far. In each iteration of the 
+  //   loop below, we look at the number of valid items (which could be all for non-nullable), 
+  //   and valid_count is that running count.
   int processed_count = 0;
   int valid_count     = 0;
+  // the core loop. decode batches of level stream data using rle_stream objects
+  // and pass the results to gpuDecodeValues
   while (processed_count < s->page.num_input_values) {
     int next_valid_count;
 
@@ -360,7 +366,6 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
     return;
   }
 
-  // the level stream decoders
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   rle_stream<level_t, decode_block_size, rolling_buf_size> def_decoder{def_runs};
 
@@ -386,10 +391,18 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
     s->dict_bits, s->data_start, s->data_end, sb->dict_idx, s->page.num_input_values);
   __syncthreads();
 
-  // the core loop. decode batches of level stream data using rle_stream objects
-  // and pass the results to gpuUpdatePageSizes
+  // We use two counters in the loop below: processed_count and valid_count. 
+  // - processed_count: number of rows out of num_input_values that we have decoded so far. 
+  //   the definition stream returns the number of total rows it has processed in each call
+  //   to decode_next and we accumulate in process_count.
+  // - valid_count: number of non-null rows we have decoded so far. In each iteration of the 
+  //   loop below, we look at the number of valid items (which could be all for non-nullable), 
+  //   and valid_count is that running count.
   int processed_count = 0;
   int valid_count     = 0;
+
+  // the core loop. decode batches of level stream data using rle_stream objects
+  // and pass the results to gpuDecodeValues
   while (processed_count < s->page.num_input_values) {
     int next_valid_count;
 
@@ -413,7 +426,10 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
     }
     __syncthreads();
 
-    dict_stream.decode_next(t, (next_valid_count - valid_count));
+    // We want to limit the number of dictionary items we decode, that correspond to 
+    // the rows we have processed in this iteration that are valid. 
+    // We know the number of valid rows to process with: next_valid_count - valid_count.
+    dict_stream.decode_next(t, next_valid_count - valid_count);
     __syncthreads();
 
     // decode the values themselves
