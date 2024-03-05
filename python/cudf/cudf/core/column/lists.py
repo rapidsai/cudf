@@ -294,17 +294,23 @@ class ListColumn(ColumnBase):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         # Can't rely on Column.to_pandas implementation for lists.
         # Need to perform `to_pylist` to preserve list types.
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        pd_series = pd.Series(self.to_arrow().to_pylist(), dtype="object")
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+        pa_array = self.to_arrow()
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(pa_array), index=index
+            )
+        else:
+            return pd.Series(pa_array.tolist(), dtype="object", index=index)
 
 
 class ListMethods(ColumnMethods):
