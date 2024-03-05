@@ -28,6 +28,7 @@ set(cython_sources
     replace.pyx
     rolling.pyx
     scalar.pyx
+    search.pyx
     stream_compaction.pyx
     sorting.pyx
     table.pyx

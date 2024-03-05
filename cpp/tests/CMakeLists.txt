@@ -259,6 +259,7 @@ ConfigureTest(
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
   transform/row_bit_count_test.cu
+  transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
 

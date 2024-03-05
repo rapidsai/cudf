@@ -2452,7 +2452,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_getJSONObject(
     options.set_allow_single_quotes(allow_single_quotes);
     options.set_strip_quotes_from_single_strings(strip_quotes_from_single_strings);
     options.set_missing_fields_as_nulls(missing_fields_as_nulls);
-    return release_as_jlong(cudf::get_json_object(n_strings_col_view, *n_scalar_path, options));
+    auto result_col_ptr = [&]() {
+      try {
+        return cudf::get_json_object(n_strings_col_view, *n_scalar_path, options);
+      } catch (std::invalid_argument const &err) {
+        auto const null_scalar = cudf::string_scalar(std::string(""), false);
+        return cudf::make_column_from_scalar(null_scalar, n_strings_col_view.size());
+      } catch (...) { throw; }
+    }();
+    return release_as_jlong(result_col_ptr);
   }
   CATCH_STD(env, 0)
 }
