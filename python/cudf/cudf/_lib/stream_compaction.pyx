@@ -109,6 +109,7 @@ def drop_duplicates(list columns,
             keep_option,
             pylibcudf.types.NullEquality.EQUAL
             if nulls_are_equal else pylibcudf.types.NullEquality.UNEQUAL,
+            pylibcudf.types.NanEquality.ALL_EQUAL,
         )
     )
 
