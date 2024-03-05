@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -46,9 +45,9 @@ strings_column_view::offset_iterator strings_column_view::offsets_end() const
   return offsets_begin() + size() + 1;
 }
 
-size_type strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
+int64_t strings_column_view::chars_size(rmm::cuda_stream_view stream) const noexcept
 {
-  if (size() == 0) return 0;
+  if (size() == 0) { return 0L; }
   return cudf::strings::detail::get_offset_value(offsets(), offsets().size() - 1, stream);
 }
 
