@@ -209,11 +209,12 @@ include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
 
-FetchContent_Declare(nanoarrow 
-                     GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
-                     GIT_TAG 7cf50a3208c0d55f5cd230f611bef808d8683832
-                     GIT_SHALLOW TRUE)
-FetchContent_MakeAvailable(nanoarrow)
+rapids_cpm_find(nanoarrow 0.4.0                
+                CPM_ARGS
+                  GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
+                  GIT_TAG c97720003ff863b81805bcdb9f7c91306ab6b6a8
+                  GIT_SHALLOW TRUE
+)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -235,6 +236,7 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
+# need to add nanoarrow to the export set
 install(TARGETS nanoarrow EXPORT cudf-exports)
 
 # ##################################################################################################
@@ -739,7 +741,6 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
