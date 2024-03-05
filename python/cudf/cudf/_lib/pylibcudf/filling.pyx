@@ -27,9 +27,7 @@ cpdef Column fill(
 ):
 
     """Fill destination column from begin to end with value.
-    ``destination ``must be a
-    :py:class:`~cudf._lib.pylibcudf.column.Column`. ``value`` must be a
-    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
     For details, see :cpp:func:`fill`.
 
     Parameters
@@ -40,6 +38,8 @@ cpdef Column fill(
         The index to begin filling from.
     end : size_type
         The index at which to stop filling.
+    value : Scalar
+        The value to fill with.
 
     Returns
     -------
@@ -67,10 +67,9 @@ cpdef void fill_in_place(
 ):
 
     """Fill destination column in place from begin to end with value.
-    ``destination ``must be a
-    :py:class:`~cudf._lib.pylibcudf.column.Column`. ``value`` must be a
-    :py:class:`~cudf._lib.pylibcudf.scalar.Scalar`.
+
     For details, see :cpp:func:`fill_in_place`.
+
     Parameters
     ----------
     destination : Column
@@ -79,6 +78,8 @@ cpdef void fill_in_place(
         The index to begin filling from.
     end : size_type
         The index at which to stop filling.
+    value : Scalar
+        The value to fill with.
     """
 
     with nogil:
@@ -90,8 +91,11 @@ cpdef void fill_in_place(
         )
 
 cpdef Column sequence(size_type size, Scalar init, Scalar step):
-    """Create a sequence column of size `size` with initial value `init` and
-    step `step`.
+    """Create a sequence column of size ``size`` with initial value ``init`` and step
+    ``step``.
+
+    For details, see :cpp:func:`sequence`.
+
     Parameters
     ----------
     size : int
@@ -123,11 +127,9 @@ cpdef Table repeat(
     Table input_table,
     ColumnOrSize count
 ):
-    """Repeat rows of a Table either ``count`` times
-    or as specified by an integral column. If ``count``
-    is a column, the number of repetitions of each row
-    is defined by the value at the corresponding index
-    of ``count``.
+    """Repeat rows of a Table either ``count`` times or as specified by an integral
+    column. If ``count`` is a column, the number of repetitions of each row is defined
+    by the value at the corresponding index of ``count``.
 
     For details, see :cpp:func:`repeat`.
 
