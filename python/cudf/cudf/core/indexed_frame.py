@@ -50,7 +50,7 @@ from cudf.api.types import (
 from cudf.core._base_index import BaseIndex
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, full
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
@@ -2872,6 +2872,8 @@ class IndexedFrame(Frame):
             self._column_names,
             None if has_range_index or not keep_index else self._index.names,
         )
+        result._data.label_dtype = self._data.label_dtype
+        result._data.rangeindex = self._data.rangeindex
 
         if keep_index and has_range_index:
             result.index = self.index[start:stop]
@@ -3046,14 +3048,14 @@ class IndexedFrame(Frame):
         (result,) = libcudf.copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
-            [full(len(self), True, dtype=bool)],
+            [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
         )
         return cudf.Series(result, index=self.index)
 
     @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True) -> Self:
-        return self._from_columns_like_self(
+        result = self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
                 [
                     *(self._index._data.columns if keep_index else ()),
@@ -3063,6 +3065,9 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if keep_index else None,
         )
+        result._data.label_dtype = self._data.label_dtype
+        result._data.rangeindex = self._data.rangeindex
+        return result
 
     def _split(self, splits, keep_index=True):
         if self._num_rows == 0:
@@ -3322,9 +3327,7 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = cudf.core.column.full(
-            size=len(self), fill_value=True, dtype="bool"
-        )
+        ans_mask = as_column(True, length=len(self), dtype="bool")
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
@@ -6255,10 +6258,10 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
-                else full(
-                    len(to_replace),
+                else as_column(
                     value,
-                    cudf.dtype(type(value)),
+                    length=len(to_replace),
+                    dtype=cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }

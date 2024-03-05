@@ -165,13 +165,13 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
-  auto d_column                       = column_device_view::create(integers, stream);
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto d_column                = column_device_view::create(integers, stream);
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
 
   return make_strings_column(integers.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              integers.null_count(),
                              cudf::detail::copy_bitmask(integers, stream, mr));
 }
