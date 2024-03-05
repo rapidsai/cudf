@@ -298,34 +298,34 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
 
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuUpdatePageSizes
-  int processed = 0;
-  int valid     = 0;
-  while (processed < s->page.num_input_values) {
-    int next_valid;
+  int processed_count = 0;
+  int valid_count     = 0;
+  while (processed_count < s->page.num_input_values) {
+    int next_valid_count;
 
     // only need to process definition levels if this is a nullable column
     if (nullable) {
-      processed += def_decoder.decode_next(t);
+      processed_count += def_decoder.decode_next(t);
       __syncthreads();
 
-      next_valid =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed, s, sb, def, t);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
     // nz_idx.  gpuDecodeValues would be the only work that happens.
     else {
-      processed += min(rolling_buf_size, s->page.num_input_values - processed);
-      next_valid =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(processed, s, sb, nullptr, t);
+      processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
     // decode the values themselves
-    gpuDecodeValues(s, sb, valid, next_valid, t);
+    gpuDecodeValues(s, sb, valid_count, next_valid_count, t);
     __syncthreads();
 
-    valid = next_valid;
+    valid_count = next_valid_count;
   }
 }
 
@@ -388,39 +388,39 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuUpdatePageSizes
-  int processed = 0;
-  int valid     = 0;
-  while (processed < s->page.num_input_values) {
-    int next_valid;
+  int processed_count = 0;
+  int valid_count     = 0;
+  while (processed_count < s->page.num_input_values) {
+    int next_valid_count;
 
     // only need to process definition levels if this is a nullable column
     if (nullable) {
       //-1 don't cap it
-      processed += def_decoder.decode_next(t);
+      processed_count += def_decoder.decode_next(t);
       __syncthreads();
 
       // count of valid items in this batch
-      next_valid =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed, s, sb, def, t);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
     // nz_idx.  gpuDecodeValues would be the only work that happens.
     else {
-      processed += min(rolling_buf_size, s->page.num_input_values - processed);
-      next_valid =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(processed, s, sb, nullptr, t);
+      processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
+      next_valid_count =
+        gpuUpdateValidityOffsetsAndRowIndicesFlat<false, level_t>(processed_count, s, sb, nullptr, t);
     }
     __syncthreads();
 
-    dict_stream.decode_next(t, (next_valid - valid));
+    dict_stream.decode_next(t, (next_valid_count - valid_count));
     __syncthreads();
 
     // decode the values themselves
-    gpuDecodeValues(s, sb, valid, next_valid, t);
+    gpuDecodeValues(s, sb, valid_count, next_valid_count, t);
     __syncthreads();
 
-    valid = next_valid;
+    valid_count = next_valid_count;
   }
 }
 
