@@ -1631,6 +1631,7 @@ reader::impl::impl(std::size_t output_size_limit,
                    rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
+    mem_stats_logger(mr),
     _config{options.get_timestamp_type(),
             options.is_enabled_use_index(),
             options.is_enabled_use_np_dtypes(),
@@ -1645,8 +1646,7 @@ reader::impl::impl(std::size_t output_size_limit,
     _chunk_read_data{
       output_size_limit,
       data_read_limit,
-      output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY},
-    mem_stats_logger(mr)
+      output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY}
 {
   printf("construct reader , limit = %d, %d, gradunarity %d \n",
 
