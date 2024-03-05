@@ -3758,12 +3758,16 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
-/*
+
   @Test
   void testChunkedPackTwoPasses() {
     // this test packes ~2MB worth of long into a 1MB bounce buffer
     // this is 3 iterations because of the validity buffer
     Long[] longs = new Long[256*1024];
+    // Initialize elements at odd-numbered indices
+    for (int i = 1; i < longs.length; i += 2) {
+      longs[i] = (long)i;
+    }
     try (Table t1 = new Table.TestBuilder().column(longs).build();
          DeviceMemoryBuffer bounceBuffer = DeviceMemoryBuffer.allocate(1L*1024*1024);
          ChunkedPack cp = t1.makeChunkedPack(1L*1024*1024);
@@ -3776,7 +3780,7 @@ public class TableTest extends CudfTestBase {
       while (cp.hasNext()) {
         long copied = cp.next(bounceBuffer);
         target.copyFromDeviceBufferAsync(
-          offset, target, 0, copied, Cuda.DEFAULT_STREAM);
+          offset, bounceBuffer, 0, copied, Cuda.DEFAULT_STREAM);
         offset += copied;
       }
 
@@ -3787,7 +3791,6 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
-*/
 
   @Test
   void testContiguousSplitWithStrings() {
