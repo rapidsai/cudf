@@ -23,7 +23,7 @@ rapids-logger "pytest dask_cudf"
 ./ci/run_dask_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
   --numprocesses=8 \
-  --dist=loadscope \
+  --dist=worksteal \
   --cov-config=../.coveragerc \
   --cov=dask_cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
@@ -33,7 +33,7 @@ rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
   --numprocesses=8 \
-  --dist=loadscope \
+  --dist=worksteal \
   --cov-config=../.coveragerc \
   --cov=custreamz \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/custreamz-coverage.xml" \
