@@ -573,9 +573,13 @@ CUDF_KERNEL void __launch_bounds__(128)
   // at the worst case number of bytes needed to encode.
   auto const physical_type = col_g.physical_type;
   auto const type_id       = col_g.leaf_column->type().id();
-  auto const is_use_delta =
-    write_v2_headers && !ck_g.use_dictionary &&
+  auto const is_requested_delta =
+    col_g.requested_encoding == column_encoding::DELTA_BINARY_PACKED ||
+    col_g.requested_encoding == column_encoding::DELTA_LENGTH_BYTE_ARRAY;
+  auto const is_fallback_to_delta =
+    !ck_g.use_dictionary && write_v2_headers &&
     (physical_type == INT32 || physical_type == INT64 || physical_type == BYTE_ARRAY);
+  auto const is_use_delta = is_requested_delta || is_fallback_to_delta;
 
   if (t < 32) {
     uint32_t fragments_in_chunk  = 0;
@@ -786,7 +790,31 @@ CUDF_KERNEL void __launch_bounds__(128)
         if (t == 0) {
           if (not pages.empty()) {
             // set encoding
-            if (is_use_delta) {
+            if (col_g.requested_encoding != column_encoding::USE_DEFAULT) {
+              switch (col_g.requested_encoding) {
+                case column_encoding::PLAIN: page_g.kernel_mask = encode_kernel_mask::PLAIN; break;
+                case column_encoding::DICTIONARY:
+                  // user may have requested dict, but we may not be able to use it
+                  // TODO: when DELTA_BYTE_ARRAY is added, rework the fallback logic so there
+                  // isn't duplicated code here and below.
+                  if (ck_g.use_dictionary) {
+                    page_g.kernel_mask = encode_kernel_mask::DICTIONARY;
+                  } else if (is_fallback_to_delta) {
+                    page_g.kernel_mask = physical_type == BYTE_ARRAY
+                                           ? encode_kernel_mask::DELTA_LENGTH_BA
+                                           : encode_kernel_mask::DELTA_BINARY;
+                  } else {
+                    page_g.kernel_mask = encode_kernel_mask::PLAIN;
+                  }
+                  break;
+                case column_encoding::DELTA_BINARY_PACKED:
+                  page_g.kernel_mask = encode_kernel_mask::DELTA_BINARY;
+                  break;
+                case column_encoding::DELTA_LENGTH_BYTE_ARRAY:
+                  page_g.kernel_mask = encode_kernel_mask::DELTA_LENGTH_BA;
+                  break;
+              }
+            } else if (is_use_delta) {
               // TODO(ets): at some point make a more intelligent decision on this. DELTA_LENGTH_BA
               // should always be preferred over PLAIN, but DELTA_BINARY is a different matter.
               // If the delta encoding size is going to be close to 32 bits anyway, then plain

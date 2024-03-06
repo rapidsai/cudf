@@ -641,7 +641,6 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/row_conversion.cu
   src/transform/transform.cpp
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
