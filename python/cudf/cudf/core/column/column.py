@@ -90,8 +90,6 @@ from cudf.utils.dtypes import (
     min_scalar_type,
     min_unsigned_type,
     np_to_pa_dtype,
-    pandas_dtypes_alias_to_cudf_alias,
-    pandas_dtypes_to_np_dtypes,
 )
 from cudf.utils.utils import _array_ufunc, mask_dtype
 
@@ -974,42 +972,20 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             col = self.copy()
         else:
             col = self
+        if dtype == "category":
+            # TODO: Figure out why `cudf.dtype("category")`
+            # astype's different than just the string
+            return col.as_categorical_column(dtype)
+        elif dtype == "interval" and isinstance(
+            self.dtype, cudf.IntervalDtype
+        ):
+            return col
+        was_object = dtype == object or dtype == np.dtype(object)
+        dtype = cudf.dtype(dtype)
         if self.dtype == dtype:
             return col
-        if _is_categorical_dtype(dtype):
+        elif isinstance(dtype, CategoricalDtype):
             return col.as_categorical_column(dtype)
-
-        if (
-            isinstance(dtype, str)
-            and dtype in pandas_dtypes_alias_to_cudf_alias
-        ):
-            if cudf.get_option("mode.pandas_compatible"):
-                raise NotImplementedError("not supported")
-            else:
-                dtype = pandas_dtypes_alias_to_cudf_alias[dtype]
-        elif _is_pandas_nullable_extension_dtype(dtype) and cudf.get_option(
-            "mode.pandas_compatible"
-        ):
-            raise NotImplementedError("not supported")
-        else:
-            dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        if _is_non_decimal_numeric_dtype(dtype):
-            return col.as_numerical_column(dtype)
-        elif _is_categorical_dtype(dtype):
-            return col.as_categorical_column(dtype)
-        elif cudf.dtype(dtype).type in {
-            np.str_,
-            np.object_,
-            str,
-        }:
-            if cudf.get_option("mode.pandas_compatible") and np.dtype(
-                dtype
-            ).type in {np.object_}:
-                raise ValueError(
-                    f"Casting to {dtype} is not supported, use "
-                    "`.astype('str')` instead."
-                )
-            return col.as_string_column(dtype)
         elif isinstance(dtype, IntervalDtype):
             return col.as_interval_column(dtype)
         elif isinstance(dtype, (ListDtype, StructDtype)):
@@ -1024,6 +1000,13 @@ class ColumnBase(Column, Serializable, BinaryOperand, Reducible):
             return col.as_datetime_column(dtype)
         elif np.issubdtype(cast(Any, dtype), np.timedelta64):
             return col.as_timedelta_column(dtype)
+        elif dtype.kind == "O":
+            if cudf.get_option("mode.pandas_compatible") and was_object:
+                raise ValueError(
+                    f"Casting to {dtype} is not supported, use "
+                    "`.astype('str')` instead."
+                )
+            return col.as_string_column(dtype)
         else:
             return col.as_numerical_column(dtype)
 
