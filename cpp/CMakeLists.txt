@@ -389,6 +389,7 @@ add_library(
   src/io/orc/reader.cu
   src/io/orc/reader_impl.cu
   src/io/orc/reader_impl_chunking.cu
+  src/io/orc/reader_impl_decode.cu
   src/io/orc/reader_impl_helpers.cpp
   src/io/orc/stats_enc.cu
   src/io/orc/stripe_data.cu
