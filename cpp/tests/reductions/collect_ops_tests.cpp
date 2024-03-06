@@ -373,7 +373,6 @@ TEST_F(CollectTest, CollectAllNulls)
   using int_col = cudf::test::fixed_width_column_wrapper<int32_t>;
   using namespace cudf::test::iterators;
 
-  // list<list<int>>
   auto const input    = int_col{{0, 0, 0, 0, 0, 0}, all_nulls()};
   auto const expected = int_col{};
 
