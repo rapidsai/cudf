@@ -69,8 +69,8 @@ class DecimalBaseColumn(NumericalBaseColumn):
     def __pow__(self, other):
         if isinstance(other, int):
             if other == 0:
-                res = cudf.core.column.full(
-                    size=len(self), fill_value=1, dtype=self.dtype
+                res = cudf.core.column.as_column(
+                    1, dtype=self.dtype, length=len(self)
                 )
                 if self.nullable:
                     res = res.set_mask(self.mask)

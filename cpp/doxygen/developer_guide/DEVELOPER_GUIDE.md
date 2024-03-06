@@ -127,7 +127,7 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
    does use raw synchronization primitives. So we should revisit Parent's third rule and improve
    here.
 
-Additional style guidelines for libcudf code include:
+Additional style guidelines for libcudf code:
 
  * Prefer "east const", placing `const` after the type. This is not
    automatically enforced by `clang-format` because the option
@@ -152,15 +152,20 @@ The following guidelines apply to organizing `#include` lines.
    from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
    includes from dependencies installed with cuDF, and then standard headers (for example
    `<string>`, `<iostream>`).
- * Use `<>` instead of `""` unless the header is in the same directory as the source file.
+ * We use clang-format for grouping and sorting headers automatically. See the
+   `cudf/cpp/.clang-format` file for specifics.
+ * Use `<>` for all includes except for internal headers that are not in the `include`
+   directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
+   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
+   should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+ * `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
+   public headers in `include` that should be included with `<>`.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
-   and brackets wrong.
+   and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
+   the grouping.
  * Always check that includes are only necessary for the file in which they are included.
    Try to avoid excessive including especially in header files. Double check this when you remove
    code.
- * Use quotes `"` to include local headers from the same relative source directory. This should only
-   occur in source files and non-public header files. Otherwise use angle brackets `<>` around
-   included header filenames.
  * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
    (internal) headers from source paths not in the same directory as the including file,
    because source paths are not passed with `-I`.

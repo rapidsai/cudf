@@ -32,6 +32,9 @@
 #include <cooperative_groups.h>
 #include <cub/block/block_scan.cuh>
 #include <cuco/static_set.cuh>
+#include <thrust/fill.h>
+#include <thrust/iterator/transform_output_iterator.h>
+#include <thrust/sequence.h>
 
 #include <cstddef>
 #include <limits>
@@ -74,6 +77,18 @@ class build_keys_fn {
 
  private:
   Hasher _hash;
+};
+
+/**
+ * @brief Device output transform functor to construct `size_type` with `cuco::pair<hash_value_type,
+ * lhs_index_type>`
+ */
+struct output_fn {
+  __device__ constexpr cudf::size_type operator()(
+    cuco::pair<hash_value_type, lhs_index_type> const& x) const
+  {
+    return static_cast<cudf::size_type>(x.second);
+  }
 };
 
 template <typename Tile>
@@ -306,9 +321,9 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  auto left_indices =
+  auto build_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
-  auto right_indices =
+  auto probe_indices =
     std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
 
   auto const probe_row_hasher =
@@ -325,14 +340,50 @@ distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
     probe_table_num_rows,
     this->_hash_table.ref(cuco::find),
     counter.data(),
-    left_indices->data(),
-    right_indices->data());
+    build_indices->data(),
+    probe_indices->data());
 
   auto const actual_size = counter.value(stream);
-  left_indices->resize(actual_size, stream);
-  right_indices->resize(actual_size, stream);
+  build_indices->resize(actual_size, stream);
+  probe_indices->resize(actual_size, stream);
 
-  return {std::move(left_indices), std::move(right_indices)};
+  return {std::move(build_indices), std::move(probe_indices)};
+}
+
+template <cudf::has_nested HasNested>
+std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::left_join(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
+{
+  cudf::thread_range range{"distinct_hash_join::left_join"};
+
+  size_type const probe_table_num_rows{this->_probe.num_rows()};
+
+  // If output size is zero, return empty
+  if (probe_table_num_rows == 0) {
+    return std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr);
+  }
+
+  auto build_indices =
+    std::make_unique<rmm::device_uvector<size_type>>(probe_table_num_rows, stream, mr);
+
+  // If build table is empty, return probe table
+  if (this->_build.num_rows() == 0) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), build_indices->begin(), build_indices->end(), JoinNoneValue);
+  } else {
+    auto const probe_row_hasher =
+      cudf::experimental::row::hash::row_hasher{this->_preprocessed_probe};
+    auto const d_probe_hasher = probe_row_hasher.device_hasher(nullate::DYNAMIC{this->_has_nulls});
+    auto const iter           = cudf::detail::make_counting_transform_iterator(
+      0, build_keys_fn<decltype(d_probe_hasher), rhs_index_type>{d_probe_hasher});
+
+    auto const output_begin =
+      thrust::make_transform_output_iterator(build_indices->begin(), output_fn{});
+    // TODO conditional find for nulls once `cuco::static_set::find_if` is added
+    this->_hash_table.find_async(iter, iter + probe_table_num_rows, output_begin, stream.value());
+  }
+
+  return build_indices;
 }
 }  // namespace detail
 
@@ -380,5 +431,20 @@ distinct_hash_join<cudf::has_nested::NO>::inner_join(rmm::cuda_stream_view strea
                                                      rmm::mr::device_memory_resource* mr) const
 {
   return _impl->inner_join(stream, mr);
+}
+
+template <>
+std::unique_ptr<rmm::device_uvector<size_type>>
+distinct_hash_join<cudf::has_nested::YES>::left_join(rmm::cuda_stream_view stream,
+                                                     rmm::mr::device_memory_resource* mr) const
+{
+  return _impl->left_join(stream, mr);
+}
+
+template <>
+std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<cudf::has_nested::NO>::left_join(
+  rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
+{
+  return _impl->left_join(stream, mr);
 }
 }  // namespace cudf
