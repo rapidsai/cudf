@@ -148,6 +148,13 @@ jobs:
       arch: '["amd64"]'
       cuda: '["12.2"]'
       build_command: |
+        # For testing, will be removed when the package is released
+        git clone https://github.com/vyasr/rapids_builder.git
+        pushd rapids_builder
+        python -m pip wheel . --no-deps
+        popd
+        export PIP_FIND_LINKS="file://${PWD}/rapids_builder"
+
         sccache -z;
         build-all -DBUILD_BENCHMARKS=ON --verbose;
         sccache -s;
