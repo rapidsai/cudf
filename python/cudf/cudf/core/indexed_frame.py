@@ -2414,6 +2414,37 @@ class IndexedFrame(Frame):
         """
         return self._iloc_indexer_type(self)
 
+    @property  # type:ignore
+    @_cudf_nvtx_annotate
+    def axes(self):
+        """
+        Return a list representing the axes of the Series.
+
+        Series.axes returns a list containing the row index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> csf1 = cudf.Series([1, 2, 3, 4])
+        >>> csf1.axes
+        [RangeIndex(start=0, stop=4, step=1)]
+
+        """
+        return [self.index]
+
+    def squeeze(self, axis: Literal["index", "columns", 0, 1, None] = None):
+        """ """
+        axes = (
+            range(len(self.axes))
+            if axis is None
+            else (self._get_axis_from_axis_arg(axis),)
+        )
+        indexer = tuple(
+            0 if i in axes and len(a) == 1 else slice(None)
+            for i, a in enumerate(self.axes)
+        )
+        return self.iloc[indexer]
+
     @_cudf_nvtx_annotate
     def scale(self):
         """
