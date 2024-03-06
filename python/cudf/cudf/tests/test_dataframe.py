@@ -4,6 +4,7 @@ import array as arr
 import contextlib
 import datetime
 import decimal
+import functools
 import io
 import operator
 import random
@@ -10727,6 +10728,9 @@ def test_init_from_2_categoricalindex_series_diff_categories():
     )
     result = cudf.DataFrame([s1, s2])
     expected = pd.DataFrame([s1.to_pandas(), s2.to_pandas()])
+    # TODO: Remove once https://github.com/pandas-dev/pandas/issues/57592
+    # is adressed
+    expected.columns = result.columns
     assert_eq(result, expected, check_dtype=False)
 
 
@@ -10861,6 +10865,55 @@ def test_dataframe_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
+
+
+def test_dataframe_columns_set_none_raises():
+    df = cudf.DataFrame({"a": [0]})
+    with pytest.raises(TypeError):
+        df.columns = None
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [cudf.RangeIndex(1, name="foo"), pd.RangeIndex(1, name="foo"), range(1)],
+)
+def test_dataframe_columns_set_rangeindex(columns):
+    df = cudf.DataFrame([1], columns=["a"])
+    df.columns = columns
+    result = df.columns
+    expected = pd.RangeIndex(1, name=getattr(columns, "name", None))
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize("klass", [cudf.MultiIndex, pd.MultiIndex])
+def test_dataframe_columns_set_multiindex(klass):
+    columns = klass.from_arrays([[10]], names=["foo"])
+    df = cudf.DataFrame([1], columns=["a"])
+    df.columns = columns
+    result = df.columns
+    expected = pd.MultiIndex.from_arrays([[10]], names=["foo"])
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
+    "klass",
+    [
+        functools.partial(cudf.Index, name="foo"),
+        functools.partial(cudf.Series, name="foo"),
+        functools.partial(pd.Index, name="foo"),
+        functools.partial(pd.Series, name="foo"),
+        np.array,
+    ],
+)
+def test_dataframe_columns_set_preserve_type(klass):
+    df = cudf.DataFrame([1], columns=["a"])
+    columns = klass([10], dtype="int8")
+    df.columns = columns
+    result = df.columns
+    expected = pd.Index(
+        [10], dtype="int8", name=getattr(columns, "name", None)
+    )
+    pd.testing.assert_index_equal(result, expected)
 
 
 @pytest.mark.parametrize(
