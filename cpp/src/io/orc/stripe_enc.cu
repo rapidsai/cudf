@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
+#include "io/comp/nvcomp_adapter.hpp"
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/config_utils.hpp"
+#include "io/utilities/time_utils.cuh"
 #include "orc_gpu.hpp"
-
-#include <cudf/io/orc_types.hpp>
-#include <io/comp/nvcomp_adapter.hpp>
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/config_utils.hpp>
-#include <io/utilities/time_utils.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/orc_types.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 
-#include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/for_each.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -648,8 +647,8 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
       if (t_nrows == 0) return 0;
       if (mask == nullptr) return 0xff;
 
-      auto const begin_offset = row + offset;
-      auto const end_offset   = min(begin_offset + 8, offset + column.size());
+      size_type const begin_offset = row + offset;
+      auto const end_offset        = min(begin_offset + 8, offset + column.size());
       auto const mask_word = cudf::detail::get_mask_offset_word(mask, 0, begin_offset, end_offset);
       return mask_word & 0xff;
     };
@@ -1310,8 +1309,8 @@ void EncodeOrcColumnData(device_2dspan<EncChunk const> chunks,
 void EncodeStripeDictionaries(stripe_dictionary const* stripes,
                               device_span<orc_column_device_view const> columns,
                               device_2dspan<EncChunk const> chunks,
-                              uint32_t num_string_columns,
-                              uint32_t num_stripes,
+                              size_type num_string_columns,
+                              size_type num_stripes,
                               device_2dspan<encoder_chunk_streams> enc_streams,
                               rmm::cuda_stream_view stream)
 {

@@ -20,13 +20,14 @@
 #include "thread_pool.hpp"
 
 #include <cudf_test/file_utilities.hpp>
+
 #include <cufile.h>
 #endif
 
-#include <rmm/cuda_stream_view.hpp>
-
 #include <cudf/io/datasource.hpp>
 #include <cudf/utilities/error.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 #include <string>
 

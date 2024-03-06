@@ -21,6 +21,7 @@
 #include <cudf/table/table_device_view.cuh>
 
 #include <cuco/static_map.cuh>
+#include <cuda/std/atomic>
 
 #include <limits>
 

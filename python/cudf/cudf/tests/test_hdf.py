@@ -8,43 +8,35 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import DATETIME_TYPES, NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, UNSIGNED_TYPES, assert_eq
 
-try:
-    import tables  # noqa F401
-except ImportError:
-    pytest.skip(
-        "PyTables is not installed and is required for HDF reading/writing",
-        allow_module_level=True,
-    )
+pytest.importorskip("tables")
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
-    types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
+    types = set(NUMERIC_TYPES + ["datetime64[ns]"] + ["bool"]) - set(
+        UNSIGNED_TYPES
+    )
     typer = {"col_" + val: val for val in types}
     ncols = len(types)
     nrows = request.param
 
+    rng = np.random.default_rng(1)
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        rng.integers(0, 50, size=(nrows, ncols)),
+        columns=pd.Index([f"col_{typ}" for typ in types]),
+        index=pd.RangeIndex(nrows, name="test_index"),
     )
-    # Delete the name of the column index, and rename the row index
-    test_pdf.columns.name = None
-    test_pdf.index.name = "test_index"
-
     # Cast all the column dtypes to objects, rename them, and then cast to
     # appropriate types
-    test_pdf = (
-        test_pdf.astype("object")
-        .astype(typer)
-        .rename({"col_datetime64[ms]": "col_datetime64"}, axis=1)
+    test_pdf = test_pdf.astype(typer).rename(
+        {"col_datetime64[ns]": "col_datetime64"}, axis=1
     )
 
     # Create non-numeric categorical data otherwise may be typecasted
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
+    data = rng.choice(list(ascii_letters), size=nrows)
     test_pdf["col_category"] = pd.Series(data, dtype="category")
 
     return (test_pdf, nrows)
@@ -107,6 +99,8 @@ def test_hdf_reader(hdf_files, columns):
 @pytest.mark.filterwarnings("ignore:Using CPU")
 def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
     pdf, nrows = pdf
+    if format == "table" and nrows == 0:
+        pytest.skip("Can't read 0 row table with format 'table'")
     gdf, _ = gdf
 
     if format == "fixed":
@@ -121,9 +115,6 @@ def test_hdf_writer(tmpdir, pdf, gdf, complib, format):
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
-
-    if format == "table" and nrows == 0:
-        pytest.skip("Can't read 0 row table with format 'table'")
 
     expect = pd.read_hdf(pdf_df_fname)
     got = pd.read_hdf(gdf_df_fname)

@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
+#include "hash/concurrent_unordered_map.cuh"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/testing_main.hpp>
-
-#include <hash/concurrent_unordered_map.cuh>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>

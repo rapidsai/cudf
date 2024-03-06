@@ -23,7 +23,7 @@ from cudf._typing import (
     ScalarLike,
 )
 from cudf.api.types import is_datetime64_dtype, is_scalar, is_timedelta64_dtype
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_220
 from cudf.core.buffer import Buffer, cuda_array_interface_wrapper
 from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
@@ -318,27 +318,27 @@ class DatetimeColumn(column.ColumnBase):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        # `copy=True` workaround until following issue is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-9772
-
-        if PANDAS_GE_200:
-            host_values = self.to_arrow()
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
         else:
-            # Pandas<2.0 supports only `datetime64[ns]`, hence the cast.
-            host_values = self.astype("datetime64[ns]").to_arrow()
-
-        # Pandas only supports `datetime64[ns]` dtype
-        # and conversion to this type is necessary to make
-        # arrow to pandas conversion happen for large values.
-        return pd.Series(
-            host_values,
-            copy=True,
-            dtype=self.dtype,
-            index=index,
-        )
+            # `copy=True` workaround until following issue is fixed:
+            # https://issues.apache.org/jira/browse/ARROW-9772
+            return pd.Series(
+                self.to_arrow(),
+                copy=True,
+                dtype=self.dtype,
+                index=index,
+            )
 
     @property
     def values(self):
@@ -567,9 +567,7 @@ class DatetimeColumn(column.ColumnBase):
         if other is NotImplemented:
             return NotImplemented
         if isinstance(other, cudf.DateOffset):
-            return other._datetime_binop(self, op, reflect=reflect).astype(
-                self.dtype
-            )
+            return other._datetime_binop(self, op, reflect=reflect)
 
         # We check this on `other` before reflection since we already know the
         # dtype of `self`.
@@ -734,15 +732,25 @@ class DatetimeTZColumn(DatetimeColumn):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
-        series = self._local_time.to_pandas().dt.tz_localize(
-            self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
-        )
-        if index is not None:
-            series.index = index
-        return series
+        elif arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        else:
+            series = self._local_time.to_pandas().dt.tz_localize(
+                self.dtype.tz, ambiguous="NaT", nonexistent="NaT"
+            )
+            if index is not None:
+                series.index = index
+            return series
 
     def to_arrow(self):
         return pa.compute.assume_timezone(

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,22 +27,9 @@ namespace strings {
 namespace detail {
 
 /**
- * @brief The type of algorithm to use for a replace operation.
- */
-enum class replace_algorithm {
-  AUTO,          ///< Automatically choose the algorithm based on heuristics
-  ROW_PARALLEL,  ///< Row-level parallelism
-  CHAR_PARALLEL  ///< Character-level parallelism
-};
-
-/**
  * @copydoc cudf::strings::replace(strings_column_view const&, string_scalar const&,
- * string_scalar const&, int32_t, rmm::mr::device_memory_resource*)
- *
- * @tparam    alg    Replacement algorithm to use
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * string_scalar const&, int32_t, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
-template <replace_algorithm alg = replace_algorithm::AUTO>
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 string_scalar const& target,
                                 string_scalar const& repl,
@@ -51,23 +38,8 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::mr::device_memory_resource* mr);
 
 /**
- * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
- * size_type. size_type, rmm::mr::device_memory_resource*)
- *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- */
-std::unique_ptr<column> replace_slice(strings_column_view const& strings,
-                                      string_scalar const& repl,
-                                      size_type start,
-                                      size_type stop,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr);
-
-/**
  * @copydoc cudf::strings::replace(strings_column_view const&, strings_column_view const&,
- * strings_column_view const&, rmm::mr::device_memory_resource*)
- *
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * strings_column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<column> replace(strings_column_view const& strings,
                                 strings_column_view const& targets,
@@ -95,6 +67,17 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
  */
 std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                       string_scalar const& repl,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc cudf::strings::replace_slice(strings_column_view const&, string_scalar const&,
+ * size_type, size_type, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+ */
+std::unique_ptr<column> replace_slice(strings_column_view const& strings,
+                                      string_scalar const& repl,
+                                      size_type start,
+                                      size_type stop,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 

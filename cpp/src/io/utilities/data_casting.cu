@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/string_parsing.hpp>
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/string_parsing.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -32,11 +32,10 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/copy.h>
 #include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
-
-#include <cub/cub.cuh>
 
 #include <memory>
 #include <type_traits>

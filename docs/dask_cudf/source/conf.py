@@ -8,11 +8,20 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import datetime
+
+from packaging.version import Version
+
+import dask_cudf
+
+
+DASK_CUDF_VERSION = Version(dask_cudf.__version__)
+
 project = "dask-cudf"
-copyright = "2018-2023, NVIDIA Corporation"
+copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = "24.04"
-release = "24.04.00"
+version = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}"
+release = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}.{DASK_CUDF_VERSION.micro:02}"
 
 language = "en"
 

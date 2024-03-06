@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,10 +28,11 @@
 #include <cudf/rolling.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <src/rolling/detail/rolling.hpp>
 
 const std::string cuda_func{
   R"***(

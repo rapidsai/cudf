@@ -27,12 +27,11 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-
-#include <cuda/functional>
 
 #include <utility>
 #include <vector>

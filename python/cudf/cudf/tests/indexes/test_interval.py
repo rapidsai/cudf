@@ -5,9 +5,9 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_GE_210
 from cudf.core.index import IntervalIndex, interval_range
-from cudf.testing._utils import assert_eq, expect_warning_if
+from cudf.testing._utils import assert_eq
 
 
 def test_interval_constructor_default_closed():
@@ -142,7 +142,7 @@ def test_interval_range_periods_basic_dtype(start_t, end_t, periods_t):
 def test_interval_range_periods_warnings():
     start_val, end_val, periods_val = 0, 4, 1.0
 
-    with expect_warning_if(PANDAS_GE_220):
+    with pytest.warns(FutureWarning):
         pindex = pd.interval_range(
             start=start_val, end=end_val, periods=periods_val, closed="left"
         )

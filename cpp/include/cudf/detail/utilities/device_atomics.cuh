@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+
 #include <type_traits>
 
 namespace cudf {
@@ -169,8 +170,6 @@ struct genericAtomicOperationImpl<float, DeviceSum, 4> {
   }
 };
 
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 600)
-// `atomicAdd(double)` is supported after cuda architecture 6.0
 template <>
 struct genericAtomicOperationImpl<double, DeviceSum, 8> {
   using T = double;
@@ -179,7 +178,6 @@ struct genericAtomicOperationImpl<double, DeviceSum, 8> {
     return atomicAdd(addr, update_value);
   }
 };
-#endif
 
 template <>
 struct genericAtomicOperationImpl<int32_t, DeviceSum, 4> {

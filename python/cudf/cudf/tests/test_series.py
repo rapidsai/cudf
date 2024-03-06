@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
+import datetime
 import decimal
 import hashlib
 import operator
@@ -15,6 +15,7 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_GE_220
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -1795,8 +1796,11 @@ def test_isin_datetime(data, values):
     psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
-    got = gsr.isin(values)
-    expected = psr.isin(values)
+    is_len_str = isinstance(next(iter(values), None), str) and len(data)
+    with expect_warning_if(is_len_str):
+        got = gsr.isin(values)
+    with expect_warning_if(PANDAS_GE_220 and is_len_str):
+        expected = psr.isin(values)
     assert_eq(got, expected)
 
 
@@ -2696,3 +2700,52 @@ def test_series_dtype_astypes(data):
     result = cudf.Series(data, dtype="float64")
     expected = cudf.Series([1.0, 2.0, 3.0])
     assert_eq(result, expected)
+
+
+def test_series_from_large_string():
+    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
+    got = cudf.Series(pa_large_string_array)
+    expected = pd.Series(pa_large_string_array)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    with pytest.raises(ValueError, match=".* cannot both be set"):
+        ser.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    result = ser.to_pandas(arrow_type=True)
+    expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
+    pd.testing.assert_series_equal(result, expected)

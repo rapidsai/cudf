@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -32,6 +32,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
+#include <cuda/functional>
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -45,9 +47,6 @@
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
-
-#include <cuda/atomic>
-#include <cuda/functional>
 
 #include <algorithm>
 #include <cstdint>

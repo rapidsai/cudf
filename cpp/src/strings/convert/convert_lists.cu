@@ -216,17 +216,14 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   auto const d_separators = column_device_view::create(separators.parent(), stream);
   auto const d_na_rep     = na_rep.value(stream);
 
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     format_lists_fn{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth},
     input.size(),
     stream,
     mr);
 
-  return make_strings_column(input.size(),
-                             std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
-                             0,
-                             rmm::device_buffer{});
+  return make_strings_column(
+    input.size(), std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

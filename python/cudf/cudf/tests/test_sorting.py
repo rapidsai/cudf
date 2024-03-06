@@ -49,9 +49,9 @@ def test_dataframe_sort_values(nelem, dtype):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("index", ["a", "b", ["a", "b"]])
 def test_dataframe_sort_values_ignore_index(index, ignore_index):
-    if not PANDAS_GE_220 and isinstance(index, list) and not ignore_index:
+    if PANDAS_GE_220 and isinstance(index, list) and not ignore_index:
         pytest.skip(
-            reason="TODO: Remove this once pandas-2.2 support is added",
+            reason="Unstable sorting by pandas(numpy): https://github.com/pandas-dev/pandas/issues/57531"
         )
 
     gdf = DataFrame(
