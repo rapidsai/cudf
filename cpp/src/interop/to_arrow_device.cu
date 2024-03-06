@@ -630,7 +630,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
   return result;
 }
 
-ArrowDeviceArray to_arrow_device(cudf::table&& table,
+std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
@@ -667,15 +667,15 @@ ArrowDeviceArray to_arrow_device(cudf::table&& table,
   if (status != cudaSuccess) { CUDF_FAIL("could not create event to sync on"); }
 
   ArrowArrayMove(tmp.get(), &private_data->parent);
-  struct ArrowDeviceArray result;
-  result.device_id = rmm::get_current_cuda_device().value();
+  auto result = std::make_unique<ArrowDeviceArray>();
+  result->device_id = rmm::get_current_cuda_device().value();
   // can/should we check whether the memory is managed/cuda_host memory?
-  result.device_type        = ARROW_DEVICE_CUDA;
-  result.sync_event         = &private_data->sync_event;
-  result.array              = private_data->parent;
-  result.array.private_data = private_data.release();
-  result.array.release      = &detail::ArrowDeviceArrayRelease;
-  return result;
+  result->device_type        = ARROW_DEVICE_CUDA;
+  result->sync_event         = &private_data->sync_event;
+  result->array              = private_data->parent;
+  result->array.private_data = private_data.release();
+  result->array.release      = &detail::ArrowDeviceArrayRelease;
+  return std::move(result);
 }
 
 }  // namespace cudf
