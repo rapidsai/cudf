@@ -293,6 +293,7 @@ reduce_to_column_tree(tree_meta_t& tree,
  *
  * @param options The reader options to influence the relevant type inference and type casting
  * options
+ * @param stream The CUDA stream to which kernels are dispatched
  */
 cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
                                         rmm::cuda_stream_view stream);

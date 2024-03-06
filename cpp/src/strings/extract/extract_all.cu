@@ -118,12 +118,12 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto offsets   = count_matches(*d_strings, *d_prog, strings_count + 1, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<size_type>();
+  auto counts   = count_matches(*d_strings, *d_prog, strings_count, stream, mr);
+  auto d_counts = counts->mutable_view().data<size_type>();
 
   // Compute null output rows
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    d_offsets, d_offsets + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
+    d_counts, d_counts + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
 
   // Return an empty lists column if there are no valid rows
   if (strings_count == null_count) {
@@ -132,18 +132,15 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Convert counts into offsets.
   // Multiply each count by the number of groups.
-  thrust::transform_exclusive_scan(
-    rmm::exec_policy(stream),
-    d_offsets,
-    d_offsets + strings_count + 1,
-    d_offsets,
-    [groups] __device__(auto v) { return v * groups; },
-    size_type{0},
-    thrust::plus{});
-  auto const total_groups =
-    cudf::detail::get_value<size_type>(offsets->view(), strings_count, stream);
+  auto sizes_itr = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<size_type>([d_counts, groups] __device__(auto idx) {
+      return d_counts[idx] * groups;
+    }));
+  auto [offsets, total_strings] =
+    cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + strings_count, stream, mr);
+  auto d_offsets = offsets->view().data<size_type>();
 
-  rmm::device_uvector<string_index_pair> indices(total_groups, stream);
+  rmm::device_uvector<string_index_pair> indices(total_strings, stream);
 
   launch_for_each_kernel(
     extract_fn{*d_strings, d_offsets, indices.data()}, *d_prog, strings_count, stream);

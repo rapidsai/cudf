@@ -34,13 +34,6 @@ def test_applymap_dataframe(data, func, na_action, request):
             reason="https://github.com/pandas-dev/pandas/issues/57390",
         )
     )
-    request.applymarker(
-        pytest.mark.xfail(
-            PANDAS_GE_220
-            and request.node.callspec.id == "ignore-<lambda>3-data3",
-            reason="https://github.com/pandas-dev/pandas/pull/57388",
-        )
-    )
     gdf = DataFrame(data)
     pdf = gdf.to_pandas(nullable=True)
 

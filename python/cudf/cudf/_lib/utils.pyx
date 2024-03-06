@@ -149,7 +149,9 @@ cpdef generate_pandas_metadata(table, index):
             col
             for col in table._columns
         ],
-        df=table,
+        # It is OKAY to do `.head(0).to_pandas()` because
+        # this method will extract `.columns` metadata only
+        df=table.head(0).to_pandas(),
         column_names=col_names,
         index_levels=index_levels,
         index_descriptors=index_descriptors,

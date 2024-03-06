@@ -48,13 +48,11 @@ def test_dataframe_sort_values(nelem, dtype):
 
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("index", ["a", "b", ["a", "b"]])
-def test_dataframe_sort_values_ignore_index(request, index, ignore_index):
-    request.applymarker(
-        pytest.mark.xfail(
-            PANDAS_GE_220 and isinstance(index, list) and not ignore_index,
-            reason="https://github.com/pandas-dev/pandas/issues/57531",
+def test_dataframe_sort_values_ignore_index(index, ignore_index):
+    if PANDAS_GE_220 and isinstance(index, list) and not ignore_index:
+        pytest.skip(
+            reason="Unstable sorting by pandas(numpy): https://github.com/pandas-dev/pandas/issues/57531"
         )
-    )
 
     gdf = DataFrame(
         {"a": [1, 3, 5, 2, 4], "b": [1, 1, 2, 2, 3], "c": [9, 7, 7, 7, 1]}

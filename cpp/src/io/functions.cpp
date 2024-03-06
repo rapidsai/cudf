@@ -404,7 +404,7 @@ orc_metadata read_orc_metadata(source_info const& src_info, rmm::cuda_stream_vie
   auto const footer = orc::metadata(sources.front().get(), stream).ff;
 
   return {{make_orc_column_schema(footer.types, 0, "")},
-          static_cast<size_type>(footer.numberOfRows),
+          footer.numberOfRows,
           static_cast<size_type>(footer.stripes.size())};
 }
 

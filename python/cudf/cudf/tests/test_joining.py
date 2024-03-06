@@ -2156,19 +2156,13 @@ def test_join_multiindex_empty():
     rhs = pd.DataFrame(index=["a", "c", "d"])
     g_lhs = cudf.from_pandas(lhs)
     g_rhs = cudf.from_pandas(rhs)
-    if PANDAS_GE_200:
-        assert_exceptions_equal(
-            lfunc=lhs.join,
-            rfunc=g_lhs.join,
-            lfunc_args_and_kwargs=([rhs], {"how": "inner"}),
-            rfunc_args_and_kwargs=([g_rhs], {"how": "inner"}),
-            check_exception_type=False,
-        )
-    else:
-        with pytest.warns(FutureWarning):
-            _ = lhs.join(rhs, how="inner")
-        with pytest.raises(ValueError):
-            _ = g_lhs.join(g_rhs, how="inner")
+    assert_exceptions_equal(
+        lfunc=lhs.join,
+        rfunc=g_lhs.join,
+        lfunc_args_and_kwargs=([rhs], {"how": "inner"}),
+        rfunc_args_and_kwargs=([g_rhs], {"how": "inner"}),
+        check_exception_type=False,
+    )
 
 
 def test_join_on_index_with_duplicate_names():

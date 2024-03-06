@@ -63,4 +63,14 @@ rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& in
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief Normalize unquoted whitespace (space and tab characters) using FST
+ *
+ * @param inbuf Input device buffer
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ */
+rmm::device_uvector<char> normalize_whitespace(rmm::device_uvector<char>&& inbuf,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr);
 }  // namespace cudf::io::json::detail

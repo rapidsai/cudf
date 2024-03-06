@@ -392,12 +392,25 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
   return to_host(d_column_names->view());
 }
 
-rmm::device_uvector<uint8_t> is_all_nulls_str_column(device_span<SymbolT const> input,
-                                                     tree_meta_t const& d_column_tree,
-                                                     tree_meta_t const& tree,
-                                                     device_span<NodeIndexT> col_ids,
-                                                     cudf::io::json_reader_options const& options,
-                                                     rmm::cuda_stream_view stream)
+/**
+ * @brief Checks if all strings in each string column in the tree are nulls.
+ * For non-string columns, it's set as true. If any of rows in a string column is false, it's set as
+ * false.
+ *
+ * @param input Input JSON string device data
+ * @param d_column_tree column tree representation of JSON string
+ * @param tree Node tree representation of the JSON string
+ * @param col_ids Column ids of the nodes in the tree
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Array of bytes where each byte indicate if it is all nulls string column.
+ */
+rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const> input,
+                                                      tree_meta_t const& d_column_tree,
+                                                      tree_meta_t const& tree,
+                                                      device_span<NodeIndexT> col_ids,
+                                                      cudf::io::json_reader_options const& options,
+                                                      rmm::cuda_stream_view stream)
 {
   auto const num_nodes = col_ids.size();
   auto const num_cols  = d_column_tree.node_categories.size();
@@ -450,8 +463,10 @@ struct json_column_data {
  * @param row_offsets Row offsets of the nodes in the tree
  * @param root Root node of the `d_json_column` tree
  * @param is_array_of_arrays Whether the tree is an array of arrays
- * @param is_enabled_lines Whether the input is a line-delimited JSON
- * @param is_enabled_mixed_types_as_string Whether to enable reading mixed types as string
+ * @param options Parsing options specifying the parsing behaviour
+ * options affecting behaviour are
+ *   is_enabled_lines: Whether the input is a line-delimited JSON
+ *   is_enabled_mixed_types_as_string: Whether to enable reading mixed types as string
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the device memory
  * of child_offets and validity members of `d_json_column`
@@ -462,14 +477,15 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_span<size_type> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
-                             bool is_enabled_lines,
-                             bool is_enabled_mixed_types_as_string,
                              cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto const num_nodes = col_ids.size();
+
+  bool const is_enabled_lines                 = options.is_enabled_lines();
+  bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
+  auto const num_nodes                        = col_ids.size();
   rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
 
@@ -594,7 +610,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   std::vector<uint8_t> is_str_column_all_nulls{};
   if (is_enabled_mixed_types_as_string) {
     is_str_column_all_nulls = cudf::detail::make_std_vector_async(
-      is_all_nulls_str_column(input, d_column_tree, tree, col_ids, options, stream), stream);
+      is_all_nulls_each_column(input, d_column_tree, tree, col_ids, options, stream), stream);
   }
 
   // use hash map because we may skip field name's col_ids
@@ -646,14 +662,17 @@ void make_device_json_column(device_span<SymbolT const> input,
       // If mixed type as string is enabled, make both of them strings and merge them.
       // All child columns will be ignored when parsing.
       if (is_enabled_mixed_types_as_string) {
-        bool is_mixed_type = true;
-        // If new or old is STR and they are all not null, make it mixed type, else ignore.
-        if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
-          if (is_str_column_all_nulls[this_col_id]) is_mixed_type = false;
-        }
-        if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
-          if (is_str_column_all_nulls[old_col_id]) is_mixed_type = false;
-        }
+        bool const is_mixed_type = [&]() {
+          // If new or old is STR and they are all not null, make it mixed type, else ignore.
+          if (column_categories[this_col_id] == NC_VAL ||
+              column_categories[this_col_id] == NC_STR) {
+            if (is_str_column_all_nulls[this_col_id]) return false;
+          }
+          if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
+            if (is_str_column_all_nulls[old_col_id]) return false;
+          }
+          return true;
+        }();
         if (is_mixed_type) {
           is_mixed_type_column[this_col_id] = 1;
           is_mixed_type_column[old_col_id]  = 1;
@@ -1080,8 +1099,6 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                           gpu_row_offsets,
                           root_column,
                           is_array_of_arrays,
-                          options.is_enabled_lines(),
-                          options.is_enabled_mixed_types_as_string(),
                           options,
                           stream,
                           mr);

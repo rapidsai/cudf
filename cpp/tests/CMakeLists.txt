@@ -152,7 +152,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
 )
 
 # ##################################################################################################
@@ -259,10 +259,9 @@ ConfigureTest(
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
   transform/row_bit_count_test.cu
+  transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
-
-ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------

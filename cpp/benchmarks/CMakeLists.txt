@@ -164,7 +164,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------

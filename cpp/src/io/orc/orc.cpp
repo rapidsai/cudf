@@ -69,7 +69,7 @@ void ProtobufReader::read(PostScript& s, size_t maxlen)
   function_builder(s, maxlen, op);
 }
 
-void ProtobufReader::read(FileFooter& s, size_t maxlen)
+void ProtobufReader::read(Footer& s, size_t maxlen)
 {
   auto op = std::tuple(field_reader(1, s.headerLength),
                        field_reader(2, s.contentLength),
@@ -307,7 +307,7 @@ size_t ProtobufWriter::write(PostScript const& s)
   return w.value();
 }
 
-size_t ProtobufWriter::write(FileFooter const& s)
+size_t ProtobufWriter::write(Footer const& s)
 {
   ProtobufFieldWriter w(this);
   w.field_uint(1, s.headerLength);
@@ -393,7 +393,8 @@ size_t ProtobufWriter::write(Metadata const& s)
   return w.value();
 }
 
-OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize) : m_blockSize(blockSize)
+OrcDecompressor::OrcDecompressor(CompressionKind kind, uint64_t block_size)
+  : m_blockSize(block_size)
 {
   switch (kind) {
     case NONE:

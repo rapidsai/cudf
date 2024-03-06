@@ -360,7 +360,7 @@ class writer::impl {
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.
   std::unique_ptr<table_input_metadata> _table_meta;
-  FileFooter _ffooter;
+  Footer _footer;
   Metadata _orc_meta;
   persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
   bool _closed = false;  // To track if the output has been written to sink.

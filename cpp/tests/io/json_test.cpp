@@ -2149,7 +2149,7 @@ TEST_F(JsonReaderTest, MixedTypes)
   // LIST + STR, LIST + STRUCT, LIST + null
   test_fn(R"(
 { "a": [1,2,3] }
-{ "a": 123 }
+{ "a": "123" }
 )",
           cudf::test::strings_column_wrapper({"[1,2,3]", "123"}));
   test_fn(R"(

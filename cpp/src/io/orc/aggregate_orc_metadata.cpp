@@ -155,7 +155,7 @@ aggregate_orc_metadata::aggregate_orc_metadata(
 std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
-  uint64_t skip_rows,
+  int64_t skip_rows,
   std::optional<size_type> const& num_rows,
   rmm::cuda_stream_view stream)
 {
@@ -163,7 +163,7 @@ aggregate_orc_metadata::select_stripes(
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not user_specified_stripes.empty()) { return std::pair<uint64_t, size_type>{0, 0}; }
+    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
     return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
   }();
 
@@ -192,8 +192,8 @@ aggregate_orc_metadata::select_stripes(
       selected_stripes_mapping.push_back({static_cast<int>(src_file_idx), stripe_infos});
     }
   } else {
-    uint64_t count             = 0;
-    size_type stripe_skip_rows = 0;
+    int64_t count            = 0;
+    int64_t stripe_skip_rows = 0;
     // Iterate all source files, each source file has corelating metadata
     for (size_t src_file_idx = 0;
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
