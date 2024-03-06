@@ -210,7 +210,7 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 
 rapids_cpm_find(
-  nanoarrow 0.4.0                
+  nanoarrow 0.4.0
   CPM_ARGS
   GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
   GIT_TAG c97720003ff863b81805bcdb9f7c91306ab6b6a8

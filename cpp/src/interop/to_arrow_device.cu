@@ -672,7 +672,7 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
   result->array              = private_data->parent;
   result->array.private_data = private_data.release();
   result->array.release      = &detail::ArrowDeviceArrayRelease;
-  return std::move(result);
+  return result;
 }
 
 }  // namespace cudf
