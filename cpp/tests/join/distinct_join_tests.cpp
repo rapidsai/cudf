@@ -49,13 +49,13 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> get_left_indices(cudf::siz
 }
 
 struct DistinctJoinTest : public cudf::test::BaseFixture {
-  template <cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK>
   void compare_to_reference(
     cudf::table_view const& build_table,
     cudf::table_view const& probe_table,
     std::pair<std::unique_ptr<rmm::device_uvector<cudf::size_type>>,
               std::unique_ptr<rmm::device_uvector<cudf::size_type>>> const& result,
-    cudf::table_view const& expected_table)
+    cudf::table_view const& expected_table,
+    cudf::out_of_bounds_policy oob_policy = cudf::out_of_bounds_policy::DONT_CHECK)
   {
     auto const& [build_join_indices, probe_join_indices] = result;
 
@@ -313,8 +313,8 @@ TEST_F(DistinctJoinTest, EmptyBuildTableLeftJoin)
   auto result        = distinct_join.left_join();
   auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
 
-  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
-    build.view(), probe.view(), gather_map, probe.view());
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
 TEST_F(DistinctJoinTest, EmptyProbeTableInnerJoin)
@@ -361,8 +361,8 @@ TEST_F(DistinctJoinTest, EmptyProbeTableLeftJoin)
   auto result        = distinct_join.left_join();
   auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
 
-  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
-    build.view(), probe.view(), gather_map, probe.view());
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, probe.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
 TEST_F(DistinctJoinTest, LeftJoinNoNulls)
@@ -397,8 +397,8 @@ TEST_F(DistinctJoinTest, LeftJoinNoNulls)
   auto result        = distinct_join.left_join();
   auto gather_map    = std::pair{std::move(result), std::move(get_left_indices(result->size()))};
 
-  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
-    build.view(), probe.view(), gather_map, gold.view());
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
 TEST_F(DistinctJoinTest, LeftJoinWithNulls)
@@ -434,8 +434,8 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
-    build.view(), probe.view(), gather_map, gold.view());
+  this->compare_to_reference <
+    (build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
 TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
@@ -492,6 +492,6 @@ TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
   cols_gold.push_back(col1_gold.release());
   Table gold(std::move(cols_gold));
 
-  this->compare_to_reference<cudf::out_of_bounds_policy::NULLIFY>(
-    build.view(), probe.view(), gather_map, gold.view());
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
