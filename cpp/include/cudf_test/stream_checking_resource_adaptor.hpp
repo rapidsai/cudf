@@ -68,13 +68,6 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     return upstream_;
   }
 
-  /**
-   * @brief Return pointer to the upstream resource.
-   *
-   * @return Pointer to the upstream resource.
-   */
-  [[nodiscard]] Upstream* get_upstream() const noexcept { return upstream_; }
-
  private:
   /**
    * @brief Allocates memory of size at least `bytes` using the upstream
