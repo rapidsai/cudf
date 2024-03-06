@@ -111,7 +111,7 @@ CUDF_EXPORT inline auto& host_mr()
 rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
 {
   std::lock_guard lock{detail::host_mr_lock()};
-  auto last_mr  = detail::host_mr();
+  auto last_mr      = detail::host_mr();
   detail::host_mr() = mr;
   return last_mr;
 }
