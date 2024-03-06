@@ -1482,8 +1482,18 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   auto const string_col =
     cudf::test::strings_column_wrapper(strings, strings + num_rows, no_nulls());
 
-  auto const table = table_view(
-    {col, col, col, col, col, string_col, string_col, string_col, string_col, string_col});
+  auto const table = table_view({col,
+                                 col,
+                                 col,
+                                 col,
+                                 col,
+                                 col,
+                                 string_col,
+                                 string_col,
+                                 string_col,
+                                 string_col,
+                                 string_col,
+                                 string_col});
 
   cudf::io::table_input_metadata table_metadata(table);
 
@@ -1495,13 +1505,15 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   set_meta(1, "int_dict", column_encoding::DICTIONARY);
   set_meta(2, "int_db", column_encoding::DELTA_BINARY_PACKED);
   set_meta(3, "int_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  table_metadata.column_metadata[4].set_name("int_none");
+  set_meta(4, "int_dba", column_encoding::DELTA_BYTE_ARRAY);
+  table_metadata.column_metadata[5].set_name("int_none");
 
-  set_meta(5, "string_plain", column_encoding::PLAIN);
-  set_meta(6, "string_dict", column_encoding::DICTIONARY);
-  set_meta(7, "string_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  set_meta(8, "string_db", column_encoding::DELTA_BINARY_PACKED);
-  table_metadata.column_metadata[9].set_name("string_none");
+  set_meta(6, "string_plain", column_encoding::PLAIN);
+  set_meta(7, "string_dict", column_encoding::DICTIONARY);
+  set_meta(8, "string_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  set_meta(9, "string_dba", column_encoding::DELTA_BYTE_ARRAY);
+  set_meta(10, "string_db", column_encoding::DELTA_BINARY_PACKED);
+  table_metadata.column_metadata[11].set_name("string_none");
 
   for (auto& col_meta : table_metadata.column_metadata) {
     col_meta.set_nullability(false);
@@ -1534,18 +1546,23 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   expect_enc(2, Encoding::DELTA_BINARY_PACKED);
   // requested delta_length_byte_array, but should fall back to dictionary
   expect_enc(3, Encoding::PLAIN_DICTIONARY);
-  // no request, should fall back to dictionary
+  // requested delta_byte_array, but should fall back to dictionary
   expect_enc(4, Encoding::PLAIN_DICTIONARY);
+  // no request, should use dictionary
+  expect_enc(5, Encoding::PLAIN_DICTIONARY);
+
   // requested plain
-  expect_enc(5, Encoding::PLAIN);
+  expect_enc(6, Encoding::PLAIN);
   // requested dictionary
-  expect_enc(6, Encoding::PLAIN_DICTIONARY);
+  expect_enc(7, Encoding::PLAIN_DICTIONARY);
   // requested delta_length_byte_array
-  expect_enc(7, Encoding::DELTA_LENGTH_BYTE_ARRAY);
+  expect_enc(8, Encoding::DELTA_LENGTH_BYTE_ARRAY);
+  // requested delta_byte_array
+  expect_enc(9, Encoding::DELTA_BYTE_ARRAY);
   // requested delta_binary_packed, but should fall back to dictionary
-  expect_enc(8, Encoding::PLAIN_DICTIONARY);
-  // no request, should fall back to dictionary
-  expect_enc(9, Encoding::PLAIN_DICTIONARY);
+  expect_enc(10, Encoding::PLAIN_DICTIONARY);
+  // no request, should use dictionary
+  expect_enc(11, Encoding::PLAIN_DICTIONARY);
 }
 
 TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
