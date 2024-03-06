@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,10 +31,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -170,14 +170,14 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  * Populates and returns an ArrowSchema C struct using a table and metadata.
  *
  * @note For decimals, since the precision is not stored for them in libcudf,
- * decimals will be converted to an Arrow decimal128 which has the widest precision that cudf decimal type
- * supports. For example, `numeric::decimal32` will be converted to Arrow decimal128 with the precision of
- * 9 which is the maximum precision for 32-bit types. Similarly, `numeric::decimal128` will be
- * converted to Arrow decimal128 with the precision of 38.
+ * decimals will be converted to an Arrow decimal128 which has the widest precision that cudf
+ * decimal type supports. For example, `numeric::decimal32` will be converted to Arrow decimal128
+ * with the precision of 9 which is the maximum precision for 32-bit types. Similarly,
+ * `numeric::decimal128` will be converted to Arrow decimal128 with the precision of 38.
  *
  * @param input table_view to create a schema from
  * @param metadata Contains the hierarchy of names of columns and children
- * @return ArrowSchema generated from `input` 
+ * @return ArrowSchema generated from `input`
  */
 nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
                                         std::vector<column_metadata> const& metadata);
@@ -200,7 +200,7 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
  *
  * @note Copies will be performed in the cases where cudf differs from Arrow
  * such as in the representation of bools (Arrow uses a bitmap, cudf uses 1-byte per value).
- * 
+ *
  * @param table input table, ownership of the data will be given to the result
  * @param stream the cuda stream to use for any operations and allocations
  * @param mr the memory resource to utilize for any allocations during conversion
