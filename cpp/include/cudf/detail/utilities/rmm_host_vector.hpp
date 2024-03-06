@@ -17,15 +17,15 @@
 #pragma once
 
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/resource_ref.hpp>
+
+#include <thrust/host_vector.h>
 
 #include <cstddef>
 #include <limits>
 #include <new>  // for bad_alloc
-
-#include <cudf/utilities/error.hpp>
-#include <thrust/host_vector.h>
 
 namespace cudf::detail {
 
@@ -130,24 +130,6 @@ class rmm_host_allocator {
   inline ~rmm_host_allocator() {}
 
   /**
-   * @brief This method returns the address of a \c reference of
-   *  interest.
-   *
-   *  @param r The \c reference of interest.
-   *  @return \c r's address.
-   */
-  inline pointer address(reference r) { return std::addressof(r); }
-
-  /**
-   * @brief This method returns the address of a \c const_reference
-   *  of interest.
-   *
-   *  @param r The \c const_reference of interest.
-   *  @return \c r's address.
-   */
-  inline const_pointer address(const_reference r) { return std::addressof(r); }
-
-  /**
    * @brief This method allocates storage for objects in host memory.
    *
    *  @param cnt The number of objects to allocate.
@@ -163,7 +145,7 @@ class rmm_host_allocator {
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
     return static_cast<pointer>(
-      mr.allocate_async(cnt * sizeof(value_type), THRUST_MR_DEFAULT_ALIGNMENT, stream));
+      mr.allocate_async(cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream));
   }
 
   /**
@@ -178,7 +160,7 @@ class rmm_host_allocator {
    */
   inline void deallocate(pointer p, size_type cnt)
   {
-    mr.deallocate_async(p, cnt * sizeof(value_type), THRUST_MR_DEFAULT_ALIGNMENT, stream);
+    mr.deallocate_async(p, cnt * sizeof(value_type), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
   }
 
   /**

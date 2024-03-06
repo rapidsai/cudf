@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/io/config_utils.hpp>
-#include <cudf/io/parquet.hpp>
-
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+
+#include <cudf/io/config_utils.hpp>
+#include <cudf/io/parquet.hpp>
 
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
