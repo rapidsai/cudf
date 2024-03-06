@@ -374,8 +374,7 @@ void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_inf
   auto const& fmd = per_file_metadata[rg_info.source_index];
   auto const& rg  = fmd.row_groups[rg_info.index];
 
-  std::vector<column_chunk_info> chunks;
-  chunks.resize(rg.columns.size());
+  std::vector<column_chunk_info> chunks(rg.columns.size());
 
   for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
     auto const& col_chunk    = rg.columns[col_idx];
