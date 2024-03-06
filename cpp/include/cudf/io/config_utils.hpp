@@ -29,8 +29,9 @@ namespace cudf::io {
  * pinned memory allocator) is what it uses to allocate space for it's host-side buffer.
  *
  * @param mr The rmm resource to be used for host-side allocations
+ * @return The previous resource that was in use
  */
-void set_current_host_memory_resource(rmm::host_async_resource_ref mr);
+rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr);
 
 /**
  * @brief Get the rmm resource being used for host memory allocations by
@@ -38,6 +39,6 @@ void set_current_host_memory_resource(rmm::host_async_resource_ref mr);
  *
  * @return The rmm resource used for host-side allocations
  */
-rmm::host_async_resource_ref get_current_host_memory_resource();
+rmm::host_async_resource_ref get_host_memory_resource();
 
 }  // namespace cudf::io

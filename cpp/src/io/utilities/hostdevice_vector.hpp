@@ -57,15 +57,13 @@ class hostdevice_vector {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : d_data(0, stream)
+    : h_data_owner(cudf::io::get_host_memory_resource()), d_data(0, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
-    h_data_owner = std::make_unique<cudf::detail::rmm_host_vector<T>>(
-      cudf::io::get_current_host_memory_resource());
-    h_data_owner->reserve(max_size);
-    h_data_owner->resize(initial_size);
-    host_data = h_data_owner->data();
+    h_data_owner.reserve(max_size);
+    h_data_owner.resize(initial_size);
+    host_data = h_data_owner.data();
 
     current_size = initial_size;
     d_data.resize(max_size, stream);
@@ -177,7 +175,7 @@ class hostdevice_vector {
   }
 
  private:
-  std::unique_ptr<cudf::detail::rmm_host_vector<T>> h_data_owner;
+  cudf::detail::rmm_host_vector<T> h_data_owner;
   T* host_data        = nullptr;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;

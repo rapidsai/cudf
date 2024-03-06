@@ -18,6 +18,7 @@
 
 #include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/export.hpp>
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
@@ -99,7 +100,7 @@ inline rmm::host_async_resource_ref default_pinned_mr()
   return default_mr;
 }
 
-inline auto& host_mr()
+CUDF_EXPORT inline auto& host_mr()
 {
   static rmm::host_async_resource_ref host_mr = default_pinned_mr();
   return host_mr;
@@ -107,15 +108,17 @@ inline auto& host_mr()
 
 }  // namespace detail
 
-void set_current_host_memory_resource(rmm::host_async_resource_ref mr)
+rmm::host_async_resource_ref set_host_memory_resource(rmm::host_async_resource_ref mr)
 {
-  std::lock_guard<std::mutex> lock{detail::host_mr_lock()};
+  std::lock_guard lock{detail::host_mr_lock()};
+  auto last_mr  = detail::host_mr();
   detail::host_mr() = mr;
+  return last_mr;
 }
 
-rmm::host_async_resource_ref get_current_host_memory_resource()
+rmm::host_async_resource_ref get_host_memory_resource()
 {
-  std::lock_guard<std::mutex> lock{detail::host_mr_lock()};
+  std::lock_guard lock{detail::host_mr_lock()};
   return detail::host_mr();
 }
 

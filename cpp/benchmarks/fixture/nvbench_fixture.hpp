@@ -122,14 +122,13 @@ struct nvbench_base_fixture {
     rmm::mr::set_current_device_resource(mr.get());
     std::cout << "RMM memory resource = " << rmm_mode << "\n";
 
-    cudf::io::set_current_host_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));
+    cudf::io::set_host_memory_resource(create_cuio_host_memory_resource(cuio_host_mode));
     std::cout << "CUIO host memory resource = " << cuio_host_mode << "\n";
   }
 
   std::shared_ptr<rmm::mr::device_memory_resource> mr;
   std::string rmm_mode{"pool"};
 
-  // host_resource_ref cuio_host_mr;
   std::string cuio_host_mode{"pinned"};
 };
 

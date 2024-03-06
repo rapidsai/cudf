@@ -103,12 +103,12 @@ class rmm_host_allocator {
   /**
    * @brief Copy constructor
    */
-  rmm_host_allocator(rmm_host_allocator const& other) : mr(other.mr) {}
+  rmm_host_allocator(rmm_host_allocator const& other) = default;
 
   /**
    * @brief Move constructor
    */
-  rmm_host_allocator(rmm_host_allocator&& other) : mr(std::move(other.mr)) {}
+  rmm_host_allocator(rmm_host_allocator&& other) = default;
 
   /**
    * @brief Assignment operator
@@ -122,7 +122,7 @@ class rmm_host_allocator {
   /**
    * @brief rmm_host_allocator's null destructor does nothing.
    */
-  __host__ __device__ inline ~rmm_host_allocator() {}
+  inline ~rmm_host_allocator() {}
 
   /**
    * @brief This method returns the address of a \c reference of
@@ -131,7 +131,7 @@ class rmm_host_allocator {
    *  @param r The \c reference of interest.
    *  @return \c r's address.
    */
-  __host__ __device__ inline pointer address(reference r) { return &r; }
+  inline pointer address(reference r) { return std::addressof(r); }
 
   /**
    * @brief This method returns the address of a \c const_reference
@@ -140,7 +140,7 @@ class rmm_host_allocator {
    *  @param r The \c const_reference of interest.
    *  @return \c r's address.
    */
-  __host__ __device__ inline const_pointer address(const_reference r) { return &r; }
+  inline const_pointer address(const_reference r) { return std::addressof(r); }
 
   /**
    * @brief This method allocates storage for objects in host memory.
@@ -154,7 +154,7 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to initialize the
    *        objects at the returned \c pointer.
    */
-  __host__ inline pointer allocate(size_type cnt, const_pointer /*hint*/ = 0)
+  inline pointer allocate(size_type cnt, const_pointer /*hint*/ = 0)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
     return static_cast<pointer>(mr.allocate(cnt * sizeof(value_type)));
@@ -170,10 +170,7 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  __host__ inline void deallocate(pointer p, size_type cnt)
-  {
-    mr.deallocate(p, cnt * sizeof(value_type));
-  }
+  inline void deallocate(pointer p, size_type cnt) { mr.deallocate(p, cnt * sizeof(value_type)); }
 
   /**
    * @brief This method returns the maximum size of the \c cnt parameter
@@ -182,7 +179,10 @@ class rmm_host_allocator {
    *  @return The maximum number of objects that may be allocated
    *          by a single call to \p allocate().
    */
-  inline size_type max_size() const { return (std::numeric_limits<size_type>::max)() / sizeof(T); }
+  constexpr inline size_type max_size() const
+  {
+    return (std::numeric_limits<size_type>::max)() / sizeof(T);
+  }
 
   /**
    * @brief This method tests this \p rmm_host_allocator for equality to
@@ -191,10 +191,7 @@ class rmm_host_allocator {
    *  @param x The other \p rmm_host_allocator of interest.
    *  @return This method always returns \c true.
    */
-  __host__ __device__ inline bool operator==(rmm_host_allocator const& x) const
-  {
-    return x.mr == mr;
-  }
+  inline bool operator==(rmm_host_allocator const& x) const { return x.mr == mr; }
 
   /**
    * @brief This method tests this \p rmm_host_allocator for inequality
@@ -203,10 +200,7 @@ class rmm_host_allocator {
    *  @param x The other \p rmm_host_allocator of interest.
    *  @return This method always returns \c false.
    */
-  __host__ __device__ inline bool operator!=(rmm_host_allocator const& x) const
-  {
-    return !operator==(x);
-  }
+  inline bool operator!=(rmm_host_allocator const& x) const { return !operator==(x); }
 
  private:
   rmm::host_async_resource_ref mr;
