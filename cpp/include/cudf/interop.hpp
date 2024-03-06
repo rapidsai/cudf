@@ -227,15 +227,15 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  *
  * Populates and returns an ArrowSchema C struct using a table and metadata.
  *
+ * @note For decimals, since the precision is not stored for them in libcudf,
+ * decimals will be converted to an Arrow decimal128 which has the widest precision that cudf decimal type
+ * supports. For example, `numeric::decimal32` will be converted to Arrow decimal128 with the precision of
+ * 9 which is the maximum precision for 32-bit types. Similarly, `numeric::decimal128` will be
+ * converted to Arrow decimal128 with the precision of 38.
+ *
  * @param input table_view to create a schema from
  * @param metadata Contains the hierarchy of names of columns and children
- * @return ArrowSchema generated from `input`
- *
- * @note For decimals, since the precision is not stored for them in libcudf,
- * it will be converted to an Arrow decimal128 that has the widest precision the cudf decimal type
- * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
- * 9 which is the maximum precision for 32-bit types. Similarly, numeric::decimal128 will be
- * converted to Arrow decimal128 of the precision 38.
+ * @return ArrowSchema generated from `input` 
  */
 nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
                                         std::vector<column_metadata> const& metadata);
