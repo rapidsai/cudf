@@ -154,9 +154,12 @@ The following guidelines apply to organizing `#include` lines.
    `<string>`, `<iostream>`).
  * We use clang-format for grouping and sorting headers automatically. See the
    `cudf/cpp/.clang-format` file for specifics.
- * Use `<>` for all includes except for internal headers that are not in the `include/cudf`
+ * Use `<>` for all includes except for internal headers that are not in the `include`
    directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
-   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
+   should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+ * `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
+   public headers in `include` that should be included with `<>`.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
    and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
    the grouping.
