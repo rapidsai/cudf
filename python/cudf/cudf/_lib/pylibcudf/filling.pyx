@@ -51,7 +51,7 @@ cpdef Column fill(
     with nogil:
         result = move(
             cpp_fill(
-                (<Column> destination).view(),
+                destination.view(),
                 begin,
                 end,
                 dereference((<Scalar> value).c_obj)
@@ -127,8 +127,10 @@ cpdef Table repeat(
     Table input_table,
     ColumnOrSize count
 ):
-    """Repeat rows of a Table either ``count`` times or as specified by an integral
-    column. If ``count`` is a column, the number of repetitions of each row is defined
+    """Repeat rows of a Table.
+    
+    If an integral value is specified for ``count``, every row is repeated ``count``
+    times. If ``count`` is a column, the number of repetitions of each row is defined
     by the value at the corresponding index of ``count``.
 
     For details, see :cpp:func:`repeat`.
@@ -140,6 +142,7 @@ cpdef Table repeat(
     count : Union[Column, size_type]
         Integer value to repeat each row by or
         non-nullable column of an integral type
+
     Returns
     -------
     pylibcudf.Table

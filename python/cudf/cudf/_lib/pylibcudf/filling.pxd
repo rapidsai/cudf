@@ -15,17 +15,20 @@ cpdef Column fill(
     size_type end,
     Scalar value,
 )
+
 cpdef void fill_in_place(
     Column destination,
     size_type c_begin,
     size_type c_end,
     Scalar value,
 )
+
 cpdef Column sequence(
     size_type size,
     Scalar init,
     Scalar step,
 )
+
 cpdef Table repeat(
     Table input_table,
     ColumnOrSize count
