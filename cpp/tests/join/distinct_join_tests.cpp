@@ -434,8 +434,8 @@ TEST_F(DistinctJoinTest, LeftJoinWithNulls)
   cols_gold.push_back(col_gold_3.release());
   Table gold(std::move(cols_gold));
 
-  this->compare_to_reference <
-    (build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
+  this->compare_to_reference(
+    build.view(), probe.view(), gather_map, gold.view(), cudf::out_of_bounds_policy::NULLIFY);
 }
 
 TEST_F(DistinctJoinTest, LeftJoinWithStructsAndNulls)
