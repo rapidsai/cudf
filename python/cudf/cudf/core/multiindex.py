@@ -667,7 +667,7 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             self_df = self.to_frame(index=False).reset_index()
             values_df = values_idx.to_frame(index=False)
             idx = self_df.merge(values_df, how="leftsemi")._data["index"]
-            res = cudf.core.column.full(size=len(self), fill_value=False)
+            res = column.as_column(False, length=len(self))
             res[idx] = True
             result = res.values
         else:
@@ -1574,10 +1574,12 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
             return mi
 
     @_cudf_nvtx_annotate
-    def to_pandas(self, *, nullable: bool = False) -> pd.MultiIndex:
+    def to_pandas(
+        self, *, nullable: bool = False, arrow_type: bool = False
+    ) -> pd.MultiIndex:
         result = self.to_frame(
             index=False, name=list(range(self.nlevels))
-        ).to_pandas(nullable=nullable)
+        ).to_pandas(nullable=nullable, arrow_type=arrow_type)
         return pd.MultiIndex.from_frame(result, names=self.names)
 
     @classmethod
@@ -1843,9 +1845,9 @@ class MultiIndex(Frame, BaseIndex, NotIterable):
                 "index must be monotonic increasing or decreasing"
             )
 
-        result = cudf.core.column.full(
-            len(target),
-            fill_value=-1,
+        result = column.as_column(
+            -1,
+            length=len(target),
             dtype=libcudf.types.size_type_dtype,
         )
         if not len(self):
