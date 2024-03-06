@@ -28,7 +28,7 @@ dependencies:
 - cxx-compiler
 - cython>=3.0.3
 - dask-cuda==24.4.*
-- dlpack>=0.5,<0.6.0a0
+- dlpack>=0.8,<1.0
 - doxygen=1.9.1
 - fastavro>=0.22.9
 - fmt>=10.1.1,<11
