@@ -213,19 +213,4 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
   cudf::test::expect_column_empty(results->view().column(0));
 }
 
-TEST_F(StringsColumnTest, OffsetsBeginEnd)
-{
-  cudf::test::strings_column_wrapper input({"eee", "bb", "", "", "aa", "bbb", "ééé"},
-                                           {1, 1, 0, 1, 1, 1, 1});
-
-  cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 5});
-  auto scv = cudf::strings_column_view(input);
-  EXPECT_EQ(std::distance(scv.offsets_begin(), scv.offsets_end()),
-            static_cast<std::ptrdiff_t>(scv.size() + 1));
-
-  scv = cudf::strings_column_view(cudf::slice(input, {1, 5}).front());
-  EXPECT_EQ(std::distance(scv.offsets_begin(), scv.offsets_end()),
-            static_cast<std::ptrdiff_t>(scv.size() + 1));
-}
-
 CUDF_TEST_PROGRAM_MAIN()
