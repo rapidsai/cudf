@@ -229,12 +229,12 @@ std::unique_ptr<column> capitalizer(CapitalFn cfn,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  auto [offsets_column, chars_column] =
+  auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(cfn, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

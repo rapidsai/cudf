@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -187,7 +187,7 @@ public class HostMemoryBufferTest extends CudfTestBase {
   }
 
   public static void initPinnedPoolIfNeeded(long size) {
-    long available = PinnedMemoryPool.getAvailableBytes();
+    long available = PinnedMemoryPool.getTotalPoolSizeBytes();
     if (available < size) {
       if (PinnedMemoryPool.isInitialized()) {
         PinnedMemoryPool.shutdown();

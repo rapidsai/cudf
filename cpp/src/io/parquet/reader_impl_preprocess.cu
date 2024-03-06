@@ -18,6 +18,7 @@
 #include "reader_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 
@@ -37,6 +38,7 @@
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
+#include <thrust/transform_scan.h>
 #include <thrust/unique.h>
 
 #include <bitset>
@@ -294,10 +296,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   // so that we can actually compile a list of all the unsupported encodings found
   // in the pages. That cannot be done here since we do not have the pages vector here.
   // see https://github.com/rapidsai/cudf/pull/14453#pullrequestreview-1778346688
-  if (error_code.value() != 0 and
-      error_code.value() != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
+  if (auto const error = error_code.value_sync(stream);
+      error != 0 and error != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
     CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
-              error_code.str());
+              kernel_error::to_string(error));
   }
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -350,6 +352,7 @@ std::string encoding_to_string(Encoding encoding)
   }
   return result;
 }
+
 /**
  * @brief Create a readable string for the user that will list out all unsupported encodings found.
  *
@@ -369,57 +372,18 @@ std::string encoding_to_string(Encoding encoding)
 }
 
 /**
- * @brief Decode the page information for a given pass.
+ * @brief Sort pages in chunk/schema order
  *
- * @param pass_intermediate_data The struct containing pass information
+ * @param unsorted_pages The unsorted pages
+ * @param chunks The chunks associated with the pages
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @returns The sorted vector of pages
  */
-void decode_page_headers(pass_intermediate_data& pass,
-                         device_span<PageInfo> unsorted_pages,
-                         rmm::cuda_stream_view stream)
+cudf::detail::hostdevice_vector<PageInfo> sort_pages(device_span<PageInfo const> unsorted_pages,
+                                                     device_span<ColumnChunkDesc const> chunks,
+                                                     rmm::cuda_stream_view stream)
 {
-  cudf::detail::hostdevice_vector<chunk_page_info> chunk_page_info(pass.chunks.size(), stream);
-
-  // IMPORTANT : if you change how pages are stored within a chunk (dist pages, then data pages),
-  // please update preprocess_nested_columns to reflect this.
-  for (size_t c = 0, page_count = 0; c < pass.chunks.size(); c++) {
-    pass.chunks[c].max_num_pages = pass.chunks[c].num_data_pages + pass.chunks[c].num_dict_pages;
-    chunk_page_info[c].pages     = &unsorted_pages[page_count];
-    page_count += pass.chunks[c].max_num_pages;
-  }
-
-  kernel_error error_code(stream);
-  pass.chunks.host_to_device_async(stream);
-  chunk_page_info.host_to_device_async(stream);
-  DecodePageHeaders(pass.chunks.device_ptr(),
-                    chunk_page_info.device_ptr(),
-                    pass.chunks.size(),
-                    error_code.data(),
-                    stream);
-
-  if (error_code.value() != 0) {
-    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
-      auto const unsupported_str =
-        ". With unsupported encodings found: " + list_unsupported_encodings(pass.pages, stream);
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported_str);
-    } else {
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
-    }
-  }
-
-  // compute max bytes needed for level data
-  auto level_bit_size = cudf::detail::make_counting_transform_iterator(
-    0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
-      auto c = chunks[i];
-      return static_cast<int>(
-        max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
-    }));
-  // max level data bit size.
-  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
-                                            level_bit_size,
-                                            level_bit_size + pass.chunks.size(),
-                                            0,
-                                            thrust::maximum<int>());
-  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+  CUDF_FUNC_RANGE();
 
   // sort the pages in chunk/schema order. we use chunk.src_col_index instead of
   // chunk.src_col_schema because the user may have reordered them (reading columns, "a" and "b" but
@@ -442,35 +406,108 @@ void decode_page_headers(pass_intermediate_data& pass,
   // 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
   //
   // We also need to preserve key-relative page ordering, so we need to use a stable sort.
-  {
-    rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      unsorted_pages.begin(),
-                      unsorted_pages.end(),
-                      page_keys.begin(),
-                      [chunks = pass.chunks.d_begin()] __device__(PageInfo const& page) {
-                        return chunks[page.chunk_idx].src_col_index;
-                      });
-    // we are doing this by sorting indices first and then transforming the output because nvcc
-    // started generating kernels using too much shared memory when trying to sort the pages
-    // directly.
-    rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
-    thrust::sequence(rmm::exec_policy_nosync(stream), sort_indices.begin(), sort_indices.end(), 0);
-    thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
-                               page_keys.begin(),
-                               page_keys.end(),
-                               sort_indices.begin(),
-                               thrust::less<int>());
-    pass.pages = cudf::detail::hostdevice_vector<PageInfo>(
-      unsorted_pages.size(), unsorted_pages.size(), stream);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      sort_indices.begin(),
-                      sort_indices.end(),
-                      pass.pages.d_begin(),
-                      [unsorted_pages = unsorted_pages.begin()] __device__(int32_t i) {
-                        return unsorted_pages[i];
-                      });
+  rmm::device_uvector<int32_t> page_keys{unsorted_pages.size(), stream};
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    unsorted_pages.begin(),
+    unsorted_pages.end(),
+    page_keys.begin(),
+    cuda::proclaim_return_type<int32_t>([chunks = chunks.begin()] __device__(PageInfo const& page) {
+      return chunks[page.chunk_idx].src_col_index;
+    }));
+  // we are doing this by sorting indices first and then transforming the output because nvcc
+  // started generating kernels using too much shared memory when trying to sort the pages
+  // directly.
+  rmm::device_uvector<int32_t> sort_indices(unsorted_pages.size(), stream);
+  thrust::sequence(rmm::exec_policy_nosync(stream), sort_indices.begin(), sort_indices.end(), 0);
+  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
+                             page_keys.begin(),
+                             page_keys.end(),
+                             sort_indices.begin(),
+                             thrust::less<int>());
+  auto pass_pages =
+    cudf::detail::hostdevice_vector<PageInfo>(unsorted_pages.size(), unsorted_pages.size(), stream);
+  thrust::transform(
+    rmm::exec_policy_nosync(stream),
+    sort_indices.begin(),
+    sort_indices.end(),
+    pass_pages.d_begin(),
+    cuda::proclaim_return_type<PageInfo>([unsorted_pages = unsorted_pages.begin()] __device__(
+                                           int32_t i) { return unsorted_pages[i]; }));
+  stream.synchronize();
+  return pass_pages;
+}
+
+/**
+ * @brief Decode the page information for a given pass.
+ *
+ * @param pass_intermediate_data The struct containing pass information
+ */
+void decode_page_headers(pass_intermediate_data& pass,
+                         device_span<PageInfo> unsorted_pages,
+                         rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+
+  auto iter = thrust::make_counting_iterator(0);
+  rmm::device_uvector<size_t> chunk_page_counts(pass.chunks.size() + 1, stream);
+  thrust::transform_exclusive_scan(
+    rmm::exec_policy_nosync(stream),
+    iter,
+    iter + pass.chunks.size() + 1,
+    chunk_page_counts.begin(),
+    cuda::proclaim_return_type<size_t>(
+      [chunks = pass.chunks.d_begin(), num_chunks = pass.chunks.size()] __device__(size_t i) {
+        return static_cast<size_t>(
+          i >= num_chunks ? 0 : chunks[i].num_data_pages + chunks[i].num_dict_pages);
+      }),
+    0,
+    thrust::plus<size_t>{});
+  rmm::device_uvector<chunk_page_info> d_chunk_page_info(pass.chunks.size(), stream);
+  thrust::for_each(rmm::exec_policy_nosync(stream),
+                   iter,
+                   iter + pass.chunks.size(),
+                   [cpi               = d_chunk_page_info.begin(),
+                    chunk_page_counts = chunk_page_counts.begin(),
+                    unsorted_pages    = unsorted_pages.begin()] __device__(size_t i) {
+                     cpi[i].pages = &unsorted_pages[chunk_page_counts[i]];
+                   });
+
+  kernel_error error_code(stream);
+  DecodePageHeaders(pass.chunks.d_begin(),
+                    d_chunk_page_info.begin(),
+                    pass.chunks.size(),
+                    error_code.data(),
+                    stream);
+
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {
+      auto const unsupported_str =
+        ". With unsupported encodings found: " + list_unsupported_encodings(pass.pages, stream);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + kernel_error::to_string(error) +
+                unsupported_str);
+    } else {
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + kernel_error::to_string(error));
+    }
   }
+
+  // compute max bytes needed for level data
+  auto level_bit_size = cudf::detail::make_counting_transform_iterator(
+    0, cuda::proclaim_return_type<int>([chunks = pass.chunks.d_begin()] __device__(int i) {
+      auto c = chunks[i];
+      return static_cast<int>(
+        max(c.level_bits[level_type::REPETITION], c.level_bits[level_type::DEFINITION]));
+    }));
+  // max level data bit size.
+  int const max_level_bits = thrust::reduce(rmm::exec_policy(stream),
+                                            level_bit_size,
+                                            level_bit_size + pass.chunks.size(),
+                                            0,
+                                            thrust::maximum<int>());
+  pass.level_type_size     = std::max(1, cudf::util::div_rounding_up_safe(max_level_bits, 8));
+
+  // sort the pages in chunk/schema order.
+  pass.pages = sort_pages(unsorted_pages, pass.chunks, stream);
 
   // compute offsets to each group of input pages.
   // page_keys:   1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3
@@ -486,11 +523,11 @@ void decode_page_headers(pass_intermediate_data& pass,
                                                      page_counts.begin())
                                  .second;
   auto const num_page_counts = page_counts_end - page_counts.begin();
-  pass.page_offsets = cudf::detail::hostdevice_vector<size_type>(num_page_counts + 1, stream);
+  pass.page_offsets          = rmm::device_uvector<size_type>(num_page_counts + 1, stream);
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
                          page_counts.begin(),
                          page_counts.begin() + num_page_counts + 1,
-                         pass.page_offsets.d_begin());
+                         pass.page_offsets.begin());
 
   // setup dict_page for each chunk if necessary
   thrust::for_each(rmm::exec_policy_nosync(stream),
@@ -502,7 +539,6 @@ void decode_page_headers(pass_intermediate_data& pass,
                      }
                    });
 
-  pass.page_offsets.device_to_host_async(stream);
   pass.pages.device_to_host_async(stream);
   pass.chunks.device_to_host_async(stream);
   stream.synchronize();
@@ -589,6 +625,8 @@ struct set_final_row_count {
 
 void reader::impl::build_string_dict_indices()
 {
+  CUDF_FUNC_RANGE();
+
   auto& pass = *_pass_itm_data;
 
   // compute number of indices per chunk and a summed total
@@ -1229,12 +1267,16 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
                      _stream);
   }
 
-  // copy our now-correct row counts  back to the base pages stored in the pass.
   auto iter = thrust::make_counting_iterator(0);
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + subpass.pages.size(),
-                   update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
+
+  // copy our now-correct row counts  back to the base pages stored in the pass.
+  // only need to do this if we are not processing the whole pass in one subpass
+  if (!subpass.single_subpass) {
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     update_pass_num_rows{pass.pages, subpass.pages, subpass.page_src_index});
+  }
 
   // computes:
   // PageInfo::chunk_row (the chunk-relative row index) for all pages in the pass. The start_row
@@ -1250,14 +1292,17 @@ void reader::impl::preprocess_subpass_pages(bool uses_custom_row_bounds, size_t 
                                 chunk_row_output_iter{pass.pages.device_ptr()});
 
   // copy chunk row into the subpass pages
-  thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   iter,
-                   iter + subpass.pages.size(),
-                   update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
+  // only need to do this if we are not processing the whole pass in one subpass
+  if (!subpass.single_subpass) {
+    thrust::for_each(rmm::exec_policy_nosync(_stream),
+                     iter,
+                     iter + subpass.pages.size(),
+                     update_subpass_chunk_row{pass.pages, subpass.pages, subpass.page_src_index});
+  }
 
   // retrieve pages back
   pass.pages.device_to_host_async(_stream);
-  subpass.pages.device_to_host_async(_stream);
+  if (!subpass.single_subpass) { subpass.pages.device_to_host_async(_stream); }
   _stream.synchronize();
 
   // at this point we have an accurate row count so we can compute how many rows we will actually be
@@ -1382,7 +1427,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       thrust::make_counting_iterator<size_type>(num_keys),
       size_input.begin(),
       get_page_nesting_size{
-        d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.d_begin()});
+        d_cols_info.data(), max_depth, subpass.pages.size(), subpass.pages.device_begin()});
     auto const reduction_keys =
       cudf::detail::make_counting_transform_iterator(0, get_reduction_key{subpass.pages.size()});
     cudf::detail::hostdevice_vector<size_t> sizes{_input_columns.size() * max_depth, _stream};
@@ -1402,7 +1447,7 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       reduction_keys + num_keys,
       size_input.cbegin(),
       start_offset_output_iterator{
-        subpass.pages.d_begin(), 0, d_cols_info.data(), max_depth, subpass.pages.size()});
+        subpass.pages.device_begin(), 0, d_cols_info.data(), max_depth, subpass.pages.size()});
 
     sizes.device_to_host_sync(_stream);
     for (size_type idx = 0; idx < static_cast<size_type>(_input_columns.size()); idx++) {
@@ -1442,7 +1487,7 @@ std::vector<size_t> reader::impl::calculate_page_string_offsets()
   rmm::device_uvector<size_t> d_col_sizes(col_sizes.size(), _stream);
 
   // use page_index to fetch page string sizes in the proper order
-  auto val_iter = thrust::make_transform_iterator(subpass.pages.d_begin(),
+  auto val_iter = thrust::make_transform_iterator(subpass.pages.device_begin(),
                                                   page_to_string_size{pass.chunks.d_begin()});
 
   // do scan by key to calculate string offsets for each page
