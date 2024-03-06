@@ -128,7 +128,7 @@ cpdef Table repeat(
     ColumnOrSize count
 ):
     """Repeat rows of a Table.
-    
+
     If an integral value is specified for ``count``, every row is repeated ``count``
     times. If ``count`` is a column, the number of repetitions of each row is defined
     by the value at the corresponding index of ``count``.
