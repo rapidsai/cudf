@@ -719,7 +719,7 @@ dependencies:
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
           # pandas[all] includes all of the required dependencies
           - pytest-reportlog
-          - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          - pandas[test, pyarrow]
   test_python_cudf_pandas:
     common:
       - output_types: pyproject
