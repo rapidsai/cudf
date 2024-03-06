@@ -79,10 +79,10 @@ class reader {
 };
 
 /**
- * @brief The reader class that supports iterative reading of a given file.
+ * @brief The reader class that supports iterative reading from an array of data sources.
  *
  * This class intentionally subclasses the `reader` class with private inheritance to hide the
- * `reader::read()` API. As such, only chunked reading APIs are supported.
+ * base class `reader::read()` API. As such, only chunked reading APIs are supported through it.
  */
 class chunked_reader : private reader {
  public:
@@ -98,18 +98,25 @@ class chunked_reader : private reader {
    *
    * ```
    *
-   * If `output_size_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
-   * whole file and return a table containing all rows.
+   * If `output_size_limit == 0` (i.e., no output limit) and `data_read_limit == 0` (no temporary
+   * memory size limit), a call to `read_chunk()` will read the whole data source and return a table
+   * containing all rows.
    *
-   * TODO: data read limit
-   * TODO: granularity
+   * The `output_size_limit` parameter controls the size of the output table to be returned per
+   * `read_chunk()` call. If the user specifies a 100 MB limit, the reader will attempt to return
+   * tables that have a total bytes size (over all columns) of 100 MB or less.
+   * This is a soft limit and the code will not fail if it cannot satisfy the limit.
    *
-   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   * The `data_read_limit` parameter controls how much temporary memory is used in the entire
+   * process of loading, decompressing and decoding of data. Again, this is also a soft limit and
+   * the reader will try to make the best effort.
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
-   *        of input, or `0` if there is no limit
+   * @param data_read_limit Limit on temporary memory usage for reading the data sources,
+   *        or `0` if there is no limit
    * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
+   * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
