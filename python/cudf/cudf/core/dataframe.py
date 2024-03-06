@@ -1777,7 +1777,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # Reassign index and column names
         if objs[0]._data.multiindex:
-            out._set_column_names_like(objs[0])
+            out._set_columns_like(objs[0]._data)
         else:
             out.columns = names
         if not ignore_index:
@@ -2215,7 +2215,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 next(iter(data.values())), (cudf.Series, cupy.ndarray)
             ):
                 result = cls(data).T
-                result.columns = columns
+                result.columns = (
+                    columns
+                    if columns is not None
+                    else range(len(result._data))
+                )
                 if dtype is not None:
                     result = result.astype(dtype)
                 return result
@@ -2619,39 +2623,69 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     @columns.setter  # type: ignore
     @_cudf_nvtx_annotate
     def columns(self, columns):
-        if isinstance(columns, cudf.BaseIndex):
-            columns = columns.to_pandas()
-        if columns is None:
-            columns = pd.Index(range(len(self._data.columns)))
-        is_multiindex = isinstance(columns, pd.MultiIndex)
+        multiindex = False
+        rangeindex = False
+        label_dtype = None
+        level_names = None
+        if isinstance(columns, (pd.MultiIndex, cudf.MultiIndex)):
+            multiindex = True
+            if isinstance(columns, cudf.MultiIndex):
+                pd_columns = columns.to_pandas()
+            else:
+                pd_columns = columns
+            if pd_columns.nunique(dropna=False) != len(pd_columns):
+                raise ValueError("Duplicate column names are not allowed")
+            level_names = list(pd_columns.names)
+        elif isinstance(columns, (cudf.BaseIndex, ColumnBase, Series)):
+            level_names = (getattr(columns, "name", None),)
+            rangeindex = isinstance(columns, cudf.RangeIndex)
+            columns = as_column(columns)
+            if columns.distinct_count(dropna=False) != len(columns):
+                raise ValueError("Duplicate column names are not allowed")
+            pd_columns = pd.Index(columns.to_pandas())
+            label_dtype = pd_columns.dtype
+        else:
+            pd_columns = pd.Index(columns)
+            if pd_columns.nunique(dropna=False) != len(pd_columns):
+                raise ValueError("Duplicate column names are not allowed")
+            rangeindex = isinstance(pd_columns, pd.RangeIndex)
+            level_names = (pd_columns.name,)
+            label_dtype = pd_columns.dtype
 
-        if isinstance(columns, (Series, cudf.Index, ColumnBase)):
-            columns = pd.Index(columns.to_numpy(), tupleize_cols=is_multiindex)
-        elif not isinstance(columns, pd.Index):
-            columns = pd.Index(columns, tupleize_cols=is_multiindex)
-
-        if not len(columns) == len(self._data.names):
+        if len(pd_columns) != len(self._data.names):
             raise ValueError(
                 f"Length mismatch: expected {len(self._data.names)} elements, "
-                f"got {len(columns)} elements"
+                f"got {len(pd_columns)} elements"
             )
 
-        self._set_column_names(columns, is_multiindex, columns.names)
-
-    def _set_column_names(self, names, multiindex=False, level_names=None):
-        data = dict(zip(names, self._data.columns))
-        if len(names) != len(data):
-            raise ValueError("Duplicate column names are not allowed")
-
         self._data = ColumnAccessor(
-            data,
+            data=dict(zip(pd_columns, self._data.columns)),
             multiindex=multiindex,
             level_names=level_names,
+            label_dtype=label_dtype,
+            rangeindex=rangeindex,
+            verify=False,
         )
 
-    def _set_column_names_like(self, other):
-        self._set_column_names(
-            other._data.names, other._data.multiindex, other._data.level_names
+    def _set_columns_like(self, other: ColumnAccessor) -> None:
+        """
+        Modify self with the column properties of other.
+
+        * Whether .columns is a MultiIndex/RangeIndex
+        * The possible .columns.dtype
+        * The .columns.names/name (depending on if it's a MultiIndex)
+        """
+        if len(self._data.names) != len(other.names):
+            raise ValueError(
+                f"Length mismatch: expected {len(other)} elements, "
+                f"got {len(self)} elements"
+            )
+        self._data = ColumnAccessor(
+            data=dict(zip(other.names, self._data.columns)),
+            multiindex=other.multiindex,
+            level_names=other.level_names,
+            label_dtype=other.label_dtype,
+            verify=False,
         )
 
     @_cudf_nvtx_annotate
@@ -3023,7 +3057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "Array conditional must be same shape as self"
                 )
             # Setting `self` column names to `cond` as it has no column names.
-            cond._set_column_names_like(self)
+            cond._set_columns_like(self._data)
 
         # If other was provided, process that next.
         if isinstance(other, DataFrame):
@@ -6347,7 +6381,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if isinstance(df, Series):
             df = df.to_frame()
 
-        df._set_column_names_like(data_df)
+        df._set_columns_like(data_df._data)
 
         return df
 
@@ -6458,7 +6492,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
         else:
             result_df = DataFrame(result).set_index(self.index)
-            result_df._set_column_names_like(prepared)
+            result_df._set_columns_like(prepared._data)
             return result_df
 
     @_cudf_nvtx_annotate
@@ -7082,7 +7116,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         cov = cupy.cov(self.values, rowvar=False)
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(cov)).set_index(cols)
-        df._set_column_names_like(self)
+        df._set_columns_like(self._data)
         return df
 
     def corr(self, method="pearson", min_periods=None):
@@ -7118,7 +7152,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         corr = cupy.corrcoef(values, rowvar=False)
         cols = self._data.to_pandas_index()
         df = DataFrame(cupy.asfortranarray(corr)).set_index(cols)
-        df._set_column_names_like(self)
+        df._set_columns_like(self._data)
         return df
 
     @_cudf_nvtx_annotate
@@ -7455,7 +7489,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             index_names,
             override_dtypes=override_dtypes,
         )
-        result._set_column_names_like(self)
+        result._set_columns_like(self._data)
         return result
 
     @_cudf_nvtx_annotate

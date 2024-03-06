@@ -68,20 +68,6 @@ pyarrow_dtypes_to_pandas_dtypes = {
 }
 
 
-pandas_dtypes_alias_to_cudf_alias = {
-    "UInt8": "uint8",
-    "UInt16": "uint16",
-    "UInt32": "uint32",
-    "UInt64": "uint64",
-    "Int8": "int8",
-    "Int16": "int16",
-    "Int32": "int32",
-    "Int64": "int64",
-    "boolean": "bool",
-    "Float32": "float32",
-    "Float64": "float64",
-}
-
 SIGNED_INTEGER_TYPES = {"int8", "int16", "int32", "int64"}
 UNSIGNED_TYPES = {"uint8", "uint16", "uint32", "uint64"}
 INTEGER_TYPES = SIGNED_INTEGER_TYPES | UNSIGNED_TYPES
