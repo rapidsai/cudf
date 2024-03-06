@@ -61,17 +61,17 @@ std::optional<schema_element> child_schema_element(std::string const& col_name,
 std::optional<data_type> get_path_data_type(
   host_span<std::pair<std::string, cudf::io::json::NodeT>> path, schema_element const& root)
 {
-  if (path.empty() || path.size() == 1)
+  if (path.empty() || path.size() == 1) {
     return root.type;
-  else {
+  } else {
     if (path.back().second == NC_STRUCT && root.type.id() == type_id::STRUCT) {
-      auto child_name      = path.first(path.size() - 1).back().first;
-      auto child_schema_it = root.child_types.find(child_name);
+      auto const child_name      = path.first(path.size() - 1).back().first;
+      auto const child_schema_it = root.child_types.find(child_name);
       return (child_schema_it != std::end(root.child_types))
                ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
                : std::optional<data_type>{};
     } else if (path.back().second == NC_LIST && root.type.id() == type_id::LIST) {
-      auto child_schema_it = root.child_types.find(list_child_name);
+      auto const child_schema_it = root.child_types.find(list_child_name);
       return (child_schema_it != std::end(root.child_types))
                ? get_path_data_type(path.first(path.size() - 1), child_schema_it->second)
                : std::optional<data_type>{};
@@ -89,7 +89,6 @@ std::optional<data_type> get_path_data_type(
   // check if it has value, then do recursive call and return.
   if (col_schema.has_value()) {
     return get_path_data_type(path, col_schema.value());
-    return {};
   } else {
     return {};
   }
