@@ -1565,6 +1565,38 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   expect_enc(11, Encoding::PLAIN_DICTIONARY);
 }
 
+TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
+{
+  // decimal128 in cuDF maps to FIXED_LEN_BYTE_ARRAY, which is allowed by the spec to use
+  // DELTA_BYTE_ARRAY encoding. But this use is not implemented in cuDF.
+  __int128_t val0 = 0xa1b2'c3d4'e5f6ULL;
+  __int128_t val1 = val0 << 80;
+  column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0}),
+                                            numeric::decimal128(val1, numeric::scale_type{0})}};
+
+  auto expected = table_view{{col0, col0}};
+  cudf::io::table_input_metadata table_metadata(expected);
+  table_metadata.column_metadata[0]
+    .set_name("decimal128")
+    .set_encoding(cudf::io::column_encoding::DELTA_BYTE_ARRAY)
+    .set_nullability(false);
+
+  auto const filepath = temp_env->get_temp_filepath("Decimal128DeltaByteArray.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::NONE)
+      .metadata(table_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // make sure DELTA_BYTE_ARRAY was not used
+  EXPECT_NE(fmd.row_groups[0].columns[0].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::DELTA_BYTE_ARRAY);
+}
+
 TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
 {
   // test that the DELTA_BINARY_PACKED writer can properly encode a column that begins with
