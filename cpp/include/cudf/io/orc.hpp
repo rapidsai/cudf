@@ -424,73 +424,95 @@ class chunked_orc_reader {
   chunked_orc_reader() = default;
 
   /**
-   * @brief Constructor for chunked reader.
+   * @brief Constructor from size limits and an array of data sources with reader options.
    *
-   * This constructor requires the same `orc_reader_option` parameter as in
-   * `cudf::read_orc()`, and additional parameters to specify the size byte limits of the
-   * output table for each reading.
+   * The typical usage should be similar to this:
+   * ```
+   *  do {
+   *    auto const chunk = reader.read_chunk();
+   *    // Process chunk
+   *  } while (reader.has_next());
    *
-   * TODO: data read limit
+   * ```
    *
-   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   * If `output_size_limit == 0` (i.e., no output limit) and `data_read_limit == 0` (no temporary
+   * memory size limit), a call to `read_chunk()` will read the whole data source and return a table
+   * containing all rows.
+   *
+   * The `output_size_limit` parameter controls the size of the output table to be returned per
+   * `read_chunk()` call. If the user specifies a 100 MB limit, the reader will attempt to return
+   * tables that have a total bytes size (over all columns) of 100 MB or less.
+   * This is a soft limit and the code will not fail if it cannot satisfy the limit.
+   *
+   * The `data_read_limit` parameter controls how much temporary memory is used in the entire
+   * process of loading, decompressing and decoding of data. Again, this is also a soft limit and
+   * the reader will try to make the best effort.
+   *
+   * Finally, the parameter `output_row_granularity` controls the changes in row number of the
+   * output chunk. For each call to `read_chunk()`, with respect to the given `data_read_limit`, a
+   * subset of stripes may be loaded, decompressed and decoded into an intermediate table. The
+   * reader will then subdivide that table into smaller tables for final output using
+   * `output_row_granularity` as the subdivision step.
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param options The options used to read Parquet file
+   * @param data_read_limit Limit on temporary memory usage for reading the data sources,
+   *        or `0` if there is no limit
+   * @param output_row_granularity The granularity parameter used for subdividing the decoded
+   *        table for final output
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  chunked_orc_reader(std::size_t output_size_limit,
-                     orc_reader_options const& options,
-                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  explicit chunked_orc_reader(
+    std::size_t output_size_limit,
+    std::size_t data_read_limit,
+    size_type output_row_granularity,
+    orc_reader_options const& options,
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Constructor for chunked reader.
+   * @brief Constructor from size limits and an array of data sources with reader options.
    *
-   * This constructor requires the same `orc_reader_option` parameter as in
-   * `cudf::read_orc()`, and additional parameters to specify the size byte limits of the
-   * output table for each reading.
+   * This constructor implicitly call the other constructor with `output_row_granularity` set to
+   * 10'000 rows.
    *
-   * TODO: data read limit
-   *
-   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
-   *        of input, or `0` if there is no limit
-   * @param options The options used to read Parquet file
+   * @param data_read_limit Limit on temporary memory usage for reading the data sources,
+   *        or `0` if there is no limit
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  chunked_orc_reader(std::size_t output_size_limit,
-                     std::size_t data_read_limit,
-                     orc_reader_options const& options,
-                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  explicit chunked_orc_reader(
+    std::size_t output_size_limit,
+    std::size_t data_read_limit,
+    orc_reader_options const& options,
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Constructor for chunked reader.
+   * @brief Constructor from output size limit and an array of data sources with reader options.
    *
-   * This constructor requires the same `orc_reader_option` parameter as in
-   * `cudf::read_orc()`, and additional parameters to specify the size byte limits of the
-   * output table for each reading.
+   * This constructor implicitly call the other constructor with `data_read_limit` set to `0` and
+   * `output_row_granularity` set to 10'000 rows.
    *
-   * TODO: data read limit
-   *
-   * @param output_size_limit Limit on total number of bytes to be returned per read,
+   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
-   *        of input, or `0` if there is no limit
-   * @param output_row_granularity  TODO
-   * @param options The options used to read Parquet file
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  chunked_orc_reader(std::size_t output_size_limit,
-                     std::size_t data_read_limit,
-                     size_type output_row_granularity,
-                     orc_reader_options const& options,
-                     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
+  explicit chunked_orc_reader(
+    std::size_t output_size_limit,
+    orc_reader_options const& options,
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
   /**
    * @brief Destructor, destroying the internal reader instance.
    *
