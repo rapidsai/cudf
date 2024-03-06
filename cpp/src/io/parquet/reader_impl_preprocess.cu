@@ -296,10 +296,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
   // so that we can actually compile a list of all the unsupported encodings found
   // in the pages. That cannot be done here since we do not have the pages vector here.
   // see https://github.com/rapidsai/cudf/pull/14453#pullrequestreview-1778346688
-  if (error_code.value() != 0 and
-      error_code.value() != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
+  if (auto const error = error_code.value_sync(stream);
+      error != 0 and error != static_cast<uint32_t>(decode_error::UNSUPPORTED_ENCODING)) {
     CUDF_FAIL("Parquet header parsing failed with code(s) while counting page headers " +
-              error_code.str());
+              kernel_error::to_string(error));
   }
 
   for (size_t c = 0; c < chunks.size(); c++) {
@@ -480,13 +480,14 @@ void decode_page_headers(pass_intermediate_data& pass,
                     error_code.data(),
                     stream);
 
-  if (error_code.value() != 0) {
-    if (BitAnd(error_code.value(), decode_error::UNSUPPORTED_ENCODING) != 0) {
+  if (auto const error = error_code.value_sync(stream); error != 0) {
+    if (BitAnd(error, decode_error::UNSUPPORTED_ENCODING) != 0) {
       auto const unsupported_str =
         ". With unsupported encodings found: " + list_unsupported_encodings(pass.pages, stream);
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str() + unsupported_str);
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + kernel_error::to_string(error) +
+                unsupported_str);
     } else {
-      CUDF_FAIL("Parquet header parsing failed with code(s) " + error_code.str());
+      CUDF_FAIL("Parquet header parsing failed with code(s) " + kernel_error::to_string(error));
     }
   }
 
