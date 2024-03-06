@@ -267,11 +267,13 @@ bool is_col_fixed_width(column_view const& column)
  * 2. stats_dtype: datatype for statistics calculation required for the data stream of a leaf node.
  * 3. ts_scale: scale to multiply or divide timestamp by in order to convert timestamp to parquet
  *    supported types
+ * 4. requested_encoding: A user provided encoding to use for the column.
  */
 struct schema_tree_node : public SchemaElement {
   cudf::detail::LinkedColPtr leaf_column;
   statistics_dtype stats_dtype;
   int32_t ts_scale;
+  column_encoding requested_encoding;
 
   // TODO(fut): Think about making schema a class that holds a vector of schema_tree_nodes. The
   // function construct_schema_tree could be its constructor. It can have method to get the per
@@ -588,7 +590,7 @@ std::vector<schema_tree_node> construct_schema_tree(
 
   std::function<void(cudf::detail::LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
     [&](cudf::detail::LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
-      bool col_nullable = is_col_nullable(col, col_meta, write_mode);
+      bool const col_nullable = is_col_nullable(col, col_meta, write_mode);
 
       auto set_field_id = [&schema, parent_idx](schema_tree_node& s,
                                                 column_in_metadata const& col_meta) {
@@ -602,6 +604,52 @@ std::vector<schema_tree_node> construct_schema_tree(
         auto const child_col_type =
           col->children[lists_column_view::child_column_index]->type().id();
         return child_col_type == type_id::UINT8;
+      };
+
+      // only call this after col_schema.type has been set
+      auto set_encoding = [&schema, parent_idx](schema_tree_node& s,
+                                                column_in_metadata const& col_meta) {
+        s.requested_encoding = column_encoding::USE_DEFAULT;
+
+        if (schema[parent_idx].name != "list" and
+            col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
+          // do some validation
+          switch (col_meta.get_encoding()) {
+            case column_encoding::DELTA_BINARY_PACKED:
+              if (s.type != Type::INT32 && s.type != Type::INT64) {
+                CUDF_LOG_WARN(
+                  "DELTA_BINARY_PACKED encoding is only supported for INT32 and INT64 columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            case column_encoding::DELTA_LENGTH_BYTE_ARRAY:
+              if (s.type != Type::BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "DELTA_LENGTH_BYTE_ARRAY encoding is only supported for BYTE_ARRAY columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            // supported parquet encodings
+            case column_encoding::PLAIN:
+            case column_encoding::DICTIONARY: break;
+
+            // not yet supported for write (soon...)
+            case column_encoding::DELTA_BYTE_ARRAY: [[fallthrough]];
+            // all others
+            default:
+              CUDF_LOG_WARN(
+                "Unsupported page encoding requested: {}; the requested encoding will be ignored",
+                static_cast<int>(col_meta.get_encoding()));
+              return;
+          }
+
+          // requested encoding seems to be ok, set it
+          s.requested_encoding = col_meta.get_encoding();
+        }
       };
 
       // There is a special case for a list<int8> column with one byte column child. This column can
@@ -626,6 +674,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        set_encoding(col_schema, col_meta);
         col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
         schema.push_back(col_schema);
       } else if (col->type().id() == type_id::STRUCT) {
@@ -761,6 +810,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         col_schema.parent_idx  = parent_idx;
         col_schema.leaf_column = col;
         set_field_id(col_schema, col_meta);
+        set_encoding(col_schema, col_meta);
         schema.push_back(col_schema);
       }
     };
@@ -947,9 +997,10 @@ parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
-  desc.nullability   = _d_nullability.data();
-  desc.max_def_level = _max_def_level;
-  desc.max_rep_level = _max_rep_level;
+  desc.nullability        = _d_nullability.data();
+  desc.max_def_level      = _max_def_level;
+  desc.max_rep_level      = _max_rep_level;
+  desc.requested_encoding = schema_node.requested_encoding;
   return desc;
 }
 
@@ -1169,9 +1220,15 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   std::vector<rmm::device_uvector<slot_type>> hash_maps_storage;
   hash_maps_storage.reserve(h_chunks.size());
   for (auto& chunk : h_chunks) {
-    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN ||
-        (col_desc[chunk.col_desc_id].output_as_byte_array &&
-         col_desc[chunk.col_desc_id].physical_type == Type::BYTE_ARRAY)) {
+    auto const& chunk_col_desc = col_desc[chunk.col_desc_id];
+    auto const is_requested_non_dict =
+      chunk_col_desc.requested_encoding != column_encoding::USE_DEFAULT &&
+      chunk_col_desc.requested_encoding != column_encoding::DICTIONARY;
+    auto const is_type_non_dict =
+      chunk_col_desc.physical_type == Type::BOOLEAN ||
+      (chunk_col_desc.output_as_byte_array && chunk_col_desc.physical_type == Type::BYTE_ARRAY);
+
+    if (is_type_non_dict || is_requested_non_dict) {
       chunk.use_dictionary = false;
     } else {
       chunk.use_dictionary = true;
@@ -1191,6 +1248,7 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
   chunks.device_to_host_sync(stream);
 
   // Make decision about which chunks have dictionary
+  bool cannot_honor_request = false;
   for (auto& ck : h_chunks) {
     if (not ck.use_dictionary) { continue; }
     std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() -> std::pair<bool, uint8_t> {
@@ -1217,6 +1275,19 @@ build_chunk_dictionaries(hostdevice_2dvector<EncColumnChunk>& chunks,
 
       return {true, nbits};
     }();
+    // If dictionary encoding was requested, but it cannot be used, then print a warning. It will
+    // actually be disabled in gpuInitPages.
+    if (not ck.use_dictionary) {
+      auto const& chunk_col_desc = col_desc[ck.col_desc_id];
+      if (chunk_col_desc.requested_encoding == column_encoding::DICTIONARY) {
+        cannot_honor_request = true;
+      }
+    }
+  }
+
+  // warn if we have to ignore requested encoding
+  if (cannot_honor_request) {
+    CUDF_LOG_WARN("DICTIONARY encoding was requested, but resource constraints prevent its use");
   }
 
   // TODO: (enh) Deallocate hash map storage for chunks that don't use dict and clear pointers.
