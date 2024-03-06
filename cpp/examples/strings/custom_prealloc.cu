@@ -98,7 +98,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
   nvtxRangePushA("redact_strings");
 
   auto const scv     = cudf::strings_column_view(names);
-  auto const offsets = scv.offsets_begin();
+  auto const offsets = scv.offsets().begin<cudf::size_type>();
 
   // create working memory to hold the output of each string
   auto working_memory = rmm::device_uvector<char>(scv.chars_size(stream), stream);

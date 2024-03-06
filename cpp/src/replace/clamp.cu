@@ -100,12 +100,12 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 
   auto fn = clamp_strings_fn<OptionalScalarIterator, ReplaceScalarIterator>{
     d_input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr};
-  auto [offsets_column, chars_column] =
+  auto [offsets_column, chars] =
     cudf::strings::detail::make_strings_children(fn, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              std::move(cudf::detail::copy_bitmask(input.parent(), stream, mr)));
 }

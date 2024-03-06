@@ -413,10 +413,10 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 {
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets_begin();
-  auto const d_in_chars    = strings.chars_begin(stream);
-  auto const chars_bytes   = chars_end - chars_start;
-  auto const target_size   = d_target.size_bytes();
+  auto const d_offsets   = strings.offsets().begin<int32_t>() + strings.offset();  // TODO: PR 14824
+  auto const d_in_chars  = strings.chars_begin(stream);
+  auto const chars_bytes = chars_end - chars_start;
+  auto const target_size = d_target.size_bytes();
 
   // detect a target match at the specified byte position
   device_span<char const> const d_chars_span(d_in_chars, chars_end);
@@ -530,12 +530,12 @@ std::unique_ptr<column> replace_row_parallel(strings_column_view const& strings,
   auto d_strings = column_device_view::create(strings.parent(), stream);
 
   // this utility calls the given functor to build the offsets and chars columns
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     replace_row_parallel_fn{*d_strings, d_target, d_repl, maxrepl}, strings.size(), stream, mr);
 
   return make_strings_column(strings.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }

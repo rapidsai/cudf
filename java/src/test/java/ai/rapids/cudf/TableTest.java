@@ -33,7 +33,6 @@ import ai.rapids.cudf.ast.TableReference;
 import com.google.common.base.Charsets;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import org.apache.avro.SchemaBuilder;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -89,6 +88,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
   private static final File TEST_JSON_ERROR_FILE = TestUtils.getResourceAsFile("people_with_invalid_lines.json");
   private static final File TEST_JSON_SINGLE_QUOTES_FILE = TestUtils.getResourceAsFile("single_quotes.json");
+  private static final File TEST_JSON_WHITESPACES_FILE = TestUtils.getResourceAsFile("whitespaces.json");
   private static final File TEST_MIXED_TYPE_1_JSON = TestUtils.getResourceAsFile("mixed_types_1.json");
   private static final File TEST_MIXED_TYPE_2_JSON = TestUtils.getResourceAsFile("mixed_types_2.json");
 
@@ -349,6 +349,58 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testReadSingleQuotesJSONFileFeatureDisabled() throws IOException {
+    Schema schema = Schema.builder()
+      .column(DType.STRING, "A")
+      .build();
+    JSONOptions opts = JSONOptions.builder()
+      .withLines(true)
+      .withNormalizeSingleQuotes(false)
+      .build();
+    try (MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE)) {
+      assertThrows(CudfException.class, () ->
+        Table.readJSON(schema, opts, source));
+    }
+  }
+
+  @Test
+  void testReadWhitespacesJSONFile() throws IOException {
+    Schema schema = Schema.builder()
+            .column(DType.STRING, "a")
+            .build();
+    JSONOptions opts = JSONOptions.builder()
+            .withLines(true)
+            .withMixedTypesAsStrings(true)
+            .withNormalizeWhitespace(true)
+            .build();
+    try (Table expected = new Table.TestBuilder()
+            .column("b", "50", "[1,2,3,4,5,6,7,8]", "{\"c\":\"d\"}", "b")
+            .build();
+         MultiBufferDataSource source = sourceFrom(TEST_JSON_WHITESPACES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  void testReadSingleQuotesJSONFileKeepQuotes() throws IOException {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "A")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .withNormalizeSingleQuotes(true)
+        .withKeepQuotes(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("\"TEST\"\"", "\"TESTER'\"") // Note that escapes are also processed
+        .build();
+         MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE);
+         Table table = Table.readJSON(schema, opts, source)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
   private static final byte[] NESTED_JSON_DATA_BUFFER = ("{\"a\":{\"c\":\"C1\"}}\n" +
       "{\"a\":{\"c\":\"C2\", \"b\":\"B2\"}}\n" +
       "{\"d\":[1,2,3]}\n" +
@@ -526,21 +578,6 @@ public class TableTest extends CudfTestBase {
          MultiBufferDataSource source = sourceFrom(TEST_MIXED_TYPE_2_JSON);
          Table table = Table.readJSON(schema, opts, source)) {
       assertTablesAreEqual(expected, table);
-    }
-  }
-
-  @Test
-  void testReadSingleQuotesJSONFileFeatureDisabled() throws IOException {
-    Schema schema = Schema.builder()
-      .column(DType.STRING, "A")
-      .build();
-    JSONOptions opts = JSONOptions.builder()
-      .withLines(true)
-      .withNormalizeSingleQuotes(false)
-      .build();
-    try (MultiBufferDataSource source = sourceFrom(TEST_JSON_SINGLE_QUOTES_FILE)) {
-      assertThrows(CudfException.class, () ->
-        Table.readJSON(schema, opts, source));
     }
   }
 
@@ -2186,6 +2223,116 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private void checkInnerDistinctJoin(Table leftKeys, Table rightKeys, Table expected,
+                                      boolean compareNullsEqual) {
+    GatherMap[] maps = leftKeys.innerDistinctJoinGatherMaps(rightKeys, compareNullsEqual);
+    try {
+      verifyJoinGatherMaps(maps, expected);
+    } finally {
+      for (GatherMap map : maps) {
+        map.close();
+      }
+    }
+  }
+
+  @Test
+  void testInnerDistinctJoinGatherMaps() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8, 6).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9, 10) // left
+             .column(2, 0, 1, 3, 0) // right
+             .build()) {
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testInnerDistinctJoinGatherMapsWithNested() {
+    StructType structType = new StructType(false,
+        new BasicType(false, DType.STRING),
+        new BasicType(false, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", 2),
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3)
+    };
+    StructData[] rightData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData("abc", -1),
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 3, 4)
+             .column(0, 2, 0)
+             .build()) {
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testInnerDistinctJoinGatherMapsNullsEqual() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .column(1, 0, 0, 2) // right
+             .build()) {
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
+  @Test
+  void testInnerDistinctJoinGatherMapsWithNestedNullsEqual() {
+    StructType structType = new StructType(true,
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        null,
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", null),
+        null,
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3),
+        new StructData(null, null),
+        new StructData(null, 1)
+    };
+    StructData[] rightData = new StructData[]{
+        null,
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData(null, null),
+        new StructData(null, 2),
+        new StructData(null, 1),
+        new StructData("xyz", null),
+        new StructData("abc", null),
+        new StructData("abc", -1)
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 4, 5, 6, 9, 10)
+             .column(1, 0, 7, 0, 1, 4, 6)
+             .build()) {
+      checkInnerDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
   @Test
   void testInnerHashJoinGatherMaps() {
     try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -3718,6 +3865,10 @@ public class TableTest extends CudfTestBase {
     // this test packes ~2MB worth of long into a 1MB bounce buffer
     // this is 3 iterations because of the validity buffer
     Long[] longs = new Long[256*1024];
+    // Initialize elements at odd-numbered indices
+    for (int i = 1; i < longs.length; i += 2) {
+      longs[i] = (long)i;
+    }
     try (Table t1 = new Table.TestBuilder().column(longs).build();
          DeviceMemoryBuffer bounceBuffer = DeviceMemoryBuffer.allocate(1L*1024*1024);
          ChunkedPack cp = t1.makeChunkedPack(1L*1024*1024);
@@ -3730,7 +3881,7 @@ public class TableTest extends CudfTestBase {
       while (cp.hasNext()) {
         long copied = cp.next(bounceBuffer);
         target.copyFromDeviceBufferAsync(
-          offset, target, 0, copied, Cuda.DEFAULT_STREAM);
+          offset, bounceBuffer, 0, copied, Cuda.DEFAULT_STREAM);
         offset += copied;
       }
 
