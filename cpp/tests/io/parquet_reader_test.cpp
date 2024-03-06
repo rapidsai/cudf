@@ -2006,22 +2006,10 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
 
   auto const filepath = temp_env->get_temp_filepath("DeltaSkipRowsWithNulls.parquet");
   auto input_metadata = cudf::io::table_input_metadata{tbl};
-  input_metadata.column_metadata[12].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[13].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[14].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[15].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[16].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[17].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[18].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[19].set_encoding(column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  input_metadata.column_metadata[20].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[21].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[22].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[23].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[24].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[25].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[26].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
-  input_metadata.column_metadata[27].set_encoding(column_encoding::DELTA_BYTE_ARRAY);
+  for (int i = 12; i <= 27; ++i) {
+    input_metadata.column_metadata[i].set_encoding(
+      i <= 19 ? column_encoding::DELTA_LENGTH_BYTE_ARRAY : column_encoding::DELTA_BYTE_ARRAY);
+  }
 
   auto const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
