@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <cudf/utilities/default_stream.hpp>
+
 #include <rmm/resource_ref.hpp>
 
 #include <cstddef>
@@ -98,7 +100,10 @@ class rmm_host_allocator {
   /**
    * @brief Construct from a `cudf::host_async_resource_ref`
    */
-  rmm_host_allocator(rmm::host_async_resource_ref _mr) : mr(_mr) {}
+  rmm_host_allocator(rmm::host_async_resource_ref _mr, rmm::cuda_stream_view _stream)
+    : mr(_mr), stream(_stream)
+  {
+  }
 
   /**
    * @brief Copy constructor
@@ -157,7 +162,8 @@ class rmm_host_allocator {
   inline pointer allocate(size_type cnt, const_pointer /*hint*/ = 0)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
-    return static_cast<pointer>(mr.allocate(cnt * sizeof(value_type)));
+    return static_cast<pointer>(
+      mr.allocate_async(cnt * sizeof(value_type), THRUST_MR_DEFAULT_ALIGNMENT, stream));
   }
 
   /**
@@ -170,7 +176,10 @@ class rmm_host_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  inline void deallocate(pointer p, size_type cnt) { mr.deallocate(p, cnt * sizeof(value_type)); }
+  inline void deallocate(pointer p, size_type cnt)
+  {
+    mr.deallocate_async(p, cnt * sizeof(value_type), THRUST_MR_DEFAULT_ALIGNMENT, stream);
+  }
 
   /**
    * @brief This method returns the maximum size of the \c cnt parameter
@@ -204,6 +213,7 @@ class rmm_host_allocator {
 
  private:
   rmm::host_async_resource_ref mr;
+  rmm::cuda_stream_view stream;
 };
 
 /**

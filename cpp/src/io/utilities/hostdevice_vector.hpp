@@ -57,7 +57,7 @@ class hostdevice_vector {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : h_data_owner(cudf::io::get_host_memory_resource()), d_data(0, stream)
+    : h_data_owner({cudf::io::get_host_memory_resource(), stream}), d_data(0, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 

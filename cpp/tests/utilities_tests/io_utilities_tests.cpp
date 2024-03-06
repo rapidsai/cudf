@@ -25,37 +25,37 @@
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
-
 class IoUtilitiesTest : public cudf::test::BaseFixture {};
 
 TEST(IoUtilitiesTest, HostMemoryGetAndSet)
 {
-  // Global environment for temporary files  
+  // Global environment for temporary files
   auto const temp_env = static_cast<cudf::test::TempDirTestEnvironment*>(
-    ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));  
+    ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
   // pinned/pooled host memory resource
   using host_pooled_mr = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
-  host_pooled_mr mr(std::make_shared<rmm::mr::pinned_host_memory_resource>().get(), size_t{128} * 1024 * 1024);
-  
+  host_pooled_mr mr(std::make_shared<rmm::mr::pinned_host_memory_resource>().get(),
+                    size_t{128} * 1024 * 1024);
+
   // set new resource
   auto last_mr = cudf::io::get_host_memory_resource();
   cudf::io::set_host_memory_resource(mr);
 
   constexpr int num_rows = 32 * 1024;
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 2; });
+  auto valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 2; });
   auto values = thrust::make_counting_iterator(0);
 
   cudf::test::fixed_width_column_wrapper<int> col(values, values + num_rows, valids);
 
-  // this file will have row groups of 10,000 each  
   cudf::table_view expected({col});
   auto filepath = temp_env->get_temp_filepath("IoUtilsMemTest.parquet");
-  cudf::io::parquet_writer_options out_args = 
+  cudf::io::parquet_writer_options out_args =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
   cudf::io::write_parquet(out_args);
 
-  cudf::io::parquet_reader_options const read_opts = 
+  cudf::io::parquet_reader_options const read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto const result = cudf::io::read_parquet(read_opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected);
