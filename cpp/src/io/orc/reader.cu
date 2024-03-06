@@ -57,6 +57,7 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                rmm::mr::device_memory_resource* mr)
   : reader()  // TODO
 {
+  CUDF_EXPECTS(output_row_granularity > 0, "Invalid value of `output_row_granularity`.");
   _impl = std::make_unique<impl>(output_size_limit,
                                  data_read_limit,
                                  output_row_granularity,
