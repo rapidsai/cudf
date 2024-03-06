@@ -182,6 +182,8 @@ std::unique_ptr<scalar> reduce(column_view const& col,
       scalar->set_valid_async(false, stream);
       return scalar;
     }
+
+    // `make_default_constructed_scalar` does not support nested type.
     if (output_dtype.id() == type_id::STRUCT || output_dtype.id() == type_id::LIST) {
       return make_empty_scalar_like(col, stream, mr);
     }
