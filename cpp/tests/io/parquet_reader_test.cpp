@@ -1430,8 +1430,8 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
   }
 
   {  // column_reference in parquet filter (indices as per order of column projection)
-    auto col_index2    = cudf::ast::column_reference{1};
-    auto read_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index, lit);
+    auto col_index2    = cudf::ast::column_reference{0};
+    auto read_ref_expr = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_index2, lit);
 
     auto projected_table = cudf::table_view{{src.get_column(2), src.get_column(0)}};
     auto expected        = cudf::apply_boolean_mask(projected_table, *predicate);
