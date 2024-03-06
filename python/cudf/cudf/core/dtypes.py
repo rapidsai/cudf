@@ -51,7 +51,7 @@ def dtype(arbitrary):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
-    if isinstance(arbitrary, str) and "hex" in arbitrary:
+    if isinstance(arbitrary, str) and arbitrary in {"hex", "hex32", "hex64"}:
         # read_csv only accepts "hex"
         # e.g. test_csv_reader_hexadecimals, test_csv_reader_hexadecimal_overflow
         return arbitrary
