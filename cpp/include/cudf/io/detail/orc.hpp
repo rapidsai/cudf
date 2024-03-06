@@ -111,6 +111,36 @@ class chunked_reader : private reader {
    * process of loading, decompressing and decoding of data. Again, this is also a soft limit and
    * the reader will try to make the best effort.
    *
+   * Finally, the parameter `output_row_granularity` controls the changes in row number of the
+   * output chunk. For each call to `read_chunk()`, with respect to the given `data_read_limit`, a
+   * subset of stripes may be loaded, decompressed and decoded into an intermediate table. The
+   * reader will then subdivide that table into smaller tables for final output using
+   * `output_row_granularity` as the subdivision step.
+   *
+   * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
+   *        or `0` if there is no limit
+   * @param data_read_limit Limit on temporary memory usage for reading the data sources,
+   *        or `0` if there is no limit
+   * @param output_row_granularity The granularity parameter used for subdividing the decoded
+   *        table for final output
+   * @param sources Input `datasource` objects to read the dataset from
+   * @param options Settings for controlling reading behaviors
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   */
+  explicit chunked_reader(std::size_t output_size_limit,
+                          std::size_t data_read_limit,
+                          size_type output_row_granularity,
+                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
+                          orc_reader_options const& options,
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr);
+  /**
+   * @brief Constructor from size limits and an array of data sources with reader options.
+   *
+   * This constructor implicitly call the other constructor with `output_row_granularity` set to
+   * 10'000 rows.
+   *
    * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
    * @param data_read_limit Limit on temporary memory usage for reading the data sources,
@@ -122,42 +152,6 @@ class chunked_reader : private reader {
    */
   explicit chunked_reader(std::size_t output_size_limit,
                           std::size_t data_read_limit,
-                          std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
-                          orc_reader_options const& options,
-                          rmm::cuda_stream_view stream,
-                          rmm::mr::device_memory_resource* mr);
-
-  /**
-   * @brief Constructor from size limits and an array of data sources with reader options.
-   *
-   * The typical usage should be similar to this:
-   * ```
-   *  do {
-   *    auto const chunk = reader.read_chunk();
-   *    // Process chunk
-   *  } while (reader.has_next());
-   *
-   * ```
-   *
-   * If `output_size_limit == 0` (i.e., no reading limit), a call to `read_chunk()` will read the
-   * whole file and return a table containing all rows.
-   *
-   * TODO: data read limit
-   * TODO: granularity
-   *
-   * @param output_size_limit Limit on total number of bytes to be returned per read,
-   *        or `0` if there is no limit
-   * @param data_read_limit Limit on memory usage for the purposes of decompression and processing
-   *        of input, or `0` if there is no limit
-   * @param output_row_granularity  TODO
-   * @param sources Input `datasource` objects to read the dataset from
-   * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource to use for device memory allocation
-   */
-  explicit chunked_reader(std::size_t output_size_limit,
-                          std::size_t data_read_limit,
-                          size_type output_row_granularity,
                           std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                           orc_reader_options const& options,
                           rmm::cuda_stream_view stream,
