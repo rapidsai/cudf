@@ -16,7 +16,6 @@
 
 #include "config_utils.hpp"
 
-#include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 

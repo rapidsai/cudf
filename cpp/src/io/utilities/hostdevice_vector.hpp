@@ -20,7 +20,7 @@
 #include "hostdevice_span.hpp"
 
 #include <cudf/detail/utilities/rmm_host_vector.hpp>
-#include <cudf/io/config_utils.hpp>
+#include <cudf/io/memory_resource.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>

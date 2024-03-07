@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <cudf/io/config_utils.hpp>
+#include <cudf/io/memory_resource.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_device.hpp>
