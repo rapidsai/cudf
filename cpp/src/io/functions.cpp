@@ -448,11 +448,6 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
   }
 }
 
-/**
- * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t, size_type,
- * std::vector<std::unique_ptr<cudf::io::datasource>>&&, orc_reader_options const&,
- * rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
- */
 chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
                                        std::size_t data_read_limit,
                                        size_type output_row_granularity,
@@ -469,11 +464,6 @@ chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
 {
 }
 
-/**
- * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t,
- * std::vector<std::unique_ptr<cudf::io::datasource>>&&, orc_reader_options const&,
- * rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
- */
 chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
                                        std::size_t data_read_limit,
                                        orc_reader_options const& options,
@@ -488,11 +478,6 @@ chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
 {
 }
 
-/**
- * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t,
- * std::vector<std::unique_ptr<cudf::io::datasource>>&&, orc_reader_options const&,
- * rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
- */
 chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
                                        orc_reader_options const& options,
                                        rmm::cuda_stream_view stream,
@@ -501,14 +486,12 @@ chunked_orc_reader::chunked_orc_reader(std::size_t output_size_limit,
 {
 }
 
-/**
- * @copydoc cudf::io::chunked_orc_reader::~chunked_orc_reader
- */
+// This destructor destroys the internal reader instance.
+// Since the declaration of the internal `reader` object does not exist in the header, this
+// destructor needs to be defined in a separate source file which can access to that object's
+// declaration.
 chunked_orc_reader::~chunked_orc_reader() = default;
 
-/**
- * @copydoc cudf::io::chunked_orc_reader::has_next
- */
 bool chunked_orc_reader::has_next() const
 {
   CUDF_FUNC_RANGE();
@@ -516,9 +499,6 @@ bool chunked_orc_reader::has_next() const
   return reader->has_next();
 }
 
-/**
- * @copydoc cudf::io::chunked_orc_reader::read_chunk
- */
 table_with_metadata chunked_orc_reader::read_chunk() const
 {
   CUDF_FUNC_RANGE();

@@ -406,7 +406,7 @@ table_with_metadata read_orc(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief The chunked orc reader class to read ORC file iteratively in to a series of
+ * @brief The chunked orc reader class to read ORC file iteratively into a series of
  * tables, chunk by chunk.
  *
  * This class is designed to address the reading issue when reading very large ORC files such
@@ -515,10 +515,6 @@ class chunked_orc_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
   /**
    * @brief Destructor, destroying the internal reader instance.
-   *
-   * Since the declaration of the internal `reader` object does not exist in this header, this
-   * destructor needs to be defined in a separate source file which can access to that object's
-   * declaration.
    */
   ~chunked_orc_reader();
 
@@ -1179,7 +1175,7 @@ class chunked_orc_writer_options {
    */
   void set_stripe_size_bytes(size_t size_bytes)
   {
-    // CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum stripe size");
+    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum stripe size");
     _stripe_size_bytes = size_bytes;
   }
 
@@ -1195,7 +1191,7 @@ class chunked_orc_writer_options {
    */
   void set_stripe_size_rows(size_type size_rows)
   {
-    // CUDF_EXPECTS(size_rows >= 512, "maximum stripe size cannot be smaller than 512");
+    CUDF_EXPECTS(size_rows >= 512, "maximum stripe size cannot be smaller than 512");
     _stripe_size_rows = size_rows;
   }
 

@@ -168,10 +168,6 @@ aggregate_orc_metadata::select_stripes(
   }();
 
   struct stripe_source_mapping {
-    stripe_source_mapping(int source_idx, std::vector<metadata::OrcStripeInfo>&& stripe_info)
-      : source_idx(source_idx), stripe_info(std::move(stripe_info))
-    {
-    }
     int source_idx;
     std::vector<metadata::OrcStripeInfo> stripe_info;
   };
@@ -206,8 +202,8 @@ aggregate_orc_metadata::select_stripes(
                (int)rows_to_read);
         printf(" stripe to read: %d-%d\n", (int)src_file_idx, (int)stripe_idx);
       }
-      selected_stripes_mapping.emplace_back(static_cast<int>(src_file_idx),
-                                            std::move(stripe_infos));
+      selected_stripes_mapping.emplace_back(
+        stripe_source_mapping{static_cast<int>(src_file_idx), std::move(stripe_infos)});
     }
   } else {
     int64_t count            = 0;
@@ -232,8 +228,8 @@ aggregate_orc_metadata::select_stripes(
         }
       }
 
-      selected_stripes_mapping.emplace_back(static_cast<int>(src_file_idx),
-                                            std::move(stripe_infos));
+      selected_stripes_mapping.emplace_back(
+        stripe_source_mapping{static_cast<int>(src_file_idx), std::move(stripe_infos)});
     }
     // Need to remove skipped rows from the stripes which are not selected.
     rows_to_skip -= stripe_skip_rows;

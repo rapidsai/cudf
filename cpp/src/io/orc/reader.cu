@@ -42,7 +42,7 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
-  : reader()  // TODO
+  : reader()
 {
   _impl = std::make_unique<impl>(
     output_size_limit, data_read_limit, std::move(sources), options, stream, mr);
@@ -55,7 +55,7 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
-  : reader()  // TODO
+  : reader()
 {
   CUDF_EXPECTS(output_row_granularity > 0, "Invalid value of `output_row_granularity`.");
   _impl = std::make_unique<impl>(output_size_limit,
