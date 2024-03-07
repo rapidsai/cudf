@@ -41,6 +41,7 @@ requirements:
     #- rapids_builder
     - tomli
     - tomli-w
+    - packaging
     - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf_kafka ={{ version }}
     - cuda-version ={{ cuda_version }}

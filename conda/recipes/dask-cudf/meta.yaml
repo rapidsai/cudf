@@ -41,6 +41,7 @@ requirements:
     #- rapids_builder
     - tomli
     - tomli-w
+    - packaging
     - cuda-version ={{ cuda_version }}
   run:
     - python
