@@ -106,7 +106,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
       if (write_start >= 0) {
         uint32_t const warp_validity_mask = ballot(is_valid);
         // lane 0 from each warp writes out validity
-        if (!(t % cudf::detail::warp_size)) {
+        if ((t % cudf::detail::warp_size) == 0) {
           int const vindex = (value_count + thread_value_count) - 1;  // absolute input value index
           int const bit_offset = (valid_map_offset + vindex + write_start) -
                                  first_row;  // absolute bit offset into the output validity map
@@ -125,7 +125,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
       // compute it directly at the end of the kernel.
       size_type const block_null_count =
         cudf::detail::single_lane_block_sum_reduce<decode_block_size, 0>(warp_null_count);
-      if (!t) { ni.null_count += block_null_count; }
+      if (t == 0) { ni.null_count += block_null_count; }
     }
     // trivial for non-nullable columns
     else {
@@ -145,7 +145,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
     valid_count += block_valid_count;
   }
 
-  if (!t) {
+  if (t == 0) {
     // update valid value count for decoding and total # of values we've processed
     ni.valid_count       = valid_count;
     ni.value_count       = value_count;

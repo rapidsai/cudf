@@ -83,7 +83,7 @@ __device__ inline void decode(level_t* const output,
 
   // if this is a repeated run, compute the repeated value
   int level_val;
-  if (!(level_run & 1)) {
+  if ((level_run & 1) == 0) {
     level_val = run_start[0];
     if constexpr (sizeof(level_t) > 1) {
       if (level_bits > 8) {
@@ -260,7 +260,7 @@ struct rle_stream {
     __shared__ int values_processed_shared;
     __shared__ int decode_index_shared;
     __shared__ int fill_index_shared;
-    if (!t) {
+    if (t == 0) {
       values_processed_shared = 0;
       decode_index_shared     = decode_index;
       fill_index_shared       = fill_index;
@@ -276,10 +276,10 @@ struct rle_stream {
       __syncthreads();
 
       // warp 0 reads ahead and fills `runs` array to be decoded by remaining warps.
-      if (!warp_id) {
+      if (warp_id == 0) {
         // fill the next set of runs. fill_runs will generally be the bottleneck for any
         // kernel that uses an rle_stream.
-        if (!warp_lane) {
+        if (warp_lane == 0) {
           fill_run_batch();
           if (decode_index == -1) {
             // first time, set it to the beginning of the buffer (rolled)
@@ -319,7 +319,7 @@ struct rle_stream {
                                              end,
                                              level_bits,
                                              warp_lane);
-          if (!warp_lane) {
+          if (warp_lane == 0) {
             // after writing this batch, are we at the end of the output buffer?
             auto const at_end = (last_run_pos + batch_len - cur_values == output_count);
 
