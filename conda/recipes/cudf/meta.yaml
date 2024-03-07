@@ -62,8 +62,10 @@ requirements:
     - protobuf ==4.24.*
     - python
     - cython >=3.0.3
-    # TODO: Add once the package exists.
+    # TODO: Add once the package exists. Then tomli/tomli-w will be pulled by rapids_builder
     #- rapids_builder
+    - tomli
+    - tomli-w
     - scikit-build-core >=0.7.0
     - setuptools
     - dlpack >=0.5,<0.6.0a0
