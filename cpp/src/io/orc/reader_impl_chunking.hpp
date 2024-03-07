@@ -252,6 +252,13 @@ struct cumulative_size {
   std::size_t size_bytes{0};
 };
 
+// TODO
+struct cumulative_size_and_row {
+  int64_t count{0};
+  std::size_t size_bytes{0};
+  std::size_t rows{0};
+};
+
 /**
  * @brief Functor to sum up cumulative sizes.
  */
@@ -260,15 +267,20 @@ struct cumulative_size_sum {
   {
     return cumulative_size{a.count + b.count, a.size_bytes + b.size_bytes};
   }
+
+  __device__ cumulative_size_and_row operator()(cumulative_size_and_row const& a,
+                                                cumulative_size_and_row const& b) const
+  {
+    return cumulative_size_and_row{a.count + b.count, a.size_bytes + b.size_bytes, a.rows + b.rows};
+  }
 };
 
 /**
  * @brief Find the splits of the input data such that each split has cumulative size less than a
  * given `size_limit`.
  */
-std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
-                               int64_t total_count,
-                               size_t size_limit);
+template <typename T>
+std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, size_t size_limit);
 
 // TODO
 std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,

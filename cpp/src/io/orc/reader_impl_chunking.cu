@@ -191,9 +191,8 @@ std::size_t gather_stream_info_and_column_desc(
  * @brief Find the splits of the input data such that each split has cumulative size less than a
  * given `size_limit`.
  */
-std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
-                               int64_t total_count,
-                               size_t size_limit)
+template <typename T>
+std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, size_t size_limit)
 {
   // if (size_limit == 0) {
   //   printf("0 limit: output chunk = 0, %d\n", (int)total_count);
@@ -251,6 +250,12 @@ std::vector<chunk> find_splits(host_span<cumulative_size const> sizes,
 
   return splits;
 }
+
+template std::vector<chunk> find_splits<cumulative_size>(host_span<cumulative_size const> sizes,
+                                                         int64_t total_count,
+                                                         size_t size_limit);
+template std::vector<chunk> find_splits<cumulative_size_and_row>(
+  host_span<cumulative_size_and_row const> sizes, int64_t total_count, size_t size_limit);
 #endif
 
 namespace {
@@ -528,7 +533,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
                                               chunk_read_data::load_limit_ratio);
     return tmp > 0UL ? tmp : 1UL;
   }();
-  _chunk_read_data.load_stripe_chunks = find_splits(total_stripe_sizes, num_stripes, load_limit);
+  _chunk_read_data.load_stripe_chunks =
+    find_splits<cumulative_size>(total_stripe_sizes, num_stripes, load_limit);
 
 #ifndef PRINT_DEBUG
   auto& splits = _chunk_read_data.load_stripe_chunks;
@@ -557,11 +563,10 @@ void reader::impl::load_data()
   if (_file_itm_data.has_no_data()) { return; }
 
   //  auto const rows_to_read      = _file_itm_data.rows_to_read;
-  //  auto const& selected_stripes = _file_itm_data.selected_stripes;
-
-  auto& lvl_stripe_data  = _file_itm_data.lvl_stripe_data;
-  auto& lvl_stripe_sizes = _file_itm_data.lvl_stripe_sizes;
-  auto& read_info        = _file_itm_data.data_read_info;
+  auto const& selected_stripes = _file_itm_data.selected_stripes;
+  auto& lvl_stripe_data        = _file_itm_data.lvl_stripe_data;
+  auto& lvl_stripe_sizes       = _file_itm_data.lvl_stripe_sizes;
+  auto& read_info              = _file_itm_data.data_read_info;
 
   //  std::size_t num_stripes = selected_stripes.size();
   auto const stripe_chunk =
@@ -625,8 +630,17 @@ void reader::impl::load_data()
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   stream_id_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
-  cudf::detail::hostdevice_vector<cumulative_size> stripe_decomp_sizes(stripe_chunk.count, _stream);
-  std::fill(stripe_decomp_sizes.begin(), stripe_decomp_sizes.end(), cumulative_size{1, 0});
+  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_chunk.count,
+                                                                               _stream);
+  for (int64_t stripe_idx = 0; stripe_idx < stripe_chunk.count; ++stripe_idx) {
+    auto const& stripe     = selected_stripes[stripe_idx];
+    auto const stripe_info = stripe.stripe_info;
+
+    stripe_decomp_sizes[stripe_idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
+    // printf("loading stripe with rows = %d\n", (int)stripe_info->numberOfRows);
+  }
+  // std::fill(
+  //   stripe_decomp_sizes.begin(), stripe_decomp_sizes.end(), cumulative_size_and_row{1, 0, 0});
 
   // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -735,6 +749,14 @@ void reader::impl::load_data()
     return;
   }
 
+  {
+    int count{0};
+    for (auto& size : stripe_decomp_sizes) {
+      printf("decomp stripe size: %ld, %zu, %zu\n", size.count, size.size_bytes, size.rows);
+      if (count++ > 5) break;
+    }
+  }
+
   // Compute the prefix sum of stripe data sizes.
   stripe_decomp_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),
@@ -745,21 +767,24 @@ void reader::impl::load_data()
 
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
+  {
+    int count{0};
+    for (auto& size : stripe_decomp_sizes) {
+      printf(
+        "prefix sum decomp stripe size: %ld, %zu, %zu\n", size.count, size.size_bytes, size.rows);
+      if (count++ > 5) break;
+    }
+  }
+
   auto const decode_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
                                               (1.0 - chunk_read_data::load_limit_ratio));
     return tmp > 0UL ? tmp : 1UL;
   }();
   _chunk_read_data.decode_stripe_chunks =
-    find_splits(stripe_decomp_sizes, stripe_chunk.count, decode_limit);
+    find_splits<cumulative_size_and_row>(stripe_decomp_sizes, stripe_chunk.count, decode_limit);
   for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
     chunk.start_idx += stripe_chunk.start_idx;
-  }
-
-  int count{0};
-  for (auto& size : stripe_decomp_sizes) {
-    printf("decomp size: %ld, %zu\n", size.count, size.size_bytes);
-    if (count++ > 5) break;
   }
 
 #ifndef PRINT_DEBUG

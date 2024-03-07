@@ -799,7 +799,7 @@ std::vector<chunk> find_table_splits(table_view const& input,
   segmented_sizes.device_to_host_sync(stream);
 
   // Since the segment sizes are in bits, we need to multiply CHAR_BIT with the output limit.
-  return find_splits(segmented_sizes, input.num_rows(), size_limit * CHAR_BIT);
+  return find_splits<cumulative_size>(segmented_sizes, input.num_rows(), size_limit * CHAR_BIT);
 }
 
 }  // namespace
