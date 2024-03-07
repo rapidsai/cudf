@@ -21,6 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop.hpp>
+#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -599,8 +600,8 @@ void ArrowDeviceArrayRelease(ArrowArray* array)
 }  // namespace
 }  // namespace detail
 
-nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
-                                        std::vector<column_metadata> const& metadata)
+std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
+                                             std::vector<column_metadata> const& metadata)
 {
   CUDF_EXPECTS((metadata.size() == static_cast<std::size_t>(input.num_columns())),
                "columns' metadata should be equal to the number of columns in table");
@@ -624,7 +625,9 @@ nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
       cudf::type_dispatcher(col.type(), detail::dispatch_to_arrow_type{}, col, metadata[i], child));
   }
 
-  return result;
+  auto out = std::make_unique<ArrowSchema>();
+  result.move(out.get());
+  return out;
 }
 
 std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,

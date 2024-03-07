@@ -31,7 +31,6 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/interop/detail/arrow.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -39,6 +38,8 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 struct DLManagedTensor;
+struct ArrowDeviceArray;
+struct ArrowSchema;
 
 namespace cudf {
 /**
@@ -179,8 +180,8 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  * @param metadata Contains the hierarchy of names of columns and children
  * @return ArrowSchema generated from `input`
  */
-nanoarrow::UniqueSchema to_arrow_schema(cudf::table_view const& input,
-                                        std::vector<column_metadata> const& metadata);
+std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
+                                             std::vector<column_metadata> const& metadata);
 
 /**
  * @brief Create `ArrowDeviceArray` from cudf table and metadata
