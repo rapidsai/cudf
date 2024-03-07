@@ -63,7 +63,6 @@ requirements:
     # TODO: Add once the package exists.
     #- rapids_builder
     - scikit-build-core >=0.7.0
-    - setuptools
     {% if cuda_major != "11" %}
     - cuda-cudart-dev
     {% endif %}

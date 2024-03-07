@@ -37,8 +37,10 @@ build:
 requirements:
   host:
     - python
-    # TODO: Add once the package exists.
+    # TODO: Add once the package exists. Then tomli/tomli-w will be pulled by rapids_builder
     #- rapids_builder
+    - tomli
+    - tomli-w
     - python-confluent-kafka >=1.9.0,<1.10.0a0
     - cudf_kafka ={{ version }}
     - cuda-version ={{ cuda_version }}

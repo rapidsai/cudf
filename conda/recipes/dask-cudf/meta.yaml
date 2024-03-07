@@ -37,8 +37,10 @@ build:
 requirements:
   host:
     - python
-    # TODO: Add once the package exists.
+    # TODO: Add once the package exists. Then tomli/tomli-w will be pulled by rapids_builder
     #- rapids_builder
+    - tomli
+    - tomli-w
     - cuda-version ={{ cuda_version }}
   run:
     - python
