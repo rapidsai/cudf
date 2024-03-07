@@ -1342,15 +1342,11 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
 }
 
-#define LOCAL_TEST
-
-// This test is extremely heavy, thus it should be disabled by default.
-#ifdef LOCAL_TEST
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
   int64_t constexpr num_rows    = 500'000'000l;
   int constexpr rows_per_stripe = 1'000'000;
-  int constexpr num_reps        = 10l;
+  int constexpr num_reps        = 10;
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
@@ -1371,46 +1367,83 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     }
   }
 
+  printf("size: %zu\n", data_buffer.size());
+
   // Verify metadata.
   auto const metadata =
     cudf::io::read_orc_metadata(cudf::io::source_info{data_buffer.data(), data_buffer.size()});
   EXPECT_EQ(metadata.num_rows(), total_rows);
   EXPECT_EQ(metadata.num_stripes(), total_rows / rows_per_stripe);
 
-  int constexpr num_rows_to_read = 5'000'000;
-  const auto num_rows_to_skip    = metadata.num_rows() - num_rows_to_read -
-                                123456 /*just shift the read data region back by a random offset*/;
+  // Read with row selections and memory limit.
+  {
+    int constexpr num_rows_to_read = 5'000'000;
+    const auto num_rows_to_skip =
+      metadata.num_rows() - num_rows_to_read -
+      123456 /*just shift the read data region back by a random offset*/;
 
-  // Check validity of the last 5 million rows.
-  const auto sequence_start = num_rows_to_skip % num_rows;
-  auto const skipped_col = int64s_col(it + sequence_start, it + sequence_start + num_rows_to_read);
-  auto const expected    = cudf::table_view{{skipped_col}};
+    // Check validity of the last 5 million rows.
+    const auto sequence_start = num_rows_to_skip % num_rows;
+    auto const skipped_col =
+      int64s_col(it + sequence_start, it + sequence_start + num_rows_to_read);
+    auto const expected = cudf::table_view{{skipped_col}};
 
-  auto const read_opts = cudf::io::orc_reader_options::builder(
-                           cudf::io::source_info{data_buffer.data(), data_buffer.size()})
-                           .use_index(false)
-                           .skip_rows(num_rows_to_skip)
-                           .num_rows(num_rows_to_read)
-                           .build();
-  auto reader = cudf::io::chunked_orc_reader(
-    600'000UL * sizeof(int64_t) /*output limit, equal to 600k int64_t rows */,
-    8'000'000UL /*input limit, around size of 1 stripe's decoded data */,
-    500'000 /*output granularity, or minimum number of rows for the output chunk*/,
-    read_opts);
+    auto const read_opts = cudf::io::orc_reader_options::builder(
+                             cudf::io::source_info{data_buffer.data(), data_buffer.size()})
+                             .use_index(false)
+                             .skip_rows(num_rows_to_skip)
+                             .num_rows(num_rows_to_read)
+                             .build();
+    auto reader = cudf::io::chunked_orc_reader(
+      600'000UL * sizeof(int64_t) /* output limit, equal to 600k int64_t rows */,
+      8'000'000UL /* input limit, around size of 1 stripe's decoded data */,
+      500'000 /* output granularity, or minimum number of rows for the output chunk */,
+      read_opts);
 
-  auto num_chunks  = 0;
-  auto read_tables = std::vector<std::unique_ptr<cudf::table>>{};
-  auto tviews      = std::vector<cudf::table_view>{};
+    auto num_chunks  = 0;
+    auto read_tables = std::vector<std::unique_ptr<cudf::table>>{};
+    auto tviews      = std::vector<cudf::table_view>{};
 
-  do {
-    auto chunk = reader.read_chunk();
-    ++num_chunks;
-    tviews.emplace_back(chunk.tbl->view());
-    read_tables.emplace_back(std::move(chunk.tbl));
-  } while (reader.has_next());
+    do {
+      auto chunk = reader.read_chunk();
+      ++num_chunks;
+      tviews.emplace_back(chunk.tbl->view());
+      read_tables.emplace_back(std::move(chunk.tbl));
+    } while (reader.has_next());
 
-  auto const read_result = cudf::concatenate(tviews);
-  EXPECT_EQ(num_chunks, 10);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
+    auto const read_result = cudf::concatenate(tviews);
+    EXPECT_EQ(num_chunks, 10);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
+  }
+
+  // Read with only output limit.
+  // There is no limit on the memory usage.
+  // However, the reader should be able to detect and load only enough stripes each time
+  // to avoid decoding a table having number of rows that exceeds the column size limit.
+  {
+    auto const read_opts = cudf::io::orc_reader_options::builder(
+                             cudf::io::source_info{data_buffer.data(), data_buffer.size()})
+                             .use_index(false)
+                             .build();
+    auto reader = cudf::io::chunked_orc_reader(
+      600'000UL * sizeof(int64_t) /* output limit, equal to 600k int64_t rows */,
+      0UL /* no input limit */,
+      500'000 /* output granularity, or minimum number of rows for the output chunk */,
+      read_opts);
+
+    auto num_chunks  = 0;
+    auto read_tables = std::vector<std::unique_ptr<cudf::table>>{};
+    auto tviews      = std::vector<cudf::table_view>{};
+
+    do {
+      auto chunk = reader.read_chunk();
+      ++num_chunks;
+      tviews.emplace_back(chunk.tbl->view());
+      read_tables.emplace_back(std::move(chunk.tbl));
+    } while (reader.has_next());
+
+    EXPECT_EQ(num_chunks, 10);
+
+    // Verify only the last chunk.
+  }
 }
-#endif
