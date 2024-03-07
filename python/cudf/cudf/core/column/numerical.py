@@ -47,7 +47,6 @@ from cudf.core.column import (
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
-    NUMERIC_TYPES,
     min_column_type,
     min_signed_type,
     np_dtypes_to_pandas_dtypes,
@@ -695,23 +694,26 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError(
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
-        if arrow_type:
+        elif arrow_type:
             return pd.Series(
                 pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
             )
-        elif nullable and self.dtype in np_dtypes_to_pandas_dtypes:
-            pandas_nullable_dtype = np_dtypes_to_pandas_dtypes[self.dtype]
+        elif (
+            nullable
+            and (
+                pandas_nullable_dtype := np_dtypes_to_pandas_dtypes.get(
+                    self.dtype
+                )
+            )
+            is not None
+        ):
             arrow_array = self.to_arrow()
-            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
-            pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
-            pd_series = pd.Series(self.values_host, copy=False)
+            pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)  # type: ignore[attr-defined]
+            return pd.Series(pandas_array, copy=False, index=index)
+        elif self.dtype.kind in set("iuf") and not self.has_nulls():
+            return pd.Series(self.values_host, copy=False, index=index)
         else:
-            pd_series = self.to_arrow().to_pandas()
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+            return super().to_pandas(index=index, nullable=nullable)
 
     def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         col_dtype = self.dtype
