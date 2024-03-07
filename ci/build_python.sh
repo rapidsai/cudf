@@ -13,10 +13,7 @@ export CMAKE_GENERATOR=Ninja
 
 rapids-print-env
 
-package_dir="python"
 version=$(rapids-generate-version)
-commit=$(git rev-parse HEAD)
-
 echo "${version}" > VERSION
 
 rapids-logger "Begin py build"
