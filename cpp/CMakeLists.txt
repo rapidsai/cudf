@@ -208,14 +208,10 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
-
-rapids_cpm_find(
-  nanoarrow 0.4.0
-  CPM_ARGS
-  GIT_REPOSITORY https://github.com/apache/arrow-nanoarrow.git
-  GIT_TAG c97720003ff863b81805bcdb9f7c91306ab6b6a8
-  GIT_SHALLOW TRUE
-)
+# find nanoarrow
+include(cmake/thirdparty/get_nanoarrow.cmake)
+# need to add nanoarrow to the export set
+install(TARGETS nanoarrow EXPORT cudf-exports)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -237,8 +233,6 @@ if(NOT BUILD_SHARED_LIBS)
   endif()
 endif()
 
-# need to add nanoarrow to the export set
-install(TARGETS nanoarrow EXPORT cudf-exports)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
