@@ -31,8 +31,12 @@ constexpr int rolling_buf_size  = decode_block_size * 2;
 constexpr int rle_run_buffer_size = rle_stream_required_run_buffer_size<decode_block_size>();
 
 template <bool nullable, typename level_t, typename state_buf>
-static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(
-  int32_t target_value_count, page_state_s* s, state_buf* sb, level_t const* const def, int t, bool has_no_nulls)
+static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_value_count,
+                                                                page_state_s* s,
+                                                                state_buf* sb,
+                                                                level_t const* const def,
+                                                                int t,
+                                                                bool has_no_nulls)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
@@ -235,23 +239,24 @@ __device__ inline void gpuDecodeValues(
   }
 }
 
-__device__ inline bool is_nullable(page_state_s* s) {
-  auto const lvl = level_type::DEFINITION;
+__device__ inline bool is_nullable(page_state_s* s)
+{
+  auto const lvl           = level_type::DEFINITION;
   auto const max_def_level = s->col.max_level[lvl];
   return max_def_level > 0;
 }
 
-__device__ inline bool no_nulls(page_state_s* s) {
-  auto const lvl = level_type::DEFINITION;
-  auto const init_run = s->initial_rle_run[lvl] ;
+__device__ inline bool no_nulls(page_state_s* s)
+{
+  auto const lvl      = level_type::DEFINITION;
+  auto const init_run = s->initial_rle_run[lvl];
   if ((init_run & 1) == 1) { return false; }
   if (s->page.num_input_values != (init_run >> 1)) { return false; }
 
   auto const lvl_bits = s->col.level_bits[lvl];
-  auto const run_val = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
+  auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
   return run_val == s->col.max_level[lvl];
 }
-
 
 /**
  * @brief Kernel for computing the column data stored in the pages
@@ -304,7 +309,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   if (s->num_rows == 0) { return; }
 
-  bool const nullable = is_nullable(s);
+  bool const nullable     = is_nullable(s);
   bool const has_no_nulls = nullable && no_nulls(s);
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
@@ -341,8 +346,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
         processed_count += min(rolling_buf_size, s->page.num_input_values - processed_count);
       }
 
-      next_valid_count =
-        gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(processed_count, s, sb, def, t, has_no_nulls);
+      next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
+        processed_count, s, sb, def, t, has_no_nulls);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
@@ -402,7 +407,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   if (s->num_rows == 0) { return; }
 
-  bool const nullable = is_nullable(s);
+  bool const nullable     = is_nullable(s);
   bool const has_no_nulls = nullable && no_nulls(s);
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
