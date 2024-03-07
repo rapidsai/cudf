@@ -254,7 +254,7 @@ __device__ inline bool no_nulls(page_state_s* s) {
 
 
 /**
- * @brief Kernel for co the column data stored in the pages
+ * @brief Kernel for computing the column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
@@ -278,8 +278,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
-  const int page_idx    = blockIdx.x;
-  const int t           = threadIdx.x;
+  int const page_idx    = blockIdx.x;
+  int const t           = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
   if (!(BitAnd(pages[page_idx].kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT))) { return; }
@@ -374,8 +374,8 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
-  const int page_idx    = blockIdx.x;
-  const int t           = threadIdx.x;
+  int const page_idx    = blockIdx.x;
+  int const t           = threadIdx.x;
   PageInfo* pp          = &pages[page_idx];
 
   if (!(BitAnd(pages[page_idx].kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT))) { return; }

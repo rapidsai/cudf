@@ -15,6 +15,7 @@
  */
 
 #include "page_data.cuh"
+#include "page_decode.cuh"
 
 #include <rmm/exec_policy.hpp>
 

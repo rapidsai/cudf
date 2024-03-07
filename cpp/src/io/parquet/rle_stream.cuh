@@ -131,7 +131,7 @@ __device__ inline void decode(level_t* const output,
 
     // store level_val
     if (lane < batch_len && (lane + decode_output_pos) >= 0) {
-      auto idx = lane + run_output_pos + run_offset + decode_output_pos;
+      auto const idx = lane + run_output_pos + run_offset + decode_output_pos;
       output[rolling_index<max_output_values>(idx)] = level_val;
     }
     remain -= batch_len;
