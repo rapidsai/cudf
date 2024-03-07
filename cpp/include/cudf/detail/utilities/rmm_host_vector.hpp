@@ -118,9 +118,9 @@ class rmm_host_allocator {
   /**
    * @brief Assignment operator
    */
-  rmm_host_allocator& operator=(rmm_host_allocator const& col)
+  rmm_host_allocator& operator=(rmm_host_allocator const& other)
   {
-    mr = col.mr;
+    mr = other.mr;
     return *this;
   }
 
@@ -134,14 +134,11 @@ class rmm_host_allocator {
    *
    *  @param cnt The number of objects to allocate.
    *  @return a \c pointer to the newly allocated objects.
-   *  @note The second parameter to this function is meant as a
-   *        hint pointer to a nearby memory location, but is
-   *        not used by this allocator.
    *  @note This method does not invoke \p value_type's constructor.
    *        It is the responsibility of the caller to initialize the
    *        objects at the returned \c pointer.
    */
-  inline pointer allocate(size_type cnt, const_pointer /*hint*/ = 0)
+  inline pointer allocate(size_type cnt)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
     return static_cast<pointer>(

@@ -57,13 +57,12 @@ class hostdevice_vector {
   }
 
   explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
-    : h_data_owner({cudf::io::get_host_memory_resource(), stream}), d_data(0, stream)
+    : h_data({cudf::io::get_host_memory_resource(), stream}), d_data(0, stream)
   {
     CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
 
-    h_data_owner.reserve(max_size);
-    h_data_owner.resize(initial_size);
-    host_data = h_data_owner.data();
+    h_data.reserve(max_size);
+    h_data.resize(initial_size);
 
     current_size = initial_size;
     d_data.resize(max_size, stream);
@@ -73,7 +72,7 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(size() < capacity(),
                  "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
-    host_data[current_size++] = data;
+    h_data[current_size++] = data;
   }
 
   [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
@@ -81,11 +80,11 @@ class hostdevice_vector {
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
-  [[nodiscard]] T& operator[](size_t i) { return host_data[i]; }
-  [[nodiscard]] T const& operator[](size_t i) const { return host_data[i]; }
+  [[nodiscard]] T& operator[](size_t i) { return h_data[i]; }
+  [[nodiscard]] T const& operator[](size_t i) const { return h_data[i]; }
 
-  [[nodiscard]] T* host_ptr(size_t offset = 0) { return host_data + offset; }
-  [[nodiscard]] T const* host_ptr(size_t offset = 0) const { return host_data + offset; }
+  [[nodiscard]] T* host_ptr(size_t offset = 0) { return h_data.data() + offset; }
+  [[nodiscard]] T const* host_ptr(size_t offset = 0) const { return h_data.data() + offset; }
 
   [[nodiscard]] T* begin() { return host_ptr(); }
   [[nodiscard]] T const* begin() const { return host_ptr(); }
@@ -156,7 +155,7 @@ class hostdevice_vector {
    */
   [[nodiscard]] operator hostdevice_span<T>()
   {
-    return hostdevice_span<T>{host_data, d_data.data(), size()};
+    return hostdevice_span<T>{h_data.data(), d_data.data(), size()};
   }
 
   /**
@@ -171,12 +170,11 @@ class hostdevice_vector {
     CUDF_EXPECTS(offset < d_data.size(), "Offset is out of bounds.");
     CUDF_EXPECTS(count <= d_data.size() - offset,
                  "The span with given offset and count is out of bounds.");
-    return hostdevice_span<T>{host_data + offset, d_data.data() + offset, count};
+    return hostdevice_span<T>{h_data.data() + offset, d_data.data() + offset, count};
   }
 
  private:
-  cudf::detail::rmm_host_vector<T> h_data_owner;
-  T* host_data        = nullptr;
+  cudf::detail::rmm_host_vector<T> h_data;
   size_t current_size = 0;
   rmm::device_uvector<T> d_data;
 };
