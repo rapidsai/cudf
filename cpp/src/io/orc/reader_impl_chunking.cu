@@ -205,6 +205,8 @@ std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, si
   int64_t cur_pos{0};
   size_t cur_cumulative_size{0};
 
+  [[maybe_unused]] size_t cur_cumulative_rows{0};
+
   auto const start = thrust::make_transform_iterator(
     sizes.begin(), [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
   auto const end = start + static_cast<int64_t>(sizes.size());
@@ -220,13 +222,20 @@ std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, si
       split_pos--;
     }
 
+    if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
+      while (split_pos > 0 && sizes[split_pos].rows - cur_cumulative_rows >
+                                static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
+        split_pos--;
+      }
+    }
+
     // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
     // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
     // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
     // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
     // either do this, or we have to call unique() on the input first.
     while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-           (split_pos < 0 || sizes[split_pos].count == cur_count)) {
+           (split_pos < 0 || sizes[split_pos].count <= cur_count)) {
       split_pos++;
     }
 
@@ -235,6 +244,10 @@ std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, si
     splits.emplace_back(chunk{start_idx, static_cast<size_type>(cur_count - start_idx)});
     cur_pos             = split_pos;
     cur_cumulative_size = sizes[split_pos].size_bytes;
+
+    if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
+      cur_cumulative_rows = sizes[split_pos].rows;
+    }
   }
 
   // If the last chunk has size smaller than `merge_threshold` percent of the second last one,
