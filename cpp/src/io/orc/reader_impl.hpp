@@ -122,6 +122,9 @@ class reader::impl {
   table_with_metadata read_chunk();
 
  private:
+  // TODO
+  enum class read_mode { READ_ALL, CHUNKED_READ };
+
   /**
    * @brief Perform all the necessary data preprocessing before creating an output table.
    *
@@ -132,9 +135,10 @@ class reader::impl {
    * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
    * @param stripes Indices of individual stripes to load if non-empty
    */
-  void prepare_data(int64_t skip_rows                                  = 0,
-                    std::optional<size_type> const& num_rows_opt       = std::nullopt,
-                    std::vector<std::vector<size_type>> const& stripes = {});
+  void prepare_data(int64_t skip_rows,
+                    std::optional<size_type> const& num_rows_opt,
+                    std::vector<std::vector<size_type>> const& stripes,
+                    read_mode mode);
 
   /**
    * @brief Perform a global preprocessing step that executes exactly once for the entire duration
@@ -150,7 +154,8 @@ class reader::impl {
    */
   void global_preprocess(uint64_t skip_rows,
                          std::optional<size_type> const& num_rows_opt,
-                         std::vector<std::vector<size_type>> const& stripes);
+                         std::vector<std::vector<size_type>> const& stripes,
+                         read_mode mode);
 
   /**
    * @brief Load stripes from the input source and store the data in the internal buffers.

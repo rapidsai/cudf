@@ -152,7 +152,7 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   }
 }
 
-std::tuple<int64_t, size_type, std::vector<metadata::OrcStripeInfo>>
+std::tuple<int64_t, int64_t, std::vector<metadata::OrcStripeInfo>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   int64_t skip_rows,
@@ -163,7 +163,7 @@ aggregate_orc_metadata::select_stripes(
                "Can't use both the row selection and the stripe selection");
 
   auto [rows_to_skip, rows_to_read] = [&]() {
-    if (not user_specified_stripes.empty()) { return std::pair<int64_t, size_type>{0, 0}; }
+    if (not user_specified_stripes.empty()) { return std::pair<int64_t, int64_t>{0, 0}; }
     return cudf::io::detail::skip_rows_num_rows_from_options(skip_rows, num_rows, get_num_rows());
   }();
 
@@ -194,12 +194,15 @@ aggregate_orc_metadata::select_stripes(
                                 nullptr,
                                 static_cast<int>(src_file_idx)});
 
-        // TODO: change return type to int64_t
-        rows_to_read += static_cast<size_type>(
-          per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows);
-        printf(" rows_to_read : %d / %d\n",
-               (int)per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows,
-               (int)rows_to_read);
+        auto const stripe_rows =
+          per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        CUDF_EXPECTS(stripe_rows < static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
+                     "The number of rows in one stripe exceeds the column size limit.",
+                     std::overflow_error);
+        rows_to_read += static_cast<int64_t>(stripe_rows);
+
+        // TODO: remove below
+        printf(" rows_to_read : %d / %d\n", (int)stripe_rows, (int)rows_to_read);
         printf(" stripe to read: %d-%d\n", (int)src_file_idx, (int)stripe_idx);
       }
       selected_stripes_mapping.emplace_back(
@@ -217,8 +220,13 @@ aggregate_orc_metadata::select_stripes(
       for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
                                   count < rows_to_skip + rows_to_read;
            ++stripe_idx) {
-        count +=
-          static_cast<int64_t>(per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows);
+        auto const stripe_rows =
+          per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows;
+        CUDF_EXPECTS(stripe_rows < static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
+                     "The number of rows in one stripe exceeds the column size limit.",
+                     std::overflow_error);
+        count += static_cast<int64_t>(stripe_rows);
+
         if (count > rows_to_skip || count == 0) {
           stripe_infos.push_back({&per_file_metadata[src_file_idx].ff.stripes[stripe_idx],
                                   nullptr,

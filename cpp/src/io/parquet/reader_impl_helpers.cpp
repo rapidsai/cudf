@@ -461,8 +461,9 @@ aggregate_reader_metadata::select_row_groups(
   auto [rows_to_skip, rows_to_read] = [&]() {
     if (not row_group_indices.empty()) { return std::pair<int64_t, size_type>{}; }
     auto const from_opts = cudf::io::detail::skip_rows_num_rows_from_options(
-      skip_rows_opt, num_rows_opt, get_num_rows());
-    return std::pair{static_cast<int64_t>(from_opts.first), from_opts.second};
+      skip_rows_opt, std::optional<int64_t>{num_rows_opt.value()}, get_num_rows());
+    return std::pair{static_cast<int64_t>(from_opts.first),
+                     static_cast<size_type>(from_opts.second)};
   }();
 
   if (!row_group_indices.empty()) {

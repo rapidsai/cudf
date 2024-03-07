@@ -123,7 +123,7 @@ struct range {
  */
 struct file_intermediate_data {
   int64_t rows_to_skip;
-  size_type rows_to_read;
+  int64_t rows_to_read;
   std::vector<metadata::OrcStripeInfo> selected_stripes;
 
   // Return true if no rows or stripes to read.

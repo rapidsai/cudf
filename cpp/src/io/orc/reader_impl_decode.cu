@@ -824,15 +824,17 @@ void reader::impl::decompress_and_decode()
   auto const& selected_stripes = _file_itm_data.selected_stripes;
 
   // auto const rows_to_skip = 0;
-  auto rows_to_read = 0;
+  int64_t rows_to_read = 0;
   for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
     auto const& stripe     = selected_stripes[stripe_idx];
     auto const stripe_info = stripe.stripe_info;
+    // TODO: this is indeed not needed since we split stripes before this based on stripe row
+
     // TODO: check overflow
     // CUDF_EXPECTS(per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows <
     //                static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
     //              "TODO");
-    rows_to_read += static_cast<size_type>(stripe_info->numberOfRows);
+    rows_to_read += static_cast<int64_t>(stripe_info->numberOfRows);
 
     if (_file_itm_data.rows_to_skip > 0) {
       CUDF_EXPECTS(_file_itm_data.rows_to_skip < static_cast<int64_t>(stripe_info->numberOfRows),
@@ -841,6 +843,10 @@ void reader::impl::decompress_and_decode()
   }
   rows_to_read = std::min<int64_t>(rows_to_read - rows_to_skip, _file_itm_data.rows_to_read);
   _file_itm_data.rows_to_skip = 0;
+
+  CUDF_EXPECTS(rows_to_read <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+               "Number or rows to decode exceeds the column size limit.",
+               std::overflow_error);
 
   // Set up table for converting timestamp columns from local to UTC time
   auto const tz_table = [&, &selected_stripes = selected_stripes] {

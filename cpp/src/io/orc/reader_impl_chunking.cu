@@ -339,7 +339,8 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
 
 void reader::impl::global_preprocess(uint64_t skip_rows,
                                      std::optional<size_type> const& num_rows_opt,
-                                     std::vector<std::vector<size_type>> const& stripes)
+                                     std::vector<std::vector<size_type>> const& stripes,
+                                     read_mode mode)
 {
   if (_file_itm_data.global_preprocessed) { return; }
   _file_itm_data.global_preprocessed = true;
@@ -349,6 +350,12 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
     _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
   if (_file_itm_data.has_no_data()) { return; }
+
+  CUDF_EXPECTS(
+    mode == read_mode::CHUNKED_READ ||
+      _file_itm_data.rows_to_read <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+    "Number or rows to read exceeds the column size limit in READ_ALL mode.",
+    std::overflow_error);
 
   printf("input skip rows: %d, num rows: %d\n", (int)skip_rows, (int)num_rows_opt.value_or(-1));
   printf("actual skip rows: %d, num rows: %d\n",

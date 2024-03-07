@@ -113,7 +113,7 @@ class aggregate_orc_metadata {
    *
    * Stripes are potentially selected from multiple files.
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<metadata::OrcStripeInfo>> select_stripes(
+  [[nodiscard]] std::tuple<int64_t, int64_t, std::vector<metadata::OrcStripeInfo>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     int64_t skip_rows,
     std::optional<size_type> const& num_rows,
