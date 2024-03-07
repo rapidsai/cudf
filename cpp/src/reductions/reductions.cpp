@@ -184,7 +184,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
     }
 
     // `make_default_constructed_scalar` does not support nested type.
-    if (output_dtype.id() == type_id::STRUCT || output_dtype.id() == type_id::LIST) {
+    if (cudf::is_nested(output_dtype)) {
       return make_empty_scalar_like(col, stream, mr);
     }
 
