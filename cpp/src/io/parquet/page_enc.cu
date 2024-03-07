@@ -514,6 +514,7 @@ __device__ encode_kernel_mask data_encoding_for_col(EncColumnChunk const* chunk,
       case column_encoding::DELTA_BINARY_PACKED: return encode_kernel_mask::DELTA_BINARY;
       case column_encoding::DELTA_LENGTH_BYTE_ARRAY: return encode_kernel_mask::DELTA_LENGTH_BA;
       case column_encoding::DELTA_BYTE_ARRAY: return encode_kernel_mask::DELTA_BYTE_ARRAY;
+      case column_encoding::BYTE_STREAM_SPLIT: return encode_kernel_mask::BYTE_STREAM_SPLIT;
     }
   }
 
@@ -1608,7 +1609,7 @@ __device__ void finish_page_encode(state_buf* s,
 
 // PLAIN page data encoder
 // blockDim(128, 1, 1)
-template <int block_size>
+template <int block_size, bool is_split_stream>
 CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
@@ -1634,7 +1635,11 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if (BitAnd(s->page.kernel_mask, encode_kernel_mask::PLAIN) == 0) { return; }
+  if constexpr (is_split_stream) {
+    if (BitAnd(s->page.kernel_mask, encode_kernel_mask::BYTE_STREAM_SPLIT) == 0) { return; }
+  } else {
+    if (BitAnd(s->page.kernel_mask, encode_kernel_mask::PLAIN) == 0) { return; }
+  }
 
   // Encode data values
   __syncthreads();
@@ -1706,6 +1711,13 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     uint32_t total_len = 0;
     block_scan(scan_storage).ExclusiveSum(len, pos, total_len);
     __syncthreads();
+
+    // if BYTE_STREAM_SPLIT, then translate byte positions to indexes
+    if constexpr (is_split_stream) {
+      pos /= dtype_len_out;
+      total_len /= dtype_len_out;
+    }
+
     if (t == 0) { s->cur = dst + total_len; }
     if (is_valid) {
       switch (physical_type) {
@@ -1723,10 +1735,18 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             }
           }();
 
-          dst[pos + 0] = v;
-          dst[pos + 1] = v >> 8;
-          dst[pos + 2] = v >> 16;
-          dst[pos + 3] = v >> 24;
+          if constexpr (is_split_stream) {
+            auto const num_valid     = s->page.num_valid;
+            dst[pos + 0 * num_valid] = v >> 24;
+            dst[pos + 1 * num_valid] = v >> 16;
+            dst[pos + 2 * num_valid] = v >> 8;
+            dst[pos + 3 * num_valid] = v;
+          } else {
+            dst[pos + 0] = v;
+            dst[pos + 1] = v >> 8;
+            dst[pos + 2] = v >> 16;
+            dst[pos + 3] = v >> 24;
+          }
         } break;
         case INT64: {
           int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
@@ -1738,16 +1758,29 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               v *= ts_scale;
             }
           }
-          dst[pos + 0] = v;
-          dst[pos + 1] = v >> 8;
-          dst[pos + 2] = v >> 16;
-          dst[pos + 3] = v >> 24;
-          dst[pos + 4] = v >> 32;
-          dst[pos + 5] = v >> 40;
-          dst[pos + 6] = v >> 48;
-          dst[pos + 7] = v >> 56;
+          if constexpr (is_split_stream) {
+            auto const num_valid     = s->page.num_valid;
+            dst[pos + 0 * num_valid] = v >> 56;
+            dst[pos + 1 * num_valid] = v >> 48;
+            dst[pos + 2 * num_valid] = v >> 40;
+            dst[pos + 3 * num_valid] = v >> 32;
+            dst[pos + 4 * num_valid] = v >> 24;
+            dst[pos + 5 * num_valid] = v >> 16;
+            dst[pos + 6 * num_valid] = v >> 8;
+            dst[pos + 7 * num_valid] = v;
+          } else {
+            dst[pos + 0] = v;
+            dst[pos + 1] = v >> 8;
+            dst[pos + 2] = v >> 16;
+            dst[pos + 3] = v >> 24;
+            dst[pos + 4] = v >> 32;
+            dst[pos + 5] = v >> 40;
+            dst[pos + 6] = v >> 48;
+            dst[pos + 7] = v >> 56;
+          }
         } break;
         case INT96: {
+          // only PLAIN encoding is supported
           int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
           int32_t ts_scale = s->col.ts_scale;
           if (ts_scale != 0) {
@@ -1791,10 +1824,24 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
         } break;
 
         case DOUBLE: {
-          auto v = s->col.leaf_column->element<double>(val_idx);
-          memcpy(dst + pos, &v, 8);
+          if (is_split_stream) {
+            int64_t const v = static_cast<int64_t>(s->col.leaf_column->element<double>(val_idx));
+            auto const num_valid     = s->page.num_valid;
+            dst[pos + 0 * num_valid] = v >> 56;
+            dst[pos + 1 * num_valid] = v >> 48;
+            dst[pos + 2 * num_valid] = v >> 40;
+            dst[pos + 3 * num_valid] = v >> 32;
+            dst[pos + 4 * num_valid] = v >> 24;
+            dst[pos + 5 * num_valid] = v >> 16;
+            dst[pos + 6 * num_valid] = v >> 8;
+            dst[pos + 7 * num_valid] = v;
+          } else {
+            auto v = s->col.leaf_column->element<double>(val_idx);
+            memcpy(dst + pos, &v, 8);
+          }
         } break;
         case BYTE_ARRAY: {
+          // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
                                 column_device_view const* leaf_column,
                                 uint32_t const val_idx) -> void const* {
@@ -1820,10 +1867,17 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             // When using FIXED_LEN_BYTE_ARRAY for decimals, the rep is encoded in big-endian
             auto const v = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
             auto const v_char_ptr = reinterpret_cast<char const*>(&v);
-            thrust::copy(thrust::seq,
-                         thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
-                         thrust::make_reverse_iterator(v_char_ptr),
-                         dst + pos);
+            if constexpr (is_split_stream) {
+              auto const num_valid = s->page.num_valid;
+              for (int i = 0; i < dtype_len_out; i++, pos += num_valid) {
+                dst[pos] = v_char_ptr[i];
+              }
+            } else {
+              thrust::copy(thrust::seq,
+                           thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+                           thrust::make_reverse_iterator(v_char_ptr),
+                           dst + pos);
+            }
           }
         } break;
       }
@@ -3412,7 +3466,14 @@ void EncodePages(device_span<EncPage> pages,
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::PLAIN);
-    gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+    gpuEncodePages<encode_block_size, false><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, comp_in, comp_out, comp_results, write_v2_headers);
+  }
+  if (BitAnd(kernel_mask, encode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
+    auto const strm = streams[s_idx++];
+    gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, write_v2_headers, encode_kernel_mask::BYTE_STREAM_SPLIT);
+    gpuEncodePages<encode_block_size, true><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, comp_in, comp_out, comp_results, write_v2_headers);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BINARY) != 0) {

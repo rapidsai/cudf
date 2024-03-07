@@ -1065,7 +1065,19 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
           offset += last_offset;
 
-          if (use_char_ll) {
+          if (s->page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+            if (src_pos + i < target_pos && dst_pos >= 0) {
+              auto const stride = s->page.str_bytes / s->dtype_len_in;
+              auto offptr =
+                reinterpret_cast<int32_t*>(nesting_info_base[leaf_level_index].data_out) + dst_pos;
+              *offptr      = len;
+              auto str_ptr = nesting_info_base[leaf_level_index].string_out + offset;
+              for (int ii = 0; ii < s->dtype_len_in; ii++) {
+                str_ptr[ii] = s->data_start[src_pos + i + ii * stride];
+              }
+            }
+            __syncwarp();
+          } else if (use_char_ll) {
             __shared__ __align__(8) uint8_t const* pointers[warp_size];
             __shared__ __align__(4) size_type offsets[warp_size];
             __shared__ __align__(4) int dsts[warp_size];

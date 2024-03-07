@@ -237,6 +237,17 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
                       streams[s_idx++]);
   }
 
+  // launch byte stream split decoder
+  if (BitAnd(kernel_mask, decode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
+    DecodeSplitPageData(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        error_code.data(),
+                        streams[s_idx++]);
+  }
+
   // launch the catch-all page decoder
   if (BitAnd(kernel_mask, decode_kernel_mask::GENERAL) != 0) {
     DecodePageData(subpass.pages,

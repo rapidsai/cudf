@@ -159,7 +159,10 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   } else if (page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY) {
     return decode_kernel_mask::DELTA_LENGTH_BA;
   } else if (is_string_col(chunk)) {
+    // check for string before byte_stream_split so FLBA will go to the right kernel
     return decode_kernel_mask::STRING;
+  } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+    return decode_kernel_mask::BYTE_STREAM_SPLIT;
   }
 
   // non-string, non-delta

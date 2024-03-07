@@ -657,6 +657,21 @@ std::vector<schema_tree_node> construct_schema_tree(
               }
               break;
 
+            case column_encoding::BYTE_STREAM_SPLIT:
+              if (s.type == Type::BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "BYTE_STREAM_SPLIT encoding is only supported for fixed width columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              if (s.type == Type::INT96) {
+                CUDF_LOG_WARN(
+                  "BYTE_STREAM_SPLIT encoding is not supported for INT96 columns; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
             // supported parquet encodings
             case column_encoding::PLAIN:
             case column_encoding::DICTIONARY: break;
