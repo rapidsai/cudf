@@ -16,7 +16,7 @@ rapids-dependency-file-generator \
 rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n checks
 conda activate checks
 
-RAPIDS_VERSION_MAJOR_MINOR="$(sed -E -e 's/^([0-9]{2})\.([0-9]{2})\.([0-9]{2})/\1.\2/' VERSION)"
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
 FORMAT_FILE_URL="https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-${RAPIDS_VERSION_MAJOR_MINOR}/cmake-format-rapids-cmake.json"
 export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.json
