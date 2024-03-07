@@ -187,21 +187,7 @@ __device__ inline void gpuDecodeValues(
       uint32_t dtype_len = s->dtype_len;
       void* dst =
         nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-      if (dtype == BYTE_ARRAY) {
-        if (s->col.converted_type == DECIMAL) {
-          auto const [ptr, len]        = gpuGetStringData(s, sb, src_pos);
-          auto const decimal_precision = s->col.decimal_precision;
-          if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
-            gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
-          } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
-            gpuOutputByteArrayAsInt(ptr, len, static_cast<int64_t*>(dst));
-          } else {
-            gpuOutputByteArrayAsInt(ptr, len, static_cast<__int128_t*>(dst));
-          }
-        }
-      } else if (dtype == BOOLEAN) {
-        gpuOutputBoolean(sb, src_pos, static_cast<uint8_t*>(dst));
-      } else if (s->col.converted_type == DECIMAL) {
+      if (s->col.converted_type == DECIMAL) {
         switch (dtype) {
           case INT32: gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst)); break;
           case INT64: gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst)); break;
