@@ -44,6 +44,10 @@ test = [
 [project.urls]
 Homepage = "https://github.com/rapidsai/cudf"
 
+[tool.rapids_builder]
+build-backend = "setuptools.build_meta"
+commit-file = "custreamz/_version.py"
+
 [tool.setuptools]
 license-files = ["LICENSE"]
 zip-safe = false

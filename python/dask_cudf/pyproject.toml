@@ -38,7 +38,6 @@ classifiers = [
 [project.entry-points."dask.dataframe.backends"]
 cudf = "dask_cudf.backends:CudfBackendEntrypoint"
 
-
 [project.optional-dependencies]
 test = [
     "dask-cuda==24.4.*",
@@ -50,6 +49,10 @@ test = [
 
 [project.urls]
 Homepage = "https://github.com/rapidsai/cudf"
+
+[tool.rapids_builder]
+build-backend = "setuptools.build_meta"
+commit-file = "dask_cudf/_version.py"
 
 [tool.setuptools]
 license-files = ["LICENSE"]

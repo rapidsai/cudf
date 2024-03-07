@@ -158,7 +158,7 @@ files:
     output: pyproject
     pyproject_dir: python/cudf_kafka
     extras:
-      table: tool.rapids-builder
+      table: tool.rapids_builder
       key: requires
     includes:
       - build_python_common
