@@ -262,7 +262,7 @@ fi
 # For testing, will be removed when the package is released
 git clone https://github.com/vyasr/rapids_builder.git
 pushd rapids_builder
-python -m pip install .[scikit-build-core, setuptools]
+python -m pip install '.[scikit-build-core, setuptools]'
 popd
 
 ################################################################################
