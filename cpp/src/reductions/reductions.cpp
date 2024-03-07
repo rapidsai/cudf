@@ -184,9 +184,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
     }
 
     // `make_default_constructed_scalar` does not support nested type.
-    if (cudf::is_nested(output_dtype)) {
-      return make_empty_scalar_like(col, stream, mr);
-    }
+    if (cudf::is_nested(output_dtype)) { return make_empty_scalar_like(col, stream, mr); }
 
     auto result = make_default_constructed_scalar(output_dtype, stream, mr);
     if (agg.kind == aggregation::ANY || agg.kind == aggregation::ALL) {
