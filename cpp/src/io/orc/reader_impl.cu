@@ -159,12 +159,14 @@ table_with_metadata reader::impl::make_output_chunk()
                 << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
     }
 
+    auto output = std::make_unique<table>(out_tview, _stream, _mr);
+
     // If this is the last slice, we also delete the decoded_table to free up memory.
     if (!_chunk_read_data.more_table_chunk_to_output()) {
       _chunk_read_data.decoded_table.reset(nullptr);
     }
 
-    return std::make_unique<table>(out_tview, _stream, _mr);
+    return output;
   }();
 
 #endif
