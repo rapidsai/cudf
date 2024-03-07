@@ -60,7 +60,7 @@
 namespace cudf::io::orc::detail {
 
 void reader::impl::prepare_data(int64_t skip_rows,
-                                std::optional<size_type> const& num_rows_opt,
+                                std::optional<int64_t> const& num_rows_opt,
                                 std::vector<std::vector<size_type>> const& stripes,
                                 read_mode mode)
 {
@@ -270,7 +270,7 @@ reader::impl::impl(std::size_t output_size_limit,
 }
 
 table_with_metadata reader::impl::read(int64_t skip_rows,
-                                       std::optional<size_type> const& num_rows_opt,
+                                       std::optional<int64_t> const& num_rows_opt,
                                        std::vector<std::vector<size_type>> const& stripes)
 {
   prepare_data(skip_rows, num_rows_opt, stripes, read_mode::READ_ALL);

@@ -57,10 +57,10 @@ class orc_reader_options {
 
   // List of individual stripes to read (ignored if empty)
   std::vector<std::vector<size_type>> _stripes;
-  // Rows to skip from the start; ORC stores the number of rows as uint64_t
-  uint64_t _skip_rows = 0;
+  // Rows to skip from the start
+  int64_t _skip_rows = 0;
   // Rows to read; `nullopt` is all
-  std::optional<size_type> _num_rows;
+  std::optional<int64_t> _num_rows;
 
   // Whether to use row index to speed-up reading
   bool _use_index = true;
@@ -124,7 +124,7 @@ class orc_reader_options {
    *
    * @return Number of rows to skip from the start
    */
-  uint64_t get_skip_rows() const { return _skip_rows; }
+  int64_t get_skip_rows() const { return _skip_rows; }
 
   /**
    * @brief Returns number of row to read.
@@ -132,7 +132,7 @@ class orc_reader_options {
    * @return Number of rows to read; `nullopt` if the option hasn't been set (in which case the file
    * is read until the end)
    */
-  std::optional<size_type> const& get_num_rows() const { return _num_rows; }
+  std::optional<int64_t> const& get_num_rows() const { return _num_rows; }
 
   /**
    * @brief Whether to use row index to speed-up reading.
@@ -197,10 +197,9 @@ class orc_reader_options {
    * @throw cudf::logic_error if a negative value is passed
    * @throw cudf::logic_error if stripes have been previously set
    */
-  void set_skip_rows(uint64_t rows)
+  void set_skip_rows(int64_t rows)
   {
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
-    CUDF_EXPECTS(rows <= std::numeric_limits<int64_t>::max(), "skip_rows is too large");
     _skip_rows = rows;
   }
 
@@ -212,7 +211,7 @@ class orc_reader_options {
    * @throw cudf::logic_error if a negative value is passed
    * @throw cudf::logic_error if stripes have been previously set
    */
-  void set_num_rows(size_type nrows)
+  void set_num_rows(int64_t nrows)
   {
     CUDF_EXPECTS(nrows >= 0, "num_rows cannot be negative");
     CUDF_EXPECTS(_stripes.empty(), "Can't set both num_rows and stripes");
@@ -270,7 +269,7 @@ class orc_reader_options_builder {
    *
    * @param src The source information used to read orc file
    */
-  explicit orc_reader_options_builder(source_info src) : options{std::move(src)} {};
+  explicit orc_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets names of the column to read.
@@ -302,7 +301,7 @@ class orc_reader_options_builder {
    * @param rows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& skip_rows(uint64_t rows)
+  orc_reader_options_builder& skip_rows(int64_t rows)
   {
     options.set_skip_rows(rows);
     return *this;
@@ -314,7 +313,7 @@ class orc_reader_options_builder {
    * @param nrows Number of rows
    * @return this for chaining
    */
-  orc_reader_options_builder& num_rows(size_type nrows)
+  orc_reader_options_builder& num_rows(int64_t nrows)
   {
     options.set_num_rows(nrows);
     return *this;

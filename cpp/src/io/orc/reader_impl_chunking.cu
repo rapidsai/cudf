@@ -355,8 +355,8 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
   return {begin, end};
 }
 
-void reader::impl::global_preprocess(uint64_t skip_rows,
-                                     std::optional<size_type> const& num_rows_opt,
+void reader::impl::global_preprocess(int64_t skip_rows,
+                                     std::optional<int64_t> const& num_rows_opt,
                                      std::vector<std::vector<size_type>> const& stripes,
                                      read_mode mode)
 {
@@ -375,10 +375,10 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
     "Number or rows to read exceeds the column size limit in READ_ALL mode.",
     std::overflow_error);
 
-  printf("input skip rows: %d, num rows: %d\n", (int)skip_rows, (int)num_rows_opt.value_or(-1));
-  printf("actual skip rows: %d, num rows: %d\n",
-         (int)_file_itm_data.rows_to_skip,
-         (int)_file_itm_data.rows_to_read);
+  printf("input skip rows: %lu, num rows: %lu\n", skip_rows, num_rows_opt.value_or(-1));
+  printf("actual skip rows: %lu, num rows: %lu\n",
+         _file_itm_data.rows_to_skip,
+         _file_itm_data.rows_to_read);
 
   //  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   //  auto const rows_to_read      = _file_itm_data.rows_to_read;
@@ -508,7 +508,8 @@ void reader::impl::global_preprocess(uint64_t skip_rows,
   _chunk_read_data.curr_load_stripe_chunk = 0;
 
   // Load all chunks if there is no read limit.
-  if (_chunk_read_data.data_read_limit == 0) {
+  if (_chunk_read_data.data_read_limit == 0 &&
+      _file_itm_data.rows_to_read < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
     printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_stripes);
     _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
     return;

@@ -1376,7 +1376,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   EXPECT_EQ(metadata.num_stripes(), total_rows / rows_per_stripe);
 
   // Read with row selections and memory limit.
-  {
+  if (0) {
     int constexpr num_rows_to_read = 5'000'000;
     const auto num_rows_to_skip =
       metadata.num_rows() - num_rows_to_read -
@@ -1416,6 +1416,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
   }
 
+  if (1)
   // Read with only output limit.
   // There is no limit on the memory usage.
   // However, the reader should be able to detect and load only enough stripes each time

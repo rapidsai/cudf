@@ -108,7 +108,7 @@ class reader::impl {
    * @return The set of columns along with metadata
    */
   table_with_metadata read(int64_t skip_rows,
-                           std::optional<size_type> const& num_rows_opt,
+                           std::optional<int64_t> const& num_rows_opt,
                            std::vector<std::vector<size_type>> const& stripes);
 
   /**
@@ -136,7 +136,7 @@ class reader::impl {
    * @param stripes Indices of individual stripes to load if non-empty
    */
   void prepare_data(int64_t skip_rows,
-                    std::optional<size_type> const& num_rows_opt,
+                    std::optional<int64_t> const& num_rows_opt,
                     std::vector<std::vector<size_type>> const& stripes,
                     read_mode mode);
 
@@ -152,8 +152,8 @@ class reader::impl {
    * stripes for reading each time using the `load_data()` step. This is to ensure that loading
    * these stripes will not exceed a fixed portion the data read limit.
    */
-  void global_preprocess(uint64_t skip_rows,
-                         std::optional<size_type> const& num_rows_opt,
+  void global_preprocess(int64_t skip_rows,
+                         std::optional<int64_t> const& num_rows_opt,
                          std::vector<std::vector<size_type>> const& stripes,
                          read_mode mode);
 
@@ -210,8 +210,8 @@ class reader::impl {
     std::vector<std::string> decimal128_columns;  // control decimals conversion
 
     // User specified reading rows/stripes selection.
-    uint64_t const skip_rows;
-    std::optional<size_type> num_read_rows;
+    int64_t const skip_rows;
+    std::optional<int64_t> num_read_rows;
     std::vector<std::vector<size_type>> const selected_stripes;
   } const _config;
 

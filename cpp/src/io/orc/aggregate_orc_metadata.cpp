@@ -200,10 +200,6 @@ aggregate_orc_metadata::select_stripes(
                      "The number of rows in one stripe exceeds the column size limit.",
                      std::overflow_error);
         rows_to_read += static_cast<int64_t>(stripe_rows);
-
-        // TODO: remove below
-        printf(" rows_to_read : %d / %d\n", (int)stripe_rows, (int)rows_to_read);
-        printf(" stripe to read: %d-%d\n", (int)src_file_idx, (int)stripe_idx);
       }
       selected_stripes_mapping.emplace_back(
         stripe_source_mapping{static_cast<int>(src_file_idx), std::move(stripe_infos)});
