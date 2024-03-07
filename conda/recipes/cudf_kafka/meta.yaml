@@ -61,7 +61,11 @@ requirements:
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
     # Needed by rapids_builder to infer the CTK version
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    {% else %}
     - cuda-nvcc-impl
+    {% endif %}
     # TODO: Add once the package exists. Then tomli/tomli-w will be pulled by rapids_builder
     #- rapids_builder
     - tomli
