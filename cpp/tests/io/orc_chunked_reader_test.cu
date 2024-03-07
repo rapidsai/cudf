@@ -1420,7 +1420,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
   }
 
-#define LOCAL_TEST
+// #define LOCAL_TEST
 #ifdef LOCAL_TEST
   // Read with only output limit -- there is no limit on the memory usage.
   // However, the reader should be able to detect and load only enough stripes each time
@@ -1470,5 +1470,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     auto const expected = cudf::table_view{{skipped_col}};
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, test_chunk->view());
   }
+
+  printf("done local test\n");
+  fflush(stdout);
 #endif  // LOCAL_TEST
 }
