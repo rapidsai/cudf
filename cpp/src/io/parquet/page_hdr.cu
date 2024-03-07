@@ -140,6 +140,18 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+__device__ inline bool is_nested(ColumnChunkDesc const& chunk) {
+  return chunk.max_nesting_depth > 1;
+}
+
+__device__ inline bool is_byte_array(ColumnChunkDesc const& chunk) {
+  return (chunk.data_type & 7) == BYTE_ARRAY;
+}
+
+__device__ inline bool is_boolean(ColumnChunkDesc const& chunk) {
+  return (chunk.data_type & 7) == BOOLEAN;
+}
+
 /**
  * @brief Determine which decode kernel to run for the given page.
  *
@@ -148,17 +160,16 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
  * @return `kernel_mask_bits` value for the given page
  */
 __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
-                                                   ColumnChunkDesc const& chunk,
-                                                   int use_fixed_op)
+                                                   ColumnChunkDesc const& chunk)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
-  // TODO: once we remove `use_fixed_op` we should also simplify this
-  // to use some functions (e.g. is_fixed_width, is_dictionary)
-  if (use_fixed_op != 0 && !is_string_col(chunk) && chunk.max_nesting_depth == 1 &&
-      (chunk.data_type & 7) != BYTE_ARRAY && (chunk.data_type & 7) != BOOLEAN) {
+  if (!is_string_col(chunk) && 
+      !is_nested(chunk) &&
+      !is_byte_array(chunk) && 
+      !is_boolean(chunk)) {
     if (page.encoding == Encoding::PLAIN) {
       return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
-    } else if (use_fixed_op == 2 && page.encoding == Encoding::PLAIN_DICTIONARY) {
+    } else if (page.encoding == Encoding::PLAIN_DICTIONARY) {
       return decode_kernel_mask::FIXED_WIDTH_DICT;
     }
   }
@@ -362,8 +373,7 @@ CUDF_KERNEL
 void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
                                                  chunk_page_info* chunk_pages,
                                                  int32_t num_chunks,
-                                                 kernel_error::pointer error_code,
-                                                 int use_fixed_op)
+                                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
@@ -460,7 +470,7 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
             error[warp_id] |=
               static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
           }
-          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck, use_fixed_op);
+          bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
           bs->cur = bs->end;
         }
@@ -537,13 +547,9 @@ void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  // TODO: note we will no longer need this env variable and use_fixed_op
-  // once it's enabled by default.
-  char* opt        = std::getenv("USE_FIXED_OP");
-  int use_fixed_op = (opt == nullptr || opt[0] == '0') ? 0 : (opt[0] == '1' ? 1 : 2);
 
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
-    chunks, chunk_pages, num_chunks, error_code, use_fixed_op);
+    chunks, chunk_pages, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,
