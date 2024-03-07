@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,26 +16,11 @@
 
 #pragma once
 
-#include <cassert>
-#include <new>
-
-struct managed {
-  static void* operator new(size_t n)
-  {
-    void* ptr          = nullptr;
-    cudaError_t result = cudaMallocManaged(&ptr, n);
-    if (cudaSuccess != result || 0 == ptr) throw std::bad_alloc();
-    return ptr;
-  }
-
-  static void operator delete(void* ptr) noexcept
-  {
-    auto const free_result = cudaFree(ptr);
-    assert(free_result == cudaSuccess);
-  }
-};
-
-inline bool isPtrManaged(cudaPointerAttributes attr)
-{
-  return (attr.type == cudaMemoryTypeManaged);
-}
+// Macros used for defining symbol visibility, only GLIBC is supported
+#if (defined(__GNUC__) && !defined(__MINGW32__) && !defined(__MINGW64__))
+#define CUDF_EXPORT __attribute__((visibility("default")))
+#define CUDF_HIDDEN __attribute__((visibility("hidden")))
+#else
+#define CUDF_EXPORT
+#define CUDF_HIDDEN
+#endif

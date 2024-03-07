@@ -313,33 +313,6 @@ class DatetimeColumn(column.ColumnBase):
     def day_of_year(self) -> ColumnBase:
         return self.get_dt_field("day_of_year")
 
-    def to_pandas(
-        self,
-        *,
-        index: Optional[pd.Index] = None,
-        nullable: bool = False,
-        arrow_type: bool = False,
-    ) -> pd.Series:
-        if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
-        elif nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-        elif arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
-            )
-        else:
-            # `copy=True` workaround until following issue is fixed:
-            # https://issues.apache.org/jira/browse/ARROW-9772
-            return pd.Series(
-                self.to_arrow(),
-                copy=True,
-                dtype=self.dtype,
-                index=index,
-            )
-
     @property
     def values(self):
         """

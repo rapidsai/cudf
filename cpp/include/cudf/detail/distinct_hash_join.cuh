@@ -149,5 +149,11 @@ struct distinct_hash_join {
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const;
+
+  /**
+   * @copydoc cudf::distinct_hash_join::left_join
+   */
+  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+    rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const;
 };
 }  // namespace cudf::detail

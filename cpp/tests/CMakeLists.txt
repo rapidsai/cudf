@@ -263,8 +263,6 @@ ConfigureTest(
   transform/one_hot_encode_tests.cpp
 )
 
-ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
-
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
@@ -378,6 +376,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
   utilities_tests/default_stream_tests.cpp
