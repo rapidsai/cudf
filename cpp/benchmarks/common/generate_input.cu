@@ -741,7 +741,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
   cudf::size_type const num_elements =
-    std::lround(num_rows * pow(single_level_mean, dist_params.max_depth));
+    std::lround(num_rows * std::pow(single_level_mean, dist_params.max_depth));
 
   auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
