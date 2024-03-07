@@ -1350,8 +1350,11 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
-  auto const it          = thrust::make_counting_iterator(int64_t{0});
-  auto const col         = int64s_col(it, it + num_rows);
+  using data_col = cudf::test::fixed_width_column_wrapper<int32_t, int64_t>;
+
+  auto const it =
+    cudf::detail::make_counting_transform_iterator(0l, [](int64_t i) { return i % 123456789l; });
+  auto const col         = data_col(it, it + num_rows);
   auto const chunk_table = cudf::table_view{{col}};
 
   std::vector<char> data_buffer;
@@ -1384,9 +1387,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 
     // Check validity of the last 5 million rows.
     const auto sequence_start = num_rows_to_skip % num_rows;
-    auto const skipped_col =
-      int64s_col(it + sequence_start, it + sequence_start + num_rows_to_read);
-    auto const expected = cudf::table_view{{skipped_col}};
+    auto const skipped_col = data_col(it + sequence_start, it + sequence_start + num_rows_to_read);
+    auto const expected    = cudf::table_view{{skipped_col}};
 
     auto const read_opts = cudf::io::orc_reader_options::builder(
                              cudf::io::source_info{data_buffer.data(), data_buffer.size()})
@@ -1395,8 +1397,8 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
                              .num_rows(num_rows_to_read)
                              .build();
     auto reader = cudf::io::chunked_orc_reader(
-      600'000UL * sizeof(int64_t) /* output limit, equal to 600k int64_t rows */,
-      8'000'000UL /* input limit, around size of 1 stripe's decoded data */,
+      600'000UL * sizeof(int32_t) /* output limit, equal to 600k int32_t rows */,
+      4'000'000UL /* input limit, around size of 1 stripe's decoded data */,
       500'000 /* output granularity, or minimum number of rows for the output chunk */,
       read_opts);
 
@@ -1427,7 +1429,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
                              .use_index(false)
                              .build();
     auto reader = cudf::io::chunked_orc_reader(
-      600'000UL * sizeof(int64_t) /* output limit, equal to 600k int64_t rows */,
+      600'000UL * sizeof(int32_t) /* output limit, equal to 600k int64_t rows */,
       0UL /* no input limit */,
       500'000 /* output granularity, or minimum number of rows for the output chunk */,
       read_opts);

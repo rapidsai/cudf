@@ -375,8 +375,8 @@ void reader::impl::global_preprocess(int64_t skip_rows,
     "Number or rows to read exceeds the column size limit in READ_ALL mode.",
     std::overflow_error);
 
-  printf("input skip rows: %lu, num rows: %lu\n", skip_rows, num_rows_opt.value_or(-1));
-  printf("actual skip rows: %lu, num rows: %lu\n",
+  printf("input skip rows: %ld, num rows: %ld\n", skip_rows, num_rows_opt.value_or(-1l));
+  printf("actual skip rows: %ld, num rows: %ld\n",
          _file_itm_data.rows_to_skip,
          _file_itm_data.rows_to_read);
 
@@ -508,8 +508,7 @@ void reader::impl::global_preprocess(int64_t skip_rows,
   _chunk_read_data.curr_load_stripe_chunk = 0;
 
   // Load all chunks if there is no read limit.
-  if (_chunk_read_data.data_read_limit == 0 &&
-      _file_itm_data.rows_to_read < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
+  if (_chunk_read_data.data_read_limit == 0) {
     printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_stripes);
     _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
     return;
@@ -541,7 +540,7 @@ void reader::impl::global_preprocess(int64_t skip_rows,
     if (count > 5) break;
   }
 
-  // TODO: handle case for extremely large files.
+  // If `data_read_limit` is too small, make sure not to pass 0 byte limit to compute splits.
   auto const load_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
                                               chunk_read_data::load_limit_ratio);
@@ -758,10 +757,17 @@ void reader::impl::load_data()
   // That is because the estimated `max_uncompressed_size` of stream data from
   // `ParseCompressedStripeData` is just the approximate of the maximum possible size, not the
   // actual size, which can be much smaller in practice.
-  if (_chunk_read_data.data_read_limit == 0) {
+
+  // TODO: docs on handle size overflow
+  if (_chunk_read_data.data_read_limit == 0 &&
+      _file_itm_data.rows_to_read < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
+    printf("0 limit: output decode stripe chunk unchanged\n");
     _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
     return;
   }
+
+  // TODO: remove
+  if (_chunk_read_data.data_read_limit == 0) { printf("0 limit but size overflow\n"); }
 
   {
     int count{0};
@@ -791,6 +797,12 @@ void reader::impl::load_data()
   }
 
   auto const decode_limit = [&] {
+    // In this case, we have no read limit but have to split due to having large input in which
+    // the number of rows exceed column size limit.
+    // We will split based on row number, not data size.
+    if (_chunk_read_data.data_read_limit == 0) { return std::numeric_limits<std::size_t>::max(); }
+
+    // If `data_read_limit` is too small, make sure not to pass 0 byte limit to compute splits.
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
                                               (1.0 - chunk_read_data::load_limit_ratio));
     return tmp > 0UL ? tmp : 1UL;
