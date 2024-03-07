@@ -760,6 +760,7 @@ void reader::impl::load_data()
 
   // TODO: docs on handle size overflow
   if (_chunk_read_data.data_read_limit == 0 &&
+      // TODO: rows_to_read  is changed every decode, should we change this?
       _file_itm_data.rows_to_read < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
     printf("0 limit: output decode stripe chunk unchanged\n");
     _chunk_read_data.decode_stripe_chunks = {stripe_chunk};

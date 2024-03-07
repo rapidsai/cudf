@@ -1344,16 +1344,18 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
 
 TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
 {
+  using data_type = int16_t;
+  using data_col  = cudf::test::fixed_width_column_wrapper<data_type, int64_t>;
+
   int64_t constexpr num_rows    = 500'000'000l;
   int constexpr rows_per_stripe = 1'000'000;
   int constexpr num_reps        = 10;
   int64_t constexpr total_rows  = num_rows * num_reps;
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
-  using data_col = cudf::test::fixed_width_column_wrapper<int32_t, int64_t>;
-
-  auto const it =
-    cudf::detail::make_counting_transform_iterator(0l, [](int64_t i) { return i % 123456789l; });
+  auto const it          = cudf::detail::make_counting_transform_iterator(0l, [](int64_t i) {
+    return i % static_cast<int64_t>(std::numeric_limits<data_type>::max() / 2);
+  });
   auto const col         = data_col(it, it + num_rows);
   auto const chunk_table = cudf::table_view{{col}};
 
@@ -1379,7 +1381,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
   EXPECT_EQ(metadata.num_stripes(), total_rows / rows_per_stripe);
 
   // Read with row selections and memory limit.
-  if (0) {
+  if (1) {
     int constexpr num_rows_to_read = 5'000'000;
     const auto num_rows_to_skip =
       metadata.num_rows() - num_rows_to_read -
@@ -1397,9 +1399,9 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
                              .num_rows(num_rows_to_read)
                              .build();
     auto reader = cudf::io::chunked_orc_reader(
-      600'000UL * sizeof(int32_t) /* output limit, equal to 600k int32_t rows */,
-      4'000'000UL /* input limit, around size of 1 stripe's decoded data */,
-      500'000 /* output granularity, or minimum number of rows for the output chunk */,
+      600'000UL * sizeof(data_type) /* output limit, equal to 600k rows */,
+      rows_per_stripe * sizeof(data_type) /* input limit, around size of 1 stripe's decoded data */,
+      rows_per_stripe / 2 /* output granularity, or minimum number of rows for the output chunk */,
       read_opts);
 
     auto num_chunks  = 0;
@@ -1414,11 +1416,11 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     } while (reader.has_next());
 
     auto const read_result = cudf::concatenate(tviews);
-    EXPECT_EQ(num_chunks, 10);
+    EXPECT_EQ(num_chunks, 11);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
   }
 
-  if (1)
+  if (0)
   // Read with only output limit.
   // There is no limit on the memory usage.
   // However, the reader should be able to detect and load only enough stripes each time

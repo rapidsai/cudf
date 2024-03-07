@@ -783,11 +783,16 @@ std::vector<chunk> find_table_splits(table_view const& input,
       return cumulative_size{current_length, static_cast<std::size_t>(size)};
     });
 
-  // TODO: remove:
-  segmented_sizes.device_to_host_sync(stream);
-  printf("total row sizes by segment = %d:\n", (int)segment_length);
-  for (auto& size : segmented_sizes) {
-    printf("size: %ld, %zu\n", size.count, size.size_bytes / CHAR_BIT);
+  {
+    int count{0};
+    // TODO: remove:
+    segmented_sizes.device_to_host_sync(stream);
+    printf("total row sizes by segment = %d:\n", (int)segment_length);
+    for (auto& size : segmented_sizes) {
+      printf("size: %ld, %zu\n", size.count, size.size_bytes / CHAR_BIT);
+      if (count > 5) break;
+      ++count;
+    }
   }
 
   // TODO: exec_policy_nosync
@@ -841,8 +846,14 @@ void reader::impl::decompress_and_decode()
                    "TODO");
     }
   }
-  rows_to_read = std::min<int64_t>(rows_to_read - rows_to_skip, _file_itm_data.rows_to_read);
+  rows_to_read = std::min<int64_t>(rows_to_read, _file_itm_data.rows_to_read) - rows_to_skip;
+  CUDF_EXPECTS(rows_to_read > 0, "Invalid rows_to_read computation.");
+
+  // rows_to_read -= rows_to_skip;
   _file_itm_data.rows_to_skip = 0;
+  _file_itm_data.rows_to_read -= rows_to_read;
+
+  printf("decode, skip = %ld, read = %ld\n", rows_to_skip, rows_to_read);
 
   CUDF_EXPECTS(rows_to_read <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",

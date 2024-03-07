@@ -110,7 +110,7 @@ table_with_metadata reader::impl::make_output_chunk()
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   // If no rows or stripes to read, return empty columns
-  if (_file_itm_data.has_no_data() || !_chunk_read_data.more_table_chunk_to_output()) {
+  if (!_chunk_read_data.more_table_chunk_to_output()) {
     printf("has no next\n");
     std::vector<std::unique_ptr<column>> out_columns;
     auto out_metadata = get_meta_with_user_data();
@@ -157,6 +157,11 @@ table_with_metadata reader::impl::make_output_chunk()
       auto peak_mem = mem_stats_logger.peak_memory_usage();
       std::cout << "done make out, peak_memory_usage: " << peak_mem << "("
                 << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+    }
+
+    // If this is the last slice, we also delete the decoded_table to free up memory.
+    if (!_chunk_read_data.more_table_chunk_to_output()) {
+      _chunk_read_data.decoded_table.reset(nullptr);
     }
 
     return std::make_unique<table>(out_tview, _stream, _mr);
