@@ -316,7 +316,8 @@ struct PageInfo {
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
   int32_t str_bytes;
-  int32_t str_offset;  // offset into string data for this page
+  int32_t str_offset;   // offset into string data for this page
+  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
 
   // nesting information (input/output) for each page. this array contains
   // input column nesting information, output column nesting information and
@@ -335,7 +336,14 @@ struct PageInfo {
   uint8_t* temp_string_buf;
 
   decode_kernel_mask kernel_mask;
+
+  // str_bytes from page index. because str_bytes needs to be reset each iteration
+  // while doing chunked reads, persist the value from the page index here.
+  int32_t str_bytes_from_index;
 };
+
+// forward declaration
+struct column_chunk_info;
 
 /**
  * @brief Return the column schema id as the key for a PageInfo struct.
@@ -376,6 +384,7 @@ struct ColumnChunkDesc {
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
+                           column_chunk_info const* chunk_info_,
                            float list_bytes_per_row_est_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
@@ -400,6 +409,7 @@ struct ColumnChunkDesc {
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
       src_col_schema(src_col_schema_),
+      h_chunk_info(chunk_info_),
       list_bytes_per_row_est(list_bytes_per_row_est_)
   {
   }
@@ -429,6 +439,9 @@ struct ColumnChunkDesc {
 
   int32_t src_col_index{};   // my input column index
   int32_t src_col_schema{};  // my schema index in the file
+
+  // pointer to column_chunk_info struct for this chunk (host only)
+  column_chunk_info const* h_chunk_info{};
 
   float list_bytes_per_row_est{};  // for LIST columns, an estimate on number of bytes per row
 };
