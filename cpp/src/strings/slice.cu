@@ -209,7 +209,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
 
   return make_strings_column(strings.size(),
                              std::move(offsets),
-                             std::move(chars->release().data.release()[0]),
+                             chars.release(),
                              strings.null_count(),
                              cudf::detail::copy_bitmask(strings.parent(), stream, mr));
 }

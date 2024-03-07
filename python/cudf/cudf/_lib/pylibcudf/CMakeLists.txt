@@ -18,6 +18,7 @@ set(cython_sources
     column.pyx
     concatenate.pyx
     copying.pyx
+    filling.pyx
     gpumemoryview.pyx
     groupby.pyx
     interop.pyx
@@ -28,6 +29,7 @@ set(cython_sources
     replace.pyx
     rolling.pyx
     scalar.pyx
+    search.pyx
     stream_compaction.pyx
     sorting.pyx
     table.pyx

@@ -25,6 +25,10 @@
 #include <map>
 #include <vector>
 
+// Forward declaration of parse_options from parsing_utils.cuh
+namespace cudf::io {
+struct parse_options;
+}
 namespace cudf::io::json {
 
 /**
@@ -283,6 +287,16 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<NodeIndexT> col_ids,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream);
+
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ * @param stream The CUDA stream to which kernels are dispatched
+ */
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream);
 
 /** @copydoc host_parse_nested_json
  * All processing is done in device memory.
