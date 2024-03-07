@@ -262,10 +262,8 @@ fi
 # For testing, will be removed when the package is released
 git clone https://github.com/vyasr/rapids_builder.git
 pushd rapids_builder
-python -m pip wheel . --no-deps
+python -m pip install .[scikit-build-core, setuptools]
 popd
-
-export PIP_FIND_LINKS="file://${REPODIR}/rapids_builder"
 
 ################################################################################
 # Configure, build, and install libcudf
