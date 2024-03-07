@@ -504,6 +504,8 @@ def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
     ):
         return True
     elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        if dtype_to_check.categories is None:
+            return False
         return _is_pandas_nullable_extension_dtype(
             dtype_to_check.categories.dtype
         )
