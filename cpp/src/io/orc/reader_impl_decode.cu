@@ -846,8 +846,8 @@ void reader::impl::decompress_and_decode()
                    "TODO");
     }
   }
-  rows_to_read = std::min<int64_t>(rows_to_read, _file_itm_data.rows_to_read) - rows_to_skip;
-  CUDF_EXPECTS(rows_to_read > 0, "Invalid rows_to_read computation.");
+  CUDF_EXPECTS(rows_to_read > rows_to_skip, "Invalid rows_to_read computation.");
+  rows_to_read = std::min<int64_t>(rows_to_read - rows_to_skip, _file_itm_data.rows_to_read);
 
   // rows_to_read -= rows_to_skip;
   _file_itm_data.rows_to_skip = 0;
