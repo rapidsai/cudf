@@ -364,7 +364,7 @@ class reader::impl {
   std::vector<int> _output_column_schemas;
 
   // _output_buffers associated metadata
-  std::unique_ptr<table_metadata> _out_metadata;
+  std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;
 

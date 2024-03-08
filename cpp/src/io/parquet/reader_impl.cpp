@@ -416,8 +416,8 @@ void reader::impl::populate_metadata(table_metadata& out_metadata)
 table_with_metadata reader::impl::read_chunk_internal(
   bool uses_custom_row_bounds, std::optional<std::reference_wrapper<ast::expression const>> filter)
 {
-  // If `_out_metadata` has been constructed, just copy it over.
-  auto out_metadata = _out_metadata ? table_metadata{*_out_metadata} : table_metadata{};
+  // If `_output_metadata` has been constructed, just copy it over.
+  auto out_metadata = _output_metadata ? table_metadata{*_output_metadata} : table_metadata{};
   out_metadata.schema_info.resize(_output_buffers.size());
 
   // output cudf columns as determined by the top level schema
@@ -448,8 +448,8 @@ table_with_metadata reader::impl::read_chunk_internal(
       metadata = std::make_optional<reader_column_schema>();
       metadata->set_convert_binary_to_strings(false);
     }
-    // Only construct `out_metadata` if `_out_metadata` has not been cached.
-    if (!_out_metadata) {
+    // Only construct `out_metadata` if `_output_metadata` has not been cached.
+    if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(make_column(_output_buffers[i], &col_name, metadata, _stream));
     } else {
@@ -468,7 +468,7 @@ table_with_metadata reader::impl::finalize_output(
 {
   // Create empty columns as needed (this can happen if we've ended up with no actual data to read)
   for (size_t i = out_columns.size(); i < _output_buffers.size(); ++i) {
-    if (!_out_metadata) {
+    if (!_output_metadata) {
       column_name_info& col_name = out_metadata.schema_info[i];
       out_columns.emplace_back(io::detail::empty_like(_output_buffers[i], &col_name, _stream, _mr));
     } else {
@@ -476,10 +476,10 @@ table_with_metadata reader::impl::finalize_output(
     }
   }
 
-  if (!_out_metadata) {
+  if (!_output_metadata) {
     populate_metadata(out_metadata);
-    // Finally, save the output table metadata into `_out_metadata` for reuse next time.
-    _out_metadata = std::make_unique<table_metadata>(out_metadata);
+    // Finally, save the output table metadata into `_output_metadata` for reuse next time.
+    _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
   // advance output chunk/subpass/pass info
