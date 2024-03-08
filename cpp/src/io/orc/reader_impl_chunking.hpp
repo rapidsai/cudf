@@ -240,10 +240,13 @@ struct chunk_read_data {
   // Only has more chunk to output if:
   bool has_next() const
   {
+#ifdef LOCAL_TEST
     printf("compute has_next: %d, %d, %d\n",
            (int)more_stripe_to_load(),
            (int)more_stripe_to_decode(),
            (int)more_table_chunk_to_output());
+#endif
+
     return more_stripe_to_load() || more_stripe_to_decode() || more_table_chunk_to_output();
   }
 };

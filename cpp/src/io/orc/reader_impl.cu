@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 
-// #define PRINT_DEBUG
-
 // TODO: remove
 #include <cudf_test/debug_utilities.hpp>
 
-#include <cudf/concatenate.hpp>
 //
 //
 //
@@ -72,46 +69,55 @@ void reader::impl::prepare_data(int64_t skip_rows,
   // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return; }
 
+#ifdef LOCAL_TEST
   std::cout << "call global, skip = " << skip_rows << std::endl;
+#endif
 
   global_preprocess(skip_rows, num_rows_opt, stripes, mode);
 
   if (!_chunk_read_data.more_table_chunk_to_output()) {
     if (!_chunk_read_data.more_stripe_to_decode() && _chunk_read_data.more_stripe_to_load()) {
+#ifdef LOCAL_TEST
       printf("load more data\n\n");
+#endif
+
       load_data();
     }
 
     if (_chunk_read_data.more_stripe_to_decode()) {
+#ifdef LOCAL_TEST
       printf("decode more data\n\n");
+#endif
+
       decompress_and_decode();
     }
   }
 
+#ifdef LOCAL_TEST
   printf("done load and decode data\n\n");
-
-  // decompress_and_decode();
-  // while (_chunk_read_data.more_stripe_to_decode()) {
-  //   decompress_and_decode();
-  //   _file_itm_data.out_buffers.push_back(std::move(_out_buffers));
-  // }
+#endif
 }
 
 table_with_metadata reader::impl::make_output_chunk()
 {
+#ifdef LOCAL_TEST
   {
     _stream.synchronize();
     auto peak_mem = mem_stats_logger.peak_memory_usage();
     std::cout << "start to make out, peak_memory_usage: " << peak_mem << "("
               << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
   }
+#endif
 
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
   // If no rows or stripes to read, return empty columns
   if (!_chunk_read_data.more_table_chunk_to_output()) {
+#ifdef LOCAL_TEST
     printf("has no next\n");
+#endif
+
     std::vector<std::unique_ptr<column>> out_columns;
     auto out_metadata = get_meta_with_user_data();
     std::transform(_selected_columns.levels[0].begin(),
@@ -130,20 +136,23 @@ table_with_metadata reader::impl::make_output_chunk()
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
-#if 1
   auto out_table = [&] {
     if (_chunk_read_data.output_table_chunks.size() == 1) {
       _chunk_read_data.curr_output_table_chunk++;
+#ifdef LOCAL_TEST
       printf("one chunk, no more table---------------------------------\n");
+#endif
       return std::move(_chunk_read_data.decoded_table);
     }
 
+#ifdef LOCAL_TEST
     {
       _stream.synchronize();
       auto peak_mem = mem_stats_logger.peak_memory_usage();
       std::cout << "prepare to make out, peak_memory_usage: " << peak_mem << "("
                 << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
     }
+#endif
 
     auto const out_chunk =
       _chunk_read_data.output_table_chunks[_chunk_read_data.curr_output_table_chunk++];
@@ -152,12 +161,15 @@ table_with_metadata reader::impl::make_output_chunk()
                           {static_cast<size_type>(out_chunk.start_idx),
                            static_cast<size_type>(out_chunk.start_idx + out_chunk.count)},
                           _stream)[0];
+
+#ifdef LOCAL_TEST
     {
       _stream.synchronize();
       auto peak_mem = mem_stats_logger.peak_memory_usage();
       std::cout << "done make out, peak_memory_usage: " << peak_mem << "("
                 << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
     }
+#endif
 
     auto output = std::make_unique<table>(out_tview, _stream, _mr);
 
@@ -169,8 +181,7 @@ table_with_metadata reader::impl::make_output_chunk()
     return output;
   }();
 
-#endif
-
+#ifdef LOCAL_TEST
   if (!_chunk_read_data.has_next()) {
     static int count{0};
     count++;
@@ -184,6 +195,7 @@ table_with_metadata reader::impl::make_output_chunk()
     std::cout << "done, partial, peak_memory_usage: " << peak_mem
               << " , MB = " << (peak_mem * 1.0) / (1024.0 * 1024.0) << std::endl;
   }
+#endif
 
   return {std::move(out_table), _out_metadata};
 }
@@ -267,13 +279,6 @@ reader::impl::impl(std::size_t output_size_limit,
       data_read_limit,
       output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY}
 {
-  printf("construct reader , limit = %d, %d, gradunarity %d \n",
-
-         (int)output_size_limit,
-         (int)data_read_limit,
-         (int)output_row_granularity
-
-  );
 }
 
 table_with_metadata reader::impl::read(int64_t skip_rows,
@@ -286,16 +291,23 @@ table_with_metadata reader::impl::read(int64_t skip_rows,
 
 bool reader::impl::has_next()
 {
+#ifdef LOCAL_TEST
   printf("==================query has next \n");
+#endif
+
   prepare_data(
     _config.skip_rows, _config.num_read_rows, _config.selected_stripes, read_mode::CHUNKED_READ);
 
+#ifdef LOCAL_TEST
   printf("has next: %d\n", (int)_chunk_read_data.has_next());
+#endif
+
   return _chunk_read_data.has_next();
 }
 
 table_with_metadata reader::impl::read_chunk()
 {
+#ifdef LOCAL_TEST
   printf("==================call read chunk\n");
   {
     _stream.synchronize();
@@ -303,34 +315,19 @@ table_with_metadata reader::impl::read_chunk()
     std::cout << "\n\n\n------------start read chunk, peak_memory_usage: " << peak_mem << "("
               << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
   }
-
-  {
-    static int count{0};
-    ++count;
-
-#if 0
-    if (count == 3) {
-      _file_itm_data.lvl_stripe_data.clear();
-      {
-        _stream.synchronize();
-        auto peak_mem = mem_stats_logger.peak_memory_usage();
-        std::cout << "clear all, peak_memory_usage: " << peak_mem << "("
-                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-      }
-      exit(0);
-    }
 #endif
-  }
 
   prepare_data(
     _config.skip_rows, _config.num_read_rows, _config.selected_stripes, read_mode::CHUNKED_READ);
 
+#ifdef LOCAL_TEST
   {
     _stream.synchronize();
     auto peak_mem = mem_stats_logger.peak_memory_usage();
     std::cout << "done prepare data, peak_memory_usage: " << peak_mem << "("
               << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
   }
+#endif
 
   return make_output_chunk();
 }

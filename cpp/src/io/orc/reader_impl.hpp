@@ -38,7 +38,9 @@ class memory_stats_logger {
  public:
   explicit memory_stats_logger(rmm::mr::device_memory_resource* mr) : existing_mr(mr)
   {
+#ifdef LOCAL_TEST
     printf("exist mr: %p\n", mr);
+#endif
 
     statistics_mr =
       std::make_unique<rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>>(
