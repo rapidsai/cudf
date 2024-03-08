@@ -429,6 +429,23 @@ inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
   }
 }
 
+template <typename T>
+__device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst, uint8_t const* src, size_type stride, uint32_t dtype_len_in)
+{
+  T unscaled = 0;
+  // fixed_len_byte_array decimals are big endian
+  for (unsigned int i = 0; i < dtype_len_in; i++) {
+    unscaled = (unscaled << 8) | src[i * stride];
+  }
+  // Shift the unscaled value up and back down when it isn't all 8 bytes,
+  // which sign extend the value for correctly representing negative numbers.
+  if (dtype_len_in < sizeof(T)) {
+    unscaled <<= (sizeof(T) - dtype_len_in) * 8;
+    unscaled >>= (sizeof(T) - dtype_len_in) * 8;
+  }
+  *dst = unscaled;
+}
+
 // TODO(ets): is this better as a standalone, or as part of the plain/dict decoder?
 // how does this work with the new microkernels?
 /**
@@ -562,6 +579,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         int leaf_level_index = s->col.max_nesting_depth - 1;
 
         uint32_t dtype_len = s->dtype_len;
+        uint8_t const* src = s->data_start + val_src_pos;
         uint8_t* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
 
@@ -570,58 +588,48 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           switch (dtype) {
             case INT32:
               gpuOutputByteStreamSplit<sizeof(int32_t)>(
-                dst, s->data_start + val_src_pos, num_values);
+                dst, src, num_values);
               break;
             case INT64:
               gpuOutputByteStreamSplit<sizeof(int64_t)>(
-                dst, s->data_start + val_src_pos, num_values);
+                dst, src, num_values);
               break;
             case FIXED_LEN_BYTE_ARRAY:
-              // FIXME(ets)
-              // need a new version of gpuOutputFixedLenByteArrayAsInt for BSS
-              // decimals in FLBA are in big endian order
               if (s->dtype_len_in <= sizeof(int32_t)) {
-                int32_t unscaled = 0;
-                for (int i = 0; i < s->dtype_len_in; i++) {
-                  unscaled = (unscaled << 8) | s->data_start[val_src_pos + i * num_values];
-                }
-                if (s->dtype_len_in < sizeof(int32_t)) {
-                  auto const shift = (sizeof(int32_t) - s->dtype_len_in) * 8;
-                  unscaled <<= shift;
-                  unscaled >>= shift;
-                }
-                *(reinterpret_cast<int32_t*>(dst)) = unscaled;
+                gpuOutputSplitFixedLenByteArrayAsInt(reinterpret_cast<int32_t*>(dst),
+                  src, num_values, s->dtype_len_in);
               } else if (s->dtype_len_in <= sizeof(int64_t)) {
-                gpuOutputFixedLenByteArrayAsInt(
-                  s, sb, val_src_pos, reinterpret_cast<int64_t*>(dst));
+                gpuOutputSplitFixedLenByteArrayAsInt(reinterpret_cast<int64_t*>(dst),
+                  src, num_values, s->dtype_len_in);
               } else {
-                gpuOutputFixedLenByteArrayAsInt(
-                  s, sb, val_src_pos, reinterpret_cast<__int128_t*>(dst));
+                gpuOutputSplitFixedLenByteArrayAsInt(reinterpret_cast<__int128_t*>(dst),
+                  src, num_values, s->dtype_len_in);
               }
-              break;
+              // unsupported decimal precision
+              [[fallthrough]];
 
             default: s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
           }
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
-            gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, s->data_start + val_src_pos, num_values);
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
+            gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values);
             dst[4] = 0;
             dst[5] = 0;
             dst[6] = 0;
             dst[7] = 0;
           } else if (s->ts_scale) {
             gpuOutputSplitInt64Timestamp(reinterpret_cast<int64_t*>(dst),
-                                         s->data_start + val_src_pos,
+                                         src,
                                          num_values,
                                          s->ts_scale);
           } else {
-            gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, s->data_start + val_src_pos, num_values);
+            gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values);
           }
         } else if (dtype_len == 4) {
-          gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, s->data_start + val_src_pos, num_values);
+          gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values);
         } else {
           s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
         }
