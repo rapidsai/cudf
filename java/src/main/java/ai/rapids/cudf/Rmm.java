@@ -591,4 +591,10 @@ public class Rmm {
   public static native long allocFromPinnedPool(long poolPtr, long size);
 
   public static native void freeFromPinnedPool(long poolPtr, long ptr, long size);
+
+  // only for tests
+  public static native long allocFromFallbackPinnedPool(long size);
+
+  // only for tests
+  public static native void freeFromFallbackPinnedPool(long ptr, long size);
 }
