@@ -26,12 +26,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/mr/host/host_memory_resource.hpp>
-
-#include <thrust/host_vector.h>
-
-#include <variant>
 
 namespace cudf::detail {
 
@@ -64,7 +60,6 @@ class hostdevice_vector {
     h_data.reserve(max_size);
     h_data.resize(initial_size);
 
-    current_size = initial_size;
     d_data.resize(max_size, stream);
   }
 
@@ -72,19 +67,13 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(size() < capacity(),
                  "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
-    h_data[current_size++] = data;
+    h_data.push_back(data);
   }
 
   [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
-  [[nodiscard]] size_t size() const noexcept { return current_size; }
+  [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
-
-  [[nodiscard]] T& front() { return h_data.front(); }
-  [[nodiscard]] T const& front() const { return front(); }
-
-  [[nodiscard]] T& back() { return h_data.back(); }
-  [[nodiscard]] T const& back() const { return back(); }
 
   [[nodiscard]] T& operator[](size_t i) { return h_data[i]; }
   [[nodiscard]] T const& operator[](size_t i) const { return h_data[i]; }
@@ -97,6 +86,12 @@ class hostdevice_vector {
 
   [[nodiscard]] T* end() { return host_ptr(size()); }
   [[nodiscard]] T const* end() const { return host_ptr(size()); }
+
+  [[nodiscard]] T& front() { return h_data.front(); }
+  [[nodiscard]] T const& front() const { return front(); }
+
+  [[nodiscard]] T& back() { return h_data.back(); }
+  [[nodiscard]] T const& back() const { return back(); }
 
   [[nodiscard]] T* device_ptr(size_t offset = 0) { return d_data.data() + offset; }
   [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
@@ -181,7 +176,6 @@ class hostdevice_vector {
 
  private:
   cudf::detail::rmm_host_vector<T> h_data;
-  size_t current_size = 0;
   rmm::device_uvector<T> d_data;
 };
 
