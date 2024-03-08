@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 ###############################
 # cuDF doxygen warnings check #
 ###############################
@@ -20,6 +20,10 @@ if [ ! $(version "$DOXYGEN_VERSION") -eq $(version "1.9.1") ] ; then
   echo -e "Expecting doxygen version 1.9.1"
   exit 0
 fi
+
+# Set variables for doxygen
+export RAPIDS_VERSION="$(rapids-version)"
+export RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
 
 # Run doxygen, ignore missing tag files error
 TAG_ERROR1="error: Tag file '.*.tag' does not exist or is not a file. Skipping it..."
