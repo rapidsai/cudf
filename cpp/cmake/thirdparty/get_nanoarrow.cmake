@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds nanoarrow and sets any additional necessary environment variables.
 function(find_and_configure_nanoarrow)
   set(oneValueArgs VERSION FORK PINNED_TAG)
   cmake_parse_arguments(PKG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -23,7 +24,9 @@ function(find_and_configure_nanoarrow)
     CPM_ARGS
     GIT_REPOSITORY https://github.com/${PKG_FORK}/arrow-nanoarrow.git
     GIT_TAG ${PKG_PINNED_TAG}
-    GIT_SHALLOW TRUE
+    # TODO: Commit hashes are not supported with shallow clones. Can switch this if and when we pin
+    # to an actual tag.
+    GIT_SHALLOW FALSE
   )
 endfunction()
 
