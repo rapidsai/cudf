@@ -100,8 +100,18 @@ def test_interval_range_freq_basic_dtype(start_t, end_t, freq_t):
     gindex = cudf.interval_range(
         start=start, end=end, freq=freq, closed="left"
     )
+    if gindex.dtype.subtype.kind == "f":
+        gindex = gindex.astype(
+            cudf.IntervalDtype(subtype="float64", closed=gindex.dtype.closed)
+        )
+    elif gindex.dtype.subtype.kind == "i":
+        gindex = gindex.astype(
+            cudf.IntervalDtype(subtype="int64", closed=gindex.dtype.closed)
+        )
 
-    assert_eq(pindex, gindex)
+    # pandas upcasts to 64 bit https://github.com/pandas-dev/pandas/issues/57268
+    # using Series to use check_dtype
+    assert_eq(pd.Series(pindex), cudf.Series(gindex), check_dtype=False)
 
 
 @pytest.mark.parametrize("closed", ["left", "right", "both", "neither"])
@@ -221,7 +231,9 @@ def test_interval_range_periods_freq_start_dtype(periods_t, freq_t, start_t):
         start=start, freq=freq, periods=periods, closed="left"
     )
 
-    assert_eq(pindex, gindex)
+    # pandas upcasts to 64 bit https://github.com/pandas-dev/pandas/issues/57268
+    # using Series to use check_dtype
+    assert_eq(pd.Series(pindex), cudf.Series(gindex), check_dtype=False)
 
 
 @pytest.mark.parametrize("closed", ["right", "left", "both", "neither"])

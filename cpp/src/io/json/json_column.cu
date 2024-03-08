@@ -674,6 +674,7 @@ void make_device_json_column(device_span<SymbolT const> input,
             reinitialize_as_string(old_col_id, col);
             // all its children (which are already inserted) are ignored later.
           }
+          col.forced_as_string_column = true;
           columns.try_emplace(this_col_id, columns.at(old_col_id));
           continue;
         }
@@ -915,6 +916,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                          : "n/a");
 #endif
         target_type = schema.value().type;
+      } else if (json_col.forced_as_string_column) {
+        target_type = data_type{type_id::STRING};
       }
       // Infer column type, if we don't have an explicit type for it
       else {
