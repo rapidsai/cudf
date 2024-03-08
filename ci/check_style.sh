@@ -16,7 +16,9 @@ rapids-dependency-file-generator \
 rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n checks
 conda activate checks
 
-FORMAT_FILE_URL=https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-24.04/cmake-format-rapids-cmake.json
+RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+
+FORMAT_FILE_URL="https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-${RAPIDS_VERSION_MAJOR_MINOR}/cmake-format-rapids-cmake.json"
 export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.json
 mkdir -p $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}

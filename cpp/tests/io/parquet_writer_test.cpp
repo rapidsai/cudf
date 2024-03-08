@@ -1482,8 +1482,18 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   auto const string_col =
     cudf::test::strings_column_wrapper(strings, strings + num_rows, no_nulls());
 
-  auto const table = table_view(
-    {col, col, col, col, col, string_col, string_col, string_col, string_col, string_col});
+  auto const table = table_view({col,
+                                 col,
+                                 col,
+                                 col,
+                                 col,
+                                 col,
+                                 string_col,
+                                 string_col,
+                                 string_col,
+                                 string_col,
+                                 string_col,
+                                 string_col});
 
   cudf::io::table_input_metadata table_metadata(table);
 
@@ -1495,13 +1505,15 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   set_meta(1, "int_dict", column_encoding::DICTIONARY);
   set_meta(2, "int_db", column_encoding::DELTA_BINARY_PACKED);
   set_meta(3, "int_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  table_metadata.column_metadata[4].set_name("int_none");
+  set_meta(4, "int_dba", column_encoding::DELTA_BYTE_ARRAY);
+  table_metadata.column_metadata[5].set_name("int_none");
 
-  set_meta(5, "string_plain", column_encoding::PLAIN);
-  set_meta(6, "string_dict", column_encoding::DICTIONARY);
-  set_meta(7, "string_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
-  set_meta(8, "string_db", column_encoding::DELTA_BINARY_PACKED);
-  table_metadata.column_metadata[9].set_name("string_none");
+  set_meta(6, "string_plain", column_encoding::PLAIN);
+  set_meta(7, "string_dict", column_encoding::DICTIONARY);
+  set_meta(8, "string_dlba", column_encoding::DELTA_LENGTH_BYTE_ARRAY);
+  set_meta(9, "string_dba", column_encoding::DELTA_BYTE_ARRAY);
+  set_meta(10, "string_db", column_encoding::DELTA_BINARY_PACKED);
+  table_metadata.column_metadata[11].set_name("string_none");
 
   for (auto& col_meta : table_metadata.column_metadata) {
     col_meta.set_nullability(false);
@@ -1534,18 +1546,55 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   expect_enc(2, Encoding::DELTA_BINARY_PACKED);
   // requested delta_length_byte_array, but should fall back to dictionary
   expect_enc(3, Encoding::PLAIN_DICTIONARY);
-  // no request, should fall back to dictionary
+  // requested delta_byte_array, but should fall back to dictionary
   expect_enc(4, Encoding::PLAIN_DICTIONARY);
+  // no request, should use dictionary
+  expect_enc(5, Encoding::PLAIN_DICTIONARY);
+
   // requested plain
-  expect_enc(5, Encoding::PLAIN);
+  expect_enc(6, Encoding::PLAIN);
   // requested dictionary
-  expect_enc(6, Encoding::PLAIN_DICTIONARY);
+  expect_enc(7, Encoding::PLAIN_DICTIONARY);
   // requested delta_length_byte_array
-  expect_enc(7, Encoding::DELTA_LENGTH_BYTE_ARRAY);
+  expect_enc(8, Encoding::DELTA_LENGTH_BYTE_ARRAY);
+  // requested delta_byte_array
+  expect_enc(9, Encoding::DELTA_BYTE_ARRAY);
   // requested delta_binary_packed, but should fall back to dictionary
-  expect_enc(8, Encoding::PLAIN_DICTIONARY);
-  // no request, should fall back to dictionary
-  expect_enc(9, Encoding::PLAIN_DICTIONARY);
+  expect_enc(10, Encoding::PLAIN_DICTIONARY);
+  // no request, should use dictionary
+  expect_enc(11, Encoding::PLAIN_DICTIONARY);
+}
+
+TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
+{
+  // decimal128 in cuDF maps to FIXED_LEN_BYTE_ARRAY, which is allowed by the spec to use
+  // DELTA_BYTE_ARRAY encoding. But this use is not implemented in cuDF.
+  __int128_t val0 = 0xa1b2'c3d4'e5f6ULL;
+  __int128_t val1 = val0 << 80;
+  column_wrapper<numeric::decimal128> col0{{numeric::decimal128(val0, numeric::scale_type{0}),
+                                            numeric::decimal128(val1, numeric::scale_type{0})}};
+
+  auto expected = table_view{{col0, col0}};
+  cudf::io::table_input_metadata table_metadata(expected);
+  table_metadata.column_metadata[0]
+    .set_name("decimal128")
+    .set_encoding(cudf::io::column_encoding::DELTA_BYTE_ARRAY)
+    .set_nullability(false);
+
+  auto const filepath = temp_env->get_temp_filepath("Decimal128DeltaByteArray.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .compression(cudf::io::compression_type::NONE)
+      .metadata(table_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // make sure DELTA_BYTE_ARRAY was not used
+  EXPECT_NE(fmd.row_groups[0].columns[0].meta_data.encodings[0],
+            cudf::io::parquet::detail::Encoding::DELTA_BYTE_ARRAY);
 }
 
 TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)

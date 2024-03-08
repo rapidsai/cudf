@@ -379,6 +379,7 @@ _names_to_skip_in_pylibcudf = {
     "type_id",
     # Unknown base types
     "int32_t",
+    "void"
 }
 
 

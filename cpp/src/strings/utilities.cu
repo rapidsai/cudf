@@ -66,14 +66,6 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
   return strings_vector;
 }
 
-std::unique_ptr<column> create_chars_child_column(cudf::size_type total_bytes,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
-{
-  return make_numeric_column(
-    data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
-}
-
 std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
                                                     size_type count,
                                                     rmm::cuda_stream_view stream,
