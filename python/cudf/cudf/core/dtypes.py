@@ -244,14 +244,10 @@ class CategoricalDtype(_BaseDtype):
         """  # noqa: E501
         if self._categories is None:
             categories = None
+        elif self._categories.dtype.kind == "f":
+            categories = self._categories.dropna().to_pandas()
         else:
-            if self._categories.dtype in {
-                cudf.dtype("float32"),
-                cudf.dtype("float64"),
-            }:
-                categories = self._categories.dropna().to_pandas()
-            else:
-                categories = self._categories.to_pandas()
+            categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories: Any):
