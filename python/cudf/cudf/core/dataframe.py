@@ -5265,7 +5265,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             the resulting columns will either convert null
             values to ``np.nan`` or ``None`` depending on the dtype.
         arrow_type : bool, Default False
-            Return the Index with a ``pandas.ArrowDtype``
+            Return the columns with a ``pandas.ArrowDtype``
 
         Returns
         -------
@@ -5324,13 +5324,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     bool[pyarrow]
         dtype: object
         """
-        out_data = {}
         out_index = self.index.to_pandas()
-
-        for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(
+        out_data = {
+            i: col.to_pandas(
                 index=out_index, nullable=nullable, arrow_type=arrow_type
             )
+            for i, col in enumerate(self._data.columns)
+        }
 
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index()
