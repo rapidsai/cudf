@@ -514,10 +514,11 @@ constexpr uint32_t encoding_to_mask(Encoding encoding)
  * Used to control which encode kernels to run.
  */
 enum class encode_kernel_mask {
-  PLAIN           = (1 << 0),  // Run plain encoding kernel
-  DICTIONARY      = (1 << 1),  // Run dictionary encoding kernel
-  DELTA_BINARY    = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
-  DELTA_LENGTH_BA = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
+  PLAIN            = (1 << 0),  // Run plain encoding kernel
+  DICTIONARY       = (1 << 1),  // Run dictionary encoding kernel
+  DELTA_BINARY     = (1 << 2),  // Run DELTA_BINARY_PACKED encoding kernel
+  DELTA_LENGTH_BA  = (1 << 3),  // Run DELTA_LENGTH_BYTE_ARRAY encoding kernel
+  DELTA_BYTE_ARRAY = (1 << 4),  // Run DELTA_BYtE_ARRAY encoding kernel
 };
 
 /**
