@@ -1476,6 +1476,28 @@ void reader::impl::create_global_chunk_info()
   auto const num_input_columns = _input_columns.size();
   auto const num_chunks        = row_groups_info.size() * num_input_columns;
 
+  // Mapping of input column to page index column
+  std::vector<size_type> column_mapping;
+
+  if (_has_page_index and not row_groups_info.empty()) {
+    // use first row group to define mappings (assumes same schema for each file)
+    auto const& rg      = row_groups_info[0];
+    auto const& columns = _metadata->get_row_group(rg.index, rg.source_index).columns;
+    column_mapping.resize(num_input_columns);
+    std::transform(
+      _input_columns.begin(), _input_columns.end(), column_mapping.begin(), [&](auto const& col) {
+        // translate schema_idx into something we can use for the page indexes
+        if (auto it = std::find_if(
+              columns.begin(),
+              columns.end(),
+              [&col](auto const& col_chunk) { return col_chunk.schema_idx == col.schema_idx; });
+            it != columns.end()) {
+          return std::distance(columns.begin(), it);
+        }
+        CUDF_FAIL("cannot find column mapping");
+      });
+  }
+
   // Initialize column chunk information
   auto remaining_rows = num_rows;
   for (auto const& rg : row_groups_info) {
@@ -1505,6 +1527,10 @@ void reader::impl::create_global_chunk_info()
               static_cast<float>(row_group.num_rows)
           : 0.0f;
 
+      // grab the column_chunk_info for each chunk (if it exists)
+      column_chunk_info const* const chunk_info =
+        _has_page_index ? &rg.column_chunks.value()[column_mapping[i]] : nullptr;
+
       chunks.push_back(ColumnChunkDesc(col_meta.total_compressed_size,
                                        nullptr,
                                        col_meta.num_values,
@@ -1524,6 +1550,7 @@ void reader::impl::create_global_chunk_info()
                                        clock_rate,
                                        i,
                                        col.schema_idx,
+                                       chunk_info,
                                        list_bytes_per_row_est));
     }
 

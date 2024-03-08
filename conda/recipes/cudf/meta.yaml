@@ -64,7 +64,7 @@ requirements:
     - cython >=3.0.3
     - scikit-build-core >=0.7.0
     - setuptools
-    - dlpack >=0.5,<0.6.0a0
+    - dlpack >=0.8,<1.0
     - numpy 1.23
     - pyarrow ==14.0.2.*
     - libcudf ={{ version }}
