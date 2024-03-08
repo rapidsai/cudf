@@ -108,7 +108,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
    * @param poolSize size of the pool to initialize.
    */
   public static synchronized void initialize(long poolSize) {
-    initialize(poolSize, -1);
+    initialize(poolSize, -1, true);
   }
 
   /**
@@ -116,8 +116,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
    *
    * @param poolSize size of the pool to initialize.
    * @param gpuId    gpu id to set to get memory pool from, -1 means to use default
+   * @param setCuioHostMemoryResource true if this pinned pool should be used by cuIO for host memory
    */
-  public static synchronized void initialize(long poolSize, int gpuId) {
+  public static synchronized void initialize(long poolSize, int gpuId, boolean setCuioHostMemoryResource) {
     if (isInitialized()) {
       throw new IllegalStateException("Can only initialize the pool once.");
     }
@@ -126,7 +127,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
       t.setDaemon(true);
       return t;
     });
-    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId));
+    initFuture = initService.submit(() -> new PinnedMemoryPool(poolSize, gpuId, setCuioHostMemoryResource));
     initService.shutdown();
   }
 
@@ -203,13 +204,16 @@ public final class PinnedMemoryPool implements AutoCloseable {
     return 0;
   }
 
-  private PinnedMemoryPool(long poolSize, int gpuId) {
+  private PinnedMemoryPool(long poolSize, int gpuId, boolean setCuioHostMemoryResource) {
     if (gpuId > -1) {
       // set the gpu device to use
       Cuda.setDevice(gpuId);
       Cuda.freeZero();
     }
     this.poolHandle = Rmm.newPinnedPoolMemoryResource(poolSize, poolSize);
+    if (setCuioHostMemoryResource) {
+      Rmm.setCuioPinnedPoolMemoryResource(this.poolHandle);
+    }
     this.poolSize = poolSize;
   }
 

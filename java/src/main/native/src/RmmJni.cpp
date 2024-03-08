@@ -21,6 +21,7 @@
 #include <limits>
 #include <mutex>
 
+#include <cudf/io/memory_resource.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
@@ -758,6 +759,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
     return reinterpret_cast<jlong>(pool);
   }
   CATCH_STD(env, 0)
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCuioPinnedPoolMemoryResource(JNIEnv *env,
+                                                                               jclass clazz,
+                                                                               jlong pool_ptr) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto pool = reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
+    cudf::io::set_host_memory_resource(*pool);
+  }
+  CATCH_STD(env, )
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(JNIEnv *env,
