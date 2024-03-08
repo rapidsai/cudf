@@ -203,17 +203,6 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   [](auto) { return std::string{}; })
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
-  normalize_single_quotes,
-  [](auto value) {
-    switch (value) {
-      case normalize_single_quotes::YES: return "YES";
-      case normalize_single_quotes::NO: return "NO";
-      default: return "Unknown";
-    }
-  },
-  [](auto) { return std::string{}; })
-
-NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   normalize_whitespace,
   [](auto value) {
     switch (value) {

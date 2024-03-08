@@ -80,7 +80,7 @@ void BM_json_read_options(nvbench::state& state,
 
   cudf::io::json_reader_options read_options =
     cudf::io::json_reader_options::builder(source_sink.make_source_info())
-      .lines(true)
+      .lines(json_lines_bool)
       .normalize_single_quotes(normalize_single_quotes_bool)
       .normalize_whitespace(normalize_whitespace_bool)
       .mixed_types_as_string(mixed_types_as_string_bool)
@@ -136,9 +136,10 @@ NVBENCH_BENCH_TYPES(
     nvbench::enum_type_list<normalize_single_quotes::NO, normalize_single_quotes::YES>,
     nvbench::enum_type_list<normalize_whitespace::NO, normalize_whitespace::YES>,
     nvbench::enum_type_list<mixed_types_as_string::NO, mixed_types_as_string::YES>,
+    nvbench::enum_type_list<json_lines::NO, json_lines::YES>,
     nvbench::enum_type_list<recovery_mode::RECOVER_WITH_NULL, recovery_mode::FAIL>))
   .set_name("json_host_buffer_reader")
   .set_type_axes_names(
-    {"row_selection", "normalize_single_quotes", "normalize_whitespace", "mixed_types_as_string", "recovery_mode"})
+    {"row_selection", "normalize_single_quotes", "normalize_whitespace", "mixed_types_as_string", "json_lines", "recovery_mode"})
   .set_min_samples(6)
-  .add_int64_axis("num_chunks", nvbench::range(2, 5));
+  .add_int64_axis("num_chunks", nvbench::range(2, 5, 1));
