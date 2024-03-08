@@ -64,7 +64,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
     int d = 0;
     if constexpr (nullable) {
       if (has_no_nulls) {
-        d = 1;
+        d = t < batch_size ? 1 : -1;
       } else {
         d = t < batch_size
               ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
