@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,31 +24,70 @@
 
 #include <nvbench/nvbench.cuh>
 
+namespace {
+
 // Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
 // run on most GPUs, but large enough to allow highest throughput
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
+template <typename Timer>
+void read_once(cudf::io::orc_reader_options const& options,
+               cudf::size_type num_rows_to_read,
+               Timer& timer)
+{
+  timer.start();
+  auto const result = cudf::io::read_orc(options);
+  timer.stop();
+
+  CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+  CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
+}
+
+template <typename Timer>
+void chunked_read(cudf::io::orc_reader_options const& options,
+                  cudf::size_type num_rows_to_read,
+                  cudf::size_type appox_num_chunks,
+                  Timer& timer)
+{
+  // Create a chunked reader that has an internal memory limits to process around 10 chunks.
+  auto const output_limit = static_cast<std::size_t>(data_size / appox_num_chunks);
+  auto const input_limit  = output_limit * 10;
+
+  auto reader = cudf::io::chunked_orc_reader(output_limit, input_limit, options);
+  cudf::size_type num_rows{0};
+
+  timer.start();
+  do {
+    auto chunk = reader.read_chunk();
+    num_rows += chunk.tbl->num_rows();
+  } while (reader.has_next());
+  timer.stop();
+
+  CUDF_EXPECTS(num_rows == num_rows_to_read, "Unexpected number of rows");
+}
+
+template <bool is_chunked_read>
 void orc_read_common(cudf::size_type num_rows_to_read,
                      cuio_source_sink_pair& source_sink,
                      nvbench::state& state)
 {
-  cudf::io::orc_reader_options read_opts =
-    cudf::io::orc_reader_options::builder(source_sink.make_source_info());
+  auto const read_opts =
+    cudf::io::orc_reader_options::builder(source_sink.make_source_info()).build();
+  cudf::size_type constexpr approx_num_chunks = 10;
 
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch&, auto& timer) {
+               try_drop_l3_cache();
 
-      timer.start();
-      auto const result = cudf::io::read_orc(read_opts);
-      timer.stop();
-
-      CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
-      CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
-    });
+               if constexpr (!is_chunked_read) {
+                 read_once(read_opts, num_rows_to_read, timer);
+               } else {
+                 chunked_read(read_opts, num_rows_to_read, approx_num_chunks, timer);
+               }
+             });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
@@ -56,6 +95,8 @@ void orc_read_common(cudf::size_type num_rows_to_read,
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
 }
+
+}  // namespace
 
 template <data_type DataType, cudf::io::io_type IOType>
 void BM_orc_read_data(nvbench::state& state,
@@ -79,7 +120,7 @@ void BM_orc_read_data(nvbench::state& state,
     return view.num_rows();
   }();
 
-  orc_read_common(num_rows_written, source_sink, state);
+  orc_read_common<false>(num_rows_written, source_sink, state);
 }
 
 template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
@@ -113,7 +154,12 @@ void BM_orc_read_io_compression(
     return view.num_rows();
   }();
 
-  orc_read_common(num_rows_written, source_sink, state);
+  auto const is_chunked_read = static_cast<bool>(state.get_int64("chunked_read"));
+  if (is_chunked_read) {
+    orc_read_common<true>(num_rows_written, source_sink, state);
+  } else {
+    orc_read_common<false>(num_rows_written, source_sink, state);
+  }
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
@@ -145,4 +191,5 @@ NVBENCH_BENCH_TYPES(BM_orc_read_io_compression, NVBENCH_TYPE_AXES(io_list, compr
   .set_type_axes_names({"io", "compression"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("run_length", {1, 32})
+  .add_int64_axis("chunked_read", {0, 1});
