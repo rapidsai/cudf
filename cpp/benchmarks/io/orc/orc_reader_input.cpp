@@ -119,8 +119,9 @@ using d_type_list = nvbench::
 using io_list =
   nvbench::enum_type_list<cudf::io::io_type::FILEPATH, cudf::io::io_type::HOST_BUFFER>;
 
-using compression_list =
-  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
+using compression_list = nvbench::enum_type_list<cudf::io::compression_type::NONE,
+                                                 cudf::io::compression_type::ZSTD,
+                                                 cudf::io::compression_type::SNAPPY>;
 
 // NVBENCH_BENCH_TYPES(BM_orc_read_data,
 //                     NVBENCH_TYPE_AXES(d_type_list,
