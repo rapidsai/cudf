@@ -152,7 +152,7 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   }
 }
 
-std::tuple<int64_t, int64_t, std::vector<metadata::OrcStripeInfo>>
+std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>>
 aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   int64_t skip_rows,
@@ -169,7 +169,7 @@ aggregate_orc_metadata::select_stripes(
 
   struct stripe_source_mapping {
     int source_idx;
-    std::vector<metadata::OrcStripeInfo> stripe_info;
+    std::vector<metadata::orc_stripe_info> stripe_info;
   };
 
   std::vector<stripe_source_mapping> selected_stripes_mapping;
@@ -181,7 +181,7 @@ aggregate_orc_metadata::select_stripes(
     // Each vector entry represents a source file; each nested vector represents the
     // user_defined_stripes to get from that source file
     for (size_t src_file_idx = 0; src_file_idx < user_specified_stripes.size(); ++src_file_idx) {
-      std::vector<metadata::OrcStripeInfo> stripe_infos;
+      std::vector<metadata::orc_stripe_info> stripe_infos;
 
       // Coalesce stripe info at the source file later since that makes downstream processing much
       // easier in impl::read
@@ -211,7 +211,7 @@ aggregate_orc_metadata::select_stripes(
     for (size_t src_file_idx = 0;
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
          ++src_file_idx) {
-      std::vector<metadata::OrcStripeInfo> stripe_infos;
+      std::vector<metadata::orc_stripe_info> stripe_infos;
 
       for (size_t stripe_idx = 0; stripe_idx < per_file_metadata[src_file_idx].ff.stripes.size() &&
                                   count < rows_to_skip + rows_to_read;
@@ -239,7 +239,7 @@ aggregate_orc_metadata::select_stripes(
     rows_to_skip -= stripe_skip_rows;
   }
 
-  std::vector<metadata::OrcStripeInfo> output;
+  std::vector<metadata::orc_stripe_info> output;
 
   // Read each stripe's stripefooter metadata
   for (auto& mapping : selected_stripes_mapping) {

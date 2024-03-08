@@ -603,12 +603,12 @@ struct column_validity_info {
  */
 class metadata {
  public:
-  struct OrcStripeInfo {
+  struct orc_stripe_info {
     StripeInformation const* stripe_info;
     StripeFooter const* stripe_footer;
     int source_idx;
   };
-  std::vector<OrcStripeInfo> stripe_info;
+  std::vector<orc_stripe_info> stripe_info;
 
  public:
   explicit metadata(datasource* const src, rmm::cuda_stream_view stream);
