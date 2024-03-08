@@ -180,12 +180,11 @@ rmm::device_buffer decompress_stripe_data(
   rmm::cuda_stream_view stream)
 {
   // Parse the columns' compressed info
-  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(
-    0, stream_info.size(), stream);
-  for (auto const& info : stream_info) {
-    compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos,
-      info.length));
+  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(stream_info.size(), stream);
+  for (std::size_t idx = 0; idx < stream_info.size(); ++idx) {
+    auto const& info = stream_info[idx];
+    compinfo[idx]    = gpu::CompressedStreamInfo(
+      static_cast<uint8_t const*>(stripe_data[info.stripe_idx].data()) + info.dst_pos, info.length);
   }
   compinfo.host_to_device_async(stream);
 
