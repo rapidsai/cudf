@@ -28,6 +28,7 @@ function(find_and_configure_nanoarrow)
     GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF"
   )
+  set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()
 
 find_and_configure_nanoarrow(
