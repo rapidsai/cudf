@@ -210,8 +210,6 @@ include(cmake/thirdparty/get_fmt.cmake)
 include(cmake/thirdparty/get_spdlog.cmake)
 # find nanoarrow
 include(cmake/thirdparty/get_nanoarrow.cmake)
-# need to add nanoarrow to the export set
-install(TARGETS nanoarrow EXPORT cudf-exports)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -232,7 +230,6 @@ if(NOT BUILD_SHARED_LIBS)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
 endif()
-
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------

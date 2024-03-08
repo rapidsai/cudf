@@ -19,14 +19,14 @@ function(find_and_configure_nanoarrow)
 
   rapids_cpm_find(
     nanoarrow ${PKG_VERSION}
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports
+    GLOBAL_TARGETS nanoarrow
     CPM_ARGS
     GIT_REPOSITORY https://github.com/${PKG_FORK}/arrow-nanoarrow.git
     GIT_TAG ${PKG_PINNED_TAG}
     # TODO: Commit hashes are not supported with shallow clones. Can switch this if and when we pin
     # to an actual tag.
     GIT_SHALLOW FALSE
+    OPTIONS "BUILD_SHARED_LIBS OFF"
   )
 endfunction()
 
