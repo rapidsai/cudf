@@ -406,6 +406,31 @@ static __device__ void gpuOutputGeneric(
   }
 }
 
+template <size_t byte_length>
+__device__ inline void gpuOutputByteStreamSplit(uint8_t* dst, uint8_t const* src, size_type stride)
+{
+  for (int i = 0; i < byte_length; i++) {
+    dst[i] = src[i * stride];
+  }
+}
+
+inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
+                                                    uint8_t const* src,
+                                                    size_type stride,
+                                                    int32_t ts_scale)
+{
+  gpuOutputByteStreamSplit<sizeof(int64_t)>(reinterpret_cast<uint8_t*>(dst), src, stride);
+  if (ts_scale < 0) {
+    // round towards negative infinity
+    int sign = (*dst < 0);
+    *dst     = ((*dst + sign) / -ts_scale) + sign;
+  } else {
+    *dst = *dst * ts_scale;
+  }
+}
+
+// TODO(ets): is this better as a standalone, or as part of the plain/dict decoder?
+// how does this work with the new microkernels?
 /**
  * @brief Kernel for computing the column data stored in the pages
  *
@@ -459,8 +484,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
     switch (s->col.data_type & 7) {
-      case BOOLEAN: [[fallthrough]];
-      case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
       default: out_thread0 = 32;
     }
@@ -497,19 +520,13 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // skipped_leaf_values will always be 0 for flat hierarchies.
       uint32_t src_target_pos = target_pos + skipped_leaf_values;
 
-      // WARP1: Decode dictionary indices, booleans or string positions
+      // WARP1: Decode string positions
       // NOTE: racecheck complains of a RAW error involving the s->dict_pos assignment below.
       // This is likely a false positive in practice, but could be solved by wrapping the next
       // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
       // be needed in the other DecodeXXX kernels.
-      if (s->dict_base) {
-        src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
-      } else if ((s->col.data_type & 7) == BOOLEAN) {
-        src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY or
-                 (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
-        gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
-      }
+      gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
+
       if (t == 32) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
@@ -548,25 +565,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         uint8_t* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
 
+        // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
         if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
-            case INT32: {
-              dst[0] = s->data_start[val_src_pos];
-              dst[1] = s->data_start[val_src_pos + 1 * num_values];
-              dst[2] = s->data_start[val_src_pos + 2 * num_values];
-              dst[3] = s->data_start[val_src_pos + 3 * num_values];
-            } break;
-            case INT64: {
-              dst[0] = s->data_start[val_src_pos];
-              dst[1] = s->data_start[val_src_pos + 1 * num_values];
-              dst[2] = s->data_start[val_src_pos + 2 * num_values];
-              dst[3] = s->data_start[val_src_pos + 3 * num_values];
-              dst[4] = s->data_start[val_src_pos + 4 * num_values];
-              dst[5] = s->data_start[val_src_pos + 5 * num_values];
-              dst[6] = s->data_start[val_src_pos + 6 * num_values];
-              dst[7] = s->data_start[val_src_pos + 7 * num_values];
-            } break;
-            default:
+            case INT32:
+              gpuOutputByteStreamSplit<sizeof(int32_t)>(
+                dst, s->data_start + val_src_pos, num_values);
+              break;
+            case INT64:
+              gpuOutputByteStreamSplit<sizeof(int64_t)>(
+                dst, s->data_start + val_src_pos, num_values);
+              break;
+            case FIXED_LEN_BYTE_ARRAY:
               // FIXME(ets)
               // need a new version of gpuOutputFixedLenByteArrayAsInt for BSS
               // decimals in FLBA are in big endian order
@@ -589,44 +599,31 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                   s, sb, val_src_pos, reinterpret_cast<__int128_t*>(dst));
               }
               break;
+
+            default: s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
           }
-        } else if (dtype == FIXED_LEN_BYTE_ARRAY) {
-          // TODO: float16 will end up here if we don't check for logical type
-          // FLBA without logical type will be handled by string decoder
         } else if (dtype_len == 8) {
           if (s->dtype_len_in == 4) {
+            gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, s->data_start + val_src_pos, num_values);
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-            dst[0] = 0;
-            dst[1] = 0;
-            dst[2] = 0;
-            dst[3] = 0;
-            dst[4] = s->data_start[val_src_pos];
-            dst[5] = s->data_start[val_src_pos + 1 * num_values];
-            dst[6] = s->data_start[val_src_pos + 2 * num_values];
-            dst[7] = s->data_start[val_src_pos + 3 * num_values];
+            dst[4] = 0;
+            dst[5] = 0;
+            dst[6] = 0;
+            dst[7] = 0;
           } else if (s->ts_scale) {
-            // TODO: implement this
-            gpuOutputInt64Timestamp(s, sb, val_src_pos, reinterpret_cast<int64_t*>(dst));
+            gpuOutputSplitInt64Timestamp(reinterpret_cast<int64_t*>(dst),
+                                         s->data_start + val_src_pos,
+                                         num_values,
+                                         s->ts_scale);
           } else {
-            dst[0] = s->data_start[val_src_pos];
-            dst[1] = s->data_start[val_src_pos + 1 * num_values];
-            dst[2] = s->data_start[val_src_pos + 2 * num_values];
-            dst[3] = s->data_start[val_src_pos + 3 * num_values];
-            dst[4] = s->data_start[val_src_pos + 4 * num_values];
-            dst[5] = s->data_start[val_src_pos + 5 * num_values];
-            dst[6] = s->data_start[val_src_pos + 6 * num_values];
-            dst[7] = s->data_start[val_src_pos + 7 * num_values];
+            gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, s->data_start + val_src_pos, num_values);
           }
         } else if (dtype_len == 4) {
-          dst[0] = s->data_start[val_src_pos];
-          dst[1] = s->data_start[val_src_pos + 1 * num_values];
-          dst[2] = s->data_start[val_src_pos + 2 * num_values];
-          dst[3] = s->data_start[val_src_pos + 3 * num_values];
+          gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, s->data_start + val_src_pos, num_values);
         } else {
-          // FIXME: what would this be anyway????
-          gpuOutputGeneric(s, sb, val_src_pos, static_cast<uint8_t*>(dst), dtype_len);
+          s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
         }
       }
 
