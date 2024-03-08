@@ -1840,7 +1840,6 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             memcpy(dst + pos, &v, 8);
           }
         } break;
-        // TODO(ets): can this ever be reached now?
         case BYTE_ARRAY: {
           // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
@@ -1869,8 +1868,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             auto const v = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
             auto const v_char_ptr = reinterpret_cast<char const*>(&v);
             if constexpr (is_split_stream) {
-              auto const num_valid = s->page.num_valid;
-              for (int i = 0; i < dtype_len_out; i++, pos += num_valid) {
+              auto const stride = s->page.num_valid;
+              for (int i = dtype_len_out - 1; i >= 0; i--, pos += stride) {
                 dst[pos] = v_char_ptr[i];
               }
             } else {
