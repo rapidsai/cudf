@@ -743,8 +743,6 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   cudf::size_type const num_elements =
     std::lround(num_rows * pow(single_level_mean, dist_params.max_depth));
 
-
-
   auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
   auto len_dist =
@@ -756,7 +754,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
   auto list_column = std::move(leaf_column);
   for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column      = std::move(list_column);
+    auto current_child_column = std::move(list_column);
     // Because single_level_mean is not a whole number, rounding errors can lead to slightly
     // different row count; top-level column needs to have exactly num_rows rows, so enforce it here
     cudf::size_type const current_num_rows =
