@@ -1733,14 +1733,14 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               case 2: return col->element<int16_t>(idx) * scale;
               default: return col->element<int8_t>(idx) * scale;
             }
-          }();
+          }(); 
 
           if constexpr (is_split_stream) {
-            auto const num_valid     = s->page.num_valid;
-            dst[pos + 0 * num_valid] = v >> 24;
-            dst[pos + 1 * num_valid] = v >> 16;
-            dst[pos + 2 * num_valid] = v >> 8;
-            dst[pos + 3 * num_valid] = v;
+            auto const stride     = s->page.num_valid;
+            dst[pos + 0 * stride] = v >> 24;
+            dst[pos + 1 * stride] = v >> 16;
+            dst[pos + 2 * stride] = v >> 8;
+            dst[pos + 3 * stride] = v;
           } else {
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
@@ -1759,15 +1759,15 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             }
           }
           if constexpr (is_split_stream) {
-            auto const num_valid     = s->page.num_valid;
-            dst[pos + 0 * num_valid] = v >> 56;
-            dst[pos + 1 * num_valid] = v >> 48;
-            dst[pos + 2 * num_valid] = v >> 40;
-            dst[pos + 3 * num_valid] = v >> 32;
-            dst[pos + 4 * num_valid] = v >> 24;
-            dst[pos + 5 * num_valid] = v >> 16;
-            dst[pos + 6 * num_valid] = v >> 8;
-            dst[pos + 7 * num_valid] = v;
+            auto const stride     = s->page.num_valid;
+            dst[pos + 0 * stride] = v >> 56;
+            dst[pos + 1 * stride] = v >> 48;
+            dst[pos + 2 * stride] = v >> 40;
+            dst[pos + 3 * stride] = v >> 32;
+            dst[pos + 4 * stride] = v >> 24;
+            dst[pos + 5 * stride] = v >> 16;
+            dst[pos + 6 * stride] = v >> 8;
+            dst[pos + 7 * stride] = v;
           } else {
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
@@ -1826,20 +1826,21 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
         case DOUBLE: {
           if (is_split_stream) {
             int64_t const v = static_cast<int64_t>(s->col.leaf_column->element<double>(val_idx));
-            auto const num_valid     = s->page.num_valid;
-            dst[pos + 0 * num_valid] = v >> 56;
-            dst[pos + 1 * num_valid] = v >> 48;
-            dst[pos + 2 * num_valid] = v >> 40;
-            dst[pos + 3 * num_valid] = v >> 32;
-            dst[pos + 4 * num_valid] = v >> 24;
-            dst[pos + 5 * num_valid] = v >> 16;
-            dst[pos + 6 * num_valid] = v >> 8;
-            dst[pos + 7 * num_valid] = v;
+            auto const stride     = s->page.num_valid;
+            dst[pos + 0 * stride] = v >> 56;
+            dst[pos + 1 * stride] = v >> 48;
+            dst[pos + 2 * stride] = v >> 40;
+            dst[pos + 3 * stride] = v >> 32;
+            dst[pos + 4 * stride] = v >> 24;
+            dst[pos + 5 * stride] = v >> 16;
+            dst[pos + 6 * stride] = v >> 8;
+            dst[pos + 7 * stride] = v;
           } else {
             auto v = s->col.leaf_column->element<double>(val_idx);
             memcpy(dst + pos, &v, 8);
           }
         } break;
+        // TODO(ets): can this ever be reached now?
         case BYTE_ARRAY: {
           // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
