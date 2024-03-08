@@ -259,10 +259,9 @@ ConfigureTest(
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
   transform/row_bit_count_test.cu
+  transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
-
-ConfigureTest(ROW_CONVERSION_TEST transform/row_conversion.cpp)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
@@ -377,6 +376,7 @@ ConfigureTest(
   utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
   utilities_tests/default_stream_tests.cpp
