@@ -19,7 +19,7 @@ for gt in ./*_TEST ; do
     continue
   fi
   echo "Running compute-sanitizer on $test_name"
-  compute-sanitizer --tool memcheck ${extra_param} ${gt} "$@"
+  compute-sanitizer --tool memcheck ${gt} "$@"
 done
 unset GTEST_CUDF_RMM_MODE
 unset LIBCUDF_MEMCHECK_ENABLED
