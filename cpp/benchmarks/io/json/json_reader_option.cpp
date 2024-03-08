@@ -25,25 +25,40 @@
 
 #include <nvbench/nvbench.cuh>
 
+// Size of the data in the benchmark dataframe; chosen to be low enough to allow benchmarks to
+// run on most GPUs, but large enough to allow highest throughput
+constexpr size_t data_size         = 512 << 20;
+constexpr cudf::size_type num_cols = 64;
+
 template <row_selection RowSelection,
           normalize_single_quotes NormalizeSingleQuotes,
+          normalize_whitespace NormalizeWhitespace,
           mixed_types_as_string MixedTypesAsString,
+          json_lines JsonLines,
           recovery_mode RecoveryMode>
 void BM_json_read_options(nvbench::state& state,
                           nvbench::type_list<nvbench::enum_type<RowSelection>,
                                              nvbench::enum_type<NormalizeSingleQuotes>,
+                                             nvbench::enum_type<NormalizeWhitespace>,
                                              nvbench::enum_type<MixedTypesAsString>,
+                                             nvbench::enum_type<JsonLines>,
                                              nvbench::enum_type<RecoveryMode>>)
 {
   auto constexpr normalize_single_quotes_bool =
     NormalizeSingleQuotes == normalize_single_quotes::YES;
+  auto constexpr normalize_whitespace_bool =
+    NormalizeWhitespace == normalize_whitespace::YES;
   auto constexpr mixed_types_as_string_bool = MixedTypesAsString == mixed_types_as_string::YES;
+  auto constexpr json_lines_bool = JsonLines == json_lines::YES;
   auto constexpr recovery_mode_enum         = RecoveryMode == recovery_mode::RECOVER_WITH_NULL
                                                 ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                                                 : cudf::io::json_recovery_mode_t::FAIL;
   size_t const num_chunks                   = state.get_int64("num_chunks");
-  size_t const num_cols                     = state.get_int64("num_cols");
-  size_t const data_size                    = state.get_int64("table_size");
+
+  if(json_lines_bool && recovery_mode_enum == cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL) {
+    state.skip("Invalid pure JSON should just fail\n");
+    return;
+  }
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -58,7 +73,7 @@ void BM_json_read_options(nvbench::state& state,
   auto const view = tbl->view();
   cudf::io::json_writer_options const write_opts =
     cudf::io::json_writer_options::builder(source_sink.make_sink_info(), view)
-      .lines(true)
+      .lines(json_lines_bool)
       .na_rep("null")
       .rows_per_chunk(100'000);
   cudf::io::write_json(write_opts);
@@ -67,6 +82,7 @@ void BM_json_read_options(nvbench::state& state,
     cudf::io::json_reader_options::builder(source_sink.make_source_info())
       .lines(true)
       .normalize_single_quotes(normalize_single_quotes_bool)
+      .normalize_whitespace(normalize_whitespace_bool)
       .mixed_types_as_string(mixed_types_as_string_bool)
       .recovery_mode(recovery_mode_enum);
 
@@ -79,22 +95,27 @@ void BM_json_read_options(nvbench::state& state,
       cudf::size_type num_rows_read = 0;
       uint64_t num_cols_read        = 0;
       timer.start();
-      for (uint64_t chunk = 0; chunk < num_chunks; chunk++) {
-        switch (RowSelection) {
-          case row_selection::ALL: break;
-          case row_selection::BYTE_RANGE:
+      switch (RowSelection) {
+        case row_selection::ALL: 
+        {
+          auto const result = cudf::io::read_json(read_options);
+          num_rows_read = result.tbl->num_rows();
+          num_cols_read = result.tbl->num_columns();
+          break;
+        }
+        case row_selection::BYTE_RANGE:
+        {
+          for (uint64_t chunk = 0; chunk < num_chunks; chunk++) {
             read_options.set_byte_range_offset(chunk * chunk_size);
             read_options.set_byte_range_size(chunk_size);
-            break;
-          default: CUDF_FAIL("Unsupported row selection method");
+            auto const result = cudf::io::read_json(read_options);
+            num_rows_read += result.tbl->num_rows();
+            num_cols_read = result.tbl->num_columns();
+          }
+          break;
         }
-
-        auto const result = cudf::io::read_json(read_options);
-
-        num_rows_read += result.tbl->num_rows();
-        num_cols_read = result.tbl->num_columns();
+        default: CUDF_FAIL("Unsupported row selection method");
       }
-
       timer.stop();
       CUDF_EXPECTS(num_rows_read == view.num_rows(), "Benchmark did not read the entire table");
       CUDF_EXPECTS(num_cols_read == num_cols, "Unexpected number of columns");
@@ -113,12 +134,11 @@ NVBENCH_BENCH_TYPES(
   NVBENCH_TYPE_AXES(
     nvbench::enum_type_list<row_selection::ALL, row_selection::BYTE_RANGE>,
     nvbench::enum_type_list<normalize_single_quotes::NO, normalize_single_quotes::YES>,
+    nvbench::enum_type_list<normalize_whitespace::NO, normalize_whitespace::YES>,
     nvbench::enum_type_list<mixed_types_as_string::NO, mixed_types_as_string::YES>,
     nvbench::enum_type_list<recovery_mode::RECOVER_WITH_NULL, recovery_mode::FAIL>))
-  .set_name("json_read_all_lines")
+  .set_name("json_host_buffer_reader")
   .set_type_axes_names(
-    {"row_selection", "normalize_single_quotes", "mixed_types_as_string", "recovery_mode"})
+    {"row_selection", "normalize_single_quotes", "normalize_whitespace", "mixed_types_as_string", "recovery_mode"})
   .set_min_samples(6)
-  .add_int64_axis("num_chunks", {1})
-  .add_int64_axis("num_cols", {64})
-  .add_int64_power_of_two_axis("table_size", nvbench::range(26, 29, 1));
+  .add_int64_axis("num_chunks", nvbench::range(2, 5));

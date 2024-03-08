@@ -170,11 +170,26 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   },
   [](auto) { return std::string{}; })
 
+enum class json_lines : bool { YES, NO };
+
 enum class normalize_single_quotes : bool { YES, NO };
+
+enum class normalize_whitespace : bool { YES, NO };
 
 enum class mixed_types_as_string : bool { YES, NO };
 
 enum class recovery_mode : bool { FAIL, RECOVER_WITH_NULL };
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  json_lines,
+  [](auto value) {
+    switch (value) {
+      case json_lines::YES: return "YES";
+      case json_lines::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
 
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   normalize_single_quotes,
@@ -182,6 +197,28 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
     switch (value) {
       case normalize_single_quotes::YES: return "YES";
       case normalize_single_quotes::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  normalize_single_quotes,
+  [](auto value) {
+    switch (value) {
+      case normalize_single_quotes::YES: return "YES";
+      case normalize_single_quotes::NO: return "NO";
+      default: return "Unknown";
+    }
+  },
+  [](auto) { return std::string{}; })
+
+NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
+  normalize_whitespace,
+  [](auto value) {
+    switch (value) {
+      case normalize_whitespace::YES: return "YES";
+      case normalize_whitespace::NO: return "NO";
       default: return "Unknown";
     }
   },
