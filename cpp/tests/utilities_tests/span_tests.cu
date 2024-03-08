@@ -325,11 +325,10 @@ TEST(MdSpanTest, CanGetCount)
 
 auto get_test_hostdevice_vector()
 {
-  auto v = cudf::detail::hostdevice_vector<char>(0, 11, cudf::get_default_stream());
-  for (auto c : create_hello_world_message()) {
-    v.push_back(c);
-  }
-
+  auto v         = cudf::detail::hostdevice_vector<char>(11, cudf::get_default_stream());
+  auto const msg = create_hello_world_message();
+  CUDF_EXPECTS(v.size() == msg.size(), "Invalid input data.");
+  std::copy(msg.begin(), msg.end(), v.begin());
   return v;
 }
 
@@ -395,10 +394,8 @@ TEST(HostDeviceSpanTest, CanGetSize)
 TEST(HostDeviceSpanTest, CanGetSizeBytes)
 {
   auto doubles     = std::vector<double>({6, 3, 2});
-  auto doubles_hdv = cudf::detail::hostdevice_vector<double>(0, 3, cudf::get_default_stream());
-  for (auto d : doubles) {
-    doubles_hdv.push_back(d);
-  }
+  auto doubles_hdv = cudf::detail::hostdevice_vector<double>(3, cudf::get_default_stream());
+  std::copy(doubles.begin(), doubles.end(), doubles_hdv.begin());
   auto const doubles_span = cudf::detail::hostdevice_span<double>(doubles_hdv);
   auto const empty_span   = cudf::detail::hostdevice_span<double>();
 
