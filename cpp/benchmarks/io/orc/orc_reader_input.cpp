@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,6 +88,9 @@ void BM_orc_read_io_compression(
   nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
+                                         static_cast<int32_t>(data_type::FLOAT),
+                                         static_cast<int32_t>(data_type::DECIMAL),
+                                         static_cast<int32_t>(data_type::TIMESTAMP),
                                          static_cast<int32_t>(data_type::STRING),
                                          static_cast<int32_t>(data_type::LIST),
                                          static_cast<int32_t>(data_type::STRUCT)});
@@ -113,24 +116,29 @@ void BM_orc_read_io_compression(
   orc_read_common(num_rows_written, source_sink, state);
 }
 
-using d_type_list = nvbench::
-  enum_type_list<data_type::INTEGRAL_SIGNED, data_type::STRING, data_type::LIST, data_type::STRUCT>;
+using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
+                                            data_type::FLOAT,
+                                            data_type::DECIMAL,
+                                            data_type::TIMESTAMP,
+                                            data_type::STRING,
+                                            data_type::LIST,
+                                            data_type::STRUCT>;
 
-using io_list =
-  nvbench::enum_type_list<cudf::io::io_type::FILEPATH, cudf::io::io_type::HOST_BUFFER>;
+using io_list = nvbench::enum_type_list<cudf::io::io_type::FILEPATH,
+                                        cudf::io::io_type::HOST_BUFFER,
+                                        cudf::io::io_type::DEVICE_BUFFER>;
 
-using compression_list = nvbench::enum_type_list<cudf::io::compression_type::NONE,
-                                                 cudf::io::compression_type::ZSTD,
-                                                 cudf::io::compression_type::SNAPPY>;
+using compression_list =
+  nvbench::enum_type_list<cudf::io::compression_type::SNAPPY, cudf::io::compression_type::NONE>;
 
-// NVBENCH_BENCH_TYPES(BM_orc_read_data,
-//                     NVBENCH_TYPE_AXES(d_type_list,
-//                                       nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
-//   .set_name("orc_read_decode")
-//   .set_type_axes_names({"data_type", "io"})
-//   .set_min_samples(4)
-//   .add_int64_axis("cardinality", {0, 1000})
-//   .add_int64_axis("run_length", {1, 32});
+NVBENCH_BENCH_TYPES(BM_orc_read_data,
+                    NVBENCH_TYPE_AXES(d_type_list,
+                                      nvbench::enum_type_list<cudf::io::io_type::DEVICE_BUFFER>))
+  .set_name("orc_read_decode")
+  .set_type_axes_names({"data_type", "io"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32});
 
 NVBENCH_BENCH_TYPES(BM_orc_read_io_compression, NVBENCH_TYPE_AXES(io_list, compression_list))
   .set_name("orc_read_io_compression")

@@ -255,8 +255,7 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * orc reader benchmark --------------------------------------------------------------------------
-#   TODO: add back the removed file, and add new file
-ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp)
+ConfigureNVBench(ORC_READER_NVBENCH io/orc/orc_reader_input.cpp io/orc/orc_reader_options.cpp)
 
 # ##################################################################################################
 # * csv reader benchmark --------------------------------------------------------------------------
