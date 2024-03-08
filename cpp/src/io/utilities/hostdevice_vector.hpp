@@ -64,7 +64,6 @@ class hostdevice_vector {
     h_data.reserve(max_size);
     h_data.resize(initial_size);
 
-    current_size = initial_size;
     d_data.resize(max_size, stream);
   }
 
@@ -72,11 +71,11 @@ class hostdevice_vector {
   {
     CUDF_EXPECTS(size() < capacity(),
                  "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
-    h_data[current_size++] = data;
+    h_data.push_back(data);
   }
 
   [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
-  [[nodiscard]] size_t size() const noexcept { return current_size; }
+  [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
 
@@ -175,7 +174,6 @@ class hostdevice_vector {
 
  private:
   cudf::detail::rmm_host_vector<T> h_data;
-  size_t current_size = 0;
   rmm::device_uvector<T> d_data;
 };
 
