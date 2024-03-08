@@ -674,12 +674,10 @@ void make_device_json_column(device_span<SymbolT const> input,
             reinitialize_as_string(old_col_id, col);
             // all its children (which are already inserted) are ignored later.
           }
+          col.forced_as_string_column = true;
           columns.try_emplace(this_col_id, columns.at(old_col_id));
           continue;
         }
-        col.forced_as_string_column = true;
-        columns.try_emplace(this_col_id, columns.at(old_col_id));
-        continue;
       }
 
       if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
