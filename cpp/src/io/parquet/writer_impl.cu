@@ -631,14 +631,36 @@ std::vector<schema_tree_node> construct_schema_tree(
                   "requested encoding will be ignored");
                 return;
               }
+              // we don't yet allow encoding decimal128 with DELTA_LENGTH_BYTE_ARRAY (nor with
+              // the BYTE_ARRAY physical type, but check anyway)
+              if (s.converted_type.value_or(ConvertedType::UNKNOWN) == ConvertedType::DECIMAL) {
+                CUDF_LOG_WARN(
+                  "Decimal types cannot yet be encoded as DELTA_LENGTH_BYTE_ARRAY; the "
+                  "requested encoding will be ignored");
+                return;
+              }
+              break;
+
+            case column_encoding::DELTA_BYTE_ARRAY:
+              if (s.type != Type::BYTE_ARRAY && s.type != Type::FIXED_LEN_BYTE_ARRAY) {
+                CUDF_LOG_WARN(
+                  "DELTA_BYTE_ARRAY encoding is only supported for BYTE_ARRAY and "
+                  "FIXED_LEN_BYTE_ARRAY columns; the requested encoding will be ignored");
+                return;
+              }
+              // we don't yet allow encoding decimal128 with DELTA_BYTE_ARRAY
+              if (s.converted_type.value_or(ConvertedType::UNKNOWN) == ConvertedType::DECIMAL) {
+                CUDF_LOG_WARN(
+                  "Decimal types cannot yet be encoded as DELTA_BYTE_ARRAY; the "
+                  "requested encoding will be ignored");
+                return;
+              }
               break;
 
             // supported parquet encodings
             case column_encoding::PLAIN:
             case column_encoding::DICTIONARY: break;
 
-            // not yet supported for write (soon...)
-            case column_encoding::DELTA_BYTE_ARRAY: [[fallthrough]];
             // all others
             default:
               CUDF_LOG_WARN(
