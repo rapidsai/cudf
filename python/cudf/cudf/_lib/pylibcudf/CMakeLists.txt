@@ -16,6 +16,7 @@ set(cython_sources
     aggregation.pyx
     binaryop.pyx
     column.pyx
+    column_factories.pyx
     concatenate.pyx
     copying.pyx
     filling.pyx
