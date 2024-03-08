@@ -91,6 +91,12 @@ class hostdevice_vector {
   [[nodiscard]] T* end() { return host_ptr(size()); }
   [[nodiscard]] T const* end() const { return host_ptr(size()); }
 
+  [[nodiscard]] T& front() { return h_data.front(); }
+  [[nodiscard]] T const& front() const { return front(); }
+
+  [[nodiscard]] T& back() { return h_data.back(); }
+  [[nodiscard]] T const& back() const { return back(); }
+
   [[nodiscard]] T* device_ptr(size_t offset = 0) { return d_data.data() + offset; }
   [[nodiscard]] T const* device_ptr(size_t offset = 0) const { return d_data.data() + offset; }
 
