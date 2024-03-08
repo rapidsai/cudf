@@ -26,12 +26,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/mr/host/host_memory_resource.hpp>
-
-#include <thrust/host_vector.h>
-
-#include <variant>
 
 namespace cudf::detail {
 
