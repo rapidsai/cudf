@@ -1733,7 +1733,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               case 2: return col->element<int16_t>(idx) * scale;
               default: return col->element<int8_t>(idx) * scale;
             }
-          }(); 
+          }();
 
           if constexpr (is_split_stream) {
             auto const stride     = s->page.num_valid;
@@ -1825,8 +1825,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
         case DOUBLE: {
           if (is_split_stream) {
-            int64_t const v = static_cast<int64_t>(s->col.leaf_column->element<double>(val_idx));
-            auto const stride     = s->page.num_valid;
+            int64_t const v   = static_cast<int64_t>(s->col.leaf_column->element<double>(val_idx));
+            auto const stride = s->page.num_valid;
             dst[pos + 0 * stride] = v >> 56;
             dst[pos + 1 * stride] = v >> 48;
             dst[pos + 2 * stride] = v >> 40;

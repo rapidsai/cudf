@@ -430,7 +430,10 @@ inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
 }
 
 template <typename T>
-__device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst, uint8_t const* src, size_type stride, uint32_t dtype_len_in)
+__device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst,
+                                                     uint8_t const* src,
+                                                     size_type stride,
+                                                     uint32_t dtype_len_in)
 {
   T unscaled = 0;
   // fixed_len_byte_array decimals are big endian
@@ -586,24 +589,18 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
         if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
-            case INT32:
-              gpuOutputByteStreamSplit<sizeof(int32_t)>(
-                dst, src, num_values);
-              break;
-            case INT64:
-              gpuOutputByteStreamSplit<sizeof(int64_t)>(
-                dst, src, num_values);
-              break;
+            case INT32: gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values); break;
+            case INT64: gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values); break;
             case FIXED_LEN_BYTE_ARRAY:
               if (s->dtype_len_in <= sizeof(int32_t)) {
-                gpuOutputSplitFixedLenByteArrayAsInt(reinterpret_cast<int32_t*>(dst),
-                  src, num_values, s->dtype_len_in);
+                gpuOutputSplitFixedLenByteArrayAsInt(
+                  reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
               } else if (s->dtype_len_in <= sizeof(int64_t)) {
-                gpuOutputSplitFixedLenByteArrayAsInt(reinterpret_cast<int64_t*>(dst),
-                  src, num_values, s->dtype_len_in);
+                gpuOutputSplitFixedLenByteArrayAsInt(
+                  reinterpret_cast<int64_t*>(dst), src, num_values, s->dtype_len_in);
               } else {
-                gpuOutputSplitFixedLenByteArrayAsInt(reinterpret_cast<__int128_t*>(dst),
-                  src, num_values, s->dtype_len_in);
+                gpuOutputSplitFixedLenByteArrayAsInt(
+                  reinterpret_cast<__int128_t*>(dst), src, num_values, s->dtype_len_in);
               }
               // unsupported decimal precision
               [[fallthrough]];
@@ -621,10 +618,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             dst[6] = 0;
             dst[7] = 0;
           } else if (s->ts_scale) {
-            gpuOutputSplitInt64Timestamp(reinterpret_cast<int64_t*>(dst),
-                                         src,
-                                         num_values,
-                                         s->ts_scale);
+            gpuOutputSplitInt64Timestamp(
+              reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
           } else {
             gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values);
           }
