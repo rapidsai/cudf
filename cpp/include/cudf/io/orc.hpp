@@ -423,7 +423,8 @@ class chunked_orc_reader {
   chunked_orc_reader() = default;
 
   /**
-   * @brief Constructor from size limits and an array of data sources with reader options.
+   * @brief Construct the reader from input/output size limits, output row granularity, along with
+   * other ORC reader options.
    *
    * The typical usage should be similar to this:
    * ```
@@ -459,7 +460,6 @@ class chunked_orc_reader {
    *        or `0` if there is no limit
    * @param output_row_granularity The granularity parameter used for subdividing the decoded
    *        table for final output
-   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -473,7 +473,7 @@ class chunked_orc_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Constructor from size limits and an array of data sources with reader options.
+   * @brief Construct the reader from input/output size limits along with other ORC reader options.
    *
    * This constructor implicitly call the other constructor with `output_row_granularity` set to
    * 10'000 rows.
@@ -482,7 +482,6 @@ class chunked_orc_reader {
    *        or `0` if there is no limit
    * @param data_read_limit Limit on temporary memory usage for reading the data sources,
    *        or `0` if there is no limit
-   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -495,14 +494,13 @@ class chunked_orc_reader {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
-   * @brief Constructor from output size limit and an array of data sources with reader options.
+   * @brief Construct the reader from output size limits along with other ORC reader options.
    *
    * This constructor implicitly call the other constructor with `data_read_limit` set to `0` and
    * `output_row_granularity` set to 10'000 rows.
    *
    * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit
-   * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
@@ -512,25 +510,26 @@ class chunked_orc_reader {
     orc_reader_options const& options,
     rmm::cuda_stream_view stream        = cudf::get_default_stream(),
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
   /**
    * @brief Destructor, destroying the internal reader instance.
    */
   ~chunked_orc_reader();
 
   /**
-   * @brief Check if there is any data in the given file has not yet read.
+   * @brief Check if there is any data in the given data sources has not yet read.
    *
    * @return A boolean value indicating if there is any data left to read
    */
   [[nodiscard]] bool has_next() const;
 
   /**
-   * @brief Read a chunk of rows in the given ORC file.
+   * @brief Read a chunk of rows in the given data sources.
    *
    * The sequence of returned tables, if concatenated by their order, guarantees to form a complete
-   * dataset as reading the entire given file at once.
+   * dataset as reading the entire given data sources at once.
    *
-   * An empty table will be returned if the given file is empty, or all the data in the file has
+   * An empty table will be returned if the given sources are empty, or all the data has
    * been read and returned by the previous calls.
    *
    * @return An output `cudf::table` along with its metadata

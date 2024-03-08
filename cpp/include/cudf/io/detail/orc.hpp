@@ -88,8 +88,9 @@ class chunked_reader : private reader {
  public:
   /**
    * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t, size_type,
-   * std::vector<std::unique_ptr<cudf::io::datasource>>&&, orc_reader_options const&,
-   * rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   *
+   * @param sources Input `datasource` objects to read the dataset from
    */
   explicit chunked_reader(std::size_t output_size_limit,
                           std::size_t data_read_limit,
@@ -100,8 +101,9 @@ class chunked_reader : private reader {
                           rmm::mr::device_memory_resource* mr);
   /**
    * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t,
-   * std::vector<std::unique_ptr<cudf::io::datasource>>&&, orc_reader_options const&,
-   * rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   *
+   * @param sources Input `datasource` objects to read the dataset from
    */
   explicit chunked_reader(std::size_t output_size_limit,
                           std::size_t data_read_limit,
