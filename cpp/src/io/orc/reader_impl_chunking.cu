@@ -68,7 +68,7 @@
 namespace cudf::io::orc::detail {
 
 std::size_t gather_stream_info_and_column_desc(
-  int64_t stripe_processing_order,
+  std::size_t stripe_processing_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -175,8 +175,7 @@ std::size_t gather_stream_info_and_column_desc(
           stripeinfo->offset + src_offset,
           dst_offset,
           stream.length,
-          stream_source_info{
-            static_cast<uint32_t>(stripe_processing_order), level, column_id, stream.kind});
+          stream_source_info{stripe_processing_order, level, column_id, stream.kind});
       }
 
       dst_offset += stream.length;
@@ -193,7 +192,9 @@ std::size_t gather_stream_info_and_column_desc(
  * given `size_limit`.
  */
 template <typename T>
-std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, size_t size_limit)
+std::vector<chunk> find_splits(host_span<T const> sizes,
+                               std::size_t total_count,
+                               std::size_t size_limit)
 {
   // if (size_limit == 0) {
   //   printf("0 limit: output chunk = 0, %d\n", (int)total_count);
@@ -202,7 +203,7 @@ std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, si
   CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
 
   std::vector<chunk> splits;
-  int64_t cur_count{0};
+  std::size_t cur_count{0};
   int64_t cur_pos{0};
   size_t cur_cumulative_size{0};
 
@@ -242,7 +243,7 @@ std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, si
 
     auto const start_idx = cur_count;
     cur_count            = sizes[split_pos].count;
-    splits.emplace_back(chunk{start_idx, static_cast<size_type>(cur_count - start_idx)});
+    splits.emplace_back(chunk{start_idx, cur_count - start_idx});
     cur_pos             = split_pos;
     cur_cumulative_size = sizes[split_pos].size_bytes;
 
@@ -266,10 +267,10 @@ std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, si
 }
 
 template std::vector<chunk> find_splits<cumulative_size>(host_span<cumulative_size const> sizes,
-                                                         int64_t total_count,
-                                                         size_t size_limit);
+                                                         std::size_t total_count,
+                                                         std::size_t size_limit);
 template std::vector<chunk> find_splits<cumulative_size_and_row>(
-  host_span<cumulative_size_and_row const> sizes, int64_t total_count, size_t size_limit);
+  host_span<cumulative_size_and_row const> sizes, std::size_t total_count, std::size_t size_limit);
 #endif
 
 /**
@@ -400,7 +401,7 @@ void reader::impl::global_preprocess(read_mode mode)
     auto const stripe_footer = stripe.stripe_footer;
 
     std::size_t total_stripe_size{0};
-    auto const last_read_size = static_cast<int64_t>(read_info.size());
+    auto const last_read_size = read_info.size();
     for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
       auto& stream_info  = _file_itm_data.lvl_stream_info[level];
       auto& stripe_sizes = lvl_stripe_sizes[level];
@@ -428,10 +429,8 @@ void reader::impl::global_preprocess(read_mode mode)
       stripe_sizes[stripe_idx] = stripe_size;
       total_stripe_size += stripe_size;
 
-      auto& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
-      stripe_stream_chunks[stripe_idx] =
-        chunk{static_cast<int64_t>(stream_count),
-              static_cast<int64_t>(stream_info.size() - stream_count)};
+      auto& stripe_stream_chunks       = lvl_stripe_stream_chunks[level];
+      stripe_stream_chunks[stripe_idx] = chunk{stream_count, stream_info.size() - stream_count};
 
       // Coalesce consecutive streams into one read
       while (not is_stripe_data_empty and stream_count < stream_info.size()) {
@@ -448,9 +447,8 @@ void reader::impl::global_preprocess(read_mode mode)
         read_info.emplace_back(offset, len, d_dst, stripe.source_idx, stripe_idx, level);
       }
     }
-    total_stripe_sizes[stripe_idx] = {1, total_stripe_size};
-    stripe_data_read_chunks[stripe_idx] =
-      chunk{last_read_size, static_cast<int64_t>(read_info.size() - last_read_size)};
+    total_stripe_sizes[stripe_idx]      = {1, total_stripe_size};
+    stripe_data_read_chunks[stripe_idx] = chunk{last_read_size, read_info.size() - last_read_size};
   }
 
   _chunk_read_data.curr_load_stripe_chunk = 0;
@@ -461,7 +459,7 @@ void reader::impl::global_preprocess(read_mode mode)
     printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_stripes);
 #endif
 
-    _chunk_read_data.load_stripe_chunks = {chunk{0, static_cast<int64_t>(num_stripes)}};
+    _chunk_read_data.load_stripe_chunks = {chunk{0ul, num_stripes}};
     return;
   }
 
@@ -591,7 +589,7 @@ void reader::impl::load_data()
 
   cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_chunk.count,
                                                                                _stream);
-  for (int64_t stripe_idx = 0; stripe_idx < stripe_chunk.count; ++stripe_idx) {
+  for (std::size_t stripe_idx = 0; stripe_idx < stripe_chunk.count; ++stripe_idx) {
     auto const& stripe     = selected_stripes[stripe_idx];
     auto const stripe_info = stripe.stripe_info;
 

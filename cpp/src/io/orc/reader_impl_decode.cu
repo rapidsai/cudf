@@ -787,7 +787,8 @@ std::vector<chunk> find_table_splits(table_view const& input,
       auto const current_length =
         cuda::std::min(segment_length, num_rows - segment_length * segment_idx);
       auto const size = d_sizes[segment_idx];
-      return cumulative_size{current_length, static_cast<std::size_t>(size)};
+      return cumulative_size{static_cast<std::size_t>(current_length),
+                             static_cast<std::size_t>(size)};
     });
 
 #ifdef LOCAL_TEST
@@ -1262,7 +1263,7 @@ void reader::impl::decompress_and_decode()
 
       // TODO: only reset each one if the new size/type are different.
       stripe_data[stripe_start - load_stripe_start] = std::move(decomp_data);
-      for (int64_t i = 1; i < stripe_chunk.count; ++i) {
+      for (std::size_t i = 1; i < stripe_chunk.count; ++i) {
         stripe_data[i + stripe_start - load_stripe_start] = {};
       }
 
@@ -1467,7 +1468,7 @@ void reader::impl::decompress_and_decode()
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       stripe_data[stripe_start - load_stripe_start] = {};
     } else {
-      for (int64_t i = 0; i < stripe_chunk.count; ++i) {
+      for (std::size_t i = 0; i < stripe_chunk.count; ++i) {
         stripe_data[i + stripe_start - load_stripe_start] = {};
       }
     }
@@ -1491,7 +1492,8 @@ void reader::impl::decompress_and_decode()
   _chunk_read_data.curr_output_table_chunk = 0;
   _chunk_read_data.output_table_chunks =
     _chunk_read_data.output_size_limit == 0
-      ? std::vector<chunk>{chunk{0, _chunk_read_data.decoded_table->num_rows()}}
+      ? std::vector<chunk>{chunk{
+          0, static_cast<std::size_t>(_chunk_read_data.decoded_table->num_rows())}}
       : find_table_splits(_chunk_read_data.decoded_table->view(),
                           _chunk_read_data.output_row_granularity,
                           _chunk_read_data.output_size_limit,

@@ -33,11 +33,10 @@ namespace cudf::io::orc::detail {
  * @brief Struct that store identification of an ORC streams
  */
 struct stream_source_info {
-  uint32_t stripe_idx;  // global stripe id throughout all data sources
-  // TODO: change type below
-  std::size_t level;     // level of the nested column
-  uint32_t orc_col_idx;  // orc column id
-  StreamKind kind;       // stream kind
+  std::size_t stripe_idx;  // global stripe id throughout all data sources
+  std::size_t level;       // level of the nested column
+  uint32_t orc_col_idx;    // orc column id
+  StreamKind kind;         // stream kind
 
   struct hash {
     std::size_t operator()(stream_source_info const& id) const
@@ -98,8 +97,8 @@ struct stripe_level_comp_info {
  * @brief Struct that store information about a chunk of data.
  */
 struct chunk {
-  int64_t start_idx;
-  int64_t count;
+  std::size_t start_idx;
+  std::size_t count;
 };
 
 /**
@@ -247,13 +246,13 @@ struct chunk_read_data {
  * @brief Struct to accumulate sizes of chunks of some data such as stripe or rows.
  */
 struct cumulative_size {
-  int64_t count{0};
+  std::size_t count{0};
   std::size_t size_bytes{0};
 };
 
 // TODO
 struct cumulative_size_and_row {
-  int64_t count{0};
+  std::size_t count{0};
   std::size_t size_bytes{0};
   std::size_t rows{0};
 };
@@ -279,7 +278,9 @@ struct cumulative_size_sum {
  * given `size_limit`.
  */
 template <typename T>
-std::vector<chunk> find_splits(host_span<T const> sizes, int64_t total_count, size_t size_limit);
+std::vector<chunk> find_splits(host_span<T const> sizes,
+                               std::size_t total_count,
+                               std::size_t size_limit);
 
 // TODO
 std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
@@ -290,7 +291,7 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
  * data, but not both.
  */
 std::size_t gather_stream_info_and_column_desc(
-  int64_t stripe_processing_order,
+  std::size_t stripe_processing_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
