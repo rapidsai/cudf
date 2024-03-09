@@ -101,8 +101,8 @@ rmm::device_buffer decompress_stripe_data(
   // TODO: use lvl_stripe_stream_chunks
   std::size_t count{0};
   for (auto const& info : stream_info) {
-    if (info.id.stripe_idx < stripe_chunk.start_idx ||
-        info.id.stripe_idx >= stripe_chunk.start_idx + stripe_chunk.count) {
+    if (info.source.stripe_idx < stripe_chunk.start_idx ||
+        info.source.stripe_idx >= stripe_chunk.start_idx + stripe_chunk.count) {
       continue;
     }
     count++;
@@ -111,17 +111,17 @@ rmm::device_buffer decompress_stripe_data(
   cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, count, stream);
 
   for (auto const& info : stream_info) {
-    if (info.id.stripe_idx < stripe_chunk.start_idx ||
-        info.id.stripe_idx >= stripe_chunk.start_idx + stripe_chunk.count) {
+    if (info.source.stripe_idx < stripe_chunk.start_idx ||
+        info.source.stripe_idx >= stripe_chunk.start_idx + stripe_chunk.count) {
       continue;
     }
 
 #ifdef LOCAL_TEST
 //    printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-//           (int)info.id.stripe_idx,
-//           (int)info.id.level,
-//           (int)info.id.orc_col_idx,
-//           (int)info.id.kind,
+//           (int)info.source.stripe_idx,
+//           (int)info.source.level,
+//           (int)info.source.orc_col_idx,
+//           (int)info.source.kind,
 //           info.dst_pos,
 //           info.length);
 //    fflush(stdout);
@@ -129,19 +129,19 @@ rmm::device_buffer decompress_stripe_data(
 
     compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<uint8_t const*>(
-        stripe_data[info.id.stripe_idx - load_stripe_chunk.start_idx].data()) +
+        stripe_data[info.source.stripe_idx - load_stripe_chunk.start_idx].data()) +
         info.dst_pos,
       info.length));
 
     //    printf("line %d\n", __LINE__);
     //    fflush(stdout);
-    auto const& cached_comp_info = compinfo_map.at(
-      stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind});
+    auto const& cached_comp_info = compinfo_map.at(stream_source_info{
+      info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind});
     //    printf("line %d\n", __LINE__);
     //    fflush(stdout);
     // auto const& cached_comp_info =
-    //   compinfo_map[stream_id_info{info.id.stripe_idx, info.id.level, info.id.orc_cold_idx,
-    //   info.id.kind}];
+    //   compinfo_map[stream_id_info{info.source.stripe_idx, info.source.level,
+    //   info.source.orc_cold_idx, info.source.kind}];
     auto& stream_comp_info                   = compinfo.back();
     stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
     stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
@@ -171,10 +171,10 @@ rmm::device_buffer decompress_stripe_data(
 
     auto const& info = stream_info[i];
     printf("compute info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-           (int)info.id.stripe_idx,
-           (int)info.id.level,
-           (int)info.id.orc_cold_idx,
-           (int)info.id.kind,
+           (int)info.source.stripe_idx,
+           (int)info.source.level,
+           (int)info.source.orc_cold_idx,
+           (int)info.source.kind,
            (size_t)compinfo[i].num_compressed_blocks,
            (size_t)compinfo[i].num_uncompressed_blocks,
            compinfo[i].max_uncompressed_size);

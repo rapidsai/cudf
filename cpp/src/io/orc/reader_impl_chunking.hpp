@@ -32,15 +32,15 @@ namespace cudf::io::orc::detail {
 /**
  * @brief Struct that store identification of an ORC streams
  */
-struct stream_id_info {
-  uint32_t stripe_idx;  // global stripe id throughout the data source
+struct stream_source_info {
+  uint32_t stripe_idx;  // global stripe id throughout all data sources
   // TODO: change type below
   std::size_t level;     // level of the nested column
   uint32_t orc_col_idx;  // orc column id
   StreamKind kind;       // stream kind
 
   struct hash {
-    std::size_t operator()(stream_id_info const& id) const
+    std::size_t operator()(stream_source_info const& id) const
     {
       auto const hasher = std::hash<size_t>{};
       return hasher(id.stripe_idx) ^ hasher(id.level) ^
@@ -49,7 +49,7 @@ struct stream_id_info {
     }
   };
   struct equal_to {
-    bool operator()(stream_id_info const& lhs, stream_id_info const& rhs) const
+    bool operator()(stream_source_info const& lhs, stream_source_info const& rhs) const
     {
       return lhs.stripe_idx == rhs.stripe_idx && lhs.level == rhs.level &&
              lhs.orc_col_idx == rhs.orc_col_idx && lhs.kind == rhs.kind;
@@ -62,7 +62,7 @@ struct stream_id_info {
  */
 template <typename T>
 using stream_id_map =
-  std::unordered_map<stream_id_info, T, stream_id_info::hash, stream_id_info::equal_to>;
+  std::unordered_map<stream_source_info, T, stream_source_info::hash, stream_source_info::equal_to>;
 
 /**
  * @brief Struct that store identification of an ORC stream.
@@ -72,8 +72,8 @@ struct orc_stream_info {
   explicit orc_stream_info(uint64_t offset_,
                            std::size_t dst_pos_,
                            uint32_t length_,
-                           stream_id_info const& id_)
-    : offset(offset_), dst_pos(dst_pos_), length(length_), id(id_)
+                           stream_source_info const& source_)
+    : offset(offset_), dst_pos(dst_pos_), length(length_), source(source_)
   {
 #ifdef PRINT_DEBUG
     printf("   construct stripe id [%d, %d, %d, %d]\n",
@@ -89,7 +89,7 @@ struct orc_stream_info {
   std::size_t length;   // stream length to read
 
   // Store location of the stream in the stripe, so we can look up where this stream comes from.
-  stream_id_info id;
+  stream_source_info source;
 };
 
 /**

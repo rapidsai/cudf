@@ -175,7 +175,7 @@ std::size_t gather_stream_info_and_column_desc(
           stripeinfo->offset + src_offset,
           dst_offset,
           stream.length,
-          stream_id_info{
+          stream_source_info{
             static_cast<uint32_t>(stripe_processing_order), level, column_id, stream.kind});
       }
 
@@ -628,17 +628,18 @@ void reader::impl::load_data()
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         compinfo.push_back(gpu::CompressedStreamInfo(
-          static_cast<uint8_t const*>(stripe_data[info.id.stripe_idx - stripe_start].data()) +
+          static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data()) +
             info.dst_pos,
           info.length));
-        stream_compinfo_map[stream_id_info{
-          info.id.stripe_idx, info.id.level, info.id.orc_col_idx, info.id.kind}] = &compinfo.back();
+        stream_compinfo_map[stream_source_info{
+          info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind}] =
+          &compinfo.back();
 #ifdef LOCAL_TEST
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-               (int)info.id.stripe_idx,
-               (int)info.id.level,
-               (int)info.id.orc_col_idx,
-               (int)info.id.kind,
+               (int)info.source.stripe_idx,
+               (int)info.source.level,
+               (int)info.source.orc_col_idx,
+               (int)info.source.kind,
                info.dst_pos,
                info.length);
         fflush(stdout);
@@ -688,7 +689,8 @@ void reader::impl::load_data()
       // Set decompression size equal to the input size.
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
-        stripe_decomp_sizes[info.id.stripe_idx - stripe_chunk.start_idx].size_bytes += info.length;
+        stripe_decomp_sizes[info.source.stripe_idx - stripe_chunk.start_idx].size_bytes +=
+          info.length;
       }
     }
 
