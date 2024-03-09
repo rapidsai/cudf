@@ -587,7 +587,7 @@ void reader::impl::load_data()
 
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
-  stream_id_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
+  stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
   cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_chunk.count,
                                                                                _stream);

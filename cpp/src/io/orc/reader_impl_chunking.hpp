@@ -61,27 +61,19 @@ struct stream_source_info {
  * @brief Map to lookup a value from stream id.
  */
 template <typename T>
-using stream_id_map =
+using stream_source_map =
   std::unordered_map<stream_source_info, T, stream_source_info::hash, stream_source_info::equal_to>;
 
 /**
  * @brief Struct that store identification of an ORC stream.
  */
 struct orc_stream_info {
-  // TODO: remove constructor
   explicit orc_stream_info(uint64_t offset_,
                            std::size_t dst_pos_,
                            uint32_t length_,
                            stream_source_info const& source_)
     : offset(offset_), dst_pos(dst_pos_), length(length_), source(source_)
   {
-#ifdef PRINT_DEBUG
-    printf("   construct stripe id [%d, %d, %d, %d]\n",
-           (int)stripe_idx,
-           (int)level,
-           (int)orc_col_idx,
-           (int)kind);
-#endif
   }
   // Data info:
   uint64_t offset;      // offset in data source
@@ -133,7 +125,7 @@ struct file_intermediate_data {
   std::size_t num_stripes() const { return selected_stripes.size(); }
 
   // Store the compression information for each data stream.
-  stream_id_map<stripe_level_comp_info> compinfo_map;
+  stream_source_map<stripe_level_comp_info> compinfo_map;
 
   // The buffers to store raw data read from disk, initialized for each reading stripe chunks.
   // After decoding, such buffers can be released.

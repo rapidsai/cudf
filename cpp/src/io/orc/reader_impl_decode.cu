@@ -80,7 +80,7 @@ namespace {
 rmm::device_buffer decompress_stripe_data(
   chunk const& load_stripe_chunk,
   chunk const& stripe_chunk,
-  stream_id_map<stripe_level_comp_info> const& compinfo_map,
+  stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
   host_span<orc_stream_info const> stream_info,
