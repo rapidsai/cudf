@@ -36,7 +36,7 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
                                                                 state_buf* sb,
                                                                 level_t const* const def,
                                                                 int t,
-                                                                bool has_no_nulls)
+                                                                bool nullable_with_nulls)
 {
   constexpr int num_warps      = decode_block_size / cudf::detail::warp_size;
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
@@ -63,12 +63,12 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
     // definition level. only need to process for nullable columns
     int d = 0;
     if constexpr (nullable) {
-      if (has_no_nulls) {
-        d = t < batch_size ? 1 : -1;
-      } else {
+      if (nullable_with_nulls) {
         d = t < batch_size
               ? static_cast<int>(def[rolling_index<state_buf::nz_buf_size>(value_count + t)])
               : -1;
+      } else {
+        d = t < batch_size ? 1 : -1;
       }
     }
 
@@ -225,6 +225,7 @@ __device__ inline void gpuDecodeValues(
   }
 }
 
+// is the page marked nullable or not
 __device__ inline bool is_nullable(page_state_s* s)
 {
   auto const lvl           = level_type::DEFINITION;
@@ -232,16 +233,23 @@ __device__ inline bool is_nullable(page_state_s* s)
   return max_def_level > 0;
 }
 
-__device__ inline bool no_nulls(page_state_s* s)
+// for a nullable page, check to see if it could have nulls
+__device__ inline bool has_nulls(page_state_s* s)
 {
   auto const lvl      = level_type::DEFINITION;
   auto const init_run = s->initial_rle_run[lvl];
-  if ((init_run & 1) == 1) { return false; }
-  if (s->page.num_input_values != (init_run >> 1)) { return false; }
+  // literal runs, lets assume they could hold nulls
+  if ((init_run & 1) == 1) { return true; }
+
+  // repeated run with number of items in the run not equal
+  // to the rows in the page, assume that means we could have nulls
+  if (s->page.num_input_values != (init_run >> 1)) { return true; }
 
   auto const lvl_bits = s->col.level_bits[lvl];
   auto const run_val  = lvl_bits == 0 ? 0 : s->initial_rle_value[lvl];
-  return run_val == s->col.max_level[lvl];
+
+  // the encoded repeated value isn't valid, we have (all) nulls
+  return run_val != s->col.max_level[lvl];
 }
 
 /**
@@ -295,12 +303,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   if (s->num_rows == 0) { return; }
 
-  bool const nullable     = is_nullable(s);
-  bool const has_no_nulls = nullable && no_nulls(s);
+  bool const nullable            = is_nullable(s);
+  bool const nullable_with_nulls = nullable && has_nulls(s);
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  if (!has_no_nulls) {
+  if (nullable_with_nulls) {
     def_decoder.init(s->col.level_bits[level_type::DEFINITION],
                      s->abs_lvl_start[level_type::DEFINITION],
                      s->abs_lvl_end[level_type::DEFINITION],
@@ -325,7 +333,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
 
     // only need to process definition levels if this is a nullable column
     if (nullable) {
-      if (!has_no_nulls) {
+      if (nullable_with_nulls) {
         processed_count += def_decoder.decode_next(t);
         __syncthreads();
       } else {
@@ -333,7 +341,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
       }
 
       next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
-        processed_count, s, sb, def, t, has_no_nulls);
+        processed_count, s, sb, def, t, nullable_with_nulls);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
@@ -393,12 +401,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   // if we have no work to do (eg, in a skip_rows/num_rows case) in this page.
   if (s->num_rows == 0) { return; }
 
-  bool const nullable     = is_nullable(s);
-  bool const has_no_nulls = nullable && no_nulls(s);
+  bool const nullable            = is_nullable(s);
+  bool const nullable_with_nulls = nullable && has_nulls(s);
 
   // initialize the stream decoders (requires values computed in setupLocalPageInfo)
   level_t* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
-  if (!has_no_nulls) {
+  if (nullable_with_nulls) {
     def_decoder.init(s->col.level_bits[level_type::DEFINITION],
                      s->abs_lvl_start[level_type::DEFINITION],
                      s->abs_lvl_end[level_type::DEFINITION],
@@ -427,7 +435,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
     // only need to process definition levels if this is a nullable column
     if (nullable) {
-      if (!has_no_nulls) {
+      if (nullable_with_nulls) {
         processed_count += def_decoder.decode_next(t);
         __syncthreads();
       } else {
@@ -436,7 +444,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
       // count of valid items in this batch
       next_valid_count = gpuUpdateValidityOffsetsAndRowIndicesFlat<true, level_t>(
-        processed_count, s, sb, def, t, has_no_nulls);
+        processed_count, s, sb, def, t, nullable_with_nulls);
     }
     // if we wanted to split off the skip_rows/num_rows case into a separate kernel, we could skip
     // this function call entirely since all it will ever generate is a mapping of (i -> i) for
