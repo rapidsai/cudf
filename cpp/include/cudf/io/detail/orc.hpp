@@ -72,10 +72,9 @@ class reader {
   /**
    * @brief Reads the entire dataset.
    *
-   * @param options Settings for controlling reading behavior
    * @return The set of columns along with table metadata
    */
-  table_with_metadata read(orc_reader_options const& options);
+  table_with_metadata read();
 };
 
 /**

@@ -56,14 +56,11 @@
 
 namespace cudf::io::orc::detail {
 
-void reader::impl::prepare_data(int64_t skip_rows,
-                                std::optional<int64_t> const& num_rows_opt,
-                                std::vector<std::vector<size_type>> const& stripes,
-                                read_mode mode)
+void reader::impl::prepare_data(read_mode mode)
 {
   // Selected columns at different levels of nesting are stored in different elements
   // of `selected_columns`; thus, size == 1 means no nested columns
-  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.num_levels() == 1,
+  CUDF_EXPECTS(_config.skip_rows == 0 or _selected_columns.num_levels() == 1,
                "skip_rows is not supported by nested columns");
 
   // There are no columns in the table.
@@ -73,7 +70,7 @@ void reader::impl::prepare_data(int64_t skip_rows,
   std::cout << "call global, skip = " << skip_rows << std::endl;
 #endif
 
-  global_preprocess(skip_rows, num_rows_opt, stripes, mode);
+  global_preprocess(mode);
 
   if (!_chunk_read_data.more_table_chunk_to_output()) {
     if (!_chunk_read_data.more_stripe_to_decode() && _chunk_read_data.more_stripe_to_load()) {
@@ -281,11 +278,9 @@ reader::impl::impl(std::size_t output_size_limit,
 {
 }
 
-table_with_metadata reader::impl::read(int64_t skip_rows,
-                                       std::optional<int64_t> const& num_rows_opt,
-                                       std::vector<std::vector<size_type>> const& stripes)
+table_with_metadata reader::impl::read()
 {
-  prepare_data(skip_rows, num_rows_opt, stripes, read_mode::READ_ALL);
+  prepare_data(read_mode::READ_ALL);
   return make_output_chunk();
 }
 
@@ -295,8 +290,7 @@ bool reader::impl::has_next()
   printf("==================query has next \n");
 #endif
 
-  prepare_data(
-    _config.skip_rows, _config.num_read_rows, _config.selected_stripes, read_mode::CHUNKED_READ);
+  prepare_data(read_mode::CHUNKED_READ);
 
 #ifdef LOCAL_TEST
   printf("has next: %d\n", (int)_chunk_read_data.has_next());
@@ -317,8 +311,7 @@ table_with_metadata reader::impl::read_chunk()
   }
 #endif
 
-  prepare_data(
-    _config.skip_rows, _config.num_read_rows, _config.selected_stripes, read_mode::CHUNKED_READ);
+  prepare_data(read_mode::CHUNKED_READ);
 
 #ifdef LOCAL_TEST
   {

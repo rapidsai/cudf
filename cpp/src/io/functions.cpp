@@ -419,7 +419,7 @@ table_with_metadata read_orc(orc_reader_options const& options,
 
   auto datasources = make_datasources(options.get_source());
   auto reader = std::make_unique<orc::detail::reader>(std::move(datasources), options, stream, mr);
-  return reader->read(options);
+  return reader->read();
 }
 
 /**

@@ -102,16 +102,9 @@ class reader::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
-   * @brief Read an entire set or a subset of data and returns a set of columns
-   *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
-   * @param stripes Indices of individual stripes to load if non-empty
-   * @return The set of columns along with metadata
+   * @copydoc cudf::io::orc::detail::reader::read
    */
-  table_with_metadata read(int64_t skip_rows,
-                           std::optional<int64_t> const& num_rows_opt,
-                           std::vector<std::vector<size_type>> const& stripes);
+  table_with_metadata read();
 
   /**
    * @copydoc cudf::io::chunked_orc_reader::has_next
@@ -124,69 +117,58 @@ class reader::impl {
   table_with_metadata read_chunk();
 
  private:
-  // TODO
+  /**
+   * @brief The enum indicating whether the data sources are read all at once or chunk by chunk.
+   */
   enum class read_mode { READ_ALL, CHUNKED_READ };
 
   /**
    * @brief Perform all the necessary data preprocessing before creating an output table.
    *
    * This is the proxy to call all other data preprocessing functions, which are prerequisite
-   * for generating an output table.
+   * for generating the output.
    *
-   * @param skip_rows Number of rows to skip from the start
-   * @param num_rows_opt Optional number of rows to read, or `std::nullopt` to read all rows
-   * @param stripes Indices of individual stripes to load if non-empty
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void prepare_data(int64_t skip_rows,
-                    std::optional<int64_t> const& num_rows_opt,
-                    std::vector<std::vector<size_type>> const& stripes,
-                    read_mode mode);
+  void prepare_data(read_mode mode);
 
   /**
    * @brief Perform a global preprocessing step that executes exactly once for the entire duration
    * of the reader.
    *
-   * TODO: rewrite, not use "ensure".
+   * In this step, the metadata of all stripes in the data sources is parsed, and information about
+   * data streams of the selected columns in all stripes are generated. If the reader has a data
+   * read limit, sizes of these streams are used to split the list of all stripes into multiple
+   * subsets, each of which will be read into memory in the `load_data()` step. These subsets are
+   * computed such that memory usage will be capped around a fixed size limit.
    *
-   * In this step, the metadata of all stripes in the data source is parsed, and information about
-   * data streams for all selected columns in alls tripes are generated. If the reader has a data
-   * read limit, data size of all stripes are used to determine the chunks of consecutive
-   * stripes for reading each time using the `load_data()` step. This is to ensure that loading
-   * these stripes will not exceed a fixed portion the data read limit.
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void global_preprocess(int64_t skip_rows,
-                         std::optional<int64_t> const& num_rows_opt,
-                         std::vector<std::vector<size_type>> const& stripes,
-                         read_mode mode);
+  void global_preprocess(read_mode mode);
 
   /**
-   * @brief Load stripes from the input source and store the data in the internal buffers.
+   * @brief Load stripes from the input data sources into memory.
    *
-   * If there is a data read limit, only a chunk of stripes are read at a time such that
-   * their total data size does not exceed a fixed portion of the limit. Then, the data is
-   * probed to determine the uncompressed sizes for these loaded stripes, which are in turn
-   * used to determine a subset of stripes to decompress and decode in the next step
-   * `decompress_and_decode()`.
-   * This is to ensure that loading data together with decompression and decoding will not exceed
-   * the data read limit.
+   * If there is a data read limit, only a subset of stripes are read at a time such that
+   * their total data size does not exceed a fixed size limit. Then, the data is probed to
+   * estimate its uncompressed sizes, which are in turn used to split that stripe subset into
+   * smaller subsets, each of which to be decompressed and decoded in the next step
+   * `decompress_and_decode()`. This is to ensure that loading data from data sources together with
+   * decompression and decoding will be capped around the given data read limit.
    */
   void load_data();
 
   /**
-   * @brief Decompress and decode the data in the internal buffers, and store the result into
-   * an internal table.
+   * @brief Decompress and decode stripe data in the internal buffers, and store the result into
+   * an intermediate table.
    *
-   * If there is a data read limit, only a chunk of stripes are decompressed and decoded at a time.
-   * Then, the result is stored in an internal table, and sizes of its rows are computed
-   * to determine slices of rows to return as the output table in the final step
-   * `make_output_chunk`.
+   * This function expects that the other preprocessing steps (`global preprocess()` and
+   * `load_data()`) have already been done.
    */
   void decompress_and_decode();
 
   /**
    * @brief Create the output table from the intermediate table and return it along with metadata.
-   *
-   * This function is called internally and expects all preprocessing steps have already been done.
    *
    * @return The output table along with columns' metadata
    */
@@ -204,7 +186,7 @@ class reader::impl {
 
   memory_stats_logger mem_stats_logger;
 
-  // Reader configs
+  // Reader configs.
   struct {
     data_type timestamp_type;  // override output timestamp resolution
     bool use_index;            // enable or disable attempt to use row index for parsing

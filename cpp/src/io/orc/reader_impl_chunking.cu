@@ -298,10 +298,7 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
   return {begin, end};
 }
 
-void reader::impl::global_preprocess(int64_t skip_rows,
-                                     std::optional<int64_t> const& num_rows_opt,
-                                     std::vector<std::vector<size_type>> const& stripes,
-                                     read_mode mode)
+void reader::impl::global_preprocess(read_mode mode)
 {
   if (_file_itm_data.global_preprocessed) { return; }
   _file_itm_data.global_preprocessed = true;
@@ -309,7 +306,8 @@ void reader::impl::global_preprocess(int64_t skip_rows,
   // Load stripes's metadata.
   std::tie(
     _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
-    _metadata.select_stripes(stripes, skip_rows, num_rows_opt, _stream);
+    _metadata.select_stripes(
+      _config.selected_stripes, _config.skip_rows, _config.num_read_rows, _stream);
   if (_file_itm_data.has_no_data()) { return; }
 
   CUDF_EXPECTS(
