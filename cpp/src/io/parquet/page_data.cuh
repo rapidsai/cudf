@@ -353,7 +353,7 @@ inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos
  * @param[in] len Length of element
  */
 template <typename state_buf>
-static __device__ void gpuOutputGeneric(
+inline __device__ void gpuOutputGeneric(
   page_state_s* s, state_buf* sb, int src_pos, uint8_t* dst8, int len)
 {
   uint8_t const* dict;
