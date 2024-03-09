@@ -664,11 +664,11 @@ defaults.
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::thread_range`
+should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::scoped_range`
 for declaring NVTX ranges in the current scope:
 - Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
 NVTX range
-- Use `cudf::thread_range rng{"custom_name"};` to provide a custom name for the current scope's
+- Use `cudf::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
 NVTX range
 
 For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).

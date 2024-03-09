@@ -160,6 +160,8 @@ struct device_json_column {
   std::vector<std::string> column_order;
   // Counting the current number of items in this column
   row_offset_t num_rows = 0;
+  // Force as string column
+  bool forced_as_string_column{false};
 
   /**
    * @brief Construct a new d json column object
