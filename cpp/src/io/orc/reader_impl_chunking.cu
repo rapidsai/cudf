@@ -317,10 +317,14 @@ void reader::impl::global_preprocess(read_mode mode)
     std::overflow_error);
 
 #ifdef LOCAL_TEST
-  printf("input skip rows: %ld, num rows: %ld\n", skip_rows, num_rows_opt.value_or(-1l));
-  printf("actual skip rows: %ld, num rows: %ld\n",
-         _file_itm_data.rows_to_skip,
-         _file_itm_data.rows_to_read);
+  {
+    auto const skip_rows    = _config.skip_rows;
+    auto const num_rows_opt = _config.num_read_rows;
+    printf("input skip rows: %ld, num rows: %ld\n", skip_rows, num_rows_opt.value_or(-1l));
+    printf("actual skip rows: %ld, num rows: %ld\n",
+           _file_itm_data.rows_to_skip,
+           _file_itm_data.rows_to_read);
+  }
 #endif
 
   //  auto const rows_to_skip      = _file_itm_data.rows_to_skip;

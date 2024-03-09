@@ -199,13 +199,15 @@ class reader::impl {
     std::vector<std::vector<size_type>> const selected_stripes;
   } const _config;
 
-  // Intermediate data for internal processing.
+  // Intermediate data for reading.
   std::unique_ptr<reader_column_meta> const _col_meta;  // Track of orc mapping and child details
   std::vector<std::unique_ptr<datasource>> const _sources;  // Unused but owns data for `_metadata`
   aggregate_orc_metadata _metadata;
   column_hierarchy const _selected_columns;  // Construct from `_metadata` thus declare after it
   file_intermediate_data _file_itm_data;
   chunk_read_data _chunk_read_data;
+
+  // Intermediate data for output.
   std::unique_ptr<table_metadata> _meta_with_user_data;
   table_metadata _out_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;

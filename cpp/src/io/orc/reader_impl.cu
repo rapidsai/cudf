@@ -58,16 +58,11 @@ namespace cudf::io::orc::detail {
 
 void reader::impl::prepare_data(read_mode mode)
 {
-  // Selected columns at different levels of nesting are stored in different elements
-  // of `selected_columns`; thus, size == 1 means no nested columns
-  CUDF_EXPECTS(_config.skip_rows == 0 or _selected_columns.num_levels() == 1,
-               "skip_rows is not supported by nested columns");
-
   // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return; }
 
 #ifdef LOCAL_TEST
-  std::cout << "call global, skip = " << skip_rows << std::endl;
+  std::cout << "call global, skip = " << _config.skip_rows << std::endl;
 #endif
 
   global_preprocess(mode);
@@ -276,6 +271,10 @@ reader::impl::impl(std::size_t output_size_limit,
       data_read_limit,
       output_row_granularity > 0 ? output_row_granularity : DEFAULT_OUTPUT_ROW_GRANULARITY}
 {
+  // Selected columns at different levels of nesting are stored in different elements
+  // of `selected_columns`; thus, size == 1 means no nested columns.
+  CUDF_EXPECTS(_config.skip_rows == 0 or _selected_columns.num_levels() == 1,
+               "skip_rows is not supported if having nested columns");
 }
 
 table_with_metadata reader::impl::read()
@@ -286,42 +285,13 @@ table_with_metadata reader::impl::read()
 
 bool reader::impl::has_next()
 {
-#ifdef LOCAL_TEST
-  printf("==================query has next \n");
-#endif
-
   prepare_data(read_mode::CHUNKED_READ);
-
-#ifdef LOCAL_TEST
-  printf("has next: %d\n", (int)_chunk_read_data.has_next());
-#endif
-
   return _chunk_read_data.has_next();
 }
 
 table_with_metadata reader::impl::read_chunk()
 {
-#ifdef LOCAL_TEST
-  printf("==================call read chunk\n");
-  {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "\n\n\n------------start read chunk, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-  }
-#endif
-
   prepare_data(read_mode::CHUNKED_READ);
-
-#ifdef LOCAL_TEST
-  {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "done prepare data, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-  }
-#endif
-
   return make_output_chunk();
 }
 
