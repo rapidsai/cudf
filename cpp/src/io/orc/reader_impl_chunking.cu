@@ -192,7 +192,7 @@ std::size_t gather_stream_info_and_column_desc(
  * given `size_limit`.
  */
 template <typename T>
-std::vector<chunk> find_splits(host_span<T const> sizes,
+std::vector<range> find_splits(host_span<T const> sizes,
                                std::size_t total_count,
                                std::size_t size_limit)
 {
@@ -202,7 +202,7 @@ std::vector<chunk> find_splits(host_span<T const> sizes,
   // }
   CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
 
-  std::vector<chunk> splits;
+  std::vector<range> splits;
   std::size_t cur_count{0};
   int64_t cur_pos{0};
   size_t cur_cumulative_size{0};
@@ -241,9 +241,13 @@ std::vector<chunk> find_splits(host_span<T const> sizes,
       split_pos++;
     }
 
+    // #ifdef LOCAL_TEST
+    //     printf("  split_pos: %d\n", (int)split_pos);
+    // #endif
+
     auto const start_idx = cur_count;
     cur_count            = sizes[split_pos].count;
-    splits.emplace_back(chunk{start_idx, cur_count - start_idx});
+    splits.emplace_back(range{start_idx, cur_count});
     cur_pos             = split_pos;
     cur_cumulative_size = sizes[split_pos].size_bytes;
 
@@ -257,45 +261,39 @@ std::vector<chunk> find_splits(host_span<T const> sizes,
   if (splits.size() > 1) {
     auto constexpr merge_threshold = 0.15;
     if (auto const last = splits.back(), second_last = splits[splits.size() - 2];
-        last.count <= static_cast<int64_t>(merge_threshold * second_last.count)) {
+        (last.end - last.begin) <=
+        static_cast<std::size_t>(merge_threshold * (second_last.end - second_last.begin))) {
       splits.pop_back();
-      splits.back().count += last.count;
+      splits.back().end = last.end;
     }
   }
 
   return splits;
 }
 
-template std::vector<chunk> find_splits<cumulative_size>(host_span<cumulative_size const> sizes,
+template std::vector<range> find_splits<cumulative_size>(host_span<cumulative_size const> sizes,
                                                          std::size_t total_count,
                                                          std::size_t size_limit);
-template std::vector<chunk> find_splits<cumulative_size_and_row>(
+template std::vector<range> find_splits<cumulative_size_and_row>(
   host_span<cumulative_size_and_row const> sizes, std::size_t total_count, std::size_t size_limit);
 #endif
 
 /**
- * @brief Find range of the data span by a given chunk of chunks.
+ * @brief Find range of the data span by a given range of ranges.
  *
- * @param input_chunks The list of all data chunks
- * @param selected_chunks A chunk of chunks in the input_chunks
- * @return The range of data span by the selected chunk of given chunks
+ * @param input_ranges The list of all data chunks
+ * @param selected_ranges A chunk of chunks in the input_chunks
+ * @return The range of data span by the selected range of given chunks
  */
-std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
-                                      chunk const& selected_chunks)
+std::pair<int64_t, int64_t> get_range(std::vector<range> const& input_ranges,
+                                      range const& selected_ranges)
 {
-  // Range indices to input_chunks
-  auto const chunk_begin = selected_chunks.start_idx;
-  auto const chunk_end   = selected_chunks.start_idx + selected_chunks.count;
+  // The first and last range, according to selected_chunk.
+  auto const& first_range = input_ranges[selected_ranges.begin];
+  auto const& last_range  = input_ranges[selected_ranges.end - 1];
 
-  // The first and last chunk, according to selected_chunk.
-  auto const& first_chunk = input_chunks[chunk_begin];
-  auto const& last_chunk  = input_chunks[chunk_end - 1];
-
-  // The range of data covered from the first to the last chunk.
-  auto const begin = first_chunk.start_idx;
-  auto const end   = last_chunk.start_idx + last_chunk.count;
-
-  return {begin, end};
+  // The range of data covered from the first to the last range.
+  return {first_range.begin, last_range.end};
 }
 
 void reader::impl::global_preprocess(read_mode mode)
@@ -337,8 +335,8 @@ void reader::impl::global_preprocess(read_mode mode)
   lvl_stripe_sizes.resize(_selected_columns.num_levels());
 
   auto& read_info                = _file_itm_data.data_read_info;
-  auto& stripe_data_read_chunks  = _file_itm_data.stripe_data_read_chunks;
-  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
+  auto& stripe_data_read_chunks  = _file_itm_data.stripe_data_read_ranges;
+  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_ranges;
 
   // Logically view streams as columns
   _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
@@ -430,7 +428,7 @@ void reader::impl::global_preprocess(read_mode mode)
       total_stripe_size += stripe_size;
 
       auto& stripe_stream_chunks       = lvl_stripe_stream_chunks[level];
-      stripe_stream_chunks[stripe_idx] = chunk{stream_count, stream_info.size() - stream_count};
+      stripe_stream_chunks[stripe_idx] = range{stream_count, stream_info.size()};
 
       // Coalesce consecutive streams into one read
       while (not is_stripe_data_empty and stream_count < stream_info.size()) {
@@ -448,10 +446,10 @@ void reader::impl::global_preprocess(read_mode mode)
       }
     }
     total_stripe_sizes[stripe_idx]      = {1, total_stripe_size};
-    stripe_data_read_chunks[stripe_idx] = chunk{last_read_size, read_info.size() - last_read_size};
+    stripe_data_read_chunks[stripe_idx] = range{last_read_size, read_info.size()};
   }
 
-  _chunk_read_data.curr_load_stripe_chunk = 0;
+  _chunk_read_data.curr_load_stripe_range = 0;
 
   // Load all chunks if there is no read limit.
   if (_chunk_read_data.data_read_limit == 0) {
@@ -459,7 +457,7 @@ void reader::impl::global_preprocess(read_mode mode)
     printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_stripes);
 #endif
 
-    _chunk_read_data.load_stripe_chunks = {chunk{0ul, num_stripes}};
+    _chunk_read_data.load_stripe_ranges = {range{0ul, num_stripes}};
     return;
   }
 
@@ -499,14 +497,14 @@ void reader::impl::global_preprocess(read_mode mode)
                                               chunk_read_data::load_limit_ratio);
     return tmp > 0UL ? tmp : 1UL;
   }();
-  _chunk_read_data.load_stripe_chunks =
+  _chunk_read_data.load_stripe_ranges =
     find_splits<cumulative_size>(total_stripe_sizes, num_stripes, load_limit);
 
 #ifdef LOCAL_TEST
-  auto& splits = _chunk_read_data.load_stripe_chunks;
+  auto& splits = _chunk_read_data.load_stripe_ranges;
   printf("------------\nSplits (/total num stripe = %d): \n", (int)num_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
-    printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
+    printf("{%ld, %ld}\n", splits[idx].begin, splits[idx].end);
   }
   fflush(stdout);
 #endif
@@ -525,9 +523,10 @@ void reader::impl::load_data()
 
   //  std::size_t num_stripes = selected_stripes.size();
   auto const stripe_chunk =
-    _chunk_read_data.load_stripe_chunks[_chunk_read_data.curr_load_stripe_chunk++];
-  auto const stripe_start = stripe_chunk.start_idx;
-  auto const stripe_end   = stripe_chunk.start_idx + stripe_chunk.count;
+    _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range++];
+  auto const stripe_start = stripe_chunk.begin;
+  auto const stripe_end   = stripe_chunk.end;
+  auto const stripe_count = stripe_end - stripe_start;
 
 #ifdef LOCAL_TEST
   printf("\n\nloading data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
@@ -537,7 +536,7 @@ void reader::impl::load_data()
   // TODO: clear all old buffer.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& stripe_data = lvl_stripe_data[level];
-    stripe_data.resize(stripe_chunk.count);
+    stripe_data.resize(stripe_count);
 
     auto& stripe_sizes = lvl_stripe_sizes[level];
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
@@ -550,7 +549,7 @@ void reader::impl::load_data()
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
 
-  auto const& stripe_data_read_chunks = _file_itm_data.stripe_data_read_chunks;
+  auto const& stripe_data_read_chunks = _file_itm_data.stripe_data_read_ranges;
   auto const [read_begin, read_end]   = get_range(stripe_data_read_chunks, stripe_chunk);
 
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
@@ -581,15 +580,15 @@ void reader::impl::load_data()
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
-  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_chunks;
+  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_ranges;
 
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
-  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_chunk.count,
+  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
                                                                                _stream);
-  for (std::size_t stripe_idx = 0; stripe_idx < stripe_chunk.count; ++stripe_idx) {
+  for (std::size_t stripe_idx = 0; stripe_idx < stripe_count; ++stripe_idx) {
     auto const& stripe     = selected_stripes[stripe_idx];
     auto const stripe_info = stripe.stripe_info;
 
@@ -659,7 +658,7 @@ void reader::impl::load_data()
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
-        stripe_decomp_sizes[stream_id.stripe_idx - stripe_chunk.start_idx].size_bytes +=
+        stripe_decomp_sizes[stream_id.stripe_idx - stripe_start].size_bytes +=
           stream_compinfo->max_uncompressed_size;
 
 #ifdef LOCAL_TEST
@@ -687,8 +686,7 @@ void reader::impl::load_data()
       // Set decompression size equal to the input size.
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
-        stripe_decomp_sizes[info.source.stripe_idx - stripe_chunk.start_idx].size_bytes +=
-          info.length;
+        stripe_decomp_sizes[info.source.stripe_idx - stripe_start].size_bytes += info.length;
       }
     }
 
@@ -697,7 +695,7 @@ void reader::impl::load_data()
   }  // end loop level
 
   // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
-  _chunk_read_data.curr_decode_stripe_chunk = 0;
+  _chunk_read_data.curr_decode_stripe_range = 0;
 
   // Decode all chunks if there is no read and no output limit.
   // In theory, we should just decode enough stripes for output one table chunk.
@@ -715,7 +713,7 @@ void reader::impl::load_data()
     printf("0 limit: output decode stripe chunk unchanged\n");
 #endif
 
-    _chunk_read_data.decode_stripe_chunks = {stripe_chunk};
+    _chunk_read_data.decode_stripe_ranges = {stripe_chunk};
     return;
   }
 
@@ -764,17 +762,18 @@ void reader::impl::load_data()
                                               (1.0 - chunk_read_data::load_limit_ratio));
     return tmp > 0UL ? tmp : 1UL;
   }();
-  _chunk_read_data.decode_stripe_chunks =
-    find_splits<cumulative_size_and_row>(stripe_decomp_sizes, stripe_chunk.count, decode_limit);
-  for (auto& chunk : _chunk_read_data.decode_stripe_chunks) {
-    chunk.start_idx += stripe_chunk.start_idx;
+  _chunk_read_data.decode_stripe_ranges =
+    find_splits<cumulative_size_and_row>(stripe_decomp_sizes, stripe_count, decode_limit);
+  for (auto& chunk : _chunk_read_data.decode_stripe_ranges) {
+    chunk.begin += stripe_start;
+    chunk.end += stripe_start;
   }
 
 #ifdef LOCAL_TEST
-  auto& splits = _chunk_read_data.decode_stripe_chunks;
-  printf("------------\nSplits decode_stripe_chunks (/%d): \n", (int)stripe_chunk.count);
+  auto& splits = _chunk_read_data.decode_stripe_ranges;
+  printf("------------\nSplits decode_stripe_chunks (/%d): \n", (int)stripe_count);
   for (size_t idx = 0; idx < splits.size(); idx++) {
-    printf("{%ld, %ld}\n", splits[idx].start_idx, splits[idx].count);
+    printf("{%ld, %ld}\n", splits[idx].begin, splits[idx].end);
   }
   fflush(stdout);
 #endif

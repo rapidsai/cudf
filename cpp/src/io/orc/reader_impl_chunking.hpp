@@ -92,21 +92,12 @@ struct stripe_level_comp_info {
   std::size_t total_decomp_size{0};
 };
 
-// TODO: remove this and use range instead
-/**
- * @brief Struct that store information about a chunk of data.
- */
-struct chunk {
-  std::size_t start_idx;
-  std::size_t count;
-};
-
 /**
  * @brief Struct that store information about a range of data.
  */
 struct range {
-  int64_t begin;
-  int64_t end;
+  std::size_t begin;
+  std::size_t end;
 };
 
 /**
@@ -166,14 +157,14 @@ struct file_intermediate_data {
 
   // For each stripe, we perform a number of read for its streams.
   // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
-  std::vector<chunk> stripe_data_read_chunks;
+  std::vector<range> stripe_data_read_ranges;
 
   // Store info for each ORC stream at each nested level.
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
 
   // At each nested level, the streams for each stripe are stored consecutively in lvl_stream_info.
   // This is used to identify the range of streams for each stripe from that vector.
-  std::vector<std::vector<chunk>> lvl_stripe_stream_chunks;
+  std::vector<std::vector<range>> lvl_stripe_stream_ranges;
 
   // TODO rename
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
@@ -207,25 +198,25 @@ struct chunk_read_data {
 
   // Chunks of stripes that can be load into memory such that their data size is within a size
   // limit.
-  std::vector<chunk> load_stripe_chunks;
-  std::size_t curr_load_stripe_chunk{0};
-  bool more_stripe_to_load() const { return curr_load_stripe_chunk < load_stripe_chunks.size(); }
+  std::vector<range> load_stripe_ranges;
+  std::size_t curr_load_stripe_range{0};
+  bool more_stripe_to_load() const { return curr_load_stripe_range < load_stripe_ranges.size(); }
 
   // Chunks of stripes such that their decompression size is within a size limit.
-  std::vector<chunk> decode_stripe_chunks;
-  std::size_t curr_decode_stripe_chunk{0};
+  std::vector<range> decode_stripe_ranges;
+  std::size_t curr_decode_stripe_range{0};
   bool more_stripe_to_decode() const
   {
-    return curr_decode_stripe_chunk < decode_stripe_chunks.size();
+    return curr_decode_stripe_range < decode_stripe_ranges.size();
   }
 
   // Chunk of rows in the internal decoded table to output for each `read_chunk()`.
-  std::vector<chunk> output_table_chunks;
-  std::size_t curr_output_table_chunk{0};
+  std::vector<range> output_table_ranges;
+  std::size_t curr_output_table_range{0};
   std::unique_ptr<cudf::table> decoded_table;
   bool more_table_chunk_to_output() const
   {
-    return curr_output_table_chunk < output_table_chunks.size();
+    return curr_output_table_range < output_table_ranges.size();
   }
 
   // Only has more chunk to output if:
@@ -278,13 +269,13 @@ struct cumulative_size_sum {
  * given `size_limit`.
  */
 template <typename T>
-std::vector<chunk> find_splits(host_span<T const> sizes,
+std::vector<range> find_splits(host_span<T const> sizes,
                                std::size_t total_count,
                                std::size_t size_limit);
 
 // TODO
-std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
-                                      chunk const& selected_chunks);
+std::pair<int64_t, int64_t> get_range(std::vector<range> const& input_ranges,
+                                      range const& selected_ranges);
 
 /**
  * @brief Function that populates descriptors for either individual streams or chunks of column

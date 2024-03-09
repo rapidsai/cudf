@@ -129,8 +129,8 @@ table_with_metadata reader::impl::make_output_chunk()
   }
 
   auto out_table = [&] {
-    if (_chunk_read_data.output_table_chunks.size() == 1) {
-      _chunk_read_data.curr_output_table_chunk++;
+    if (_chunk_read_data.output_table_ranges.size() == 1) {
+      _chunk_read_data.curr_output_table_range++;
 #ifdef LOCAL_TEST
       printf("one chunk, no more table---------------------------------\n");
 #endif
@@ -147,12 +147,11 @@ table_with_metadata reader::impl::make_output_chunk()
 #endif
 
     auto const out_chunk =
-      _chunk_read_data.output_table_chunks[_chunk_read_data.curr_output_table_chunk++];
-    auto const out_tview =
-      cudf::detail::slice(_chunk_read_data.decoded_table->view(),
-                          {static_cast<size_type>(out_chunk.start_idx),
-                           static_cast<size_type>(out_chunk.start_idx + out_chunk.count)},
-                          _stream)[0];
+      _chunk_read_data.output_table_ranges[_chunk_read_data.curr_output_table_range++];
+    auto const out_tview = cudf::detail::slice(
+      _chunk_read_data.decoded_table->view(),
+      {static_cast<size_type>(out_chunk.begin), static_cast<size_type>(out_chunk.end)},
+      _stream)[0];
 
 #ifdef LOCAL_TEST
     {
