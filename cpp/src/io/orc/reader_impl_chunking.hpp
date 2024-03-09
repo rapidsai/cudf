@@ -298,7 +298,7 @@ std::pair<int64_t, int64_t> get_range(std::vector<chunk> const& input_chunks,
  * data, but not both.
  */
 std::size_t gather_stream_info_and_column_desc(
-  int64_t stripe_index,
+  int64_t stripe_processing_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -307,7 +307,7 @@ std::size_t gather_stream_info_and_column_desc(
   bool use_index,
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
-  std::size_t* stream_idx,
+  std::size_t* stream_processing_order,
   std::optional<std::vector<orc_stream_info>*> const& stream_info,
   std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks);
 

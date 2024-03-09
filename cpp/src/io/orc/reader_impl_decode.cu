@@ -1066,8 +1066,7 @@ void reader::impl::decompress_and_decode()
     int64_t num_rowgroups    = 0;
 
     // TODO: Stripe and stream idx must be by chunk.
-    //    std::size_t stripe_idx = 0;
-    std::size_t stream_idx = 0;
+    std::size_t stream_processing_order = 0;
 
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
 #ifdef LOCAL_TEST
@@ -1091,7 +1090,7 @@ void reader::impl::decompress_and_decode()
                                                                       use_index,
                                                                       level == 0,
                                                                       &num_dict_entries,
-                                                                      &stream_idx,
+                                                                      &stream_processing_order,
                                                                       std::nullopt,  // stream_info
                                                                       &chunks);
 

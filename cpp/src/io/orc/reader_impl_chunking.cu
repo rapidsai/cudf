@@ -68,7 +68,7 @@
 namespace cudf::io::orc::detail {
 
 std::size_t gather_stream_info_and_column_desc(
-  int64_t stripe_index,
+  int64_t stripe_processing_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -77,7 +77,7 @@ std::size_t gather_stream_info_and_column_desc(
   bool use_index,
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
-  std::size_t* stream_idx,
+  std::size_t* stream_processing_order,
   std::optional<std::vector<orc_stream_info>*> const& stream_info,
   std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks)
 {
@@ -104,8 +104,7 @@ std::size_t gather_stream_info_and_column_desc(
   for (auto const& stream : stripefooter->streams) {
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
       // Ignore reading this stream from source.
-      // cudf::logger().warn("Unexpected stream in the input ORC source. The stream will be
-      // ignored.");
+      CUDF_LOG_WARN("Unexpected stream in the input ORC source. The stream will be ignored.");
 
 #ifdef LOCAL_TEST
       printf("Unexpected stream in the input ORC source. The stream will be ignored\n");
@@ -126,14 +125,13 @@ std::size_t gather_stream_info_and_column_desc(
       auto const schema_type = types[column_id];
       if (!schema_type.subtypes.empty() && schema_type.kind == orc::STRUCT &&
           stream.kind == orc::PRESENT) {
-        // printf("present stream\n");
         for (auto const& idx : schema_type.subtypes) {
           auto const child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
           if (child_idx >= 0) {
             col = child_idx;
             if (chunks.has_value()) {
-              auto& chunk                     = (*chunks.value())[stripe_index][col];
-              chunk.strm_id[gpu::CI_PRESENT]  = *stream_idx;
+              auto& chunk                     = (*chunks.value())[stripe_processing_order][col];
+              chunk.strm_id[gpu::CI_PRESENT]  = *stream_processing_order;
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
           }
@@ -144,7 +142,7 @@ std::size_t gather_stream_info_and_column_desc(
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
           if (index_type < gpu::CI_NUM_STREAMS) {
-            auto& chunk = (*chunks.value())[stripe_index][col];
+            auto& chunk = (*chunks.value())[stripe_processing_order][col];
             // printf("use stream id: %d, stripe: %d, level: %d, col idx: %d, kind: %d\n",
             //        (int)(*stream_idx),
             //        (int)stripe_index,
@@ -152,7 +150,7 @@ std::size_t gather_stream_info_and_column_desc(
             //        (int)column_id,
             //        (int)stream.kind);
 
-            chunk.strm_id[index_type]  = *stream_idx;
+            chunk.strm_id[index_type]  = *stream_processing_order;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
             chunk.skip_count |= 1 << index_type;
@@ -165,7 +163,7 @@ std::size_t gather_stream_info_and_column_desc(
           }
         }
 
-        (*stream_idx)++;
+        (*stream_processing_order)++;
       } else {  // not chunks.has_value()
         // printf("collect stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
         //        (int)stripe_index,
@@ -177,7 +175,8 @@ std::size_t gather_stream_info_and_column_desc(
           stripeinfo->offset + src_offset,
           dst_offset,
           stream.length,
-          stream_id_info{static_cast<uint32_t>(stripe_index), level, column_id, stream.kind});
+          stream_id_info{
+            static_cast<uint32_t>(stripe_processing_order), level, column_id, stream.kind});
       }
 
       dst_offset += stream.length;
