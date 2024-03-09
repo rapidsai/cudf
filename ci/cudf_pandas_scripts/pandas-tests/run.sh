@@ -37,7 +37,8 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -m "not slow" \
   --max-worker-restart=3 \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-pandas.xml" \
-  --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
+  --report-log=${PANDAS_TESTS_BRANCH}.json \
+  --durations=50  2>&1
 
 # summarize the results and save them to artifacts:
 python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
