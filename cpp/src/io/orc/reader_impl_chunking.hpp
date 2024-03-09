@@ -24,13 +24,12 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <tuple>
 #include <unordered_map>
 
 namespace cudf::io::orc::detail {
 
 /**
- * @brief Struct that store identification of an ORC streams
+ * @brief Struct that store source information of an ORC streams.
  */
 struct stream_source_info {
   std::size_t stripe_idx;  // global stripe id throughout all data sources
@@ -57,14 +56,14 @@ struct stream_source_info {
 };
 
 /**
- * @brief Map to lookup a value from stream id.
+ * @brief Map to lookup a value from stream source.
  */
 template <typename T>
 using stream_source_map =
   std::unordered_map<stream_source_info, T, stream_source_info::hash, stream_source_info::equal_to>;
 
 /**
- * @brief Struct that store identification of an ORC stream.
+ * @brief Struct that store information of an ORC stream.
  */
 struct orc_stream_info {
   explicit orc_stream_info(uint64_t offset_,
@@ -79,7 +78,7 @@ struct orc_stream_info {
   std::size_t dst_pos;  // offset to store data in memory relative to start of raw stripe data
   std::size_t length;   // stream length to read
 
-  // Store location of the stream in the stripe, so we can look up where this stream comes from.
+  // Store source of the stream in the stripe, so we can look up where this stream comes from.
   stream_source_info source;
 };
 
@@ -101,7 +100,7 @@ struct range {
 };
 
 /**
- * @brief Struct to store file-level data that remains constant for all chunks being output.
+ * @brief Struct to store intermediate processing data loaded from data sources.
  */
 struct file_intermediate_data {
   int64_t rows_to_skip;
@@ -110,9 +109,6 @@ struct file_intermediate_data {
 
   // Return true if no rows or stripes to read.
   bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
-
-  // TODO: remove
-  std::size_t num_stripes() const { return selected_stripes.size(); }
 
   // Store the compression information for each data stream.
   stream_source_map<stripe_level_comp_info> compinfo_map;
@@ -129,26 +125,26 @@ struct file_intermediate_data {
   // Store information to identify where to read a chunk of data from source.
   // Each read corresponds to one or more consecutive streams combined.
   struct stream_data_read_info {
-    // TODO: remove constructor
     stream_data_read_info(uint64_t offset_,
-                          std::size_t length_,
                           std::size_t dst_pos_,
+                          std::size_t length_,
                           std::size_t source_idx_,
                           std::size_t stripe_idx_,
                           std::size_t level_)
       : offset(offset_),
-        length(length_),
         dst_pos(dst_pos_),
+        length(length_),
         source_idx(source_idx_),
         stripe_idx(stripe_idx_),
         level(level_)
     {
     }
+
     uint64_t offset;         // offset in data source
     std::size_t dst_pos;     // offset to store data in memory relative to start of raw stripe data
     std::size_t length;      // data length to read
     std::size_t source_idx;  // the data source id
-    std::size_t stripe_idx;  // stream id TODO: processing or source stripe id?
+    std::size_t stripe_idx;  // global stripe index
     std::size_t level;       // nested level
   };
 
@@ -190,10 +186,11 @@ struct chunk_read_data {
   }
 
   // TODO: const for 3 below?
-  std::size_t output_size_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
-  std::size_t data_read_limit;    // approximate maximum size (in bytes) used for store
-                                  // intermediate data, or 0 for no limit
-  size_type output_row_granularity;               // TODO
+  std::size_t const
+    output_size_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
+  std::size_t const data_read_limit;       // approximate maximum size (in bytes) used for store
+                                           // intermediate data, or 0 for no limit
+  size_type const output_row_granularity;  // TODO
   static double constexpr load_limit_ratio{0.4};  // TODO
 
   // Chunks of stripes that can be load into memory such that their data size is within a size

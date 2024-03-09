@@ -442,7 +442,7 @@ void reader::impl::global_preprocess(read_mode mode)
           len += stream_info[stream_count].length;
           stream_count++;
         }
-        read_info.emplace_back(offset, len, d_dst, stripe.source_idx, stripe_idx, level);
+        read_info.emplace_back(offset, d_dst, len, stripe.source_idx, stripe_idx, level);
       }
     }
     total_stripe_sizes[stripe_idx]      = {1, total_stripe_size};
