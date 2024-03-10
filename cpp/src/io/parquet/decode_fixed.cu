@@ -253,17 +253,18 @@ __device__ inline bool has_nulls(page_state_s* s)
 }
 
 /**
- * @brief Kernel for computing the column data stored in the pages
+ * @brief Kernel for computing fixed width non dictionary column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
  * conversion will be performed to translate from the Parquet datatype to
- * desired output datatype (ex. 32-bit to 16-bit, string to hash).
+ * desired output datatype.
  *
  * @param pages List of pages
  * @param chunks List of column chunks
  * @param min_row Row index to start reading at
  * @param num_rows Maximum number of rows to read
+ * @param error_code Error code to set if an error is encountered
  */
 template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size)
@@ -366,6 +367,20 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
+/**
+ * @brief Kernel for computing fixed width dictionary column data stored in the pages
+ *
+ * This function will write the page data and the page data's validity to the
+ * output specified in the page's column chunk. If necessary, additional
+ * conversion will be performed to translate from the Parquet datatype to
+ * desired output datatype.
+ *
+ * @param pages List of pages
+ * @param chunks List of column chunks
+ * @param min_row Row index to start reading at
+ * @param num_rows Maximum number of rows to read
+ * @param error_code Error code to set if an error is encountered
+ */
 template <typename level_t>
 CUDF_KERNEL void __launch_bounds__(decode_block_size)
   gpuDecodePageDataFixedDict(PageInfo* pages,
