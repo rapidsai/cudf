@@ -55,14 +55,27 @@ inline __device__ uint32_t get_vlq32(uint8_t const*& cur, uint8_t const* end)
   return v;
 }
 
+/**
+ * @brief RLE run decode function per warp.
+ * 
+ * @param output output data buffer
+ * @param level_run RLE run header
+ * @param run_start beginning of data for RLE run 
+ * @param end pointer to the end of data for RLE run
+ * @param run_output_pos absolute output position for this run
+ * @param run_offset offset after run_output_pos this call to decode starts outputing at
+ * @param size length that will be decoded in this decode call, truncated to fit output buffer
+ * @param level_bits bits needed to encode max values in the run (definition, dictionary)
+ * @param lane warp lane that is executing this decode call
+ */
 template <typename level_t, int max_output_values>
 __device__ inline void decode(level_t* const output,
-                              uint8_t const* const run_start,
-                              int const run_offset,
-                              int const run_output_pos,
                               int const level_run,
-                              int const size,
+                              uint8_t const* const run_start,
                               uint8_t const* const end,
+                              int const run_output_pos,
+                              int const run_offset,
+                              int const size,
                               int level_bits,
                               int lane)
 {
@@ -311,12 +324,12 @@ struct rle_stream {
           // a call to decode_next).
           int const batch_len = min(remaining, max_count - last_run_pos);
           decode<level_t, max_output_values>(output,
-                                             run.start,
-                                             run_offset,
-                                             run.output_pos,
                                              run.level_run,
-                                             batch_len,
+                                             run.start,
                                              end,
+                                             run.output_pos,
+                                             run_offset,
+                                             batch_len,
                                              level_bits,
                                              warp_lane);
           if (warp_lane == 0) {
