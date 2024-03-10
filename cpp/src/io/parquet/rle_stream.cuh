@@ -73,7 +73,7 @@ __device__ inline void decode(level_t* const output,
   // for bitpacked/literal runs, total size is always a multiple of 8. so we need to take care if
   // we are not starting/ending exactly on a run boundary
   uint8_t const* cur;
-  if (level_run & 1) {
+  if (is_literal_run(level_run)) {
     int const effective_offset = cudf::util::round_down_safe(run_offset, 8);
     int const lead_values      = (run_offset - effective_offset);
     decode_output_pos -= lead_values;
@@ -83,7 +83,7 @@ __device__ inline void decode(level_t* const output,
 
   // if this is a repeated run, compute the repeated value
   int level_val;
-  if ((level_run & 1) == 0) {
+  if (is_repeated_run(level_run)) {
     level_val = run_start[0];
     if constexpr (sizeof(level_t) > 1) {
       if (level_bits > 8) {
@@ -105,7 +105,7 @@ __device__ inline void decode(level_t* const output,
     int const batch_len = min(32, remain);
 
     // if this is a literal run. each thread computes its own level_val
-    if (level_run & 1) {
+    if (is_literal_run(level_run)) {
       int const batch_len8 = (batch_len + 7) >> 3;
       if (lane < batch_len) {
         int bitpos                = lane * level_bits;
@@ -216,8 +216,8 @@ struct rle_stream {
       int run_bytes = _cur - cur;
 
       // literal run
-      if (level_run & 1) {
-        // multiples of 8
+      if (is_literal_run(level_run)) {
+        // from the parquet spec: literal runs always come in multiples of 8 values.
         run.size = (level_run >> 1) * 8;
         run_bytes += ((run.size * level_bits) + 7) >> 3;
       }
