@@ -229,13 +229,23 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   }
 
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_NO_DICT) != 0) {
-    DecodePageDataFixed(
-      subpass.pages, pass.chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
+    DecodePageDataFixed(subpass.pages,
+                        pass.chunks,
+                        num_rows,
+                        skip_rows,
+                        level_type_size,
+                        error_code.data(),
+                        streams[s_idx++]);
   }
 
   if (BitAnd(kernel_mask, decode_kernel_mask::FIXED_WIDTH_DICT) != 0) {
-    DecodePageDataFixedDict(
-      subpass.pages, pass.chunks, num_rows, skip_rows, level_type_size, error_code.data(), streams[s_idx++]);
+    DecodePageDataFixedDict(subpass.pages,
+                            pass.chunks,
+                            num_rows,
+                            skip_rows,
+                            level_type_size,
+                            error_code.data(),
+                            streams[s_idx++]);
   }
 
   // launch the catch-all page decoder
