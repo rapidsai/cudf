@@ -215,6 +215,11 @@ struct rle_stream {
 
   __device__ inline void fill_run_batch()
   {
+    // decode_index == -1 means we are on the very first decode iteration for this stream.
+    // In this first iteration we are filling up to half of the runs array to decode in the next iteration.
+    // On subsequent iterations, decode_index >= 0 and we are going to fill as many run slots available as we can,
+    // to fill up to the slot before decode_index. 
+    // We are also always bound by cur < end, making sure we stop decoding once we've reached the end of the stream.
     while (((decode_index == -1 && fill_index < num_rle_stream_decode_warps) ||
             fill_index < decode_index + run_buffer_size) &&
            cur < end) {
