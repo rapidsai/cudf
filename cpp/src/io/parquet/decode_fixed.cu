@@ -50,15 +50,15 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
   // cap by last row so that we don't process any rows past what we want to output.
   int const first_row = s->first_row;
   int const last_row  = first_row + s->num_rows;
-  target_value_count  = min(target_value_count, last_row);
+  int const capped_target_value_count  = min(target_value_count, last_row);
 
   int const valid_map_offset      = ni.valid_map_offset;
   int const row_index_lower_bound = s->row_index_lower_bound;
 
   __syncthreads();
 
-  while (value_count < target_value_count) {
-    int const batch_size = min(max_batch_size, target_value_count - value_count);
+  while (value_count < capped_target_value_count) {
+    int const batch_size = min(max_batch_size, capped_target_value_count - value_count);
 
     // definition level. only need to process for nullable columns
     int d = 0;
