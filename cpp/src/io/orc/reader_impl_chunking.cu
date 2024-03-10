@@ -105,12 +105,6 @@ std::size_t gather_stream_info_and_column_desc(
     if (!stream.column_id || *stream.column_id >= orc2gdf.size()) {
       // Ignore reading this stream from source.
       CUDF_LOG_WARN("Unexpected stream in the input ORC source. The stream will be ignored.");
-
-#ifdef LOCAL_TEST
-      printf("Unexpected stream in the input ORC source. The stream will be ignored\n");
-      fflush(stdout);
-#endif
-
       src_offset += stream.length;
       continue;
     }
@@ -142,14 +136,7 @@ std::size_t gather_stream_info_and_column_desc(
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
           if (index_type < gpu::CI_NUM_STREAMS) {
-            auto& chunk = (*chunks.value())[stripe_processing_order][col];
-            // printf("use stream id: %d, stripe: %d, level: %d, col idx: %d, kind: %d\n",
-            //        (int)(*stream_idx),
-            //        (int)stripe_index,
-            //        (int)level,
-            //        (int)column_id,
-            //        (int)stream.kind);
-
+            auto& chunk                = (*chunks.value())[stripe_processing_order][col];
             chunk.strm_id[index_type]  = *stream_processing_order;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
@@ -165,12 +152,6 @@ std::size_t gather_stream_info_and_column_desc(
 
         (*stream_processing_order)++;
       } else {  // not chunks.has_value()
-        // printf("collect stream id: stripe: %d, level: %d, col idx: %d, kind: %d\n",
-        //        (int)stripe_index,
-        //        (int)level,
-        //        (int)column_id,
-        //        (int)stream.kind);
-
         stream_info.value()->emplace_back(
           stripeinfo->offset + src_offset,
           dst_offset,
@@ -196,50 +177,47 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   std::vector<range> splits;
   std::size_t cur_count{0};
   int64_t cur_pos{0};
-  size_t cur_cumulative_size{0};
+  std::size_t cur_cumulative_size{0};
 
-  [[maybe_unused]] size_t cur_cumulative_rows{0};
+  [[maybe_unused]] std::size_t cur_cumulative_rows{0};
 
   auto const start = thrust::make_transform_iterator(
     cumulative_sizes.begin(),
     [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
-  auto const end = start + static_cast<int64_t>(cumulative_sizes.size());
+  auto const end = start + cumulative_sizes.size();
 
   while (cur_count < total_count) {
     int64_t split_pos =
       thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit));
 
-    // If we're past the end, or if the returned bucket is bigger than the chunk_read_limit, move
-    // back one.
-    if (static_cast<std::size_t>(split_pos) >= cumulative_sizes.size() ||
-        (cumulative_sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
+    // If we're past the end, or if the returned range has size exceeds the given size limit,
+    // move back one position.
+    if (split_pos >= static_cast<int64_t>(cumulative_sizes.size()) ||
+        (cumulative_sizes[split_pos].size_bytes > cur_cumulative_size + size_limit)) {
       split_pos--;
     }
 
     if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
-      while (split_pos > 0 && cumulative_sizes[split_pos].rows - cur_cumulative_rows >
-                                static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
+      // Similarly, while the returned range has total number of rows exceeds column size limit,
+      // move back one position.
+      while (split_pos > 0 && cumulative_sizes[split_pos].rows >
+                                cur_cumulative_rows +
+                                  static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
         split_pos--;
       }
     }
 
-    // best-try. if we can't find something that'll fit, we have to go bigger. we're doing this in
-    // a loop because all of the cumulative sizes for all the pages are sorted into one big list.
-    // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
-    // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
-    // either do this, or we have to call unique() on the input first.
+    // In case we have moved back too in the steps above, far beyond the last split point: that
+    // means we cannot find any range that has size fits within the given size limit.
+    // In such case, we need to move forward until we move pass the last output range.
     while (split_pos < (static_cast<int64_t>(cumulative_sizes.size()) - 1) &&
            (split_pos < 0 || cumulative_sizes[split_pos].count <= cur_count)) {
       split_pos++;
     }
 
-    // #ifdef LOCAL_TEST
-    //     printf("  split_pos: %d\n", (int)split_pos);
-    // #endif
-
-    auto const start_idx = cur_count;
-    cur_count            = cumulative_sizes[split_pos].count;
-    splits.emplace_back(range{start_idx, cur_count});
+    auto const start_count = cur_count;
+    cur_count              = cumulative_sizes[split_pos].count;
+    splits.emplace_back(range{start_count, cur_count});
     cur_pos             = split_pos;
     cur_cumulative_size = cumulative_sizes[split_pos].size_bytes;
 
@@ -248,10 +226,11 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
     }
   }
 
-  // If the last chunk has size smaller than `merge_threshold` percent of the second last one,
+  // If the last range has size smaller than `merge_threshold` percent of the second last one,
   // merge it with the second last one.
+  // This is to prevent having too small trailing range.
   if (splits.size() > 1) {
-    auto constexpr merge_threshold = 0.15;
+    double constexpr merge_threshold = 0.15;
     if (auto const last = splits.back(), second_last = splits[splits.size() - 2];
         (last.end - last.begin) <=
         static_cast<std::size_t>(merge_threshold * (second_last.end - second_last.begin))) {
