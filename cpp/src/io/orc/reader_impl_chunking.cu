@@ -380,8 +380,8 @@ void reader::impl::global_preprocess(read_mode mode)
       stripe_sizes[stripe_global_idx] = stripe_level_size;
       stripe_size += stripe_level_size;
 
-      auto& stripe_stream_chunks              = lvl_stripe_stream_chunks[level];
-      stripe_stream_chunks[stripe_global_idx] = range{stream_level_count, stream_info.size()};
+      lvl_stripe_stream_chunks[level][stripe_global_idx] =
+        range{stream_level_count, stream_info.size()};
 
       // Coalesce consecutive streams into one read
       while (not is_stripe_data_empty and stream_level_count < stream_info.size()) {
@@ -472,62 +472,58 @@ void reader::impl::load_data()
 {
   if (_file_itm_data.has_no_data()) { return; }
 
-  //  auto const rows_to_read      = _file_itm_data.rows_to_read;
-  auto const& selected_stripes = _file_itm_data.selected_stripes;
-  auto& lvl_stripe_data        = _file_itm_data.lvl_stripe_data;
-  auto& lvl_stripe_sizes       = _file_itm_data.lvl_stripe_sizes;
-  auto& read_info              = _file_itm_data.data_read_info;
-
-  //  std::size_t num_stripes = selected_stripes.size();
-  auto const stripe_chunk =
+  auto const load_stripe_range =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range++];
-  auto const stripe_start = stripe_chunk.begin;
-  auto const stripe_end   = stripe_chunk.end;
+  auto const stripe_start = load_stripe_range.begin;
+  auto const stripe_end   = load_stripe_range.end;
   auto const stripe_count = stripe_end - stripe_start;
+
+  auto const num_levels = _selected_columns.num_levels();
 
 #ifdef LOCAL_TEST
   printf("\n\nloading data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
 #endif
 
+  auto& lvl_stripe_data = _file_itm_data.lvl_stripe_data;
+
   // Prepare the buffer to read raw data onto.
-  // TODO: clear all old buffer.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto& stripe_data = lvl_stripe_data[level];
     stripe_data.resize(stripe_count);
 
-    auto& stripe_sizes = lvl_stripe_sizes[level];
-    for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
-      // TODO: only do this if it was not allocated before.
-      stripe_data[stripe_idx - stripe_start] = rmm::device_buffer(
-        cudf::util::round_up_safe(stripe_sizes[stripe_idx], BUFFER_PADDING_MULTIPLE), _stream);
+    for (std::size_t idx = 0; idx < stripe_count; ++idx) {
+      auto const stripe_size = _file_itm_data.lvl_stripe_sizes[level][idx + stripe_start];
+      stripe_data[idx]       = rmm::device_buffer(
+        cudf::util::round_up_safe(stripe_size, BUFFER_PADDING_MULTIPLE), _stream);
     }
   }
 
+  // Load stripe data into memory.
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
-
-  auto const& stripe_data_read_chunks = _file_itm_data.stripe_data_read_ranges;
-  auto const [read_begin, read_end]   = get_range(stripe_data_read_chunks, stripe_chunk);
+  auto const [read_begin, read_end] =
+    get_range(_file_itm_data.stripe_data_read_ranges, load_stripe_range);
 
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
-    auto const& read  = read_info[read_idx];
-    auto& stripe_data = lvl_stripe_data[read.level];
-    auto dst_base     = static_cast<uint8_t*>(stripe_data[read.stripe_idx - stripe_start].data());
+    auto const& read_info = _file_itm_data.data_read_info[read_idx];
+    auto const source     = _metadata.per_file_metadata[read_info.source_idx].source;
+    auto const dst_base   = static_cast<uint8_t*>(
+      lvl_stripe_data[read_info.level][read_info.stripe_idx - stripe_start].data());
 
-    if (_metadata.per_file_metadata[read.source_idx].source->is_device_read_preferred(
-          read.length)) {
+    if (source->is_device_read_preferred(read_info.length)) {
       read_tasks.push_back(
-        std::pair(_metadata.per_file_metadata[read.source_idx].source->device_read_async(
-                    read.offset, read.length, dst_base + read.dst_pos, _stream),
-                  read.length));
+        std::pair(source->device_read_async(
+                    read_info.offset, read_info.length, dst_base + read_info.dst_pos, _stream),
+                  read_info.length));
 
     } else {
-      auto buffer =
-        _metadata.per_file_metadata[read.source_idx].source->host_read(read.offset, read.length);
-      CUDF_EXPECTS(buffer->size() == read.length, "Unexpected discrepancy in bytes read.");
-      CUDF_CUDA_TRY(cudaMemcpyAsync(
-        dst_base + read.dst_pos, buffer->data(), read.length, cudaMemcpyDefault, _stream.value()));
-      //        _stream.synchronize();
+      auto buffer = source->host_read(read_info.offset, read_info.length);
+      CUDF_EXPECTS(buffer->size() == read_info.length, "Unexpected discrepancy in bytes read.");
+      CUDF_CUDA_TRY(cudaMemcpyAsync(dst_base + read_info.dst_pos,
+                                    buffer->data(),
+                                    read_info.length,
+                                    cudaMemcpyDefault,
+                                    _stream.value()));
       host_read_buffers.emplace_back(std::move(buffer));
     }
   }
@@ -537,8 +533,6 @@ void reader::impl::load_data()
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
-  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_ranges;
-
   // TODO: This is subpass
   // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
@@ -546,7 +540,7 @@ void reader::impl::load_data()
   cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
                                                                                _stream);
   for (std::size_t stripe_idx = 0; stripe_idx < stripe_count; ++stripe_idx) {
-    auto const& stripe     = selected_stripes[stripe_idx];
+    auto const& stripe     = _file_itm_data.selected_stripes[stripe_idx];
     auto const stripe_info = stripe.stripe_info;
 
     stripe_decomp_sizes[stripe_idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
@@ -564,9 +558,9 @@ void reader::impl::load_data()
     auto& stripe_data = lvl_stripe_data[level];
     if (stripe_data.empty()) { continue; }
 
-    auto const& stripe_stream_chunks      = lvl_stripe_stream_chunks[level];
-    auto const [stream_begin, stream_end] = get_range(stripe_stream_chunks, stripe_chunk);
-    auto const num_streams                = stream_end - stream_begin;
+    auto const [stream_begin, stream_end] =
+      get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
+    auto const num_streams = stream_end - stream_begin;
 
     // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
@@ -670,7 +664,7 @@ void reader::impl::load_data()
     printf("0 limit: output decode stripe chunk unchanged\n");
 #endif
 
-    _chunk_read_data.decode_stripe_ranges = {stripe_chunk};
+    _chunk_read_data.decode_stripe_ranges = {load_stripe_range};
     return;
   }
 
