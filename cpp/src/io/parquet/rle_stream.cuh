@@ -321,7 +321,7 @@ struct rle_stream {
                                              warp_lane);
           if (warp_lane == 0) {
             // after writing this batch, are we at the end of the output buffer?
-            auto const at_end = (last_run_pos + batch_len - cur_values == output_count);
+            auto const at_end = ((last_run_pos + batch_len - cur_values) == output_count);
 
             // update remaining for my warp
             remaining -= batch_len;
@@ -329,7 +329,7 @@ struct rle_stream {
             // - either this run still has remaining
             // - or it is consumed fully and its last index corresponds to output_count
             if (remaining > 0 || at_end) { values_processed_shared = output_count; }
-            if (remaining == 0 && (at_end || warp_id == num_rle_stream_decode_warps)) {
+            if (remaining == 0 && (at_end || (warp_id == num_rle_stream_decode_warps))) {
               decode_index_shared = run_index + 1;
             }
             run.remaining = remaining;
