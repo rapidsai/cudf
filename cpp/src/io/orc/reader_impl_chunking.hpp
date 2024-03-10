@@ -83,7 +83,7 @@ struct orc_stream_info {
 };
 
 /**
- * @brief Struct that store compression information for a stripe at a specific nested level.
+ * @brief Compression information for a stripe at a specific nested level.
  */
 struct stripe_level_comp_info {
   std::size_t num_compressed_blocks{0};
@@ -92,7 +92,7 @@ struct stripe_level_comp_info {
 };
 
 /**
- * @brief Struct that store information about a range of data.
+ * @brief Struct representing a range of data.
  */
 struct range {
   std::size_t begin;
@@ -100,7 +100,7 @@ struct range {
 };
 
 /**
- * @brief Struct to store intermediate processing data loaded from data sources.
+ * @brief Struct storing intermediate processing data loaded from data sources.
  */
 struct file_intermediate_data {
   int64_t rows_to_skip;
@@ -173,7 +173,7 @@ struct file_intermediate_data {
 };
 
 /**
- * @brief Struct to store all data necessary for chunked reading.
+ * @brief Struct collecting data necessary for chunked reading.
  */
 struct chunk_read_data {
   explicit chunk_read_data(std::size_t output_size_limit_,
@@ -231,14 +231,17 @@ struct chunk_read_data {
 };
 
 /**
- * @brief Struct to accumulate sizes of chunks of some data such as stripe or rows.
+ * @brief Struct to accumulate counts and sizes of some types such as stripes or rows.
  */
 struct cumulative_size {
   std::size_t count{0};
   std::size_t size_bytes{0};
 };
 
-// TODO
+/**
+ * @brief Struct to accumulate counts, sizes, and number of rows of some types such as stripes or
+ * rows in tables.
+ */
 struct cumulative_size_and_row {
   std::size_t count{0};
   std::size_t size_bytes{0};
@@ -246,7 +249,7 @@ struct cumulative_size_and_row {
 };
 
 /**
- * @brief Functor to sum up cumulative sizes.
+ * @brief Functor to sum up cumulative data.
  */
 struct cumulative_size_sum {
   __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
@@ -262,21 +265,41 @@ struct cumulative_size_sum {
 };
 
 /**
- * @brief Find the splits of the input data such that each split has cumulative size less than a
- * given `size_limit`.
+ * @brief Find the splits of the input data such that each split range has cumulative size less than
+ * a given `size_limit`.
+ *
+ * Note that the given limit is just a soft limit. The function will always output ranges that
+ * have at least one count, even such ranges have sizes exceed the value of `size_limit`.
+ *
+ * @param cumulative_sizes The input cumulative sizes to compute split ranges
+ * @param total_count The total count in the entire input
+ * @param size_limit The given soft limit to compute splits
+ * @return A vector of ranges as splits of the input
  */
 template <typename T>
-std::vector<range> find_splits(host_span<T const> sizes,
+std::vector<range> find_splits(host_span<T const> cumulative_sizes,
                                std::size_t total_count,
                                std::size_t size_limit);
 
-// TODO
+/**
+ * @brief Expand a range of ranges into a simple range of data.
+ *
+ * @param input_ranges The list of all data ranges
+ * @param selected_ranges A range of ranges from `input_ranges`
+ * @return The range of data span by the selected range of ranges
+ */
 std::pair<int64_t, int64_t> get_range(std::vector<range> const& input_ranges,
                                       range const& selected_ranges);
 
 /**
  * @brief Function that populates descriptors for either individual streams or chunks of column
  * data, but not both.
+ *
+ * This function is used in the global step, to gather information for streams of all stripes in
+ * the data sources (when `stream_info` is present). Later on, it is used again to populate column
+ * descriptors (`chunks` is present) during decompression and decoding. The two steps share
+ * most of the execution path thus this function takes mutually exclusive parameters `stream_info`
+ * or `chunks` depending on each use case.
  */
 std::size_t gather_stream_info_and_column_desc(
   std::size_t stripe_processing_order,

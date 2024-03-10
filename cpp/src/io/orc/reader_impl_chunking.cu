@@ -84,8 +84,8 @@ std::size_t gather_stream_info_and_column_desc(
   CUDF_EXPECTS(stream_info.has_value() ^ chunks.has_value(),
                "Either stream_info or chunks must be provided, but not both.");
 
-  uint64_t src_offset = 0;
-  uint64_t dst_offset = 0;
+  std::size_t src_offset = 0;
+  std::size_t dst_offset = 0;
 
   auto const get_stream_index_type = [](orc::StreamKind kind) {
     switch (kind) {
@@ -186,20 +186,11 @@ std::size_t gather_stream_info_and_column_desc(
   return dst_offset;
 }
 
-#if 1
-/**
- * @brief Find the splits of the input data such that each split has cumulative size less than a
- * given `size_limit`.
- */
 template <typename T>
-std::vector<range> find_splits(host_span<T const> sizes,
+std::vector<range> find_splits(host_span<T const> cumulative_sizes,
                                std::size_t total_count,
                                std::size_t size_limit)
 {
-  // if (size_limit == 0) {
-  //   printf("0 limit: output chunk = 0, %d\n", (int)total_count);
-  //   return {chunk{0, total_count}};
-  // }
   CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
 
   std::vector<range> splits;
@@ -210,8 +201,9 @@ std::vector<range> find_splits(host_span<T const> sizes,
   [[maybe_unused]] size_t cur_cumulative_rows{0};
 
   auto const start = thrust::make_transform_iterator(
-    sizes.begin(), [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
-  auto const end = start + static_cast<int64_t>(sizes.size());
+    cumulative_sizes.begin(),
+    [&](auto const& size) { return size.size_bytes - cur_cumulative_size; });
+  auto const end = start + static_cast<int64_t>(cumulative_sizes.size());
 
   while (cur_count < total_count) {
     int64_t split_pos =
@@ -219,13 +211,13 @@ std::vector<range> find_splits(host_span<T const> sizes,
 
     // If we're past the end, or if the returned bucket is bigger than the chunk_read_limit, move
     // back one.
-    if (static_cast<std::size_t>(split_pos) >= sizes.size() ||
-        (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
+    if (static_cast<std::size_t>(split_pos) >= cumulative_sizes.size() ||
+        (cumulative_sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
       split_pos--;
     }
 
     if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
-      while (split_pos > 0 && sizes[split_pos].rows - cur_cumulative_rows >
+      while (split_pos > 0 && cumulative_sizes[split_pos].rows - cur_cumulative_rows >
                                 static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
         split_pos--;
       }
@@ -236,8 +228,8 @@ std::vector<range> find_splits(host_span<T const> sizes,
     // so if we had two columns, both of which had an entry {1000, 10000}, that entry would be in
     // the list twice. so we have to iterate until we skip past all of them.  The idea is that we
     // either do this, or we have to call unique() on the input first.
-    while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-           (split_pos < 0 || sizes[split_pos].count <= cur_count)) {
+    while (split_pos < (static_cast<int64_t>(cumulative_sizes.size()) - 1) &&
+           (split_pos < 0 || cumulative_sizes[split_pos].count <= cur_count)) {
       split_pos++;
     }
 
@@ -246,13 +238,13 @@ std::vector<range> find_splits(host_span<T const> sizes,
     // #endif
 
     auto const start_idx = cur_count;
-    cur_count            = sizes[split_pos].count;
+    cur_count            = cumulative_sizes[split_pos].count;
     splits.emplace_back(range{start_idx, cur_count});
     cur_pos             = split_pos;
-    cur_cumulative_size = sizes[split_pos].size_bytes;
+    cur_cumulative_size = cumulative_sizes[split_pos].size_bytes;
 
     if constexpr (std::is_same_v<T, cumulative_size_and_row>) {
-      cur_cumulative_rows = sizes[split_pos].rows;
+      cur_cumulative_rows = cumulative_sizes[split_pos].rows;
     }
   }
 
@@ -276,19 +268,11 @@ template std::vector<range> find_splits<cumulative_size>(host_span<cumulative_si
                                                          std::size_t size_limit);
 template std::vector<range> find_splits<cumulative_size_and_row>(
   host_span<cumulative_size_and_row const> sizes, std::size_t total_count, std::size_t size_limit);
-#endif
 
-/**
- * @brief Find range of the data span by a given range of ranges.
- *
- * @param input_ranges The list of all data chunks
- * @param selected_ranges A chunk of chunks in the input_chunks
- * @return The range of data span by the selected range of given chunks
- */
 std::pair<int64_t, int64_t> get_range(std::vector<range> const& input_ranges,
                                       range const& selected_ranges)
 {
-  // The first and last range, according to selected_chunk.
+  // The first and last range.
   auto const& first_range = input_ranges[selected_ranges.begin];
   auto const& last_range  = input_ranges[selected_ranges.end - 1];
 

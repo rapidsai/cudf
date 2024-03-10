@@ -212,6 +212,7 @@ class reader::impl {
   table_metadata _out_metadata;
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 
+  // The default value used for subdividing the decoded table for final output.
   static constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
 };
 
