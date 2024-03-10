@@ -267,7 +267,7 @@ __device__ inline bool has_nulls(page_state_s* s)
  */
 template <typename level_t>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
@@ -328,7 +328,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   int valid_count     = 0;
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuDecodeValues
-  while (processed_count < s->page.num_input_values) {
+  while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
     // only need to process definition levels if this is a nullable column
@@ -359,11 +359,12 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
 
     valid_count = next_valid_count;
   }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 template <typename level_t>
 __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
-  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows)
+  PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
@@ -430,7 +431,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
   // the core loop. decode batches of level stream data using rle_stream objects
   // and pass the results to gpuDecodeValues
-  while (processed_count < s->page.num_input_values) {
+  while (s->error == 0 && processed_count < s->page.num_input_values) {
     int next_valid_count;
 
     // only need to process definition levels if this is a nullable column
@@ -468,6 +469,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
 
     valid_count = next_valid_count;
   }
+  if (t == 0 and s->error != 0) { set_error(s->error, error_code); }
 }
 
 }  // anonymous namespace
@@ -477,6 +479,7 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
                                   size_t num_rows,
                                   size_t min_row,
                                   int level_type_size,
+                                  kernel_error::pointer error_code,
                                   rmm::cuda_stream_view stream)
 {
   dim3 dim_block(decode_block_size, 1);
@@ -484,10 +487,10 @@ void __host__ DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
 
   if (level_type_size == 1) {
     gpuDecodePageDataFixed<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows, error_code);
   } else {
     gpuDecodePageDataFixed<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
 }
 
@@ -496,6 +499,7 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
                                       size_t num_rows,
                                       size_t min_row,
                                       int level_type_size,
+                                      kernel_error::pointer error_code,
                                       rmm::cuda_stream_view stream)
 {
   //  dim3 dim_block(decode_block_size, 1); // decode_block_size = 128 threads per block
@@ -505,10 +509,10 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
 
   if (level_type_size == 1) {
     gpuDecodePageDataFixedDict<uint8_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows, error_code);
   } else {
     gpuDecodePageDataFixedDict<uint16_t>
-      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows);
+      <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(), chunks, min_row, num_rows, error_code);
   }
 }
 

@@ -827,6 +827,7 @@ void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -834,6 +835,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
                          std::size_t num_rows,
                          size_t min_row,
                          int level_type_size,
+                         kernel_error::pointer error_code,
                          rmm::cuda_stream_view stream);
 
 /**
@@ -847,6 +849,7 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] num_rows Total number of rows to read
  * @param[in] min_row Minimum number of rows to read
  * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -854,6 +857,7 @@ void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
                              std::size_t num_rows,
                              size_t min_row,
                              int level_type_size,
+                             kernel_error::pointer error_code,
                              rmm::cuda_stream_view stream);
 
 /**
