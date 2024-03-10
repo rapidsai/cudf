@@ -266,7 +266,7 @@ __device__ inline bool has_nulls(page_state_s* s)
  * @param num_rows Maximum number of rows to read
  */
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
+CUDF_KERNEL void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
@@ -363,7 +363,7 @@ __global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixed(
 }
 
 template <typename level_t>
-__global__ void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
+CUDF_KERNEL void __launch_bounds__(decode_block_size) gpuDecodePageDataFixedDict(
   PageInfo* pages, device_span<ColumnChunkDesc const> chunks, size_t min_row, size_t num_rows, kernel_error::pointer error_code)
 {
   __shared__ __align__(16) page_state_s state_g;
