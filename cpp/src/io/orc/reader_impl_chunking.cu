@@ -288,75 +288,65 @@ void reader::impl::global_preprocess(read_mode mode)
   }
 #endif
 
-  //  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
-  //  auto const rows_to_read      = _file_itm_data.rows_to_read;
-  auto const& selected_stripes = _file_itm_data.selected_stripes;
-
-  auto& lvl_stripe_data  = _file_itm_data.lvl_stripe_data;
-  auto& lvl_stripe_sizes = _file_itm_data.lvl_stripe_sizes;
-  lvl_stripe_data.resize(_selected_columns.num_levels());
-  lvl_stripe_sizes.resize(_selected_columns.num_levels());
-
-  auto& read_info                = _file_itm_data.data_read_info;
-  auto& stripe_data_read_chunks  = _file_itm_data.stripe_data_read_ranges;
-  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_ranges;
-
-  // Logically view streams as columns
-  _file_itm_data.lvl_stream_info.resize(_selected_columns.num_levels());
-
-  // TODO: handle large number of stripes.
-  // Get the total number of stripes across all input files.
-  auto const num_stripes = selected_stripes.size();
+  auto const num_total_stripes = _file_itm_data.selected_stripes.size();
+  auto const num_levels        = _selected_columns.num_levels();
 
 #ifdef LOCAL_TEST
-  printf("num load stripe: %d\n", (int)num_stripes);
+  printf("num load stripe: %d\n", (int)num_total_stripes);
 #endif
 
-  stripe_data_read_chunks.resize(num_stripes);
-  lvl_stripe_stream_chunks.resize(_selected_columns.num_levels());
+  //
+  // Pre allocate necessary memory for data processed in the next steps:
+  //
+  auto& stripe_data_read_chunks = _file_itm_data.stripe_data_read_ranges;
+  stripe_data_read_chunks.resize(num_total_stripes);
 
-  // TODO: move this
-  auto& lvl_chunks = _file_itm_data.lvl_data_chunks;
-  lvl_chunks.resize(_selected_columns.num_levels());
-  _out_buffers.resize(_selected_columns.num_levels());
+  auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
+  auto& lvl_stripe_sizes         = _file_itm_data.lvl_stripe_sizes;
+  auto& lvl_stream_info          = _file_itm_data.lvl_stream_info;
+  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_ranges;
 
-  // TODO: Check if these data depends on pass and subpass, instead of global pass.
-  // Prepare data.
-  // Iterates through levels of nested columns, child column will be one level down
-  // compared to parent column.
-  auto& col_meta = *_col_meta;
-  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    auto& columns_level = _selected_columns.levels[level];
+  lvl_stripe_data.resize(num_levels);
+  lvl_stripe_sizes.resize(num_levels);
+  lvl_stream_info.resize(num_levels);
+  lvl_stripe_stream_chunks.resize(num_levels);
+  _file_itm_data.lvl_data_chunks.resize(num_levels);
+  _out_buffers.resize(num_levels);
+
+  auto& read_info = _file_itm_data.data_read_info;
+  auto& col_meta  = *_col_meta;
+
+  for (std::size_t level = 0; level < num_levels; ++level) {
+    lvl_stripe_sizes[level].resize(num_total_stripes);
+    lvl_stripe_stream_chunks[level].resize(num_total_stripes);
+
     // Association between each ORC column and its cudf::column
     col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
 
     size_type col_id{0};
-    for (auto& col : columns_level) {
+    for (auto const& col : _selected_columns.levels[level]) {
       // Map each ORC column to its column
       col_meta.orc_col_map[level][col.id] = col_id++;
     }
 
-    // auto& stripe_data = lvl_stripe_data[level];
-    // stripe_data.resize(num_stripes);
-
-    auto& stream_info      = _file_itm_data.lvl_stream_info[level];
     auto const num_columns = _selected_columns.levels[level].size();
-    auto& stripe_sizes     = lvl_stripe_sizes[level];
-    stream_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
 
-    stripe_sizes.resize(selected_stripes.size());
-    if (read_info.capacity() < selected_stripes.size()) {
-      read_info.reserve(selected_stripes.size() * num_columns);  // final size is unknown
+    // Try to reserve some memory, but the final size is unknown,
+    // since each column may have more than one stream.
+    lvl_stream_info[level].reserve(num_total_stripes * num_columns);
+    if (read_info.capacity() < num_total_stripes * num_columns) {
+      read_info.reserve(num_total_stripes * num_columns);
     }
-
-    auto& stripe_stream_chunks = lvl_stripe_stream_chunks[level];
-    stripe_stream_chunks.resize(num_stripes);
   }
 
-  cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_stripes, _stream);
+  //
+  // Load all stripes' metadata.
+  //
+  cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_total_stripes, _stream);
+  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
   // Compute input size for each stripe.
-  for (std::size_t stripe_idx = 0; stripe_idx < num_stripes; ++stripe_idx) {
+  for (std::size_t stripe_idx = 0; stripe_idx < num_total_stripes; ++stripe_idx) {
     auto const& stripe       = selected_stripes[stripe_idx];
     auto const stripe_info   = stripe.stripe_info;
     auto const stripe_footer = stripe.stripe_footer;
@@ -412,15 +402,20 @@ void reader::impl::global_preprocess(read_mode mode)
     stripe_data_read_chunks[stripe_idx] = range{last_read_size, read_info.size()};
   }
 
+  //
+  // Compute stripes' data sizes, and split list of all stripes into subsets that be loaded
+  // separately without blowing up memory:
+  //
+
   _chunk_read_data.curr_load_stripe_range = 0;
 
   // Load all chunks if there is no read limit.
   if (_chunk_read_data.data_read_limit == 0) {
 #ifdef LOCAL_TEST
-    printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_stripes);
+    printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_total_stripes);
 #endif
 
-    _chunk_read_data.load_stripe_ranges = {range{0ul, num_stripes}};
+    _chunk_read_data.load_stripe_ranges = {range{0ul, num_total_stripes}};
     return;
   }
 
@@ -461,11 +456,11 @@ void reader::impl::global_preprocess(read_mode mode)
     return tmp > 0UL ? tmp : 1UL;
   }();
   _chunk_read_data.load_stripe_ranges =
-    find_splits<cumulative_size>(total_stripe_sizes, num_stripes, load_limit);
+    find_splits<cumulative_size>(total_stripe_sizes, num_total_stripes, load_limit);
 
 #ifdef LOCAL_TEST
   auto& splits = _chunk_read_data.load_stripe_ranges;
-  printf("------------\nSplits (/total num stripe = %d): \n", (int)num_stripes);
+  printf("------------\nSplits (/total num stripe = %d): \n", (int)num_total_stripes);
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].begin, splits[idx].end);
   }
