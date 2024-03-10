@@ -299,8 +299,8 @@ void reader::impl::global_preprocess(read_mode mode)
   //
   // Pre allocate necessary memory for data processed in the next steps:
   //
-  auto& stripe_data_read_chunks = _file_itm_data.stripe_data_read_ranges;
-  stripe_data_read_chunks.resize(num_total_stripes);
+  auto& stripe_data_read_ranges = _file_itm_data.stripe_data_read_ranges;
+  stripe_data_read_ranges.resize(num_total_stripes);
 
   auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_sizes         = _file_itm_data.lvl_stripe_sizes;
@@ -343,6 +343,8 @@ void reader::impl::global_preprocess(read_mode mode)
   //
   // Load all stripes' metadata.
   //
+
+  // Collect total data size for all data streams in each stripe.
   cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_total_stripes, _stream);
 
   for (std::size_t stripe_global_idx = 0; stripe_global_idx < num_total_stripes;
@@ -399,7 +401,7 @@ void reader::impl::global_preprocess(read_mode mode)
       }
     }
     total_stripe_sizes[stripe_global_idx]      = {1, stripe_size};
-    stripe_data_read_chunks[stripe_global_idx] = range{last_read_size, read_info.size()};
+    stripe_data_read_ranges[stripe_global_idx] = range{last_read_size, read_info.size()};
   }
 
   //
@@ -498,9 +500,18 @@ void reader::impl::load_data()
     }
   }
 
-  // Load stripe data into memory.
+  //
+  // Load stripe data into memory:
+  //
+
+  // After loading data from sources into host buffers, we need to transfer (async) data to device.
+  // Such host buffers need to be kept alive until we sync device.
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
+
+  // If we load data directly from sources into device, we also need to the entire read tasks.
+  // Thus, we need to keep all read tasks alive and sync all together.
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
+
   auto const [read_begin, read_end] =
     get_range(_file_itm_data.stripe_data_read_ranges, load_stripe_range);
 
@@ -533,28 +544,29 @@ void reader::impl::load_data()
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
-  // TODO: This is subpass
-  // TODO: Don't have to keep it for all stripe/level. Can reset it after each iter.
+  //
+  // Split list of all stripes into subsets that be loaded separately without blowing up memory:
+  //
+
+  // A map from stripe source into `CompressedStreamInfo*` which are generated during parsing
+  // streams decompressed sizes.
+  // These pointers are then used to populate stripe/level decompressed sizes for later
+  // decompression and decoding.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
+  // For estimating the decompressed sizes of the loaded stripes.
   cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
                                                                                _stream);
   for (std::size_t stripe_idx = 0; stripe_idx < stripe_count; ++stripe_idx) {
-    auto const& stripe     = _file_itm_data.selected_stripes[stripe_idx];
-    auto const stripe_info = stripe.stripe_info;
-
+    auto const& stripe              = _file_itm_data.selected_stripes[stripe_idx];
+    auto const stripe_info          = stripe.stripe_info;
     stripe_decomp_sizes[stripe_idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
-    // printf("loading stripe with rows = %d\n", (int)stripe_info->numberOfRows);
   }
-  // std::fill(
-  //   stripe_decomp_sizes.begin(), stripe_decomp_sizes.end(), cumulative_size_and_row{1, 0, 0});
 
-  // Parse the decompressed sizes for each stripe.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    auto& stream_info      = _file_itm_data.lvl_stream_info[level];
-    auto const num_columns = _selected_columns.levels[level].size();
+    auto const& stream_info = _file_itm_data.lvl_stream_info[level];
+    auto const num_columns  = _selected_columns.levels[level].size();
 
-    // Tracker for eventually deallocating compressed and uncompressed data
     auto& stripe_data = lvl_stripe_data[level];
     if (stripe_data.empty()) { continue; }
 
