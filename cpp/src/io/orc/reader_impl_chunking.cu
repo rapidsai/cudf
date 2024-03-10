@@ -288,7 +288,8 @@ void reader::impl::global_preprocess(read_mode mode)
   }
 #endif
 
-  auto const num_total_stripes = _file_itm_data.selected_stripes.size();
+  auto const& selected_stripes = _file_itm_data.selected_stripes;
+  auto const num_total_stripes = selected_stripes.size();
   auto const num_levels        = _selected_columns.num_levels();
 
 #ifdef LOCAL_TEST
@@ -343,23 +344,22 @@ void reader::impl::global_preprocess(read_mode mode)
   // Load all stripes' metadata.
   //
   cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_total_stripes, _stream);
-  auto const& selected_stripes = _file_itm_data.selected_stripes;
 
-  // Compute input size for each stripe.
-  for (std::size_t stripe_idx = 0; stripe_idx < num_total_stripes; ++stripe_idx) {
-    auto const& stripe       = selected_stripes[stripe_idx];
+  for (std::size_t stripe_global_idx = 0; stripe_global_idx < num_total_stripes;
+       ++stripe_global_idx) {
+    auto const& stripe       = selected_stripes[stripe_global_idx];
     auto const stripe_info   = stripe.stripe_info;
     auto const stripe_footer = stripe.stripe_footer;
 
-    std::size_t total_stripe_size{0};
+    std::size_t stripe_size{0};
     auto const last_read_size = read_info.size();
-    for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+    for (std::size_t level = 0; level < num_levels; ++level) {
       auto& stream_info  = _file_itm_data.lvl_stream_info[level];
       auto& stripe_sizes = lvl_stripe_sizes[level];
 
-      auto stream_count = stream_info.size();
-      auto const stripe_size =
-        gather_stream_info_and_column_desc(stripe_idx,
+      auto stream_level_count = stream_info.size();
+      auto const stripe_level_size =
+        gather_stream_info_and_column_desc(stripe_global_idx,
                                            level,
                                            stripe_info,
                                            stripe_footer,
@@ -368,43 +368,42 @@ void reader::impl::global_preprocess(read_mode mode)
                                            false,  // use_index,
                                            level == 0,
                                            nullptr,  // num_dictionary_entries
-                                           nullptr,  // stream_idx
+                                           nullptr,  // stream_processing_order
                                            &stream_info,
                                            std::nullopt  // chunks
         );
 
-      auto const is_stripe_data_empty = stripe_size == 0;
+      auto const is_stripe_data_empty = stripe_level_size == 0;
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      stripe_sizes[stripe_idx] = stripe_size;
-      total_stripe_size += stripe_size;
+      stripe_sizes[stripe_global_idx] = stripe_level_size;
+      stripe_size += stripe_level_size;
 
-      auto& stripe_stream_chunks       = lvl_stripe_stream_chunks[level];
-      stripe_stream_chunks[stripe_idx] = range{stream_count, stream_info.size()};
+      auto& stripe_stream_chunks              = lvl_stripe_stream_chunks[level];
+      stripe_stream_chunks[stripe_global_idx] = range{stream_level_count, stream_info.size()};
 
       // Coalesce consecutive streams into one read
-      while (not is_stripe_data_empty and stream_count < stream_info.size()) {
-        auto const d_dst  = stream_info[stream_count].dst_pos;
-        auto const offset = stream_info[stream_count].offset;
-        auto len          = stream_info[stream_count].length;
-        stream_count++;
+      while (not is_stripe_data_empty and stream_level_count < stream_info.size()) {
+        auto const d_dst  = stream_info[stream_level_count].dst_pos;
+        auto const offset = stream_info[stream_level_count].offset;
+        auto len          = stream_info[stream_level_count].length;
+        stream_level_count++;
 
-        while (stream_count < stream_info.size() &&
-               stream_info[stream_count].offset == offset + len) {
-          len += stream_info[stream_count].length;
-          stream_count++;
+        while (stream_level_count < stream_info.size() &&
+               stream_info[stream_level_count].offset == offset + len) {
+          len += stream_info[stream_level_count].length;
+          stream_level_count++;
         }
-        read_info.emplace_back(offset, d_dst, len, stripe.source_idx, stripe_idx, level);
+        read_info.emplace_back(offset, d_dst, len, stripe.source_idx, stripe_global_idx, level);
       }
     }
-    total_stripe_sizes[stripe_idx]      = {1, total_stripe_size};
-    stripe_data_read_chunks[stripe_idx] = range{last_read_size, read_info.size()};
+    total_stripe_sizes[stripe_global_idx]      = {1, stripe_size};
+    stripe_data_read_chunks[stripe_global_idx] = range{last_read_size, read_info.size()};
   }
 
   //
-  // Compute stripes' data sizes, and split list of all stripes into subsets that be loaded
-  // separately without blowing up memory:
+  // Split list of all stripes into subsets that be loaded separately without blowing up memory:
   //
 
   _chunk_read_data.curr_load_stripe_range = 0;
@@ -429,9 +428,9 @@ void reader::impl::global_preprocess(read_mode mode)
   }
 #endif
 
-  // Compute the prefix sum of stripe data sizes.
+  // Compute the prefix sum of stripes' data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy(_stream),
+  thrust::inclusive_scan(rmm::exec_policy(_stream),  // todo no sync
                          total_stripe_sizes.d_begin(),
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
@@ -449,10 +448,10 @@ void reader::impl::global_preprocess(read_mode mode)
   }
 #endif
 
-  // If `data_read_limit` is too small, make sure not to pass 0 byte limit to compute splits.
   auto const load_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
                                               chunk_read_data::load_limit_ratio);
+    // Make sure not to pass 0 byte limit (due to round-off) to compute splits.
     return tmp > 0UL ? tmp : 1UL;
   }();
   _chunk_read_data.load_stripe_ranges =
