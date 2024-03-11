@@ -548,20 +548,23 @@ void reader::impl::load_data()
   // Split list of all stripes into subsets that be loaded separately without blowing up memory:
   //
 
-  // A map from stripe source into `CompressedStreamInfo*` which are generated during parsing
-  // streams decompressed sizes.
-  // These pointers are then used to populate stripe/level decompressed sizes for later
+  // A map from stripe source into `CompressedStreamInfo*` pointer.
+  // These pointers are then used to retrieve stripe/level decompressed sizes for later
   // decompression and decoding.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
   // For estimating the decompressed sizes of the loaded stripes.
   cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
                                                                                _stream);
+  std::size_t num_loaded_stripes{0};
   for (std::size_t stripe_idx = 0; stripe_idx < stripe_count; ++stripe_idx) {
     auto const& stripe              = _file_itm_data.selected_stripes[stripe_idx];
     auto const stripe_info          = stripe.stripe_info;
     stripe_decomp_sizes[stripe_idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
+    num_loaded_stripes += stripe_info->numberOfRows;
   }
+
+  auto& compinfo_map = _file_itm_data.compinfo_map;
 
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
@@ -574,26 +577,23 @@ void reader::impl::load_data()
       get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
     auto const num_streams = stream_end - stream_begin;
 
-    // Setup row group descriptors if using indexes
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      // Cannot be cached, since this is for streams in a loaded stripe chunk, while
-      // the latter decoding step will use a different stripe chunk.
+      // Cannot be cached as-is, since this is for streams in a loaded stripe range, while
+      // the latter decompression/decoding step will use a different stripe range.
       cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, _stream);
-
-      // TODO: Instead of all stream info, loop using read_chunk info to process
-      // only stream info of the curr_load_stripe_chunk.
 
       for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
-        compinfo.push_back(gpu::CompressedStreamInfo(
-          static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data()) +
-            info.dst_pos,
-          info.length));
+        auto const dst_base =
+          static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
+
+        compinfo.push_back(gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length));
         stream_compinfo_map[stream_source_info{
           info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind}] =
           &compinfo.back();
+
 #ifdef LOCAL_TEST
         printf("collec stream [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
                (int)info.source.stripe_idx,
@@ -607,7 +607,6 @@ void reader::impl::load_data()
       }
 
       compinfo.host_to_device_async(_stream);
-
       gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                      compinfo.size(),
                                      decompressor.GetBlockSize(),
@@ -615,9 +614,8 @@ void reader::impl::load_data()
                                      _stream);
       compinfo.device_to_host_sync(_stream);
 
-      auto& compinfo_map = _file_itm_data.compinfo_map;
       for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
-        // Cache these parsed numbers so they can be reused in the decoding step.
+        // Cache these parsed numbers so they can be reused in the decompression/decoding step.
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
                                    stream_compinfo->num_uncompressed_blocks,
                                    stream_compinfo->max_uncompressed_size};
@@ -637,7 +635,7 @@ void reader::impl::load_data()
 #endif
       }
 
-      // Must clear map since the next level will have similar keys.
+      // Important: must clear this map since the next level will have similar keys.
       stream_compinfo_map.clear();
 
     } else {
@@ -657,21 +655,18 @@ void reader::impl::load_data()
 
   }  // end loop level
 
-  // Decoding is reset to start from the first chunk in `decode_stripe_chunks`.
+  // Decoding range is reset to start from the first position in `decode_stripe_ranges`.
   _chunk_read_data.curr_decode_stripe_range = 0;
 
-  // Decode all chunks if there is no read and no output limit.
-  // In theory, we should just decode enough stripes for output one table chunk.
-  // However, we do not know the output size of each stripe after decompressing and decoding,
-  // thus we have to process all loaded chunks.
-  // That is because the estimated `max_uncompressed_size` of stream data from
-  // `ParseCompressedStripeData` is just the approximate of the maximum possible size, not the
-  // actual size, which can be much smaller in practice.
-
-  // TODO: docs on handle size overflow
+  // Decode all loaded stripes if there is no read limit.
+  // In theory, we should just decode enough stripes for output one table chunk, instead of
+  // decoding all stripes like this.
+  // However, we do not know how many stripes are 'enough' because there is not any simple and
+  // cheap way to compute the exact decoded sizes of stripes.
   if (_chunk_read_data.data_read_limit == 0 &&
-      // TODO: rows_to_read  is changed every decode, should we change this?
-      _file_itm_data.rows_to_read < static_cast<int64_t>(std::numeric_limits<size_type>::max())) {
+      // In addition to not have any read limit, we also need to check if the the total number of
+      // rows in the loaded stripes exceeds column size limit.
+      num_loaded_stripes < static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
 #ifdef LOCAL_TEST
     printf("0 limit: output decode stripe chunk unchanged\n");
 #endif
@@ -693,14 +688,13 @@ void reader::impl::load_data()
   }
 #endif
 
-  // Compute the prefix sum of stripe data sizes.
+  // Compute the prefix sum of stripe data sizes and rows.
   stripe_decomp_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),
                          stripe_decomp_sizes.d_begin(),
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),
                          cumulative_size_sum{});
-
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
 #ifdef LOCAL_TEST
@@ -715,9 +709,8 @@ void reader::impl::load_data()
 #endif
 
   auto const decode_limit = [&] {
-    // In this case, we have no read limit but have to split due to having large input in which
-    // the number of rows exceed column size limit.
-    // We will split based on row number, not data size.
+    // In this case, we have no read limit but have to split due to having number of rows in loaded
+    // stripes exceeds column size limit. So we will split based on row number, not data size.
     if (_chunk_read_data.data_read_limit == 0) { return std::numeric_limits<std::size_t>::max(); }
 
     // If `data_read_limit` is too small, make sure not to pass 0 byte limit to compute splits.
@@ -727,6 +720,10 @@ void reader::impl::load_data()
   }();
   _chunk_read_data.decode_stripe_ranges =
     find_splits<cumulative_size_and_row>(stripe_decomp_sizes, stripe_count, decode_limit);
+
+  // The split ranges always start from zero.
+  // We need to update the ranges to start from `stripe_start` which is covererd by the current
+  // range of loaded stripes.
   for (auto& chunk : _chunk_read_data.decode_stripe_ranges) {
     chunk.begin += stripe_start;
     chunk.end += stripe_start;
@@ -738,16 +735,11 @@ void reader::impl::load_data()
   for (size_t idx = 0; idx < splits.size(); idx++) {
     printf("{%ld, %ld}\n", splits[idx].begin, splits[idx].end);
   }
-  fflush(stdout);
-#endif
 
-  // lvl_stripe_data.clear();
-  // _file_itm_data.compinfo_ready = true;
-
-#ifdef LOCAL_TEST
   auto peak_mem = mem_stats_logger.peak_memory_usage();
   std::cout << "load, peak_memory_usage: " << peak_mem << "("
             << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
+  fflush(stdout);
 #endif
 }
 
