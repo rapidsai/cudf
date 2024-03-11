@@ -63,7 +63,7 @@ inline __device__ uint32_t get_vlq32(uint8_t const*& cur, uint8_t const* end)
  * @param run_start beginning of data for RLE run
  * @param end pointer to the end of data for RLE run
  * @param run_output_pos absolute output position for this run
- * @param run_offset offset after run_output_pos this call to decode starts outputing at
+ * @param run_offset offset after run_output_pos this call to decode starts outputting at
  * @param size length that will be decoded in this decode call, truncated to fit output buffer
  * @param level_bits bits needed to encode max values in the run (definition, dictionary)
  * @param lane warp lane that is executing this decode call
