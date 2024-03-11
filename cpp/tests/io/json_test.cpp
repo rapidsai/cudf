@@ -2052,6 +2052,9 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
 
 TEST_F(JsonReaderTest, MixedTypes)
 {
+  using LCWS    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using LCWI    = cudf::test::lists_column_wrapper<int64_t>;
+  using valid_t = std::vector<cudf::valid_type>;
   {
     // Simple test for mixed types
     std::string json_string = R"({ "foo": [1,2,3], "bar": 123 }
@@ -2084,34 +2087,112 @@ TEST_F(JsonReaderTest, MixedTypes)
         .lines(true);
 
     cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    static int num_case                  = 0;
+    num_case++;
+    std::cout << "case:" << num_case << "\n";
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected);
   };
-
-  // test cases.
+  // value + string (not mixed type case)
   test_fn(R"(
 { "a": "123" }
 { "a": 123 }
 )",
           cudf::test::strings_column_wrapper({"123", "123"}));
 
+  // test cases.
+  // STR + STRUCT, STR + LIST, STR + null
+  // STRUCT + STR, STRUCT + LIST, STRUCT + null
+  // LIST + STR, LIST + STRUCT, LIST + null
+  // LIST + STRUCT + STR, STRUCT + LIST + STR, STR + STRUCT + LIST, STRUCT + LIST + null
+  // STR + STRUCT + LIST + null
+
+  // STRING mixed:
+  // STR + STRUCT, STR + LIST, STR + null
+  test_fn(R"(
+{ "a": "123" }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"123", "{ \"b\": 1 }"}));
+  test_fn(R"(
+{ "a": "123" }
+{ "a": [1,2,3] }
+)",
+          cudf::test::strings_column_wrapper({"123", "[1,2,3]"}));
+  test_fn(R"(
+{ "a": "123" }
+{ "a": null }
+)",
+          cudf::test::strings_column_wrapper({"123", ""}, std::vector<bool>{1, 0}.begin()));
+
+  // STRUCT mixed:
+  // STRUCT + STR, STRUCT + LIST, STRUCT + null
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": "fox" }
+)",
+          cudf::test::strings_column_wrapper({"{ \"b\": 1 }", "fox"}));
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": [1,2,3] }
+)",
+          cudf::test::strings_column_wrapper({"{ \"b\": 1 }", "[1,2,3]"}));
+  cudf::test::fixed_width_column_wrapper<int64_t> child_int_col_wrapper{1, 2};
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": null }
+)",
+          cudf::test::structs_column_wrapper{
+            {child_int_col_wrapper}, {1, 0} /*Validity*/
+          });
+
+  // LIST mixed:
+  // LIST + STR, LIST + STRUCT, LIST + null
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": "123" }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "123"}));
   test_fn(R"(
 { "a": [1,2,3] }
 { "a": { "b": 1 } }
 )",
           cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }"}));
-
-  test_fn(R"(
-{ "a": "fox" }
-{ "a": { "b": 1 } }
-)",
-          cudf::test::strings_column_wrapper({"fox", "{ \"b\": 1 }"}));
-
-  test_fn(R"(
+  test_fn(
+    R"(
 { "a": [1,2,3] }
-{ "a": "fox" }
+{ "a": null }
 )",
-          cudf::test::strings_column_wrapper({"[1,2,3]", "fox"}));
+    cudf::test::lists_column_wrapper{{LCWI{1L, 2L, 3L}, LCWI{4L, 5L}}, valid_t{1, 0}.begin()});
 
+  // All mixed:
+  // LIST + STRUCT + STR, STRUCT + LIST + STR, STR + STRUCT + LIST, STRUCT + LIST + null
+  test_fn(R"(
+{ "a": [1,2,3]  }
+{ "a": { "b": 1 } }
+{ "a": "fox"}
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }", "fox"}));
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": [1,2,3]  }
+{ "a": "fox"}
+)",
+          cudf::test::strings_column_wrapper({"{ \"b\": 1 }", "[1,2,3]", "fox"}));
+  test_fn(R"(
+{ "a": "fox"}
+{ "a": { "b": 1 } }
+{ "a": [1,2,3]  }
+)",
+          cudf::test::strings_column_wrapper({"fox", "{ \"b\": 1 }", "[1,2,3]"}));
+  test_fn(R"(
+{ "a": [1,2,3]  }
+{ "a": { "b": 1 } }
+{ "a": null}
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }", "NA"},
+                                             valid_t{1, 1, 0}.begin()));  // RIGHT
+
+  // value + string inside list
   test_fn(R"(
 { "a": [1,2,3] }
 { "a": [true,false,true] }
@@ -2119,36 +2200,31 @@ TEST_F(JsonReaderTest, MixedTypes)
 )",
           cudf::test::lists_column_wrapper<cudf::string_view>{
             {"1", "2", "3"}, {"true", "false", "true"}, {"a", "b", "c"}});
-  {
-    std::string json_string = R"(
-{ "var1": true }
+
+  // null + list of mixed types and null
+  test_fn(R"(
+{ "var1": null }
 { "var1": [{ "var0": true, "var1": "hello", "var2": null }, null, [true, null, null]] }
-  )";
-
-    cudf::io::json_reader_options in_options =
-      cudf::io::json_reader_options::builder(
-        cudf::io::source_info{json_string.data(), json_string.size()})
-        .mixed_types_as_string(true)
-        .lines(true);
-
-    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
-  }
+  )",
+          cudf::test::lists_column_wrapper<cudf::string_view>(
+            {{"NA", "NA"},
+             {{R"({ "var0": true, "var1": "hello", "var2": null })", "null", "[true, null, null]"},
+              valid_t{1, 0, 1}.begin()}},
+            valid_t{0, 1}.begin()));
 
   // test to confirm if reinitialize a non-string column as string affects max_rowoffsets.
   // max_rowoffsets is generated based on parent col id,
   // so, even if mixed types are present, their row offset will be correct.
-  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
-  using valid_t = std::vector<cudf::valid_type>;
 
   cudf::test::lists_column_wrapper expected_list{
     {
-      cudf::test::lists_column_wrapper({LCW({"1", "2", "3"}), LCW({"4", "5", "6"})}),
-      cudf::test::lists_column_wrapper({LCW()}),
-      cudf::test::lists_column_wrapper({LCW()}),  // null
-      cudf::test::lists_column_wrapper({LCW()}),  // null
-      cudf::test::lists_column_wrapper({LCW({"{\"c\": -1}"}), LCW({"5"})}),
-      cudf::test::lists_column_wrapper({LCW({"7"}), LCW({"8", "9"})}),
-      cudf::test::lists_column_wrapper({LCW()}),  // null
+      cudf::test::lists_column_wrapper({LCWS({"1", "2", "3"}), LCWS({"4", "5", "6"})}),
+      cudf::test::lists_column_wrapper({LCWS()}),
+      cudf::test::lists_column_wrapper({LCWS()}),  // null
+      cudf::test::lists_column_wrapper({LCWS()}),  // null
+      cudf::test::lists_column_wrapper({LCWS({"{\"c\": -1}"}), LCWS({"5"})}),
+      cudf::test::lists_column_wrapper({LCWS({"7"}), LCWS({"8", "9"})}),
+      cudf::test::lists_column_wrapper({LCWS()}),  // null
     },
     valid_t{1, 1, 0, 0, 1, 1, 0}.begin()};
   test_fn(R"(

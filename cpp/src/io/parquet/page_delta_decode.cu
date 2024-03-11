@@ -462,6 +462,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
+  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+    // we cannot read decimal encoded with DELTA_BYTE_ARRAY yet
+    if (t == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
+    }
+    return;
+  }
+
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // choose a character parallel string copy when the average string is longer than a warp
@@ -617,6 +625,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                           num_rows,
                           mask_filter{mask},
                           page_processing_stage::DECODE)) {
+    return;
+  }
+
+  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+    // we cannot read decimal encoded with DELTA_LENGTH_BYTE_ARRAY yet
+    if (t == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
+    }
     return;
   }
 

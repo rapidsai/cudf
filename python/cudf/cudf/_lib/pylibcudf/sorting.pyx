@@ -50,7 +50,8 @@ cpdef Column stable_sorted_order(
     list column_order,
     list null_precedence,
 ):
-    """Computes the row indices required to sort the table, maintaining input order.
+    """Computes the row indices required to sort the table,
+    preserving order of equal elements.
 
     Parameters
     ----------
@@ -206,7 +207,8 @@ cpdef Table stable_segmented_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key, within segments, maintaining input order.
+    """Sorts the table by key preserving order of equal elements,
+    within segments.
 
     Parameters
     ----------
@@ -287,7 +289,7 @@ cpdef Table stable_sort_by_key(
     list column_order,
     list null_precedence,
 ):
-    """Sorts the table by key, maintaining input order.
+    """Sorts the table by key preserving order of equal elements.
 
     Parameters
     ----------
@@ -343,6 +345,37 @@ cpdef Table sort(Table source_table, list column_order, list null_precedence):
     with nogil:
         c_result = move(
             cpp_sorting.sort(
+                source_table.view(),
+                c_orders,
+                c_null_precedence,
+            )
+        )
+    return Table.from_libcudf(move(c_result))
+
+
+cpdef Table stable_sort(Table source_table, list column_order, list null_precedence):
+    """Sorts the table preserving order of equal elements.
+
+    Parameters
+    ----------
+    source_table : Table
+        The table to sort.
+    column_order : List[ColumnOrder]
+        Whether each column should be sorted in ascending or descending order.
+    null_precedence : List[NullOrder]
+        Whether nulls should come before or after non-nulls.
+
+    Returns
+    -------
+    Table
+        The sorted table.
+    """
+    cdef unique_ptr[table] c_result
+    cdef vector[order] c_orders = column_order
+    cdef vector[null_order] c_null_precedence = null_precedence
+    with nogil:
+        c_result = move(
+            cpp_sorting.stable_sort(
                 source_table.view(),
                 c_orders,
                 c_null_precedence,

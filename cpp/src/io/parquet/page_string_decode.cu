@@ -599,10 +599,12 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
   PageInfo* const pp    = &pages[page_idx];
 
   if (t == 0) {
-    s->page.num_nulls  = 0;
-    s->page.num_valids = 0;
+    // don't clobber these if they're already computed from the index
+    if (!pp->has_page_index) {
+      s->page.num_nulls  = 0;
+      s->page.num_valids = 0;
+    }
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
-    // TODO: need to rethink this once str_bytes is in the statistics
     pp->str_bytes = 0;
   }
 
@@ -631,6 +633,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) { return; }
 
   // find start/end value indices
   auto const [start_value, end_value] =
@@ -698,6 +703,15 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
       }
     }
   } else {
+    bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+    // if we have size info, then we only need to do this for bounds pages
+    if (pp->has_page_index && !is_bounds_pg) {
+      // check if we need to store values from the index
+      if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+      return;
+    }
+
     // now process string info in the range [start_value, end_value)
     // set up for decoding strings...can be either plain or dictionary
     uint8_t const* data      = s->data_start;
@@ -758,6 +772,13 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengt
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) {
+    // check if we need to store values from the index
+    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    return;
+  }
 
   // for DELTA_LENGTH_BYTE_ARRAY, string size is page_data_size - size_of_delta_binary_block.
   // so all we need to do is skip the encoded string size info and then do pointer arithmetic,
@@ -849,6 +870,13 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) {
+    // check if we need to store values from the index
+    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    return;
+  }
 
   auto const& col  = s->col;
   size_t str_bytes = 0;
