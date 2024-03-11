@@ -88,6 +88,8 @@ cpdef Aggregation collect_list(null_policy null_handling = *)
 
 cpdef Aggregation collect_set(null_handling = *, nulls_equal = *, nans_equal = *)
 
+cpdef Aggregation top_k(size_type k, order column_order = *)
+
 cpdef Aggregation udf(str operation, DataType output_type)
 
 cpdef Aggregation correlation(correlation_type type, size_type min_periods)

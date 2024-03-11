@@ -77,6 +77,17 @@ class Aggregation:
         return cls(pylibcudf.aggregation.nth_element(size))
 
     @classmethod
+    def top_k(cls, size, descending=True):
+        return cls(
+            pylibcudf.aggregation.top_k(
+                size,
+                pylibcudf.types.Order.DESCENDING
+                if descending
+                else pylibcudf.types.Order.ASCENDING
+            )
+        )
+
+    @classmethod
     def product(cls):
         return cls(pylibcudf.aggregation.product())
     prod = product
