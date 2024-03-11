@@ -34,6 +34,11 @@ rapids-mamba-retry install \
 
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
+# TODO: Disable hard errors until the docs site is accessible (network problems)
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
+
 rapids-logger "Build CPP docs"
 pushd cpp/doxygen
 aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_NUMBER}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
@@ -66,4 +71,11 @@ if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
 fi
 popd
 
-rapids-upload-docs
+if [[ "${EXITCODE}" == "0" ]]; then
+  rapids-upload-docs
+else
+  rapids-logger "Docs script had errors resulting in exit code $EXITCODE"
+fi
+
+# TODO: Disable hard errors until the docs site is accessible (network problems)
+exit 0
