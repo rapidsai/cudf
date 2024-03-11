@@ -723,9 +723,9 @@ void reader::impl::load_data()
   // The split ranges always start from zero.
   // We need to update the ranges to start from `stripe_start` which is covererd by the current
   // range of loaded stripes.
-  for (auto& chunk : _chunk_read_data.decode_stripe_ranges) {
-    chunk.begin += stripe_start;
-    chunk.end += stripe_start;
+  for (auto& range : _chunk_read_data.decode_stripe_ranges) {
+    range.begin += stripe_start;
+    range.end += stripe_start;
   }
 
 #ifdef LOCAL_TEST

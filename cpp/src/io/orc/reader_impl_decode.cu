@@ -71,14 +71,13 @@ namespace {
  * @param stream_info List of stream to column mappings
  * @param chunks Vector of list of column chunk descriptors
  * @param row_groups Vector of list of row index descriptors
- * @param num_stripes Number of stripes making up column chunks
  * @param row_index_stride Distance between each row index
  * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Device buffer to decompressed page data
  */
 rmm::device_buffer decompress_stripe_data(
-  range const& loaded_stripe_range,
+  range const& stripe_range,
   range const& stream_range,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
@@ -86,7 +85,6 @@ rmm::device_buffer decompress_stripe_data(
   host_span<orc_stream_info const> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
-  size_type num_stripes,
   size_type row_index_stride,
   bool use_base_stride,
   rmm::cuda_stream_view stream)
@@ -114,21 +112,14 @@ rmm::device_buffer decompress_stripe_data(
 #endif
 
     compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<uint8_t const*>(
-        stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
+      static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_range.begin].data()) +
         info.dst_pos,
       info.length));
 
-    //    printf("line %d\n", __LINE__);
-    //    fflush(stdout);
     auto const& cached_comp_info = compinfo_map.at(stream_source_info{
       info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind});
-    //    printf("line %d\n", __LINE__);
-    //    fflush(stdout);
-    // auto const& cached_comp_info =
-    //   compinfo_map[stream_id_info{info.source.stripe_idx, info.source.level,
-    //   info.source.orc_cold_idx, info.source.kind}];
-    auto& stream_comp_info                   = compinfo.back();
+    auto& stream_comp_info       = compinfo.back();
+
     stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
     stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
     stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
@@ -186,7 +177,10 @@ rmm::device_buffer decompress_stripe_data(
   // Required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
-  if (decomp_data.is_empty()) { return decomp_data; }
+
+  // If total_decomp_size is zero, the data should not be compressed, and this function
+  // should not be called at all.
+  CUDF_EXPECTS(!decomp_data.is_empty(), "Invalid decompression size");
 
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
     num_compressed_blocks + num_uncompressed_blocks, stream);
@@ -325,15 +319,16 @@ rmm::device_buffer decompress_stripe_data(
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
-  auto const num_columns = static_cast<size_type>(chunks.size().second);
+  auto const num_stripes = stripe_range.end - stripe_range.begin;
+  auto const num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
   // TBD: We could update the value from the information we already
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  for (size_type i = 0; i < num_stripes; ++i) {
-    for (size_type j = 0; j < num_columns; ++j) {
+  for (std::size_t i = 0; i < num_stripes; ++i) {
+    for (std::size_t j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; ++k) {
         if (chunk.strm_len[k] > 0 && chunk.strm_id[k] < compinfo.size()) {
@@ -821,6 +816,7 @@ void reader::impl::decompress_and_decode()
 
 #ifdef LOCAL_TEST
   printf("\ndecoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
+  printf("\n loaded stripe start %d \n", (int)load_stripe_start);
 #endif
 
   auto const rows_to_skip = _file_itm_data.rows_to_skip;
@@ -1235,7 +1231,6 @@ void reader::impl::decompress_and_decode()
         stream_info,
         chunks,
         row_groups,
-        stripe_count,
         _metadata.get_row_index_stride(),
         level == 0,
         _stream);
