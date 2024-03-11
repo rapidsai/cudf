@@ -856,7 +856,7 @@ void reader::impl::decompress_and_decode()
 #endif
 
   // Technically, overflow here should never happen because the `load_data()` step
-  // already handled it by spliting the loaded stripe range into multiple decode ranges.
+  // already handled it by splitting the loaded stripe range into multiple decode ranges.
   CUDF_EXPECTS(rows_to_decode <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",
                std::overflow_error);
@@ -947,7 +947,7 @@ void reader::impl::decompress_and_decode()
         stripe_count, _stream, rmm::mr::get_current_device_resource());
     });
 
-    // 0-based counters, used accross all decoding stripes in this step.
+    // 0-based counters, used across all decoding stripes in this step.
     int64_t stripe_start_row{0};
     int64_t num_dict_entries{0};
     uint32_t num_rowgroups{0};
