@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import os
 
@@ -9,6 +9,10 @@ import dask.dataframe as dd
 import cudf
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_dask_expr
+
+# No dask-expr support
+pytestmark = skip_dask_expr()
 
 cur_dir = os.path.dirname(__file__)
 text_file = os.path.join(cur_dir, "data/text/sample.pgn")

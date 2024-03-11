@@ -132,6 +132,7 @@ ConfigureTest(
   groupby/min_scan_tests.cpp
   groupby/nth_element_tests.cpp
   groupby/nunique_tests.cpp
+  groupby/product_scan_tests.cpp
   groupby/product_tests.cpp
   groupby/quantile_tests.cpp
   groupby/rank_scan_tests.cpp
