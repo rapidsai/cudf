@@ -276,7 +276,7 @@ reader::impl::impl(std::size_t output_size_limit,
   // Selected columns at different levels of nesting are stored in different elements
   // of `selected_columns`; thus, size == 1 means no nested columns.
   CUDF_EXPECTS(_config.skip_rows == 0 or _selected_columns.num_levels() == 1,
-               "skip_rows is not supported if having nested columns");
+               "skip_rows is not supported by nested column");
 }
 
 table_with_metadata reader::impl::read()
