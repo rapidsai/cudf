@@ -597,12 +597,10 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   stream.synchronize();
 }
 
-// TODO: this is called for each chunk of stripes.
 /**
  * @brief Aggregate child metadata from parent column chunks.
  */
-void aggregate_child_meta(std::size_t stripe_start,
-                          std::size_t level,
+void aggregate_child_meta(std::size_t level,
                           cudf::io::orc::detail::column_hierarchy const& selected_columns,
                           cudf::detail::host_2dspan<gpu::ColumnDesc> chunks,
                           cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
@@ -637,10 +635,7 @@ void aggregate_child_meta(std::size_t stripe_start,
 
   // For each parent column, update its child column meta for each stripe.
   std::for_each(nested_cols.begin(), nested_cols.end(), [&](auto const p_col) {
-    // printf("p_col.id: %d\n", (int)p_col.id);
-
     auto const parent_col_idx = col_meta.orc_col_map[level][p_col.id];
-    // printf("   level: %d, parent_col_idx: %d\n", (int)level, (int)parent_col_idx);
 
     int64_t start_row         = 0;
     auto processed_row_groups = 0;
@@ -648,8 +643,6 @@ void aggregate_child_meta(std::size_t stripe_start,
     for (std::size_t stripe_id = 0; stripe_id < num_of_stripes; stripe_id++) {
       // Aggregate num_rows and start_row from processed parent columns per row groups
       if (num_of_rowgroups) {
-        // printf("   num_of_rowgroups: %d\n", (int)num_of_rowgroups);
-
         auto stripe_num_row_groups = chunks[stripe_id][parent_col_idx].num_rowgroups;
         auto processed_child_rows  = 0;
 
@@ -667,24 +660,24 @@ void aggregate_child_meta(std::size_t stripe_start,
 
       // Aggregate start row, number of rows per chunk and total number of rows in a column
       auto const child_rows = chunks[stripe_id][parent_col_idx].num_child_rows;
-      // printf("     stripe_id: %d: child_rows: %d\n", (int)stripe_id, (int)child_rows);
-      // printf("      p_col.num_children: %d\n", (int)p_col.num_children);
 
       for (size_type id = 0; id < p_col.num_children; id++) {
         auto const child_col_idx = index + id;
 
-        // TODO: Check for overflow here.
         num_child_rows[child_col_idx] += child_rows;
+
+        // The number of rows in child column should not be very large otherwise we will have
+        // size overflow.
+        // If that is the case, we need to set a read limit to reduce number of decoding stripes.
+        CUDF_EXPECTS(num_child_rows[child_col_idx] <=
+                       static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+                     "Number of rows in the child column exceeds column size limit.");
+
         num_child_rows_per_stripe[stripe_id][child_col_idx] = child_rows;
         // start row could be different for each column when there is nesting at each stripe level
         child_start_row[stripe_id][child_col_idx] = (stripe_id == 0) ? 0 : start_row;
-        // printf("update child_start_row (%d, %d): %d\n",
-        //        (int)stripe_id,
-        //        (int)child_col_idx,
-        //        (int)start_row);
       }
       start_row += child_rows;
-      // printf("        start_row: %d\n", (int)start_row);
     }
 
     // Parent column null mask and null count would be required for child column
@@ -1390,14 +1383,8 @@ void reader::impl::decompress_and_decode()
       scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
 
       row_groups.device_to_host_sync(_stream);
-      aggregate_child_meta(stripe_start,
-                           level,
-                           _selected_columns,
-                           chunks,
-                           row_groups,
-                           nested_cols,
-                           _out_buffers[level],
-                           col_meta);
+      aggregate_child_meta(
+        level, _selected_columns, chunks, row_groups, nested_cols, _out_buffers[level], col_meta);
 
       // ORC stores number of elements at each row, so we need to generate offsets from that
       std::vector<list_buffer_data> buff_data;
