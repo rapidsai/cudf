@@ -305,12 +305,12 @@ void reader::impl::global_preprocess(read_mode mode)
   auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_sizes         = _file_itm_data.lvl_stripe_sizes;
   auto& lvl_stream_info          = _file_itm_data.lvl_stream_info;
-  auto& lvl_stripe_stream_chunks = _file_itm_data.lvl_stripe_stream_ranges;
+  auto& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
 
   lvl_stripe_data.resize(num_levels);
   lvl_stripe_sizes.resize(num_levels);
   lvl_stream_info.resize(num_levels);
-  lvl_stripe_stream_chunks.resize(num_levels);
+  lvl_stripe_stream_ranges.resize(num_levels);
   _file_itm_data.lvl_data_chunks.resize(num_levels);
   _out_buffers.resize(num_levels);
 
@@ -319,7 +319,7 @@ void reader::impl::global_preprocess(read_mode mode)
 
   for (std::size_t level = 0; level < num_levels; ++level) {
     lvl_stripe_sizes[level].resize(num_total_stripes);
-    lvl_stripe_stream_chunks[level].resize(num_total_stripes);
+    lvl_stripe_stream_ranges[level].resize(num_total_stripes);
 
     // Association between each ORC column and its cudf::column
     col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
@@ -382,7 +382,7 @@ void reader::impl::global_preprocess(read_mode mode)
       stripe_sizes[stripe_global_idx] = stripe_level_size;
       stripe_size += stripe_level_size;
 
-      lvl_stripe_stream_chunks[level][stripe_global_idx] =
+      lvl_stripe_stream_ranges[level][stripe_global_idx] =
         range{stream_level_count, stream_info.size()};
 
       // Coalesce consecutive streams into one read

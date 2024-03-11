@@ -78,8 +78,8 @@ namespace {
  * @return Device buffer to decompressed page data
  */
 rmm::device_buffer decompress_stripe_data(
-  range const& load_stripe_range,
-  range const& stripe_range,
+  range const& loaded_stripe_range,
+  range const& decode_stripe_range,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
@@ -96,12 +96,11 @@ rmm::device_buffer decompress_stripe_data(
   std::size_t num_uncompressed_blocks = 0;
   std::size_t total_decomp_size       = 0;
 
-  // printf("decompress #stripe: %d, ")
-
-  // TODO: use lvl_stripe_stream_chunks
+  // TODO: use lvl_stripe_stream_ranges
   std::size_t count{0};
   for (auto const& info : stream_info) {
-    if (info.source.stripe_idx < stripe_range.begin || info.source.stripe_idx >= stripe_range.end) {
+    if (info.source.stripe_idx < decode_stripe_range.begin ||
+        info.source.stripe_idx >= decode_stripe_range.end) {
       continue;
     }
     count++;
@@ -110,7 +109,8 @@ rmm::device_buffer decompress_stripe_data(
   cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, count, stream);
 
   for (auto const& info : stream_info) {
-    if (info.source.stripe_idx < stripe_range.begin || info.source.stripe_idx >= stripe_range.end) {
+    if (info.source.stripe_idx < decode_stripe_range.begin ||
+        info.source.stripe_idx >= decode_stripe_range.end) {
       continue;
     }
 
@@ -127,7 +127,7 @@ rmm::device_buffer decompress_stripe_data(
 
     compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<uint8_t const*>(
-        stripe_data[info.source.stripe_idx - load_stripe_range.begin].data()) +
+        stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
       info.length));
 
@@ -822,11 +822,11 @@ void reader::impl::decompress_and_decode()
 {
   if (_file_itm_data.has_no_data()) { return; }
 
-  auto const stripe_chunk =
+  auto const stripe_range =
     _chunk_read_data.decode_stripe_ranges[_chunk_read_data.curr_decode_stripe_range++];
-  auto const stripe_start = stripe_chunk.begin;
-  auto const stripe_end   = stripe_chunk.end;
-  auto const stripe_count = stripe_chunk.end - stripe_chunk.begin;
+  auto const stripe_start = stripe_range.begin;
+  auto const stripe_end   = stripe_range.end;
+  auto const stripe_count = stripe_range.end - stripe_range.begin;
 
   auto const load_stripe_start =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1].begin;
@@ -980,7 +980,7 @@ void reader::impl::decompress_and_decode()
 #endif
 
     auto const& stripe_stream_ranges      = lvl_stripe_stream_ranges[level];
-    auto const [stream_begin, stream_end] = get_range(stripe_stream_ranges, stripe_chunk);
+    auto const [stream_begin, stream_end] = get_range(stripe_stream_ranges, stripe_range);
 
     auto& columns_level = _selected_columns.levels[level];
 
@@ -1245,7 +1245,7 @@ void reader::impl::decompress_and_decode()
 
       auto decomp_data = decompress_stripe_data(
         _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1],
-        stripe_chunk,
+        stripe_range,
         _file_itm_data.compinfo_map,
         *_metadata.per_file_metadata[0].decompressor,
         stripe_data,
