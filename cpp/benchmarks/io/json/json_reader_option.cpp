@@ -33,7 +33,7 @@ constexpr cudf::size_type num_cols = 64;
 template <json_lines JsonLines>
 void BM_json_read_options(nvbench::state& state, nvbench::type_list<nvbench::enum_type<JsonLines>>)
 {
-  auto constexpr json_lines_bool = JsonLines == json_lines::YES;
+  constexpr auto json_lines_bool = JsonLines == json_lines::YES;
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -54,11 +54,7 @@ void BM_json_read_options(nvbench::state& state, nvbench::type_list<nvbench::enu
   cudf::io::write_json(write_opts);
 
   cudf::io::json_reader_options read_options =
-    cudf::io::json_reader_options::builder(source_sink.make_source_info())
-      .lines(json_lines_bool)
-      .normalize_single_quotes(false)
-      .normalize_whitespace(false)
-      .mixed_types_as_string(false);
+    cudf::io::json_reader_options::builder(source_sink.make_source_info()).lines(json_lines_bool);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
@@ -66,7 +62,7 @@ void BM_json_read_options(nvbench::state& state, nvbench::type_list<nvbench::enu
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
       cudf::size_type num_rows_read = 0;
-      uint64_t num_cols_read        = 0;
+      cudf::size_type num_cols_read = 0;
       timer.start();
       auto const result = cudf::io::read_json(read_options);
       num_rows_read     = result.tbl->num_rows();
@@ -96,11 +92,11 @@ void BM_jsonlines_read_options(nvbench::state& state,
                                                   nvbench::enum_type<MixedTypesAsString>,
                                                   nvbench::enum_type<RecoveryMode>>)
 {
-  auto constexpr normalize_single_quotes_bool =
+  constexpr auto normalize_single_quotes_bool =
     NormalizeSingleQuotes == normalize_single_quotes::YES;
-  auto constexpr normalize_whitespace_bool  = NormalizeWhitespace == normalize_whitespace::YES;
-  auto constexpr mixed_types_as_string_bool = MixedTypesAsString == mixed_types_as_string::YES;
-  auto constexpr recovery_mode_enum         = RecoveryMode == recovery_mode::RECOVER_WITH_NULL
+  constexpr auto normalize_whitespace_bool  = NormalizeWhitespace == normalize_whitespace::YES;
+  constexpr auto mixed_types_as_string_bool = MixedTypesAsString == mixed_types_as_string::YES;
+  constexpr auto recovery_mode_enum         = RecoveryMode == recovery_mode::RECOVER_WITH_NULL
                                                 ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                                                 : cudf::io::json_recovery_mode_t::FAIL;
   size_t const num_chunks                   = state.get_int64("num_chunks");
@@ -144,7 +140,7 @@ void BM_jsonlines_read_options(nvbench::state& state,
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
       cudf::size_type num_rows_read = 0;
-      uint64_t num_cols_read        = 0;
+      cudf::size_type num_cols_read = 0;
       timer.start();
       switch (RowSelection) {
         case row_selection::ALL: {
