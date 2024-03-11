@@ -79,7 +79,7 @@ namespace {
  */
 rmm::device_buffer decompress_stripe_data(
   range const& loaded_stripe_range,
-  range const& decode_stripe_range,
+  range const& stream_range,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
@@ -96,23 +96,11 @@ rmm::device_buffer decompress_stripe_data(
   std::size_t num_uncompressed_blocks = 0;
   std::size_t total_decomp_size       = 0;
 
-  // TODO: use lvl_stripe_stream_ranges
-  std::size_t count{0};
-  for (auto const& info : stream_info) {
-    if (info.source.stripe_idx < decode_stripe_range.begin ||
-        info.source.stripe_idx >= decode_stripe_range.end) {
-      continue;
-    }
-    count++;
-  }
+  auto const num_streams = stream_range.end - stream_range.begin;
+  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, stream);
 
-  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, count, stream);
-
-  for (auto const& info : stream_info) {
-    if (info.source.stripe_idx < decode_stripe_range.begin ||
-        info.source.stripe_idx >= decode_stripe_range.end) {
-      continue;
-    }
+  for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
+    auto const& info = stream_info[stream_idx];
 
 #ifdef LOCAL_TEST
 //    printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
@@ -979,8 +967,8 @@ void reader::impl::decompress_and_decode()
     }
 #endif
 
-    auto const& stripe_stream_ranges      = lvl_stripe_stream_ranges[level];
-    auto const [stream_begin, stream_end] = get_range(stripe_stream_ranges, stripe_range);
+    auto const& stripe_stream_ranges = lvl_stripe_stream_ranges[level];
+    auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
 
     auto& columns_level = _selected_columns.levels[level];
 
@@ -1179,13 +1167,8 @@ void reader::impl::decompress_and_decode()
         }
         if (not is_stripe_data_empty) {
           for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k] + stream_begin].dst_pos;
-            // printf("chunk.streams[%d] of chunk.strm_id[%d], stripe %d | %d, collect from %d\n",
-            //        (int)k,
-            //        (int)chunk.strm_id[k],
-            //        (int)stripe_idx,
-            //        (int)stripe_start,
-            //        (int)(chunk.strm_id[k] + stream_begin));
+            chunk.streams[k] =
+              dst_base + stream_info[chunk.strm_id[k] + stream_range.begin].dst_pos;
           }
         }
       }
@@ -1245,7 +1228,7 @@ void reader::impl::decompress_and_decode()
 
       auto decomp_data = decompress_stripe_data(
         _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1],
-        stripe_range,
+        get_range(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range),
         _file_itm_data.compinfo_map,
         *_metadata.per_file_metadata[0].decompressor,
         stripe_data,

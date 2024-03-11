@@ -248,8 +248,7 @@ template std::vector<range> find_splits<cumulative_size>(host_span<cumulative_si
 template std::vector<range> find_splits<cumulative_size_and_row>(
   host_span<cumulative_size_and_row const> sizes, std::size_t total_count, std::size_t size_limit);
 
-std::pair<int64_t, int64_t> get_range(std::vector<range> const& input_ranges,
-                                      range const& selected_ranges)
+range get_range(std::vector<range> const& input_ranges, range const& selected_ranges)
 {
   // The first and last range.
   auto const& first_range = input_ranges[selected_ranges.begin];
@@ -573,9 +572,9 @@ void reader::impl::load_data()
     auto& stripe_data = lvl_stripe_data[level];
     if (stripe_data.empty()) { continue; }
 
-    auto const [stream_begin, stream_end] =
+    auto const stream_range =
       get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
-    auto const num_streams = stream_end - stream_begin;
+    auto const num_streams = stream_range.end - stream_range.begin;
 
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
@@ -584,7 +583,7 @@ void reader::impl::load_data()
       // the latter decompression/decoding step will use a different stripe range.
       cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, _stream);
 
-      for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
+      for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
@@ -645,7 +644,7 @@ void reader::impl::load_data()
 #endif
 
       // Set decompression size equal to the input size.
-      for (auto stream_idx = stream_begin; stream_idx < stream_end; ++stream_idx) {
+      for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         stripe_decomp_sizes[info.source.stripe_idx - stripe_start].size_bytes += info.length;
       }
