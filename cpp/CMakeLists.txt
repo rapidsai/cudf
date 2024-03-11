@@ -384,6 +384,7 @@ add_library(
   src/io/json/read_json.cu
   src/io/json/legacy/json_gpu.cu
   src/io/json/legacy/reader_impl.cu
+  src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu

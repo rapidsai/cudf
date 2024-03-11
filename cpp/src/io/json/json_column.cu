@@ -496,15 +496,16 @@ void make_device_json_column(device_span<SymbolT const> input,
     rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id = [&]() {
-    if (!is_array_of_arrays) return parent_node_sentinel;
-    auto const list_node_index = is_enabled_lines ? 0 : 1;
-    NodeIndexT value;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  col_ids.data() + list_node_index,
-                                  sizeof(NodeIndexT),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
+    NodeIndexT value = parent_node_sentinel;
+    if (!col_ids.empty()) {
+      auto const list_node_index = is_enabled_lines ? 0 : 1;
+      CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
+                                    col_ids.data() + list_node_index,
+                                    sizeof(NodeIndexT),
+                                    cudaMemcpyDefault,
+                                    stream.value()));
+      stream.synchronize();
+    }
     return value;
   }();
 
@@ -592,6 +593,12 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.column_order.clear();
   };
 
+  path_from_tree tree_path{column_categories,
+                           column_parent_ids,
+                           column_names,
+                           is_array_of_arrays,
+                           row_array_parent_col_id};
+
   // 2. generate nested columns tree and its device_memory
   // reorder unique_col_ids w.r.t. column_range_begin for order of column to be in field order.
   auto h_range_col_id_it =
@@ -642,6 +649,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       ignore_vals[this_col_id]          = 1;
       continue;
     }
+
     // If the child is already found,
     // replace if this column is a nested column and the existing was a value column
     // ignore this column if this column is a value column and the existing was a nested column
@@ -701,6 +709,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                      "A mix of lists and structs within the same column is not supported");
       }
     }
+    if (is_enabled_mixed_types_as_string) {
+      // get path of this column, check if it is a struct forced as string, and enforce it
+      auto nt                          = tree_path.get_path(this_col_id);
+      std::optional<data_type> user_dt = get_path_data_type(nt, options);
+      if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
+          user_dt.value().id() == type_id::STRING) {
+        is_mixed_type_column[this_col_id] = 1;
+        column_categories[this_col_id]    = NC_STR;
+      }
+    }
+
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name: " + name);
     // move into parent
     device_json_column col(stream, mr);
