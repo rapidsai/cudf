@@ -1246,9 +1246,6 @@ void reader::impl::decompress_and_decode()
 
       if (not buff_data.empty()) { generate_offsets_for_list(buff_data, _stream); }
     }
-
-    // printf("line %d\n", __LINE__);
-    // fflush(stdout);
   }  // end loop level
 
 #ifdef LOCAL_TEST
@@ -1260,6 +1257,7 @@ void reader::impl::decompress_and_decode()
   }
 #endif
 
+  // Now generate a table from the decoded result.
   std::vector<std::unique_ptr<column>> out_columns;
   _out_metadata = get_meta_with_user_data();
   std::transform(
@@ -1274,14 +1272,11 @@ void reader::impl::decompress_and_decode()
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
 
-  // TODO: do not clear but reset each one.
-  // and only reset if the new size/type are different.
-  // This clear is just to check if there is memory leak.
+  // Free up memory.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     _out_buffers[level].clear();
 
     auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
-
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       stripe_data[stripe_start - load_stripe_start] = {};
     } else {
@@ -1299,12 +1294,6 @@ void reader::impl::decompress_and_decode()
               << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
   }
 #endif
-
-  // printf("col: \n");
-  // cudf::test::print(_chunk_read_data.decoded_table->get_column(0).view());
-
-  // DEBUG only
-  // _chunk_read_data.output_size_limit = _chunk_read_data.data_read_limit / 3;
 
   _chunk_read_data.curr_output_table_range = 0;
   _chunk_read_data.output_table_ranges =
