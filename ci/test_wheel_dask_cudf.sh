@@ -38,3 +38,12 @@ python -m pytest \
   --numprocesses=8 \
   .
 popd
+
+# Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
+rapids-logger "pytest dask_cudf + dask_expr"
+pushd python/dask_cudf/dask_cudf
+DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
+  --numprocesses=8 \
+  .
+popd
