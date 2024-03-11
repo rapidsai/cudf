@@ -110,18 +110,6 @@ struct file_intermediate_data {
   // Return true if no rows or stripes to read.
   bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
 
-  // Store the compression information for each data stream.
-  stream_source_map<stripe_level_comp_info> compinfo_map;
-
-  // The buffers to store raw data read from disk, initialized for each reading stripe chunks.
-  // After decoding, such buffers can be released.
-  // This can only be implemented after chunked output is ready.
-  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
-
-  // Store the size of each stripe at each nested level.
-  // This is used to initialize the stripe_data buffers.
-  std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
-
   // Store information to identify where to read a chunk of data from source.
   // Each read corresponds to one or more consecutive streams combined.
   struct stream_data_read_info {
@@ -155,12 +143,24 @@ struct file_intermediate_data {
   // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
   std::vector<range> stripe_data_read_ranges;
 
+  // Store the compression information for each data stream.
+  stream_source_map<stripe_level_comp_info> compinfo_map;
+
   // Store info for each ORC stream at each nested level.
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;
 
   // At each nested level, the streams for each stripe are stored consecutively in lvl_stream_info.
   // This is used to identify the range of streams for each stripe from that vector.
   std::vector<std::vector<range>> lvl_stripe_stream_ranges;
+
+  // The buffers to store raw data read from disk, initialized for each reading stripe chunks.
+  // After decoding, such buffers can be released.
+  // This can only be implemented after chunked output is ready.
+  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
+
+  // Store the size of each stripe at each nested level.
+  // This is used to initialize the stripe_data buffers.
+  std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
 
   bool global_preprocessed{false};
 };
