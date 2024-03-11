@@ -77,8 +77,9 @@ namespace {
  * @return Device buffer to decompressed page data
  */
 rmm::device_buffer decompress_stripe_data(
-  range const& stripe_range,
+  range const& loaded_stripe_range,
   range const& stream_range,
+  std::size_t num_decode_stripes,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
@@ -112,7 +113,8 @@ rmm::device_buffer decompress_stripe_data(
 #endif
 
     compinfo.push_back(gpu::CompressedStreamInfo(
-      static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_range.begin].data()) +
+      static_cast<uint8_t const*>(
+        stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
       info.length));
 
@@ -319,7 +321,6 @@ rmm::device_buffer decompress_stripe_data(
   // We can check on host after stream synchronize
   CUDF_EXPECTS(not any_block_failure[0], "Error during decompression");
 
-  auto const num_stripes = stripe_range.end - stripe_range.begin;
   auto const num_columns = chunks.size().second;
 
   // Update the stream information with the updated uncompressed info
@@ -327,7 +328,7 @@ rmm::device_buffer decompress_stripe_data(
   // have in stream_info[], but using the gpu results also updates
   // max_uncompressed_size to the actual uncompressed size, or zero if
   // decompression failed.
-  for (std::size_t i = 0; i < num_stripes; ++i) {
+  for (std::size_t i = 0; i < num_decode_stripes; ++i) {
     for (std::size_t j = 0; j < num_columns; ++j) {
       auto& chunk = chunks[i][j];
       for (int k = 0; k < gpu::CI_NUM_STREAMS; ++k) {
@@ -346,7 +347,7 @@ rmm::device_buffer decompress_stripe_data(
                             compinfo.device_ptr(),
                             chunks.base_device_ptr(),
                             num_columns,
-                            num_stripes,
+                            num_decode_stripes,
                             row_index_stride,
                             use_base_stride,
                             stream);
@@ -1225,6 +1226,7 @@ void reader::impl::decompress_and_decode()
       auto decomp_data = decompress_stripe_data(
         _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1],
         get_range(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range),
+        stripe_count,
         _file_itm_data.compinfo_map,
         *_metadata.per_file_metadata[0].decompressor,
         stripe_data,
