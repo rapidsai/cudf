@@ -816,8 +816,10 @@ void reader::impl::decompress_and_decode()
   auto const stripe_count = stripe_range.end - stripe_range.begin;
 
   // The start index of loaded stripes. They are different from decoding stripes.
-  auto const load_stripe_start =
-    _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1].begin;
+  CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_range > 0, "There is not any stripe loaded.");
+  auto const load_stripe_range =
+    _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1];
+  auto const load_stripe_start = load_stripe_range.begin;
 
 #ifdef LOCAL_TEST
   printf("\ndecoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
@@ -946,6 +948,7 @@ void reader::impl::decompress_and_decode()
         stripe_count, _stream, rmm::mr::get_current_device_resource());
     });
 
+    // 0-based counters, used accross all decoding stripes in this step.
     int64_t stripe_start_row{0};
     int64_t num_dict_entries{0};
     int64_t num_rowgroups{0};
@@ -960,8 +963,8 @@ void reader::impl::decompress_and_decode()
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
-      // Gather only for the decoding stripes, thus the first parameter (`stripe_processing_order`)
-      // needs to be normalized to be 0-based.
+      // Gather only for the decoding stripes, thus the first parameter (`global_stripe_order`)
+      // needs to be normalized to 0-based.
       auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx - stripe_start,
                                                                       level,
                                                                       stripe_info,
@@ -983,29 +986,20 @@ void reader::impl::decompress_and_decode()
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      // TODO: Wrong?
-      // stripe load_stripe_start?
-      auto dst_base = static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
-
-      // printf("line %d\n", __LINE__);
-      // fflush(stdout);
-
+      auto const dst_base =
+        static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
       auto const num_rows_per_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
+      auto const rowgroup_id         = num_rowgroups;
+      auto const stripe_num_rowgroups =
+        use_index ? (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
+                      _metadata.get_row_index_stride()
+                  : 0;
+
 #ifdef LOCAL_TEST
       printf(" num_rows_per_stripe : %d\n", (int)num_rows_per_stripe);
 #endif
 
-      auto const rowgroup_id    = num_rowgroups;
-      auto stripe_num_rowgroups = 0;
-      if (use_index) {
-        stripe_num_rowgroups = (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
-                               _metadata.get_row_index_stride();
-      }
-
-      // printf("line %d\n", __LINE__);
-      // fflush(stdout);
-
-      // Update chunks to reference streams pointers
+      // Update chunks to reference streams pointers.
       for (std::size_t col_idx = 0; col_idx < num_level_columns; col_idx++) {
         auto& chunk = chunks[stripe_idx - stripe_start][col_idx];
         // start row, number of rows in a each stripe and total number of rows
@@ -1016,15 +1010,9 @@ void reader::impl::decompress_and_decode()
             : col_meta.child_start_row[(stripe_idx - stripe_start) * num_level_columns + col_idx];
         chunk.num_rows =
           (level == 0)
-            ? static_cast<int64_t>(stripe_info->numberOfRows)
+            ? num_rows_per_stripe
             : col_meta.num_child_rows_per_stripe[(stripe_idx - stripe_start) * num_level_columns +
                                                  col_idx];
-
-        // printf("col idx: %d, start_row: %d, num rows: %d\n",
-        //        (int)col_idx,
-        //        (int)chunk.start_row,
-        //        (int)chunk.num_rows);
-
         chunk.column_num_rows = (level == 0) ? rows_to_decode : col_meta.num_child_rows[col_idx];
         chunk.parent_validity_info =
           (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
@@ -1035,8 +1023,6 @@ void reader::impl::decompress_and_decode()
         chunk.encoding_kind = stripe_footer->columns[columns_level[col_idx].id].kind;
         chunk.type_kind =
           _metadata.per_file_metadata[stripe.source_idx].ff.types[columns_level[col_idx].id].kind;
-
-        // printf("type: %d\n", (int)chunk.type_kind);
 
         // num_child_rows for a struct column will be same, for other nested types it will be
         // calculated.
@@ -1054,7 +1040,6 @@ void reader::impl::decompress_and_decode()
                                 ? sizeof(size_type)
                                 : cudf::size_of(column_types[col_idx]);
         chunk.num_rowgroups = stripe_num_rowgroups;
-        // printf("stripe_num_rowgroups: %d\n", (int)stripe_num_rowgroups);
 
         if (chunk.type_kind == orc::TIMESTAMP) {
           chunk.timestamp_type_id = _config.timestamp_type.id();
@@ -1067,21 +1052,13 @@ void reader::impl::decompress_and_decode()
         }
       }
 
-      // printf("line %d\n", __LINE__);
-      // fflush(stdout);
-
       stripe_start_row += num_rows_per_stripe;
       num_rowgroups += stripe_num_rowgroups;
-
-      //      stripe_idx++;
-    }  // for (stripe : selected_stripes)
-
-    // printf("line %d\n", __LINE__);
-    // fflush(stdout);
+    }
 
     if (stripe_data.empty()) { continue; }
 
-    // Process dataset chunk pages into output columns
+    // Process dataset chunks into output columns.
     auto row_groups =
       cudf::detail::hostdevice_2dvector<gpu::RowGroup>(num_rowgroups, num_level_columns, _stream);
     if (level > 0 and row_groups.size().first) {
@@ -1101,16 +1078,8 @@ void reader::impl::decompress_and_decode()
                      });
     }
 
-    // printf("line %d\n", __LINE__);
-    // fflush(stdout);
-
-    // Setup row group descriptors if using indexes
+    // Setup row group descriptors if using indexes.
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-      // printf("decompress----------------------\n");
-      // printf("line %d\n", __LINE__);
-      // fflush(stdout);
-      CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_range > 0, "ERRRRR");
-
 #ifdef LOCAL_TEST
       {
         _stream.synchronize();
@@ -1120,23 +1089,20 @@ void reader::impl::decompress_and_decode()
       }
 #endif
 
-      auto decomp_data = decompress_stripe_data(
-        _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1],
-        stream_range,
-        stripe_count,
-        _file_itm_data.compinfo_map,
-        *_metadata.per_file_metadata[0].decompressor,
-        stripe_data,
-        stream_info,
-        chunks,
-        row_groups,
-        _metadata.get_row_index_stride(),
-        level == 0,
-        _stream);
-      // stripe_data.clear();
-      // stripe_data.push_back(std::move(decomp_data));
+      auto decomp_data = decompress_stripe_data(load_stripe_range,
+                                                stream_range,
+                                                stripe_count,
+                                                _file_itm_data.compinfo_map,
+                                                *_metadata.per_file_metadata[0].decompressor,
+                                                stripe_data,
+                                                stream_info,
+                                                chunks,
+                                                row_groups,
+                                                _metadata.get_row_index_stride(),
+                                                level == 0,
+                                                _stream);
 
-      // TODO: only reset each one if the new size/type are different.
+      // Just save the decompressed data and clear out the raw data to free up memory.
       stripe_data[stripe_start - load_stripe_start] = std::move(decomp_data);
       for (std::size_t i = 1; i < stripe_count; ++i) {
         stripe_data[i + stripe_start - load_stripe_start] = {};
