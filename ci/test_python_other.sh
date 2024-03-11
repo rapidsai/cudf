@@ -29,6 +29,14 @@ rapids-logger "pytest dask_cudf"
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/dask-cudf-coverage.xml" \
   --cov-report=term
 
+# Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
+rapids-logger "pytest dask_cudf + dask_expr"
+DASK_DATAFRAME__QUERY_PLANNING=True ./ci/run_dask_cudf_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
+  --numprocesses=8 \
+  --dist=loadscope \
+  .
+
 rapids-logger "pytest custreamz"
 ./ci/run_custreamz_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-custreamz.xml" \
