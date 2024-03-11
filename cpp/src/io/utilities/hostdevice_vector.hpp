@@ -48,9 +48,19 @@ class hostdevice_vector {
   hostdevice_vector() : hostdevice_vector(0, cudf::get_default_stream()) {}
 
   explicit hostdevice_vector(size_t size, rmm::cuda_stream_view stream)
-    : h_data{size, rmm_host_allocator<T>{cudf::io::get_host_memory_resource(), stream}},
-      d_data{size, stream}
+    : hostdevice_vector(size, size, stream)
   {
+  }
+
+  explicit hostdevice_vector(size_t initial_size, size_t max_size, rmm::cuda_stream_view stream)
+    : h_data({cudf::io::get_host_memory_resource(), stream}), d_data(0, stream)
+  {
+    CUDF_EXPECTS(initial_size <= max_size, "initial_size cannot be larger than max_size");
+
+    h_data.reserve(max_size);
+    h_data.resize(initial_size);
+
+    d_data.resize(max_size, stream);
   }
 
   [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
