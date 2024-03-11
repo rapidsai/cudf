@@ -83,10 +83,10 @@ TYPED_TEST(groupby_product_scan_test, empty_cols)
   using value_wrapper  = typename TestFixture::value_wrapper;
   using result_wrapper = typename TestFixture::result_wrapper;
 
-  key_wrapper   keys{};
+  key_wrapper keys{};
   value_wrapper vals{};
 
-  key_wrapper    expect_keys{};
+  key_wrapper expect_keys{};
   result_wrapper expect_vals{};
 
   auto agg = cudf::make_product_aggregation<cudf::groupby_scan_aggregation>();
