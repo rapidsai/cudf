@@ -779,7 +779,7 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE nvtx3-cpp cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
