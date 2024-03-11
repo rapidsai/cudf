@@ -307,7 +307,9 @@ struct rle_stream {
           fill_index_shared = fill_index;
         }
       }
-      // remaining warps decode the runs, starting on the second iteration of this
+      // remaining warps decode the runs, starting on the second iteration of this. the pipeline of
+      // runs is also persistent across calls to decode_next, so on the second call to decode_next,
+      // this branch will start doing work immediately.
       // do/while loop (decode_index == -1 means "first iteration", so we should skip decoding)
       else if (decode_index >= 0 && decode_index + warp_decode_id < fill_index) {
         int const run_index = decode_index + warp_decode_id;
