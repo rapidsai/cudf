@@ -1955,6 +1955,7 @@ TEST_F(ParquetReaderTest, RepeatedNoAnnotations)
 
 TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
 {
+  using cudf::io::column_encoding;
   constexpr int num_rows = 10'000;
   constexpr auto seed    = 21337;
 
@@ -1999,9 +2000,17 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
                         int64_col,   int64_nulls_col,    *int64_list,   *int64_list_nulls,
                         *int16_list, *int16_list_nulls,  *int8_list,    *int8_list_nulls,
                         str_col,     *str_col_nulls,     *str_list,     *str_list_nulls,
+                        big_str_col, *big_str_col_nulls, *big_str_list, *big_str_list_nulls,
+                        str_col,     *str_col_nulls,     *str_list,     *str_list_nulls,
                         big_str_col, *big_str_col_nulls, *big_str_list, *big_str_list_nulls});
 
   auto const filepath = temp_env->get_temp_filepath("DeltaSkipRowsWithNulls.parquet");
+  auto input_metadata = cudf::io::table_input_metadata{tbl};
+  for (int i = 12; i <= 27; ++i) {
+    input_metadata.column_metadata[i].set_encoding(
+      i <= 19 ? column_encoding::DELTA_LENGTH_BYTE_ARRAY : column_encoding::DELTA_BYTE_ARRAY);
+  }
+
   auto const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
       .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
@@ -2058,6 +2067,39 @@ TEST_F(ParquetReaderTest, DeltaSkipRowsWithNulls)
 
     CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view(), result2.tbl->view());
   }
+}
+
+TEST_F(ParquetReaderTest, DeltaByteArraySkipAllValid)
+{
+  // test that the DELTA_BYTE_ARRAY decoder can handle the case where skip rows skips all valid
+  // values in a page. see #15075
+  constexpr int num_rows  = 500;
+  constexpr int num_valid = 150;
+
+  auto const ones = thrust::make_constant_iterator("one");
+
+  auto valids = cudf::detail::make_counting_transform_iterator(
+    0, [num_valid](auto i) { return i < num_valid; });
+  auto const col      = cudf::test::strings_column_wrapper{ones, ones + num_rows, valids};
+  auto const expected = table_view({col});
+
+  auto input_metadata = cudf::io::table_input_metadata{expected};
+  input_metadata.column_metadata[0].set_encoding(cudf::io::column_encoding::DELTA_BYTE_ARRAY);
+
+  auto const filepath = temp_env->get_temp_filepath("DeltaByteArraySkipAllValid.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .write_v2_headers(true)
+      .metadata(input_metadata)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .skip_rows(num_valid + 1);
+  auto result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::slice(expected, {num_valid + 1, num_rows}),
+                                result.tbl->view());
 }
 
 // test that using page stats is working for full reads and various skip rows

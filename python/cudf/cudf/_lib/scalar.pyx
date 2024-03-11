@@ -129,18 +129,29 @@ cdef class DeviceScalar:
         else:
             pa_type = pa.from_numpy_dtype(dtype)
 
-        pa_scalar = pa.scalar(value, type=pa_type)
+        if isinstance(pa_type, pa.ListType) and value is None:
+            # pyarrow doesn't correctly handle None values for list types, so
+            # we have to create this one manually.
+            # https://github.com/apache/arrow/issues/40319
+            pa_array = pa.array([None], type=pa_type)
+        else:
+            pa_array = pa.array([pa.scalar(value, type=pa_type)])
 
-        data_type = None
+        pa_table = pa.Table.from_arrays([pa_array], names=[""])
+        table = pylibcudf.Table.from_arrow(pa_table)
+
+        column = table.columns()[0]
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            tid = pylibcudf.TypeId.DECIMAL128
             if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                tid = pylibcudf.TypeId.DECIMAL32
+                column = pylibcudf.unary.cast(
+                    column, pylibcudf.DataType(pylibcudf.TypeId.DECIMAL32, -dtype.scale)
+                )
             elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                tid = pylibcudf.TypeId.DECIMAL64
-            data_type = pylibcudf.DataType(tid, -dtype.scale)
+                column = pylibcudf.unary.cast(
+                    column, pylibcudf.DataType(pylibcudf.TypeId.DECIMAL64, -dtype.scale)
+                )
 
-        self.c_value = pylibcudf.Scalar.from_arrow(pa_scalar, data_type)
+        self.c_value = pylibcudf.copying.get_element(column, 0)
         self._dtype = dtype
 
     def _to_host_scalar(self):
