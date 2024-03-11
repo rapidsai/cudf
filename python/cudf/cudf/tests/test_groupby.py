@@ -2319,7 +2319,9 @@ def test_groupby_unique(by, data, dtype):
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+@pytest.mark.parametrize(
+    "func", ["cummin", "cummax", "cumcount", "cumsum", "cumprod"]
+)
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
