@@ -130,10 +130,13 @@ table_with_metadata reader::impl::make_output_chunk()
 
   auto out_table = [&] {
     if (_chunk_read_data.output_table_ranges.size() == 1) {
+      // Must change the index of output range, so calling `has_next()` after that
+      // can return the correct answer.
       _chunk_read_data.curr_output_table_range++;
 #ifdef LOCAL_TEST
       printf("one chunk, no more table---------------------------------\n");
 #endif
+      // If there is no slicing, just hand over the decoded table.
       return std::move(_chunk_read_data.decoded_table);
     }
 
@@ -146,11 +149,11 @@ table_with_metadata reader::impl::make_output_chunk()
     }
 #endif
 
-    auto const out_chunk =
+    auto const out_range =
       _chunk_read_data.output_table_ranges[_chunk_read_data.curr_output_table_range++];
     auto const out_tview = cudf::detail::slice(
       _chunk_read_data.decoded_table->view(),
-      {static_cast<size_type>(out_chunk.begin), static_cast<size_type>(out_chunk.end)},
+      {static_cast<size_type>(out_range.begin), static_cast<size_type>(out_range.end)},
       _stream)[0];
 
 #ifdef LOCAL_TEST
@@ -164,7 +167,7 @@ table_with_metadata reader::impl::make_output_chunk()
 
     auto output = std::make_unique<table>(out_tview, _stream, _mr);
 
-    // If this is the last slice, we also delete the decoded_table to free up memory.
+    // If this is the last slice, we also delete the decoded table to free up memory.
     if (!_chunk_read_data.more_table_chunk_to_output()) {
       _chunk_read_data.decoded_table.reset(nullptr);
     }
