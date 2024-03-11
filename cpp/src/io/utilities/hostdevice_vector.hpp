@@ -63,6 +63,14 @@ class hostdevice_vector {
     d_data.resize(max_size, stream);
   }
 
+  void push_back(T const& data)
+  {
+    CUDF_EXPECTS(size() < capacity(),
+                 "Cannot insert data into hostdevice_vector because capacity has been exceeded.");
+    h_data.push_back(data);
+  }
+
+  [[nodiscard]] size_t capacity() const noexcept { return d_data.size(); }
   [[nodiscard]] size_t size() const noexcept { return h_data.size(); }
   [[nodiscard]] size_t size_bytes() const noexcept { return sizeof(T) * size(); }
   [[nodiscard]] bool empty() const noexcept { return size() == 0; }
