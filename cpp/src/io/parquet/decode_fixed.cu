@@ -48,9 +48,9 @@ static __device__ int gpuUpdateValidityOffsetsAndRowIndicesFlat(int32_t target_v
   int valid_count = ni.valid_count;
 
   // cap by last row so that we don't process any rows past what we want to output.
-  int const first_row = s->first_row;
-  int const last_row  = first_row + s->num_rows;
-  int const capped_target_value_count  = min(target_value_count, last_row);
+  int const first_row                 = s->first_row;
+  int const last_row                  = first_row + s->num_rows;
+  int const capped_target_value_count = min(target_value_count, last_row);
 
   int const valid_map_offset      = ni.valid_map_offset;
   int const row_index_lower_bound = s->row_index_lower_bound;

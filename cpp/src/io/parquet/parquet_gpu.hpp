@@ -625,16 +625,12 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 /**
  * @brief Return true if the run with header run_header is a literal RLE run
  */
-__device__ inline bool is_literal_run(int const run_header) {
-  return (run_header & 1) == 1;
-}
+__device__ inline bool is_literal_run(int const run_header) { return (run_header & 1) == 1; }
 
 /**
  * @brief Return true if the run with header run_header is a repeated RLE run
  */
-__device__ inline bool is_repeated_run(int const run_header) {
-  return !is_literal_run(run_header);
-}
+__device__ inline bool is_repeated_run(int const run_header) { return !is_literal_run(run_header); }
 
 /**
  * @brief Launches kernel for parsing the page headers in the column chunks

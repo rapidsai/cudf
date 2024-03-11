@@ -57,10 +57,10 @@ inline __device__ uint32_t get_vlq32(uint8_t const*& cur, uint8_t const* end)
 
 /**
  * @brief RLE run decode function per warp.
- * 
+ *
  * @param output output data buffer
  * @param level_run RLE run header
- * @param run_start beginning of data for RLE run 
+ * @param run_start beginning of data for RLE run
  * @param end pointer to the end of data for RLE run
  * @param run_output_pos absolute output position for this run
  * @param run_offset offset after run_output_pos this call to decode starts outputing at
@@ -216,10 +216,10 @@ struct rle_stream {
   __device__ inline void fill_run_batch()
   {
     // decode_index == -1 means we are on the very first decode iteration for this stream.
-    // In this first iteration we are filling up to half of the runs array to decode in the next iteration.
-    // On subsequent iterations, decode_index >= 0 and we are going to fill as many run slots available as we can,
-    // to fill up to the slot before decode_index. 
-    // We are also always bound by cur < end, making sure we stop decoding once we've reached the end of the stream.
+    // In this first iteration we are filling up to half of the runs array to decode in the next
+    // iteration. On subsequent iterations, decode_index >= 0 and we are going to fill as many run
+    // slots available as we can, to fill up to the slot before decode_index. We are also always
+    // bound by cur < end, making sure we stop decoding once we've reached the end of the stream.
     while (((decode_index == -1 && fill_index < num_rle_stream_decode_warps) ||
             fill_index < decode_index + run_buffer_size) &&
            cur < end) {
