@@ -3583,12 +3583,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 )
 
             if level is not None and isinstance(self.index, MultiIndex):
+                level = self.index._get_level_label(level)
                 out_index = self.index.copy(deep=copy)
-                out_index.get_level_values(level).to_frame().replace(
+                level_values = out_index.get_level_values(level)
+                level_values.to_frame().replace(
                     to_replace=list(index.keys()),
                     value=list(index.values()),
                     inplace=True,
                 )
+                out_index._data[level] = column.as_column(level_values)
+                out_index._compute_levels_and_codes()
                 out = DataFrame(index=out_index)
             else:
                 to_replace = list(index.keys())
@@ -5261,7 +5265,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             the resulting columns will either convert null
             values to ``np.nan`` or ``None`` depending on the dtype.
         arrow_type : bool, Default False
-            Return the Index with a ``pandas.ArrowDtype``
+            Return the columns with a ``pandas.ArrowDtype``
 
         Returns
         -------
@@ -5320,13 +5324,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     bool[pyarrow]
         dtype: object
         """
-        out_data = {}
         out_index = self.index.to_pandas()
-
-        for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(
+        out_data = {
+            i: col.to_pandas(
                 index=out_index, nullable=nullable, arrow_type=arrow_type
             )
+            for i, col in enumerate(self._data.columns)
+        }
 
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index()

@@ -740,7 +740,8 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 {
   auto const dist_params       = profile.get_distribution_params<cudf::list_view>();
   auto const single_level_mean = get_distribution_mean(dist_params.length_params);
-  auto const num_elements      = num_rows * pow(single_level_mean, dist_params.max_depth);
+  cudf::size_type const num_elements =
+    std::lround(num_rows * std::pow(single_level_mean, dist_params.max_depth));
 
   auto leaf_column = cudf::type_dispatcher(
     cudf::data_type(dist_params.element_type), create_rand_col_fn{}, profile, engine, num_elements);
@@ -751,13 +752,16 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
 
   // Generate the list column bottom-up
   auto list_column = std::move(leaf_column);
-  for (int lvl = 0; lvl < dist_params.max_depth; ++lvl) {
+  for (int lvl = dist_params.max_depth; lvl > 0; --lvl) {
     // Generating the next level - offsets point into the current list column
-    auto current_child_column      = std::move(list_column);
-    cudf::size_type const num_rows = current_child_column->size() / single_level_mean;
+    auto current_child_column = std::move(list_column);
+    // Because single_level_mean is not a whole number, rounding errors can lead to slightly
+    // different row count; top-level column needs to have exactly num_rows rows, so enforce it here
+    cudf::size_type const current_num_rows =
+      (lvl == 1) ? num_rows : std::lround(current_child_column->size() / single_level_mean);
 
-    auto offsets = len_dist(engine, num_rows + 1);
-    auto valids  = valid_dist(engine, num_rows);
+    auto offsets = len_dist(engine, current_num_rows + 1);
+    auto valids  = valid_dist(engine, current_num_rows);
     // to ensure these values <= current_child_column->size()
     auto output_offsets = thrust::make_transform_output_iterator(
       offsets.begin(), clamp_down{current_child_column->size()});
@@ -767,7 +771,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
       current_child_column->size();  // Always include all elements
 
     auto offsets_column = std::make_unique<cudf::column>(cudf::data_type{cudf::type_id::INT32},
-                                                         num_rows + 1,
+                                                         current_num_rows + 1,
                                                          offsets.release(),
                                                          rmm::device_buffer{},
                                                          0);
@@ -778,7 +782,7 @@ std::unique_ptr<cudf::column> create_random_column<cudf::list_view>(data_profile
                                                           cudf::get_default_stream(),
                                                           rmm::mr::get_current_device_resource());
     list_column                  = cudf::make_lists_column(
-      num_rows,
+      current_num_rows,
       std::move(offsets_column),
       std::move(current_child_column),
       profile.get_null_probability().has_value() ? null_count : 0,
