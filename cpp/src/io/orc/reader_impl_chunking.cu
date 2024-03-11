@@ -429,6 +429,7 @@ void reader::impl::global_preprocess(read_mode mode)
   }
 #endif
 
+  // TODO: exec_policy_nosync
   // Compute the prefix sum of stripes' data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),  // todo no sync
@@ -687,6 +688,7 @@ void reader::impl::load_data()
   }
 #endif
 
+  // TODO: exec_policy_nosync
   // Compute the prefix sum of stripe data sizes and rows.
   stripe_decomp_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy(_stream),

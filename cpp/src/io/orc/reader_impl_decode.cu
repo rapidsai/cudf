@@ -576,6 +576,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
     prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
 
+  // TODO: exec_policy_nosync
   thrust::for_each(rmm::exec_policy(stream),
                    d_prefix_sums_to_update.begin(),
                    d_prefix_sums_to_update.end(),
@@ -722,11 +723,20 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 }
 
 /**
- * @brief TODO
- * @param input
- * @param size_limit
- * @param stream
- * @return
+ * @brief Find the splits of the input table such that each split range has cumulative size less
+ * than a given `size_limit`.
+ *
+ * The parameter `segment_length` is to control the granularity of splits. The output ranges will
+ * always have numbers of rows that are multiple of this value, except the last range that contains
+ * the remaining rows.
+ *
+ * Similar to `find_splits`, the given limit is just a soft limit. The function will never output
+ * empty ranges, even they have sizes exceed the value of `size_limit`.
+ *
+ * @param input The input table to find splits
+ * @param size_limit A limit on the output size of each split range
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return A vector of ranges as splits of the input
  */
 std::vector<range> find_table_splits(table_view const& input,
                                      size_type segment_length,
@@ -738,14 +748,12 @@ std::vector<range> find_table_splits(table_view const& input,
 #endif
 
   // If segment_length is zero: we don't have any limit on granularity.
-  // As such, set segment length to the number of rows.
+  // As such, set segment length equal to the number of rows.
   if (segment_length == 0) { segment_length = input.num_rows(); }
 
-  // If we have small number of rows, need to adjust segment_length before calling to
-  // `segmented_row_bit_count`.
+  // `segmented_row_bit_count` requires that `segment_length` is not larger than number of rows.
   segment_length = std::min(segment_length, input.num_rows());
 
-  // Default 10k rows.
   auto const d_segmented_sizes = cudf::detail::segmented_row_bit_count(
     input, segment_length, stream, rmm::mr::get_current_device_resource());
 
@@ -798,7 +806,6 @@ std::vector<range> find_table_splits(table_view const& input,
 
 }  // namespace
 
-// TODO: this should be called per chunk of stripes.
 void reader::impl::decompress_and_decode()
 {
   if (_file_itm_data.has_no_data()) { return; }
@@ -809,6 +816,7 @@ void reader::impl::decompress_and_decode()
   auto const stripe_end   = stripe_range.end;
   auto const stripe_count = stripe_range.end - stripe_range.begin;
 
+  // The start index of loaded stripes. They are different from decoding stripes.
   auto const load_stripe_start =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1].begin;
 
@@ -817,40 +825,36 @@ void reader::impl::decompress_and_decode()
   printf("\n loaded stripe start %d \n", (int)load_stripe_start);
 #endif
 
-  auto const rows_to_skip = _file_itm_data.rows_to_skip;
-  // auto const rows_to_read      = _file_itm_data.rows_to_read;
+  auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
 
-  // auto const rows_to_skip = 0;
-  int64_t rows_to_read = 0;
+  // Number of rows to decode in this decompressing/decoding step.
+  int64_t rows_to_decode = 0;
   for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
     auto const& stripe     = selected_stripes[stripe_idx];
-    auto const stripe_info = stripe.stripe_info;
-    // TODO: this is indeed not needed since we split stripes before this based on stripe row
+    auto const stripe_rows = static_cast<int64_t>(stripe.stripe_info->numberOfRows);
+    rows_to_decode += stripe_rows;
 
-    // TODO: check overflow
-    // CUDF_EXPECTS(per_file_metadata[src_file_idx].ff.stripes[stripe_idx].numberOfRows <
-    //                static_cast<uint64_t>(std::numeric_limits<size_type>::max()),
-    //              "TODO");
-    rows_to_read += static_cast<int64_t>(stripe_info->numberOfRows);
-
-    if (_file_itm_data.rows_to_skip > 0) {
-      CUDF_EXPECTS(_file_itm_data.rows_to_skip < static_cast<int64_t>(stripe_info->numberOfRows),
-                   "TODO");
+    // The rows to skip should never be larger than number of rows in the first loaded stripes.
+    // This is just to make sure there was not any bug with it.
+    if (rows_to_skip > 0) {
+      CUDF_EXPECTS(rows_to_skip < stripe_rows, "Invalid rows_to_skip computation.");
     }
   }
-  CUDF_EXPECTS(rows_to_read > rows_to_skip, "Invalid rows_to_read computation.");
-  rows_to_read = std::min<int64_t>(rows_to_read - rows_to_skip, _file_itm_data.rows_to_read);
 
-  // rows_to_read -= rows_to_skip;
+  CUDF_EXPECTS(rows_to_decode > rows_to_skip, "Invalid rows_to_decode computation.");
+  rows_to_decode = std::min<int64_t>(rows_to_decode - rows_to_skip, _file_itm_data.rows_to_read);
+
+  // After this step, we no longer have any rows to skip.
+  // The number of rows remains to read in the future also reduced.
   _file_itm_data.rows_to_skip = 0;
-  _file_itm_data.rows_to_read -= rows_to_read;
+  _file_itm_data.rows_to_read -= rows_to_decode;
 
 #ifdef LOCAL_TEST
-  printf("decode, skip = %ld, read = %ld\n", rows_to_skip, rows_to_read);
+  printf("decode, skip = %ld, decode = %ld\n", rows_to_skip, rows_to_decode);
 #endif
 
-  CUDF_EXPECTS(rows_to_read <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
+  CUDF_EXPECTS(rows_to_decode <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",
                std::overflow_error);
 
@@ -1017,8 +1021,9 @@ void reader::impl::decompress_and_decode()
       _metadata.is_row_grp_idx_present() &&
       // Only use if we don't have much work with complete columns & stripes
       // TODO: Consider nrows, gpu, and tune the threshold
-      (rows_to_read > _metadata.get_row_index_stride() && !(_metadata.get_row_index_stride() & 7) &&
-       _metadata.get_row_index_stride() != 0 && num_columns * stripe_count < 8 * 128) &&
+      (rows_to_decode > _metadata.get_row_index_stride() &&
+       !(_metadata.get_row_index_stride() & 7) && _metadata.get_row_index_stride() != 0 &&
+       num_columns * stripe_count < 8 * 128) &&
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);
@@ -1125,7 +1130,7 @@ void reader::impl::decompress_and_decode()
         //        (int)chunk.start_row,
         //        (int)chunk.num_rows);
 
-        chunk.column_num_rows = (level == 0) ? rows_to_read : col_meta.num_child_rows[col_idx];
+        chunk.column_num_rows = (level == 0) ? rows_to_decode : col_meta.num_child_rows[col_idx];
         chunk.parent_validity_info =
           (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
         chunk.parent_null_count_prefix_sums =
@@ -1311,7 +1316,7 @@ void reader::impl::decompress_and_decode()
         }
       }
       auto is_list_type = (column_types[i].id() == type_id::LIST);
-      auto n_rows       = (level == 0) ? rows_to_read : col_meta.num_child_rows[i];
+      auto n_rows       = (level == 0) ? rows_to_decode : col_meta.num_child_rows[i];
 
       // printf("  create col, num rows: %d\n", (int)n_rows);
 
