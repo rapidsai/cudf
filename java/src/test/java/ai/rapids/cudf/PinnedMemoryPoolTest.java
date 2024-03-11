@@ -140,4 +140,24 @@ class PinnedMemoryPoolTest extends CudfTestBase {
       assertEquals(0, buffer.getLength());
     }
   }
+
+  // This test simulates cuIO using our fallback pinned pool wrapper
+  // we should be able to either go to the pool, in this case 15KB in size
+  // or we should be falling back to pinned cudaMallocHost/cudaFreeHost.
+  @Test
+  void testFallbackPinnedPool() {
+    final long poolSize = 15 * 1024L;
+    PinnedMemoryPool.initialize(poolSize);
+    assertEquals(poolSize, PinnedMemoryPool.getTotalPoolSizeBytes());
+
+    long ptr = Rmm.allocFromFallbackPinnedPool(1347);  // this doesn't fallback
+    long ptr2 = Rmm.allocFromFallbackPinnedPool(15 * 1024L);  // this does
+    Rmm.freeFromFallbackPinnedPool(ptr, 1347); // free from pool
+    Rmm.freeFromFallbackPinnedPool(ptr2, 15*1024); // free from fallback
+
+    ptr = Rmm.allocFromFallbackPinnedPool(15*1024L); // this doesn't fallback
+    ptr2 = Rmm.allocFromFallbackPinnedPool(15*1024L); // this does
+    Rmm.freeFromFallbackPinnedPool(ptr, 15*1024L); // free from pool
+    Rmm.freeFromFallbackPinnedPool(ptr2, 15*1024L); // free from fallback
+  }
 }

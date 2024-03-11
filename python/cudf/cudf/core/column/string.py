@@ -5805,13 +5805,9 @@ class StringColumn(column.ColumnBase):
             )
         elif nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            pd_series = pd.Series(pandas_array, copy=False)
+            return pd.Series(pandas_array, copy=False, index=index)
         else:
-            pd_series = self.to_arrow().to_pandas()
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+            return super().to_pandas(index=index, nullable=nullable)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.api.types.dtype(to_dtype)

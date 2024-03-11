@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/nvtx/nvtx3.hpp>
+#include <nvtx3/nvtx3.hpp>
 
 #include "jni_utils.hpp"
 #include "nvtx_common.hpp"
