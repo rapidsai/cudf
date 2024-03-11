@@ -311,7 +311,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 distinct_hash_join<HasNested>::inner_join(rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr) const
 {
-  cudf::thread_range range{"distinct_hash_join::inner_join"};
+  cudf::scoped_range range{"distinct_hash_join::inner_join"};
 
   size_type const probe_table_num_rows{this->_probe.num_rows()};
 
@@ -354,7 +354,7 @@ template <cudf::has_nested HasNested>
 std::unique_ptr<rmm::device_uvector<size_type>> distinct_hash_join<HasNested>::left_join(
   rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr) const
 {
-  cudf::thread_range range{"distinct_hash_join::left_join"};
+  cudf::scoped_range range{"distinct_hash_join::left_join"};
 
   size_type const probe_table_num_rows{this->_probe.num_rows()};
 

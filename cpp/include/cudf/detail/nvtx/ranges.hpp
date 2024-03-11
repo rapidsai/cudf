@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "nvtx3.hpp"
+#include <nvtx3/nvtx3.hpp>
 
 namespace cudf {
 /**
@@ -34,12 +34,12 @@ struct libcudf_domain {
  * Example:
  * ```
  * void some_function(){
- *    cudf::thread_range rng{"custom_name"}; // Customizes range name
+ *    cudf::scoped_range rng{"custom_name"}; // Customizes range name
  *    ...
  * }
  * ```
  */
-using thread_range = ::nvtx3::domain_thread_range<libcudf_domain>;
+using scoped_range = ::nvtx3::scoped_range_in<libcudf_domain>;
 
 }  // namespace cudf
 
