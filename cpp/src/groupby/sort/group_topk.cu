@@ -89,7 +89,7 @@ std::unique_ptr<column> group_topk(column_view const& values,
                                                             table_view{{values}},
                                                             group_offsets,
                                                             {order},
-                                                            {null_order::AFTER},
+                                                            {null_order::BEFORE},
                                                             stream,
                                                             mr);
   auto output_table   = cudf::detail::gather(ordered_values->view(),
