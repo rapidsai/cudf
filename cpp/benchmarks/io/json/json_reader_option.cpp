@@ -104,6 +104,12 @@ void BM_jsonlines_read_options(nvbench::state& state,
                                                 ? cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL
                                                 : cudf::io::json_recovery_mode_t::FAIL;
   size_t const num_chunks                   = state.get_int64("num_chunks");
+  if (num_chunks > 1 && RowSelection == row_selection::ALL) {
+    state.skip(
+      "No point running the same benchmark multiple times for different num_chunks when all rows "
+      "are being selected anyway");
+    return;
+  }
 
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   auto const data_types = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
@@ -154,6 +160,8 @@ void BM_jsonlines_read_options(nvbench::state& state,
             auto const result = cudf::io::read_json(read_options);
             num_rows_read += result.tbl->num_rows();
             num_cols_read = result.tbl->num_columns();
+            if (num_cols_read)
+              CUDF_EXPECTS(num_cols_read == num_cols, "Unexpected number of columns");
           }
           break;
         }
@@ -161,7 +169,6 @@ void BM_jsonlines_read_options(nvbench::state& state,
       }
       timer.stop();
       CUDF_EXPECTS(num_rows_read == view.num_rows(), "Benchmark did not read the entire table");
-      CUDF_EXPECTS(num_cols_read == num_cols, "Unexpected number of columns");
     });
 
   auto const elapsed_time   = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
@@ -187,7 +194,7 @@ NVBENCH_BENCH_TYPES(
                         "mixed_types_as_string",
                         "recovery_mode"})
   .set_min_samples(6)
-  .add_int64_axis("num_chunks", nvbench::range(2, 5, 1));
+  .add_int64_axis("num_chunks", nvbench::range(1, 5, 1));
 
 NVBENCH_BENCH_TYPES(BM_json_read_options,
                     NVBENCH_TYPE_AXES(nvbench::enum_type_list<json_lines::YES, json_lines::NO>))
