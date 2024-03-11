@@ -61,11 +61,17 @@ namespace cudf::io::orc::detail {
 
 namespace {
 
-// TODO: update
-// TODO: compute num stripes from chunks
 /**
- * @brief Decompresses the stripe data, at stream granularity.
+ * @brief  Decompresses the stripe data, at stream granularity.
  *
+ * Only the streams in the provided `stream_range` are decoded. That range is determined in
+ * the previous steps, after splitting stripes into subsets to maintain memory usage to be
+ * under data read limit.
+ *
+ * @param loaded_stripe_range Range of stripes that are already loaded in memory
+ * @param stream_range Range of streams to be decoded
+ * @param num_decoded_stripes Number of stripes that the decoding streams belong to
+ * @param compinfo_map A map to lookup compression info of streams
  * @param decompressor Block decompressor
  * @param stripe_data List of source stripe column data
  * @param stream_info List of stream to column mappings
@@ -74,7 +80,7 @@ namespace {
  * @param row_index_stride Distance between each row index
  * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return Device buffer to decompressed page data
+ * @return Device buffer to decompressed data
  */
 rmm::device_buffer decompress_stripe_data(
   range const& loaded_stripe_range,
@@ -208,13 +214,13 @@ rmm::device_buffer decompress_stripe_data(
     compinfo[i].copy_in_ctl  = inflate_in.data() + start_pos_uncomp;
     compinfo[i].copy_out_ctl = inflate_out.data() + start_pos_uncomp;
 
-    //    stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
     start_pos += compinfo[i].num_compressed_blocks;
     start_pos_uncomp += compinfo[i].num_uncompressed_blocks;
     max_uncomp_block_size =
       std::max(max_uncomp_block_size, compinfo[i].max_uncompressed_block_size);
   }
+
   compinfo.host_to_device_async(stream);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                  compinfo.size(),
@@ -289,8 +295,6 @@ rmm::device_buffer decompress_stripe_data(
         break;
       default: CUDF_FAIL("Unexpected decompression dispatch"); break;
     }
-
-    // TODO: proclam return type
 
     // Check if any block has been failed to decompress.
     // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
