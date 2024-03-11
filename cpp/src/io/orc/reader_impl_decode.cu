@@ -885,14 +885,7 @@ void reader::impl::decompress_and_decode()
   // For computing null count.
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums(num_levels);
 
-  //
-  //
-  //
-
-  // Iterates through levels of nested columns, child column will be one level down
-  // compared to parent column.
   auto& col_meta = *_col_meta;
-
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
 #ifdef LOCAL_TEST
     printf("processing level = %d\n", (int)level);
@@ -908,13 +901,15 @@ void reader::impl::decompress_and_decode()
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
     auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
 
-    auto& columns_level = _selected_columns.levels[level];
-    auto& chunks        = lvl_chunks[level];
+    auto const& columns_level = _selected_columns.levels[level];
+    auto const& stream_info   = _file_itm_data.lvl_stream_info[level];
+    auto const& column_types  = _file_itm_data.lvl_column_types[level];
+    auto const& nested_cols   = _file_itm_data.lvl_nested_cols[level];
 
-    auto const& column_types     = _file_itm_data.lvl_column_types[level];
-    auto const& nested_cols      = _file_itm_data.lvl_nested_cols[level];
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    auto& chunks      = lvl_chunks[level];
+
     auto const num_level_columns = columns_level.size();
-
     chunks =
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_level_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
@@ -950,9 +945,6 @@ void reader::impl::decompress_and_decode()
       return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
         stripe_count, _stream, rmm::mr::get_current_device_resource());
     });
-
-    auto& stripe_data       = _file_itm_data.lvl_stripe_data[level];
-    auto const& stream_info = _file_itm_data.lvl_stream_info[level];
 
     int64_t stripe_start_row{0};
     int64_t num_dict_entries{0};
