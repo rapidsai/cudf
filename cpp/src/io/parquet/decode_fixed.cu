@@ -239,7 +239,7 @@ __device__ inline bool has_nulls(page_state_s* s)
   auto const lvl      = level_type::DEFINITION;
   auto const init_run = s->initial_rle_run[lvl];
   // literal runs, lets assume they could hold nulls
-  if ((init_run & 1) == 1) { return true; }
+  if (is_literal_run(init_run)) { return true; }
 
   // repeated run with number of items in the run not equal
   // to the rows in the page, assume that means we could have nulls
