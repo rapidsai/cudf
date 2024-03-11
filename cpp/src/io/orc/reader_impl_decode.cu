@@ -462,7 +462,7 @@ void decode_stream_data(std::size_t num_dicts,
                         int64_t skip_rows,
                         size_type row_index_stride,
                         std::size_t level,
-                        table_view const& tz_table,
+                        table_device_view const& d_tz_table,
                         cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                         cudf::detail::device_2dspan<gpu::RowGroup> row_groups,
                         std::vector<column_buffer>& out_buffers,
@@ -504,7 +504,6 @@ void decode_stream_data(std::size_t num_dicts,
     update_null_mask(chunks, out_buffers, stream, mr);
   }
 
-  auto const tz_table_dptr = table_device_view::create(tz_table, stream);
   rmm::device_scalar<size_type> error_count(0, stream);
   // Update the null map for child columns
 
@@ -526,7 +525,7 @@ void decode_stream_data(std::size_t num_dicts,
                            num_columns,
                            num_stripes,
                            skip_rows,
-                           *tz_table_dptr,
+                           d_tz_table,
                            row_groups.size().first,
                            row_index_stride,
                            level,
@@ -836,7 +835,8 @@ void reader::impl::decompress_and_decode()
     rows_to_decode += stripe_rows;
 
     // The rows to skip should never be larger than number of rows in the first loaded stripes.
-    // This is just to make sure there was not any bug with it.
+    // Technically, overflow here should never happen since `select_stripes` already checked it.
+    // This is just to make sure there was not any bug there.
     if (rows_to_skip > 0) {
       CUDF_EXPECTS(rows_to_skip < stripe_rows, "Invalid rows_to_skip computation.");
     }
@@ -854,6 +854,8 @@ void reader::impl::decompress_and_decode()
   printf("decode, skip = %ld, decode = %ld\n", rows_to_skip, rows_to_decode);
 #endif
 
+  // Technically, overflow here should never happen because the `load_data()` step
+  // already handled it by spliting the loaded stripe range into multiple decode ranges.
   CUDF_EXPECTS(rows_to_decode <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",
                std::overflow_error);
@@ -871,6 +873,7 @@ void reader::impl::decompress_and_decode()
                                     {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
                                 : std::make_unique<cudf::table>();
   }();
+  auto const tz_table_dptr = table_device_view::create(tz_table->view(), _stream);
 
   auto& lvl_stripe_data        = _file_itm_data.lvl_stripe_data;
   auto& null_count_prefix_sums = _file_itm_data.null_count_prefix_sums;
@@ -891,66 +894,7 @@ void reader::impl::decompress_and_decode()
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
-  auto& col_meta = *_col_meta;
-
-#if 0
-  printf("num_child_rows: (size %d)\n", (int)_col_meta->num_child_rows.size());
-  if (_col_meta->num_child_rows.size()) {
-    for (auto x : _col_meta->num_child_rows) {
-      printf("%d, ", (int)x);
-    }
-    printf("\n");
-
-    _col_meta->num_child_rows.clear();
-  }
-
-  printf("parent_column_data null count: (size %d)\n", (int)_col_meta->parent_column_data.size());
-  if (_col_meta->parent_column_data.size()) {
-    for (auto x : _col_meta->parent_column_data) {
-      printf("%d, ", (int)x.null_count);
-    }
-    printf("\n");
-    _col_meta->parent_column_data.clear();
-  }
-
-  printf("parent_column_index: (size %d)\n", (int)_col_meta->parent_column_index.size());
-  if (_col_meta->parent_column_index.size()) {
-    for (auto x : _col_meta->parent_column_index) {
-      printf("%d, ", (int)x);
-    }
-    printf("\n");
-    _col_meta->parent_column_index.clear();
-  }
-
-  printf("child_start_row: (size %d)\n", (int)_col_meta->child_start_row.size());
-  if (_col_meta->child_start_row.size()) {
-    for (auto x : _col_meta->child_start_row) {
-      printf("%d, ", (int)x);
-    }
-    printf("\n");
-    _col_meta->child_start_row.clear();
-  }
-
-  printf("num_child_rows_per_stripe: (size %d)\n",
-         (int)_col_meta->num_child_rows_per_stripe.size());
-  if (_col_meta->num_child_rows_per_stripe.size()) {
-    for (auto x : _col_meta->num_child_rows_per_stripe) {
-      printf("%d, ", (int)x);
-    }
-    printf("\n");
-    _col_meta->num_child_rows_per_stripe.clear();
-  }
-
-  printf("rwgrp_meta: (size %d)\n", (int)_col_meta->rwgrp_meta.size());
-  if (_col_meta->rwgrp_meta.size()) {
-    for (auto x : _col_meta->rwgrp_meta) {
-      printf("(%d | %d), ", (int)x.start_row, (int)x.num_rows);
-    }
-    printf("\n");
-  }
-
-#endif
-
+  auto& col_meta                 = *_col_meta;
   auto& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
 
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
@@ -1360,7 +1304,7 @@ void reader::impl::decompress_and_decode()
                        rows_to_skip,
                        _metadata.get_row_index_stride(),
                        level,
-                       tz_table->view(),
+                       *tz_table_dptr,
                        chunks,
                        row_groups,
                        _out_buffers[level],
