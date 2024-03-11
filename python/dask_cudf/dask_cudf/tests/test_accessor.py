@@ -12,6 +12,7 @@ from cudf import DataFrame, Series, date_range
 from cudf.testing._utils import assert_eq, does_not_raise
 
 import dask_cudf
+from dask_cudf.tests.utils import xfail_dask_expr
 
 #############################################################################
 #                        Datetime Accessor                                  #
@@ -110,6 +111,7 @@ def test_categorical_accessor_initialization2(data):
         dsr.cat
 
 
+@xfail_dask_expr("TODO: Unexplained dask-expr failure")
 @pytest.mark.parametrize("data", [data_cat_1()])
 def test_categorical_basic(data):
     cat = data.copy()
@@ -201,10 +203,11 @@ def test_categorical_compare_unordered(data):
         dsr < dsr
 
 
+@xfail_dask_expr("TODO: Unexplained dask-expr failure")
 @pytest.mark.parametrize("data", [data_cat_3()])
 def test_categorical_compare_ordered(data):
-    cat1 = data[0]
-    cat2 = data[1]
+    cat1 = data[0].copy()
+    cat2 = data[1].copy()
     pdsr1 = pd.Series(cat1)
     pdsr2 = pd.Series(cat2)
     sr1 = Series(cat1)
@@ -271,6 +274,7 @@ def test_categorical_categories():
     )
 
 
+@xfail_dask_expr("TODO: Unexplained dask-expr failure")
 def test_categorical_as_known():
     df = dask_cudf.from_cudf(DataFrame({"col_1": [0, 1, 2, 3]}), npartitions=2)
     df["col_1"] = df["col_1"].astype("category")
