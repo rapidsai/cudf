@@ -458,7 +458,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-void decode_stream_data(std::size_t num_dicts,
+void decode_stream_data(int64_t num_dicts,
                         int64_t skip_rows,
                         size_type row_index_stride,
                         std::size_t level,
@@ -951,7 +951,7 @@ void reader::impl::decompress_and_decode()
     // 0-based counters, used accross all decoding stripes in this step.
     int64_t stripe_start_row{0};
     int64_t num_dict_entries{0};
-    int64_t num_rowgroups{0};
+    uint32_t num_rowgroups{0};
     std::size_t local_stream_order{0};
 
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
@@ -989,8 +989,9 @@ void reader::impl::decompress_and_decode()
       auto const dst_base =
         static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
       auto const num_rows_per_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
-      auto const rowgroup_id         = num_rowgroups;
-      auto const stripe_num_rowgroups =
+
+      uint32_t const rowgroup_id = num_rowgroups;
+      uint32_t const stripe_num_rowgroups =
         use_index ? (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
                       _metadata.get_row_index_stride()
                   : 0;
@@ -1117,15 +1118,8 @@ void reader::impl::decompress_and_decode()
       }
 #endif
 
-      // printf("line %d\n", __LINE__);
-      // fflush(stdout);
-
     } else {
-      // printf("no decompression----------------------\n");
-
       if (row_groups.size().first) {
-        // printf("line %d\n", __LINE__);
-        // fflush(stdout);
         chunks.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
         row_groups.host_to_device_async(_stream);
@@ -1140,9 +1134,6 @@ void reader::impl::decompress_and_decode()
       }
     }
 
-    // printf("line %d\n", __LINE__);
-    // fflush(stdout);
-
 #ifdef LOCAL_TEST
     {
       _stream.synchronize();
@@ -1152,8 +1143,6 @@ void reader::impl::decompress_and_decode()
     }
 #endif
 
-    // TODO: do not clear but reset each one.
-    // and only reset if the new size/type are different.
     _out_buffers[level].clear();
 
 #ifdef LOCAL_TEST
@@ -1176,10 +1165,9 @@ void reader::impl::decompress_and_decode()
           break;
         }
       }
-      auto is_list_type = (column_types[i].id() == type_id::LIST);
-      auto n_rows       = (level == 0) ? rows_to_decode : col_meta.num_child_rows[i];
 
-      // printf("  create col, num rows: %d\n", (int)n_rows);
+      auto const is_list_type = (column_types[i].id() == type_id::LIST);
+      auto const n_rows       = (level == 0) ? rows_to_decode : col_meta.num_child_rows[i];
 
 #ifdef LOCAL_TEST
       {
@@ -1190,9 +1178,9 @@ void reader::impl::decompress_and_decode()
       }
 #endif
 
-      // For list column, offset column will be always size + 1
-      if (is_list_type) n_rows++;
-      _out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, _stream, _mr);
+      // For list column, offset column will be always size + 1.
+      _out_buffers[level].emplace_back(
+        column_types[i], is_list_type ? n_rows + 1 : n_rows, is_nullable, _stream, _mr);
 
 #ifdef LOCAL_TEST
       {
@@ -1204,9 +1192,6 @@ void reader::impl::decompress_and_decode()
       }
 #endif
     }
-
-    // printf("line %d\n", __LINE__);
-    // fflush(stdout);
 
 #ifdef LOCAL_TEST
     {
@@ -1237,15 +1222,12 @@ void reader::impl::decompress_and_decode()
     }
 #endif
 
-    // printf("line %d\n", __LINE__);
-    // fflush(stdout);
-
     if (nested_cols.size()) {
 #ifdef LOCAL_TEST
       printf("have nested col\n");
 #endif
 
-      // Extract information to process nested child columns
+      // Extract information to process nested child columns.
       scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
 
       row_groups.device_to_host_sync(_stream);

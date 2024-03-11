@@ -145,7 +145,8 @@ std::size_t gather_stream_info_and_column_desc(
             if (index_type == gpu::CI_DICTIONARY) {
               chunk.dictionary_start = *num_dictionary_entries;
               chunk.dict_len         = stripefooter->columns[column_id].dictionarySize;
-              *num_dictionary_entries += stripefooter->columns[column_id].dictionarySize;
+              *num_dictionary_entries +=
+                static_cast<int64_t>(stripefooter->columns[column_id].dictionarySize);
             }
           }
         }
