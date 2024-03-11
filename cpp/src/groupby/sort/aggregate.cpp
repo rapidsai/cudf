@@ -377,10 +377,30 @@ void aggregate_result_functor::operator()<aggregation::NUNIQUE>(aggregation cons
 }
 
 template <>
+void aggregate_result_functor::operator()<aggregation::TOP_K>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+  auto& topk_agg = dynamic_cast<cudf::detail::top_k_aggregation const&>(agg);
+
+  auto count_agg = make_count_aggregation(null_policy::INCLUDE);
+  operator()<aggregation::COUNT_ALL>(*count_agg);
+  column_view group_sizes = cache.get_result(values, *count_agg);
+
+  cache.add_result(values,
+                   agg,
+                   detail::group_topk(get_grouped_values(),
+                                      group_sizes,
+                                      helper.group_offsets(stream),
+                                      helper.num_groups(stream),
+                                      topk_agg._k,
+                                      topk_agg._order,
+                                      stream,
+                                      mr));
+}
+template <>
 void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
-
   auto& nth_element_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
 
   auto count_agg = make_count_aggregation(nth_element_agg._null_handling);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -537,6 +537,27 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           column_view const& stddev_1,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to calculate topk in each group of  @p values
+ *
+ * @param values Grouped values to get top-k values from
+ * @param group_sizes Number of elements per group
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param k How many elements to take from the front of each group of @p values
+ * @param order Sort order within each group (use ASCENDING for bottom-k, DESCENDING for top-k)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_topk(column_view const& values,
+                                   cudf::device_span<size_type const> group_sizes,
+                                   cudf::device_span<size_type const> group_offsets,
+                                   size_type num_groups,
+                                   size_type k,
+                                   order order,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace groupby

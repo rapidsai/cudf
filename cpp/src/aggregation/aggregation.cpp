@@ -173,6 +173,12 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, top_k_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, lead_lag_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -344,6 +350,11 @@ void aggregation_finalizer::visit(collect_list_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(collect_set_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(top_k_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -727,6 +738,14 @@ template std::unique_ptr<groupby_aggregation> make_collect_set_aggregation<group
 template std::unique_ptr<reduce_aggregation> make_collect_set_aggregation<reduce_aggregation>(
   null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal);
 
+template <typename Base>
+std::unique_ptr<Base> make_top_k_aggregation(size_type k, order order)
+{
+  return std::make_unique<detail::top_k_aggregation>(k, order);
+}
+
+template std::unique_ptr<aggregation> make_top_k_aggregation(size_type k, order order);
+template std::unique_ptr<groupby_aggregation> make_top_k_aggregation(size_type k, order order);
 /// Factory to create a LAG aggregation
 template <typename Base>
 std::unique_ptr<Base> make_lag_aggregation(size_type offset)
