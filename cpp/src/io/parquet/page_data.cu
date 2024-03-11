@@ -609,11 +609,11 @@ struct mask_tform {
 
 }  // anonymous namespace
 
-uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>& pages,
+uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo const> pages,
                                        rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  auto mask_iter = thrust::make_transform_iterator(pages.d_begin(), mask_tform{});
+  auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
   return thrust::reduce(
     rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
 }
@@ -621,8 +621,8 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>
 /**
  * @copydoc cudf::io::parquet::detail::DecodePageData
  */
-void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,

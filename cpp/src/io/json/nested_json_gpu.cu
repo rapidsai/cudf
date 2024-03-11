@@ -2042,7 +2042,8 @@ void make_json_column(json_column& root_column,
  * options
  * @param stream The CUDA stream to which kernels are dispatched
  */
-auto parsing_options(cudf::io::json_reader_options const& options, rmm::cuda_stream_view stream)
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 

@@ -140,10 +140,9 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
                std::overflow_error);
 
   // Now build the chars column
-  std::unique_ptr<column> chars =
-    create_chars_child_column(static_cast<size_type>(char_bytes), stream, mr);
+  rmm::device_uvector<char> chars(char_bytes, stream, mr);
   if (char_bytes > 0) {
-    size_and_exec_fn.d_chars = chars->mutable_view().template data<char>();
+    size_and_exec_fn.d_chars = chars.data();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       size_and_exec_fn, d_prog, strings_count);
   }

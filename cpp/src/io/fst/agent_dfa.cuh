@@ -91,7 +91,7 @@ class DFASimulationCallbackWrapper {
   {
     uint32_t const count = transducer_table(old_state, symbol_id, read_symbol);
     if (write) {
-#if __CUDA_ARCH__ > 0
+#if defined(__CUDA_ARCH__)
 #pragma unroll 1
 #endif
       for (uint32_t out_char = 0; out_char < count; out_char++) {
