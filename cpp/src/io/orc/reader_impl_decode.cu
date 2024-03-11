@@ -875,27 +875,24 @@ void reader::impl::decompress_and_decode()
   }();
   auto const tz_table_dptr = table_device_view::create(tz_table->view(), _stream);
 
-  auto& lvl_stripe_data = _file_itm_data.lvl_stripe_data;
-  auto& lvl_chunks      = _file_itm_data.lvl_data_chunks;
-
   auto const num_levels = _selected_columns.num_levels();
-
-  // TODO: move this to global step
-  lvl_chunks.resize(_selected_columns.num_levels());
-
   _out_buffers.resize(num_levels);
 
+  // Column descriptors ('chunks').
+  // Each 'chunk' of data here corresponds to an orc column, in a stripe, at a nested level.
+  std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks(num_levels);
+
+  // For computing null count.
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums(num_levels);
+
   //
   //
   //
-  // TODO: move this to reader_impl.cu, decomp and decode step
-  //  std::size_t num_stripes = selected_stripes.size();
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
-  auto& col_meta                 = *_col_meta;
-  auto& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
+  auto& col_meta                       = *_col_meta;
+  auto const& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
 
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
 #ifdef LOCAL_TEST
@@ -987,7 +984,7 @@ void reader::impl::decompress_and_decode()
     });
 
     // Tracker for eventually deallocating compressed and uncompressed data
-    auto& stripe_data = lvl_stripe_data[level];
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
 
     int64_t stripe_start_row = 0;
     int64_t num_dict_entries = 0;
@@ -1169,7 +1166,7 @@ void reader::impl::decompress_and_decode()
 
       auto decomp_data = decompress_stripe_data(
         _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1],
-        get_range(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range),
+        stream_range,
         stripe_count,
         _file_itm_data.compinfo_map,
         *_metadata.per_file_metadata[0].decompressor,
@@ -1379,7 +1376,7 @@ void reader::impl::decompress_and_decode()
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     _out_buffers[level].clear();
 
-    auto& stripe_data = lvl_stripe_data[level];
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
 
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       stripe_data[stripe_start - load_stripe_start] = {};

@@ -310,7 +310,6 @@ void reader::impl::global_preprocess(read_mode mode)
   lvl_stripe_sizes.resize(num_levels);
   lvl_stream_info.resize(num_levels);
   lvl_stripe_stream_ranges.resize(num_levels);
-  _file_itm_data.lvl_data_chunks.resize(num_levels);
   _out_buffers.resize(num_levels);
 
   auto& read_info = _file_itm_data.data_read_info;
