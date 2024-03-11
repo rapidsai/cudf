@@ -891,8 +891,7 @@ void reader::impl::decompress_and_decode()
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
-  auto& col_meta                       = *_col_meta;
-  auto const& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
+  auto& col_meta = *_col_meta;
 
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
 #ifdef LOCAL_TEST
@@ -906,44 +905,16 @@ void reader::impl::decompress_and_decode()
     }
 #endif
 
-    auto const& stripe_stream_ranges = lvl_stripe_stream_ranges[level];
+    auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
     auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
 
     auto& columns_level = _selected_columns.levels[level];
+    auto& chunks        = lvl_chunks[level];
 
-    // TODO: do it in global step
-    // Association between each ORC column and its cudf::column
-    std::vector<orc_column_meta> nested_cols;
-
-    // Get a list of column data types
-    std::vector<data_type> column_types;
-    for (auto& col : columns_level) {
-      auto col_type =
-        to_cudf_type(_metadata.get_col_type(col.id).kind,
-                     _config.use_np_dtypes,
-                     _config.timestamp_type.id(),
-                     to_cudf_decimal_type(_config.decimal128_columns, _metadata, col.id));
-      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
-          col_type == type_id::DECIMAL128) {
-        // sign of the scale is changed since cuDF follows c++ libraries like CNL
-        // which uses negative scaling, but liborc and other libraries
-        // follow positive scaling.
-        auto const scale =
-          -static_cast<size_type>(_metadata.get_col_type(col.id).scale.value_or(0));
-        column_types.emplace_back(col_type, scale);
-      } else {
-        column_types.emplace_back(col_type);
-      }
-
-      // Map each ORC column to its column
-      if (col_type == type_id::LIST or col_type == type_id::STRUCT) {
-        nested_cols.emplace_back(col);
-      }
-    }
-
+    auto const& column_types     = _file_itm_data.lvl_column_types[level];
+    auto const& nested_cols      = _file_itm_data.lvl_nested_cols[level];
     auto const num_level_columns = columns_level.size();
-    auto& chunks                 = lvl_chunks[level];
+
     chunks =
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_level_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
@@ -974,24 +945,19 @@ void reader::impl::decompress_and_decode()
     printf(" use_index: %d\n", (int)use_index);
 #endif
 
-    // Logically view streams as columns
-    auto const& stream_info = _file_itm_data.lvl_stream_info[level];
-
     null_count_prefix_sums[level].reserve(num_level_columns);
     std::generate_n(std::back_inserter(null_count_prefix_sums[level]), num_level_columns, [&]() {
       return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
         stripe_count, _stream, rmm::mr::get_current_device_resource());
     });
 
-    // Tracker for eventually deallocating compressed and uncompressed data
-    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    auto& stripe_data       = _file_itm_data.lvl_stripe_data[level];
+    auto const& stream_info = _file_itm_data.lvl_stream_info[level];
 
-    int64_t stripe_start_row = 0;
-    int64_t num_dict_entries = 0;
-    int64_t num_rowgroups    = 0;
-
-    // TODO: Stripe and stream idx must be by chunk.
-    std::size_t stream_processing_order = 0;
+    int64_t stripe_start_row{0};
+    int64_t num_dict_entries{0};
+    int64_t num_rowgroups{0};
+    std::size_t local_stream_order{0};
 
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
 #ifdef LOCAL_TEST
@@ -1002,10 +968,8 @@ void reader::impl::decompress_and_decode()
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
-      // printf("stripeinfo->indexLength: %d, data: %d\n",
-      //        (int)stripe_info->indexLength,
-      //        (int)stripe_info->dataLength);
-
+      // Gather only for the decoding stripes, thus the first parameter (`stripe_processing_order`)
+      // needs to be normalized to be 0-based.
       auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx - stripe_start,
                                                                       level,
                                                                       stripe_info,
@@ -1015,7 +979,7 @@ void reader::impl::decompress_and_decode()
                                                                       use_index,
                                                                       level == 0,
                                                                       &num_dict_entries,
-                                                                      &stream_processing_order,
+                                                                      &local_stream_order,
                                                                       std::nullopt,  // stream_info
                                                                       &chunks);
 

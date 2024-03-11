@@ -68,7 +68,7 @@
 namespace cudf::io::orc::detail {
 
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t stripe_processing_order,
+  std::size_t global_stripe_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -77,7 +77,7 @@ std::size_t gather_stream_info_and_column_desc(
   bool use_index,
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
-  std::size_t* stream_processing_order,
+  std::size_t* local_stream_order,
   std::optional<std::vector<orc_stream_info>*> const& stream_info,
   std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks)
 {
@@ -124,8 +124,8 @@ std::size_t gather_stream_info_and_column_desc(
           if (child_idx >= 0) {
             col = child_idx;
             if (chunks.has_value()) {
-              auto& chunk                     = (*chunks.value())[stripe_processing_order][col];
-              chunk.strm_id[gpu::CI_PRESENT]  = *stream_processing_order;
+              auto& chunk                     = (*chunks.value())[global_stripe_order][col];
+              chunk.strm_id[gpu::CI_PRESENT]  = *local_stream_order;
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
           }
@@ -136,8 +136,8 @@ std::size_t gather_stream_info_and_column_desc(
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
           if (index_type < gpu::CI_NUM_STREAMS) {
-            auto& chunk                = (*chunks.value())[stripe_processing_order][col];
-            chunk.strm_id[index_type]  = *stream_processing_order;
+            auto& chunk                = (*chunks.value())[global_stripe_order][col];
+            chunk.strm_id[index_type]  = *local_stream_order;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
             chunk.skip_count |= 1 << index_type;
@@ -150,13 +150,13 @@ std::size_t gather_stream_info_and_column_desc(
           }
         }
 
-        (*stream_processing_order)++;
+        (*local_stream_order)++;
       } else {  // not chunks.has_value()
         stream_info.value()->emplace_back(
           stripeinfo->offset + src_offset,
           dst_offset,
           stream.length,
-          stream_source_info{stripe_processing_order, level, column_id, stream.kind});
+          stream_source_info{global_stripe_order, level, column_id, stream.kind});
       }
 
       dst_offset += stream.length;
@@ -305,11 +305,15 @@ void reader::impl::global_preprocess(read_mode mode)
   auto& lvl_stripe_sizes         = _file_itm_data.lvl_stripe_sizes;
   auto& lvl_stream_info          = _file_itm_data.lvl_stream_info;
   auto& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
+  auto& lvl_column_types         = _file_itm_data.lvl_column_types;
+  auto& lvl_nested_cols          = _file_itm_data.lvl_nested_cols;
 
   lvl_stripe_data.resize(num_levels);
   lvl_stripe_sizes.resize(num_levels);
   lvl_stream_info.resize(num_levels);
   lvl_stripe_stream_ranges.resize(num_levels);
+  lvl_column_types.resize(num_levels);
+  lvl_nested_cols.resize(num_levels);
   _out_buffers.resize(num_levels);
 
   auto& read_info = _file_itm_data.data_read_info;
@@ -322,16 +326,44 @@ void reader::impl::global_preprocess(read_mode mode)
     // Association between each ORC column and its cudf::column
     col_meta.orc_col_map.emplace_back(_metadata.get_num_cols(), -1);
 
+    auto const& columns_level = _selected_columns.levels[level];
     size_type col_id{0};
-    for (auto const& col : _selected_columns.levels[level]) {
+
+    for (auto const& col : columns_level) {
       // Map each ORC column to its column
       col_meta.orc_col_map[level][col.id] = col_id++;
-    }
 
-    auto const num_columns = _selected_columns.levels[level].size();
+      auto const col_type =
+        to_cudf_type(_metadata.get_col_type(col.id).kind,
+                     _config.use_np_dtypes,
+                     _config.timestamp_type.id(),
+                     to_cudf_decimal_type(_config.decimal128_columns, _metadata, col.id));
+      CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
+
+      auto& column_types = lvl_column_types[level];
+      auto& nested_cols  = lvl_nested_cols[level];
+
+      if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
+          col_type == type_id::DECIMAL128) {
+        // sign of the scale is changed since cuDF follows c++ libraries like CNL
+        // which uses negative scaling, but liborc and other libraries
+        // follow positive scaling.
+        auto const scale =
+          -static_cast<size_type>(_metadata.get_col_type(col.id).scale.value_or(0));
+        column_types.emplace_back(col_type, scale);
+      } else {
+        column_types.emplace_back(col_type);
+      }
+
+      // Map each ORC column to its column.
+      if (col_type == type_id::LIST or col_type == type_id::STRUCT) {
+        nested_cols.emplace_back(col);
+      }
+    }
 
     // Try to reserve some memory, but the final size is unknown,
     // since each column may have more than one stream.
+    auto const num_columns = columns_level.size();
     lvl_stream_info[level].reserve(num_total_stripes * num_columns);
     if (read_info.capacity() < num_total_stripes * num_columns) {
       read_info.reserve(num_total_stripes * num_columns);

@@ -162,6 +162,12 @@ struct file_intermediate_data {
   // This is used to initialize the stripe_data buffers.
   std::vector<std::vector<std::size_t>> lvl_stripe_sizes;
 
+  // List of column data types at each nested level.
+  std::vector<std::vector<data_type>> lvl_column_types;
+
+  // List of nested type columns at each nested level.
+  std::vector<std::vector<orc_column_meta>> lvl_nested_cols;
+
   bool global_preprocessed{false};
 };
 
@@ -292,9 +298,22 @@ range get_range(std::vector<range> const& input_ranges, range const& selected_ra
  * descriptors (`chunks` is present) during decompression and decoding. The two steps share
  * most of the execution path thus this function takes mutually exclusive parameters `stream_info`
  * or `chunks` depending on each use case.
+ *
+ * @param global_stripe_order The global index of the current decoding stripe
+ * @param level The nested level of the current decoding column
+ * @param stripeinfo The pointer to current decoding stripe's information
+ * @param stripefooter The pointer to current decoding stripe's footer
+ * @param orc2gdf The mapping from ORC column ids to gdf column ids
+ * @param types The schema type
+ * @param use_index Whether to use the row index for parsing
+ * @param apply_struct_map Indicating if this is the root level
+ * @param num_dictionary_entries The number of dictionary entries
+ * @param local_stream_order For retrieving 0-based orders of streams in the current decoding step
+ * @param stream_info The vector of streams' information
+ * @param chunks The vector of column descriptors
  */
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t stripe_processing_order,
+  std::size_t global_stripe_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
@@ -303,7 +322,7 @@ std::size_t gather_stream_info_and_column_desc(
   bool use_index,
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
-  std::size_t* stream_processing_order,
+  std::size_t* local_stream_order,
   std::optional<std::vector<orc_stream_info>*> const& stream_info,
   std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks);
 
