@@ -311,6 +311,7 @@ range get_range(std::vector<range> const& input_ranges, range const& selected_ra
  * @param local_stream_order For retrieving 0-based orders of streams in the current decoding step
  * @param stream_info The vector of streams' information
  * @param chunks The vector of column descriptors
+ * @return The number of bytes in the gathered streams
  */
 std::size_t gather_stream_info_and_column_desc(
   std::size_t global_stripe_order,
