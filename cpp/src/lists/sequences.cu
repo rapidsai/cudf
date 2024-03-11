@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -145,7 +146,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
     CUDF_EXPECTS(!steps_cv.has_nulls(), "steps input column must not have nulls.");
     CUDF_EXPECTS(starts.size() == steps_cv.size(),
                  "starts and steps input columns must have the same number of rows.");
-    CUDF_EXPECTS(starts.type() == steps_cv.type(),
+    CUDF_EXPECTS(cudf::column_types_equal(starts, steps_cv),
                  "starts and steps input columns must have the same type.");
   }
 

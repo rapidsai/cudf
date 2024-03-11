@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -312,6 +312,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
                "Mismatch number of fill_values and columns.");
   CUDF_EXPECTS(
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     std::all_of(thrust::make_counting_iterator(0),
                 thrust::make_counting_iterator(values.num_columns()),
                 [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),

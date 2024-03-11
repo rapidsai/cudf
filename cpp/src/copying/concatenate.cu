@@ -30,6 +30,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -460,11 +461,7 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  */
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(std::all_of(cols.begin(),
-                           cols.end(),
-                           [expected_type = cols.front().type()](auto const& c) {
-                             return c.type() == expected_type;
-                           }),
+  CUDF_EXPECTS(cudf::all_column_types_equal(cols.begin(), cols.end()),
                "Type mismatch in columns to concatenate.");
 
   // total size of all concatenated rows

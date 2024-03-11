@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -53,7 +54,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
-  CUDF_EXPECTS(new_keys.type() == old_keys.type(), "Keys must be the same type");
+  CUDF_EXPECTS(cudf::column_types_equal(new_keys, old_keys), "Keys must be the same type");
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys = cudf::detail::concatenate(

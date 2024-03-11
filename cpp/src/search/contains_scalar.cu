@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,6 +62,8 @@ struct contains_scalar_dispatch {
                                                            scalar const& needle,
                                                            rmm::cuda_stream_view stream) const
   {
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
@@ -87,6 +89,8 @@ struct contains_scalar_dispatch {
                                                           scalar const& needle,
                                                           rmm::cuda_stream_view stream) const
   {
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.

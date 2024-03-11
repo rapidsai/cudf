@@ -21,6 +21,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -230,9 +231,8 @@ DLManagedTensor* to_dlpack(table_view const& input,
   DLDataType const dltype = data_type_to_DLDataType(type);
 
   // Ensure all columns are the same type
-  CUDF_EXPECTS(
-    std::all_of(input.begin(), input.end(), [type](auto const& col) { return col.type() == type; }),
-    "All columns required to have same data type");
+  CUDF_EXPECTS(cudf::all_column_types_equal(input.begin(), input.end()),
+               "All columns required to have same data type");
 
   // Ensure none of the columns have nulls
   CUDF_EXPECTS(

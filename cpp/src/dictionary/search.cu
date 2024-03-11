@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,8 @@ struct find_index_fn {
   {
     if (!key.is_valid(stream))
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
 
@@ -115,6 +117,8 @@ struct find_insert_index_fn {
   {
     if (!key.is_valid(stream))
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(input.keys().type() == key.type(),
                  "search key type must match dictionary keys type");
 

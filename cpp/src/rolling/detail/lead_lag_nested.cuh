@@ -24,6 +24,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -98,7 +99,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
 {
   CUDF_EXPECTS(op == aggregation::LEAD || op == aggregation::LAG,
                "Unexpected aggregation type in compute_lead_lag_for_nested");
-  CUDF_EXPECTS(default_outputs.type().id() == input.type().id(),
+  CUDF_EXPECTS(cudf::column_types_equal(input, default_outputs),
                "Defaults column type must match input column.");  // Because LEAD/LAG.
 
   CUDF_EXPECTS(default_outputs.is_empty() || (input.size() == default_outputs.size()),

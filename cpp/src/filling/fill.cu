@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,6 +109,8 @@ struct out_of_place_fill_range_dispatch {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
@@ -136,6 +138,8 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
+  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+  // ensure nested types are handled correctly.
   CUDF_EXPECTS(input.type() == value.type(), "Data type mismatch.");
   using ScalarType = cudf::scalar_type_t<cudf::string_view>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
@@ -152,6 +156,8 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
 {
   if (input.is_empty()) return std::make_unique<cudf::column>(input, stream, mr);
   cudf::dictionary_column_view const target(input);
+  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+  // ensure nested types are handled correctly.
   CUDF_EXPECTS(target.keys().type() == value.type(), "Data type mismatch.");
 
   // if the scalar is invalid, then just copy the column and fill the null mask
@@ -218,6 +224,8 @@ void fill_in_place(mutable_column_view& destination,
                "Range is out of bounds.");
   CUDF_EXPECTS(destination.nullable() || value.is_valid(stream),
                "destination should be nullable or value should be non-null.");
+  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+  // ensure nested types are handled correctly.
   CUDF_EXPECTS(destination.type() == value.type(), "Data type mismatch.");
 
   if (end != begin) {  // otherwise no-op

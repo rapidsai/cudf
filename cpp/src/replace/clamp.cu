@@ -197,6 +197,8 @@ struct dispatch_clamp {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
     auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
@@ -321,6 +323,8 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
+  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+  // ensure nested types are handled correctly.
   CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
   CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");
   CUDF_EXPECTS(lo.type() == lo_replace.type(), "mismatching types of limit and replace scalars");

@@ -109,6 +109,8 @@ struct column_scalar_scatterer_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
     // make a copy of data and null mask from source
@@ -140,6 +142,8 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
     auto const scalar_impl = static_cast<string_scalar const*>(&source.get());
@@ -299,12 +303,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                "Number of columns in source and target not equal");
   CUDF_EXPECTS(scatter_map.size() <= source.num_rows(),
                "Size of scatter map must be equal to or less than source rows");
-  CUDF_EXPECTS(std::equal(source.begin(),
-                          source.end(),
-                          target.begin(),
-                          [](auto const& col1, auto const& col2) {
-                            return col1.type().id() == col2.type().id();
-                          }),
+  CUDF_EXPECTS(cudf::have_same_types(source, target),
                "Column types do not match between source and target");
   CUDF_EXPECTS(not scatter_map.has_nulls(), "Scatter map contains nulls");
 
@@ -430,13 +429,8 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                "Boolean mask size and number of target rows mismatch");
   CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
   // Count valid pair of input and columns as per type at each column index i
-  CUDF_EXPECTS(
-    std::all_of(thrust::counting_iterator<size_type>(0),
-                thrust::counting_iterator<size_type>(target.num_columns()),
-                [&input, &target](auto index) {
-                  return ((input.column(index).type().id()) == (target.column(index).type().id()));
-                }),
-    "Type mismatch in input column and target column");
+  CUDF_EXPECTS(cudf::have_same_types(input, target),
+               "Type mismatch in input column and target column");
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
@@ -470,6 +464,8 @@ std::unique_ptr<table> boolean_mask_scatter(
 
   // Count valid pair of input and columns as per type at each column/scalar index i
   CUDF_EXPECTS(
+    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
+    // ensure nested types are handled correctly.
     std::all_of(thrust::counting_iterator<size_type>(0),
                 thrust::counting_iterator<size_type>(target.num_columns()),
                 [&input, &target](auto index) {

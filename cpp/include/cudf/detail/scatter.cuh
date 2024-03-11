@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -212,7 +213,7 @@ struct column_scatterer_impl<dictionary32> {
     // check the keys match
     dictionary_column_view const source(source_in);
     dictionary_column_view const target(target_in);
-    CUDF_EXPECTS(source.keys().type() == target.keys().type(),
+    CUDF_EXPECTS(cudf::column_types_equal(source.keys(), target.keys()),
                  "scatter dictionary keys must be the same type");
 
     // first combine keys so both dictionaries have the same set

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -154,7 +155,7 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
   auto const keys_view = dictionary_column.keys();
-  CUDF_EXPECTS(keys_view.type() == keys_to_remove.type(), "keys types must match");
+  CUDF_EXPECTS(cudf::column_types_equal(keys_view, keys_to_remove), "keys types must match");
 
   // locate keys to remove by searching the keys column
   auto const matches = cudf::detail::contains(keys_to_remove, keys_view, stream, mr);
