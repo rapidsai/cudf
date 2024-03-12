@@ -1697,6 +1697,38 @@ TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_F(ParquetWriterTest, DurationByteStreamSplit)
+{
+  constexpr cudf::size_type num_rows = 100;
+  auto seq_col0                      = random_values<int32_t>(num_rows);
+  auto seq_col1                      = random_values<int64_t>(num_rows);
+
+  auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int64_t>(
+    seq_col0.begin(), seq_col0.end(), no_nulls());
+  auto durations_us = cudf::test::fixed_width_column_wrapper<cudf::duration_us, int64_t>(
+    seq_col1.begin(), seq_col1.end(), no_nulls());
+
+  auto expected = table_view{{durations_ms, durations_us}};
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("millis");
+  expected_metadata.column_metadata[1].set_name("micros");
+  for (size_t i = 0; i < expected_metadata.column_metadata.size(); i++) {
+    expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+  }
+
+  auto filepath = temp_env->get_temp_filepath("DurationByteStreamSplit.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 /////////////////////////////////////////////////////////////
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>
@@ -1870,6 +1902,34 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
   auto filepath = temp_env->get_temp_filepath("ParquetTimestampOverflow.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+      .timestamp_type(this->type());
+  auto result = cudf::io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsByteStreamSplit)
+{
+  auto sequence = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return ((std::rand() / 10000) * 1000); });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, no_nulls());
+
+  auto expected = table_view{{col}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+
+  auto filepath = temp_env->get_temp_filepath("TimestampsByteStreamSplit.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
   cudf::io::write_parquet(out_opts);
 
   cudf::io::parquet_reader_options in_opts =
