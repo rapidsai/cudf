@@ -40,8 +40,7 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 
-__global__ void compute_topk_indices(cudf::device_span<size_type const> group_sizes,
-                                     cudf::device_span<size_type const> group_offsets,
+__global__ void compute_topk_indices(cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> index_offsets,
                                      cudf::device_span<size_type> indices,
                                      size_type num_groups,
@@ -54,12 +53,13 @@ __global__ void compute_topk_indices(cudf::device_span<size_type const> group_si
     auto const group{idx / cudf::detail::warp_size};
     auto const lane{idx % cudf::detail::warp_size};
     if (group >= num_groups) break;
-    auto const group_size   = group_sizes[group];
-    auto const k_loc        = min(group_size, k);
-    auto const index_offset = group_offsets[group];
-    auto const out_offset   = index_offsets[group];
+    auto const off1       = group_offsets[group + 1];
+    auto const off0       = group_offsets[group];
+    auto const k_loc      = min(off1 - off0, k);
+    auto const out_offset = index_offsets[group];
+    // TODO: these writes are uncoalesced
     for (size_type off = lane; off < k_loc; off += cudf::detail::warp_size) {
-      indices[out_offset + off] = index_offset + off;
+      indices[out_offset + off] = off0 + off;
     }
   }
 }
@@ -83,7 +83,7 @@ std::unique_ptr<column> group_topk(column_view const& values,
   auto indices = rmm::device_uvector<size_type>(output_size, stream);
   cudf::detail::grid_1d const config{num_groups * cudf::detail::warp_size, 128};
   compute_topk_indices<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    group_sizes, group_offsets, offsets_column->view(), indices, num_groups, k);
+    group_offsets, offsets_column->view(), indices, num_groups, k);
 
   auto ordered_values = cudf::detail::segmented_sort_by_key(table_view{{values}},
                                                             table_view{{values}},
