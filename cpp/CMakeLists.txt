@@ -339,6 +339,7 @@ add_library(
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
+  src/groupby/sort/group_product_scan.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
@@ -779,7 +780,7 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE nvtx3-cpp cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
