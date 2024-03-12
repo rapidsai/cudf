@@ -312,8 +312,7 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
 struct ToArrowDeviceTest : public BaseArrowFixture {};
 
 template <typename T>
-struct ToArrowDeviceTestDurationsTest : public BaseArrowFixture {
-};
+struct ToArrowDeviceTestDurationsTest : public BaseArrowFixture {};
 
 TYPED_TEST_SUITE(ToArrowDeviceTestDurationsTest, cudf::test::DurationTypes);
 

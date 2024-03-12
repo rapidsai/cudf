@@ -26,8 +26,7 @@ function(find_and_configure_nanoarrow)
     # TODO: Commit hashes are not supported with shallow clones. Can switch this if and when we pin
     # to an actual tag.
     GIT_SHALLOW FALSE
-    OPTIONS "BUILD_SHARED_LIBS OFF"
-            "NANOARROW_NAMESPACE cudf"
+    OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()

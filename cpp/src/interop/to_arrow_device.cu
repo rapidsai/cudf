@@ -241,20 +241,16 @@ void device_buffer_finalize(ArrowBufferAllocator* allocator, uint8_t*, int64_t)
 }
 
 template <typename>
-struct is_device_scalar : public std::false_type {
-};
+struct is_device_scalar : public std::false_type {};
 
 template <typename T>
-struct is_device_scalar<rmm::device_scalar<T>> : public std::true_type {
-};
+struct is_device_scalar<rmm::device_scalar<T>> : public std::true_type {};
 
 template <typename>
-struct is_device_uvector : public std::false_type {
-};
+struct is_device_uvector : public std::false_type {};
 
 template <typename T>
-struct is_device_uvector<rmm::device_uvector<T>> : public std::true_type {
-};
+struct is_device_uvector<rmm::device_uvector<T>> : public std::true_type {};
 
 template <typename T>
 int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
