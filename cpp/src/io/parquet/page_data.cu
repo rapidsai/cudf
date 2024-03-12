@@ -595,12 +595,15 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
               if (s->dtype_len_in <= sizeof(int32_t)) {
                 gpuOutputSplitFixedLenByteArrayAsInt(
                   reinterpret_cast<int32_t*>(dst), src, num_values, s->dtype_len_in);
+                break;
               } else if (s->dtype_len_in <= sizeof(int64_t)) {
                 gpuOutputSplitFixedLenByteArrayAsInt(
                   reinterpret_cast<int64_t*>(dst), src, num_values, s->dtype_len_in);
-              } else {
+                break;
+              } else if (s->dtype_len_in <= sizeof(__int128_t)) {
                 gpuOutputSplitFixedLenByteArrayAsInt(
                   reinterpret_cast<__int128_t*>(dst), src, num_values, s->dtype_len_in);
+                break;
               }
               // unsupported decimal precision
               [[fallthrough]];

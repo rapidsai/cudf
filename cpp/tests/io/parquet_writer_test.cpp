@@ -1648,7 +1648,7 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
     expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
   }
 
-  auto filepath = temp_env->get_temp_filepath("ByteStreamSplit.parquet");
+  auto const filepath = temp_env->get_temp_filepath("ByteStreamSplit.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(expected_metadata);
@@ -1658,7 +1658,42 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
   auto result = cudf::io::read_parquet(in_opts);
 
-  //*((char*)0) = 0;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
+{
+  constexpr cudf::size_type num_rows = 100;
+  auto seq_col0                      = random_values<int32_t>(num_rows);
+  auto seq_col1                      = random_values<int64_t>(num_rows);
+  auto seq_col2                      = random_values<__int128_t>(num_rows);
+
+  auto col0 = cudf::test::fixed_point_column_wrapper<int32_t>{
+    seq_col0.begin(), seq_col0.end(), no_nulls(), numeric::scale_type{-5}};
+  auto col1 = cudf::test::fixed_point_column_wrapper<int64_t>{
+    seq_col1.begin(), seq_col1.end(), no_nulls(), numeric::scale_type{-9}};
+  auto col2 = cudf::test::fixed_point_column_wrapper<__int128_t>{
+    seq_col1.begin(), seq_col1.end(), no_nulls(), numeric::scale_type{-11}};
+
+  auto expected = table_view({col0, col1, col2});
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("int32s").set_decimal_precision(7);
+  expected_metadata.column_metadata[1].set_name("int64s").set_decimal_precision(11);
+  expected_metadata.column_metadata[2].set_name("int128s").set_decimal_precision(22);
+  for (size_t i = 0; i < expected_metadata.column_metadata.size(); i++) {
+    expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+  }
+
+  auto const filepath = temp_env->get_temp_filepath("DecimalByteStreamSplit.parquet");
+  cudf::io::parquet_writer_options args =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(args);
+
+  cudf::io::parquet_reader_options read_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(read_opts);
+
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
