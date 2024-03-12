@@ -47,14 +47,11 @@ void read_once(cudf::io::orc_reader_options const& options,
 template <typename Timer>
 void chunked_read(cudf::io::orc_reader_options const& options,
                   cudf::size_type num_rows_to_read,
-                  cudf::size_type appox_num_chunks,
+                  std::size_t output_limit,
+                  std::size_t read_limit,
                   Timer& timer)
 {
-  // Create a chunked reader that has an internal memory limits to process around 10 chunks.
-  auto const output_limit = static_cast<std::size_t>(data_size / appox_num_chunks);
-  auto const input_limit  = output_limit * 10;
-
-  auto reader = cudf::io::chunked_orc_reader(output_limit, input_limit, options);
+  auto reader = cudf::io::chunked_orc_reader(output_limit, read_limit, options);
   cudf::size_type num_rows{0};
 
   timer.start();
@@ -74,20 +71,21 @@ void orc_read_common(cudf::size_type num_rows_to_read,
 {
   auto const read_opts =
     cudf::io::orc_reader_options::builder(source_sink.make_source_info()).build();
-  cudf::size_type constexpr approx_num_chunks = 10;
 
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
-             [&](nvbench::launch&, auto& timer) {
-               try_drop_l3_cache();
+  state.exec(
+    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
+      try_drop_l3_cache();
 
-               if constexpr (!is_chunked_read) {
-                 read_once(read_opts, num_rows_to_read, timer);
-               } else {
-                 chunked_read(read_opts, num_rows_to_read, approx_num_chunks, timer);
-               }
-             });
+      if constexpr (!is_chunked_read) {
+        read_once(read_opts, num_rows_to_read, timer);
+      } else {
+        auto const output_limit = static_cast<std::size_t>(state.get_int64("output_limit"));
+        auto const read_limit   = static_cast<std::size_t>(state.get_int64("read_limit"));
+        chunked_read(read_opts, num_rows_to_read, output_limit, read_limit, timer);
+      }
+    });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
@@ -213,4 +211,6 @@ NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression,
   .set_type_axes_names({"io", "compression"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32});
+  .add_int64_axis("run_length", {1, 32})
+  .add_int64_axis("output_limit", {0, 500'000})
+  .add_int64_axis("read_limit", {0, 500'000});
