@@ -81,7 +81,7 @@ std::unique_ptr<column> group_topk(column_view const& values,
   auto [offsets_column, output_size] = cudf::detail::make_offsets_child_column(
     size_per_group, size_per_group + num_groups, stream, mr);
   auto indices = rmm::device_uvector<size_type>(output_size, stream);
-  cudf::detail::grid_1d const config{num_groups, 128};
+  cudf::detail::grid_1d const config{num_groups * cudf::detail::warp_size, 128};
   compute_topk_indices<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     group_sizes, group_offsets, offsets_column->view(), indices, num_groups, k);
 
