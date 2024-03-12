@@ -1,6 +1,6 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t, int64_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
