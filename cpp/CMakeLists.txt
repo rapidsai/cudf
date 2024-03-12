@@ -339,6 +339,7 @@ add_library(
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
+  src/groupby/sort/group_product_scan.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
