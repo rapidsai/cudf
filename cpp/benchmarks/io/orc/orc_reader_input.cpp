@@ -123,10 +123,8 @@ void BM_orc_read_data(nvbench::state& state,
   orc_read_common<false>(num_rows_written, source_sink, state);
 }
 
-template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
-void BM_orc_read_io_compression(
-  nvbench::state& state,
-  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
+template <cudf::io::io_type IOType, cudf::io::compression_type Compression, bool chunked_read>
+void orc_read_io_compression(nvbench::state& state)
 {
   auto const d_type = get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL_SIGNED),
                                          static_cast<int32_t>(data_type::FLOAT),
@@ -154,12 +152,27 @@ void BM_orc_read_io_compression(
     return view.num_rows();
   }();
 
-  auto const is_chunked_read = static_cast<bool>(state.get_int64("chunked_read"));
-  if (is_chunked_read) {
+  if constexpr (chunked_read) {
     orc_read_common<true>(num_rows_written, source_sink, state);
   } else {
     orc_read_common<false>(num_rows_written, source_sink, state);
   }
+}
+
+template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
+void BM_orc_read_io_compression(
+  nvbench::state& state,
+  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
+{
+  return orc_read_io_compression<IOType, Compression, false>(state);
+}
+
+template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
+void BM_orc_chunked_read_io_compression(
+  nvbench::state& state,
+  nvbench::type_list<nvbench::enum_type<IOType>, nvbench::enum_type<Compression>>)
+{
+  return orc_read_io_compression<IOType, Compression, true>(state);
 }
 
 using d_type_list = nvbench::enum_type_list<data_type::INTEGRAL_SIGNED,
@@ -191,5 +204,13 @@ NVBENCH_BENCH_TYPES(BM_orc_read_io_compression, NVBENCH_TYPE_AXES(io_list, compr
   .set_type_axes_names({"io", "compression"})
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
-  .add_int64_axis("run_length", {1, 32})
-  .add_int64_axis("chunked_read", {0, 1});
+  .add_int64_axis("run_length", {1, 32});
+
+// Should have the same parameters as `BM_orc_read_io_compression` for comparision.
+NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression,
+                    NVBENCH_TYPE_AXES(io_list, compression_list))
+  .set_name("orc_chunked_read_io_compression")
+  .set_type_axes_names({"io", "compression"})
+  .set_min_samples(4)
+  .add_int64_axis("cardinality", {0, 1000})
+  .add_int64_axis("run_length", {1, 32});
