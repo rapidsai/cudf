@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,6 +76,18 @@ double geometric_dist_p(T range_size)
   return p ? p : std::numeric_limits<double>::epsilon();
 }
 
+template <typename T>
+constexpr double geometric_as_gauss_std_dev(T lower_bound, T upper_bound)
+{
+  // Standard deviation of the half-normal distribution that approximates the geometric distribution
+  constexpr double std_dev_scale = 0.25;
+
+  // Pre-scaling to avoid underflow/overflow
+  auto const scaled_lower = lower_bound * std_dev_scale;
+  auto const scaled_upper = upper_bound * std_dev_scale;
+  return std::abs(scaled_upper - scaled_lower);
+}
+
 /**
  * @brief Generates a geometric distribution between lower_bound and upper_bound.
  * This distribution is an approximation generated using normal distribution.
@@ -92,7 +104,7 @@ class geometric_distribution : public thrust::random::normal_distribution<integr
  public:
   using result_type = T;
   __host__ __device__ explicit geometric_distribution(T lower_bound, T upper_bound)
-    : super_t(0, std::labs(upper_bound - lower_bound) / 4.0),
+    : super_t(0, geometric_as_gauss_std_dev(lower_bound, upper_bound)),
       _lower_bound(lower_bound),
       _upper_bound(upper_bound)
   {
@@ -101,8 +113,11 @@ class geometric_distribution : public thrust::random::normal_distribution<integr
   template <typename UniformRandomNumberGenerator>
   __host__ __device__ result_type operator()(UniformRandomNumberGenerator& urng)
   {
-    return _lower_bound < _upper_bound ? std::abs(super_t::operator()(urng)) + _lower_bound
-                                       : _lower_bound - std::abs(super_t::operator()(urng));
+    // Distribution always biases towards lower_bound
+    realType const result = _lower_bound < _upper_bound
+                              ? std::abs(super_t::operator()(urng)) + _lower_bound
+                              : _lower_bound - std::abs(super_t::operator()(urng));
+    return std::round(result);
   }
 };
 

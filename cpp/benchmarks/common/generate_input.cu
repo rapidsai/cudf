@@ -77,14 +77,14 @@ double get_distribution_mean(distribution_params<T> const& dist)
     case distribution_id::NORMAL:
     case distribution_id::UNIFORM: return (dist.lower_bound / 2.) + (dist.upper_bound / 2.);
     case distribution_id::GEOMETRIC: {
-      auto const range_size = dist.lower_bound < dist.upper_bound
-                                ? dist.upper_bound - dist.lower_bound
-                                : dist.lower_bound - dist.upper_bound;
-      auto const p          = geometric_dist_p(range_size);
+      // In the current implementation, the geometric distribution is
+      // approximated by absolute value of a uniform distribution
+      auto const gauss_std_dev   = geometric_as_gauss_std_dev(dist.lower_bound, dist.upper_bound);
+      auto const half_gauss_mean = gauss_std_dev * sqrt(2. / M_PI);
       if (dist.lower_bound < dist.upper_bound)
-        return dist.lower_bound + (1. / p);
+        return dist.lower_bound + half_gauss_mean;
       else
-        return dist.lower_bound - (1. / p);
+        return dist.lower_bound - half_gauss_mean;
     }
     default: CUDF_FAIL("Unsupported distribution type.");
   }
