@@ -271,7 +271,6 @@ ConfigureTest(
   interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
 )
 
-
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
