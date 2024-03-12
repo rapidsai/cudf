@@ -19,9 +19,20 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         TRUE_DIV
         FLOOR_DIV
         MOD
+        PMOD
         PYMOD
         POW
         INT_POW
+        LOG_BASE
+        ATAN2
+        SHIFT_LEFT
+        SHIFT_RIGHT
+        SHIFT_RIGHT_UNSIGNED
+        BITWISE_AND
+        BITWISE_OR
+        BITWISE_XOR
+        LOGICAL_AND
+        LOGICAL_OR
         EQUAL
         NOT_EQUAL
         LESS
@@ -29,12 +40,12 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         LESS_EQUAL
         GREATER_EQUAL
         NULL_EQUALS
-        BITWISE_AND
-        BITWISE_OR
-        BITWISE_XOR
-        LOGICAL_AND
-        LOGICAL_OR
+        NULL_MAX
+        NULL_MIN
         GENERIC_BINARY
+        NULL_LOGICAL_AND
+        NULL_LOGICAL_OR
+        INVALID_BINARY
 
     cdef unique_ptr[column] binary_operation (
         const scalar& lhs,
