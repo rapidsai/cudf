@@ -1658,8 +1658,12 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     s->rle_pos     = 0;
     s->rle_numvals = 0;
     s->rle_out     = dst;
-    s->page.encoding =
-      determine_encoding(s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
+    if constexpr (is_split_stream) {
+      s->page.encoding = Encoding::BYTE_STREAM_SPLIT;
+    } else {
+      s->page.encoding = determine_encoding(
+        s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
+    }
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
@@ -1737,10 +1741,10 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
           if constexpr (is_split_stream) {
             auto const stride     = s->page.num_valid;
-            dst[pos + 0 * stride] = v >> 24;
-            dst[pos + 1 * stride] = v >> 16;
-            dst[pos + 2 * stride] = v >> 8;
-            dst[pos + 3 * stride] = v;
+            dst[pos + 0 * stride] = v;
+            dst[pos + 1 * stride] = v >> 8;
+            dst[pos + 2 * stride] = v >> 16;
+            dst[pos + 3 * stride] = v >> 24;
           } else {
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
@@ -1760,14 +1764,14 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           }
           if constexpr (is_split_stream) {
             auto const stride     = s->page.num_valid;
-            dst[pos + 0 * stride] = v >> 56;
-            dst[pos + 1 * stride] = v >> 48;
-            dst[pos + 2 * stride] = v >> 40;
-            dst[pos + 3 * stride] = v >> 32;
-            dst[pos + 4 * stride] = v >> 24;
-            dst[pos + 5 * stride] = v >> 16;
-            dst[pos + 6 * stride] = v >> 8;
-            dst[pos + 7 * stride] = v;
+            dst[pos + 0 * stride] = v;
+            dst[pos + 1 * stride] = v >> 8;
+            dst[pos + 2 * stride] = v >> 16;
+            dst[pos + 3 * stride] = v >> 24;
+            dst[pos + 4 * stride] = v >> 32;
+            dst[pos + 5 * stride] = v >> 40;
+            dst[pos + 6 * stride] = v >> 48;
+            dst[pos + 7 * stride] = v >> 56;
           } else {
             dst[pos + 0] = v;
             dst[pos + 1] = v >> 8;
@@ -1825,16 +1829,16 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
         case DOUBLE: {
           if (is_split_stream) {
-            int64_t const v   = static_cast<int64_t>(s->col.leaf_column->element<double>(val_idx));
-            auto const stride = s->page.num_valid;
-            dst[pos + 0 * stride] = v >> 56;
-            dst[pos + 1 * stride] = v >> 48;
-            dst[pos + 2 * stride] = v >> 40;
-            dst[pos + 3 * stride] = v >> 32;
-            dst[pos + 4 * stride] = v >> 24;
-            dst[pos + 5 * stride] = v >> 16;
-            dst[pos + 6 * stride] = v >> 8;
-            dst[pos + 7 * stride] = v;
+            auto const v          = s->col.leaf_column->element<int64_t>(val_idx);
+            auto const stride     = s->page.num_valid;
+            dst[pos + 0 * stride] = v;
+            dst[pos + 1 * stride] = v >> 8;
+            dst[pos + 2 * stride] = v >> 16;
+            dst[pos + 3 * stride] = v >> 24;
+            dst[pos + 4 * stride] = v >> 32;
+            dst[pos + 5 * stride] = v >> 40;
+            dst[pos + 6 * stride] = v >> 48;
+            dst[pos + 7 * stride] = v >> 56;
           } else {
             auto v = s->col.leaf_column->element<double>(val_idx);
             memcpy(dst + pos, &v, 8);
@@ -1885,6 +1889,9 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     __syncthreads();
   }
 
+  // for BYTE_STREAM_SPLIT, s->cur now points to the end of the first stream.
+  // need it to point to the end of the Nth stream.
+  if constexpr (is_split_stream) { s->cur += (dtype_len_out - 1) * s->page.num_valid; }
   finish_page_encode<block_size>(
     s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }

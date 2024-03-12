@@ -1623,6 +1623,45 @@ TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_F(ParquetWriterTest, ByteStreamSplit)
+{
+  constexpr auto num_rows = 100;
+
+  auto col0_data = random_values<int32_t>(num_rows);
+  auto col1_data = random_values<int64_t>(num_rows);
+  auto col2_data = random_values<float>(num_rows);
+  auto col3_data = random_values<double>(num_rows);
+
+  column_wrapper<int32_t> col0{col0_data.begin(), col0_data.end(), no_nulls()};
+  column_wrapper<int64_t> col1{col1_data.begin(), col1_data.end(), no_nulls()};
+  column_wrapper<float> col2{col2_data.begin(), col2_data.end(), no_nulls()};
+  column_wrapper<double> col3{col3_data.begin(), col3_data.end(), no_nulls()};
+
+  auto expected = table_view{{col0, col1, col2, col3}};
+
+  cudf::io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("int32s");
+  expected_metadata.column_metadata[1].set_name("int64s");
+  expected_metadata.column_metadata[2].set_name("floats");
+  expected_metadata.column_metadata[3].set_name("doubles");
+  for (size_t i = 0; i < expected_metadata.column_metadata.size(); i++) {
+    expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+  }
+
+  auto filepath = temp_env->get_temp_filepath("ByteStreamSplit.parquet");
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
+      .metadata(expected_metadata);
+  cudf::io::write_parquet(out_opts);
+
+  cudf::io::parquet_reader_options in_opts =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
+  auto result = cudf::io::read_parquet(in_opts);
+
+  //*((char*)0) = 0;
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 /////////////////////////////////////////////////////////////
 // custom mem mapped data sink that supports device writes
 template <bool supports_device_writes>
