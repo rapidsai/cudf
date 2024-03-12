@@ -160,6 +160,8 @@ struct device_json_column {
   std::vector<std::string> column_order;
   // Counting the current number of items in this column
   row_offset_t num_rows = 0;
+  // Force as string column
+  bool forced_as_string_column{false};
 
   /**
    * @brief Construct a new d json column object
@@ -306,6 +308,32 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Get the path data type of a column by path if present in input schema
+ *
+ * @param path path of the column
+ * @param options json reader options which holds schema
+ * @return data type of the column if present
+ */
+std::optional<data_type> get_path_data_type(
+  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  cudf::io::json_reader_options const& options);
+
+/**
+ * @brief Helper class to get path of a column by column id from reduced column tree
+ *
+ */
+struct path_from_tree {
+  host_span<NodeT const> column_categories;
+  host_span<NodeIndexT const> column_parent_ids;
+  host_span<std::string const> column_names;
+  bool is_array_of_arrays;
+  NodeIndexT const row_array_parent_col_id;
+
+  using path_rep = std::pair<std::string, cudf::io::json::NodeT>;
+  std::vector<path_rep> get_path(NodeIndexT this_col_id);
+};
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.

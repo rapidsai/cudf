@@ -163,7 +163,7 @@ def test_merge_left(
         }
     )
 
-    expect = left.merge(right, on=("x", "y"), how=how)
+    expect = left.merge(right, on=["x", "y"], how=how)
 
     def normalize(df):
         return (
@@ -176,7 +176,7 @@ def test_merge_left(
     left = dask_cudf.from_cudf(left, chunksize=chunksize)
     right = dask_cudf.from_cudf(right, chunksize=chunksize)
 
-    result = left.merge(right, on=("x", "y"), how=how).compute(
+    result = left.merge(right, on=["x", "y"], how=how).compute(
         scheduler="single-threaded"
     )
 
