@@ -31,6 +31,7 @@ public final class JSONOptions extends ColumnFilterOptions {
   private final boolean lines;
   private final boolean recoverWithNull;
   private final boolean normalizeSingleQuotes;
+  private final boolean normalizeWhitespace;
   private final boolean mixedTypesAsStrings;
   private final boolean keepStringQuotes;
 
@@ -40,6 +41,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     lines = builder.lines;
     recoverWithNull = builder.recoverWithNull;
     normalizeSingleQuotes = builder.normalizeSingleQuotes;
+    normalizeWhitespace = builder.normalizeWhitespace;
     mixedTypesAsStrings = builder.mixedTypesAsStrings;
     keepStringQuotes = builder.keepQuotes;
   }
@@ -59,6 +61,10 @@ public final class JSONOptions extends ColumnFilterOptions {
 
   public boolean isNormalizeSingleQuotes() {
     return normalizeSingleQuotes;
+  }
+
+  public boolean isNormalizeWhitespace() {
+    return normalizeWhitespace;
   }
 
   public boolean isMixedTypesAsStrings() {
@@ -84,6 +90,7 @@ public final class JSONOptions extends ColumnFilterOptions {
 
     private boolean recoverWithNull = false;
     private boolean normalizeSingleQuotes = false;
+    private boolean normalizeWhitespace = false;
 
     private boolean mixedTypesAsStrings = false;
     private boolean keepQuotes = false;
@@ -128,6 +135,14 @@ public final class JSONOptions extends ColumnFilterOptions {
      */
     public Builder withNormalizeSingleQuotes(boolean normalizeSingleQuotes) {
       this.normalizeSingleQuotes = normalizeSingleQuotes;
+      return this;
+    }
+
+    /**
+     * Should the unquoted whitespace be removed.
+     */
+    public Builder withNormalizeWhitespace(boolean normalizeWhitespace) {
+      this.normalizeWhitespace = normalizeWhitespace;
       return this;
     }
 

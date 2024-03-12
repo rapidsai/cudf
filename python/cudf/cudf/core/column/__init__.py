@@ -16,7 +16,6 @@ from cudf.core.column.column import (
     column_empty_like_same_mask,
     concat_columns,
     deserialize_columns,
-    full,
     serialize_columns,
 )
 from cudf.core.column.datetime import DatetimeColumn  # noqa: F401

@@ -94,13 +94,10 @@ std::unique_ptr<column> fill(strings_column_view const& input,
   auto const d_str   = is_valid ? d_value.value(stream) : string_view{};
   auto fn            = fill_fn{d_strings, begin, end, d_str};
 
-  auto [offsets_column, chars_column] = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 }  // namespace detail

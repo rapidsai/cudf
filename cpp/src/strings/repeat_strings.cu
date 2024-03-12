@@ -160,11 +160,11 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
 
-  auto [offsets_column, chars_column] =
+  auto [offsets_column, chars] =
     make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
   return make_strings_column(strings_count,
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }
@@ -240,7 +240,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                                              input.has_nulls(),
                                                              repeat_times.has_nulls()};
 
-  auto [offsets_column, chars_column] = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
 
   // We generate new bitmask by AND of the two input columns' bitmasks.
   // Note that if either of the input columns are nullable, the output column will also be nullable
@@ -248,11 +248,8 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr);
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 }  // namespace detail
 

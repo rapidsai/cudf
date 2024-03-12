@@ -147,7 +147,7 @@ std::unique_ptr<column> from_booleans(column_view const& booleans,
 
   return make_strings_column(strings_count,
                              std::move(offsets),
-                             std::move(chars->release().data.release()[0]),
+                             chars.release(),
                              booleans.null_count(),
                              std::move(null_mask));
 }
