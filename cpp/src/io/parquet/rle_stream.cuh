@@ -104,9 +104,7 @@ __device__ inline void decode(level_t* const output,
         if constexpr (sizeof(level_t) > 2) {
           if (level_bits > 16) {
             level_val |= run_start[2] << 16;
-            if constexpr (sizeof(level_t) > 3) {
-              if (level_bits > 24) { level_val |= run_start[3] << 24; }
-            }
+            if (level_bits > 24) { level_val |= run_start[3] << 24; }
           }
         }
       }
@@ -192,6 +190,11 @@ struct rle_stream {
   int decode_index;
 
   __device__ rle_stream(rle_run<level_t>* _runs) : runs(_runs) {}
+
+  __device__ inline bool is_last_decode_warp(int warp_id)
+  {
+    return warp_id == num_rle_stream_decode_warps;
+  }
 
   __device__ void init(int _level_bits,
                        uint8_t const* _start,
@@ -346,10 +349,10 @@ struct rle_stream {
             // update remaining for my warp
             remaining -= batch_len;
             // this is the last batch we will process this iteration if:
-            // - either this run still has remaining
+            // - either this run still has remaining values
             // - or it is consumed fully and its last index corresponds to output_count
             if (remaining > 0 || at_end) { values_processed_shared = output_count; }
-            if (remaining == 0 && (at_end || (warp_id == num_rle_stream_decode_warps))) {
+            if (remaining == 0 && (at_end || is_last_decode_warp(warp_id))) {
               decode_index_shared = run_index + 1;
             }
             run.remaining = remaining;
