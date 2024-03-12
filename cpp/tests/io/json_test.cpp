@@ -2239,4 +2239,56 @@ TEST_F(JsonReaderTest, MixedTypes)
           expected_list);
 }
 
+TEST_F(JsonReaderTest, MapTypes)
+{
+  using cudf::type_id;
+  // Testing function for mixed types in JSON (for spark json reader)
+  auto test_fn = [](std::string_view json_string, bool lines, std::vector<type_id> types) {
+    std::map<std::string, cudf::io::schema_element> dtype_schema{
+      {"foo1", {data_type{type_id::STRING}}},  // list won't be a string
+      {"foo2", {data_type{type_id::STRING}}},  // struct forced as a string
+      {"1", {data_type{type_id::STRING}}},
+      {"2", {data_type{type_id::STRING}}},
+      {"bar", {dtype<int32_t>()}},
+    };
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .dtypes(dtype_schema)
+        .mixed_types_as_string(true)
+        .lines(lines);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    EXPECT_EQ(result.tbl->num_columns(), types.size());
+    int i = 0;
+    for (auto& col : result.tbl->view()) {
+      EXPECT_EQ(col.type().id(), types[i]) << "column[" << i << "].type";
+      i++;
+    }
+    std::cout << "\n";
+  };
+
+  // json
+  test_fn(R"([{ "foo1": [1,2,3], "bar": 123 },
+              { "foo2": { "a": 1 }, "bar": 456 }])",
+          false,
+          {type_id::LIST, type_id::INT32, type_id::STRING});
+  // jsonl
+  test_fn(R"( { "foo1": [1,2,3], "bar": 123 }
+              { "foo2": { "a": 1 }, "bar": 456 })",
+          true,
+          {type_id::LIST, type_id::INT32, type_id::STRING});
+  // jsonl-array
+  test_fn(R"([123, [1,2,3]]
+              [456, null,  { "a": 1 }])",
+          true,
+          {type_id::INT64, type_id::LIST, type_id::STRING});
+  // json-array
+  test_fn(R"([[[1,2,3], null, 123],
+              [null, { "a": 1 }, 456 ]])",
+          false,
+          {type_id::LIST, type_id::STRING, type_id::STRING});
+}
+
 CUDF_TEST_PROGRAM_MAIN()
