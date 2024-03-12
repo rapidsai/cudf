@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#include "stream_compaction_common.hpp"
-
+#include <cudf/detail/hash_reduce_by_row.cuh>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/types.hpp>
