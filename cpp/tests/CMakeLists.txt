@@ -267,7 +267,7 @@ ConfigureTest(
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp 
+  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
   interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
 )
 
