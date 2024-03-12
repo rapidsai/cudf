@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import pandas as pd
 import pytest
@@ -8,6 +8,10 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+from dask_cudf.tests.utils import xfail_dask_expr
+
+# No dask-expr support
+pytestmark = xfail_dask_expr("limited get_dummy support in dask-expr + cudf")
 
 
 def test_get_dummies_cat():
