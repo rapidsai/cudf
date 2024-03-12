@@ -46,8 +46,9 @@ __global__ void compute_topk_indices(cudf::device_span<size_type const> group_of
                                      size_type num_groups,
                                      size_type k)
 {
-  // warp per group writes output indices
+  // Each group's output indices are processed by a single warp
   for (thread_index_type idx = threadIdx.x + blockDim.x * blockIdx.x;
+       // TODO: overflow if num_groups > 2**26 - 1
        idx < cudf::detail::warp_size * num_groups;
        idx += gridDim.x * blockDim.x) {
     auto const group{idx / cudf::detail::warp_size};
@@ -81,6 +82,7 @@ std::unique_ptr<column> group_topk(column_view const& values,
   auto [offsets_column, output_size] = cudf::detail::make_offsets_child_column(
     size_per_group, size_per_group + num_groups, stream, mr);
   auto indices = rmm::device_uvector<size_type>(output_size, stream);
+  // TODO: this will overflow if there are more than (2**26 - 1) groups
   cudf::detail::grid_1d const config{num_groups * cudf::detail::warp_size, 128};
   compute_topk_indices<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
     group_offsets, offsets_column->view(), indices, num_groups, k);
