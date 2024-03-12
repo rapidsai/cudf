@@ -3,6 +3,11 @@
 
 set -euo pipefail
 
+export RAPIDS_VERSION_NUMBER="$(rapids-generate-version)"
+
+export RAPIDS_VERSION="$(rapids-version)"
+export RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
@@ -27,7 +32,6 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   libcudf cudf dask-cudf
 
-export RAPIDS_VERSION_NUMBER="24.04"
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
 rapids-logger "Build CPP docs"

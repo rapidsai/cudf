@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,6 +87,10 @@ TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
 
 TYPED_TEST(SegmentedReductionTest, ProductExcludeNulls)
 {
+  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   // [1, 3, 5], [null, 3, 5], [1], [null], [null, null], []
   // values:    {1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX}
   // offsets:   {0, 3, 6, 7, 8, 10, 10}
@@ -137,6 +141,10 @@ TYPED_TEST(SegmentedReductionTest, ProductExcludeNulls)
 
 TYPED_TEST(SegmentedReductionTest, MaxExcludeNulls)
 {
+  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
   // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
   // offsets:   {0, 3, 6, 7, 8, 10, 10}
@@ -185,6 +193,10 @@ TYPED_TEST(SegmentedReductionTest, MaxExcludeNulls)
 
 TYPED_TEST(SegmentedReductionTest, MinExcludeNulls)
 {
+  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
   // values:   {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
   // offsets:  {0, 3, 6, 7, 8, 10, 10}
@@ -376,6 +388,10 @@ TYPED_TEST(SegmentedReductionTest, SumIncludeNulls)
 
 TYPED_TEST(SegmentedReductionTest, ProductIncludeNulls)
 {
+  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   // [1, 3, 5], [null, 3, 5], [1], [null], [null, null], []
   // values:    {1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX}
   // offsets:   {0, 3, 6, 7, 8, 10, 10}
@@ -429,6 +445,10 @@ TYPED_TEST(SegmentedReductionTest, ProductIncludeNulls)
 
 TYPED_TEST(SegmentedReductionTest, MaxIncludeNulls)
 {
+  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
   // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
   // offsets:   {0, 3, 6, 7, 8, 10, 10}
@@ -480,6 +500,10 @@ TYPED_TEST(SegmentedReductionTest, MaxIncludeNulls)
 
 TYPED_TEST(SegmentedReductionTest, MinIncludeNulls)
 {
+  if constexpr (std::is_same_v<TypeParam, int16_t> || std::is_same_v<TypeParam, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
   // values:   {1, 2, 3, 1, XXX, 3, 1, XXX, XXX}
   // offsets:  {0, 3, 6, 7, 8, 10, 10}

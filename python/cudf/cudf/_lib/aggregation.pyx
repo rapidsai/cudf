@@ -150,6 +150,7 @@ class Aggregation:
     cumsum = sum
     cummin = min
     cummax = max
+    cumprod = product
 
     @classmethod
     def rank(cls, method, ascending, na_option, pct):
