@@ -204,7 +204,7 @@ NVBENCH_BENCH_TYPES(BM_orc_read_io_compression, NVBENCH_TYPE_AXES(io_list, compr
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
-// Should have the same parameters as `BM_orc_read_io_compression` for comparision.
+// Should have the same parameters as `BM_orc_read_io_compression` for comparison.
 NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression,
                     NVBENCH_TYPE_AXES(io_list, compression_list))
   .set_name("orc_chunked_read_io_compression")
