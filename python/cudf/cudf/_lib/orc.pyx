@@ -329,7 +329,7 @@ cdef int64_t get_num_rows_arg(object arg) except*:
     arg = -1 if arg is None else arg
     if not isinstance(arg, int) or arg < -1:
         raise TypeError("num_rows must be an int >= -1")
-    return <size_type> arg
+    return <int64_t> arg
 
 
 cdef orc_reader_options make_orc_reader_options(
