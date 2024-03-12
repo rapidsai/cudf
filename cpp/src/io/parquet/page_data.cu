@@ -449,10 +449,8 @@ __device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst,
   *dst = unscaled;
 }
 
-// TODO(ets): is this better as a standalone, or as part of the plain/dict decoder?
-// how does this work with the new microkernels?
 /**
- * @brief Kernel for computing the column data stored in the pages
+ * @brief Kernel for computing the BYTE_STREAM_SPLIT column data stored in the pages
  *
  * This function will write the page data and the page data's validity to the
  * output specified in the page's column chunk. If necessary, additional
@@ -473,6 +471,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                          size_t num_rows,
                          kernel_error::pointer error_code)
 {
+  using cudf::detail::warp_size;
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16)
     page_state_buffers_s<rolling_buf_size, rolling_buf_size, rolling_buf_size>
@@ -482,7 +481,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   auto* const sb        = &state_buffers;
   int page_idx          = blockIdx.x;
   int t                 = threadIdx.x;
-  int out_thread0;
   [[maybe_unused]] null_count_back_copier _{s, t};
 
   if (!setupLocalPageInfo(s,
@@ -497,17 +495,9 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  auto const data_len   = thrust::distance(s->data_start, s->data_end);
-  auto const num_values = data_len / s->dtype_len_in;
-
-  if (s->dict_base) {
-    out_thread0 = (s->dict_bits > 0) ? 64 : 32;
-  } else {
-    switch (s->col.data_type & 7) {
-      case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
-      default: out_thread0 = 32;
-    }
-  }
+  auto const data_len    = thrust::distance(s->data_start, s->data_end);
+  auto const num_values  = data_len / s->dtype_len_in;
+  auto const out_thread0 = warp_size;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
 
@@ -526,28 +516,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                        s->nz_count + (decode_block_size - out_thread0));
     } else {
       target_pos = min(s->nz_count, src_pos + decode_block_size - out_thread0);
-      if (out_thread0 > 32) { target_pos = min(target_pos, s->dict_pos); }
     }
-    // this needs to be here to prevent warp 3 modifying src_pos before all threads have read it
+    // this needs to be here to prevent warp 1 modifying src_pos before all threads have read it
     __syncthreads();
-    if (t < 32) {
+
+    if (t < warp_size) {
       // decode repetition and definition levels.
       // - update validity vectors
       // - updates offsets (for nested columns)
       // - produces non-NULL value indices in s->nz_idx for subsequent decoding
       gpuDecodeLevels<lvl_buf_size, level_t>(s, sb, target_pos, rep, def, t);
-    } else if (t < out_thread0) {
-      // skipped_leaf_values will always be 0 for flat hierarchies.
-      uint32_t src_target_pos = target_pos + skipped_leaf_values;
-
-      // WARP1: Decode string positions
-      // NOTE: racecheck complains of a RAW error involving the s->dict_pos assignment below.
-      // This is likely a false positive in practice, but could be solved by wrapping the next
-      // 9 lines in `if (s->dict_pos < src_target_pos) {}`. If that change is made here, it will
-      // be needed in the other DecodeXXX kernels.
-      gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
-
-      if (t == 32) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
       int const dtype = s->col.data_type & 7;
