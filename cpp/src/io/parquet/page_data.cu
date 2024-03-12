@@ -452,10 +452,12 @@ __device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst,
 /**
  * @brief Kernel for computing the BYTE_STREAM_SPLIT column data stored in the pages
  *
- * This function will write the page data and the page data's validity to the
- * output specified in the page's column chunk. If necessary, additional
- * conversion will be performed to translate from the Parquet datatype to
- * desired output datatype (ex. 32-bit to 16-bit, string to hash).
+ * This is basically the PLAIN decoder, but with a pared down set of supported data
+ * types, and using output functions that piece together the individual streams.
+ * Supported physical types include INT32, INT64, FLOAT, DOUBLE and FIXED_LEN_BYTE_ARRAY.
+ * The latter is currently only used for large decimals. The Parquet specification also
+ * has FLOAT16 and UUID types that are currently not supported. FIXED_LEN_BYTE_ARRAY data
+ * that lacks a `LogicalType` annotation will be handled by the string decoder.
  *
  * @param pages List of pages
  * @param chunks List of column chunks
