@@ -41,6 +41,8 @@
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
 
+#include <iostream>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -173,9 +175,10 @@ int dispatch_to_arrow_type::operator()<cudf::struct_view>(column_view input,
   for (int i = 0; i < input.num_children(); ++i) {
     auto child = out->children[i];
     auto col   = input.child(i);
-    NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(child, metadata.name.c_str()));
+    ArrowSchemaInit(child);
+    NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(child, metadata.children_meta[i].name.c_str()));
 
-    child->flags = col.nullable() ? ARROW_FLAG_NULLABLE : 0;
+    child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
 
     if (col.type().id() == cudf::type_id::EMPTY) {
       NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(child, NANOARROW_TYPE_NA));
@@ -195,15 +198,17 @@ int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
                                                         ArrowSchema* out)
 {
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, NANOARROW_TYPE_LIST));
-  auto child = input.child(0);
+  auto child = input.child(cudf::lists_column_view::child_column_index);
+  ArrowSchemaInit(out->children[0]);
   if (child.type().id() == cudf::type_id::EMPTY) {
     return ArrowSchemaSetType(out->children[0], NANOARROW_TYPE_NA);
   }
   auto child_meta =
     metadata.children_meta.empty() ? column_metadata{"element"} : metadata.children_meta[0];
 
-  out->flags = child.nullable() ? ARROW_FLAG_NULLABLE : 0;
-
+  out->flags = input.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
+  NANOARROW_RETURN_NOT_OK(ArrowSchemaSetName(out->children[0], child_meta.name.c_str()));
+  out->children[0]->flags = child.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
   return cudf::type_dispatcher(
     child.type(), detail::dispatch_to_arrow_type{}, child, child_meta, out->children[0]);
 }
@@ -214,8 +219,10 @@ int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
                                                            ArrowSchema* out)
 {
   cudf::dictionary_column_view dview{input};
+
   NANOARROW_RETURN_NOT_OK(ArrowSchemaSetType(out, id_to_arrow_type(dview.indices().type().id())));
   NANOARROW_RETURN_NOT_OK(ArrowSchemaAllocateDictionary(out));
+  ArrowSchemaInit(out->dictionary);
 
   auto dict_keys = dview.keys();
   return cudf::type_dispatcher(
@@ -234,28 +241,42 @@ void device_buffer_finalize(ArrowBufferAllocator* allocator, uint8_t*, int64_t)
 }
 
 template <typename>
-struct is_device_scalar : public std::false_type {};
+struct is_device_scalar : public std::false_type {
+};
 
 template <typename T>
-struct is_device_scalar<rmm::device_scalar<T>> : public std::true_type {};
+struct is_device_scalar<rmm::device_scalar<T>> : public std::true_type {
+};
+
+template <typename>
+struct is_device_uvector : public std::false_type {
+};
+
+template <typename T>
+struct is_device_uvector<rmm::device_uvector<T>> : public std::true_type {
+};
 
 template <typename T>
 int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
 {
   ArrowBuffer* buf = ArrowArrayBuffer(out, i);
-  buf->data        = reinterpret_cast<uint8_t*>(device_buf->data());
+  auto ptr         = reinterpret_cast<uint8_t*>(device_buf->data());
   buf->size_bytes  = [&] {
     if constexpr (is_device_scalar<T>::value) {
       return sizeof(typename T::value_type);
+    } else if constexpr (is_device_uvector<T>::value) {
+      return sizeof(typename T::value_type) * device_buf->size();
     } else {
       return device_buf->size();
     }
   }();
   // we make a new unique_ptr and move to it in case there was a custom deleter
-  return ArrowBufferSetAllocator(
-    buf,
-    ArrowBufferDeallocator(&device_buffer_finalize<T>,
-                           new std::unique_ptr<T>(std::move(device_buf))));
+  NANOARROW_RETURN_NOT_OK(
+    ArrowBufferSetAllocator(buf,
+                            ArrowBufferDeallocator(&device_buffer_finalize<T>,
+                                                   new std::unique_ptr<T>(std::move(device_buf)))));
+  buf->data = ptr;
+  return NANOARROW_OK;
 }
 
 int initialize_array(ArrowArray* arr, ArrowType storage_type, const cudf::column& column)
@@ -289,15 +310,14 @@ struct dispatch_to_arrow_device {
         case cudf::type_id::TIMESTAMP_SECONDS:
         case cudf::type_id::TIMESTAMP_MILLISECONDS:
         case cudf::type_id::TIMESTAMP_MICROSECONDS:
-        case cudf::type_id::TIMESTAMP_NANOSECONDS: return NANOARROW_TYPE_TIMESTAMP;
+        case cudf::type_id::TIMESTAMP_NANOSECONDS: return NANOARROW_TYPE_INT64;
         case cudf::type_id::DURATION_SECONDS:
         case cudf::type_id::DURATION_MILLISECONDS:
         case cudf::type_id::DURATION_MICROSECONDS:
-        case cudf::type_id::DURATION_NANOSECONDS: return NANOARROW_TYPE_DURATION;
+        case cudf::type_id::DURATION_NANOSECONDS: return NANOARROW_TYPE_INT64;
         default: return id_to_arrow_type(column.type().id());
       }
     }();
-
     NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), storage_type, column));
 
     auto contents = column.release();
@@ -309,8 +329,6 @@ struct dispatch_to_arrow_device {
     NANOARROW_RETURN_NOT_OK(
       set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, tmp.get()));
 
-    NANOARROW_RETURN_NOT_OK(
-      ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
@@ -356,8 +374,6 @@ int unsupported_decimals_to_arrow(cudf::column&& input,
   }
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
 
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -401,9 +417,6 @@ int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column&& col
 
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, tmp.get()));
-
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -426,8 +439,6 @@ int dispatch_to_arrow_device::operator()<bool>(cudf::column&& column,
   NANOARROW_RETURN_NOT_OK(
     set_buffer(std::move(bitmask.first), fixed_width_data_buffer_idx, tmp.get()));
 
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -444,8 +455,6 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
   if (column.size() == 0) {
     auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
     NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
-    NANOARROW_RETURN_NOT_OK(
-      ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
     ArrowArrayMove(tmp.get(), out);
     return NANOARROW_OK;
   }
@@ -461,8 +470,6 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(contents.data), 2, tmp.get()));
 
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -495,8 +502,9 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& colum
       set_buffer(std::move(contents.null_mask), validity_buffer_idx, tmp.get()));
   }
 
-  ArrowArray* child_ptr = tmp->children[0];
-  for (auto&& child : contents.children) {
+  for (size_t i = 0; i < size_t(tmp->n_children); ++i) {
+    ArrowArray* child_ptr = tmp->children[i];
+    auto& child           = contents.children[i];
     if (child->type().id() == cudf::type_id::EMPTY) {
       NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(child_ptr, NANOARROW_TYPE_NA));
       child_ptr->length     = child->size();
@@ -505,12 +513,8 @@ int dispatch_to_arrow_device::operator()<cudf::struct_view>(cudf::column&& colum
       NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
         child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, child_ptr));
     }
-
-    child_ptr++;
   }
 
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -523,12 +527,14 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_LIST, column));
+  NANOARROW_RETURN_NOT_OK(ArrowArrayAllocateChildren(tmp.get(), 1));
 
   auto contents = column.release();
   if (contents.null_mask) {
     NANOARROW_RETURN_NOT_OK(
       set_buffer(std::move(contents.null_mask), validity_buffer_idx, tmp.get()));
   }
+
   auto offsets_contents =
     contents.children[cudf::lists_column_view::offsets_column_index]->release();
   NANOARROW_RETURN_NOT_OK(set_buffer(std::move(offsets_contents.data), 1, tmp.get()));
@@ -543,8 +549,6 @@ int dispatch_to_arrow_device::operator()<cudf::list_view>(cudf::column&& column,
       child->type(), dispatch_to_arrow_device{}, std::move(*child), stream, mr, tmp->children[0]));
   }
 
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -577,8 +581,6 @@ int dispatch_to_arrow_device::operator()<cudf::dictionary32>(cudf::column&& colu
   NANOARROW_RETURN_NOT_OK(cudf::type_dispatcher(
     keys->type(), dispatch_to_arrow_device{}, std::move(*keys), stream, mr, tmp->dictionary));
 
-  NANOARROW_RETURN_NOT_OK(
-    ArrowArrayFinishBuilding(tmp.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
 }
@@ -613,8 +615,9 @@ std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
   for (int i = 0; i < input.num_columns(); ++i) {
     auto child = result->children[i];
     auto col   = input.column(i);
+    ArrowSchemaInit(child);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(child, metadata[i].name.c_str()));
-    child->flags = col.nullable() ? ARROW_FLAG_NULLABLE : 0;
+    child->flags = col.has_nulls() ? ARROW_FLAG_NULLABLE : 0;
 
     if (col.type().id() == cudf::type_id::EMPTY) {
       NANOARROW_THROW_NOT_OK(ArrowSchemaSetType(child, NANOARROW_TYPE_NA));

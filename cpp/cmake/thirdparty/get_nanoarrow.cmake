@@ -27,6 +27,7 @@ function(find_and_configure_nanoarrow)
     # to an actual tag.
     GIT_SHALLOW FALSE
     OPTIONS "BUILD_SHARED_LIBS OFF"
+            "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
 endfunction()
