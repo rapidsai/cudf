@@ -10,6 +10,10 @@ import dask.dataframe as dd
 from dask.utils import tmpfile
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_dask_expr
+
+# No dask-expr support
+pytestmark = skip_dask_expr()
 
 
 def test_read_json_backend_dispatch(tmp_path):

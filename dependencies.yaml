@@ -717,8 +717,11 @@ dependencies:
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
-          # pandas[all] includes all of the required dependencies
-          - pandas[all]
+          # pandas[...] includes all of the required dependencies.
+          # Intentionally excluding `postgresql` because of
+          # installation issues with `psycopg2`.
+          - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          - pytest-reportlog
   test_python_cudf_pandas:
     common:
       - output_types: pyproject

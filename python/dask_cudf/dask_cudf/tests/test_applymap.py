@@ -1,4 +1,4 @@
-# Copyright (c) 2022, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import pytest
 from pandas import NA
@@ -24,6 +24,6 @@ def test_applymap_basic(func, has_na):
 
     dpdf = dd.from_pandas(pdf, npartitions=dgdf.npartitions)
 
-    expect = dpdf.applymap(func)
-    got = dgdf.applymap(func)
+    expect = dpdf.map(func)
+    got = dgdf.map(func)
     dd.assert_eq(expect, got, check_dtype=False)
