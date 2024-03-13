@@ -230,7 +230,7 @@ TEST_F(StringColumnTest, ConcatenateTooLarge)
 
 TEST_F(StringColumnTest, ConcatenateLargeStrings)
 {
-  setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "1", 1);
+  CUDF_TEST_ENABLE_LARGE_STRINGS();
   auto itr = thrust::constant_iterator<std::string_view>(
     "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
   auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
@@ -241,24 +241,38 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
   auto result = cudf::concatenate(input_cols);
   auto sv     = cudf::strings_column_view(result->view());
   EXPECT_EQ(sv.size(), 50'000'000);
-  // std::cout << sv.chars_size(cudf::get_default_stream()) << "\n";
-  // std::cout << (int)sv.offsets().type().id() << "\n";
   EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
 
-  auto sliced = cudf::split(result->view(),
-                            {5'000'000,
-                             10'000'000,
-                             15'000'000,
-                             20'000'000,
-                             25'000'000,
-                             30'000'000,
-                             35'000'000,
-                             40'000'000,
-                             45'000'000});
+  // verify results in sections
+  auto splits = std::vector<cudf::size_type>({5'000'000,
+                                              10'000'000,
+                                              15'000'000,
+                                              20'000'000,
+                                              25'000'000,
+                                              30'000'000,
+                                              35'000'000,
+                                              40'000'000,
+                                              45'000'000});
+  auto sliced = cudf::split(result->view(), splits);
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
-  unsetenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+
+  // also test with large strings column as input
+  {
+    input_cols.clear();
+    input_cols.push_back(input);           // regular column
+    input_cols.push_back(result->view());  // large column
+    result = cudf::concatenate(input_cols);
+    sv     = cudf::strings_column_view(result->view());
+    EXPECT_EQ(sv.size(), 55'000'000);
+    EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+    splits.push_back(50'000'000);
+    sliced = cudf::split(result->view(), splits);
+    for (auto c : sliced) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
+    }
+  }
 }
 
 struct TableTest : public cudf::test::BaseFixture {};

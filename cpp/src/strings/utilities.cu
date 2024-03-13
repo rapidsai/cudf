@@ -32,6 +32,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <string>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -149,7 +151,11 @@ int64_t get_offset64_threshold()
            : std::numeric_limits<int32_t>::max();
 }
 
-bool is_large_strings_enabled() { return std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED") != nullptr; }
+bool is_large_strings_enabled()
+{
+  auto const env = std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+  return env != nullptr && std::string(env) == "1";
+}
 
 int64_t get_offset_value(cudf::column_view const& offsets,
                          size_type index,
