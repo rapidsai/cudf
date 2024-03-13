@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -1748,6 +1748,10 @@ def test_fill_new_category():
     gs[0:1] = "d"
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning newly introduced in pandas-2.2.0",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1799,7 +1803,7 @@ def test_isin_datetime(data, values):
     is_len_str = isinstance(next(iter(values), None), str) and len(data)
     with expect_warning_if(is_len_str):
         got = gsr.isin(values)
-    with expect_warning_if(PANDAS_GE_220 and is_len_str):
+    with expect_warning_if(is_len_str):
         expected = psr.isin(values)
     assert_eq(got, expected)
 
@@ -2661,6 +2665,22 @@ def test_series_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
+
+
+def test_list_category_like_maintains_dtype():
+    dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
+    data = [1, 2, 3]
+    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    expected = pd.Series(data, dtype=dtype.to_pandas())
+    assert_eq(result, expected)
+
+
+def test_list_interval_like_maintains_dtype():
+    dtype = cudf.IntervalDtype(subtype=np.int8)
+    data = [pd.Interval(1, 2)]
+    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    expected = pd.Series(data, dtype=dtype.to_pandas())
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(

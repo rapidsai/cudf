@@ -65,14 +65,6 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
   return strings_vector;
 }
 
-std::unique_ptr<column> create_chars_child_column(cudf::size_type total_bytes,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
-{
-  return make_numeric_column(
-    data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
-}
-
 namespace {
 // The device variables are created here to avoid using a singleton that may cause issues
 // with RMM initialize/finalize. See PR #3159 for details on this approach.
