@@ -7,6 +7,7 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_duration_column as cpp_make_duration_column,
     make_empty_column as cpp_make_empty_column,
     make_fixed_point_column as cpp_make_fixed_point_column,
+    make_fixed_width_column as cpp_make_fixed_width_column,
     make_numeric_column as cpp_make_numeric_column,
     make_timestamp_column as cpp_make_timestamp_column,
 )
@@ -39,68 +40,139 @@ cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
 cpdef Column make_numeric_column(
     DataType type_,
     size_type size,
-    mask_state state
+    MaskStateOrMask state_or_mask
 ):
 
     cdef unique_ptr[column] result
-
-    with nogil:
-        result = move(
-            cpp_make_numeric_column(
-                type_.c_obj,
-                size,
-                state
+    if MaskStateOrMask is mask_state:
+        with nogil:
+            result = move(
+                cpp_make_numeric_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask
+                )
             )
-        )
+    else:
+        with nogil:
+            result = move(
+                cpp_make_numeric_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask.mask,
+                    state_or_mask.null_count
+                )
+            )
     return Column.from_libcudf(move(result))
 
-cdef Column make_timestamp_column(
+cpdef Column make_fixed_point_column(
     DataType type_,
     size_type size,
-    mask_state state
+    MaskStateOrMask state_or_mask
 ):
     cdef unique_ptr[column] result
 
-    with nogil:
-        result = move(
-            cpp_make_timestamp_column(
-                type_.c_obj,
-                size,
-                state
+    if MaskStateOrMask is mask_state:
+        with nogil:
+            result = move(
+                cpp_make_fixed_point_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask
+                )
             )
-        )
+    else:
+        with nogil:
+            result = move(
+                cpp_make_fixed_point_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask.mask,
+                    state_or_mask.null_count
+                )
+            )
     return Column.from_libcudf(move(result))
 
-cdef Column make_duration_column(
+cpdef Column make_timestamp_column(
     DataType type_,
     size_type size,
-    mask_state state
+    MaskStateOrMask state_or_mask
 ):
     cdef unique_ptr[column] result
 
-    with nogil:
-        result = move(
-            cpp_make_duration_column(
-                type_.c_obj,
-                size,
-                state
+    if MaskStateOrMask is mask_state:
+        with nogil:
+            result = move(
+                cpp_make_timestamp_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask
+                )
             )
-        )
+    else:
+        with nogil:
+            result = move(
+                cpp_make_timestamp_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask.mask,
+                    state_or_mask.null_count
+                )
+            )
     return Column.from_libcudf(move(result))
 
-cdef Column make_fixed_point_column(
+cpdef Column make_duration_column(
     DataType type_,
     size_type size,
-    mask_state state
+    MaskStateOrMask state_or_mask
 ):
     cdef unique_ptr[column] result
 
-    with nogil:
-        result = move(
-            cpp_make_fixed_point_column(
-                type_.c_obj,
-                size,
-                state
+    if MaskStateOrMask is mask_state:
+        with nogil:
+            result = move(
+                cpp_make_duration_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask
+                )
             )
-        )
+    else:
+        with nogil:
+            result = move(
+                cpp_make_duration_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask.mask,
+                    state_or_mask.null_count
+                )
+            )
+    return Column.from_libcudf(move(result))
+
+cpdef Column make_fixed_width_column(
+    DataType type_,
+    size_type size,
+    MaskStateOrMask state_or_mask
+):
+    cdef unique_ptr[column] result
+
+    if MaskStateOrMask is mask_state:
+        with nogil:
+            result = move(
+                cpp_make_fixed_width_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask
+                )
+            )
+    else:
+        with nogil:
+            result = move(
+                cpp_make_fixed_width_column(
+                    type_.c_obj,
+                    size,
+                    state_or_mask.mask,
+                    state_or_mask.null_count
+                )
+            )
     return Column.from_libcudf(move(result))

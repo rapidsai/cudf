@@ -4,7 +4,13 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport scalar
-from cudf._lib.cpp.types cimport data_type, mask_state, size_type, type_id
+from cudf._lib.cpp.types cimport (
+    bitmask_type,
+    data_type,
+    mask_state,
+    size_type,
+    type_id,
+)
 
 
 cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
@@ -12,7 +18,23 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
                                                 size_type size,
                                                 mask_state state) except +
 
+    cdef unique_ptr[column] make_numeric_column(data_type type,
+                                                size_type size,
+                                                const bitmask_type* mask,
+                                                size_type null_count) except +
+
     cdef unique_ptr[column] make_fixed_point_column(
+        data_type type,
+        size_type size,
+        mask_state state) except +
+
+    cdef unique_ptr[column] make_fixed_point_column(
+        data_type type,
+        size_type size,
+        const bitmask_type* mask,
+        size_type null_count) except +
+
+    cdef unique_ptr[column] make_timestamp_column(
         data_type type,
         size_type size,
         mask_state state) except +
@@ -20,17 +42,30 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_timestamp_column(
         data_type type,
         size_type size,
-        mask_state state) except +
+        const bitmask_type* mask,
+        size_type null_count) except +
 
     cdef unique_ptr[column] make_duration_column(
         data_type type,
         size_type size,
         mask_state state) except +
 
-    cdef unique_ptr[column] make_fixed_point_column(
+    cdef unique_ptr[column] make_duration_column(
+        data_type type,
+        size_type size,
+        const bitmask_type* mask,
+        size_type null_count) except +
+
+    cdef unique_ptr[column] make_fixed_width_column(
         data_type type,
         size_type size,
         mask_state state) except +
+
+    cdef unique_ptr[column] make_fixed_width_column(
+        data_type type,
+        size_type size,
+        const bitmask_type* mask,
+        size_type null_count) except +
 
     cdef unique_ptr[column] make_column_from_scalar (const scalar & s,
                                                      size_type size) except +
