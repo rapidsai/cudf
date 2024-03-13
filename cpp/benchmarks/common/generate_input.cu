@@ -77,9 +77,10 @@ double get_distribution_mean(distribution_params<T> const& dist)
     case distribution_id::NORMAL:
     case distribution_id::UNIFORM: return (dist.lower_bound / 2.) + (dist.upper_bound / 2.);
     case distribution_id::GEOMETRIC: {
-      // In the current implementation, the geometric distribution is
-      // approximated by absolute value of a uniform distribution
-      auto const gauss_std_dev   = geometric_as_gauss_std_dev(dist.lower_bound, dist.upper_bound);
+      // Geometric distribution is approximated by a half-normal distribution
+      // Doubling the standard deviation because the dist range only includes half of the (unfolded)
+      // normal distribution
+      auto const gauss_std_dev   = std_dev_from_range(dist.lower_bound, dist.upper_bound) * 2;
       auto const half_gauss_mean = gauss_std_dev * sqrt(2. / M_PI);
       if (dist.lower_bound < dist.upper_bound)
         return dist.lower_bound + half_gauss_mean;
