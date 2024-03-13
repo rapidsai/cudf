@@ -906,20 +906,18 @@ void expect_column_empty(cudf::column_view const& col)
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
   if (c.nullable()) {
-    auto num_bitmasks = num_bitmask_words(c.size());
-    std::vector<bitmask_type> host_bitmask(num_bitmasks);
-    if (c.offset() == 0) {
-      CUDF_CUDA_TRY(cudaMemcpy(host_bitmask.data(),
-                               c.null_mask(),
-                               num_bitmasks * sizeof(bitmask_type),
-                               cudaMemcpyDefault));
-    } else {
+    auto num_bitmasks      = num_bitmask_words(c.size());
+    auto [bitmask_span, _] = [&] {
+      if (c.offset() == 0) {
+        return std::pair{cudf::device_span<bitmask_type const>(c.null_mask(), num_bitmasks),
+                         rmm::device_buffer{}};
+      }
       auto mask = copy_bitmask(c.null_mask(), c.offset(), c.offset() + c.size());
-      CUDF_CUDA_TRY(cudaMemcpy(
-        host_bitmask.data(), mask.data(), num_bitmasks * sizeof(bitmask_type), cudaMemcpyDefault));
-    }
-
-    return host_bitmask;
+      return std::pair{cudf::device_span<bitmask_type const>(
+                         static_cast<bitmask_type*>(mask.data()), num_bitmasks),
+                       std::move(mask)};
+    }();
+    return cudf::detail::make_std_vector_sync(bitmask_span, cudf::get_default_stream());
   } else {
     return std::vector<bitmask_type>{};
   }
@@ -946,16 +944,14 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
   using namespace numeric;
   using Rep = typename T::rep;
 
-  auto host_rep_types = thrust::host_vector<Rep>(c.size());
-
-  CUDF_CUDA_TRY(
-    cudaMemcpy(host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDefault));
+  auto col_span       = cudf::device_span<Rep const>(c.begin<Rep>(), c.size());
+  auto host_rep_types = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
 
   auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
   auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
   auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
 
-  return {host_fixed_points, bitmask_to_host(c)};
+  return {std::move(host_fixed_points), bitmask_to_host(c)};
 }
 
 template std::pair<thrust::host_vector<numeric::decimal32>, std::vector<bitmask_type>> to_host(
