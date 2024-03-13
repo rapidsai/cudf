@@ -86,6 +86,18 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 }
 
 template <>
+void scan_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::product_scan(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
+}
+
+template <>
 void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;

@@ -363,13 +363,22 @@ class GroupBy(Serializable, Reducible, Scannable):
         >>> df.groupby(by=["a"]).indices
         {10: array([0, 1]), 40: array([2])}
         """
-        group_names, offsets, _, grouped_values = self._grouped()
+        offsets, group_keys, (indices,) = self._groupby.groups(
+            [
+                cudf.core.column.as_column(
+                    range(len(self.obj)), dtype=size_type_dtype
+                )
+            ]
+        )
 
+        group_keys = libcudf.stream_compaction.drop_duplicates(group_keys)
+        if len(group_keys) > 1:
+            index = cudf.MultiIndex.from_arrays(group_keys)
+        else:
+            (group_keys,) = group_keys
+            index = cudf.Index(group_keys)
         return dict(
-            zip(
-                group_names.to_pandas(),
-                np.split(grouped_values.index.values, offsets[1:-1]),
-            )
+            zip(index.to_pandas(), cp.split(indices.values, offsets[1:-1]))
         )
 
     @_cudf_nvtx_annotate
@@ -414,8 +423,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 "instead of ``gb.get_group(name, obj=df)``.",
                 FutureWarning,
             )
-
-        return obj.loc[self.groups[name].drop_duplicates()]
+        return obj.iloc[self.indices[name]]
 
     @_cudf_nvtx_annotate
     def size(self):
@@ -1300,12 +1308,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         chunk_results = jit_groupby_apply(
             offsets, grouped_values, function, *args
         )
-        result = cudf.Series._from_data(
-            {None: chunk_results}, index=group_names
+        return self._post_process_chunk_results(
+            chunk_results, group_names, group_keys, grouped_values
         )
-        result.index.names = self.grouping.names
-
-        return result
 
     @_cudf_nvtx_annotate
     def _iterative_groupby_apply(
@@ -1333,12 +1338,15 @@ class GroupBy(Serializable, Reducible, Scannable):
     ):
         if not len(chunk_results):
             return self.obj.head(0)
-        if cudf.api.types.is_scalar(chunk_results[0]):
-            result = cudf.Series._from_data(
-                {None: chunk_results}, index=group_names
-            )
+        if isinstance(chunk_results, ColumnBase) or cudf.api.types.is_scalar(
+            chunk_results[0]
+        ):
+            data = {None: chunk_results}
+            ty = cudf.Series if self._as_index else cudf.DataFrame
+            result = ty._from_data(data, index=group_names)
             result.index.names = self.grouping.names
             return result
+
         elif isinstance(chunk_results[0], cudf.Series) and isinstance(
             self.obj, cudf.DataFrame
         ):
@@ -1372,6 +1380,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                     index_data = group_keys._data.copy(deep=True)
                     index_data[None] = grouped_values.index._column
                     result.index = cudf.MultiIndex._from_data(index_data)
+            elif len(chunk_results) == len(group_names):
+                result = cudf.concat(chunk_results, axis=1).T
+                result.index = group_names
+                result.index.names = self.grouping.names
             else:
                 raise TypeError(
                     "Error handling Groupby apply output with input of "
@@ -1544,7 +1556,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             result = result.sort_index()
         if self._as_index is False:
             result = result.reset_index()
-            result[None] = result.pop(0)
         return result
 
     @_cudf_nvtx_annotate

@@ -28,7 +28,7 @@
 
 namespace cudf::io::parquet::detail {
 
-void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
+void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
   auto& subpass = *pass.subpass;
@@ -62,14 +62,23 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   auto const has_strings = (kernel_mask & STRINGS_MASK) != 0;
   std::vector<size_t> col_string_sizes(_input_columns.size(), 0L);
   if (has_strings) {
-    ComputePageStringSizes(subpass.pages,
-                           pass.chunks,
-                           delta_temp_buf,
-                           skip_rows,
-                           num_rows,
-                           level_type_size,
-                           kernel_mask,
-                           _stream);
+    // need to compute pages bounds/sizes if we lack page indexes or are using custom bounds
+    // TODO: we could probably dummy up size stats for FLBA data since we know the width
+    auto const has_flba =
+      std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
+        return (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY && chunk.converted_type != DECIMAL;
+      });
+
+    if (!_has_page_index || uses_custom_row_bounds || has_flba) {
+      ComputePageStringSizes(subpass.pages,
+                             pass.chunks,
+                             delta_temp_buf,
+                             skip_rows,
+                             num_rows,
+                             level_type_size,
+                             kernel_mask,
+                             _stream);
+    }
 
     col_string_sizes = calculate_page_string_offsets();
 
@@ -246,11 +255,9 @@ void reader::impl::decode_page_data(size_t skip_rows, size_t num_rows)
   page_nesting.device_to_host_async(_stream);
   page_nesting_decode.device_to_host_async(_stream);
 
-  if (error_code.value() != 0) {
-    CUDF_FAIL("Parquet data decode failed with code(s) " + error_code.str());
+  if (auto const error = error_code.value_sync(_stream); error != 0) {
+    CUDF_FAIL("Parquet data decode failed with code(s) " + kernel_error::to_string(error));
   }
-  // error_code.value() is synchronous; explicitly sync here for better visibility
-  _stream.synchronize();
 
   // for list columns, add the final offset to every offset buffer.
   // TODO : make this happen in more efficiently. Maybe use thrust::for_each
@@ -428,7 +435,7 @@ table_with_metadata reader::impl::read_chunk_internal(
   allocate_columns(read_info.skip_rows, read_info.num_rows, uses_custom_row_bounds);
 
   // Parse data into the output buffers.
-  decode_page_data(read_info.skip_rows, read_info.num_rows);
+  decode_page_data(uses_custom_row_bounds, read_info.skip_rows, read_info.num_rows);
 
   // Create the final output cudf columns.
   for (size_t i = 0; i < _output_buffers.size(); ++i) {

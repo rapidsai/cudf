@@ -25,6 +25,10 @@
 #include <map>
 #include <vector>
 
+// Forward declaration of parse_options from parsing_utils.cuh
+namespace cudf::io {
+struct parse_options;
+}
 namespace cudf::io::json {
 
 /**
@@ -156,6 +160,8 @@ struct device_json_column {
   std::vector<std::string> column_order;
   // Counting the current number of items in this column
   row_offset_t num_rows = 0;
+  // Force as string column
+  bool forced_as_string_column{false};
 
   /**
    * @brief Construct a new d json column object
@@ -284,6 +290,16 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream);
 
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ * @param stream The CUDA stream to which kernels are dispatched
+ */
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream);
+
 /** @copydoc host_parse_nested_json
  * All processing is done in device memory.
  *
@@ -292,6 +308,32 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Get the path data type of a column by path if present in input schema
+ *
+ * @param path path of the column
+ * @param options json reader options which holds schema
+ * @return data type of the column if present
+ */
+std::optional<data_type> get_path_data_type(
+  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  cudf::io::json_reader_options const& options);
+
+/**
+ * @brief Helper class to get path of a column by column id from reduced column tree
+ *
+ */
+struct path_from_tree {
+  host_span<NodeT const> column_categories;
+  host_span<NodeIndexT const> column_parent_ids;
+  host_span<std::string const> column_names;
+  bool is_array_of_arrays;
+  NodeIndexT const row_array_parent_col_id;
+
+  using path_rep = std::pair<std::string, cudf::io::json::NodeT>;
+  std::vector<path_rep> get_path(NodeIndexT this_col_id);
+};
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.
