@@ -27,7 +27,7 @@
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/strings/detail/merge.cuh>
+#include <cudf/strings/detail/merge.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table.hpp>
@@ -433,12 +433,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
-  auto column = strings::detail::merge<index_type>(strings_column_view(lcol),
-                                                   strings_column_view(rcol),
-                                                   row_order_.begin(),
-                                                   row_order_.end(),
-                                                   stream,
-                                                   mr);
+  auto column = strings::detail::merge(
+    strings_column_view(lcol), strings_column_view(rcol), row_order_, stream, mr);
   if (lcol.has_nulls() || rcol.has_nulls()) {
     auto merged_view = column->mutable_view();
     materialize_bitmask(
