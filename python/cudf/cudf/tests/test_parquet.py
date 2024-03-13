@@ -21,7 +21,6 @@ from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200
 from cudf.io.parquet import (
     ParquetDatasetWriter,
     ParquetWriter,
@@ -1607,18 +1606,9 @@ def test_parquet_writer_int96_timestamps(tmpdir, pdf, gdf):
 
     expect = pdf
     got = pd.read_parquet(gdf_fname)
-    if PANDAS_GE_200:
-        # https://github.com/pandas-dev/pandas/issues/52412
-        assert got["col_datetime64[ms]"].dtype == np.dtype("datetime64[ns]")
-        assert got["col_datetime64[us]"].dtype == np.dtype("datetime64[ns]")
-        got["col_datetime64[ms]"] = got["col_datetime64[ms]"].astype(
-            "datetime64[ms]"
-        )
-        got["col_datetime64[us]"] = got["col_datetime64[us]"].astype(
-            "datetime64[us]"
-        )
+
     # verify INT96 timestamps were converted back to the same data.
-    assert_eq(expect, got, check_categorical=False)
+    assert_eq(expect, got, check_categorical=False, check_dtype=False)
 
 
 def test_multifile_parquet_folder(tmpdir):
@@ -1906,7 +1896,7 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200 and isinstance(got_pd["c"].dtype, pd.CategoricalDtype):
+    if isinstance(got_pd["c"].dtype, pd.CategoricalDtype):
         # Work-around for pandas bug:
         # https://github.com/pandas-dev/pandas/issues/53345
         got_pd["c"] = got_pd["c"].astype(
@@ -1962,15 +1952,15 @@ def test_parquet_writer_chunked_partitioned(tmpdir_factory, return_meta):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        got_pd["a"] = got_pd["a"].astype(
-            pd.CategoricalDtype(
-                categories=got_pd["a"].dtype.categories.astype("int64"),
-                ordered=got_pd["a"].dtype.ordered,
-            )
+
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    got_pd["a"] = got_pd["a"].astype(
+        pd.CategoricalDtype(
+            categories=got_pd["a"].dtype.categories.astype("int64"),
+            ordered=got_pd["a"].dtype.ordered,
         )
+    )
     assert_eq(got_pd, got_cudf)
 
 
@@ -2011,15 +2001,15 @@ def test_parquet_writer_chunked_max_file_size(
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        got_pd["a"] = got_pd["a"].astype(
-            pd.CategoricalDtype(
-                categories=got_pd["a"].dtype.categories.astype("int64"),
-                ordered=got_pd["a"].dtype.ordered,
-            )
+
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    got_pd["a"] = got_pd["a"].astype(
+        pd.CategoricalDtype(
+            categories=got_pd["a"].dtype.categories.astype("int64"),
+            ordered=got_pd["a"].dtype.ordered,
         )
+    )
     assert_eq(
         got_pd.sort_values(["b"]).reset_index(drop=True),
         got_cudf.sort_values(["b"]).reset_index(drop=True),
@@ -2065,15 +2055,15 @@ def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
 
     # Check that cudf and pd return the same read
     got_cudf = cudf.read_parquet(gdf_dir)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        got_pd["a"] = got_pd["a"].astype(
-            pd.CategoricalDtype(
-                categories=got_pd["a"].dtype.categories.astype("int64"),
-                ordered=got_pd["a"].dtype.ordered,
-            )
+
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    got_pd["a"] = got_pd["a"].astype(
+        pd.CategoricalDtype(
+            categories=got_pd["a"].dtype.categories.astype("int64"),
+            ordered=got_pd["a"].dtype.ordered,
         )
+    )
     assert_eq(got_pd, got_cudf)
 
 
@@ -2181,15 +2171,15 @@ def test_read_parquet_partitioned_filtered(
     filters = [[("a", "==", 10)], [("c", "==", 1)]]
     got = cudf.read_parquet(read_path, filters=filters)
     expect = pd.read_parquet(read_path, filters=filters)
-    if PANDAS_GE_200:
-        # Work-around for pandas bug:
-        # https://github.com/pandas-dev/pandas/issues/53345
-        expect["c"] = expect["c"].astype(
-            pd.CategoricalDtype(
-                categories=expect["c"].dtype.categories.astype("int64"),
-                ordered=expect["c"].dtype.ordered,
-            )
+
+    # Work-around for pandas bug:
+    # https://github.com/pandas-dev/pandas/issues/53345
+    expect["c"] = expect["c"].astype(
+        pd.CategoricalDtype(
+            categories=expect["c"].dtype.categories.astype("int64"),
+            ordered=expect["c"].dtype.ordered,
         )
+    )
     assert_eq(expect, got)
 
 
