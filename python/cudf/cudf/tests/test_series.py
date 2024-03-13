@@ -15,7 +15,7 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -1748,6 +1748,10 @@ def test_fill_new_category():
     gs[0:1] = "d"
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning newly introduced in pandas-2.2.0",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1799,7 +1803,7 @@ def test_isin_datetime(data, values):
     is_len_str = isinstance(next(iter(values), None), str) and len(data)
     with expect_warning_if(is_len_str):
         got = gsr.isin(values)
-    with expect_warning_if(PANDAS_GE_220 and is_len_str):
+    with expect_warning_if(is_len_str):
         expected = psr.isin(values)
     assert_eq(got, expected)
 

@@ -5,7 +5,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import IntervalIndex, interval_range
 from cudf.testing._utils import assert_eq
 
@@ -315,8 +315,8 @@ def test_interval_index_from_breaks(closed):
             1.0,
             0.2,
             None,
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_210,
+            marks=pytest.mark.skipif(
+                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/pull/54477",
             ),
         ),
@@ -327,7 +327,7 @@ def test_interval_index_from_breaks(closed):
             0.1,
             None,
             marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_210,
+                condition=PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/pull/54477",
             ),
         ),
