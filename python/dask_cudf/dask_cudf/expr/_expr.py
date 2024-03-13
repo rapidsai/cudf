@@ -1,6 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
-from dask_expr._cumulative import CumulativeBlockwise, TakeLast
+from dask_expr._cumulative import CumulativeBlockwise
 from dask_expr._reductions import Var
 
 ##
@@ -23,21 +23,6 @@ class PatchCumulativeBlockwise(CumulativeBlockwise):
 
 CumulativeBlockwise._args = PatchCumulativeBlockwise._args
 CumulativeBlockwise._kwargs = PatchCumulativeBlockwise._kwargs
-
-
-# This can be removed if squeeze support is added to cudf,
-# or if squeeze is removed from the dask-expr logic.
-# See: https://github.com/rapidsai/cudf/issues/15177
-def _takelast(a, skipna=True):
-    if not len(a):
-        return a
-    if skipna:
-        a = a.bfill()
-    # Cannot use `squeeze` with cudf
-    return a.tail(n=1).iloc[0]
-
-
-TakeLast.operation = staticmethod(_takelast)
 
 
 # This patch accounts for differences between
