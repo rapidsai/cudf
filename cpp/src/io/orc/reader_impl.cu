@@ -256,7 +256,9 @@ reader::impl::impl(std::size_t output_size_limit,
                    rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
+#ifdef LOCAL_TEST
     mem_stats_logger(mr),
+#endif
     _config{options.get_timestamp_type(),
             options.is_enabled_use_index(),
             options.is_enabled_use_np_dtypes(),

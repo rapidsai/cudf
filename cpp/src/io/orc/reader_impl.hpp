@@ -34,13 +34,12 @@
 
 namespace cudf::io::orc::detail {
 
+#ifdef LOCAL_TEST
 class memory_stats_logger {
  public:
   explicit memory_stats_logger(rmm::mr::device_memory_resource* mr) : existing_mr(mr)
   {
-#ifdef LOCAL_TEST
     printf("exist mr: %p\n", mr);
-#endif
 
     statistics_mr =
       std::make_unique<rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>>(
@@ -62,6 +61,7 @@ class memory_stats_logger {
     rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>>
     statistics_mr;
 };
+#endif
 
 struct reader_column_meta;
 
@@ -184,7 +184,9 @@ class reader::impl {
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
+#ifdef LOCAL_TEST
   memory_stats_logger mem_stats_logger;
+#endif
 
   // Reader configs.
   struct {
