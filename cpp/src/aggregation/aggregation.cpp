@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -429,6 +429,8 @@ std::unique_ptr<Base> make_product_aggregation()
 }
 template std::unique_ptr<aggregation> make_product_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_product_aggregation<groupby_aggregation>();
+template std::unique_ptr<groupby_scan_aggregation>
+make_product_aggregation<groupby_scan_aggregation>();
 template std::unique_ptr<reduce_aggregation> make_product_aggregation<reduce_aggregation>();
 template std::unique_ptr<scan_aggregation> make_product_aggregation<scan_aggregation>();
 template std::unique_ptr<segmented_reduce_aggregation>

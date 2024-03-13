@@ -13,7 +13,7 @@ import pytest
 import cudf
 import cudf.testing.dataset_generator as dataset_generator
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_EQ_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.index import DatetimeIndex
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -1577,19 +1577,11 @@ def test_date_range_start_freq_periods(request, start, freq, periods):
     )
 
 
-def test_date_range_end_freq_periods(request, end, freq, periods):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                not PANDAS_GE_210
-                and "nanoseconds" in freq
-                and periods != 1
-                and end == "1970-01-01 00:00:00"
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/46877",
-        )
-    )
-
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/46877",
+)
+def test_date_range_end_freq_periods(end, freq, periods):
     if isinstance(freq, str):
         _gfreq = _pfreq = freq
     else:
@@ -1852,6 +1844,10 @@ def test_error_values():
         s.values
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/52761",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1873,22 +1869,7 @@ def test_error_values():
 @pytest.mark.parametrize(
     "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
-def test_ceil(request, data, time_type, resolution):
-    alias_map = {"L": "ms", "U": "us", "N": "ns"}
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                PANDAS_EQ_200
-                and resolution in {"L", "ms", "U", "us", "N"}
-                and np.dtype(
-                    f"datetime64[{alias_map.get(resolution, resolution)}]"
-                )
-                > np.dtype(time_type)
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/52761",
-            strict=True,
-        )
-    )
+def test_ceil(data, time_type, resolution):
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -1897,6 +1878,10 @@ def test_ceil(request, data, time_type, resolution):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/52761",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1918,23 +1903,7 @@ def test_ceil(request, data, time_type, resolution):
 @pytest.mark.parametrize(
     "resolution", ["D", "h", "min", "min", "s", "ms", "us", "ns"]
 )
-def test_floor(request, data, time_type, resolution):
-    alias_map = {"L": "ms", "U": "us", "N": "ns"}
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                PANDAS_EQ_200
-                and resolution in {"L", "ms", "U", "us", "N"}
-                and np.dtype(
-                    f"datetime64[{alias_map.get(resolution, resolution)}]"
-                )
-                > np.dtype(time_type)
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/52761",
-            strict=True,
-        )
-    )
-
+def test_floor(data, time_type, resolution):
     gs = cudf.Series(data, dtype=time_type)
     ps = gs.to_pandas()
 
@@ -1973,6 +1942,10 @@ def test_round(data, time_type, resolution):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "idx",
     [
@@ -2004,7 +1977,7 @@ def test_first(idx, offset):
     p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expect = p.first(offset=offset)
     with pytest.warns(FutureWarning):
         got = g.first(offset=offset)
@@ -2036,7 +2009,7 @@ def test_first_start_at_end_of_month(idx, offset):
     p = pd.Series(range(len(idx)), index=idx)
     g = cudf.from_pandas(p)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expect = p.first(offset=offset)
     with pytest.warns(FutureWarning):
         got = g.first(offset=offset)
@@ -2044,6 +2017,10 @@ def test_first_start_at_end_of_month(idx, offset):
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "idx",
     [
@@ -2075,7 +2052,7 @@ def test_last(idx, offset):
     p = pd.Series(range(len(idx)), dtype="int64", index=idx)
     g = cudf.from_pandas(p)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expect = p.last(offset=offset)
     with pytest.warns(FutureWarning):
         got = g.last(offset=offset)
