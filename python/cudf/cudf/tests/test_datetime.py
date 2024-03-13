@@ -2348,6 +2348,15 @@ def test_datetime_to_str(data, dtype):
     assert_eq(actual.to_pandas(nullable=True), expected)
 
 
+def test_datetime_string_to_datetime_resolution_loss_raises():
+    data = ["2020-01-01 00:00:00.00001"]
+    dtype = "datetime64[s]"
+    with pytest.raises(ValueError):
+        cudf.Series(data, dtype=dtype)
+    with pytest.raises(ValueError):
+        pd.Series(data, dtype=dtype)
+
+
 def test_dateimeindex_from_noniso_string():
     data = ["20160920", "20160925"]
     gdti = cudf.DatetimeIndex(data)
