@@ -2240,6 +2240,12 @@ def as_column(
                 break
         try:
             arbitrary = pa.array(arbitrary, from_pandas=from_pandas)
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and pa.types.is_integer(arbitrary.type)
+                and arbitrary.null_count > 0
+            ):
+                arbitrary = arbitrary.cast(pa.float64())
             if cudf.get_option(
                 "default_integer_bitwidth"
             ) and pa.types.is_integer(arbitrary.type):
