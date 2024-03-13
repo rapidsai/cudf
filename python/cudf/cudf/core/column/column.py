@@ -2175,9 +2175,20 @@ def as_column(
             pd.IntervalDtype,
             cudf.IntervalDtype,
         ),
-    ) or dtype in {"category", "interval", "str", str, np.str_}:
+    ) or dtype in {
+        "category",
+        "interval",
+        "str",
+        str,
+        np.str_,
+        object,
+        np.dtype(object),
+    }:
         if isinstance(dtype, (cudf.CategoricalDtype, cudf.IntervalDtype)):
             dtype = dtype.to_pandas()
+        elif dtype == object:
+            # Unlike pandas, interpret object as "str" instead of "python object"
+            dtype = "str"
         ser = pd.Series(arbitrary, dtype=dtype)
         return as_column(ser, nan_as_null=nan_as_null)
     elif isinstance(dtype, (cudf.StructDtype, cudf.ListDtype)):
@@ -2237,7 +2248,7 @@ def as_column(
                 "default_float_bitwidth"
             ) and pa.types.is_floating(arbitrary.type):
                 dtype = _maybe_convert_to_default_type("float")
-        except (pa.ArrowInvalid, pa.ArrowTypeError):
+        except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
             arbitrary = pd.Series(arbitrary)
             if cudf.get_option(
                 "default_integer_bitwidth"
