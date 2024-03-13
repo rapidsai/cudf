@@ -342,6 +342,8 @@ struct rle_stream {
                                              batch_len,
                                              level_bits,
                                              warp_lane);
+
+          __syncwarp();
           if (warp_lane == 0) {
             // after writing this batch, are we at the end of the output buffer?
             auto const at_end = ((last_run_pos + batch_len - cur_values) == output_count);
