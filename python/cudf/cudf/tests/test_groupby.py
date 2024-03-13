@@ -871,6 +871,33 @@ def test_groupby_apply_return_df(func):
     assert_groupby_results_equal(expect, got)
 
 
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_apply_return_reindexed_series(as_index):
+    def gdf_func(df):
+        return cudf.Series([df["a"].sum(), df["b"].min(), df["c"].max()])
+
+    def pdf_func(df):
+        return pd.Series([df["a"].sum(), df["b"].min(), df["c"].max()])
+
+    df = cudf.DataFrame(
+        {
+            "key": [0, 0, 1, 1, 2, 2],
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [7, 8, 9, 10, 11, 12],
+            "c": [13, 14, 15, 16, 17, 18],
+        }
+    )
+    pdf = df.to_pandas()
+
+    kwargs = {}
+    if PANDAS_GE_220:
+        kwargs["include_groups"] = False
+
+    expect = pdf.groupby("key", as_index=as_index).apply(pdf_func, **kwargs)
+    got = df.groupby("key", as_index=as_index).apply(gdf_func, **kwargs)
+    assert_groupby_results_equal(expect, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
