@@ -1,22 +1,4 @@
-[tool.black]
-line-length = 79
-target-version = ["py39"]
-include = '\.py?$'
-force-exclude = '''
-/(
-    thirdparty |
-    \.eggs |
-    \.git |
-    \.hg |
-    \.mypy_cache |
-    \.tox |
-    \.venv |
-    _build |
-    buck-out |
-    build |
-    dist
-)/
-'''
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 [tool.pydocstyle]
 # Due to https://github.com/PyCQA/pydocstyle/issues/363, we must exclude rather
