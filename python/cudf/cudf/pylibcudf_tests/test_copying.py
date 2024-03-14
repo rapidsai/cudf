@@ -104,17 +104,26 @@ def test_scatter_scalars(source_scalar, input_column, target_table):
     assert_table_eq(result, expected)
 
 
-def test_empty_like(input_column):
+def test_empty_like_column(input_column):
     result = plc.copying.empty_like(input_column)
-    assert input_column.type() == result.type()
+    assert result.type() == input_column.type()
 
 
-def test_allocate_like(input_column):
+def test_empty_like_table(source_table):
+    result = plc.copying.empty_like(source_table)
+    assert result.num_columns() == source_table.num_columns()
+    for icol, rcol in zip(source_table.columns(), result.columns()):
+        assert rcol.type() == icol.type()
+
+
+# TODO: Check the size parameter.
+@pytest.mark.parametrize("size", [None, 10])
+def test_allocate_like(input_column, size):
     result = plc.copying.allocate_like(
-        input_column, plc.copying.MaskAllocationPolicy.RETAIN
+        input_column, plc.copying.MaskAllocationPolicy.RETAIN, size=size
     )
-    assert input_column.type() == result.type()
-    assert input_column.size() == result.size()
+    assert result.type() == input_column.type()
+    assert result.size() == (input_column.size() if size is None else size)
 
 
 def test_copy_range(input_column, target_column):
@@ -183,6 +192,28 @@ def test_slice_table(target_table):
     pa_target_table = table_to_arrow(target_table)
     for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
         assert_table_eq(slice_, pa_target_table[lb:ub])
+
+
+def test_copy_if_else_column_column(target_column):
+    pa_other_column = column_to_arrow(target_column)
+    pa_other_column = pa.compute.add(pa_other_column, 4)
+    other_column = column_from_arrow(pa_other_column)
+
+    pa_mask = pa.array([True, False] * (target_column.size() // 2))
+    mask = column_from_arrow(pa_mask)
+    result = plc.copying.copy_if_else(
+        target_column,
+        other_column,
+        mask,
+    )
+
+    pa_target_column = column_to_arrow(target_column)
+    expected = pa.compute.if_else(
+        pa_mask,
+        pa_target_column,
+        pa_other_column,
+    )
+    assert_array_eq(result, expected)
 
 
 @pytest.mark.parametrize("array_left", [True, False])
