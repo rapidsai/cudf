@@ -8,6 +8,7 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type
+from cudf._lib.exception_handler cimport cudf_exception_handler
 
 
 cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
@@ -52,25 +53,25 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         binary_operator op,
         data_type output_type
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const scalar& rhs,
         binary_operator op,
         data_type output_type
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         binary_operator op,
         data_type output_type
-    ) except +
+    ) except +cudf_exception_handler
 
     cdef unique_ptr[column] binary_operation (
         const column_view& lhs,
         const column_view& rhs,
         const string& op,
         data_type output_type
-    ) except +
+    ) except +cudf_exception_handler
