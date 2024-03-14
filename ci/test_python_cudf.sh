@@ -14,6 +14,15 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
+rapids-logger "pytest pylibcudf"
+pushd python/cudf/cudf/pylibcudf_tests
+python -m pytest \
+  --cache-clear \
+  --numprocesses=8 \
+  --dist=worksteal \
+  .
+popd
+
 rapids-logger "pytest cudf"
 ./ci/run_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
