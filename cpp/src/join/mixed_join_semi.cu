@@ -225,8 +225,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   auto const hash_probe = row_hash.device_hasher(has_nulls);
 
   // Flagged vector used to indicate indices from left/probe table which are present in output
-  auto flagged = std::make_unique<rmm::device_uvector<bool>>(probe.num_rows(), stream, mr);
-  thrust::uninitialized_fill(thrust::cuda::par.on(stream), flagged->begin(), flagged->end(), false);
+  auto flagged = std::make_unique<rmm::device_uvector<bool>>(probe.num_rows(), stream);
+  thrust::uninitialized_fill(rmm::exec_policy(stream), flagged->begin(), flagged->end(), false);
 
   if (has_nulls) {
     mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>
@@ -261,9 +261,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     thrust::copy_if(rmm::exec_policy(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(probe.num_rows()),
+                    flagged->begin(),
                     gather_map->begin(),
-                    [join_type, d_flagged = flagged->begin()] __device__(size_type const idx) {
-                      return *(d_flagged + idx) == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
+                    [join_type] __device__(bool flag) {
+                      return flag == (join_type == detail::join_kind::LEFT_SEMI_JOIN);
                     });
 
   gather_map->resize(thrust::distance(gather_map->begin(), gather_map_end), stream);
