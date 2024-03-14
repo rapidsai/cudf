@@ -2200,7 +2200,10 @@ def as_column(
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
             raise
         return as_column(data, nan_as_null=nan_as_null)
-    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
+    elif (
+        not isinstance(arbitrary, (abc.Iterable, abc.Sequence))
+        or getattr(arbitrary, "ndim", 1) != 1
+    ):
         # TODO: This validation should probably be done earlier?
         raise TypeError(
             f"{type(arbitrary).__name__} must be an iterable or sequence."
