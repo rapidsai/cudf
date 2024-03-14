@@ -55,6 +55,8 @@ Typically, exception cases require specific assertions or other special logic, s
 The main exception to this rule is tests based on comparison to pandas.
 Such tests may test exceptional cases alongside more typical cases since the logic is generally identical.
 
+(test_parametrization)=
+
 ### Parametrization: custom fixtures and `pytest.mark.parametrize`
 
 When it comes to parametrizing tests written with `pytest`,
@@ -140,6 +142,8 @@ def test_odds():
 
 Other approaches are also possible, and the best solution should be discussed on a case-by-case basis during PR review.
 
+(xfailing_tests)=
+
 ### Tests with expected failures (`xfail`s)
 
 In some circumstances it makes sense to mark a test as _expected_ to
@@ -218,6 +222,8 @@ This way, when the bug is fixed, the test suite will fail at this
 point (and we will remember to update the test).
 
 
+(testing_warnings)=
+
 ### Testing code that throws warnings
 
 Some code may be expected to throw warnings.
@@ -249,3 +255,22 @@ In particular:
 - `testing._utils.assert_eq` is the biggest hammer to reach for. It can be used to compare any pair of objects.
 - For comparing specific objects, use `testing.testing.assert_[frame|series|index]_equal`.
 - For verifying that the expected assertions are raised, use `testing._utils.assert_exceptions_equal`.
+
+
+### Version testing
+
+It is recommended to have `cudf` pytests only work on the latest supported pandas version i.e., `PANDAS_CURRENT_SUPPORTED_VERSION`. Any anticipated failures should be either `skipped` or `xfailed`.
+
+For example:
+
+```python
+@pytest.mark.skipif(PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION, reason="bug in older version of pandas")
+def test_bug_from_older_pandas_versions(...):
+    ...
+
+@pytest.mark.xfail(PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION, reason="bug in latest version of pandas")
+def test_bug_in_current_and_maybe_future_versions(...):
+    ...
+```
+
+If pandas makes a bugfix release and fixes this, then we'll see it in CI immediately, patch it, and bump `PANDAS_CURRENT_SUPPORTED_VERSION` which also usually happens during pandas upgrades.
