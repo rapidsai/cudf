@@ -331,8 +331,8 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-
   private static final byte[] EMPTY_JSON_DATA_BUFFER = ("{}\n").getBytes(StandardCharsets.UTF_8);
+
   @Test
   void testReadEmptyJson() {
     Schema schema = Schema.builder()
@@ -357,6 +357,7 @@ public class TableTest extends CudfTestBase {
 
   private static final byte[] EMPTY_ARRAY_JSON_DATA_BUFFER =
       ("{'a':[]}\n").getBytes(StandardCharsets.UTF_8);
+
   @Test
   void testReadEmptyArrayJson() {
     Schema.Builder builder = Schema.builder();
