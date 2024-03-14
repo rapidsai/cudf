@@ -26,7 +26,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -1347,11 +1347,7 @@ def test_dataframe_setitem_from_masked_object():
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
     pdf["a"] = []
-    if PANDAS_GE_200:
-        # TODO: Remove this workaround after
-        # the following bug is fixed:
-        # https://github.com/pandas-dev/pandas/issues/56679
-        pdf["a"] = pdf["a"].astype("str")
+    pdf["a"] = pdf["a"].astype("str")
     pdf["b"] = [1, 2, 3]
 
     gdf = cudf.DataFrame()
@@ -6724,7 +6720,8 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_GE_200 and len(col_data) == 0,
+            condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and len(col_data) == 0,
             reason="https://github.com/pandas-dev/pandas/issues/56679",
         )
     )
@@ -9970,6 +9967,10 @@ def test_dataframe_rename_duplicate_column():
 
 
 @pytest_unmark_spilling
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -9990,8 +9991,7 @@ def test_dataframe_pct_change(data, periods, fill_method):
     with expect_warning_if(fill_method is not no_default):
         actual = gdf.pct_change(periods=periods, fill_method=fill_method)
     with expect_warning_if(
-        PANDAS_GE_210
-        and (fill_method is not no_default or pdf.isna().any().any())
+        fill_method is not no_default or pdf.isna().any().any()
     ):
         expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
@@ -10947,3 +10947,12 @@ def test_dataframe_to_pandas_arrow_type(scalar):
     result = df.to_pandas(arrow_type=True)
     expected = pd.DataFrame({"a": pd.arrays.ArrowExtensionArray(pa_array)})
     pd.testing.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("axis", [None, 0, "index", 1, "columns"])
+@pytest.mark.parametrize("data", [[[1, 2], [2, 3]], [1, 2], [1]])
+def test_squeeze(axis, data):
+    df = cudf.DataFrame(data)
+    result = df.squeeze(axis=axis)
+    expected = df.to_pandas().squeeze(axis=axis)
+    assert_eq(result, expected)
