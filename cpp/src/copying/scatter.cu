@@ -109,7 +109,9 @@ struct column_scalar_scatterer_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
+    CUDF_EXPECTS(source.get().type() == target.type(),
+                 "scalar and column types must match",
+                 cudf::data_type_error);
 
     // make a copy of data and null mask from source
     auto result      = std::make_unique<column>(target, stream, mr);
@@ -296,17 +298,20 @@ std::unique_ptr<table> scatter(table_view const& source,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(source.num_columns() == target.num_columns(),
-               "Number of columns in source and target not equal");
+               "Number of columns in source and target not equal",
+               std::invalid_argument);
   CUDF_EXPECTS(scatter_map.size() <= source.num_rows(),
-               "Size of scatter map must be equal to or less than source rows");
+               "Size of scatter map must be equal to or less than source rows",
+               std::invalid_argument);
   CUDF_EXPECTS(std::equal(source.begin(),
                           source.end(),
                           target.begin(),
                           [](auto const& col1, auto const& col2) {
                             return col1.type().id() == col2.type().id();
                           }),
-               "Column types do not match between source and target");
-  CUDF_EXPECTS(not scatter_map.has_nulls(), "Scatter map contains nulls");
+               "Column types do not match between source and target",
+               cudf::data_type_error);
+  CUDF_EXPECTS(not scatter_map.has_nulls(), "Scatter map contains nulls", std::invalid_argument);
 
   if (scatter_map.is_empty()) { return std::make_unique<table>(target, stream, mr); }
 
@@ -340,8 +345,9 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(source.size() == static_cast<size_t>(target.num_columns()),
-               "Number of columns in source and target not equal");
-  CUDF_EXPECTS(not indices.has_nulls(), "indices contains nulls");
+               "Number of scalars in source and number of columns in target not equal",
+               std::invalid_argument);
+  CUDF_EXPECTS(not indices.has_nulls(), "indices contains nulls", std::invalid_argument);
 
   if (indices.is_empty()) { return std::make_unique<table>(target, stream, mr); }
 

@@ -152,6 +152,13 @@ std::unique_ptr<column> reverse(
  * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
  * is the number of rows in the `target` table.
  *
+ * @throws std::invalid_argument if the number of columns in source does not match the number of
+ * columns in target
+ * @throws std::invalid_argument if the number of rows in source does not match the number of
+ * elements in scatter_map
+ * @throws cudf::data_type_error if the data types of the source and target columns do not match
+ * @throws std::invalid_argument if scatter_map contains null values
+ *
  * @param source The input columns containing values to be scattered into the
  * target columns
  * @param scatter_map A non-nullable column of integral indices that maps the
@@ -190,6 +197,11 @@ std::unique_ptr<table> scatter(
  *
  * If any values in `scatter_map` are outside of the interval [-n, n) where `n`
  * is the number of rows in the `target` table, behavior is undefined.
+ *
+ * @throws std::invalid_argument if the number of scalars does not match the number of columns in
+ * target
+ * @throws std::invalid_argument if indices contains null values
+ * @throws cudf::data_type_error if the data types of the scalars and target columns do not match
  *
  * @param source The input scalars containing values to be scattered into the
  * target columns

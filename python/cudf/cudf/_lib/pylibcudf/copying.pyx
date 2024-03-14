@@ -97,6 +97,26 @@ cpdef Table scatter(
     -------
     Table
         The result of the scatter
+
+    Raises
+    ------
+    ValueError
+        If source is a Table and the number of columns in source does not match the
+        number of columns in target.
+    ValueError
+        If source is a Table and the number of rows in source does not match the number
+        of elements in scatter_map.
+    TypeError
+        If source is a Table and the data types of the source and target columns do not
+        match.
+    ValueError
+        If scatter_map contains null values.
+    ValueError
+        If source is a Scalar and the number of scalars does not match the number of
+        columns in target.
+    TypeError
+        If source is a Scalar and the data types of the scalars and target columns do
+        not match.
     """
     cdef unique_ptr[table] c_result
     cdef vector[reference_wrapper[const scalar]] source_scalars

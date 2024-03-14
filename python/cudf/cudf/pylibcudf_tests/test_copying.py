@@ -87,6 +87,79 @@ def test_scatter_table(source_table, input_column, target_table):
     assert_table_eq(result, expected)
 
 
+def test_scatter_table_num_col_mismatch(
+    source_table, input_column, target_table
+):
+    # Number of columns in source and target must match.
+    with pytest.raises(ValueError):
+        plc.copying.scatter(
+            plc.Table(source_table.columns()[:2]),
+            input_column,
+            target_table,
+        )
+
+
+def test_scatter_table_num_row_mismatch(source_table, target_table):
+    # Number of rows in source and scatter map must match.
+    with pytest.raises(ValueError):
+        plc.copying.scatter(
+            source_table,
+            column_from_arrow(pa.array(range(source_table.num_rows() * 2))),
+            target_table,
+        )
+
+
+def test_scatter_table_map_has_nulls(source_table, target_table):
+    with pytest.raises(ValueError):
+        plc.copying.scatter(
+            source_table,
+            column_from_arrow(pa.array([None] * source_table.num_rows())),
+            target_table,
+        )
+
+
+def test_scatter_table_type_mismatch(source_table, input_column, target_table):
+    with pytest.raises(TypeError):
+        pa_array = pa.array([True] * source_table.num_rows())
+        ncol = source_table.num_columns()
+        pa_table = pa.table([pa_array] * ncol, [""] * ncol)
+        plc.copying.scatter(
+            plc.Table.from_arrow(pa_table),
+            input_column,
+            target_table,
+        )
+
+
+def test_scatter_scalars_num_scalars_mismatch(
+    source_scalar, input_column, target_table
+):
+    with pytest.raises(ValueError):
+        plc.copying.scatter(
+            [source_scalar] * (target_table.num_columns() - 1),
+            input_column,
+            target_table,
+        )
+
+
+def test_scatter_scalars_map_has_nulls(source_scalar, target_table):
+    with pytest.raises(ValueError):
+        plc.copying.scatter(
+            [source_scalar] * target_table.num_columns(),
+            column_from_arrow(pa.array([None, None])),
+            target_table,
+        )
+
+
+def test_scatter_scalars_type_mismatch(input_column, target_table):
+    with pytest.raises(TypeError):
+        plc.copying.scatter(
+            [plc.Scalar.from_arrow(pa.scalar(True))]
+            * target_table.num_columns(),
+            input_column,
+            target_table,
+        )
+
+
 def test_scatter_scalars(source_scalar, input_column, target_table):
     result = plc.copying.scatter(
         [source_scalar] * target_table.num_columns(),
