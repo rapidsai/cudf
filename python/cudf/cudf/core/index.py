@@ -1350,14 +1350,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
             output = output.replace("nan", str(cudf.NA))
         elif preprocess._values.nullable:
-            # TODO: Should we be checking presence of a base_mask or if there are NAs
-            # in general?
-            if isinstance(self._values, (StringColumn, DatetimeColumn)):
-                output = repr(
-                    self.to_pandas(
-                        nullable=isinstance(self._values, StringColumn)
-                    )
-                )
+            if isinstance(self._values, StringColumn):
+                output = repr(self.to_pandas(nullable=True))
             else:
                 output = repr(self._clean_nulls_from_index().to_pandas())
                 # We should remove all the single quotes

@@ -2078,26 +2078,25 @@ def as_column(
                 arbitrary = arbitrary.astype(new_type)
 
             is_nat = np.isnat(arbitrary)
-            if (nan_as_null is None or nan_as_null) and is_nat.any():
-                # Convert NaT to NA, which pyarrow does by default
-                return as_column(
-                    pa.array(arbitrary),
-                    dtype=dtype,
-                    nan_as_null=nan_as_null,
-                )
-            else:
-                buffer = as_buffer(arbitrary.view("|u1"))
-                # Consider NaT as NA in the mask
-                # but maintain NaT as a value
-                bool_mask = as_column(~is_nat)
-                mask = as_buffer(bools_to_mask(bool_mask))
-                col = build_column(
-                    data=buffer, mask=mask, dtype=arbitrary.dtype
-                )
-
-                if dtype:
-                    col = col.astype(dtype)
-                return col
+            mask = None
+            if is_nat.any():
+                if nan_as_null is None or nan_as_null:
+                    # Convert NaT to NA, which pyarrow does by default
+                    return as_column(
+                        pa.array(arbitrary),
+                        dtype=dtype,
+                        nan_as_null=nan_as_null,
+                    )
+                else:
+                    # Consider NaT as NA in the mask
+                    # but maintain NaT as a value
+                    bool_mask = as_column(~is_nat)
+                    mask = as_buffer(bools_to_mask(bool_mask))
+            buffer = as_buffer(arbitrary.view("|u1"))
+            col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
+            if dtype:
+                col = col.astype(dtype)
+            return col
         else:
             raise NotImplementedError(f"{arbitrary.dtype} not supported")
     elif (view := as_memoryview(arbitrary)) is not None:
