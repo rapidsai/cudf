@@ -80,7 +80,7 @@ public class TableWithMeta implements AutoCloseable {
    */
   public Table releaseTable() {
     long[] ptr = releaseTable(handle);
-    if (ptr == null) {
+    if (ptr == null || ptr.length == 0) {
       return null;
     } else {
       return new Table(ptr);
@@ -120,6 +120,9 @@ public class TableWithMeta implements AutoCloseable {
       String[] flatNames = getFlattenedColumnNames(handle);
       ChildAndOffset tmp = unflatten(0, flatNames, flatCount);
       children = tmp.child;
+      if (children == null) {
+        children = new NestedChildren(new String[0], new NestedChildren[0]);
+      }
     }
     return children;
   }
