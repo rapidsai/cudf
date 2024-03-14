@@ -90,7 +90,7 @@ cdef class Table:
 
     cpdef int num_rows(self):
         """The number of rows in this table."""
-        return self._columns[0].size
+        return self._columns[0].size()
 
     cpdef list columns(self):
         """The columns in this table."""
