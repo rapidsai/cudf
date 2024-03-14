@@ -266,7 +266,7 @@ cpdef Column copy_range(
     return Column.from_libcudf(move(c_result))
 
 
-cpdef Column shift(Column input, size_type offset, Scalar fill_values):
+cpdef Column shift(Column input, size_type offset, Scalar fill_value):
     """Shift the elements of input by offset.
 
     For details on the implementation, see :cpp:func:`shift`.
@@ -292,7 +292,7 @@ cpdef Column shift(Column input, size_type offset, Scalar fill_values):
             cpp_copying.shift(
                 input.view(),
                 offset,
-                dereference(fill_values.c_obj)
+                dereference(fill_value.c_obj)
             )
         )
     return Column.from_libcudf(move(c_result))

@@ -58,7 +58,7 @@ cpdef Column copy_range(
     size_type target_begin,
 )
 
-cpdef Column shift(Column input, size_type offset, Scalar fill_values)
+cpdef Column shift(Column input, size_type offset, Scalar fill_value)
 
 cpdef list split(ColumnOrTable input, list splits)
 
