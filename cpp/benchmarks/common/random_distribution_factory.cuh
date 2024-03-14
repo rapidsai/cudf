@@ -91,7 +91,7 @@ class geometric_distribution : public thrust::random::normal_distribution<integr
   T _lower_bound;
   T _upper_bound;
 
-  super_t make_appox_normal_dist(T lower_bound, T upper_bound) const
+  super_t make_approx_normal_dist(T lower_bound, T upper_bound) const
   {
     auto const abs_range_size = std::abs(static_cast<realType>(upper_bound) - lower_bound);
     // Generate normal distribution around zero; output will be shifted by lower_bound
@@ -101,7 +101,7 @@ class geometric_distribution : public thrust::random::normal_distribution<integr
  public:
   using result_type = T;
   explicit geometric_distribution(T lower_bound, T upper_bound)
-    : super_t(make_appox_normal_dist(lower_bound, upper_bound)),
+    : super_t(make_approx_normal_dist(lower_bound, upper_bound)),
       _lower_bound(lower_bound),
       _upper_bound(upper_bound)
   {
