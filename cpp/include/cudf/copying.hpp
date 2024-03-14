@@ -66,7 +66,7 @@ enum class out_of_bounds_policy : bool {
  * For dictionary columns, the keys column component is copied and not trimmed
  * if the gather results in abandoned key elements.
  *
- * @throws cudf::logic_error if gather_map contains null values.
+ * @throws std::invalid_argument if gather_map contains null values.
  *
  * @param source_table The input columns whose rows will be gathered
  * @param gather_map View into a non-nullable column of integral indices that maps the

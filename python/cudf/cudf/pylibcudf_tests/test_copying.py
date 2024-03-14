@@ -55,6 +55,16 @@ def test_gather(target_table, input_column):
     assert_table_eq(result, expected)
 
 
+def test_gather_map_has_nulls(target_table):
+    gather_map = column_from_arrow(pa.array([0, 1, None]))
+    with pytest.raises(ValueError):
+        plc.copying.gather(
+            target_table,
+            gather_map,
+            plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        )
+
+
 def test_scatter_table(source_table, input_column, target_table):
     result = plc.copying.scatter(
         source_table,

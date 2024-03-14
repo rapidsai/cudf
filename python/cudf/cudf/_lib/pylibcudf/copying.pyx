@@ -54,6 +54,11 @@ cpdef Table gather(
     -------
     pylibcudf.Table
         The result of the gather
+
+    Raises
+    ------
+    ValueError
+        If the gather_map contains nulls.
     """
     cdef unique_ptr[table] c_result
     with nogil:
