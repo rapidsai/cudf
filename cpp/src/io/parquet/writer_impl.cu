@@ -611,8 +611,7 @@ std::vector<schema_tree_node> construct_schema_tree(
                                                 column_in_metadata const& col_meta) {
         s.requested_encoding = column_encoding::USE_DEFAULT;
 
-        if (schema[parent_idx].name != "list" and
-            col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
+        if (s.name != "list" and col_meta.get_encoding() != column_encoding::USE_DEFAULT) {
           // do some validation
           switch (col_meta.get_encoding()) {
             case column_encoding::DELTA_BINARY_PACKED:
