@@ -1,17 +1,23 @@
 #!/bin/bash
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -euo pipefail
+
+export RAPIDS_VERSION="$(rapids-version)"
+export RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
+export RAPIDS_VERSION_NUMBER="$RAPIDS_VERSION_MAJOR_MINOR"
 
 rapids-logger "Create test conda environment"
 . /opt/conda/etc/profile.d/conda.sh
 
+ENV_YAML_DIR="$(mktemp -d)"
+
 rapids-dependency-file-generator \
   --output conda \
   --file_key docs \
-  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee env.yaml
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f env.yaml -n docs
+rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n docs
 conda activate docs
 
 rapids-print-env
@@ -25,12 +31,11 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   libcudf cudf dask-cudf
 
-export RAPIDS_VERSION_NUMBER="23.08"
 export RAPIDS_DOCS_DIR="$(mktemp -d)"
 
 rapids-logger "Build CPP docs"
 pushd cpp/doxygen
-aws s3 cp s3://rapidsai-docs/librmm/${RAPIDS_VERSION_NUMBER}/html/rmm.tag . || echo "Failed to download rmm Doxygen tag"
+aws s3 cp s3://rapidsai-docs/librmm/html/${RAPIDS_VERSION_NUMBER}/rmm.tag . || echo "Failed to download rmm Doxygen tag"
 doxygen Doxyfile
 mkdir -p "${RAPIDS_DOCS_DIR}/libcudf/html"
 mv html/* "${RAPIDS_DOCS_DIR}/libcudf/html"
@@ -38,20 +43,26 @@ popd
 
 rapids-logger "Build Python docs"
 pushd docs/cudf
-sphinx-build -b dirhtml source _html
-sphinx-build -b text source _text
-mkdir -p "${RAPIDS_DOCS_DIR}/cudf/"{html,txt}
-mv _html/* "${RAPIDS_DOCS_DIR}/cudf/html"
-mv _text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+make dirhtml
+mkdir -p "${RAPIDS_DOCS_DIR}/cudf/html"
+mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/cudf/html"
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
+  make text
+  mkdir -p "${RAPIDS_DOCS_DIR}/cudf/txt"
+  mv build/text/* "${RAPIDS_DOCS_DIR}/cudf/txt"
+fi
 popd
 
 rapids-logger "Build dask-cuDF Sphinx docs"
 pushd docs/dask_cudf
-sphinx-build -b dirhtml source _html
-sphinx-build -b text source _text
-mkdir -p "${RAPIDS_DOCS_DIR}/dask_cudf/"{html,txt}
-mv _html/* "${RAPIDS_DOCS_DIR}/dask_cudf/html"
-mv _text/* "${RAPIDS_DOCS_DIR}/dask_cudf/txt"
+make dirhtml
+mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/html"
+mv build/dirhtml/* "${RAPIDS_DOCS_DIR}/dask-cudf/html"
+if [[ "${RAPIDS_BUILD_TYPE}" != "pull-request" ]]; then
+  make text
+  mkdir -p "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+  mv build/text/* "${RAPIDS_DOCS_DIR}/dask-cudf/txt"
+fi
 popd
 
 rapids-upload-docs

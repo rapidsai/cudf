@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import cupy as cp
 import numpy as np
@@ -81,7 +81,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
-    if cudf.api.types.is_categorical_dtype(col.dtype):
+    if cudf.api.types._is_categorical_dtype(col.dtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
     elif cudf.api.types.is_string_dtype(col.dtype):
@@ -120,7 +120,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
     else:
         pd_series = series.to_pandas()
 
-    if cudf.api.types.is_categorical_dtype(col.dtype):
+    if cudf.api.types._is_categorical_dtype(col.dtype):
         # The cudf.Series is constructed from an already sliced column, whereas
         # the pandas.Series is constructed from the unsliced series and then
         # sliced, so the indexes should be different and we must ignore it.
@@ -193,12 +193,15 @@ def test_column_mixed_dtype(data, error):
 
 
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_as_column_scalar_with_nan(nan_as_null):
-    size = 10
-    scalar = np.nan
-
+@pytest.mark.parametrize(
+    "scalar",
+    [np.nan, pd.Timedelta(days=1), pd.Timestamp(2020, 1, 1)],
+    ids=repr,
+)
+@pytest.mark.parametrize("size", [1, 10])
+def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
     expected = (
-        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        cudf.Series([scalar] * size, nan_as_null=nan_as_null)
         .dropna()
         .to_numpy()
     )
@@ -330,7 +333,6 @@ def test_column_view_valid_string_to_numeric(data, to_dtype):
 
 
 def test_column_view_nulls_widths_even():
-
     data = [1, 2, None, 4, None]
     expect_data = [
         np.int32(val).view("float32") if val is not None else np.nan
@@ -358,7 +360,6 @@ def test_column_view_nulls_widths_even():
 
 @pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
 def test_column_view_numeric_slice(slc):
-
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 
@@ -395,7 +396,7 @@ def test_column_view_string_slice(slc):
         ),
         (
             cp.array([], dtype="uint8"),
-            cudf.core.column.as_column([], dtype="uint8"),
+            cudf.core.column.column_empty(0, dtype="uint8"),
         ),
         (
             cp.array([255], dtype="uint8"),

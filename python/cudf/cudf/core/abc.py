@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 """Common abstract base classes for cudf."""
 
 import pickle
@@ -89,7 +89,13 @@ class Serializable:
         """
         header, frames = self.serialize()
         assert all(
-            isinstance(f, (cudf.core.buffer.Buffer, memoryview))
+            isinstance(
+                f,
+                (
+                    cudf.core.buffer.Buffer,
+                    memoryview,
+                ),
+            )
             for f in frames
         )
         header["type-serialized"] = pickle.dumps(type(self))

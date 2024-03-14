@@ -1,8 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
-
-from typing import Union
 
 import cupy as cp
 import numpy as np
@@ -11,15 +9,11 @@ import pandas as pd
 import cudf
 from cudf._lib.unary import is_nan
 from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_interval_dtype,
-    is_list_dtype,
+    _is_categorical_dtype,
     is_numeric_dtype,
     is_string_dtype,
-    is_struct_dtype,
 )
-from cudf.core.missing import NA
+from cudf.core.missing import NA, NaT
 
 
 def dtype_can_compare_equal_to_other(dtype):
@@ -27,10 +21,15 @@ def dtype_can_compare_equal_to_other(dtype):
     # as equal to equal values of a different dtype
     return not (
         is_string_dtype(dtype)
-        or is_list_dtype(dtype)
-        or is_struct_dtype(dtype)
-        or is_decimal_dtype(dtype)
-        or is_interval_dtype(dtype)
+        or isinstance(
+            dtype,
+            (
+                cudf.IntervalDtype,
+                cudf.ListDtype,
+                cudf.StructDtype,
+                cudf.core.dtypes.DecimalDtype,
+            ),
+        )
     )
 
 
@@ -46,7 +45,6 @@ def _check_isinstance(left, right, obj):
 
 
 def raise_assert_detail(obj, message, left, right, diff=None):
-
     msg = f"""{obj} are different
 
 {message}
@@ -88,7 +86,7 @@ def _check_types(
     if (
         exact
         and not isinstance(left, cudf.MultiIndex)
-        and is_categorical_dtype(left)
+        and _is_categorical_dtype(left)
     ):
         if left.dtype != right.dtype:
             raise_assert_detail(
@@ -101,7 +99,6 @@ def assert_column_equal(
     right,
     check_dtype=True,
     check_column_type="equiv",
-    check_less_precise=False,
     check_exact=False,
     check_datetimelike_compat=False,
     check_categorical=True,
@@ -129,8 +126,6 @@ def assert_column_equal(
         Whether to check the columns class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_exact : bool, default False
         Whether to compare number exactly.
     check_datetime_like_compat : bool, default False
@@ -149,8 +144,8 @@ def assert_column_equal(
     """
     if check_dtype is True:
         if (
-            is_categorical_dtype(left)
-            and is_categorical_dtype(right)
+            _is_categorical_dtype(left)
+            and _is_categorical_dtype(right)
             and not check_categorical
         ):
             pass
@@ -178,7 +173,7 @@ def assert_column_equal(
             return
 
     if check_exact and check_categorical:
-        if is_categorical_dtype(left) and is_categorical_dtype(right):
+        if _is_categorical_dtype(left) and _is_categorical_dtype(right):
             left_cat = left.categories
             right_cat = right.categories
 
@@ -212,8 +207,8 @@ def assert_column_equal(
 
     if (
         not check_dtype
-        and is_categorical_dtype(left)
-        and is_categorical_dtype(right)
+        and _is_categorical_dtype(left)
+        and _is_categorical_dtype(right)
     ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
@@ -223,11 +218,11 @@ def assert_column_equal(
     elif not (
         (
             not dtype_can_compare_equal_to_other(left.dtype)
-            and is_numeric_dtype(right)
+            and is_numeric_dtype(right.dtype)
         )
         or (
-            is_numeric_dtype(left)
-            and not dtype_can_compare_equal_to_other(right)
+            is_numeric_dtype(left.dtype)
+            and not dtype_can_compare_equal_to_other(right.dtype)
         )
     ):
         try:
@@ -236,7 +231,11 @@ def assert_column_equal(
                 left.isnull().values == right.isnull().values
             )
 
-            if columns_equal and not check_exact and is_numeric_dtype(left):
+            if (
+                columns_equal
+                and not check_exact
+                and is_numeric_dtype(left.dtype)
+            ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
                     left.apply_boolean_mask(
@@ -259,12 +258,16 @@ def assert_column_equal(
                 raise e
             else:
                 columns_equal = False
-            if is_categorical_dtype(left) and is_categorical_dtype(right):
+            if _is_categorical_dtype(left) and _is_categorical_dtype(right):
                 left = left.astype(left.categories.dtype)
                 right = right.astype(right.categories.dtype)
     if not columns_equal:
-        ldata = str([val for val in left.to_pandas(nullable=True)])
-        rdata = str([val for val in right.to_pandas(nullable=True)])
+        try:
+            ldata = str([val for val in left.to_pandas(nullable=True)])
+            rdata = str([val for val in right.to_pandas(nullable=True)])
+        except NotImplementedError:
+            ldata = str([val for val in left.to_pandas(nullable=False)])
+            rdata = str([val for val in right.to_pandas(nullable=False)])
         try:
             diff = 0
             for i in range(left.size):
@@ -282,7 +285,7 @@ def assert_column_equal(
 
 
 def null_safe_scalar_equals(left, right):
-    if left in {NA, np.nan} or right in {NA, np.nan}:
+    if left in {NA, NaT, np.nan} or right in {NA, NaT, np.nan}:
         return left is right
     return left == right
 
@@ -292,7 +295,6 @@ def assert_index_equal(
     right,
     exact="equiv",
     check_names: bool = True,
-    check_less_precise: Union[bool, int] = False,
     check_exact: bool = True,
     check_categorical: bool = True,
     check_order: bool = True,
@@ -319,8 +321,6 @@ def assert_index_equal(
         for Index with an int8/int32/int64 dtype as well.
     check_names : bool, default True
         Whether to check the names attribute.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_exact : bool, default False
         Whether to compare number exactly.
     check_categorical : bool, default True
@@ -404,7 +404,6 @@ def assert_index_equal(
                 exact=check_exact,
                 check_names=check_names,
                 check_exact=check_exact,
-                check_less_precise=check_less_precise,
                 check_order=check_order,
                 rtol=rtol,
                 atol=atol,
@@ -433,7 +432,6 @@ def assert_series_equal(
     check_dtype=True,
     check_index_type="equiv",
     check_series_type=True,
-    check_less_precise=False,
     check_names=True,
     check_exact=False,
     check_datetimelike_compat=False,
@@ -465,8 +463,6 @@ def assert_series_equal(
         Whether to check the series class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
-    check_less_precise : bool or int, default False
-        Not yet supported
     check_names : bool, default True
         Whether to check that the names attribute for both the index
         and column attributes of the Series is identical.
@@ -530,7 +526,6 @@ def assert_series_equal(
         right.index,
         exact=check_index_type,
         check_names=check_names,
-        check_less_precise=check_less_precise,
         check_exact=check_exact,
         check_categorical=check_categorical,
         rtol=rtol,
@@ -543,7 +538,6 @@ def assert_series_equal(
         right._column,
         check_dtype=check_dtype,
         check_column_type=check_series_type,
-        check_less_precise=check_less_precise,
         check_exact=check_exact,
         check_datetimelike_compat=check_datetimelike_compat,
         check_categorical=check_categorical,

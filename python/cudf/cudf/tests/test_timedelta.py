@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import datetime
 import operator
@@ -11,7 +11,6 @@ import pytest
 import cudf
 from cudf.testing import _utils as utils
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
-from cudf.core._compat import PANDAS_GE_200
 
 _TIMEDELTA_DATA = [
     [1000000, 200000, 3000000],
@@ -56,6 +55,15 @@ _TIMEDELTA_DATA_NON_OVERFLOW = [
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
     [1.321, 1132.324, 23223231.11, 233.41, 0.2434, 332, 323],
     [12, 11, 2.32, 2234.32411, 2343.241, 23432.4, 23234],
+]
+
+_cmpops = [
+    operator.lt,
+    operator.gt,
+    operator.le,
+    operator.ge,
+    operator.eq,
+    operator.ne,
 ]
 
 
@@ -529,13 +537,7 @@ def test_timedelta_series_mod_with_scalar_zero(reverse):
         datetime.timedelta(seconds=768),
         datetime.timedelta(microseconds=7),
         np.timedelta64(4, "s"),
-        pytest.param(
-            np.timedelta64("nat", "s"),
-            marks=pytest.mark.xfail(
-                strict=False,
-                reason="https://github.com/pandas-dev/pandas/issues/52295",
-            ),
-        ),
+        np.timedelta64("nat", "s"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
@@ -693,10 +695,7 @@ def test_timedelta_dt_components(data, dtype):
 
 @pytest.mark.parametrize(
     "data",
-    _TIMEDELTA_DATA_NON_OVERFLOW,
-    # TODO-PANDAS-2.0: Replace above with `_TIMEDELTA_DATA`
-    # after the following issue is fixed:
-    # https://github.com/pandas-dev/pandas/issues/52386
+    _TIMEDELTA_DATA,
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_dt_properties(data, dtype):
@@ -1025,12 +1024,12 @@ def test_timedelta_index_properties(data, dtype, name):
     [
         np.timedelta64(4, "s"),
         np.timedelta64(456, "D"),
-        np.timedelta64(46, "h"),
         np.timedelta64("nat"),
         np.timedelta64(1, "s"),
         np.timedelta64(1, "ms"),
         np.timedelta64(1, "us"),
         np.timedelta64(1, "ns"),
+        "NaT",
     ],
 )
 def test_timedelta_fillna(data, dtype, fill_value):
@@ -1186,7 +1185,6 @@ def test_timedelta_fillna(data, dtype, fill_value):
     ],
 )
 def test_timedelta_str_roundtrip(gsr, expected_series):
-
     actual_series = gsr.astype("str")
 
     assert_eq(expected_series, actual_series)
@@ -1325,11 +1323,7 @@ def test_numeric_to_timedelta(data, dtype, timedelta_dtype):
     psr = sr.to_pandas()
 
     actual = sr.astype(timedelta_dtype)
-
-    if PANDAS_GE_200:
-        expected = psr.astype(timedelta_dtype)
-    else:
-        expected = pd.Series(psr.to_numpy().astype(timedelta_dtype))
+    expected = psr.astype(timedelta_dtype)
 
     assert_eq(expected, actual)
 
@@ -1440,3 +1434,36 @@ def test_timedelta_constructor(data, dtype):
     actual = cudf.TimedeltaIndex(data=cudf.Series(data), dtype=dtype)
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_timdelta_binop_tz_timestamp(op):
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    pd_tz_timestamp = pd.Timestamp("1970-01-01 00:00:00.000000001", tz="utc")
+    with pytest.raises(NotImplementedError):
+        op(s, pd_tz_timestamp)
+    date_tz_scalar = datetime.datetime.now(datetime.timezone.utc)
+    with pytest.raises(NotImplementedError):
+        op(s, date_tz_scalar)
+
+
+def test_timedelta_getitem_na():
+    s = cudf.Series([1, 2, None, 3], dtype="timedelta64[ns]")
+    assert s[2] is cudf.NaT
+
+
+@pytest.mark.parametrize("data1", [[123, 456, None, 321, None]])
+@pytest.mark.parametrize("data2", [[123, 456, 789, None, None]])
+@pytest.mark.parametrize("op", _cmpops)
+def test_timedelta_series_cmpops_pandas_compatibility(data1, data2, op):
+    gsr1 = cudf.Series(data=data1, dtype="timedelta64[ns]")
+    psr1 = gsr1.to_pandas()
+
+    gsr2 = cudf.Series(data=data2, dtype="timedelta64[ns]")
+    psr2 = gsr2.to_pandas()
+
+    expect = op(psr1, psr2)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = op(gsr1, gsr2)
+
+    assert_eq(expect, got)

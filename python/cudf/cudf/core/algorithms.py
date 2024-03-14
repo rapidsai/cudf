@@ -1,14 +1,16 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import warnings
 
 import cupy as cp
 import numpy as np
 
 from cudf.core.column import as_column
-from cudf.core.index import Index, RangeIndex
+from cudf.core.copy_types import BooleanMask
+from cudf.core.index import RangeIndex, as_index
 from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.scalar import Scalar
-from cudf.core.series import Series
+from cudf.options import get_option
+from cudf.utils.dtypes import can_convert_to_column
 
 
 def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
@@ -76,28 +78,36 @@ def factorize(values, sort=False, use_na_sentinel=True, size_hint=None):
 
     return_cupy_array = isinstance(values, cp.ndarray)
 
-    values = Series(values)
+    if not can_convert_to_column(values):
+        raise TypeError(
+            "'values' can only be a Series, Index, or CuPy array, "
+            f"got {type(values)}"
+        )
+
+    values = as_column(values)
 
     if size_hint:
         warnings.warn("size_hint is not applicable for cudf.factorize")
 
     if use_na_sentinel:
         na_sentinel = Scalar(-1)
-        cats = values._column.dropna()
+        cats = values.dropna()
     else:
         na_sentinel = Scalar(None, dtype=values.dtype)
-        cats = values._column
+        cats = values
 
     cats = cats.unique().astype(values.dtype)
 
     if sort:
-        cats, _ = cats.sort_by_values()
+        cats = cats.sort_values()
 
-    labels = values._column._label_encoding(
-        cats=cats, na_sentinel=na_sentinel
+    labels = values._label_encoding(
+        cats=cats,
+        na_sentinel=na_sentinel,
+        dtype="int64" if get_option("mode.pandas_compatible") else None,
     ).values
 
-    return labels, cats.values if return_cupy_array else Index(cats)
+    return labels, cats.values if return_cupy_array else as_index(cats)
 
 
 def _linear_interpolation(column, index=None):
@@ -128,7 +138,9 @@ def _index_or_values_interpolation(column, index=None):
         return column
 
     to_interp = IndexedFrame(data={None: column}, index=index)
-    known_x_and_y = to_interp._apply_boolean_mask(as_column(~mask))
+    known_x_and_y = to_interp._apply_boolean_mask(
+        BooleanMask(~mask, len(to_interp))
+    )
 
     known_x = known_x_and_y._index._column.values
     known_y = known_x_and_y._data.columns[0].values

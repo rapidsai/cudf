@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import os
 import zoneinfo
@@ -89,8 +89,10 @@ def _read_tzfile_as_frame(tzdir, zone_name):
             [np.timedelta64(0, "s")]
         )
 
-    return DataFrame._from_columns(
-        transition_times_and_offsets, ["transition_times", "offsets"]
+    return DataFrame._from_data(
+        dict(
+            zip(["transition_times", "offsets"], transition_times_and_offsets)
+        )
     )
 
 
@@ -186,7 +188,7 @@ def localize(
         DatetimeColumn,
         data._scatter_by_column(
             data.isnull() | (ambiguous | nonexistent),
-            cudf.Scalar(cudf.NA, dtype=data.dtype),
+            cudf.Scalar(cudf.NaT, dtype=data.dtype),
         ),
     )
     gmt_data = local_to_utc(localized, zone_name)
@@ -200,6 +202,17 @@ def localize(
             offset=gmt_data.offset,
         ),
     )
+
+
+def delocalize(data: DatetimeColumn) -> DatetimeColumn:
+    """
+    Convert a timezone-aware datetime column to a timezone-naive one.
+    If the column is already timezone-naive, return it as is.
+    """
+    if isinstance(data, DatetimeTZColumn):
+        return data._local_time
+    # already timezone-naive:
+    return data
 
 
 def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:

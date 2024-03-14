@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,15 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <map>
 #include <vector>
 
+// Forward declaration of parse_options from parsing_utils.cuh
+namespace cudf::io {
+struct parse_options;
+}
 namespace cudf::io::json {
 
 /**
@@ -43,6 +46,21 @@ struct tree_meta_t {
  * @brief A column type
  */
 enum class json_col_t : char { ListColumn, StructColumn, StringColumn, Unknown };
+
+/**
+ * @brief Enum class to specify whether we just push onto and pop from the stack or whether we also
+ * reset to an empty stack on a newline character.
+ */
+enum class stack_behavior_t : char {
+  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// from the stack
+  PushPopWithoutReset,
+
+  /// Opening brackets and braces, [, {, push onto the stack, closing brackets and braces, ], }, pop
+  /// from the stack. Newline characters are considered delimiters and therefore reset to an empty
+  /// stack.
+  ResetOnDelimiter
+};
 
 // Default name for a list's child column
 constexpr auto list_child_name{"element"};
@@ -79,8 +97,8 @@ struct json_column {
   json_column()                              = default;
   json_column(json_column&& other)           = default;
   json_column& operator=(json_column&&)      = default;
-  json_column(const json_column&)            = delete;
-  json_column& operator=(const json_column&) = delete;
+  json_column(json_column const&)            = delete;
+  json_column& operator=(json_column const&) = delete;
 
   /**
    * @brief Fills the rows up to the given \p up_to_row_offset with nulls.
@@ -133,7 +151,7 @@ struct device_json_column {
   rmm::device_uvector<row_offset_t> child_offsets;
 
   // Validity bitmap
-  rmm::device_uvector<bitmask_type> validity;
+  rmm::device_buffer validity;
 
   // Map of child columns, if applicable.
   // Following "element" as the default child column's name of a list column
@@ -142,6 +160,8 @@ struct device_json_column {
   std::vector<std::string> column_order;
   // Counting the current number of items in this column
   row_offset_t num_rows = 0;
+  // Force as string column
+  bool forced_as_string_column{false};
 
   /**
    * @brief Construct a new d json column object
@@ -175,17 +195,34 @@ namespace detail {
  * character of \p d_json_in, where a '{' represents that the corresponding input character is
  * within the context of a struct, a '[' represents that it is within the context of an array, and a
  * '_' symbol that it is at the root of the JSON.
+ * @param[in] stack_behavior Specifies the stack's behavior
  * @param[in] stream The cuda stream to dispatch GPU kernels to
  */
 void get_stack_context(device_span<SymbolT const> json_in,
                        SymbolT* d_top_of_stack,
+                       stack_behavior_t stack_behavior,
                        rmm::cuda_stream_view stream);
+
+/**
+ * @brief Post-processes a token stream that may contain tokens from invalid lines. Expects that the
+ * token stream begins with a LineEnd token.
+ *
+ * @param tokens The tokens to be post-processed
+ * @param token_indices The tokens' corresponding indices that are post-processed
+ * @param stream The cuda stream to dispatch GPU kernels to
+ * @return Returns the post-processed token stream
+ */
+std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> process_token_stream(
+  device_span<PdaTokenT const> tokens,
+  device_span<SymbolOffsetT const> token_indices,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Parses the given JSON string and generates a tree representation of the given input.
  *
  * @param tokens Vector of token types in the json string
  * @param token_indices The indices within the input string corresponding to each token
+ * @param is_strict_nested_boundaries Whether to extract node end of nested types strictly
  * @param stream The CUDA stream to which kernels are dispatched
  * @param mr Optional, resource with which to allocate
  * @return A tree representation of the input JSON string as vectors of node type, parent index,
@@ -193,6 +230,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
  */
 tree_meta_t get_tree_representation(device_span<PdaTokenT const> tokens,
                                     device_span<SymbolOffsetT const> token_indices,
+                                    bool is_strict_nested_boundaries,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr);
 
@@ -252,6 +290,16 @@ reduce_to_column_tree(tree_meta_t& tree,
                       device_span<size_type> row_offsets,
                       rmm::cuda_stream_view stream);
 
+/**
+ * @brief Retrieves the parse_options to be used for type inference and type casting
+ *
+ * @param options The reader options to influence the relevant type inference and type casting
+ * options
+ * @param stream The CUDA stream to which kernels are dispatched
+ */
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream);
+
 /** @copydoc host_parse_nested_json
  * All processing is done in device memory.
  *
@@ -260,6 +308,32 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> input,
                                              cudf::io::json_reader_options const& options,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Get the path data type of a column by path if present in input schema
+ *
+ * @param path path of the column
+ * @param options json reader options which holds schema
+ * @return data type of the column if present
+ */
+std::optional<data_type> get_path_data_type(
+  host_span<std::pair<std::string, cudf::io::json::NodeT>> path,
+  cudf::io::json_reader_options const& options);
+
+/**
+ * @brief Helper class to get path of a column by column id from reduced column tree
+ *
+ */
+struct path_from_tree {
+  host_span<NodeT const> column_categories;
+  host_span<NodeIndexT const> column_parent_ids;
+  host_span<std::string const> column_names;
+  bool is_array_of_arrays;
+  NodeIndexT const row_array_parent_col_id;
+
+  using path_rep = std::pair<std::string, cudf::io::json::NodeT>;
+  std::vector<path_rep> get_path(NodeIndexT this_col_id);
+};
 
 /**
  * @brief Parses the given JSON string and generates table from the given input.

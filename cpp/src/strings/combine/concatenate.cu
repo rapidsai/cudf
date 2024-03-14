@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
   /**
@@ -72,7 +72,7 @@ struct concat_strings_base {
     }
 
     char* d_buffer       = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes    = 0;
+    size_type bytes      = 0;
     bool write_separator = false;
 
     for (auto itr = d_table.begin(); itr < d_table.end(); ++itr) {
@@ -142,7 +142,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
   concat_strings_fn fn{*d_table, d_separator, d_narep, separate_nulls};
-  auto children = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -156,11 +156,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     stream,
     mr);
 
-  return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 namespace {
@@ -237,7 +234,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   multi_separator_concat_fn mscf{
     *d_table, separator_col_view, separator_rep, col_rep, separate_nulls};
-  auto children = make_strings_children(mscf, strings_count, stream, mr);
+  auto [offsets_column, chars] = make_strings_children(mscf, strings_count, stream, mr);
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -252,11 +249,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
     stream,
     mr);
 
-  return make_strings_column(strings_count,
-                             std::move(children.first),
-                             std::move(children.second),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 }  // namespace detail
@@ -267,11 +261,11 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator,
                                     string_scalar const& narep,
                                     separator_on_nulls separate_nulls,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(
-    strings_columns, separator, narep, separate_nulls, cudf::get_default_stream(), mr);
+  return detail::concatenate(strings_columns, separator, narep, separate_nulls, stream, mr);
 }
 
 std::unique_ptr<column> concatenate(table_view const& strings_columns,
@@ -279,16 +273,12 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                                     string_scalar const& separator_narep,
                                     string_scalar const& col_narep,
                                     separator_on_nulls separate_nulls,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate(strings_columns,
-                             separators,
-                             separator_narep,
-                             col_narep,
-                             separate_nulls,
-                             cudf::get_default_stream(),
-                             mr);
+  return detail::concatenate(
+    strings_columns, separators, separator_narep, col_narep, separate_nulls, stream, mr);
 }
 
 }  // namespace strings

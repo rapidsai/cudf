@@ -12,8 +12,9 @@
 # the License.
 # =============================================================================
 
-set(cython_sources edit_distance.pyx generate_ngrams.pyx minhash.pyx ngrams_tokenize.pyx
-                   normalize.pyx replace.pyx stemmer.pyx subword_tokenize.pyx tokenize.pyx
+set(cython_sources
+    byte_pair_encode.pyx edit_distance.pyx generate_ngrams.pyx jaccard.pyx minhash.pyx
+    ngrams_tokenize.pyx normalize.pyx replace.pyx stemmer.pyx subword_tokenize.pyx tokenize.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
@@ -21,3 +22,4 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX nvtext_ ASSOCIATED_TARGETS cudf
 )
+link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")

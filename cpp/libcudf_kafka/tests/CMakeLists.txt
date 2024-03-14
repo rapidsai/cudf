@@ -26,7 +26,7 @@ function(ConfigureTest test_name)
   add_executable(${test_name} ${ARGN})
   set_target_properties(
     ${test_name}
-    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>"
+    PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_KAFKA_BINARY_DIR}/gtests>"
                INSTALL_RPATH "\$ORIGIN/../../../lib"
   )
   target_link_libraries(

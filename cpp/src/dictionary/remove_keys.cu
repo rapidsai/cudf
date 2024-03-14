@@ -195,17 +195,19 @@ std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& diction
 
 std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_column,
                                     column_view const& keys_to_remove,
+                                    rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_keys(dictionary_column, keys_to_remove, cudf::get_default_stream(), mr);
+  return detail::remove_keys(dictionary_column, keys_to_remove, stream, mr);
 }
 
 std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::remove_unused_keys(dictionary_column, cudf::get_default_stream(), mr);
+  return detail::remove_unused_keys(dictionary_column, stream, mr);
 }
 
 }  // namespace dictionary

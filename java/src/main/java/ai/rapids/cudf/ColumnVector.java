@@ -50,8 +50,8 @@ public final class ColumnVector extends ColumnView {
      *
      * @note the callback is invoked with this `ColumnVector`'s lock held.
      *
-     * @param cv - a reference to the ColumnVector we are closing
-     * @param refCount - the updated ref count for this ColumnVector at the time
+     * @param cv reference to the ColumnVector we are closing
+     * @param refCount the updated ref count for this ColumnVector at the time
      *                 of invocation
      */
     void onClosed(ColumnVector cv, int refCount);
@@ -264,6 +264,7 @@ public final class ColumnVector extends ColumnView {
       eventHandler.onClosed(this, refCount);
     }
     if (refCount == 0) {
+      super.close();
       offHeap.clean(false);
     } else if (refCount < 0) {
       offHeap.logRefCountDebug("double free " + this);
@@ -1726,6 +1727,41 @@ public final class ColumnVector extends ColumnView {
       }
     } else {
       throw new IllegalArgumentException("Unsupported data type: " + colType);
+    }
+  }
+
+  static ColumnVector[] getColumnVectorsFromPointers(long[] nativeHandles) {
+    ColumnVector[] columns = new ColumnVector[nativeHandles.length];
+    try {
+      for (int i = 0; i < nativeHandles.length; i++) {
+        long nativeHandle = nativeHandles[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the constructor
+        nativeHandles[i] = 0;
+        columns[i] = new ColumnVector(nativeHandle);
+      }
+      return columns;
+    } catch (Throwable t) {
+      for (ColumnVector columnVector : columns) {
+        if (columnVector != null) {
+          try {
+            columnVector.close();
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+      for (long nativeHandle : nativeHandles) {
+        if (nativeHandle != 0) {
+          try {
+            deleteCudfColumn(nativeHandle);
+          } catch (Throwable s) {
+            t.addSuppressed(s);
+          }
+        }
+      }
+
+      throw t;
     }
   }
 }

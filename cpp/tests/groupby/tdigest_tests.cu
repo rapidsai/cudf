@@ -265,7 +265,7 @@ TEST_F(TDigestMergeTest, Grouped)
 {
   auto values = cudf::test::generate_standardized_percentile_distribution(
     cudf::data_type{cudf::type_id::FLOAT64});
-  CUDF_EXPECTS(values->size() == 750000, "Unexpected distribution size");
+  ASSERT_EQ(values->size(), 750000);
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
@@ -321,7 +321,7 @@ TEST_F(TDigestMergeTest, Grouped)
     requests.push_back({*merge_input, std::move(aggregations)});
     auto result = gb.aggregate(requests);
 
-    CUDF_EXPECTS(result.second[0].results[0]->size() == 2, "Unexpected tdigest merge result size");
+    ASSERT_EQ(result.second[0].results[0]->size(), 2);
     cudf::tdigest::tdigest_column_view tdv(*result.second[0].results[0]);
 
     // verify centroids
@@ -376,7 +376,7 @@ TEST_F(TDigestMergeTest, Grouped)
     requests.push_back({*merge_input, std::move(aggregations)});
     auto result = gb.aggregate(requests);
 
-    CUDF_EXPECTS(result.second[0].results[0]->size() == 2, "Unexpected tdigest merge result size");
+    ASSERT_EQ(result.second[0].results[0]->size(), 2);
     cudf::tdigest::tdigest_column_view tdv(*result.second[0].results[0]);
 
     // verify centroids
@@ -423,7 +423,7 @@ TEST_F(TDigestMergeTest, Grouped)
     requests.push_back({*merge_input, std::move(aggregations)});
     auto result = gb.aggregate(requests);
 
-    CUDF_EXPECTS(result.second[0].results[0]->size() == 2, "Unexpected tdigest merge result size");
+    ASSERT_EQ(result.second[0].results[0]->size(), 2);
     cudf::tdigest::tdigest_column_view tdv(*result.second[0].results[0]);
 
     // verify centroids

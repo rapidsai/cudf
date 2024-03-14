@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+#include "hash/concurrent_unordered_map.cuh"
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/cudf_gtest.hpp>
-
-#include <hash/concurrent_unordered_map.cuh>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -68,10 +69,7 @@ struct InsertTest : public cudf::test::BaseFixture {
 
 using TestTypes = ::testing::Types<key_value_types<int32_t, int32_t>,
                                    key_value_types<int64_t, int64_t>,
-                                   key_value_types<int8_t, int8_t>,
                                    key_value_types<int16_t, int16_t>,
-                                   key_value_types<int8_t, float>,
-                                   key_value_types<int16_t, double>,
                                    key_value_types<int32_t, float>,
                                    key_value_types<int64_t, double>>;
 

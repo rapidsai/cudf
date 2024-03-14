@@ -1,11 +1,10 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import warnings
 
 import pyarrow as pa
 from fsspec.utils import stringify_path
-from pyarrow import orc as orc
 
 import cudf
 from cudf._lib import orc as liborc
@@ -17,6 +16,8 @@ from cudf.utils.metadata import (  # type: ignore
 
 
 def _make_empty_df(filepath_or_buffer, columns):
+    from pyarrow import orc
+
     orc_file = orc.ORCFile(filepath_or_buffer)
     schema = orc_file.schema
     col_names = schema.names if columns is None else columns
@@ -150,6 +151,7 @@ def _parse_column_statistics(cs, column_statistics_blob):
 @ioutils.doc_read_orc_metadata()
 def read_orc_metadata(path):
     """{docstring}"""
+    from pyarrow import orc
 
     orc_file = orc.ORCFile(path)
 
@@ -296,12 +298,14 @@ def read_orc(
     from cudf import DataFrame
 
     if skiprows is not None:
+        # Do not remove until cuIO team approves its removal.
         warnings.warn(
             "skiprows is deprecated and will be removed.",
             FutureWarning,
         )
 
     if num_rows is not None:
+        # Do not remove until cuIO team approves its removal.
         warnings.warn(
             "num_rows is deprecated and will be removed.",
             FutureWarning,
@@ -378,6 +382,7 @@ def read_orc(
             )
         )
     else:
+        from pyarrow import orc
 
         def read_orc_stripe(orc_file, stripe, columns):
             pa_table = orc_file.read_stripe(stripe, columns)

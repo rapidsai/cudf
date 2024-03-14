@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import json
 import re
@@ -15,7 +15,6 @@ import pytest
 
 import cudf
 from cudf import concat
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.column.string import StringColumn
 from cudf.core.index import Index, as_index
 from cudf.testing._utils import (
@@ -847,7 +846,6 @@ def test_string_contains_case(ps_gs):
     ],
 )
 def test_string_like(pat, esc, expect):
-
     expectation = does_not_raise()
     if len(esc) > 1:
         expectation = pytest.raises(ValueError)
@@ -893,7 +891,7 @@ def test_string_repeat(data, repeats):
 )
 @pytest.mark.parametrize("repl", ["qwerty", "", " "])
 @pytest.mark.parametrize("case,case_raise", [(None, 0), (True, 1), (False, 1)])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (re.U, 1)])
 def test_string_replace(
     ps_gs, pat, repl, case, case_raise, flags, flags_raise, regex
 ):
@@ -974,8 +972,7 @@ def test_string_split_re(data, pat, n, expand):
     ps = pd.Series(data, dtype="str")
     gs = cudf.Series(data, dtype="str")
 
-    # Pandas does not support the regex parameter until 1.4.0
-    expect = ps.str.split(pat=pat, n=n, expand=expand)
+    expect = ps.str.split(pat=pat, n=n, expand=expand, regex=True)
     got = gs.str.split(pat=pat, n=n, expand=expand, regex=True)
 
     assert_eq(expect, got)
@@ -1722,13 +1719,7 @@ def test_strings_filling_tests(data, width, fillchar):
         ["A,,B", "1,,5", "3,00,0"],
         ["Linda van der Berg", "George Pitt-Rivers"],
         ["³", "⅕", ""],
-        pytest.param(
-            ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/20868",
-            ),
-        ),
+        ["hello", "there", "world", "+1234", "-1234", None, "accént", ""],
         [" ", "\t\r\n ", ""],
         ["1. Ant.  ", "2. Bee!\n", "3. Cat?\t", None],
     ],
@@ -2409,7 +2400,6 @@ def test_string_str_translate(data):
 
 
 def test_string_str_filter_characters():
-
     data = [
         "hello world",
         "A+B+C+D",
@@ -2439,7 +2429,6 @@ def test_string_str_filter_characters():
 
 
 def test_string_str_code_points():
-
     data = [
         "abc",
         "Def",
@@ -2605,7 +2594,6 @@ def test_string_typecast_error(data, obj_type, dtype):
     ],
 )
 def test_string_hex_to_int(data):
-
     gsr = cudf.Series(data)
 
     expected = cudf.Series([263988422296292, 0, 281474976710655])
@@ -2661,6 +2649,13 @@ def test_string_istimestamp():
         ]
     )
     assert_eq(expected, got)
+
+
+def test_istimestamp_empty():
+    gsr = cudf.Series([], dtype="object")
+    result = gsr.str.istimestamp("%Y%m%d")
+    expected = cudf.Series([], dtype="bool")
+    assert_eq(result, expected)
 
 
 def test_string_ip4_to_int():
@@ -3475,3 +3470,27 @@ def test_str_find_multiple_error():
         match=re.escape("patterns can only be of 'string' dtype, got: int64"),
     ):
         s.str.find_multiple(t)
+
+
+def test_str_iterate_error():
+    s = cudf.Series(["abc", "xyz"])
+    with pytest.raises(TypeError):
+        iter(s.str)
+
+
+def test_string_reduction_error():
+    s = cudf.Series([None, None], dtype="str")
+    ps = s.to_pandas(nullable=True)
+    assert_exceptions_equal(
+        s.any,
+        ps.any,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )
+
+    assert_exceptions_equal(
+        s.all,
+        ps.all,
+        lfunc_args_and_kwargs=([], {"skipna": False}),
+        rfunc_args_and_kwargs=([], {"skipna": False}),
+    )

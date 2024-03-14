@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import os
 
@@ -113,6 +113,16 @@ def test_delocalize(unit, tz):
     assert_eq(expect, got)
 
 
+def test_delocalize_naive():
+    # delocalizing naive datetimes should be a no-op
+    psr = pd.Series(["2001-01-01"], dtype="datetime64[ns]")
+    sr = cudf.from_pandas(psr)
+
+    expect = psr.dt.tz_localize(None)
+    got = sr.dt.tz_localize(None)
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "from_tz", ["Europe/London", "America/Chicago", "UTC"]
 )
@@ -120,7 +130,7 @@ def test_delocalize(unit, tz):
     "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
 )
 def test_convert(from_tz, to_tz):
-    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="H"))
+    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
     gs = cudf.from_pandas(ps)
     ps = ps.dt.tz_localize(from_tz)
     gs = gs.dt.tz_localize(from_tz)
@@ -130,7 +140,7 @@ def test_convert(from_tz, to_tz):
 
 
 def test_convert_from_naive():
-    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="H"))
+    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="h"))
     with pytest.raises(TypeError):
         gs.dt.tz_convert("America/New_York")
 
@@ -168,3 +178,28 @@ def test_convert_edge_cases(data, original_timezone, target_timezone):
     expect = ps.dt.tz_convert(target_timezone)
     got = gs.dt.tz_convert(target_timezone)
     assert_eq(expect, got)
+
+
+def test_to_pandas_index_true_timezone():
+    data = [
+        "2008-05-12",
+        "2008-12-12",
+        "2009-05-12",
+    ]
+    dti = cudf.DatetimeIndex(data).tz_localize("UTC")
+    ser = cudf.Series(dti, index=list("abc"))
+    result = ser.to_pandas(index=True)
+    expected = pd.Series(pd.to_datetime(data, utc=True), index=list("abc"))
+    assert_eq(result, expected)
+
+
+def test_tz_aware_attributes_local():
+    data = [
+        "2008-05-12 13:50:00",
+        "2008-12-12 14:50:35",
+        "2009-05-12 13:50:32",
+    ]
+    dti = cudf.DatetimeIndex(data).tz_localize("UTC").tz_convert("US/Eastern")
+    result = dti.hour
+    expected = cudf.Index([9, 9, 9], dtype="int16")
+    assert_eq(result, expected)

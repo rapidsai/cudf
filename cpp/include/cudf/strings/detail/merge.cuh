@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/merge.hpp>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/merge.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -73,22 +74,22 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
     null_mask = cudf::detail::create_null_mask(strings_count, mask_state::ALL_VALID, stream, mr);
 
   // build offsets column
-  auto offsets_transformer = [d_lhs, d_rhs] __device__(auto index_pair) {
-    auto const [side, index] = index_pair;
-    if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return 0;
-    auto d_str =
-      side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
-    return d_str.size_bytes();
-  };
+  auto offsets_transformer =
+    cuda::proclaim_return_type<size_type>([d_lhs, d_rhs] __device__(auto index_pair) {
+      auto const [side, index] = index_pair;
+      if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return 0;
+      auto d_str =
+        side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
+      return d_str.size_bytes();
+    });
   auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
   auto [offsets_column, bytes] = cudf::detail::make_offsets_child_column(
     offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
   auto d_offsets = offsets_column->view().template data<int32_t>();
 
   // create the chars column
-  auto chars_column = strings::detail::create_chars_child_column(bytes, stream, mr);
-  // merge the strings
-  auto d_chars = chars_column->mutable_view().template data<char>();
+  rmm::device_uvector<char> chars(bytes, stream, mr);
+  auto d_chars = chars.data();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
@@ -100,11 +101,8 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                        memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
                      });
 
-  return make_strings_column(strings_count,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask));
+  return make_strings_column(
+    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
 }
 
 }  // namespace detail

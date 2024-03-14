@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
 #include <benchmarks/join/join_common.hpp>
 
 template <typename key_type, typename payload_type, bool Nullable>

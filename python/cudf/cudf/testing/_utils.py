@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import itertools
 import string
@@ -19,7 +19,6 @@ from pandas import testing as tm
 
 import cudf
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
-from cudf.api.types import is_scalar
 from cudf.core.column.timedelta import _unit_to_nanoseconds_conversion
 from cudf.core.udf.strings_lowering import cast_string_view_to_udf_string
 from cudf.core.udf.strings_typing import StringView, string_view, udf_string
@@ -47,6 +46,33 @@ DATETIME_TYPES = sorted(list(dtypeutils.DATETIME_TYPES))
 TIMEDELTA_TYPES = sorted(list(dtypeutils.TIMEDELTA_TYPES))
 OTHER_TYPES = sorted(list(dtypeutils.OTHER_TYPES))
 ALL_TYPES = sorted(list(dtypeutils.ALL_TYPES))
+
+SERIES_OR_INDEX_NAMES = [
+    None,
+    pd.NA,
+    cudf.NA,
+    np.nan,
+    float("NaN"),
+    "abc",
+    1,
+    pd.NaT,
+    np.datetime64("nat"),
+    np.timedelta64("NaT"),
+    np.timedelta64(10, "D"),
+    np.timedelta64(5, "D"),
+    np.datetime64("1970-01-01 00:00:00.000000001"),
+    np.datetime64("1970-01-01 00:00:00.000000002"),
+    pd.Timestamp(1),
+    pd.Timestamp(2),
+    pd.Timedelta(1),
+    pd.Timedelta(2),
+    Decimal("NaN"),
+    Decimal("1.2"),
+    np.int64(1),
+    np.int32(1),
+    np.float32(1),
+    pd.Timestamp(1),
+]
 
 
 def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
@@ -368,15 +394,6 @@ def assert_column_memory_ne(
     except AssertionError:
         return
     raise AssertionError("lhs and rhs holds the same memory.")
-
-
-def _create_pandas_series(data=None, index=None, dtype=None, *args, **kwargs):
-    # Wrapper around pd.Series using a float64 default dtype for empty data.
-    if dtype is None and (
-        data is None or (not is_scalar(data) and len(data) == 0)
-    ):
-        dtype = "float64"
-    return pd.Series(data=data, index=index, dtype=dtype, *args, **kwargs)
 
 
 parametrize_numeric_dtypes_pairwise = pytest.mark.parametrize(

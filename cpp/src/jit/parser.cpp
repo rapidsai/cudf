@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ namespace cudf {
 namespace jit {
 constexpr char percent_escape[] = "_";
 
-inline bool is_white(const char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+inline bool is_white(char const c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
 
-std::string ptx_parser::escape_percent(const std::string& src)
+std::string ptx_parser::escape_percent(std::string const& src)
 {
   // b/c we're transforming into inline ptx we aren't allowed to have register names starting with %
   auto f = std::find_if_not(src.begin(), src.end(), [](auto c) { return is_white(c) || c == '['; });
@@ -43,7 +43,7 @@ std::string ptx_parser::escape_percent(const std::string& src)
   return src;
 }
 
-std::string ptx_parser::remove_nonalphanumeric(const std::string& src)
+std::string ptx_parser::remove_nonalphanumeric(std::string const& src)
 {
   std::string out = src;
   auto f = std::find_if_not(out.begin(), out.end(), [](auto c) { return is_white(c) || c == '['; });
@@ -53,7 +53,7 @@ std::string ptx_parser::remove_nonalphanumeric(const std::string& src)
   return std::string(f, l);
 }
 
-std::string ptx_parser::register_type_to_contraint(const std::string& src)
+std::string ptx_parser::register_type_to_contraint(std::string const& src)
 {
   if (src == ".b8" || src == ".u8" || src == ".s8")
     return "h";
@@ -71,7 +71,7 @@ std::string ptx_parser::register_type_to_contraint(const std::string& src)
     return "x_reg";
 }
 
-std::string ptx_parser::register_type_to_cpp_type(const std::string& register_type)
+std::string ptx_parser::register_type_to_cpp_type(std::string const& register_type)
 {
   if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
     return "char";
@@ -99,11 +99,11 @@ std::string ptx_parser::register_type_to_cpp_type(const std::string& register_ty
     return "x_cpptype";
 }
 
-std::string ptx_parser::parse_instruction(const std::string& src)
+std::string ptx_parser::parse_instruction(std::string const& src)
 {
   // I am assuming for an instruction statement the starting phrase is an
   // instruction.
-  const size_t length = src.size();
+  size_t const length = src.size();
   std::string output;
   std::string suffix;
 
@@ -114,6 +114,7 @@ std::string ptx_parser::parse_instruction(const std::string& src)
   size_t start                      = 0;
   size_t stop                       = 0;
   bool is_instruction               = true;
+  bool is_pragma_instruction        = false;
   bool is_param_loading_instruction = false;
   std::string constraint;
   std::string register_type;
@@ -181,6 +182,9 @@ std::string ptx_parser::parse_instruction(const std::string& src)
                "value through the first function parameter. Thus the `st.param.***` instructions "
                "are not processed. *** */" +
                "\");" + original_code;  // Our port does not support return value;
+      } else if (piece.find(".pragma") != std::string::npos) {
+        is_pragma_instruction = true;
+        output += " " + piece;
       } else if (piece[0] == '@') {
         output += " @" + remove_nonalphanumeric(piece.substr(1, piece.size() - 1));
       } else {
@@ -200,6 +204,17 @@ std::string ptx_parser::parse_instruction(const std::string& src)
         }
         // Here we get to see the actual type of the input arguments.
         input_arg_list[remove_nonalphanumeric(piece)] = register_type_to_cpp_type(register_type);
+      } else if (is_pragma_instruction) {
+        // quote any string
+        std::string transformed_piece;
+        for (const auto& c : piece) {
+          if (c == '"') {
+            transformed_piece += "\\\"";
+          } else {
+            transformed_piece += c;
+          }
+        }
+        output += transformed_piece;
       } else {
         output += escape_percent(std::string(src, start, stop - start));
       }
@@ -211,13 +226,13 @@ std::string ptx_parser::parse_instruction(const std::string& src)
   return "asm volatile (\"" + output + "\"" + suffix + ");" + original_code;
 }
 
-std::string ptx_parser::parse_statement(const std::string& src)
+std::string ptx_parser::parse_statement(std::string const& src)
 {
   auto f = std::find_if_not(src.cbegin(), src.cend(), [](auto c) { return is_white(c); });
   return f == src.cend() ? " \n" : parse_instruction(std::string(f, src.cend()));
 }
 
-std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
+std::vector<std::string> ptx_parser::parse_function_body(std::string const& src)
 {
   auto f = src.cbegin();
   std::vector<std::string> statements;
@@ -230,7 +245,7 @@ std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
   return statements;
 }
 
-std::string ptx_parser::parse_param(const std::string& src)
+std::string ptx_parser::parse_param(std::string const& src)
 {
   auto i = 0;
   auto f = src.cbegin();
@@ -244,7 +259,7 @@ std::string ptx_parser::parse_param(const std::string& src)
   return "";
 }
 
-std::string ptx_parser::parse_param_list(const std::string& src)
+std::string ptx_parser::parse_param_list(std::string const& src)
 {
   auto f = src.begin();
 
@@ -282,7 +297,7 @@ std::string ptx_parser::parse_param_list(const std::string& src)
   return "\n  " + output + "\n";
 }
 
-std::string ptx_parser::parse_function_header(const std::string& src)
+std::string ptx_parser::parse_function_header(std::string const& src)
 {
   // Essentially we only need the information inside the two pairs of parentheses.
   auto f = [&] {
@@ -302,7 +317,7 @@ std::string ptx_parser::parse_function_header(const std::string& src)
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg + "){" + "\n";
 }
 
-std::string remove_comments(const std::string& src)
+std::string remove_comments(std::string const& src)
 {
   std::string output;
   auto f = src.cbegin();
@@ -363,10 +378,10 @@ std::string ptx_parser::parse()
   return final_output + " asm volatile (\"RETTGT:}\");}";
 }
 
-ptx_parser::ptx_parser(const std::string& ptx_,
-                       const std::string& function_name_,
-                       const std::string& output_arg_type_,
-                       const std::set<int>& pointer_arg_list_)
+ptx_parser::ptx_parser(std::string const& ptx_,
+                       std::string const& function_name_,
+                       std::string const& output_arg_type_,
+                       std::set<int> const& pointer_arg_list_)
   : ptx(ptx_),
     function_name(function_name_),
     output_arg_type(output_arg_type_),
@@ -375,13 +390,13 @@ ptx_parser::ptx_parser(const std::string& ptx_,
 }
 
 // The interface
-std::string parse_single_function_cuda(const std::string& src, const std::string& function_name)
+std::string parse_single_function_cuda(std::string const& src, std::string const& function_name)
 {
   std::string no_comments = remove_comments(src);
 
   // For CUDA device function we just need to find the function
   // name and replace it with the specified one.
-  const size_t length = no_comments.size();
+  size_t const length = no_comments.size();
   size_t start        = 0;
   size_t stop         = start;
 

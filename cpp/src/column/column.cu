@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +33,10 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/transform_iterator.h>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+
+#include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
 #include <iterator>
@@ -205,7 +205,7 @@ struct create_column_from_view {
       view.type(),
       view.size(),
       rmm::device_buffer{
-        static_cast<const char*>(view.head()) + (view.offset() * cudf::size_of(view.type())),
+        static_cast<char const*>(view.head()) + (view.offset() * cudf::size_of(view.type())),
         view.size() * cudf::size_of(view.type()),
         stream,
         mr},

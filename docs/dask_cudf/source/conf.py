@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -8,11 +8,20 @@
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
+import datetime
+
+from packaging.version import Version
+
+import dask_cudf
+
+
+DASK_CUDF_VERSION = Version(dask_cudf.__version__)
+
 project = "dask-cudf"
-copyright = "2018-2023, NVIDIA Corporation"
+copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
-version = '23.08'
-release = '23.08.00'
+version = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}"
+release = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}.{DASK_CUDF_VERSION.micro:02}"
 
 language = "en"
 
@@ -57,6 +66,7 @@ html_theme_options = {
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "right",
+    "navigation_with_keys": True,
 }
 include_pandas_compat = True
 

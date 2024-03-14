@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,25 +18,29 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/io/datasource.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
+#include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <limits>
 #include <thrust/iterator/constant_iterator.h>
 
 #include <arrow/io/api.h>
 
 #include <fstream>
+#include <limits>
 #include <type_traits>
 
 #define wrapper cudf::test::fixed_width_column_wrapper
@@ -143,13 +147,11 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out-of-range")
 
 // temporary method to verify the float columns until
 // CUDF_TEST_EXPECT_COLUMNS_EQUAL supports floating point
-template <typename T, typename valid_t>
-void check_float_column(cudf::column_view const& col,
-                        std::vector<T> const& data,
-                        valid_t const& validity)
+template <typename T>
+void check_float_column(cudf::column_view const& col, std::vector<T> const& data)
 {
-  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(col, (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col.null_count() == 0, "All elements should be valid");
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(col, (wrapper<T>(data.begin(), data.end())));
+  EXPECT_EQ(col.null_count(), 0);
   EXPECT_THAT(cudf::test::to_host<T>(col).first,
               ::testing::Pointwise(FloatNearPointwise(1e-6), data));
 }
@@ -196,6 +198,12 @@ struct JsonReaderParamTest : public cudf::test::BaseFixture,
  * JSON lines reader and the nested reader
  */
 struct JsonReaderDualTest : public cudf::test::BaseFixture,
+                            public testing::WithParamInterface<json_test_t> {};
+
+/**
+ * @brief Test fixture for parametrized JSON reader tests that only tests the new nested JSON reader
+ */
+struct JsonReaderNoLegacy : public cudf::test::BaseFixture,
                             public testing::WithParamInterface<json_test_t> {};
 
 /**
@@ -287,6 +295,12 @@ INSTANTIATE_TEST_CASE_P(JsonReaderDualTest,
                         ::testing::Values(json_test_t::legacy_lines_record_orient,
                                           json_test_t::json_experimental_record_orient));
 
+// Parametrize qualifying JSON tests for executing nested reader only
+INSTANTIATE_TEST_CASE_P(JsonReaderNoLegacy,
+                        JsonReaderNoLegacy,
+                        ::testing::Values(json_test_t::json_experimental_row_orient,
+                                          json_test_t::json_experimental_record_orient));
+
 TEST_P(JsonReaderParamTest, BasicJsonLines)
 {
   auto const test_opt       = GetParam();
@@ -311,11 +325,8 @@ TEST_P(JsonReaderParamTest, BasicJsonLines)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2, 3}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{1.1, 2.2, 3.3}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2, 3}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3}});
 }
 
 TEST_P(JsonReaderParamTest, FloatingPoint)
@@ -352,15 +363,9 @@ TEST_P(JsonReaderParamTest, FloatingPoint)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::FLOAT32);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     result.tbl->get_column(0),
-    float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998},
-                  validity});
-
-  auto const bitmask = cudf::test::bitmask_to_host(result.tbl->get_column(0));
-  ASSERT_EQ((1u << result.tbl->get_column(0).size()) - 1, bitmask[0]);
+    float_wrapper{{5.6, 56.79, 12000000000., 0.7, 3.000, 12.34, 0.31, -73.98007199999998}});
 }
 
 TEST_P(JsonReaderParamTest, JsonLinesStrings)
@@ -391,10 +396,8 @@ TEST_P(JsonReaderParamTest, JsonLinesStrings)
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
   EXPECT_EQ(result.metadata.schema_info[2].name, "2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
@@ -451,8 +454,6 @@ TEST_P(JsonReaderParamTest, MultiColumn)
       .legacy(is_legacy_test(test_opt));
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
   auto const view = result.tbl->view();
 
   EXPECT_EQ(view.num_columns(), 6);
@@ -464,15 +465,15 @@ TEST_P(JsonReaderParamTest, MultiColumn)
   EXPECT_EQ(view.column(5).type().id(), cudf::type_id::FLOAT64);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(0),
-                                 int8_wrapper{int8_values.begin(), int8_values.end(), validity});
+                                 int8_wrapper(int8_values.begin(), int8_values.end()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(1),
-                                 int16_wrapper{int16_values.begin(), int16_values.end(), validity});
+                                 int16_wrapper(int16_values.begin(), int16_values.end()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(2),
-                                 int_wrapper{int32_values.begin(), int32_values.end(), validity});
+                                 int_wrapper(int32_values.begin(), int32_values.end()));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.column(3),
-                                 int64_wrapper{int64_values.begin(), int64_values.end(), validity});
-  check_float_column(view.column(4), float32_values, validity);
-  check_float_column(view.column(5), float64_values, validity);
+                                 int64_wrapper(int64_values.begin(), int64_values.end()));
+  check_float_column(view.column(4), float32_values);
+  check_float_column(view.column(5), float64_values);
 }
 
 TEST_P(JsonReaderParamTest, Booleans)
@@ -508,10 +509,8 @@ TEST_P(JsonReaderParamTest, Booleans)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::BOOL8);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 bool_wrapper{{true, true, false, false, true}, validity});
+                                 bool_wrapper{{true, true, false, false, true}});
 }
 
 TEST_P(JsonReaderParamTest, Dates)
@@ -655,10 +654,8 @@ TEST_P(JsonReaderParamTest, JsonLinesDtypeInference)
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
   EXPECT_EQ(result.metadata.schema_info[2].name, "2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
@@ -692,10 +689,8 @@ TEST_P(JsonReaderParamTest, JsonLinesFileInput)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
 }
 
 TEST_F(JsonReaderTest, JsonLinesByteRange)
@@ -720,10 +715,7 @@ TEST_F(JsonReaderTest, JsonLinesByteRange)
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{3000, 4000, 5000}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{3000, 4000, 5000}});
 }
 
 TEST_P(JsonReaderDualTest, JsonLinesObjects)
@@ -749,10 +741,8 @@ TEST_P(JsonReaderDualTest, JsonLinesObjects)
   EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
   EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{1}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{2.0}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{1}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{2.0}});
 }
 
 TEST_P(JsonReaderDualTest, JsonLinesObjectsStrings)
@@ -777,11 +767,8 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsStrings)
     EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
     EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
 
-    auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                   float64_wrapper{{1.1, 2.2}, validity});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                    cudf::test::strings_column_wrapper({"aaa", "bbb"}));
   };
@@ -856,10 +843,8 @@ TEST_P(JsonReaderDualTest, JsonLinesObjectsOutOfOrder)
   EXPECT_EQ(result.metadata.schema_info[1].name, "col2");
   EXPECT_EQ(result.metadata.schema_info[2].name, "col3");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{100, 200}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aaa", "bbb"}));
 }
@@ -938,10 +923,7 @@ TEST_F(JsonReaderTest, ArrowFileSource)
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT8);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int8_wrapper{{9, 8, 7, 6, 5, 4, 3, 2}});
 }
 
 TEST_P(JsonReaderParamTest, InvalidFloatingPoint)
@@ -1227,12 +1209,49 @@ TEST_P(JsonReaderParamTest, JsonLinesMultipleFileInputs)
   EXPECT_EQ(result.metadata.schema_info[0].name, "0");
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22, 33, 44}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3, 4.4}});
+}
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
-                                 int64_wrapper{{11, 22, 33, 44}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+TEST_P(JsonReaderNoLegacy, JsonLinesMultipleFileInputsNoNL)
+{
+  auto const test_opt = GetParam();
+  // Strings for the two separate input files in row-orient that do not end with a newline
+  std::vector<std::string> row_orient{"[11, 1.1]\n[22, 2.2]", "[33, 3.3]\n[44, 4.4]"};
+  // Strings for the two separate input files in record-orient that do not end with a newline
+  std::vector<std::string> record_orient{
+    to_records_orient({{{"0", "11"}, {"1", "1.1"}}, {{"0", "22"}, {"1", "2.2"}}}, "\n"),
+    to_records_orient({{{"0", "33"}, {"1", "3.3"}}, {{"0", "44"}, {"1", "4.4"}}}, "\n")};
+  auto const& data = is_row_orient_test(test_opt) ? row_orient : record_orient;
+
+  const std::string file1 = temp_env->get_temp_dir() + "JsonLinesFileTest1.json";
+  std::ofstream outfile(file1, std::ofstream::out);
+  outfile << data[0];
+  outfile.close();
+
+  const std::string file2 = temp_env->get_temp_dir() + "JsonLinesFileTest2.json";
+  std::ofstream outfile2(file2, std::ofstream::out);
+  outfile2 << data[1];
+  outfile2.close();
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{{file1, file2}})
+      .lines(true)
+      .legacy(is_legacy_test(test_opt));
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 4);
+
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int64_wrapper{{11, 22, 33, 44}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2, 3.3, 4.4}});
 }
 
 TEST_F(JsonReaderTest, BadDtypeParams)
@@ -1311,6 +1330,129 @@ TEST_F(JsonReaderTest, JsonExperimentalLines)
   // Verify that the data read via non-nested JSON lines reader matches the data read via nested
   // JSON reader
   CUDF_TEST_EXPECT_TABLES_EQUAL(legacy_reader_table.tbl->view(), table.tbl->view());
+}
+
+TEST_F(JsonReaderTest, JsonLongString)
+{
+  // Unicode
+  // 0000-FFFF     Basic Multilingual Plane
+  // 10000-10FFFF  Supplementary Plane
+  cudf::test::strings_column_wrapper col1{
+    {
+      "\"\\/\b\f\n\r\t",
+      "\"",
+      "\\",
+      "/",
+      "\b",
+      "\f\n",
+      "\r\t",
+      "$€",
+      "ராபிட்ஸ்",
+      "C𝞵𝓓𝒻",
+      "",  // null
+      "",  // null
+      "கார்த்தி",
+      "CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",  //  0000-FFFF
+      "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",                            // 10000-1FFFF
+      "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",                // 20000-2FFFF
+      "𰾑𱔈𲍉",                                          // 30000-3FFFF
+      R"("$€ \u0024\u20ac \\u0024\\u20ac  \\\u0024\\\u20ac \\\\u0024\\\\u20ac)",
+      R"(        \\\\\\\\\\\\\\\\)",
+      R"(\\\\\\\\\\\\\\\\)",
+      R"(\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\)",
+      R"( \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\)",
+      R"(                      \\abcd)",
+      R"(                 \\\\\\\\\\\\\\\\                 \\\\\\\\\\\\\\\\)",
+      R"(                \\\\\\\\\\\\\\\\                 \\\\\\\\\\\\\\\\)",
+    },
+    cudf::test::iterators::nulls_at({10, 11})};
+
+  cudf::test::fixed_width_column_wrapper<int16_t> repeat_times{
+    {1, 2, 3, 4, 5, 6, 7, 8, 9, 13, 19, 37, 81, 161, 323, 631, 1279, 10, 1, 2, 1, 100, 1000, 1, 3},
+    cudf::test::iterators::no_nulls()};
+  auto d_col2 = cudf::strings::repeat_strings(cudf::strings_column_view{col1}, repeat_times);
+  auto col2   = d_col2->view();
+  cudf::table_view const tbl_view{{col1, col2, repeat_times}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination     = cudf::io::sink_info(&out_buffer);
+  auto options_builder = cudf::io::json_writer_options_builder(destination, tbl_view)
+                           .include_nulls(true)
+                           .metadata(mt)
+                           .lines(true)
+                           .na_rep("null");
+
+  cudf::io::write_json(options_builder.build(),
+                       cudf::test::get_default_stream(),
+                       rmm::mr::get_current_device_resource());
+
+  cudf::column_view int16_with_mask(repeat_times);
+  cudf::column_view int16(
+    int16_with_mask.type(), int16_with_mask.size(), int16_with_mask.head(), nullptr, 0);
+  cudf::table_view const expected = cudf::table_view{{col1, col2, int16}};
+  std::map<std::string, data_type> types;
+  types["col1"]  = data_type{type_id::STRING};
+  types["col2"]  = data_type{type_id::STRING};
+  types["int16"] = data_type{type_id::INT16};
+
+  // Initialize parsing options (reading json lines)
+  cudf::io::json_reader_options json_lines_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+      .lines(true)
+      .dtypes(types);
+
+  // Read test data via nested JSON reader
+  auto const table = cudf::io::read_json(json_lines_options);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, table.tbl->view());
+}
+
+TEST_F(JsonReaderTest, ErrorStrings)
+{
+  // cases of invalid escape characters, invalid unicode encodings.
+  // Error strings will decode to nulls
+  auto const buffer = std::string{R"(
+    {"col0": "\"\a"}
+    {"col0": "\u"}
+    {"col0": "\u0"}
+    {"col0": "\u0b"}
+    {"col0": "\u00b"}
+    {"col0": "\u00bz"}
+    {"col0": "\t34567890123456\t9012345678901\ug0bc"}
+    {"col0": "\t34567890123456\t90123456789012\u0hbc"}
+    {"col0": "\t34567890123456\t90123456789012\u00ic"}
+    {"col0": "\u0b95\u0bbe\u0bb0\u0bcd\u0ba4\u0bcd\u0ba4\u0bbfகார்த்தி"}
+)"};
+  // Last one is not an error case, but shows that unicode in json is copied string column output.
+
+  cudf::io::json_reader_options const in_opts =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
+      .dtypes({data_type{cudf::type_id::STRING}})
+      .lines(true)
+      .legacy(false);
+
+  auto const result      = cudf::io::read_json(in_opts);
+  auto const result_view = result.tbl->view().column(0);
+
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col0");
+  EXPECT_EQ(result_view.null_count(), 9);
+  cudf::test::strings_column_wrapper expected{
+    {"",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "",
+     "கார்த்தி\xe0\xae\x95\xe0\xae\xbe\xe0\xae\xb0\xe0\xaf\x8d\xe0\xae\xa4\xe0\xaf\x8d\xe0\xae\xa4"
+     "\xe0\xae\xbf"},
+    // unicode hex 0xe0 0xae 0x95 0xe0 0xae 0xbe 0xe0 0xae 0xb0 0xe0 0xaf 0x8d
+    //             0xe0 0xae 0xa4 0xe0 0xaf 0x8d 0xe0 0xae 0xa4 0xe0 0xae 0xbf
+    cudf::test::iterators::nulls_at({0, 1, 2, 3, 4, 5, 6, 7, 8})};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result_view, expected);
 }
 
 TEST_F(JsonReaderTest, TokenAllocation)
@@ -1462,10 +1604,8 @@ TEST_P(JsonReaderParamTest, JsonDtypeSchema)
   EXPECT_EQ(result.metadata.schema_info[1].name, "1");
   EXPECT_EQ(result.metadata.schema_info[2].name, "2");
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}, validity});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}, validity});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), int_wrapper{{1, 2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), float64_wrapper{{1.1, 2.2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(2),
                                  cudf::test::strings_column_wrapper({"aa ", "  bbb"}));
 }
@@ -1521,8 +1661,7 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(0), int_wrapper{{0, 2, 2, 2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0).child(1).child(0),
                                  float_wrapper{{0.0, 123.0}, {false, true}});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
-                                 int_wrapper{{1, 1, 2}, {true, true, true}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), int_wrapper{{1, 1, 2}});
   // List column expected
   auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
   auto const validity = {1, 0, 0};
@@ -1767,6 +1906,389 @@ TEST_F(JsonReaderTest, TrailingCommas)
     EXPECT_THROW(cudf::io::read_json(json_parser_options), cudf::logic_error)
       << "Failed on test case " << i;
   }
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecovering)
+{
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"a":])"
+    "\n"
+    // 2 -> (invalid)
+    R"({"b":{"a":[321})"
+    "\n"
+    // 3 -> c: 1.2 (valid)
+    R"({"c":1.2})"
+    "\n"
+    "\n"
+    // 4 -> a: 4 (valid)
+    R"({"a":4})"
+    "\n"
+    // 5 -> (invalid)
+    R"({"a":5)"
+    "\n"
+    // 6 -> (invalid)
+    R"({"a":6 )"
+    "\n"
+    // 7 -> (invalid)
+    R"({"b":[7 )"
+    "\n"
+    // 8 -> a: 8 (valid)
+    R"({"a":8})"
+    "\n"
+    // 9 -> (invalid)
+    R"({"d":{"unterminated_field_name)"
+    "\n"
+    // 10 -> (invalid)
+    R"({"d":{)"
+    "\n"
+    // 11 -> (invalid)
+    R"({"d":{"123",)"
+    "\n"
+    // 12 -> a: 12 (valid)
+    R"({"a":12})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLines.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 2);
+  EXPECT_EQ(result.tbl->num_rows(), 13);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{
+    true, false, false, false, true, false, false, false, true, false, false, false, true};
+  std::vector<bool> c_validity{
+    false, false, false, true, false, false, false, false, false, false, false, false, false};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(0),
+    int64_wrapper{{-2, 0, 0, 0, 4, 0, 0, 0, 8, 0, 0, 0, 12}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+                    c_validity.cbegin()});
+}
+
+TEST_F(JsonReaderTest, JSONLinesRecoveringIgnoreExcessChars)
+{
+  /**
+   * @brief Spark has the specific need to ignore extra characters that come after the first record
+   * on a JSON line
+   */
+  std::string data =
+    // 0 -> a: -2 (valid)
+    R"({"a":-2}{})"
+    "\n"
+    // 1 -> (invalid)
+    R"({"b":{}should_be_invalid})"
+    "\n"
+    // 2 -> b (valid)
+    R"({"b":{"a":3} })"
+    "\n"
+    // 3 -> c: (valid)
+    R"({"c":1.2 } )"
+    "\n"
+    "\n"
+    // 4 -> (valid)
+    R"({"a":4} 123)"
+    "\n"
+    // 5 -> (valid)
+    R"({"a":5}//Comment after record)"
+    "\n"
+    // 6 -> (valid)
+    R"({"a":6} //Comment after whitespace)"
+    "\n"
+    // 7 -> (invalid)
+    R"({"a":5 //Invalid Comment within record})";
+
+  auto filepath = temp_env->get_temp_dir() + "RecoveringLinesExcessChars.json";
+  {
+    std::ofstream outfile(filepath, std::ofstream::out);
+    outfile << data;
+  }
+
+  cudf::io::json_reader_options in_options =
+    cudf::io::json_reader_options::builder(cudf::io::source_info{filepath})
+      .lines(true)
+      .recovery_mode(cudf::io::json_recovery_mode_t::RECOVER_WITH_NULL);
+
+  cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+  EXPECT_EQ(result.tbl->num_columns(), 3);
+  EXPECT_EQ(result.tbl->num_rows(), 8);
+  EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::INT64);
+  EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::STRUCT);
+  EXPECT_EQ(result.tbl->get_column(2).type().id(), cudf::type_id::FLOAT64);
+
+  std::vector<bool> a_validity{true, false, false, false, true, true, true, false};
+  std::vector<bool> b_validity{false, false, true, false, false, false, false, false};
+  std::vector<bool> c_validity{false, false, false, true, false, false, false, false};
+
+  // Child column b->a
+  auto b_a_col = int64_wrapper({0, 0, 3, 0, 0, 0, 0, 0});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                 int64_wrapper{{-2, 0, 0, 0, 4, 5, 6, 0}, a_validity.cbegin()});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(1), cudf::test::structs_column_wrapper({b_a_col}, b_validity.cbegin()));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+    result.tbl->get_column(2),
+    float64_wrapper{{0.0, 0.0, 0.0, 1.2, 0.0, 0.0, 0.0, 0.0}, c_validity.cbegin()});
+}
+
+TEST_F(JsonReaderTest, MixedTypes)
+{
+  using LCWS    = cudf::test::lists_column_wrapper<cudf::string_view>;
+  using LCWI    = cudf::test::lists_column_wrapper<int64_t>;
+  using valid_t = std::vector<cudf::valid_type>;
+  {
+    // Simple test for mixed types
+    std::string json_string = R"({ "foo": [1,2,3], "bar": 123 }
+                               { "foo": { "a": 1 }, "bar": 456 })";
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+
+    EXPECT_EQ(result.tbl->num_columns(), 2);
+    EXPECT_EQ(result.tbl->num_rows(), 2);
+    EXPECT_EQ(result.tbl->get_column(0).type().id(), cudf::type_id::STRING);
+    EXPECT_EQ(result.tbl->get_column(1).type().id(), cudf::type_id::INT64);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0),
+                                   cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"a\": 1 }"}));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
+                                   cudf::test::fixed_width_column_wrapper<int64_t>({123, 456}));
+  }
+
+  // Testing function for mixed types in JSON (for spark json reader)
+  auto test_fn = [](std::string_view json_string, cudf::column_view expected) {
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .mixed_types_as_string(true)
+        .lines(true);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    static int num_case                  = 0;
+    num_case++;
+    std::cout << "case:" << num_case << "\n";
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(0), expected);
+  };
+  // value + string (not mixed type case)
+  test_fn(R"(
+{ "a": "123" }
+{ "a": 123 }
+)",
+          cudf::test::strings_column_wrapper({"123", "123"}));
+
+  // test cases.
+  // STR + STRUCT, STR + LIST, STR + null
+  // STRUCT + STR, STRUCT + LIST, STRUCT + null
+  // LIST + STR, LIST + STRUCT, LIST + null
+  // LIST + STRUCT + STR, STRUCT + LIST + STR, STR + STRUCT + LIST, STRUCT + LIST + null
+  // STR + STRUCT + LIST + null
+
+  // STRING mixed:
+  // STR + STRUCT, STR + LIST, STR + null
+  test_fn(R"(
+{ "a": "123" }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"123", "{ \"b\": 1 }"}));
+  test_fn(R"(
+{ "a": "123" }
+{ "a": [1,2,3] }
+)",
+          cudf::test::strings_column_wrapper({"123", "[1,2,3]"}));
+  test_fn(R"(
+{ "a": "123" }
+{ "a": null }
+)",
+          cudf::test::strings_column_wrapper({"123", ""}, std::vector<bool>{1, 0}.begin()));
+
+  // STRUCT mixed:
+  // STRUCT + STR, STRUCT + LIST, STRUCT + null
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": "fox" }
+)",
+          cudf::test::strings_column_wrapper({"{ \"b\": 1 }", "fox"}));
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": [1,2,3] }
+)",
+          cudf::test::strings_column_wrapper({"{ \"b\": 1 }", "[1,2,3]"}));
+  cudf::test::fixed_width_column_wrapper<int64_t> child_int_col_wrapper{1, 2};
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": null }
+)",
+          cudf::test::structs_column_wrapper{
+            {child_int_col_wrapper}, {1, 0} /*Validity*/
+          });
+
+  // LIST mixed:
+  // LIST + STR, LIST + STRUCT, LIST + null
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": "123" }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "123"}));
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": { "b": 1 } }
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }"}));
+  test_fn(
+    R"(
+{ "a": [1,2,3] }
+{ "a": null }
+)",
+    cudf::test::lists_column_wrapper{{LCWI{1L, 2L, 3L}, LCWI{4L, 5L}}, valid_t{1, 0}.begin()});
+
+  // All mixed:
+  // LIST + STRUCT + STR, STRUCT + LIST + STR, STR + STRUCT + LIST, STRUCT + LIST + null
+  test_fn(R"(
+{ "a": [1,2,3]  }
+{ "a": { "b": 1 } }
+{ "a": "fox"}
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }", "fox"}));
+  test_fn(R"(
+{ "a": { "b": 1 } }
+{ "a": [1,2,3]  }
+{ "a": "fox"}
+)",
+          cudf::test::strings_column_wrapper({"{ \"b\": 1 }", "[1,2,3]", "fox"}));
+  test_fn(R"(
+{ "a": "fox"}
+{ "a": { "b": 1 } }
+{ "a": [1,2,3]  }
+)",
+          cudf::test::strings_column_wrapper({"fox", "{ \"b\": 1 }", "[1,2,3]"}));
+  test_fn(R"(
+{ "a": [1,2,3]  }
+{ "a": { "b": 1 } }
+{ "a": null}
+)",
+          cudf::test::strings_column_wrapper({"[1,2,3]", "{ \"b\": 1 }", "NA"},
+                                             valid_t{1, 1, 0}.begin()));  // RIGHT
+
+  // value + string inside list
+  test_fn(R"(
+{ "a": [1,2,3] }
+{ "a": [true,false,true] }
+{ "a": ["a", "b", "c"] }
+)",
+          cudf::test::lists_column_wrapper<cudf::string_view>{
+            {"1", "2", "3"}, {"true", "false", "true"}, {"a", "b", "c"}});
+
+  // null + list of mixed types and null
+  test_fn(R"(
+{ "var1": null }
+{ "var1": [{ "var0": true, "var1": "hello", "var2": null }, null, [true, null, null]] }
+  )",
+          cudf::test::lists_column_wrapper<cudf::string_view>(
+            {{"NA", "NA"},
+             {{R"({ "var0": true, "var1": "hello", "var2": null })", "null", "[true, null, null]"},
+              valid_t{1, 0, 1}.begin()}},
+            valid_t{0, 1}.begin()));
+
+  // test to confirm if reinitialize a non-string column as string affects max_rowoffsets.
+  // max_rowoffsets is generated based on parent col id,
+  // so, even if mixed types are present, their row offset will be correct.
+
+  cudf::test::lists_column_wrapper expected_list{
+    {
+      cudf::test::lists_column_wrapper({LCWS({"1", "2", "3"}), LCWS({"4", "5", "6"})}),
+      cudf::test::lists_column_wrapper({LCWS()}),
+      cudf::test::lists_column_wrapper({LCWS()}),  // null
+      cudf::test::lists_column_wrapper({LCWS()}),  // null
+      cudf::test::lists_column_wrapper({LCWS({"{\"c\": -1}"}), LCWS({"5"})}),
+      cudf::test::lists_column_wrapper({LCWS({"7"}), LCWS({"8", "9"})}),
+      cudf::test::lists_column_wrapper({LCWS()}),  // null
+    },
+    valid_t{1, 1, 0, 0, 1, 1, 0}.begin()};
+  test_fn(R"(
+{"b": [ [1, 2, 3], [ 4, 5, 6] ]}
+{"b": [[]]}
+{}
+{}
+{"b": [ [ {"c": -1} ], [ 5 ] ]}
+{"b": [ [7], [8, 9]]}
+{}
+)",
+          expected_list);
+}
+
+TEST_F(JsonReaderTest, MapTypes)
+{
+  using cudf::type_id;
+  // Testing function for mixed types in JSON (for spark json reader)
+  auto test_fn = [](std::string_view json_string, bool lines, std::vector<type_id> types) {
+    std::map<std::string, cudf::io::schema_element> dtype_schema{
+      {"foo1", {data_type{type_id::STRING}}},  // list won't be a string
+      {"foo2", {data_type{type_id::STRING}}},  // struct forced as a string
+      {"1", {data_type{type_id::STRING}}},
+      {"2", {data_type{type_id::STRING}}},
+      {"bar", {dtype<int32_t>()}},
+    };
+
+    cudf::io::json_reader_options in_options =
+      cudf::io::json_reader_options::builder(
+        cudf::io::source_info{json_string.data(), json_string.size()})
+        .dtypes(dtype_schema)
+        .mixed_types_as_string(true)
+        .lines(lines);
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
+    EXPECT_EQ(result.tbl->num_columns(), types.size());
+    int i = 0;
+    for (auto& col : result.tbl->view()) {
+      EXPECT_EQ(col.type().id(), types[i]) << "column[" << i << "].type";
+      i++;
+    }
+    std::cout << "\n";
+  };
+
+  // json
+  test_fn(R"([{ "foo1": [1,2,3], "bar": 123 },
+              { "foo2": { "a": 1 }, "bar": 456 }])",
+          false,
+          {type_id::LIST, type_id::INT32, type_id::STRING});
+  // jsonl
+  test_fn(R"( { "foo1": [1,2,3], "bar": 123 }
+              { "foo2": { "a": 1 }, "bar": 456 })",
+          true,
+          {type_id::LIST, type_id::INT32, type_id::STRING});
+  // jsonl-array
+  test_fn(R"([123, [1,2,3]]
+              [456, null,  { "a": 1 }])",
+          true,
+          {type_id::INT64, type_id::LIST, type_id::STRING});
+  // json-array
+  test_fn(R"([[[1,2,3], null, 123],
+              [null, { "a": 1 }, 456 ]])",
+          false,
+          {type_id::LIST, type_id::STRING, type_id::STRING});
 }
 
 CUDF_TEST_PROGRAM_MAIN()

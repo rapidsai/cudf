@@ -42,12 +42,14 @@ namespace lists {
  *
  * @param lists Lists column whose `n` rows are to be searched
  * @param search_key The scalar key to be looked up in each list row
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -63,13 +65,15 @@ std::unique_ptr<column> contains(
  *   2. The list row `lists[i]` is null
  *
  * @param lists Lists column whose `n` rows are to be searched
- * @param search_keys Column of elements to be looked up in each list row
+ * @param search_keys Column of elements to be looked up in each list row.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -84,12 +88,14 @@ std::unique_ptr<column> contains(
  * A row with an empty list will always return false.
  * Nulls inside non-null nested elements (such as lists or structs) are not considered.
  *
- * @param lists Lists column whose `n` rows are to be searched
+ * @param lists Lists column whose `n` rows are to be searched.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return BOOL8 column of `n` rows with the result of the lookup
  */
 std::unique_ptr<column> contains_nulls(
   cudf::lists_column_view const& lists,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -125,6 +131,7 @@ enum class duplicate_find_option : int32_t {
  * @param search_key The scalar key to be looked up in each list row
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column of `n` rows with the location of the `search_key`
  */
@@ -132,6 +139,7 @@ std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
   duplicate_find_option find_option   = duplicate_find_option::FIND_FIRST,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -160,6 +168,7 @@ std::unique_ptr<column> index_of(
  * `lists`
  * @param find_option Whether to return the position of the first match (`FIND_FIRST`) or
  * last (`FIND_LAST`)
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return column of `n` rows with the location of the `search_key`
  */
@@ -167,6 +176,7 @@ std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
   duplicate_find_option find_option   = duplicate_find_option::FIND_FIRST,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import decimal
 import operator
 import pickle
 import textwrap
+import warnings
 from functools import cached_property
 from typing import Any, Callable, Dict, List, Tuple, Type, Union
 
@@ -12,22 +13,14 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api import types as pd_types
 from pandas.api.extensions import ExtensionDtype
-from pandas.core.dtypes.dtypes import (
-    CategoricalDtype as pd_CategoricalDtype,
-    CategoricalDtypeType as pd_CategoricalDtypeType,
-)
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 
 import cudf
 from cudf._typing import Dtype
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 from cudf.utils.docutils import doc_apply
-
-if PANDAS_GE_150:
-    from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
-else:
-    from pandas.core.arrays._arrow_utils import ArrowIntervalType
 
 
 def dtype(arbitrary):
@@ -49,12 +42,12 @@ def dtype(arbitrary):
     # next, try interpreting arbitrary as a NumPy dtype that we support:
     try:
         np_dtype = np.dtype(arbitrary)
-        if np_dtype.kind in ("OU"):
-            return np.dtype("object")
     except TypeError:
         pass
     else:
-        if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+        if np_dtype.kind in set("OU"):
+            return np.dtype("object")
+        elif np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
@@ -62,21 +55,25 @@ def dtype(arbitrary):
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
     pd_dtype = pd.api.types.pandas_dtype(arbitrary)
-    try:
-        return dtype(pd_dtype.numpy_dtype)
-    except AttributeError:
-        if isinstance(pd_dtype, pd.CategoricalDtype):
-            return cudf.CategoricalDtype.from_pandas(pd_dtype)
+    if cudf.api.types._is_pandas_nullable_extension_dtype(pd_dtype):
+        if cudf.get_option("mode.pandas_compatible"):
+            raise NotImplementedError(
+                "Nullable types not supported in pandas compatibility mode"
+            )
         elif isinstance(pd_dtype, pd.StringDtype):
             return np.dtype("object")
-        elif isinstance(pd_dtype, pd.IntervalDtype):
-            return cudf.IntervalDtype.from_pandas(pd_dtype)
-        elif isinstance(pd_dtype, pd.DatetimeTZDtype):
-            return pd_dtype
         else:
-            raise TypeError(
-                f"Cannot interpret {arbitrary} as a valid cuDF dtype"
-            )
+            return dtype(pd_dtype.numpy_dtype)
+    elif isinstance(pd_dtype, pd.core.dtypes.dtypes.NumpyEADtype):
+        return dtype(pd_dtype.numpy_dtype)
+    elif isinstance(pd_dtype, pd.CategoricalDtype):
+        return cudf.CategoricalDtype.from_pandas(pd_dtype)
+    elif isinstance(pd_dtype, pd.IntervalDtype):
+        return cudf.IntervalDtype.from_pandas(pd_dtype)
+    elif isinstance(pd_dtype, pd.DatetimeTZDtype):
+        return pd_dtype
+    else:
+        raise TypeError(f"Cannot interpret {arbitrary} as a valid cuDF dtype")
 
 
 def _decode_type(
@@ -143,6 +140,16 @@ class CategoricalDtype(_BaseDtype):
         None can be used to maintain the ordered value of existing categoricals
         when used in operations that combine categoricals, e.g. astype, and
         will resolve to False if there is no existing ordered to maintain.
+
+    Attributes
+    ----------
+    categories
+    ordered
+
+    Methods
+    -------
+    from_pandas
+    to_pandas
 
     Examples
     --------
@@ -213,11 +220,11 @@ class CategoricalDtype(_BaseDtype):
         >>> import pandas as pd
         >>> pd_dtype = pd.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> pd_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         >>> cudf_dtype = cudf.CategoricalDtype.from_pandas(pd_dtype)
         >>> cudf_dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
-        """
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        """  # noqa: E501
         return CategoricalDtype(
             categories=dtype.categories, ordered=dtype.ordered
         )
@@ -231,26 +238,25 @@ class CategoricalDtype(_BaseDtype):
         >>> import cudf
         >>> dtype = cudf.CategoricalDtype(categories=['b', 'a'], ordered=True)
         >>> dtype
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
         >>> dtype.to_pandas()
-        CategoricalDtype(categories=['b', 'a'], ordered=True)
-        """
+        CategoricalDtype(categories=['b', 'a'], ordered=True, categories_dtype=object)
+        """  # noqa: E501
         if self._categories is None:
             categories = None
+        elif self._categories.dtype.kind == "f":
+            categories = self._categories.dropna().to_pandas()
         else:
-            if self._categories.dtype in {
-                cudf.dtype("float32"),
-                cudf.dtype("float64"),
-            }:
-                categories = self._categories.dropna().to_pandas()
-            else:
-                categories = self._categories.to_pandas()
+            categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories: Any):
         if categories is None:
             return categories
-        if len(categories) == 0 and not is_interval_dtype(categories):
+        if len(categories) == 0 and not isinstance(
+            getattr(categories, "dtype", None),
+            (cudf.IntervalDtype, pd.IntervalDtype),
+        ):
             dtype = "object"  # type: Any
         else:
             dtype = None
@@ -321,6 +327,16 @@ class ListDtype(_BaseDtype):
     element_type : object
         A dtype with which represents the element types in the list.
 
+    Attributes
+    ----------
+    element_type
+    leaf_type
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
+
     Examples
     --------
     >>> import cudf
@@ -374,7 +390,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.StructType):
             return StructDtype.from_arrow(self._typ.value_type)
         else:
-            return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
+            return cudf.dtype(self._typ.value_type.to_pandas_dtype())
 
     @cached_property
     def leaf_type(self):
@@ -471,7 +487,9 @@ class ListDtype(_BaseDtype):
         if isinstance(self.element_type, _BaseDtype):
             header["element-type"], frames = self.element_type.serialize()
         else:
-            header["element-type"] = self.element_type
+            header["element-type"] = getattr(
+                self.element_type, "name", self.element_type
+            )
         header["frame_count"] = len(frames)
         return header, frames
 
@@ -486,6 +504,10 @@ class ListDtype(_BaseDtype):
             element_type = header["element-type"]
         return klass(element_type=element_type)
 
+    @cached_property
+    def itemsize(self):
+        return self.element_type.itemsize
+
 
 class StructDtype(_BaseDtype):
     """
@@ -496,6 +518,16 @@ class StructDtype(_BaseDtype):
     fields : dict
         A mapping of field names to dtypes, the dtypes can themselves
         be of ``StructDtype`` too.
+
+    Attributes
+    ----------
+    fields
+    itemsize
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
 
     Examples
     --------
@@ -650,19 +682,32 @@ decimal_dtype_template = textwrap.dedent(
         scale : int, optional
             The scale of the dtype. See Notes below.
 
+        Attributes
+        ----------
+        precision
+        scale
+        itemsize
+
+        Methods
+        -------
+        to_arrow
+        from_arrow
+
         Notes
         -----
-            When the scale is positive:
-                - numbers with fractional parts (e.g., 0.0042) can be represented
-                - the scale is the total number of digits to the right of the
-                decimal point
-            When the scale is negative:
-                - only multiples of powers of 10 (including 10**0) can be
-                represented (e.g., 1729, 4200, 1000000)
-                - the scale represents the number of trailing zeros in the value.
-            For example, 42 is representable with precision=2 and scale=0.
-            13.0051 is representable with precision=6 and scale=4,
-            and *not* representable with precision<6 or scale<4.
+        When the scale is positive:
+            - numbers with fractional parts (e.g., 0.0042) can be represented
+            - the scale is the total number of digits to the right of the
+              decimal point
+
+        When the scale is negative:
+            - only multiples of powers of 10 (including 10**0) can be
+              represented (e.g., 1729, 4200, 1000000)
+            - the scale represents the number of trailing zeros in the value.
+
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
 
         Examples
         --------
@@ -863,8 +908,11 @@ class IntervalDtype(StructDtype):
     def subtype(self):
         return self.fields["left"]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"interval[{self.subtype}, {self.closed}]"
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
     @classmethod
     def from_arrow(cls, typ):
@@ -911,26 +959,14 @@ class IntervalDtype(StructDtype):
         return klass(subtype, closed=closed)
 
 
-def is_categorical_dtype(obj):
-    """Check whether an array-like or dtype is of the Categorical dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of a categorical dtype.
-    """
+def _is_categorical_dtype(obj):
     if obj is None:
         return False
 
     if isinstance(
         obj,
         (
-            pd_CategoricalDtype,
+            pd.CategoricalDtype,
             cudf.CategoricalDtype,
             cudf.core.index.CategoricalIndex,
             cudf.core.column.CategoricalColumn,
@@ -947,8 +983,8 @@ def is_categorical_dtype(obj):
         obj is t
         for t in (
             cudf.CategoricalDtype,
-            pd_CategoricalDtype,
-            pd_CategoricalDtypeType,
+            pd.CategoricalDtype,
+            pd.CategoricalDtype.type,
         )
     ):
         return True
@@ -967,13 +1003,41 @@ def is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return is_categorical_dtype(obj.dtype)
+        return _is_categorical_dtype(obj.dtype)
     if hasattr(obj, "type"):
-        if obj.type is pd_CategoricalDtypeType:
+        if obj.type is pd.CategoricalDtype.type:
             return True
     # TODO: A lot of the above checks are probably redundant and should be
     # farmed out to this function here instead.
-    return pd_types.is_categorical_dtype(obj)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return pd_types.is_categorical_dtype(obj)
+
+
+def is_categorical_dtype(obj):
+    """Check whether an array-like or dtype is of the Categorical dtype.
+
+    .. deprecated:: 24.04
+       Use isinstance(dtype, cudf.CategoricalDtype) instead
+
+    Parameters
+    ----------
+    obj : array-like or dtype
+        The array-like or dtype to check.
+
+    Returns
+    -------
+    bool
+        Whether or not the array-like or dtype is of a categorical dtype.
+    """
+    # Do not remove until pandas 3.0 support is added.
+    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+    warnings.warn(
+        "is_categorical_dtype is deprecated and will be removed in a future "
+        "version. Use isinstance(dtype, cudf.CategoricalDtype) instead",
+        DeprecationWarning,
+    )
+    return _is_categorical_dtype(obj)
 
 
 def is_list_dtype(obj):
@@ -995,7 +1059,10 @@ def is_list_dtype(obj):
         or type(obj) is cudf.core.column.ListColumn
         or obj is cudf.core.column.ListColumn
         or (isinstance(obj, str) and obj == cudf.core.dtypes.ListDtype.name)
-        or (hasattr(obj, "dtype") and is_list_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.ListDtype)
+        )
     )
 
 
@@ -1021,7 +1088,10 @@ def is_struct_dtype(obj):
         isinstance(obj, cudf.core.dtypes.StructDtype)
         or obj is cudf.core.dtypes.StructDtype
         or (isinstance(obj, str) and obj == cudf.core.dtypes.StructDtype.name)
-        or (hasattr(obj, "dtype") and is_struct_dtype(obj.dtype))
+        or (
+            hasattr(obj, "dtype")
+            and isinstance(obj.dtype, cudf.core.dtypes.StructDtype)
+        )
     )
 
 
@@ -1045,6 +1115,29 @@ def is_decimal_dtype(obj):
     )
 
 
+def _is_interval_dtype(obj):
+    return (
+        isinstance(
+            obj,
+            (
+                cudf.core.dtypes.IntervalDtype,
+                pd.IntervalDtype,
+            ),
+        )
+        or obj is cudf.core.dtypes.IntervalDtype
+        or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
+        or (
+            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
+        )
+        or (
+            isinstance(
+                getattr(obj, "dtype", None),
+                (pd.IntervalDtype, cudf.core.dtypes.IntervalDtype),
+            )
+        )
+    )
+
+
 def is_interval_dtype(obj):
     """Check whether an array-like or dtype is of the interval dtype.
 
@@ -1058,23 +1151,12 @@ def is_interval_dtype(obj):
     bool
         Whether or not the array-like or dtype is of the interval dtype.
     """
-    # TODO: Should there be any branch in this function that calls
-    # pd.api.types.is_interval_dtype?
-    return (
-        isinstance(
-            obj,
-            (
-                cudf.core.dtypes.IntervalDtype,
-                pd.core.dtypes.dtypes.IntervalDtype,
-            ),
-        )
-        or obj is cudf.core.dtypes.IntervalDtype
-        or (isinstance(obj, cudf.core.index.BaseIndex) and obj._is_interval())
-        or (
-            isinstance(obj, str) and obj == cudf.core.dtypes.IntervalDtype.name
-        )
-        or (hasattr(obj, "dtype") and is_interval_dtype(obj.dtype))
+    warnings.warn(
+        "is_interval_dtype is deprecated and will be removed in a "
+        "future version. Use `isinstance(dtype, cudf.IntervalDtype)` instead",
+        DeprecationWarning,
     )
+    return _is_interval_dtype(obj)
 
 
 def is_decimal32_dtype(obj):

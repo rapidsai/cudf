@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 """Benchmarks of DataFrame methods."""
 
@@ -70,6 +70,40 @@ def bench_sample(benchmark, dataframe, axis, frac, random_state):
     benchmark(
         dataframe.sample, frac=frac, axis=axis, random_state=random_state
     )
+
+
+@benchmark_with_object(cls="dataframe", dtype="int")
+@pytest.mark.parametrize("frac", [0, 0.25, 0.5, 0.75, 1])
+def bench_iloc_getitem_indices(benchmark, dataframe, frac):
+    rs = numpy.random.RandomState(seed=42)
+    n = int(len(dataframe) * frac)
+    values = rs.choice(len(dataframe), size=n, replace=False)
+    benchmark(dataframe.iloc.__getitem__, values)
+
+
+@benchmark_with_object(cls="dataframe", dtype="int")
+@pytest.mark.parametrize("frac", [0, 0.25, 0.5, 0.75, 1])
+def bench_iloc_getitem_mask(benchmark, dataframe, frac):
+    rs = numpy.random.RandomState(seed=42)
+    n = int(len(dataframe) * frac)
+    values = rs.choice(len(dataframe), size=n, replace=False)
+    mask = numpy.zeros(len(dataframe), dtype=bool)
+    mask[values] = True
+    benchmark(dataframe.iloc.__getitem__, mask)
+
+
+@benchmark_with_object(cls="dataframe", dtype="int")
+@pytest.mark.parametrize(
+    "slice",
+    [slice(None), slice(0, 0, 1), slice(1, None, 10), slice(None, -1, -1)],
+)
+def bench_iloc_getitem_slice(benchmark, dataframe, slice):
+    benchmark(dataframe.iloc.__getitem__, slice)
+
+
+@benchmark_with_object(cls="dataframe", dtype="int")
+def bench_iloc_getitem_scalar(benchmark, dataframe):
+    benchmark(dataframe.iloc.__getitem__, len(dataframe) // 2)
 
 
 @benchmark_with_object(cls="dataframe", dtype="int", nulls=False, cols=6)
@@ -144,6 +178,8 @@ def bench_nsmallest(benchmark, dataframe, num_cols_to_sort, n):
     benchmark(dataframe.nsmallest, n, by)
 
 
-@pytest_cases.parametrize_with_cases("dataframe, cond, other", prefix="where")
+@pytest_cases.parametrize_with_cases(
+    "dataframe, cond, other", prefix="where", cases="cases_dataframe"
+)
 def bench_where(benchmark, dataframe, cond, other):
     benchmark(dataframe.where, cond, other)

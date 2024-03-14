@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,7 @@ namespace {
  */
 template <typename FloatType>
 struct string_to_float_fn {
-  const column_device_view strings_column;  // strings to convert
+  column_device_view const strings_column;  // strings to convert
 
   __device__ FloatType operator()(size_type idx)
   {
@@ -91,26 +91,28 @@ struct dispatch_to_floats_fn {
 }  // namespace
 
 // This will convert a strings column into any float column type.
-std::unique_ptr<column> to_floats(strings_column_view const& strings,
+std::unique_ptr<column> to_floats(strings_column_view const& input,
                                   data_type output_type,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(output_type, 0);
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  size_type strings_count = input.size();
+  if (strings_count == 0) {
+    return make_numeric_column(output_type, 0, mask_state::UNALLOCATED, stream);
+  }
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
   // create float output column copying the strings null-mask
   auto results      = make_numeric_column(output_type,
                                      strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
   auto results_view = results->mutable_view();
   // fill output column with floats
   type_dispatcher(output_type, dispatch_to_floats_fn{}, d_strings, results_view, stream);
-  results->set_null_count(strings.null_count());
+  results->set_null_count(input.null_count());
   return results;
 }
 
@@ -118,12 +120,13 @@ std::unique_ptr<column> to_floats(strings_column_view const& strings,
 
 // external API
 
-std::unique_ptr<column> to_floats(strings_column_view const& strings,
+std::unique_ptr<column> to_floats(strings_column_view const& input,
                                   data_type output_type,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::to_floats(strings, output_type, cudf::get_default_stream(), mr);
+  return detail::to_floats(input, output_type, stream, mr);
 }
 
 namespace detail {
@@ -147,9 +150,9 @@ struct ftos_converter {
   static constexpr double lower_limit = 0.0001;      // printf uses scientific notation below this
   // Tables for doing normalization: converting to exponent form
   // IEEE double float has maximum exponent of 305 so these should cover everything
-  const double upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
-  const double lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
-  const double blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
+  double const upper10[9]  = {10, 100, 10000, 1e8, 1e16, 1e32, 1e64, 1e128, 1e256};
+  double const lower10[9]  = {.1, .01, .0001, 1e-8, 1e-16, 1e-32, 1e-64, 1e-128, 1e-256};
+  double const blower10[9] = {1.0, .1, .001, 1e-7, 1e-15, 1e-31, 1e-63, 1e-127, 1e-255};
 
   // utility for quickly converting known integer range to character array
   __device__ char* int2str(int value, char* output)
@@ -284,7 +287,7 @@ struct ftos_converter {
       while (pb != buffer)  // reverses the digits
         *ptr++ = *--pb;     // e.g. 54321 -> 12345
     } else
-      *ptr++ = '0';         // always include at least .0
+      *ptr++ = '0';  // always include at least .0
     // exponent
     if (exp10) {
       *ptr++ = 'e';
@@ -310,7 +313,7 @@ struct ftos_converter {
   {
     if (std::isnan(value)) return 3;  // NaN
     bool bneg = false;
-    if (signbit(value)) {             // handles -0.0 too
+    if (signbit(value)) {  // handles -0.0 too
       value = -value;
       bneg  = true;
     }
@@ -337,7 +340,7 @@ struct ftos_converter {
       ++count;  // always include .0
     // exponent
     if (exp10) {
-      count += 2;                  // 'e±'
+      count += 2;  // 'e±'
       if (exp10 < 0) exp10 = -exp10;
       count += (int)(exp10 < 10);  // padding
       while (exp10 > 0) {
@@ -405,7 +408,7 @@ struct dispatch_from_floats_fn {
 
     return make_strings_column(strings_count,
                                std::move(offsets),
-                               std::move(chars),
+                               chars.release(),
                                floats.null_count(),
                                std::move(null_mask));
   }
@@ -436,48 +439,51 @@ std::unique_ptr<column> from_floats(column_view const& floats,
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> from_floats(column_view const& floats, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> from_floats(column_view const& floats,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::from_floats(floats, cudf::get_default_stream(), mr);
+  return detail::from_floats(floats, stream, mr);
 }
 
 namespace detail {
-std::unique_ptr<column> is_float(strings_column_view const& strings,
+std::unique_ptr<column> is_float(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
   // check strings for valid float chars
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings.size()),
+                    thrust::make_counting_iterator<size_type>(input.size()),
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
                       return is_float(d_column.element<string_view>(idx));
                     });
-  results->set_null_count(strings.null_count());
+  results->set_null_count(input.null_count());
   return results;
 }
 
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> is_float(strings_column_view const& strings,
+std::unique_ptr<column> is_float(strings_column_view const& input,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_float(strings, cudf::get_default_stream(), mr);
+  return detail::is_float(input, stream, mr);
 }
 
 }  // namespace strings

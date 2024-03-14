@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/column/column.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
@@ -258,6 +259,22 @@ cudf::size_type inplace_bitmask_and(device_span<bitmask_type> dest_mask,
                                     host_span<size_type const> masks_begin_bits,
                                     size_type mask_size_bits,
                                     rmm::cuda_stream_view stream);
+
+/**
+ * @brief Recursively set valid null masks for all children.
+ *
+ * This function applies all valid null masks to the output column if input column satisfies
+ * `nullable() == true` condition
+ *
+ * @param input input column to check for nullability
+ * @param output output column to mirror nullability of input
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+void set_all_valid_null_masks(column_view const& input,
+                              column& output,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,18 +46,20 @@ namespace dictionary {
  * Null entries from the input column are copied to the output column.
  * No new null entries are created by this operation.
  *
- * @throw cudf_logic_error if the new_keys type does not match the keys type in
+ * @throw cudf::logic_error if the new_keys type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf_logic_error if the new_keys contain nulls.
+ * @throw cudf::logic_error if the new_keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
- * @param new_keys New keys to incorporate into the dictionary_column
+ * @param new_keys New keys to incorporate into the dictionary_column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> add_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& new_keys,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -76,18 +78,20 @@ std::unique_ptr<column> add_keys(
  * @endcode
  * Note that "a" has been removed so output row[2] becomes null.
  *
- * @throw cudf_logic_error if the keys_to_remove type does not match the keys type in
+ * @throw cudf::logic_error if the keys_to_remove type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf_logic_error if the keys_to_remove contain nulls.
+ * @throw cudf::logic_error if the keys_to_remove contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
- * @param keys_to_remove The keys to remove from the dictionary_column
+ * @param keys_to_remove The keys to remove from the dictionary_column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> remove_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys_to_remove,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -103,11 +107,13 @@ std::unique_ptr<column> remove_keys(
  * @endcode
  *
  * @param dictionary_column Existing dictionary column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> remove_unused_keys(
   dictionary_column_view const& dictionary_column,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -128,18 +134,20 @@ std::unique_ptr<column> remove_unused_keys(
  * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], valids=[1, 0, 1, 1, 1]}
  * @endcode
  *
- * @throw cudf_logic_error if the keys type does not match the keys type in
+ * @throw cudf::logic_error if the keys type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf_logic_error if the keys contain nulls.
+ * @throw cudf::logic_error if the keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to use for the output column. Must not contain nulls.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
  */
 std::unique_ptr<column> set_keys(
   dictionary_column_view const& dictionary_column,
   column_view const& keys,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -149,11 +157,13 @@ std::unique_ptr<column> set_keys(
  * The result is a vector of new dictionaries with a common set of keys.
  *
  * @param input Dictionary columns to match keys.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary columns.
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
   cudf::host_span<dictionary_column_view const> input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

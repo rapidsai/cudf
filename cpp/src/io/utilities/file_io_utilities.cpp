@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,14 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 #include "file_io_utilities.hpp"
+
+#include "io/utilities/config_utils.hpp"
+
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <io/utilities/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <dlfcn.h>
+#include <errno.h>
+#include <string.h>
 
+#include <filesystem>
 #include <fstream>
 #include <numeric>
 
@@ -28,23 +34,42 @@ namespace cudf {
 namespace io {
 namespace detail {
 
-size_t get_file_size(int file_descriptor)
+[[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create)
+{
+  // save errno because it may be overwritten by subsequent calls
+  auto const err = errno;
+
+  if (auto const path = std::filesystem::path(filepath); is_create) {
+    CUDF_EXPECTS(std::filesystem::exists(path.parent_path()),
+                 "Cannot create output file; directory does not exist");
+
+  } else {
+    CUDF_EXPECTS(std::filesystem::exists(path), "Cannot open file; it does not exist");
+  }
+
+  std::array<char, 1024> error_msg_buffer;
+  auto const error_msg = strerror_r(err, error_msg_buffer.data(), 1024);
+  CUDF_FAIL("Cannot open file; failed with errno: " + std::string{error_msg});
+}
+
+[[nodiscard]] int open_file_checked(std::string const& filepath, int flags, mode_t mode)
+{
+  auto const fd = open(filepath.c_str(), flags, mode);
+  if (fd == -1) { throw_on_file_open_failure(filepath, flags & O_CREAT); }
+
+  return fd;
+}
+
+[[nodiscard]] size_t get_file_size(int file_descriptor)
 {
   struct stat st;
   CUDF_EXPECTS(fstat(file_descriptor, &st) != -1, "Cannot query file size");
   return static_cast<size_t>(st.st_size);
 }
 
-file_wrapper::file_wrapper(std::string const& filepath, int flags)
-  : fd(open(filepath.c_str(), flags)), _size{get_file_size(fd)}
-{
-  CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
-}
-
 file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
-  : fd(open(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
+  : fd(open_file_checked(filepath.c_str(), flags, mode)), _size{get_file_size(fd)}
 {
-  CUDF_EXPECTS(fd != -1, "Cannot open file " + filepath);
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
@@ -288,8 +313,9 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      auto const cufile_in = std::make_unique<cufile_input_impl>(filepath);
+      auto cufile_in = std::make_unique<cufile_input_impl>(filepath);
       CUDF_LOG_INFO("File successfully opened for reading with GDS.");
+      return cufile_in;
     } catch (...) {
       if (cufile_integration::is_always_enabled()) {
         CUDF_LOG_ERROR(
@@ -302,15 +328,16 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
         "buffer (possible performance impact).");
     }
   }
-  return nullptr;
+  return {};
 }
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
   if (cufile_integration::is_gds_enabled()) {
     try {
-      auto const cufile_out = std::make_unique<cufile_output_impl>(filepath);
+      auto cufile_out = std::make_unique<cufile_output_impl>(filepath);
       CUDF_LOG_INFO("File successfully opened for writing with GDS.");
+      return cufile_out;
     } catch (...) {
       if (cufile_integration::is_always_enabled()) {
         CUDF_LOG_ERROR(
@@ -323,7 +350,7 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
         "buffer (possible performance impact).");
     }
   }
-  return nullptr;
+  return {};
 }
 
 std::vector<file_io_slice> make_file_io_slices(size_t size, size_t max_slice_size)

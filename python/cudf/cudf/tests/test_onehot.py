@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from string import ascii_lowercase
 
@@ -24,8 +24,8 @@ pytestmark = pytest.mark.spilling
 )
 @pytest.mark.parametrize("dtype", ["bool", "uint8"])
 def test_get_dummies(data, index, dtype):
-    gdf = cudf.DataFrame({"x": data}, index=index)
     pdf = pd.DataFrame({"x": data}, index=index)
+    gdf = cudf.from_pandas(pdf)
 
     encoded_expected = pd.get_dummies(pdf, prefix="test", dtype=dtype)
     encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=dtype)

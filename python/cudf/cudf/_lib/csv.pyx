@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -35,9 +35,9 @@ from cudf._lib.cpp.io.csv cimport (
     read_csv as cpp_read_csv,
     write_csv as cpp_write_csv,
 )
+from cudf._lib.cpp.io.data_sink cimport data_sink
 from cudf._lib.cpp.io.types cimport (
     compression_type,
-    data_sink,
     quote_style,
     sink_info,
     source_info,
@@ -262,7 +262,7 @@ cdef csv_reader_options make_csv_reader_options(
         elif (
             cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
-                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+                np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
             c_dtypes_list.reserve(1)
@@ -434,19 +434,19 @@ def read_csv(
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                if cudf.api.types.is_categorical_dtype(v):
+                if cudf.api.types._is_categorical_dtype(v):
                     df._data[str(k)] = df._data[str(k)].astype(v)
         elif (
             cudf.api.types.is_scalar(dtype) or
             isinstance(dtype, (
-                np.dtype, pd.core.dtypes.dtypes.ExtensionDtype, type
+                np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
-            if cudf.api.types.is_categorical_dtype(dtype):
+            if cudf.api.types._is_categorical_dtype(dtype):
                 df = df.astype(dtype)
         elif isinstance(dtype, abc.Collection):
             for index, col_dtype in enumerate(dtype):
-                if cudf.api.types.is_categorical_dtype(col_dtype):
+                if cudf.api.types._is_categorical_dtype(col_dtype):
                     col_name = df._data.names[index]
                     df._data[col_name] = df._data[col_name].astype(col_dtype)
 
@@ -456,8 +456,15 @@ def read_csv(
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
         if isinstance(index_col, int):
-            df = df.set_index(df._data.select_by_index(index_col).names[0])
-            if names is None:
+            index_col_name = df._data.select_by_index(index_col).names[0]
+            df = df.set_index(index_col_name)
+            if isinstance(index_col_name, str) and \
+                    names is None and header in ("infer",):
+                if index_col_name.startswith("Unnamed:"):
+                    # TODO: Try to upstream it to libcudf
+                    # csv reader in future
+                    df._index.name = None
+            elif names is None:
                 df._index.name = index_col
         else:
             df = df.set_index(index_col)
@@ -543,11 +550,11 @@ def write_csv(
         )
 
 
-cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
+cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
-    if cudf.api.types.is_categorical_dtype(dtype):
+    if cudf.api.types._is_categorical_dtype(dtype):
         if isinstance(dtype, str):
             dtype = "str"
         else:

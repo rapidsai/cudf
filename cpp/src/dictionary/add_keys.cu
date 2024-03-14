@@ -130,10 +130,11 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
 
 std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column,
                                  column_view const& keys,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::add_keys(dictionary_column, keys, cudf::get_default_stream(), mr);
+  return detail::add_keys(dictionary_column, keys, stream, mr);
 }
 
 }  // namespace dictionary

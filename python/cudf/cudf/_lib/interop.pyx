@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from cpython cimport pycapsule
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -18,7 +18,8 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
-from cudf.api.types import is_list_dtype, is_struct_dtype
+from cudf.core.buffer import acquire_spill_lock
+from cudf.core.dtypes import ListDtype, StructDtype
 
 
 def from_dlpack(dlpack_capsule):
@@ -97,7 +98,7 @@ cdef vector[column_metadata] gather_metadata(object cols_dtypes) except *:
     if cols_dtypes is not None:
         for idx, (col_name, col_dtype) in enumerate(cols_dtypes):
             cpp_metadata.push_back(column_metadata(col_name.encode()))
-            if is_struct_dtype(col_dtype) or is_list_dtype(col_dtype):
+            if isinstance(col_dtype, (ListDtype, StructDtype)):
                 _set_col_children_metadata(col_dtype, cpp_metadata[idx])
     else:
         raise TypeError(
@@ -106,19 +107,20 @@ cdef vector[column_metadata] gather_metadata(object cols_dtypes) except *:
         )
     return cpp_metadata
 
+
 cdef _set_col_children_metadata(dtype,
                                 column_metadata& col_meta):
 
     cdef column_metadata element_metadata
 
-    if is_struct_dtype(dtype):
+    if isinstance(dtype, StructDtype):
         for name, value in dtype.fields.items():
             element_metadata = column_metadata(name.encode())
             _set_col_children_metadata(
                 value, element_metadata
             )
             col_meta.children_meta.push_back(element_metadata)
-    elif is_list_dtype(dtype):
+    elif isinstance(dtype, ListDtype):
         col_meta.children_meta.reserve(2)
         # Offsets - child 0
         col_meta.children_meta.push_back(column_metadata())
@@ -133,6 +135,7 @@ cdef _set_col_children_metadata(dtype,
         col_meta.children_meta.push_back(column_metadata())
 
 
+@acquire_spill_lock()
 def to_arrow(list source_columns, object column_dtypes):
     """Convert a list of columns from
     cudf Frame to a PyArrow Table.
@@ -158,6 +161,7 @@ def to_arrow(list source_columns, object column_dtypes):
     return pyarrow_wrap_table(cpp_arrow_table)
 
 
+@acquire_spill_lock()
 def from_arrow(object input_table):
     """Convert from PyArrow Table to a list of columns.
 

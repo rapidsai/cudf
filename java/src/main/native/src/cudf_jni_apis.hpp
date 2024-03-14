@@ -100,7 +100,8 @@ jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups,
 /**
  * Allocate a HostMemoryBuffer
  */
-jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned);
+jobject allocate_host_buffer(JNIEnv *env, jlong amount, jboolean prefer_pinned,
+                             jobject host_memory_allocator);
 
 /**
  * Get the address of a HostMemoryBuffer
@@ -132,6 +133,14 @@ void auto_set_device(JNIEnv *env);
  * operations occurring on other streams.
  */
 void device_memset_async(JNIEnv *env, rmm::device_buffer &buf, char value);
+
+//
+// DataSource APIs
+//
+
+bool cache_data_source_jni(JNIEnv *env);
+
+void release_data_source_jni(JNIEnv *env);
 
 } // namespace jni
 } // namespace cudf

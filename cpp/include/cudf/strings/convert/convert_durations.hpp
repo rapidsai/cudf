@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,16 +65,18 @@ namespace strings {
  *
  * @throw cudf::logic_error if duration_type is not a duration type.
  *
- * @param strings Strings instance for this operation.
- * @param duration_type The duration type used for creating the output column.
- * @param format String specifying the duration format in strings.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New duration column.
+ * @param input Strings instance for this operation
+ * @param duration_type The duration type used for creating the output column
+ * @param format String specifying the duration format in strings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return New duration column
  */
 std::unique_ptr<column> to_durations(
-  strings_column_view const& strings,
+  strings_column_view const& input,
   data_type duration_type,
   std::string_view format,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -115,15 +117,17 @@ std::unique_ptr<column> to_durations(
  *
  * @throw cudf::logic_error if `durations` column parameter is not a duration type.
  *
- * @param durations Duration values to convert.
+ * @param durations Duration values to convert
  * @param format The string specifying output format.
- *        Default format is ""%d days %H:%M:%S".
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return New strings column with formatted durations.
+ *        Default format is ""%D days %H:%M:%S".
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return New strings column with formatted durations
  */
 std::unique_ptr<column> from_durations(
   column_view const& durations,
   std::string_view format             = "%D days %H:%M:%S",
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

@@ -1,4 +1,6 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+
+import warnings
 
 from cudf.core.buffer import acquire_spill_lock
 
@@ -10,6 +12,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.filling cimport calendrical_month_sequence
+from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
 
@@ -84,19 +87,35 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
     cdef libcudf_datetime.rounding_frequency freq_val
 
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+    old_to_new_freq_map = {
+        "H": "h",
+        "N": "ns",
+        "T": "min",
+        "L": "ms",
+        "U": "us",
+        "S": "s",
+    }
+    if freq in old_to_new_freq_map:
+        warnings.warn(
+            f"FutureWarning: {freq} is deprecated and will be "
+            "removed in a future version, please use "
+            f"{old_to_new_freq_map[freq]} instead.",
+            FutureWarning
+        )
+        freq = old_to_new_freq_map.get(freq)
     if freq == "D":
         freq_val = libcudf_datetime.rounding_frequency.DAY
-    elif freq == "H":
+    elif freq == "h":
         freq_val = libcudf_datetime.rounding_frequency.HOUR
-    elif freq in ("T", "min"):
+    elif freq == "min":
         freq_val = libcudf_datetime.rounding_frequency.MINUTE
-    elif freq == "S":
+    elif freq == "s":
         freq_val = libcudf_datetime.rounding_frequency.SECOND
-    elif freq in ("L", "ms"):
+    elif freq == "ms":
         freq_val = libcudf_datetime.rounding_frequency.MILLISECOND
-    elif freq in ("U", "us"):
+    elif freq == "us":
         freq_val = libcudf_datetime.rounding_frequency.MICROSECOND
-    elif freq == "N":
+    elif freq == "ns":
         freq_val = libcudf_datetime.rounding_frequency.NANOSECOND
     else:
         raise ValueError(f"Invalid resolution: '{freq}'")
@@ -166,10 +185,11 @@ def date_range(DeviceScalar start, size_type n, offset):
         + offset.kwds.get("months", 0)
     )
 
+    cdef const scalar* c_start = start.c_value.get()
     with nogil:
         c_result = move(calendrical_month_sequence(
             n,
-            start.c_value.get()[0],
+            c_start[0],
             months
         ))
     return Column.from_unique_ptr(move(c_result))

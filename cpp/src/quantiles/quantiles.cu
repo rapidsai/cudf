@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <quantiles/quantiles_util.hpp>
+#include "quantiles/quantiles_util.hpp"
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.cuh>
@@ -28,6 +28,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -44,10 +45,11 @@ std::unique_ptr<table> quantiles(table_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  auto quantile_idx_lookup = [sortmap, interp, size = input.num_rows()] __device__(double q) {
-    auto selector = [sortmap] __device__(auto idx) { return sortmap[idx]; };
-    return detail::select_quantile<size_type>(selector, size, q, interp);
-  };
+  auto quantile_idx_lookup = cuda::proclaim_return_type<size_type>(
+    [sortmap, interp, size = input.num_rows()] __device__(double q) {
+      auto selector = [sortmap] __device__(auto idx) { return sortmap[idx]; };
+      return detail::select_quantile<size_type>(selector, size, q, interp);
+    });
 
   auto const q_device =
     cudf::detail::make_device_uvector_async(q, stream, rmm::mr::get_current_device_resource());

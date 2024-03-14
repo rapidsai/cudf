@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 
 from decimal import Decimal
@@ -12,7 +12,12 @@ import cudf
 from cudf import Series
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import _utils as utils
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, gen_rand
+from cudf.testing._utils import (
+    NUMERIC_TYPES,
+    assert_eq,
+    expect_warning_if,
+    gen_rand,
+)
 
 params_dtype = NUMERIC_TYPES
 
@@ -122,10 +127,8 @@ def test_sum_of_squares(dtype, nelem):
     sr = Series(data)
     df = cudf.DataFrame(sr)
 
-    with pytest.warns(FutureWarning):
-        got = sr.sum_of_squares()
-    with pytest.warns(FutureWarning):
-        got_df = df.sum_of_squares()
+    got = (sr**2).sum()
+    got_df = (df**2).sum()
     expect = (data**2).sum()
 
     if cudf.dtype(dtype).kind in {"u", "i"}:
@@ -158,8 +161,7 @@ def test_sum_of_squares_decimal(dtype):
     data = [str(x) for x in gen_rand("int8", 3) / 10]
 
     expected = pd.Series([Decimal(x) for x in data]).pow(2).sum()
-    with pytest.warns(FutureWarning):
-        got = cudf.Series(data).astype(dtype).sum_of_squares()
+    got = (cudf.Series(data).astype(dtype) ** 2).sum()
 
     assert_eq(expected, got)
 
@@ -309,3 +311,68 @@ def test_categorical_reductions(op):
     psr = gsr.to_pandas()
 
     utils.assert_exceptions_equal(getattr(psr, op), getattr(gsr, op))
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [10, 11, 12]},
+        {"a": [1, 0, 3], "b": [10, 11, 12]},
+        {"a": [1, 2, 3], "b": [10, 11, None]},
+        {
+            "a": [],
+        },
+        {},
+    ],
+)
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_any_all_axis_none(data, op):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = getattr(pdf, op)(axis=None)
+    actual = getattr(gdf, op)(axis=None)
+
+    assert expected == actual
+
+
+@pytest.mark.parametrize(
+    "op",
+    [
+        "sum",
+        "product",
+        "std",
+        "var",
+        "kurt",
+        "kurtosis",
+        "skew",
+        "min",
+        "max",
+        "mean",
+        "median",
+    ],
+)
+def test_reductions_axis_none_warning(op):
+    df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
+    pdf = df.to_pandas()
+    with expect_warning_if(
+        op in {"sum", "product", "std", "var"},
+        FutureWarning,
+    ):
+        actual = getattr(df, op)(axis=None)
+    with expect_warning_if(
+        op in {"sum", "product", "std", "var"},
+        FutureWarning,
+    ):
+        expected = getattr(pdf, op)(axis=None)
+    assert_eq(expected, actual, check_dtype=False)
+
+
+def test_reduction_column_multiindex():
+    idx = cudf.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2)], names=["foo", "bar"]
+    )
+    df = cudf.DataFrame(np.array([[1, 3], [2, 4]]), columns=idx)
+    result = df.mean()
+    expected = df.to_pandas().mean()
+    assert_eq(result, expected)

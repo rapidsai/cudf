@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -89,9 +90,10 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
   // iterator for partition index rotated right by start_partition positions:
   auto rotated_iter_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator<cudf::size_type>(0),
-    [num_partitions, start_partition] __device__(auto index) {
-      return (index + num_partitions - start_partition) % num_partitions;
-    });
+    cuda::proclaim_return_type<cudf::size_type>(
+      [num_partitions, start_partition] __device__(auto index) {
+        return (index + num_partitions - start_partition) % num_partitions;
+      }));
 
   if (num_partitions == nrows) {
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
@@ -131,7 +133,9 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate
     // this composes rotated_iter transform (above) iterator with
     // calculating number of edges of transposed bi-graph:
     auto nedges_iter_begin = thrust::make_transform_iterator(
-      rotated_iter_begin, [nrows] __device__(auto index) { return (index < nrows ? 1 : 0); });
+      rotated_iter_begin,
+      cuda::proclaim_return_type<cudf::size_type>(
+        [nrows] __device__(auto index) { return (index < nrows ? 1 : 0); }));
 
     // offsets (part 2: compute partition offsets):
     rmm::device_uvector<cudf::size_type> partition_offsets(num_partitions, stream);
@@ -205,12 +209,12 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
 
   auto iter_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator<cudf::size_type>(0),
-    [nrows,
-     num_partitions,
-     max_partition_size,
-     num_partitions_max_size,
-     total_max_partitions_size,
-     delta] __device__(auto index0) {
+    cuda::proclaim_return_type<size_type>([nrows,
+                                           num_partitions,
+                                           max_partition_size,
+                                           num_partitions_max_size,
+                                           total_max_partitions_size,
+                                           delta] __device__(auto index0) {
       // rotate original index right by delta positions;
       // this is the effect of applying start_partition:
       //
@@ -230,7 +234,7 @@ std::pair<std::unique_ptr<table>, std::vector<cudf::size_type>> round_robin_part
            : num_partitions_max_size +
                (rotated_index - total_max_partitions_size) / (max_partition_size - 1));
       return num_partitions * index_within_partition + partition_index;
-    });
+    }));
 
   auto uniq_tbl = cudf::detail::gather(
     input, iter_begin, iter_begin + nrows, cudf::out_of_bounds_policy::DONT_CHECK, stream, mr);

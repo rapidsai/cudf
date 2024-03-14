@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ static void bench_extract(nvbench::state& state)
   std::uniform_int_distribution<int> words_dist(0, 999);
   std::vector<std::string> samples(100);  // 100 unique rows of data to reuse
   std::generate(samples.begin(), samples.end(), [&]() {
-    std::string row;                      // build a row of random tokens
+    std::string row;  // build a row of random tokens
     while (static_cast<cudf::size_type>(row.size()) < row_width) {
       row += std::to_string(words_dist(generator)) + " ";
     }
@@ -67,7 +67,7 @@ static void bench_extract(nvbench::state& state)
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
-  auto chars_size = strings_view.chars_size();
+  auto chars_size = strings_view.chars_size(cudf::get_default_stream());
   state.add_element_count(chars_size, "chars_size");            // number of bytes;
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read;
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written

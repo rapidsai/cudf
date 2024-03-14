@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -83,12 +83,8 @@ public final class Table implements AutoCloseable {
    */
   public Table(long[] cudfColumns) {
     assert cudfColumns != null && cudfColumns.length > 0 : "CudfColumns can't be null or empty";
-    this.columns = new ColumnVector[cudfColumns.length];
+    this.columns = ColumnVector.getColumnVectorsFromPointers(cudfColumns);
     try {
-      for (int i = 0; i < cudfColumns.length; i++) {
-        this.columns[i] = new ColumnVector(cudfColumns[i]);
-        cudfColumns[i] = 0;
-      }
       long[] views = new long[columns.length];
       for (int i = 0; i < columns.length; i++) {
         views[i] = columns[i].getNativeView();
@@ -96,7 +92,13 @@ public final class Table implements AutoCloseable {
       nativeHandle = createCudfTableView(views);
       this.rows = columns[0].getRowCount();
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(cudfColumns, this.columns);
+      for (ColumnVector column : columns) {
+        try {
+          column.close();
+        } catch (Throwable s) {
+          t.addSuppressed(s);
+        }
+      }
       throw t;
     }
   }
@@ -233,16 +235,52 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
+  private static native long[] readCSVFromDataSource(String[] columnNames,
+                                       int[] dTypeIds, int[] dTypeScales,
+                                       String[] filterColumnNames,
+                                       int headerRow, byte delim, int quoteStyle, byte quote,
+                                       byte comment, String[] nullValues,
+                                       String[] trueValues, String[] falseValues,
+                                       long dataSourceHandle) throws CudfException;
+
   /**
    * read JSON data and return a pointer to a TableWithMeta object.
    */
-  private static native long readJSON(String[] columnNames,
+  private static native long readJSON(int[] numChildren, String[] columnNames,
                                         int[] dTypeIds, int[] dTypeScales,
                                         String filePath, long address, long length,
-                                        boolean dayFirst, boolean lines) throws CudfException;
+                                        boolean dayFirst, boolean lines,
+                                        boolean recoverWithNulls,
+                                        boolean normalizeSingleQuotes,
+                                        boolean normalizeWhitespace,
+                                        boolean mixedTypesAsStrings,
+                                        boolean keepStringQuotes) throws CudfException;
 
+  private static native long readJSONFromDataSource(int[] numChildren, String[] columnNames,
+                                      int[] dTypeIds, int[] dTypeScales,
+                                      boolean dayFirst, boolean lines,
+                                      boolean recoverWithNulls,
+                                      boolean normalizeSingleQuotes,
+                                      boolean normalizeWhitespace,
+                                      boolean mixedTypesAsStrings,
+                                      boolean keepStringQuotes,
+                                      long dsHandle) throws CudfException;
+
+  private static native long readAndInferJSONFromDataSource(boolean dayFirst, boolean lines,
+                                      boolean recoverWithNulls,
+                                      boolean normalizeSingleQuotes,
+                                      boolean normalizeWhitespace,
+                                      boolean mixedTypesAsStrings,
+                                      boolean keepStringQuotes,
+                                      long dsHandle) throws CudfException;
   private static native long readAndInferJSON(long address, long length,
-      boolean dayFirst, boolean lines) throws CudfException;
+                                              boolean dayFirst,
+                                              boolean lines,
+                                              boolean recoverWithNulls,
+                                              boolean normalizeSingleQuotes,
+                                              boolean normalizeWhitespace,
+                                              boolean mixedTypesAsStrings,
+                                              boolean keepStringQuotes) throws CudfException;
 
   /**
    * Read in Parquet formatted data.
@@ -257,6 +295,10 @@ public final class Table implements AutoCloseable {
   private static native long[] readParquet(String[] filterColumnNames, boolean[] binaryToString, String filePath,
                                            long address, long length, int timeUnit) throws CudfException;
 
+  private static native long[] readParquetFromDataSource(String[] filterColumnNames,
+                                                         boolean[] binaryToString, int timeUnit,
+                                                         long dataSourceHandle) throws CudfException;
+
   /**
    * Read in Avro formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
@@ -267,6 +309,9 @@ public final class Table implements AutoCloseable {
    */
   private static native long[] readAvro(String[] filterColumnNames, String filePath,
                                         long address, long length) throws CudfException;
+
+  private static native long[] readAvroFromDataSource(String[] filterColumnNames,
+                                                      long dataSourceHandle) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -334,7 +379,9 @@ public final class Table implements AutoCloseable {
                                                      boolean[] isBinaryValues,
                                                      boolean[] hasParquetFieldIds,
                                                      int[] parquetFieldIds,
-                                                     HostBufferConsumer consumer) throws CudfException;
+                                                     HostBufferConsumer consumer,
+                                                     HostMemoryAllocator hostMemoryAllocator
+                                                     ) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -366,6 +413,11 @@ public final class Table implements AutoCloseable {
                                        String filePath, long address, long length,
                                        boolean usingNumPyTypes, int timeUnit,
                                        String[] decimal128Columns) throws CudfException;
+
+  private static native long[] readORCFromDataSource(String[] filterColumnNames,
+                                                     boolean usingNumPyTypes, int timeUnit,
+                                                     String[] decimal128Columns,
+                                                     long dataSourceHandle) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
@@ -417,7 +469,9 @@ public final class Table implements AutoCloseable {
                                                  int compression,
                                                  int[] precisions,
                                                  boolean[] isMapValues,
-                                                 HostBufferConsumer consumer) throws CudfException;
+                                                 HostBufferConsumer consumer,
+                                                 HostMemoryAllocator hostMemoryAllocator
+                                                 ) throws CudfException;
 
   /**
    * Write out a table to an open handle.
@@ -445,10 +499,12 @@ public final class Table implements AutoCloseable {
    * Setup everything to write Arrow IPC formatted data to a buffer.
    * @param columnNames names that correspond to the table columns
    * @param consumer consumer of host buffers produced.
+   * @param hostMemoryAllocator allocator for host memory buffers.
    * @return a handle that is used in later calls to writeArrowIPCChunk and writeArrowIPCEnd.
    */
   private static native long writeArrowIPCBufferBegin(String[] columnNames,
-                                                      HostBufferConsumer consumer);
+                                                      HostBufferConsumer consumer,
+                                                      HostMemoryAllocator hostMemoryAllocator);
 
   /**
    * Convert a cudf table to an arrow table handle.
@@ -543,6 +599,8 @@ public final class Table implements AutoCloseable {
       int[] minPeriods,
       int[] preceding,
       int[] following,
+      boolean[] unboundedPreceding,
+      boolean[] unboundedFollowing,
       boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices, int[] orderByIndices, boolean[] isOrderByAscending,
@@ -562,6 +620,9 @@ public final class Table implements AutoCloseable {
   private static native long[] leftJoinGatherMaps(long leftKeys, long rightKeys,
                                                   boolean compareNullsEqual) throws CudfException;
 
+  private static native long[] leftDistinctJoinGatherMap(long leftKeys, long rightKeys,
+                                                         boolean compareNullsEqual) throws CudfException;
+
   private static native long leftJoinRowCount(long leftTable, long rightHashJoin) throws CudfException;
 
   private static native long[] leftHashJoinGatherMaps(long leftTable, long rightHashJoin) throws CudfException;
@@ -571,6 +632,9 @@ public final class Table implements AutoCloseable {
 
   private static native long[] innerJoinGatherMaps(long leftKeys, long rightKeys,
                                                    boolean compareNullsEqual) throws CudfException;
+
+  private static native long[] innerDistinctJoinGatherMaps(long leftKeys, long rightKeys,
+                                                           boolean compareNullsEqual) throws CudfException;
 
   private static native long innerJoinRowCount(long table, long hashJoin) throws CudfException;
 
@@ -714,14 +778,6 @@ public final class Table implements AutoCloseable {
                                              long targetTableHandle)
                                              throws CudfException;
 
-  private static native long[] convertToRows(long nativeHandle);
-
-  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
-
-  private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
-
-  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
-
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
   private static native long[] repeatColumnCount(long tableHandle,
@@ -751,6 +807,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
+  private static native int distinctCount(long handle, boolean nullsEqual);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -773,8 +831,11 @@ public final class Table implements AutoCloseable {
    * @return the file parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
+    if (schema.hasNestedChildren()) {
+      throw new IllegalArgumentException("CSV does not support nested types");
+    }
     return new Table(
-        readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+        readCSV(schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
             opts.getIncludeColumnNames(), path.getAbsolutePath(),
             0, 0,
             opts.getHeaderRow(),
@@ -815,20 +876,27 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
-                              long len) {
+                              long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readCSV(schema, opts, newBuf, 0, len);
     }
+  }
+
+
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
+                              long len) {
+    return readCSV(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -848,7 +916,10 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
-    return new Table(readCSV(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+    if (schema.hasNestedChildren()) {
+      throw new IllegalArgumentException("CSV does not support nested types");
+    }
+    return new Table(readCSV(schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
         opts.getIncludeColumnNames(), null,
         buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
@@ -859,6 +930,30 @@ public final class Table implements AutoCloseable {
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  public static Table readCSV(Schema schema, CSVOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      if (schema.hasNestedChildren()) {
+        throw new IllegalArgumentException("CSV does not support nested types");
+      }
+      return new Table(readCSVFromDataSource(schema.getFlattenedColumnNames(),
+              schema.getFlattenedTypeIds(),
+              schema.getFlattenedTypeScales(),
+              opts.getIncludeColumnNames(),
+              opts.getHeaderRow(),
+              opts.getDelim(),
+              opts.getQuoteStyle().nativeId,
+              opts.getQuote(),
+              opts.getComment(),
+              opts.getNullValues(),
+              opts.getTrueValues(),
+              opts.getFalseValues(),
+              dsHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dsHandle);
+    }
   }
 
   private static native void writeCSVToFile(long table,
@@ -893,7 +988,9 @@ public final class Table implements AutoCloseable {
                                                    String trueValue,
                                                    String falseValue,
                                                    int quoteStyle,
-                                                   HostBufferConsumer buffer) throws CudfException;
+                                                   HostBufferConsumer buffer,
+                                                   HostMemoryAllocator hostMemoryAllocator
+                                                   ) throws CudfException;
 
   private static native void writeCSVChunkToBuffer(long writerHandle, long tableHandle);
 
@@ -902,7 +999,8 @@ public final class Table implements AutoCloseable {
   private static class CSVTableWriter extends TableWriter {
     private HostBufferConsumer consumer;
 
-    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer) {
+    private CSVTableWriter(CSVWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(startWriteCSVToBuffer(options.getColumnNames(),
           options.getIncludeHeader(),
           options.getRowDelimiter(),
@@ -911,7 +1009,7 @@ public final class Table implements AutoCloseable {
           options.getTrueValue(),
           options.getFalseValue(),
           options.getQuoteStyle().nativeId,
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -936,8 +1034,14 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  public static TableWriter getCSVBufferWriter(CSVWriterOptions options, HostBufferConsumer bufferConsumer) {
-    return new CSVTableWriter(options, bufferConsumer);
+  public static TableWriter getCSVBufferWriter(CSVWriterOptions options,
+      HostBufferConsumer bufferConsumer, HostMemoryAllocator hostMemoryAllocator) {
+    return new CSVTableWriter(options, bufferConsumer, hostMemoryAllocator);
+  }
+
+   public static TableWriter getCSVBufferWriter(CSVWriterOptions options,
+      HostBufferConsumer bufferConsumer) {
+    return getCSVBufferWriter(options, bufferConsumer, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -971,6 +1075,134 @@ public final class Table implements AutoCloseable {
     return readJSON(schema, opts, buffer, 0, buffer.length);
   }
 
+  private static class DidViewChange {
+    ColumnVector changeWasNeeded = null;
+    boolean noChangeNeeded = false;
+
+    public static DidViewChange yes(ColumnVector cv) {
+      DidViewChange ret = new DidViewChange();
+      ret.changeWasNeeded = cv;
+      return ret;
+    }
+
+    public static DidViewChange no() {
+      DidViewChange ret = new DidViewChange();
+      ret.noChangeNeeded = true;
+      return ret;
+    }
+  }
+
+  private static DidViewChange gatherJSONColumns(Schema schema, TableWithMeta.NestedChildren children,
+                                                 ColumnView cv) {
+    // We need to do this recursively to be sure it all matches as expected.
+    // If we run into problems where the data types don't match, we are not
+    // going to fix up the data types. We are only going to reorder the columns.
+    if (schema.getType() == DType.STRUCT) {
+      if (cv.getType() != DType.STRUCT) {
+        // The types don't match so just return the input unchanged...
+        return DidViewChange.no();
+      } else {
+        String[] foundNames = children.getNames();
+        HashMap<String, Integer> indices = new HashMap<>();
+        for (int i = 0; i < foundNames.length; i++) {
+          indices.put(foundNames[i], i);
+        }
+        // We might need to rearrange the columns to match what we want.
+        DType[] types = schema.getChildTypes();
+        String[] neededNames = schema.getColumnNames();
+        ColumnView[] columns = new ColumnView[neededNames.length];
+        try {
+          boolean somethingChanged = false;
+          if (columns.length != foundNames.length) {
+            somethingChanged = true;
+          }
+          for (int i = 0; i < columns.length; i++) {
+            String neededColumnName = neededNames[i];
+            Integer index = indices.get(neededColumnName);
+            if (index != null) {
+              if (schema.getChild(i).isStructOrHasStructDescendant()) {
+                ColumnView child = cv.getChildColumnView(index);
+                boolean shouldCloseChild = true;
+                try {
+                  if (index != i) {
+                    somethingChanged = true;
+                  }
+                  DidViewChange childResult = gatherJSONColumns(schema.getChild(i),
+                      children.getChild(index), child);
+                  if (childResult.noChangeNeeded) {
+                    shouldCloseChild = false;
+                    columns[i] = child;
+                  } else {
+                    somethingChanged = true;
+                    columns[i] = childResult.changeWasNeeded;
+                  }
+                } finally {
+                  if (shouldCloseChild) {
+                    child.close();
+                  }
+                }
+              } else {
+                if (index != i) {
+                  somethingChanged = true;
+                }
+                columns[i] = cv.getChildColumnView(index);
+              }
+            } else {
+              somethingChanged = true;
+              try (Scalar s = Scalar.fromNull(types[i])) {
+                columns[i] = ColumnVector.fromScalar(s, (int) cv.getRowCount());
+              }
+            }
+          }
+          if (somethingChanged) {
+            try (ColumnView ret = new ColumnView(cv.type, cv.rows, Optional.of(cv.nullCount),
+                cv.getValid(), null, columns)) {
+              return DidViewChange.yes(ret.copyToColumnVector());
+            }
+          } else {
+            return DidViewChange.no();
+          }
+        } finally {
+          for (ColumnView c: columns) {
+            if (c != null) {
+              c.close();
+            }
+          }
+        }
+      }
+    } else if (schema.getType() == DType.LIST && cv.getType() == DType.LIST) {
+      if (schema.isStructOrHasStructDescendant()) {
+        String [] childNames = children.getNames();
+        if (childNames.length == 2 &&
+            "offsets".equals(childNames[0]) &&
+            "element".equals(childNames[1])) {
+          try (ColumnView child = cv.getChildColumnView(0)){
+            DidViewChange listResult = gatherJSONColumns(schema.getChild(0),
+                children.getChild(1), child);
+            if (listResult.noChangeNeeded) {
+              return DidViewChange.no();
+            } else {
+              try (ColumnView listView = new ColumnView(cv.type, cv.rows,
+                  Optional.of(cv.nullCount), cv.getValid(), cv.getOffsets(),
+                  new ColumnView[]{listResult.changeWasNeeded})) {
+                return DidViewChange.yes(listView.copyToColumnVector());
+              } finally {
+                listResult.changeWasNeeded.close();
+              }
+            }
+          }
+        }
+      }
+      // Nothing to change so just return the input, but we need to inc a ref count to really
+      // make it work, so for now we are going to turn it into a ColumnVector.
+      return DidViewChange.no();
+    } else {
+      // Nothing to change so just return the input, but we need to inc a ref count to really
+      // make it work, so for now we are going to turn it into a ColumnVector.
+      return DidViewChange.no();
+    }
+  }
+
   private static Table gatherJSONColumns(Schema schema, TableWithMeta twm) {
     String[] neededColumns = schema.getColumnNames();
     if (neededColumns == null || neededColumns.length == 0) {
@@ -982,14 +1214,24 @@ public final class Table implements AutoCloseable {
         indices.put(foundNames[i], i);
       }
       // We might need to rearrange the columns to match what we want.
-      DType[] types = schema.getTypes();
+      DType[] types = schema.getChildTypes();
       ColumnVector[] columns = new ColumnVector[neededColumns.length];
       try (Table tbl = twm.releaseTable()) {
         for (int i = 0; i < columns.length; i++) {
           String neededColumnName = neededColumns[i];
           Integer index = indices.get(neededColumnName);
           if (index != null) {
-            columns[i] = tbl.getColumn(index).incRefCount();
+            if (schema.getChild(i).isStructOrHasStructDescendant()) {
+              DidViewChange gathered = gatherJSONColumns(schema.getChild(i), twm.getChild(index),
+                  tbl.getColumn(index));
+              if (gathered.noChangeNeeded) {
+                columns[i] = tbl.getColumn(index).incRefCount();
+              } else {
+                columns[i] = gathered.changeWasNeeded;
+              }
+            } else {
+              columns[i] = tbl.getColumn(index).incRefCount();
+            }
           } else {
             try (Scalar s = Scalar.fromNull(types[i])) {
               columns[i] = ColumnVector.fromScalar(s, (int)tbl.getRowCount());
@@ -1016,10 +1258,15 @@ public final class Table implements AutoCloseable {
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
     try (TableWithMeta twm = new TableWithMeta(
-            readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+            readJSON(schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
+                    schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(),
                     path.getAbsolutePath(),
                     0, 0,
-                    opts.isDayFirst(), opts.isLines()))) {
+                    opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+                    opts.isNormalizeSingleQuotes(),
+                    opts.isNormalizeWhitespace(),
+                    opts.isMixedTypesAsStrings(),
+                opts.keepStringQuotes()))) {
 
       return gatherJSONColumns(schema, twm);
     }
@@ -1032,20 +1279,26 @@ public final class Table implements AutoCloseable {
    * @param buffer raw UTF8 formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
-                               long len) {
+                               long len, HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readJSON(schema, opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                               long len) {
+    return readJSON(schema, opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1065,7 +1318,32 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new TableWithMeta(readAndInferJSON(buffer.getAddress() + offset, len,
-        opts.isDayFirst(), opts.isLines()));
+        opts.isDayFirst(), opts.isLines(), opts.isRecoverWithNull(),
+        opts.isNormalizeSingleQuotes(),
+        opts.isNormalizeWhitespace(),
+        opts.isMixedTypesAsStrings(), opts.keepStringQuotes()));
+  }
+
+  /**
+   * Read JSON formatted data and infer the column names and schema.
+   * @param opts various JSON parsing options.
+   * @return the data parsed as a table on the GPU and the metadata for the table returned.
+   */
+  public static TableWithMeta readAndInferJSON(JSONOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      TableWithMeta twm = new TableWithMeta(readAndInferJSONFromDataSource(opts.isDayFirst(),
+          opts.isLines(),
+          opts.isRecoverWithNull(),
+          opts.isNormalizeSingleQuotes(),
+          opts.isNormalizeWhitespace(),
+          opts.isMixedTypesAsStrings(),
+          opts.keepStringQuotes(),
+          dsHandle));
+        return twm;
+      } finally {
+        DataSourceHelper.destroyWrapperDataSource(dsHandle);
+      }
   }
 
   /**
@@ -1085,10 +1363,34 @@ public final class Table implements AutoCloseable {
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (TableWithMeta twm = new TableWithMeta(readJSON(schema.getColumnNames(),
-            schema.getTypeIds(), schema.getTypeScales(), null,
-            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines()))) {
+    try (TableWithMeta twm = new TableWithMeta(readJSON(
+            schema.getFlattenedNumChildren(), schema.getFlattenedColumnNames(),
+            schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), null,
+            buffer.getAddress() + offset, len, opts.isDayFirst(), opts.isLines(),
+            opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+            opts.isNormalizeWhitespace(),
+            opts.isMixedTypesAsStrings(), opts.keepStringQuotes()))) {
       return gatherJSONColumns(schema, twm);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param ds the DataSource to read from.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, DataSource ds) {
+    long dsHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try (TableWithMeta twm = new TableWithMeta(readJSONFromDataSource(schema.getFlattenedNumChildren(),
+        schema.getFlattenedColumnNames(), schema.getFlattenedTypeIds(), schema.getFlattenedTypeScales(), opts.isDayFirst(),
+        opts.isLines(), opts.isRecoverWithNull(), opts.isNormalizeSingleQuotes(),
+        opts.isNormalizeWhitespace(),
+        opts.isMixedTypesAsStrings(), opts.keepStringQuotes(), dsHandle))) {
+      return gatherJSONColumns(schema, twm);
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dsHandle);
     }
   }
 
@@ -1137,19 +1439,25 @@ public final class Table implements AutoCloseable {
    * @param buffer raw parquet formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
+  }
+
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
+    return readParquet(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1170,6 +1478,17 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(), opts.getReadBinaryAsString(),
         null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
+  }
+
+  public static Table readParquet(ParquetOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readParquetFromDataSource(opts.getIncludeColumnNames(),
+              opts.getReadBinaryAsString(), opts.timeUnit().typeId.getNativeId(),
+              dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   /**
@@ -1217,18 +1536,25 @@ public final class Table implements AutoCloseable {
    * @param buffer raw Avro formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     assert offset >= 0 && offset < buffer.length;
     assert len <= buffer.length - offset;
     len = len > 0 ? len : buffer.length - offset;
 
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readAvro(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readAvro(AvroOptions opts, byte[] buffer, long offset, long len) {
+    return readAvro(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read Avro formatted data.
@@ -1246,6 +1572,16 @@ public final class Table implements AutoCloseable {
 
     return new Table(readAvro(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len));
+  }
+
+  public static Table readAvro(AvroOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readAvroFromDataSource(opts.getIncludeColumnNames(),
+              dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   /**
@@ -1295,20 +1631,27 @@ public final class Table implements AutoCloseable {
    * @param buffer raw ORC formatted bytes.
    * @param offset the starting offset into buffer.
    * @param len the number of bytes to parse.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return the data parsed as a table on the GPU.
    */
-  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len,
+      HostMemoryAllocator hostMemoryAllocator) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
     assert len > 0;
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
-    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+    try (HostMemoryBuffer newBuf = hostMemoryAllocator.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
       return readORC(opts, newBuf, 0, len);
     }
   }
+
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    return readORC(opts, buffer, offset, len, DefaultHostMemoryAllocator.get());
+  }
+
 
   /**
    * Read ORC formatted data.
@@ -1330,6 +1673,17 @@ public final class Table implements AutoCloseable {
         null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns()));
+  }
+
+  public static Table readORC(ORCOptions opts, DataSource ds) {
+    long dataSourceHandle = DataSourceHelper.createWrapperDataSource(ds);
+    try {
+      return new Table(readORCFromDataSource(opts.getIncludeColumnNames(),
+              opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+              opts.getDecimal128Columns(), dataSourceHandle));
+    } finally {
+      DataSourceHelper.destroyWrapperDataSource(dataSourceHandle);
+    }
   }
 
   private static class ParquetTableWriter extends TableWriter {
@@ -1354,7 +1708,8 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
     }
 
-    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer) {
+    private ParquetTableWriter(ParquetWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(writeParquetBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
@@ -1369,7 +1724,7 @@ public final class Table implements AutoCloseable {
           options.getFlatIsBinary(),
           options.getFlatHasParquetFieldId(),
           options.getFlatParquetFieldId(),
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -1409,11 +1764,18 @@ public final class Table implements AutoCloseable {
    * @param options the parquet writer options.
    * @param consumer a class that will be called when host buffers are ready with parquet
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
   public static TableWriter writeParquetChunked(ParquetWriterOptions options,
+                                                HostBufferConsumer consumer,
+                                                HostMemoryAllocator hostMemoryAllocator) {
+    return new ParquetTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
+  public static TableWriter writeParquetChunked(ParquetWriterOptions options,
                                                 HostBufferConsumer consumer) {
-    return new ParquetTableWriter(options, consumer);
+    return writeParquetChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -1422,10 +1784,12 @@ public final class Table implements AutoCloseable {
    * @param options the Parquet writer options.
    * @param consumer a class that will be called when host buffers are ready with Parquet
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @param columnViews ColumnViews to write to Parquet
    */
   public static void writeColumnViewsToParquet(ParquetWriterOptions options,
                                                HostBufferConsumer consumer,
+                                               HostMemoryAllocator hostMemoryAllocator,
                                                ColumnView... columnViews) {
     assert columnViews != null && columnViews.length > 0 : "ColumnViews can't be null or empty";
     long rows = columnViews[0].getRowCount();
@@ -1444,7 +1808,9 @@ public final class Table implements AutoCloseable {
 
     long nativeHandle = createCudfTableView(viewPointers);
     try {
-      try (ParquetTableWriter writer = new ParquetTableWriter(options, consumer)) {
+      try (
+        ParquetTableWriter writer = new ParquetTableWriter(options, consumer, hostMemoryAllocator)
+      ) {
         long total = 0;
         for (ColumnView cv : columnViews) {
           total += cv.getDeviceMemorySize();
@@ -1454,6 +1820,12 @@ public final class Table implements AutoCloseable {
     } finally {
       deleteCudfTable(nativeHandle);
     }
+  }
+
+  public static void writeColumnViewsToParquet(ParquetWriterOptions options,
+                                               HostBufferConsumer consumer,
+                                               ColumnView... columnViews) {
+    writeColumnViewsToParquet(options, consumer, DefaultHostMemoryAllocator.get(), columnViews);
   }
 
   private static class ORCTableWriter extends TableWriter {
@@ -1473,7 +1845,8 @@ public final class Table implements AutoCloseable {
       this.consumer = null;
     }
 
-    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
+    private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
       super(writeORCBufferBegin(options.getFlatColumnNames(),
           options.getTopLevelChildren(),
           options.getFlatNumChildren(),
@@ -1483,7 +1856,7 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getFlatPrecision(),
           options.getFlatIsMap(),
-          consumer));
+          consumer, hostMemoryAllocator));
       this.consumer = consumer;
     }
 
@@ -1523,10 +1896,16 @@ public final class Table implements AutoCloseable {
    * @param options the ORC writer options.
    * @param consumer a class that will be called when host buffers are ready with ORC
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
+  public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer,
+      HostMemoryAllocator hostMemoryAllocator) {
+    return new ORCTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
-    return new ORCTableWriter(options, consumer);
+    return writeORCChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   private static class ArrowIPCTableWriter extends TableWriter {
@@ -1541,8 +1920,9 @@ public final class Table implements AutoCloseable {
       this.maxChunkSize = options.getMaxChunkSize();
     }
 
-    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer) {
-      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer));
+    private ArrowIPCTableWriter(ArrowIPCWriterOptions options, HostBufferConsumer consumer,
+        HostMemoryAllocator hostMemoryAllocator) {
+      super(writeArrowIPCBufferBegin(options.getColumnNames(), consumer, hostMemoryAllocator));
       this.callback = options.getCallback();
       this.consumer = consumer;
       this.maxChunkSize = options.getMaxChunkSize();
@@ -1590,20 +1970,30 @@ public final class Table implements AutoCloseable {
    * @param options the arrow IPC writer options.
    * @param consumer a class that will be called when host buffers are ready with arrow IPC
    *                 formatted data in them.
+   * @param hostMemoryAllocator allocator for host memory buffers
    * @return a table writer to use for writing out multiple tables.
    */
   public static TableWriter writeArrowIPCChunked(ArrowIPCWriterOptions options,
+                                                 HostBufferConsumer consumer,
+                                                 HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCTableWriter(options, consumer, hostMemoryAllocator);
+  }
+
+  public static TableWriter writeArrowIPCChunked(ArrowIPCWriterOptions options,
                                                  HostBufferConsumer consumer) {
-    return new ArrowIPCTableWriter(options, consumer);
+    return writeArrowIPCChunked(options, consumer, DefaultHostMemoryAllocator.get());
   }
 
   private static class ArrowReaderWrapper implements AutoCloseable {
     private HostBufferProvider provider;
     private HostMemoryBuffer buffer;
+    private final HostMemoryAllocator hostMemoryAllocator;
 
-    private ArrowReaderWrapper(HostBufferProvider provider) {
+    private ArrowReaderWrapper(HostBufferProvider provider,
+        HostMemoryAllocator hostMemoryAllocator) {
       this.provider = provider;
-      buffer = HostMemoryBuffer.allocate(10 * 1024 * 1024, false);
+      this.hostMemoryAllocator = hostMemoryAllocator;
+      buffer = this.hostMemoryAllocator.allocate(10 * 1024 * 1024, false);
     }
 
     // Called From JNI
@@ -1650,8 +2040,9 @@ public final class Table implements AutoCloseable {
       this.callback = options.getCallback();
     }
 
-    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider) {
-      this.provider = new ArrowReaderWrapper(provider);
+    private ArrowIPCStreamedTableReader(ArrowIPCOptions options, HostBufferProvider provider,
+      HostMemoryAllocator hostMemoryAllocator) {
+      this.provider = new ArrowReaderWrapper(provider, hostMemoryAllocator);
       this.handle = readArrowIPCBufferBegin(this.provider);
       this.callback = options.getCallback();
     }
@@ -1714,9 +2105,16 @@ public final class Table implements AutoCloseable {
    * @param provider what will provide the data being read.
    * @return a reader.
    */
+
+  public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
+                                                        HostBufferProvider provider,
+                                                        HostMemoryAllocator hostMemoryAllocator) {
+    return new ArrowIPCStreamedTableReader(options, provider, hostMemoryAllocator);
+  }
+
   public static StreamedTableReader readArrowIPCChunked(ArrowIPCOptions options,
                                                         HostBufferProvider provider) {
-    return new ArrowIPCStreamedTableReader(options, provider);
+    return new ArrowIPCStreamedTableReader(options, provider, DefaultHostMemoryAllocator.get());
   }
 
   /**
@@ -2161,6 +2559,22 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Count how many rows in the table are distinct from one another.
+   * @param nullsEqual if nulls should be considered equal to each other or not.
+   */
+  public int distinctCount(NullEquality nullsEqual) {
+    return distinctCount(nativeHandle, nullsEqual.nullsEqual);
+  }
+
+  /**
+   * Count how many rows in the table are distinct from one another.
+   * Nulls are considered to be equal to one another.
+   */
+  public int distinctCount() {
+    return distinctCount(nativeHandle, true);
+  }
+
+  /**
    * Split a table at given boundaries, but the result of each split has memory that is laid out
    * in a contiguous range of memory.  This allows for us to optimize copying the data in a single
    * operation.
@@ -2521,7 +2935,9 @@ public final class Table implements AutoCloseable {
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
    * instances will be returned that can be used to gather the left and right tables,
    * respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
@@ -2534,6 +2950,33 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         leftJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
     return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes a gather map that can be used to manifest the result of a left equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys.
+   * The left table can be used as-is to produce the left table columns resulting from the join,
+   * i.e.: left table ordering is preserved in the join result, so no gather map is required for
+   * the left table. The resulting gather map can be applied to the right table to produce the
+   * right table columns resulting from the join. It is assumed this table instance holds the
+   * key columns from the left table, and the table argument represents the key columns from the
+   * right table. A {@link GatherMap} instance will be returned that can be used to gather the
+   * right table and that result combined with the left table to produce a left outer join result.
+   *
+   * It is the responsibility of the caller to close the resulting gather map instance.
+   *
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return right table gather map
+   */
+  public GatherMap leftDistinctJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        leftDistinctJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -2557,7 +3000,9 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @return left and right table gather maps
    */
@@ -2576,11 +3021,15 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #leftJoinRowCount(HashJoin)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @param outputRowCount number of output rows in the join result
    * @return left and right table gather maps
@@ -2614,7 +3063,9 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightTable the right side table of the join in the join
    * @param condition conditional expression to evaluate during the join
    * @return left and right table gather maps
@@ -2633,11 +3084,15 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightTable the right side table of the join in the join
    * @param condition conditional expression to evaluate during the join
    * @param outputRowCount number of output rows in the join result
@@ -2686,7 +3141,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -2713,10 +3170,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the left join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedLeftJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -2746,18 +3206,44 @@ public final class Table implements AutoCloseable {
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
    * instances will be returned that can be used to gather the left and right tables,
    * respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
   public GatherMap[] innerJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
         innerJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
+    return buildJoinGatherMaps(gatherMapData);
+  }
+
+  /**
+   * Computes the gather maps that can be used to manifest the result of an inner equi-join between
+   * two tables where the right table is guaranteed to not contain any duplicated join keys. It is
+   * assumed this table instance holds the key columns from the left table, and the table argument
+   * represents the key columns from the right table. Two {@link GatherMap} instances will be
+   * returned that can be used to gather the left and right tables, respectively, to produce the
+   * result of the inner join.
+   *
+   * It is the responsibility of the caller to close the resulting gather map instances.
+   *
+   * @param rightKeys join key columns from the right table
+   * @param compareNullsEqual true if null key values should match otherwise false
+   * @return left and right table gather maps
+   */
+  public GatherMap[] innerDistinctJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
+    if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
+          "rightKeys: " + rightKeys.getNumberOfColumns());
+    }
+    long[] gatherMapData =
+        innerDistinctJoinGatherMaps(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
     return buildJoinGatherMaps(gatherMapData);
   }
 
@@ -2768,7 +3254,7 @@ public final class Table implements AutoCloseable {
    */
   public long innerJoinRowCount(HashJoin otherHash) {
     if (getNumberOfColumns() != otherHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "otherKeys: " + otherHash.getNumberOfColumns());
     }
     return innerJoinRowCount(getNativeView(), otherHash.getNativeView());
@@ -2780,13 +3266,15 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @return left and right table gather maps
    */
   public GatherMap[] innerJoinGatherMaps(HashJoin rightHash) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = innerHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
@@ -2799,18 +3287,22 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #innerJoinRowCount(HashJoin)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @param outputRowCount number of output rows in the join result
    * @return left and right table gather maps
    */
   public GatherMap[] innerJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = innerHashJoinGatherMapsWithCount(getNativeView(),
@@ -2838,7 +3330,9 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightTable the right side table of the join
    * @param condition conditional expression to evaluate during the join
    * @return left and right table gather maps
@@ -2857,11 +3351,15 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression)}.
+   *
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
+   *
    * @param rightTable the right side table of the join in the join
    * @param condition conditional expression to evaluate during the join
    * @param outputRowCount number of output rows in the join result
@@ -2910,7 +3408,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -2937,10 +3437,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the inner join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedInnerJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -2970,14 +3473,16 @@ public final class Table implements AutoCloseable {
    * the table argument represents the key columns from the right table. Two {@link GatherMap}
    * instances will be returned that can be used to gather the left and right tables,
    * respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightKeys join key columns from the right table
    * @param compareNullsEqual true if null key values should match otherwise false
    * @return left and right table gather maps
    */
   public GatherMap[] fullJoinGatherMaps(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
@@ -2997,7 +3502,7 @@ public final class Table implements AutoCloseable {
    */
   public long fullJoinRowCount(HashJoin rightHash) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     return fullJoinRowCount(getNativeView(), rightHash.getNativeView());
@@ -3009,13 +3514,15 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightHash hash table built from join key columns from the right table
    * @return left and right table gather maps
    */
   public GatherMap[] fullJoinGatherMaps(HashJoin rightHash) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = fullHashJoinGatherMaps(getNativeView(), rightHash.getNativeView());
@@ -3028,7 +3535,9 @@ public final class Table implements AutoCloseable {
    * the {@link HashJoin} argument has been constructed from the key columns from the right table.
    * Two {@link GatherMap} instances will be returned that can be used to gather the left and right
    * tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing an output row count that was previously computed from
    * {@link #fullJoinRowCount(HashJoin)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
@@ -3039,7 +3548,7 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap[] fullJoinGatherMaps(HashJoin rightHash, long outputRowCount) {
     if (getNumberOfColumns() != rightHash.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightHash.getNumberOfColumns());
     }
     long[] gatherMapData = fullHashJoinGatherMapsWithCount(getNativeView(),
@@ -3053,7 +3562,9 @@ public final class Table implements AutoCloseable {
    * the columns from the left table, and the table argument represents the columns from the
    * right table. Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param rightTable the right side table of the join
    * @param condition conditional expression to evaluate during the join
    * @return left and right table gather maps
@@ -3072,7 +3583,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * Two {@link GatherMap} instances will be returned that can be used to gather
    * the left and right tables, respectively, to produce the result of the full join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3093,7 +3606,7 @@ public final class Table implements AutoCloseable {
     return buildJoinGatherMaps(gatherMapData);
   }
 
-  private static GatherMap buildSemiJoinGatherMap(long[] gatherMapData) {
+  private static GatherMap buildSingleJoinGatherMap(long[] gatherMapData) {
     long bufferSize = gatherMapData[0];
     long leftAddr = gatherMapData[1];
     long leftHandle = gatherMapData[2];
@@ -3113,12 +3626,12 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftSemiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
         leftSemiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3151,7 +3664,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3176,7 +3689,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftSemiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3213,7 +3726,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left semi join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3231,7 +3746,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3240,10 +3755,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left semi join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedLeftSemiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3264,7 +3782,7 @@ public final class Table implements AutoCloseable {
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3280,12 +3798,12 @@ public final class Table implements AutoCloseable {
    */
   public GatherMap leftAntiJoinGatherMap(Table rightKeys, boolean compareNullsEqual) {
     if (getNumberOfColumns() != rightKeys.getNumberOfColumns()) {
-      throw new IllegalArgumentException("column count mismatch, this: " + getNumberOfColumns() +
+      throw new IllegalArgumentException("Column count mismatch, this: " + getNumberOfColumns() +
           "rightKeys: " + rightKeys.getNumberOfColumns());
     }
     long[] gatherMapData =
         leftAntiJoinGatherMap(getNativeView(), rightKeys.getNativeView(), compareNullsEqual);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3318,7 +3836,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMap(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle());
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3343,7 +3861,7 @@ public final class Table implements AutoCloseable {
     long[] gatherMapData =
         conditionalLeftAntiJoinGatherMapWithCount(getNativeView(), rightTable.getNativeView(),
             condition.getNativeHandle(), outputRowCount);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3380,7 +3898,9 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left anti join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3398,7 +3918,7 @@ public final class Table implements AutoCloseable {
         leftConditional.getNativeView(), rightConditional.getNativeView(),
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL);
-    return buildSemiJoinGatherMap(gatherMapData);
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3407,10 +3927,13 @@ public final class Table implements AutoCloseable {
    * assumed to be a logical AND of the equality condition and inequality condition.
    * A {@link GatherMap} instance will be returned that can be used to gather
    * the left table to produce the result of the left anti join.
+   *
    * It is the responsibility of the caller to close the resulting gather map instances.
+   *
    * This interface allows passing the size result from
    * {@link #mixedLeftAntiJoinSize(Table, Table, Table, Table, CompiledExpression, NullEquality)}
    * when the output size was computed previously.
+   *
    * @param leftKeys the left table's key columns for the equality condition
    * @param rightKeys the right table's key columns for the equality condition
    * @param leftConditional the left table's columns needed to evaluate the inequality condition
@@ -3431,161 +3954,7 @@ public final class Table implements AutoCloseable {
         condition.getNativeHandle(),
         nullEquality == NullEquality.EQUAL,
         joinSize.getOutputRowCount(), joinSize.getMatches().getNativeView());
-    return buildSemiJoinGatherMap(gatherMapData);
-  }
-
-  /**
-   * For details about how this method functions refer to
-   * {@link #convertToRowsFixedWidthOptimized()}.
-   *
-   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
-   * is that this can handle roughly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
-   * can only handle columns less than 100
-   */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
-    return ret;
-  }
-
-  /**
-   * Convert this table of columns into a row major format that is useful for interacting with other
-   * systems that do row major processing of the data. Currently only fixed-width column types are
-   * supported.
-   * <p/>
-   * The output is one or more ColumnVectors that are lists of bytes. A ColumnVector that is a
-   * list of bytes can have at most 2GB of data stored in it. Multiple ColumnVectors are returned
-   * if not all of the data can fit in a single one.
-   * <p/>
-   * Each row in the returned ColumnVector array corresponds to a row in the input table. The rows
-   * will be in the same order as the input Table. The first ColumnVector in the array will hold
-   * the first N rows followed by the second ColumnVector and so on.  The following illustrates
-   * this and also shows some of the internal structure that will be explained later.
-   * <p/><pre>
-   * result[0]:
-   *  | row 0 | validity for row 0 | padding |
-   *  ...
-   *  | row N | validity for row N | padding |
-   *  result[1]:
-   *  |row N+1 | validity for row N+1 | padding |
-   *  ...
-   * </pre>
-   *
-   * The format of each row is similar in layout to a C struct where each column will have padding
-   * in front of it to align it properly. Each row has padding inserted at the end so the next row
-   * is aligned to a 64-bit boundary. This is so that the first column will always start at the
-   * beginning (first byte) of the list of bytes and each row has a consistent layout for fixed
-   * width types.
-   * <p/>
-   * Validity bytes are added to the end of the row. There will be one byte for each 8 columns in a
-   * row. Because the validity is byte aligned there is no padding between it and the last column
-   * in the row.
-   * <p/>
-   * For example a table consisting of the following columns A, B, C with the corresponding types
-   * <p/><pre>
-   *   | A - BOOL8 (8-bit) | B - INT16 (16-bit) | C - DURATION_DAYS (32-bit) |
-   * </pre>
-   * <p/>
-   *  Will have a layout that looks like
-   *  <p/><pre>
-   *  | A_0 | P | B_0 | B_1 | C_0 | C_1 | C_2 | C_3 | V0 | P | P | P | P | P | P | P |
-   * </pre>
-   * <p/>
-   * In this P corresponds to a byte of padding, [LETTER]_[NUMBER] represents the NUMBER
-   * byte of the corresponding LETTER column, and V[NUMBER] is a validity byte for the `NUMBER * 8`
-   * to `(NUMBER + 1) * 8` columns.
-   * <p/>
-   * The order of the columns will not be changed, but to reduce the total amount of padding it is
-   * recommended to order the columns in the following way.
-   * <p/>
-   * <ol>
-   *  <li>64-bit columns</li>
-   *  <li>32-bit columns</li>
-   *  <li>16-bit columns</li>
-   *  <li>8-bit columns</li>
-   * </ol>
-   * <p/>
-   * This way padding is only inserted at the end of a row to make the next column 64-bit aligned.
-   * So for the example above if the columns were ordered C, B, A the layout would be.
-   * <pre>
-   * | C_0 | C_1 | C_2 | C_3 | B_0 | B_1 | A_0 | V0 |
-   * </pre>
-   * This would have reduced the overall size of the data transferred by half.
-   * <p/>
-   * One of the main motivations for doing a row conversion on the GPU is to avoid cache problems
-   * when walking through columnar data on the CPU in a row wise manner. If you are not transferring
-   * very many columns it is likely to be more efficient to just pull back the columns and walk
-   * through them. This is especially true of a single column of fixed width data. The extra
-   * padding will slow down the transfer and looking at only a handful of buffers is not likely to
-   * cause cache issues.
-   * <p/>
-   * There are some limits on the size of a single row.  If the row is larger than 1KB this will
-   * throw an exception.
-   */
-  public ColumnVector[] convertToRowsFixedWidthOptimized() {
-    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    try {
-      for (int i = 0; i < ptrs.length; i++) {
-        ret[i] = new ColumnVector(ptrs[i]);
-        ptrs[i] = 0;
-      }
-    } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(ptrs, ret);
-      throw t;
-    }
-    return ret;
-  }
-
-  /**
-   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
-   * and convert it back to a table.
-   *
-   * NOTE: This method doesn't support nested types
-   *
-   * @param vec the row data to process.
-   * @param schema the types of each column.
-   * @return the parsed table.
-   */
-  public static Table convertFromRows(ColumnView vec, DType ... schema) {
-    int[] types = new int[schema.length];
-    int[] scale = new int[schema.length];
-    for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].typeId.nativeId;
-      scale[i] = schema[i].getScale();
-
-    }
-    return new Table(convertFromRows(vec.getNativeView(), types, scale));
-  }
-
-  /**
-   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
-   * and convert it back to a table.
-   *
-   * NOTE: This method doesn't support nested types
-   *
-   * @param vec the row data to process.
-   * @param schema the types of each column.
-   * @return the parsed table.
-   */
-  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
-    int[] types = new int[schema.length];
-    int[] scale = new int[schema.length];
-    for (int i = 0; i < schema.length; i++) {
-      types[i] = schema[i].typeId.nativeId;
-      scale[i] = schema[i].getScale();
-
-    }
-    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
+    return buildSingleJoinGatherMap(gatherMapData);
   }
 
   /**
@@ -3608,13 +3977,21 @@ public final class Table implements AutoCloseable {
     Table result = null;
     try {
       for (int i = 0; i < columns.length; i++) {
-        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddresses[i], data);
+        long columnViewAddress = columnViewAddresses[i];
+        // setting address to zero, so we don't clean it in case of an exception as it
+        // will be cleaned up by the ColumnView  constructor
         columnViewAddresses[i] = 0;
+        columns[i] = ColumnVector.fromViewWithContiguousAllocation(columnViewAddress, data);
       }
       result = new Table(columns);
     } catch (Throwable t) {
-      ColumnView.cleanupColumnViews(columnViewAddresses, columns);
-      throw t;
+      try {
+        ColumnView.cleanupColumnViews(columnViewAddresses, columns, t);
+      } catch (Throwable s){
+        t.addSuppressed(s);
+      } finally {
+        throw t;
+      }
     }
 
     // close columns to leave the resulting table responsible for freeing underlying columns
@@ -3902,6 +4279,8 @@ public final class Table implements AutoCloseable {
       try {
         int[] aggPrecedingWindows = new int[totalOps];
         int[] aggFollowingWindows = new int[totalOps];
+        boolean[] unboundedPreceding = new boolean[totalOps];
+        boolean[] unboundedFollowing = new boolean[totalOps];
         int[] aggMinPeriods = new int[totalOps];
         long[] defaultOutputs = new long[totalOps];
         int opIndex = 0;
@@ -3914,6 +4293,8 @@ public final class Table implements AutoCloseable {
             aggPrecedingWindows[opIndex] = p == null || !p.isValid() ? 0 : p.getInt();
             Scalar f = operation.getWindowOptions().getFollowingScalar();
             aggFollowingWindows[opIndex] = f == null || ! f.isValid() ? 1 : f.getInt();
+            unboundedPreceding[opIndex] = operation.getWindowOptions().isUnboundedPreceding();
+            unboundedFollowing[opIndex] = operation.getWindowOptions().isUnboundedFollowing();
             aggMinPeriods[opIndex] = operation.getWindowOptions().getMinPeriods();
             defaultOutputs[opIndex] = operation.getDefaultOutput();
             opIndex++;
@@ -3927,6 +4308,7 @@ public final class Table implements AutoCloseable {
             defaultOutputs,
             aggColumnIndexes,
             aggInstances, aggMinPeriods, aggPrecedingWindows, aggFollowingWindows,
+            unboundedPreceding, unboundedFollowing,
             groupByOptions.getIgnoreNullKeys()))) {
           // prepare the final table
           ColumnVector[] finalCols = new ColumnVector[windowAggregates.length];
@@ -4027,6 +4409,8 @@ public final class Table implements AutoCloseable {
           case UINT16:
           case UINT32:
           case UINT64:
+          case FLOAT32:
+          case FLOAT64:
           case TIMESTAMP_MILLISECONDS:
           case TIMESTAMP_SECONDS:
           case TIMESTAMP_DAYS:

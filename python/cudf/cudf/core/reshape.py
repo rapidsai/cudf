@@ -1,9 +1,11 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import itertools
+import warnings
 from collections import abc
 from typing import Dict, Optional
 
+import cupy
 import numpy as np
 import pandas as pd
 
@@ -12,8 +14,10 @@ from cudf._lib.transform import one_hot_encode
 from cudf._lib.types import size_type_dtype
 from cudf._typing import Dtype
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
+from cudf.utils.dtypes import min_unsigned_type
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -32,7 +36,7 @@ def _align_objs(objs, how="outer", sort=None):
     A list of reindexed and aligned objects
     ready for concatenation
     """
-    # Check if multiindex then check if indexes match. GenericIndex
+    # Check if multiindex then check if indexes match. Index
     # returns ndarray tuple of bools requiring additional filter.
     # Then check for duplicate index value.
     i_objs = iter(objs)
@@ -98,17 +102,17 @@ def _normalize_series_and_dataframe(objs, axis):
     """Convert any cudf.Series objects in objs to DataFrames in place."""
     # Default to naming series by a numerical id if they are not named.
     sr_name = 0
-    for idx, o in enumerate(objs):
-        if isinstance(o, cudf.Series):
-            if axis == 1:
-                name = o.name
-                if name is None:
+    for idx, obj in enumerate(objs):
+        if isinstance(obj, cudf.Series):
+            name = obj.name
+            if name is None:
+                if axis == 0:
+                    name = 0
+                else:
                     name = sr_name
                     sr_name += 1
-            else:
-                name = sr_name
 
-            objs[idx] = o.to_frame(name=name)
+            objs[idx] = obj.to_frame(name=name)
 
 
 def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
@@ -318,9 +322,23 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         df = cudf.DataFrame()
         _normalize_series_and_dataframe(objs, axis=axis)
 
+        any_empty = any(obj.empty for obj in objs)
+        if any_empty:
+            # Do not remove until pandas-3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                "The behavior of array concatenation with empty entries is "
+                "deprecated. In a future version, this will no longer exclude "
+                "empty items when determining the result dtype. "
+                "To retain the old behavior, exclude the empty entries before "
+                "the concat operation.",
+                FutureWarning,
+            )
         # Inner joins involving empty data frames always return empty dfs, but
         # We must delay returning until we have set the column names.
-        empty_inner = any(obj.empty for obj in objs) and join == "inner"
+        empty_inner = any_empty and join == "inner"
 
         objs = [obj for obj in objs if obj.shape != (0, 0)]
 
@@ -415,11 +433,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         return result
 
     elif typ is cudf.Series:
-        objs = [obj for obj in objs if len(obj)]
-        if len(objs) == 0:
-            return cudf.Series()
-        elif len(objs) == 1 and not ignore_index:
-            return objs[0]
+        new_objs = [obj for obj in objs if len(obj)]
+        if len(new_objs) == 1 and not ignore_index:
+            return new_objs[0]
         else:
             return cudf.Series._concat(
                 objs, axis=axis, index=None if ignore_index else True
@@ -533,11 +549,12 @@ def melt(
             )
     else:
         # then all remaining columns in frame
-        value_vars = list(set(frame._column_names) - set(id_vars))
+        unique_id = set(id_vars)
+        value_vars = [c for c in frame._column_names if c not in unique_id]
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(cudf.api.types.is_categorical_dtype(t) for t in dtypes):
+    if any(isinstance(typ, cudf.CategoricalDtype) for typ in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet supported for function"
         )
@@ -573,11 +590,9 @@ def melt(
     mdata = {col: _tile(frame[col], K) for col in id_vars}
 
     # Step 2: add variable
-    var_cols = [
-        cudf.Series(cudf.core.column.full(N, i, dtype=np.int8))
-        for i in range(len(value_vars))
-    ]
-    temp = cudf.Series._concat(objs=var_cols, index=None)
+    nval = len(value_vars)
+    dtype = min_unsigned_type(nval)
+    temp = cudf.Series(cupy.repeat(cupy.arange(nval, dtype=dtype), N))
 
     if not var_name:
         var_name = "variable"
@@ -1105,7 +1120,7 @@ def unstack(df, level, fill_value=None):
                     "Calling unstack() on single index dataframe"
                     " with different column datatype is not supported."
                 )
-        res = df.T.stack(dropna=False)
+        res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
             tuple(df._data.to_pandas_index().names) + df.index.names
@@ -1128,7 +1143,7 @@ def _get_unique(column, dummy_na):
     if isinstance(column, cudf.core.column.CategoricalColumn):
         unique = column.categories
     else:
-        unique = column.unique().sort_by_values()[0]
+        unique = column.unique().sort_values()
     if not dummy_na:
         if np.issubdtype(unique.dtype, np.floating):
             unique = unique.nans_to_nulls()

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,13 +33,24 @@
 
 namespace cudf {
 
+/**
+ * @brief Enum to indicate whether the distinct join table has nested columns or not
+ *
+ * @ingroup column_join
+ */
+enum class has_nested : bool { YES, NO };
+
 // forward declaration
+namespace hashing::detail {
+template <typename T>
+class MurmurHash3_x86_32;
+}  // namespace hashing::detail
 namespace detail {
 template <typename T>
-class MurmurHash3_32;
-
-template <typename T>
 class hash_join;
+
+template <cudf::has_nested HasNested>
+class distinct_hash_join;
 }  // namespace detail
 
 /**
@@ -272,7 +283,7 @@ enum class nullable_join : bool { YES, NO };
 class hash_join {
  public:
   using impl_type = typename cudf::detail::hash_join<
-    cudf::detail::MurmurHash3_32<cudf::hash_value_type>>;  ///< Implementation type
+    cudf::hashing::detail::MurmurHash3_x86_32<cudf::hash_value_type>>;  ///< Implementation type
 
   hash_join() = delete;
   ~hash_join();
@@ -298,7 +309,7 @@ class hash_join {
   /**
    * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
    *
-   * @param has_nulls Flag to indicate if the there exists any nulls in the `build` table or
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
    *        any `probe` table that will be used later for join
    */
   hash_join(cudf::table_view const& build,
@@ -322,7 +333,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing an inner join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -347,7 +358,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a left join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -372,7 +383,7 @@ class hash_join {
    *
    * @return A pair of columns [`left_indices`, `right_indices`] that can be used to construct
    * the result of performing a full join between two tables with `build` and `probe`
-   * as the the join keys .
+   * as the join keys .
    */
   std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
             std::unique_ptr<rmm::device_uvector<size_type>>>
@@ -392,7 +403,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing an inner join between two tables with
-   * `build` and `probe` as the the join keys .
+   * `build` and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t inner_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -408,7 +419,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing a left join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   [[nodiscard]] std::size_t left_join_size(
     cudf::table_view const& probe, rmm::cuda_stream_view stream = cudf::get_default_stream()) const;
@@ -426,7 +437,7 @@ class hash_join {
    * constructed with null check.
    *
    * @return The exact number of output when performing a full join between two tables with `build`
-   * and `probe` as the the join keys .
+   * and `probe` as the join keys .
    */
   std::size_t full_join_size(
     cudf::table_view const& probe,
@@ -434,7 +445,83 @@ class hash_join {
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
-  const std::unique_ptr<const impl_type> _impl;
+  const std::unique_ptr<impl_type const> _impl;
+};
+
+/**
+ * @brief Distinct hash join that builds hash table in creation and probes results in subsequent
+ * `*_join` member functions
+ *
+ * @note Behavior is undefined if the build table contains duplicates.
+ * @note All NaNs are considered as equal
+ *
+ * @tparam HasNested Flag indicating whether there are nested columns in build/probe table
+ */
+// TODO: `HasNested` to be removed via dispatching
+template <cudf::has_nested HasNested>
+class distinct_hash_join {
+ public:
+  distinct_hash_join() = delete;
+  ~distinct_hash_join();
+  distinct_hash_join(distinct_hash_join const&)            = delete;
+  distinct_hash_join(distinct_hash_join&&)                 = delete;
+  distinct_hash_join& operator=(distinct_hash_join const&) = delete;
+  distinct_hash_join& operator=(distinct_hash_join&&)      = delete;
+
+  /**
+   * @brief Constructs a distinct hash join object for subsequent probe calls
+   *
+   * @param build The build table that contains distinct elements
+   * @param probe The probe table, from which the keys are probed
+   * @param has_nulls Flag to indicate if there exists any nulls in the `build` table or
+   *        any `probe` table that will be used later for join
+   * @param compare_nulls Controls whether null join-key values should match or not
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   */
+  distinct_hash_join(cudf::table_view const& build,
+                     cudf::table_view const& probe,
+                     nullable_join has_nulls      = nullable_join::YES,
+                     null_equality compare_nulls  = null_equality::EQUAL,
+                     rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+  /**
+   * @brief Returns the row indices that can be used to construct the result of performing
+   * an inner join between two tables. @see cudf::inner_join().
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned indices' device memory.
+   *
+   * @return A pair of columns [`build_indices`, `probe_indices`] that can be used to construct
+   * the result of performing an inner join between two tables with `build` and `probe`
+   * as the join keys.
+   */
+  std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+            std::unique_ptr<rmm::device_uvector<size_type>>>
+  inner_join(rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+             rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
+   * @brief Returns the build table indices that can be used to construct the result of performing
+   * a left join between two tables.
+   *
+   * @note For a given row index `i` of the probe table, the resulting `build_indices[i]` contains
+   * the row index of the matched row from the build table if there is a match. Otherwise, contains
+   * `JoinNoneValue`.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
+   * @return A `build_indices` column that can be used to construct the result of performing a left
+   * join between two tables with `build` and `probe` as the join keys.
+   */
+  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+ private:
+  using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type
+
+  std::unique_ptr<impl_type> _impl;  ///< Distinct hash join implementation
 };
 
 /**

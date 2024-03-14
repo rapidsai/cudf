@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/hash_utils.cuh>
-#include <text/subword/detail/tokenizer_utils.cuh>
-#include <text/subword/detail/wordpiece_tokenizer.hpp>
+#include "text/subword/detail/hash_utils.cuh"
+#include "text/subword/detail/tokenizer_utils.cuh"
+#include "text/subword/detail/wordpiece_tokenizer.hpp"
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/subword_tokenize.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -61,7 +62,7 @@ namespace {
  * Memory required is 13 bytes per code point values:
  * - 4 bytes each for `start_word_indices` and `end_word_indices`
  * - 4 bytes for each `token_ids`
- * - 1 byte for each each `tokens_per_word`
+ * - 1 byte for each `tokens_per_word`
  * Also, there is a code point value for each byte in the input strings.
  *
  * @param[in] code_points A pointer to the code points in the strings after normalization.
@@ -75,14 +76,16 @@ namespace {
  * @param[out] tokens_per_word An array of size `num_code_points` which hold the number of
  *        tokens. This kernel just sets all the values to 0.
  */
-__global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
-                                                       uint32_t* start_word_indices,
-                                                       uint32_t* end_word_indices,
-                                                       size_t num_code_points,
-                                                       uint32_t* token_ids,
-                                                       uint8_t* tokens_per_word)
+CUDF_KERNEL void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
+                                                        uint32_t* start_word_indices,
+                                                        uint32_t* end_word_indices,
+                                                        size_t num_code_points,
+                                                        uint32_t* token_ids,
+                                                        uint8_t* tokens_per_word)
 {
-  uint32_t char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
+  cudf::thread_index_type char_for_thread = static_cast<cudf::thread_index_type>(blockDim.x) *
+                                              static_cast<cudf::thread_index_type>(blockIdx.x) +
+                                            threadIdx.x;
 
   // Deal with the start_word_indices array
   if (char_for_thread < num_code_points) {
@@ -129,13 +132,15 @@ __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_poin
  *        written to indicate this.
  * @param num_strings The total number of strings to be processed.
  */
-__global__ void mark_string_start_and_ends(uint32_t const* code_points,
-                                           uint32_t const* strings_offsets,
-                                           uint32_t* start_word_indices,
-                                           uint32_t* end_word_indices,
-                                           uint32_t num_strings)
+CUDF_KERNEL void mark_string_start_and_ends(uint32_t const* code_points,
+                                            int64_t const* strings_offsets,
+                                            uint32_t* start_word_indices,
+                                            uint32_t* end_word_indices,
+                                            uint32_t num_strings)
 {
-  uint32_t idx = blockDim.x * blockIdx.x + threadIdx.x;
+  cudf::thread_index_type idx = static_cast<cudf::thread_index_type>(blockDim.x) *
+                                  static_cast<cudf::thread_index_type>(blockIdx.x) +
+                                threadIdx.x;
   // Ensure the starting character of each strings is written to the word start array.
   if (idx <= num_strings) {
     auto const offset = strings_offsets[idx];
@@ -315,22 +320,24 @@ struct mark_special_tokens {
  * @param outer_hash_b_param: The b parameter for the outer hash
  * @param num_outer_bins: The number of bins for the outer hash
  */
-__global__ void kernel_wordpiece_tokenizer(uint32_t const* code_points,
-                                           uint64_t const* hash_table,
-                                           uint64_t const* bin_coefficients,
-                                           uint16_t const* bin_offsets,
-                                           uint16_t unk_token_id,
-                                           uint32_t outer_hash_a_param,
-                                           uint32_t outer_hash_b_param,
-                                           uint16_t num_outer_bins,
-                                           uint32_t const* word_starts,
-                                           uint32_t const* word_ends,
-                                           uint32_t max_word_length,
-                                           uint32_t total_words,
-                                           uint32_t* token_ids,
-                                           uint8_t* tokens_per_word)
+CUDF_KERNEL void kernel_wordpiece_tokenizer(uint32_t const* code_points,
+                                            uint64_t const* hash_table,
+                                            uint64_t const* bin_coefficients,
+                                            uint16_t const* bin_offsets,
+                                            uint16_t unk_token_id,
+                                            uint32_t outer_hash_a_param,
+                                            uint32_t outer_hash_b_param,
+                                            uint16_t num_outer_bins,
+                                            uint32_t const* word_starts,
+                                            uint32_t const* word_ends,
+                                            uint32_t max_word_length,
+                                            uint32_t total_words,
+                                            uint32_t* token_ids,
+                                            uint8_t* tokens_per_word)
 {
-  uint32_t const word_to_tokenize = blockDim.x * blockIdx.x + threadIdx.x;
+  cudf::thread_index_type word_to_tokenize = static_cast<cudf::thread_index_type>(blockDim.x) *
+                                               static_cast<cudf::thread_index_type>(blockIdx.x) +
+                                             threadIdx.x;
 
   if (word_to_tokenize >= total_words) return;
   // Each thread gets the start code_point offset for each word and resets the token_id memory to
@@ -413,12 +420,10 @@ wordpiece_tokenizer::wordpiece_tokenizer(hashed_vocabulary const& vocab_table,
 {
 }
 
-uvector_pair wordpiece_tokenizer::tokenize(char const* d_strings,
-                                           uint32_t const* d_offsets,
-                                           uint32_t num_strings,
+uvector_pair wordpiece_tokenizer::tokenize(cudf::strings_column_view const& input,
                                            rmm::cuda_stream_view stream)
 {
-  auto cps_and_offsets = normalizer.normalize(d_strings, d_offsets, num_strings, stream);
+  auto cps_and_offsets = normalizer.normalize(input, stream);
   tokenize(cps_and_offsets, stream);
   return uvector_pair(std::move(cps_and_offsets.first), std::move(cps_and_offsets.second));
 }
@@ -433,13 +438,13 @@ struct tranform_fn {  // just converting uint8 value to uint32
 
 void wordpiece_tokenizer::tokenize(uvector_pair& cps_and_offsets, rmm::cuda_stream_view stream)
 {
-  uint32_t* device_code_points     = cps_and_offsets.first->data();
-  size_t const num_code_points     = cps_and_offsets.first->size();
-  uint32_t* device_strings_offsets = cps_and_offsets.second->data();
-  uint32_t const num_strings       = cps_and_offsets.second->size() - 1;
+  auto device_code_points     = cps_and_offsets.first->data();
+  auto const num_code_points  = cps_and_offsets.first->size();
+  auto device_strings_offsets = cps_and_offsets.second->data();
+  auto const num_strings      = cps_and_offsets.second->size() - 1;
 
-  const size_t four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
-  const size_t rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
+  size_t const four_byte_cp_chunks = 1 + (num_code_points - 1) / sizeof(uint32_t);
+  size_t const rounded_num_cps     = sizeof(uint32_t) * four_byte_cp_chunks;
   rmm::device_uvector<uint8_t> device_tokens_per_word(rounded_num_cps, stream);
   rmm::device_uvector<uint32_t> device_token_ids(num_code_points, stream);
   rmm::device_uvector<uint32_t> device_word_indices(2 * num_code_points, stream);

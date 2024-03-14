@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 #pragma once
 
 #include <cudf/io/json.hpp>
-#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -33,7 +32,7 @@ namespace cudf::io::json::detail {
  *
  * @return cudf::table object that contains the array of cudf::column.
  */
-table_with_metadata read_json(std::vector<std::unique_ptr<cudf::io::datasource>>& sources,
+table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& options,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr);
@@ -52,4 +51,26 @@ void write_json(data_sink* sink,
                 json_writer_options const& options,
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Normalize single quotes to double quotes using FST
+ *
+ * @param inbuf Input device buffer
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ */
+rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& inbuf,
+                                                  rmm::cuda_stream_view stream,
+                                                  rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Normalize unquoted whitespace (space and tab characters) using FST
+ *
+ * @param inbuf Input device buffer
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ */
+rmm::device_uvector<char> normalize_whitespace(rmm::device_uvector<char>&& inbuf,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr);
 }  // namespace cudf::io::json::detail

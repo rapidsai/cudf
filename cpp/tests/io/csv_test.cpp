@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,13 +18,15 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/io/arrow_io_source.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/datasource.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -32,12 +34,12 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/unary.hpp>
 
-#include <arrow/io/api.h>
-
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <arrow/io/api.h>
 
 #include <algorithm>
 #include <fstream>
@@ -169,8 +171,7 @@ void check_float_column(cudf::column_view const& col_lhs,
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(col_lhs,
                                                 (wrapper<T>{data.begin(), data.end(), validity}));
-  CUDF_EXPECTS(col_lhs.null_count() == 0 and col_rhs.null_count() == 0,
-               "All elements should be valid");
+  EXPECT_TRUE(col_lhs.null_count() == 0 and col_rhs.null_count() == 0);
   EXPECT_THAT(cudf::test::to_host<T>(col_lhs).first,
               ::testing::Pointwise(FloatNearPointwise(tol), data));
 }
@@ -1381,14 +1382,14 @@ TEST_F(CsvReaderTest, FailCases)
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_offset(4)
         .skiprows(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
   {
     EXPECT_THROW(
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_offset(4)
         .skipfooter(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
 
   {
@@ -1403,14 +1404,14 @@ TEST_F(CsvReaderTest, FailCases)
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_size(4)
         .skiprows(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
   {
     EXPECT_THROW(
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .byte_range_size(4)
         .skipfooter(1),
-      cudf::logic_error);
+      std::invalid_argument);
   }
   {
     EXPECT_THROW(
@@ -1466,7 +1467,7 @@ TEST_F(CsvReaderTest, FailCases)
       cudf::io::csv_reader_options::builder(cudf::io::source_info{buffer.c_str(), buffer.size()})
         .nrows(1)
         .skipfooter(1),
-      cudf::logic_error);
+      std::invalid_argument);
     ;
   }
   {

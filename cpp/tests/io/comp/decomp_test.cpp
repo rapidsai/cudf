@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-#include <src/io/comp/nvcomp_adapter.hpp>
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/utilities/default_stream.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <vector>
 
@@ -51,22 +53,22 @@ struct DecompressTest : public cudf::test::BaseFixture {
     rmm::device_buffer src{compressed, compressed_size, stream};
     rmm::device_uvector<uint8_t> dst{decompressed->size(), stream};
 
-    hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t const>> inf_in(1, stream);
     inf_in[0] = {static_cast<uint8_t const*>(src.data()), src.size()};
-    inf_in.host_to_device(stream);
+    inf_in.host_to_device_async(stream);
 
-    hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
+    cudf::detail::hostdevice_vector<device_span<uint8_t>> inf_out(1, stream);
     inf_out[0] = dst;
-    inf_out.host_to_device(stream);
+    inf_out.host_to_device_async(stream);
 
-    hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
+    cudf::detail::hostdevice_vector<cudf::io::compression_result> inf_stat(1, stream);
     inf_stat[0] = {};
-    inf_stat.host_to_device(stream);
+    inf_stat.host_to_device_async(stream);
 
     static_cast<Decompressor*>(this)->dispatch(inf_in, inf_out, inf_stat);
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       decompressed->data(), dst.data(), dst.size(), cudaMemcpyDefault, stream.value()));
-    inf_stat.device_to_host(stream, true);
+    inf_stat.device_to_host_sync(stream);
     ASSERT_EQ(inf_stat[0].status, cudf::io::compression_status::SUCCESS);
   }
 };
@@ -213,8 +215,6 @@ TEST_F(NvcompConfigTest, Decompression)
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 2, 0, true, true, 7}));
   // stable integrations enabled required
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 7}));
-  // 2.4.0 disabled on Pascal
-  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 6}));
 
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 4, 0, true, true, 7}));
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 3, 0, false, true, 7}));

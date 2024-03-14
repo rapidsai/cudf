@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 # libcudf examples build script
 
@@ -14,18 +14,17 @@ LIB_BUILD_DIR=${LIB_BUILD_DIR:-$(readlink -f "${EXAMPLES_DIR}/../build")}
 ################################################################################
 # Add individual libcudf examples build scripts down below
 
-# Basic example
-BASIC_EXAMPLE_DIR=${EXAMPLES_DIR}/basic
-BASIC_EXAMPLE_BUILD_DIR=${BASIC_EXAMPLE_DIR}/build
-# Configure
-cmake -S ${BASIC_EXAMPLE_DIR} -B ${BASIC_EXAMPLE_BUILD_DIR} -Dcudf_ROOT="${LIB_BUILD_DIR}"
-# Build
-cmake --build ${BASIC_EXAMPLE_BUILD_DIR} -j${PARALLEL_LEVEL}
+build_example() {
+  example_dir=${1}
+  example_dir="${EXAMPLES_DIR}/${example_dir}"
+  build_dir="${example_dir}/build"
 
-# Strings example
-STRINGS_EXAMPLE_DIR=${EXAMPLES_DIR}/strings
-STRINGS_EXAMPLE_BUILD_DIR=${STRINGS_EXAMPLE_DIR}/build
-# Configure
-cmake -S ${STRINGS_EXAMPLE_DIR} -B ${STRINGS_EXAMPLE_BUILD_DIR} -Dcudf_ROOT="${LIB_BUILD_DIR}"
-# Build
-cmake --build ${STRINGS_EXAMPLE_BUILD_DIR} -j${PARALLEL_LEVEL}
+  # Configure
+  cmake -S ${example_dir} -B ${build_dir} -Dcudf_ROOT="${LIB_BUILD_DIR}"
+  # Build
+  cmake --build ${build_dir} -j${PARALLEL_LEVEL}
+}
+
+build_example basic
+build_example strings
+build_example nested_types

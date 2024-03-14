@@ -30,7 +30,7 @@ class Reduction : public cudf::benchmark {};
 template <typename type>
 void BM_reduction(benchmark::State& state, std::unique_ptr<cudf::reduce_aggregation> const& agg)
 {
-  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  cudf::size_type const column_size{(cudf::size_type)state.range(0)};
   auto const dtype = cudf::type_to_id<type>();
   data_profile const profile =
     data_profile_builder().no_validity().distribution(dtype, distribution_id::UNIFORM, 0, 100);

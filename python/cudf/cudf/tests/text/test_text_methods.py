@@ -1,9 +1,14 @@
 # Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
+import random
+import string
+
 import numpy as np
 import pytest
 
 import cudf
+from cudf.core.byte_pair_encoding import BytePairEncoder
+from cudf.core.tokenize_vocabulary import TokenizeVocabulary
 from cudf.testing._utils import assert_eq
 
 
@@ -17,25 +22,23 @@ def test_tokenize():
         ]
     )
 
-    expected_values = cudf.Series(
-        [
-            "the",
-            "quick",
-            "fox",
-            "jumped",
-            "over",
-            "the",
-            "lazy",
-            "dog",
-            "the",
-            "siamésé",
-            "cat",
-            "jumped",
-            "under",
-            "the",
-            "sofa",
-        ]
-    )
+    expected_values = [
+        "the",
+        "quick",
+        "fox",
+        "jumped",
+        "over",
+        "the",
+        "lazy",
+        "dog",
+        "the",
+        "siamésé",
+        "cat",
+        "jumped",
+        "under",
+        "the",
+        "sofa",
+    ]
     expected_index = strings.index.repeat(strings.str.token_count())
     expected = cudf.Series(expected_values, index=expected_index)
 
@@ -55,16 +58,14 @@ def test_tokenize_delimiter():
         ]
     )
 
-    expected_values = cudf.Series(
-        [
-            "the quick f",
-            "x jumped ",
-            "ver the lazy d",
-            "g",
-            "the siamésé cat jumped under the s",
-            "fa",
-        ]
-    )
+    expected_values = [
+        "the quick f",
+        "x jumped ",
+        "ver the lazy d",
+        "g",
+        "the siamésé cat jumped under the s",
+        "fa",
+    ]
     expected_index = strings.index.repeat(strings.str.token_count("o"))
     expected = cudf.Series(expected_values, index=expected_index)
 
@@ -151,6 +152,64 @@ def test_token_count(delimiter, expected_token_counts):
 
     assert type(expected) == type(actual)
     assert_eq(expected, actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "delimiter, input, default_id, results",
+    [
+        (
+            "",
+            "the quick brown fox jumps over the lazy brown dog",
+            99,
+            [0, 1, 2, 3, 4, 5, 0, 99, 2, 6],
+        ),
+        (
+            " ",
+            " the sable siamésé cat jumps under the brown sofa ",
+            -1,
+            [0, 7, 8, 9, 4, 10, 0, 2, 11],
+        ),
+        (
+            "_",
+            "the_quick_brown_fox_jumped__over_the_lazy_brown_dog",
+            -99,
+            [0, 1, 2, 3, -99, 5, 0, -99, 2, 6],
+        ),
+    ],
+)
+def test_tokenize_with_vocabulary(delimiter, input, default_id, results):
+    vocabulary = cudf.Series(
+        [
+            "the",
+            "quick",
+            "brown",
+            "fox",
+            "jumps",
+            "over",
+            "dog",
+            "sable",
+            "siamésé",
+            "cat",
+            "under",
+            "sofa",
+        ]
+    )
+    tokenizer = TokenizeVocabulary(vocabulary)
+
+    strings = cudf.Series([input, None, "", input])
+
+    expected = cudf.Series(
+        [
+            cudf.Series(results, dtype=np.int32),
+            None,
+            cudf.Series([], dtype=np.int32),
+            cudf.Series(results, dtype=np.int32),
+        ]
+    )
+
+    actual = tokenizer.tokenize(strings, delimiter, default_id)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
 
 
 def test_normalize_spaces():
@@ -313,6 +372,26 @@ def test_character_ngrams(n, expected_values, expected_index, as_list):
     assert_eq(expected, actual)
 
 
+def test_hash_character_ngrams():
+    strings = cudf.Series(["abcdefg", "stuvwxyz"])
+    expected = cudf.Series(
+        [
+            cudf.Series([3902511862, 570445242, 4202475763], dtype=np.uint32),
+            cudf.Series(
+                [556054766, 3166857694, 3760633458, 192452857], dtype=np.uint32
+            ),
+        ]
+    )
+    actual = strings.str.hash_character_ngrams(5, True)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+    actual = strings.str.hash_character_ngrams(5)
+    expected = expected.explode()
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "n, separator, expected_values",
     [
@@ -358,94 +437,92 @@ def test_character_tokenize_series():
             ),
         ]
     )
-    expected_values = cudf.Series(
-        [
-            "h",
-            "e",
-            "l",
-            "l",
-            "o",
-            " ",
-            "w",
-            "o",
-            "r",
-            "l",
-            "d",
-            "s",
-            "d",
-            "f",
-            "g",
-            "o",
-            "o",
-            "d",
-            "b",
-            "y",
-            "e",
-            ",",
-            " ",
-            "o",
-            "n",
-            "e",
-            "-",
-            "t",
-            "w",
-            "o",
-            ":",
-            "t",
-            "h",
-            "r",
-            "e",
-            "e",
-            "~",
-            "f",
-            "o",
-            "u",
-            "r",
-            "+",
-            "f",
-            "i",
-            "v",
-            "e",
-            "_",
-            "s",
-            "i",
-            "x",
-            "@",
-            "s",
-            "e",
-            "v",
-            "e",
-            "n",
-            "#",
-            "e",
-            "i",
-            "g",
-            "h",
-            "t",
-            "^",
-            "n",
-            "i",
-            "n",
-            "e",
-            " ",
-            "h",
-            "e",
-            "Œ",
-            "Ž",
-            "‘",
-            "•",
-            "™",
-            "œ",
-            "$",
-            "µ",
-            "¾",
-            "Ť",
-            "Ơ",
-            "é",
-            " ",
-            "Ǆ",
-        ]
-    )
+    expected_values = [
+        "h",
+        "e",
+        "l",
+        "l",
+        "o",
+        " ",
+        "w",
+        "o",
+        "r",
+        "l",
+        "d",
+        "s",
+        "d",
+        "f",
+        "g",
+        "o",
+        "o",
+        "d",
+        "b",
+        "y",
+        "e",
+        ",",
+        " ",
+        "o",
+        "n",
+        "e",
+        "-",
+        "t",
+        "w",
+        "o",
+        ":",
+        "t",
+        "h",
+        "r",
+        "e",
+        "e",
+        "~",
+        "f",
+        "o",
+        "u",
+        "r",
+        "+",
+        "f",
+        "i",
+        "v",
+        "e",
+        "_",
+        "s",
+        "i",
+        "x",
+        "@",
+        "s",
+        "e",
+        "v",
+        "e",
+        "n",
+        "#",
+        "e",
+        "i",
+        "g",
+        "h",
+        "t",
+        "^",
+        "n",
+        "i",
+        "n",
+        "e",
+        " ",
+        "h",
+        "e",
+        "Œ",
+        "Ž",
+        "‘",
+        "•",
+        "™",
+        "œ",
+        "$",
+        "µ",
+        "¾",
+        "Ť",
+        "Ơ",
+        "é",
+        " ",
+        "Ǆ",
+    ]
     expected_index = sr.index.repeat(sr.str.len().fillna(0))
     expected = cudf.Series(expected_values, index=expected_index)
 
@@ -813,7 +890,15 @@ def test_is_vowel_consonant():
 
 def test_minhash():
     strings = cudf.Series(["this is my", "favorite book", None, ""])
-    expected = cudf.Series([21141582, 962346254, None, 0], dtype=np.uint32)
+
+    expected = cudf.Series(
+        [
+            cudf.Series([21141582], dtype=np.uint32),
+            cudf.Series([962346254], dtype=np.uint32),
+            None,
+            cudf.Series([0], dtype=np.uint32),
+        ]
+    )
     actual = strings.str.minhash()
     assert_eq(expected, actual)
     seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
@@ -825,13 +910,158 @@ def test_minhash():
             cudf.Series([0, 0, 0], dtype=np.uint32),
         ]
     )
-    actual = strings.str.minhash(seeds=seeds, n=5)
+    actual = strings.str.minhash(seeds=seeds, width=5)
     assert_eq(expected, actual)
 
+    expected = cudf.Series(
+        [
+            cudf.Series([3232308021562742685], dtype=np.uint64),
+            cudf.Series([23008204270530356], dtype=np.uint64),
+            None,
+            cudf.Series([0], dtype=np.uint64),
+        ]
+    )
+    actual = strings.str.minhash64()
+    assert_eq(expected, actual)
+    seeds = cudf.Series([0, 1, 2], dtype=np.uint64)
+    expected = cudf.Series(
+        [
+            cudf.Series(
+                [7082801294247314046, 185949556058924788, 167570629329462454],
+                dtype=np.uint64,
+            ),
+            cudf.Series(
+                [382665377781028452, 86243762733551437, 7688750597953083512],
+                dtype=np.uint64,
+            ),
+            None,
+            cudf.Series([0, 0, 0], dtype=np.uint64),
+        ]
+    )
+    actual = strings.str.minhash64(seeds=seeds, width=5)
+    assert_eq(expected, actual)
+
+    # test wrong seed types
     with pytest.raises(ValueError):
-        strings.str.minhash(seeds=7)
-    with pytest.raises(ValueError):
-        strings.str.minhash(seeds=seeds, method="md5")
+        strings.str.minhash(seeds="a")
     with pytest.raises(ValueError):
         seeds = cudf.Series([0, 1, 2], dtype=np.int32)
         strings.str.minhash(seeds=seeds)
+    with pytest.raises(ValueError):
+        seeds = cudf.Series([0, 1, 2], dtype=np.uint32)
+        strings.str.minhash64(seeds=seeds)
+
+
+def test_jaccard_index():
+    str1 = cudf.Series(["the brown dog", "jumped about"])
+    str2 = cudf.Series(["the black cat", "jumped around"])
+
+    expected = cudf.Series([0.058824, 0.307692], dtype=np.float32)
+    actual = str1.str.jaccard_index(str2, 5)
+    assert_eq(expected, actual)
+
+    actual = str2.str.jaccard_index(str1, 5)
+    assert_eq(expected, actual)
+
+    with pytest.raises(ValueError):
+        str1.str.jaccard_index(str2, 1)
+    with pytest.raises(ValueError):
+        str3 = cudf.Series(["not enough rows"])
+        str1.str.jaccard_index(str3, 5)
+
+
+def _make_list_of_strings_of_random_length(
+    num_strings, min_length, max_length
+):
+    return [
+        "".join(
+            random.choice(string.ascii_lowercase)
+            for _ in range(random.randint(min_length, max_length))
+        )
+        for _ in range(num_strings)
+    ]
+
+
+def test_jaccard_index_random_strings():
+    # Seed the rng before random string generation.
+    random.seed(42)
+    num_strings = 100
+    jaccard_width = 5
+    common_strings = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 50
+    )
+    uncommon_strings1 = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 10
+    )
+    uncommon_strings2 = _make_list_of_strings_of_random_length(
+        num_strings, jaccard_width, 20
+    )
+    str1 = cudf.Series(uncommon_strings1).str.cat(cudf.Series(common_strings))
+    str2 = cudf.Series(uncommon_strings2).str.cat(cudf.Series(common_strings))
+
+    # adopted from https://github.com/rapidsai/rapids-deduplication/issues/36
+    da = str1.str.character_ngrams(jaccard_width, True)
+    db = str2.str.character_ngrams(jaccard_width, True)
+    da = da.list.unique()
+    db = db.list.unique()
+    da = da.explode()
+    db = db.explode()
+    da = da.to_frame()
+    db = db.to_frame()
+    da = da.reset_index()
+    db = db.reset_index()
+    da = da.rename(columns={0: "token"})
+    db = db.rename(columns={0: "token"})
+    db["match"] = 1
+    inter = da.merge(db, on=["index", "token"], how="left")
+    inter = inter.groupby("index")["match"].sum()
+    union = da.merge(db, on=["index", "token"], how="outer")
+    union = union.groupby("index").size()
+    res = inter / union
+    res.fillna(0, inplace=True)
+    res = res.sort_index()
+    res = res.values.astype("float32")
+    expected = cudf.Series(res)
+
+    actual = str1.str.jaccard_index(str2, jaccard_width)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "separator, input, results",
+    [
+        (" ", "thetestsentence", "the test sent ence"),
+        ("_", "sentenceistest", "sent_ence_is_test"),
+        ("$", "istestsentencehere", "is$test$sent$ence$he$r$e"),
+    ],
+)
+def test_byte_pair_encoding(separator, input, results):
+    pairs_table = cudf.Series(
+        [
+            "t he",
+            "h e",
+            "e n",
+            "i t",
+            "i s",
+            "e s",
+            "en t",
+            "c e",
+            "es t",
+            "en ce",
+            "t h",
+            "h i",
+            "th is",
+            "t est",
+            "s i",
+            "s ent",
+        ]
+    )
+    encoder = BytePairEncoder(pairs_table)
+
+    strings = cudf.Series([input, None, "", input])
+
+    expected = cudf.Series([results, None, "", results])
+
+    actual = encoder(strings, separator)
+    assert type(expected) == type(actual)
+    assert_eq(expected, actual)

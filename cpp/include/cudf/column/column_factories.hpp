@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -374,7 +374,7 @@ std::unique_ptr<column> make_fixed_width_column(
  * @return Constructed strings column
  */
 std::unique_ptr<column> make_strings_column(
-  cudf::device_span<thrust::pair<const char*, size_type> const> strings,
+  cudf::device_span<thrust::pair<char const*, size_type> const> strings,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -406,40 +406,7 @@ std::unique_ptr<column> make_strings_column(
  */
 std::unique_ptr<column> make_strings_column(
   cudf::device_span<string_view const> string_views,
-  const string_view null_placeholder,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Construct a STRING type column given a device span of chars encoded as UTF-8, a device
- * span of byte offsets identifying individual strings within the char vector, and an optional
- * null bitmask.
- *
- * `offsets.front()` must always be zero.
- *
- * The total number of char bytes must not exceed the maximum size of size_type. Use the
- * strings_column_view class to perform strings operations on this type of column.
- *
- * This function makes a deep copy of the strings, offsets, null_mask to create a new column.
- *
- * @param strings The device span of chars in device memory. This char vector is expected to be
- *  UTF-8 encoded characters.
- * @param offsets The device span of byte offsets in device memory. The number of elements is
- *  one more than the total number of strings so the `offsets.back()` is the total number of bytes
- *  in the strings array. `offsets.front()` must always be 0 to point to the beginning of `strings`.
- * @param null_mask Device span containing the null element indicator bitmask. Arrow format for
- *  nulls is used for interpreting this bitmask.
- * @param null_count The number of null string entries
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used for allocation of the column's `null_mask` and children
- * columns' device memory
- * @return Constructed strings column
- */
-std::unique_ptr<column> make_strings_column(
-  cudf::device_span<char const> strings,
-  cudf::device_span<size_type const> offsets,
-  cudf::device_span<bitmask_type const> null_mask,
-  size_type null_count,
+  string_view const null_placeholder,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -453,7 +420,7 @@ std::unique_ptr<column> make_strings_column(
  * @param offsets_column The column of offset values for this column. The number of elements is
  *  one more than the total number of strings so the `offset[last] - offset[0]` is the total number
  *  of bytes in the strings vector.
- * @param chars_column The column of char bytes for all the strings for this column. Individual
+ * @param chars_buffer The buffer of char bytes for all the strings for this column. Individual
  *  strings are identified by the offsets and the nullmask.
  * @param null_count The number of null string entries.
  * @param null_mask The bits specifying the null strings in device memory. Arrow format for
@@ -462,30 +429,9 @@ std::unique_ptr<column> make_strings_column(
  */
 std::unique_ptr<column> make_strings_column(size_type num_strings,
                                             std::unique_ptr<column> offsets_column,
-                                            std::unique_ptr<column> chars_column,
+                                            rmm::device_buffer&& chars_buffer,
                                             size_type null_count,
                                             rmm::device_buffer&& null_mask);
-
-/**
- * @brief Construct a STRING type column given offsets, columns, and optional null count and null
- * mask.
- *
- * @param[in] num_strings The number of strings the column represents.
- * @param[in] offsets The offset values for this column. The number of elements is one more than the
- * total number of strings so the `offset[last] - offset[0]` is the total number of bytes in the
- * strings vector.
- * @param[in] chars The char bytes for all the strings for this column. Individual strings are
- * identified by the offsets and the nullmask.
- * @param[in] null_mask The bits specifying the null strings in device memory. Arrow format for
- *  nulls is used for interpreting this bitmask.
- * @param[in] null_count The number of null string entries.
- * @return Constructed strings column
- */
-std::unique_ptr<column> make_strings_column(size_type num_strings,
-                                            rmm::device_uvector<size_type>&& offsets,
-                                            rmm::device_uvector<char>&& chars,
-                                            rmm::device_buffer&& null_mask,
-                                            size_type null_count);
 
 /**
  * @brief Construct a LIST type column given offsets column, child column, null mask and null

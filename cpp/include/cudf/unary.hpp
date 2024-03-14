@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -65,6 +66,7 @@ enum class unary_operator : int32_t {
  *
  * @param input A `column_view` as input
  * @param op operation to perform
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns Column of same size as `input` containing result of the operation
@@ -72,6 +74,7 @@ enum class unary_operator : int32_t {
 std::unique_ptr<cudf::column> unary_operation(
   cudf::column_view const& input,
   cudf::unary_operator op,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -79,6 +82,7 @@ std::unique_ptr<cudf::column> unary_operation(
  * indicates the value is null and `false` indicates the value is valid.
  *
  * @param input A `column_view` as input
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `true`
@@ -86,6 +90,7 @@ std::unique_ptr<cudf::column> unary_operation(
  */
 std::unique_ptr<cudf::column> is_null(
   cudf::column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -93,6 +98,7 @@ std::unique_ptr<cudf::column> is_null(
  * indicates the value is valid and `false` indicates the value is null.
  *
  * @param input A `column_view` as input
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `false`
@@ -100,6 +106,7 @@ std::unique_ptr<cudf::column> is_null(
  */
 std::unique_ptr<cudf::column> is_valid(
   cudf::column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -109,6 +116,7 @@ std::unique_ptr<cudf::column> is_valid(
  *
  * @param input Input column
  * @param out_type Desired datatype of output column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns Column of same size as `input` containing result of the cast operation
@@ -117,6 +125,7 @@ std::unique_ptr<cudf::column> is_valid(
 std::unique_ptr<column> cast(
   column_view const& input,
   data_type out_type,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -127,12 +136,14 @@ std::unique_ptr<column> cast(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `true` representing `NAN` values
  */
 std::unique_ptr<column> is_nan(
   cudf::column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -143,6 +154,7 @@ std::unique_ptr<column> is_nan(
  * @throws cudf::logic_error if `input` is a non-floating point type
  *
  * @param input A column of floating-point elements
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns A non-nullable column of `type_id::BOOL8` elements with `false` representing `NAN`
@@ -150,6 +162,7 @@ std::unique_ptr<column> is_nan(
  */
 std::unique_ptr<column> is_not_nan(
   cudf::column_view const& input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

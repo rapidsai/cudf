@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,11 @@
 
 #pragma once
 
-#include <cudf/detail/utilities/device_atomics.cuh>
+#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/distance.h>
@@ -31,7 +32,7 @@
 
 #include <cassert>
 
-__global__ static void init_curand(curandState* state, const int nstates)
+CUDF_KERNEL void init_curand(curandState* state, int const nstates)
 {
   int ithread = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -39,11 +40,11 @@ __global__ static void init_curand(curandState* state, const int nstates)
 }
 
 template <typename key_type, typename size_type>
-__global__ static void init_build_tbl(key_type* const build_tbl,
-                                      const size_type build_tbl_size,
-                                      const int multiplicity,
-                                      curandState* state,
-                                      const int num_states)
+CUDF_KERNEL void init_build_tbl(key_type* const build_tbl,
+                                size_type const build_tbl_size,
+                                int const multiplicity,
+                                curandState* state,
+                                int const num_states)
 {
   auto const start_idx = blockIdx.x * blockDim.x + threadIdx.x;
   auto const stride    = blockDim.x * gridDim.x;
@@ -52,7 +53,7 @@ __global__ static void init_build_tbl(key_type* const build_tbl,
   curandState localState = state[start_idx];
 
   for (size_type idx = start_idx; idx < build_tbl_size; idx += stride) {
-    const double x = curand_uniform_double(&localState);
+    double const x = curand_uniform_double(&localState);
 
     build_tbl[idx] = static_cast<key_type>(x * (build_tbl_size / multiplicity));
   }
@@ -61,14 +62,14 @@ __global__ static void init_build_tbl(key_type* const build_tbl,
 }
 
 template <typename key_type, typename size_type>
-__global__ void init_probe_tbl(key_type* const probe_tbl,
-                               const size_type probe_tbl_size,
-                               const size_type build_tbl_size,
-                               const key_type rand_max,
-                               const double selectivity,
-                               const int multiplicity,
-                               curandState* state,
-                               const int num_states)
+CUDF_KERNEL void init_probe_tbl(key_type* const probe_tbl,
+                                size_type const probe_tbl_size,
+                                size_type const build_tbl_size,
+                                key_type const rand_max,
+                                double const selectivity,
+                                int const multiplicity,
+                                curandState* state,
+                                int const num_states)
 {
   auto const start_idx = blockIdx.x * blockDim.x + threadIdx.x;
   auto const stride    = blockDim.x * gridDim.x;
@@ -123,11 +124,11 @@ __global__ void init_probe_tbl(key_type* const probe_tbl,
  */
 template <typename key_type, typename size_type>
 void generate_input_tables(key_type* const build_tbl,
-                           const size_type build_tbl_size,
+                           size_type const build_tbl_size,
                            key_type* const probe_tbl,
-                           const size_type probe_tbl_size,
-                           const double selectivity,
-                           const int multiplicity)
+                           size_type const probe_tbl_size,
+                           double const selectivity,
+                           int const multiplicity)
 {
   // With large values of rand_max the a lot of temporary storage is needed for the lottery. At the
   // expense of not being that accurate with applying the selectivity an especially more memory
@@ -152,7 +153,7 @@ void generate_input_tables(key_type* const build_tbl,
   int num_sms{-1};
   CUDF_CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
-  const int num_states =
+  int const num_states =
     num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
   rmm::device_uvector<curandState> devStates(num_states, cudf::get_default_stream());
 

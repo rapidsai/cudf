@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.vector cimport vector
@@ -12,7 +12,6 @@ cdef extern from "cudf/column/column_view.hpp" namespace "cudf" nogil:
         column_view(const column_view& other) except +
 
         column_view& operator=(const column_view&) except +
-        column_view& operator=(column_view&&) except +
 
         column_view(
             data_type type,

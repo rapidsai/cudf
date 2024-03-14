@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "nvtx3.hpp"
+#include <nvtx3/nvtx3.hpp>
 
 namespace cudf {
 /**
@@ -28,8 +28,18 @@ struct libcudf_domain {
 
 /**
  * @brief Alias for an NVTX range in the libcudf domain.
+ *
+ * Customizes an NVTX range with the given input.
+ *
+ * Example:
+ * ```
+ * void some_function(){
+ *    cudf::scoped_range rng{"custom_name"}; // Customizes range name
+ *    ...
+ * }
+ * ```
  */
-using thread_range = ::nvtx3::domain_thread_range<libcudf_domain>;
+using scoped_range = ::nvtx3::scoped_range_in<libcudf_domain>;
 
 }  // namespace cudf
 

@@ -146,7 +146,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputLists)
 
   using LCW = cudf::test::lists_column_wrapper<V, int32_t>;
 
-  auto offsets = cudf::data_type{cudf::type_to_id<cudf::offset_type>()};
+  auto offsets = cudf::data_type{cudf::type_to_id<cudf::size_type>()};
 
   cudf::test::fixed_width_column_wrapper<K, int32_t> keys{};
   auto values =
@@ -176,7 +176,7 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
 
   auto values =
     cudf::make_lists_column(0,
-                            cudf::make_empty_column(cudf::type_to_id<cudf::offset_type>()),
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
                             struct_column.release(),
                             0,
                             {});
@@ -188,13 +188,13 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
 
   auto expect_child =
     cudf::make_lists_column(0,
-                            cudf::make_empty_column(cudf::type_to_id<cudf::offset_type>()),
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
                             expect_struct_column.release(),
                             0,
                             {});
   auto expect_values =
     cudf::make_lists_column(0,
-                            cudf::make_empty_column(cudf::type_to_id<cudf::offset_type>()),
+                            cudf::make_empty_column(cudf::type_to_id<cudf::size_type>()),
                             std::move(expect_child),
                             0,
                             {});

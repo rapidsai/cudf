@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,21 @@
  * limitations under the License.
  */
 
+#include "text/utilities/tokenize_ops.cuh"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+
 #include <nvtext/detail/tokenize.hpp>
 #include <nvtext/tokenize.hpp>
-#include <text/utilities/tokenize_ops.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -36,7 +38,6 @@
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/scan.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -50,12 +51,13 @@ std::unique_ptr<cudf::column> token_count_fn(cudf::size_type strings_count,
                                              rmm::mr::device_memory_resource* mr)
 {
   // create output column
-  auto token_counts   = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                strings_count,
-                                                cudf::mask_state::UNALLOCATED,
-                                                stream,
-                                                mr);
-  auto d_token_counts = token_counts->mutable_view().data<int32_t>();
+  auto token_counts =
+    cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                              strings_count,
+                              cudf::mask_state::UNALLOCATED,
+                              stream,
+                              mr);
+  auto d_token_counts = token_counts->mutable_view().data<cudf::size_type>();
   // add the counts to the column
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<cudf::size_type>(0),
@@ -77,18 +79,17 @@ std::unique_ptr<cudf::column> tokenize_fn(cudf::size_type strings_count,
     token_count_fn(strings_count, tokenizer, stream, rmm::mr::get_current_device_resource());
   auto d_token_counts = token_counts->view();
   // create token-index offsets from the counts
-  rmm::device_uvector<int32_t> token_offsets(strings_count + 1, stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         d_token_counts.template begin<int32_t>(),
-                         d_token_counts.template end<int32_t>(),
-                         token_offsets.begin() + 1);
-  token_offsets.set_element_to_zero_async(0, stream);
-  auto const total_tokens = token_offsets.back_element(stream);
-  // build a list of pointers to each token
+  auto [token_offsets, total_tokens] =
+    cudf::detail::make_offsets_child_column(d_token_counts.template begin<cudf::size_type>(),
+                                            d_token_counts.template end<cudf::size_type>(),
+                                            stream,
+                                            rmm::mr::get_current_device_resource());
+  //  build a list of pointers to each token
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   // now go get the tokens
-  tokenizer.d_offsets = token_offsets.data();
-  tokenizer.d_tokens  = tokens.data();
+  tokenizer.d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(token_offsets->view());
+  tokenizer.d_tokens = tokens.data();
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<cudf::size_type>(0),
                      strings_count,
@@ -175,11 +176,12 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   }
 
   auto offsets = strings_column.offsets();
-  auto offset  = cudf::detail::get_value<int32_t>(offsets, strings_column.offset(), stream);
-  auto chars_bytes =
-    cudf::detail::get_value<int32_t>(offsets, strings_column.offset() + strings_count, stream) -
-    offset;
-  auto d_chars = strings_column.chars().data<uint8_t>();  // unsigned is necessary for checking bits
+  auto offset  = cudf::strings::detail::get_offset_value(offsets, strings_column.offset(), stream);
+  auto chars_bytes = cudf::strings::detail::get_offset_value(
+                       offsets, strings_column.offset() + strings_count, stream) -
+                     offset;
+  auto d_chars =
+    strings_column.parent().data<uint8_t>();  // unsigned is necessary for checking bits
   d_chars += offset;
 
   // To minimize memory, count the number of characters so we can
@@ -198,73 +200,75 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   // create output offsets column
   // -- conditionally copy a counting iterator where
   //    the first byte of each character is located
-  auto offsets_column = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
-                                                  num_characters + 1,
-                                                  cudf::mask_state::UNALLOCATED,
-                                                  stream,
-                                                  mr);
-  auto d_new_offsets  = offsets_column->mutable_view().begin<int32_t>();
-  thrust::copy_if(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<int32_t>(0),
-    thrust::make_counting_iterator<int32_t>(chars_bytes + 1),
+  auto offsets_column = cudf::make_numeric_column(
+    offsets.type(), num_characters + 1, cudf::mask_state::UNALLOCATED, stream, mr);
+  auto d_new_offsets =
+    cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
+  cudf::detail::copy_if_safe(
+    thrust::counting_iterator<int64_t>(0),
+    thrust::counting_iterator<int64_t>(chars_bytes + 1),
     d_new_offsets,
     [d_chars, chars_bytes] __device__(auto idx) {
       // this will also set the final value to the size chars_bytes
       return idx < chars_bytes ? cudf::strings::detail::is_begin_utf8_char(d_chars[idx]) : true;
-    });
+    },
+    stream);
 
-  // create the output chars column -- just a copy of the input's chars column
-  cudf::column_view chars_view(
-    cudf::data_type{cudf::type_id::INT8}, chars_bytes, d_chars, nullptr, 0);
-  auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
+  // create the output chars buffer -- just a copy of the input's chars
+  rmm::device_uvector<char> output_chars(chars_bytes, stream, mr);
+  thrust::copy(rmm::exec_policy(stream), d_chars, d_chars + chars_bytes, output_chars.data());
 
   // return new strings column
   return cudf::make_strings_column(
-    num_characters, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
+    num_characters, std::move(offsets_column), output_chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
 
 // external APIs
 
-std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& input,
                                        cudf::string_scalar const& delimiter,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tokenize(strings, delimiter, cudf::get_default_stream(), mr);
+  return detail::tokenize(input, delimiter, stream, mr);
 }
 
-std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& input,
                                        cudf::strings_column_view const& delimiters,
+                                       rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::tokenize(strings, delimiters, cudf::get_default_stream(), mr);
+  return detail::tokenize(input, delimiters, stream, mr);
 }
 
-std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& input,
                                            cudf::string_scalar const& delimiter,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_tokens(strings, delimiter, cudf::get_default_stream(), mr);
+  return detail::count_tokens(input, delimiter, stream, mr);
 }
 
-std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& input,
                                            cudf::strings_column_view const& delimiters,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_tokens(strings, delimiters, cudf::get_default_stream(), mr);
+  return detail::count_tokens(input, delimiters, stream, mr);
 }
 
-std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const& strings,
+std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const& input,
+                                                 rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::character_tokenize(strings, cudf::get_default_stream(), mr);
+  return detail::character_tokenize(input, stream, mr);
 }
 
 }  // namespace nvtext

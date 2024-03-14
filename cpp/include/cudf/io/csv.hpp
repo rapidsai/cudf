@@ -138,7 +138,7 @@ class csv_reader_options {
    *
    * @param src source information used to read csv file
    */
-  explicit csv_reader_options(source_info const& src) : _source(src) {}
+  explicit csv_reader_options(source_info src) : _source{std::move(src)} {}
 
   friend csv_reader_options_builder;
 
@@ -156,7 +156,7 @@ class csv_reader_options {
    * @param src Source information to read csv file
    * @return Builder to build reader options
    */
-  static csv_reader_options_builder builder(source_info const& src);
+  static csv_reader_options_builder builder(source_info src);
 
   /**
    * @brief Returns source info.
@@ -208,12 +208,12 @@ class csv_reader_options {
   [[nodiscard]] std::size_t get_byte_range_padding() const
   {
     auto const num_names   = _names.size();
-    auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_dtypes  = std::visit([](auto const& dtypes) { return dtypes.size(); }, _dtypes);
     auto const num_columns = std::max(num_dtypes, num_names);
 
     auto const max_row_bytes = 16 * 1024;  // 16KB
     auto const column_bytes  = 64;
-    auto const base_padding  = 1024;       // 1KB
+    auto const base_padding  = 1024;  // 1KB
 
     if (num_columns == 0) {
       // Use flat size if the number of columns is not known
@@ -567,31 +567,33 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param skip Number of rows to skip
+   * @param skiprows Number of rows to skip
    */
-  void set_skiprows(size_type skip)
+  void set_skiprows(size_type skiprows)
   {
-    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
-      CUDF_FAIL(
-        "skiprows can't be a non zero value if range offset and/or range size has been set");
+    if ((skiprows != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+      CUDF_FAIL("skiprows must be zero if range offset or range size has been set",
+                std::invalid_argument);
     }
-    _skiprows = skip;
+    _skiprows = skiprows;
   }
 
   /**
    * @brief Sets number of rows to skip from end.
    *
-   * @param skip Number of rows to skip
+   * @param skipfooter Number of rows to skip
    */
-  void set_skipfooter(size_type skip)
+  void set_skipfooter(size_type skipfooter)
   {
-    CUDF_EXPECTS((skip == 0) or (_nrows == -1), "Cannot use both `nrows` and `skipfooter`");
-    if ((skip != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
-      CUDF_FAIL(
-        "skipfooter can't be a non zero value if range offset and/or range size has been set");
+    CUDF_EXPECTS((skipfooter == 0) or (_nrows == -1),
+                 "Cannot use both `nrows` and `skipfooter`",
+                 std::invalid_argument);
+    if ((skipfooter != 0) and ((_byte_range_offset != 0) or (_byte_range_size != 0))) {
+      CUDF_FAIL("skipfooter must be zero if range offset or range size has been set",
+                std::invalid_argument);
     }
 
-    _skipfooter = skip;
+    _skipfooter = skipfooter;
   }
 
   /**
@@ -833,7 +835,7 @@ class csv_reader_options_builder {
    *
    * @param src The source information used to read csv file
    */
-  csv_reader_options_builder(source_info const& src) : options(src) {}
+  csv_reader_options_builder(source_info src) : options{std::move(src)} {}
 
   /**
    * @brief Sets compression format of the source.
@@ -1305,6 +1307,7 @@ class csv_reader_options_builder {
  * @endcode
  *
  * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
  * table_with_metadata
  *
@@ -1312,6 +1315,7 @@ class csv_reader_options_builder {
  */
 table_with_metadata read_csv(
   csv_reader_options options,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
@@ -1713,9 +1717,11 @@ class csv_writer_options_builder {
  * @endcode
  *
  * @param options Settings for controlling writing behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
 void write_csv(csv_writer_options const& options,
+               rmm::cuda_stream_view stream        = cudf::get_default_stream(),
                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

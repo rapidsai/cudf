@@ -97,8 +97,8 @@ TEST_F(StringsPadTest, PaddingBoth)
 
 TEST_F(StringsPadTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::pad(strings_view, 5);
   cudf::test::expect_column_empty(results->view());

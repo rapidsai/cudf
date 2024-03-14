@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,12 @@
 
 #include <cudf_test/default_stream.hpp>
 
+#include <cudf/detail/utilities/stacktrace.hpp>
+
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <iostream>
 
 /**
  * @brief Resource that verifies that the default stream is not used in any allocation.
@@ -54,27 +59,13 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
     default;
 
   /**
-   * @brief Return pointer to the upstream resource.
+   * @brief Returns the wrapped upstream resource
    *
-   * @return Pointer to the upstream resource.
+   * @return The wrapped upstream resource
    */
-  Upstream* get_upstream() const noexcept { return upstream_; }
-
-  /**
-   * @brief Checks whether the upstream resource supports streams.
-   *
-   * @return Whether or not the upstream resource supports streams
-   */
-  bool supports_streams() const noexcept override { return upstream_->supports_streams(); }
-
-  /**
-   * @brief Query whether the resource supports the get_mem_info API.
-   *
-   * @return Whether or not the upstream resource supports get_mem_info
-   */
-  bool supports_get_mem_info() const noexcept override
+  [[nodiscard]] rmm::device_async_resource_ref get_upstream_resource() const noexcept
   {
-    return upstream_->supports_get_mem_info();
+    return upstream_;
   }
 
  private:
@@ -123,23 +114,8 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
   {
     if (this == &other) { return true; }
     auto cast = dynamic_cast<stream_checking_resource_adaptor<Upstream> const*>(&other);
-    return cast != nullptr ? upstream_->is_equal(*cast->get_upstream())
-                           : upstream_->is_equal(other);
-  }
-
-  /**
-   * @brief Get free and available memory from upstream resource.
-   *
-   * @throws `rmm::cuda_error` if unable to retrieve memory info.
-   * @throws `cudf::logic_error` if attempted on a default stream
-   *
-   * @param stream Stream on which to get the mem info.
-   * @return std::pair with available and free memory for resource
-   */
-  std::pair<std::size_t, std::size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override
-  {
-    verify_stream(stream);
-    return upstream_->get_mem_info(stream);
+    if (cast == nullptr) { return upstream_->is_equal(other); }
+    return get_upstream_resource() == cast->get_upstream_resource();
   }
 
   /**
@@ -162,6 +138,10 @@ class stream_checking_resource_adaptor final : public rmm::mr::device_memory_res
                             : (cstream != cudf::test::get_default_stream().value());
 
     if (invalid_stream) {
+      // Exclude the current function from stacktrace.
+      std::cout << cudf::detail::get_stacktrace(cudf::detail::capture_last_stackframe::NO)
+                << std::endl;
+
       if (error_on_invalid_stream_) {
         throw std::runtime_error("Attempted to perform an operation on an unexpected stream!");
       } else {

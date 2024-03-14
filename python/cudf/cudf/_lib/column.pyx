@@ -1,20 +1,24 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+
+from typing import Literal
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 
 import rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf.api.types import is_categorical_dtype, is_datetime64tz_dtype
+from cudf._lib import pylibcudf
 from cudf.core.buffer import (
     Buffer,
-    CopyOnWriteBuffer,
+    ExposureTrackedBuffer,
     SpillableBuffer,
     acquire_spill_lock,
     as_buffer,
+    cuda_array_interface_wrapper,
 )
 from cudf.utils.dtypes import _get_base_dtype
 
@@ -26,10 +30,16 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
-from cudf._lib.types cimport dtype_from_column_view, dtype_to_data_type
+from cudf._lib.types cimport (
+    dtype_from_column_view,
+    dtype_to_data_type,
+    dtype_to_pylibcudf_type,
+)
 
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
+from cudf._lib.types import dtype_from_pylibcudf_column
 
+cimport cudf._lib.cpp.copying as cpp_copying
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
 from cudf._lib.cpp.column.column cimport column, column_contents
@@ -38,9 +48,22 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column,
 )
 from cudf._lib.cpp.column.column_view cimport column_view
-from cudf._lib.cpp.null_mask cimport null_count as c_null_count
+from cudf._lib.cpp.null_mask cimport null_count as cpp_null_count
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.scalar cimport DeviceScalar
+
+
+cdef get_element(column_view col_view, size_type index):
+
+    cdef unique_ptr[scalar] c_output
+    with nogil:
+        c_output = move(
+            cpp_copying.get_element(col_view, index)
+        )
+
+    return DeviceScalar.from_unique_ptr(
+        move(c_output), dtype=dtype_from_column_view(col_view)
+    )
 
 
 cdef class Column:
@@ -121,7 +144,7 @@ cdef class Column:
         return self.base_mask is not None
 
     def has_nulls(self, include_nan=False):
-        return self.null_count != 0
+        return int(self.null_count) != 0
 
     @property
     def base_mask(self):
@@ -264,7 +287,7 @@ cdef class Column:
                 self._children = ()
             else:
                 children = Column.from_unique_ptr(
-                    make_unique[column](self.view())
+                    move(make_unique[column](self.view()))
                 ).base_children
                 dtypes = [
                     base_child.dtype for base_child in self.base_children
@@ -312,7 +335,7 @@ cdef class Column:
         with acquire_spill_lock():
             if not self.nullable:
                 return 0
-            return c_null_count(
+            return cpp_null_count(
                 <libcudf_types.bitmask_type*><uintptr_t>(
                     self.base_mask.get_ptr(mode="read")
                 ),
@@ -321,10 +344,10 @@ cdef class Column:
             )
 
     cdef mutable_column_view mutable_view(self) except *:
-        if is_categorical_dtype(self.dtype):
+        if isinstance(self.dtype, cudf.CategoricalDtype):
             col = self.base_children[0]
             data_dtype = col.dtype
-        elif is_datetime64tz_dtype(self.dtype):
+        elif isinstance(self.dtype, pd.DatetimeTZDtype):
             col = self
             data_dtype = _get_base_dtype(col.dtype)
         else:
@@ -339,8 +362,8 @@ cdef class Column:
         if col.base_data is None:
             data = NULL
         else:
-            data = <void*><uintptr_t>(col.base_data.get_ptr(
-                mode="write")
+            data = <void*><uintptr_t>(
+                col.base_data.get_ptr(mode="write")
             )
 
         cdef Column child_column
@@ -384,10 +407,10 @@ cdef class Column:
         return self._view(c_null_count)
 
     cdef column_view _view(self, libcudf_types.size_type null_count) except *:
-        if is_categorical_dtype(self.dtype):
+        if isinstance(self.dtype, cudf.CategoricalDtype):
             col = self.base_children[0]
             data_dtype = col.dtype
-        elif is_datetime64tz_dtype(self.dtype):
+        elif isinstance(self.dtype, pd.DatetimeTZDtype):
             col = self
             data_dtype = _get_base_dtype(col.dtype)
         else:
@@ -427,6 +450,80 @@ cdef class Column:
             c_null_count,
             offset,
             children)
+
+    # TODO: Consider whether this function should support some sort of `copy`
+    # parameter. Not urgent until this functionality is moved up to the Frame
+    # layer and made public. This function will also need to mark the
+    # underlying buffers as exposed before this function can itself be exposed
+    # publicly.  User requests to convert to pylibcudf must assume that the
+    # data may be modified afterwards.
+    cpdef to_pylibcudf(self, mode: Literal["read", "write"]):
+        """Convert this Column to a pylibcudf.Column.
+
+        This function will generate a pylibcudf Column pointing to the same
+        data, mask, and children as this one.
+
+        Parameters
+        ----------
+        mode : str
+            Supported values are {"read", "write"} If "write", the data pointed
+            to may be modified by the caller. If "read", the data pointed to
+            must not be modified by the caller.  Failure to fulfill this
+            contract will cause incorrect behavior.
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        """
+
+        # TODO: Categoricals will need to be treated differently eventually.
+        # There is no 1-1 correspondence between cudf and libcudf for
+        # categoricals because cudf supports ordered and unordered categoricals
+        # while libcudf supports only unordered categoricals (see
+        # https://github.com/rapidsai/cudf/pull/8567).
+        if isinstance(self.dtype, cudf.CategoricalDtype):
+            col = self.base_children[0]
+        else:
+            col = self
+
+        dtype = dtype_to_pylibcudf_type(col.dtype)
+
+        data = None
+        if col.base_data is not None:
+            cai = cuda_array_interface_wrapper(
+                ptr=col.base_data.get_ptr(mode=mode),
+                size=col.base_data.size,
+                owner=col.base_data,
+            )
+            data = pylibcudf.gpumemoryview(cai)
+
+        mask = None
+        if self.nullable:
+            # TODO: Are we intentionally use self's mask instead of col's?
+            # Where is the mask stored for categoricals?
+            cai = cuda_array_interface_wrapper(
+                ptr=self.base_mask.get_ptr(mode=mode),
+                size=self.base_mask.size,
+                owner=self.base_mask,
+            )
+            mask = pylibcudf.gpumemoryview(cai)
+
+        cdef Column child_column
+        children = []
+        if col.base_children:
+            for child_column in col.base_children:
+                children.append(child_column.to_pylibcudf(mode=mode))
+
+        return pylibcudf.Column(
+            dtype,
+            self.size,
+            data,
+            mask,
+            self.null_count,
+            self.offset,
+            children,
+        )
 
     @staticmethod
     cdef Column from_unique_ptr(
@@ -497,6 +594,47 @@ cdef class Column:
             children=tuple(children)
         )
 
+    #  TODO: Actually support exposed data pointers.
+    @staticmethod
+    def from_pylibcudf(
+        col, bint data_ptr_exposed=False
+    ):
+        """Create a Column from a pylibcudf.Column.
+
+        This function will generate a Column pointing to the provided pylibcudf
+        Column.  It will directly access the data and mask buffers of the
+        pylibcudf Column, so the newly created object is not tied to the
+        lifetime of the original pylibcudf.Column.
+
+        Parameters
+        ----------
+        col : pylibcudf.Column
+            The object to copy.
+        data_ptr_exposed : bool
+            This parameter is not yet supported
+
+        Returns
+        -------
+        pylibcudf.Column
+            A new pylibcudf.Column referencing the same data.
+        """
+        dtype = dtype_from_pylibcudf_column(col)
+
+        return cudf.core.column.build_column(
+            data=as_buffer(col.data().obj) if col.data() is not None else None,
+            dtype=dtype,
+            size=col.size(),
+            mask=as_buffer(
+                col.null_mask().obj
+            ) if col.null_mask() is not None else None,
+            offset=col.offset(),
+            null_count=col.null_count(),
+            children=tuple([
+                Column.from_pylibcudf(child)
+                for child in col.children()
+            ])
+        )
+
     @staticmethod
     cdef Column from_column_view(column_view cv, object owner):
         """
@@ -510,7 +648,7 @@ cdef class Column:
         """
         column_owner = isinstance(owner, Column)
         mask_owner = owner
-        if column_owner and is_categorical_dtype(owner.dtype):
+        if column_owner and isinstance(owner.dtype, cudf.CategoricalDtype):
             owner = owner.base_children[0]
 
         size = cv.size()
@@ -528,19 +666,40 @@ cdef class Column:
             mask_owner = mask_owner.base_mask
             base_size = owner.base_size
         base_nbytes = base_size * dtype_itemsize
+        # special case for string column
+        is_string_column = (cv.type().id() == libcudf_types.type_id.STRING)
+        if is_string_column:
+            # get the size from offset child column (device to host copy)
+            offsets_column_index = 0
+            offset_child_column = cv.child(offsets_column_index)
+            if offset_child_column.size() == 0:
+                base_nbytes = 0
+            else:
+                chars_size = get_element(
+                    offset_child_column, offset_child_column.size()-1).value
+                base_nbytes = chars_size
+
         if data_ptr:
             if data_owner is None:
+                buffer_size = (
+                    base_nbytes
+                    if is_string_column
+                    else ((size + offset) * dtype_itemsize)
+                )
                 data = as_buffer(
                     rmm.DeviceBuffer(ptr=data_ptr,
-                                     size=(size+offset) * dtype_itemsize)
+                                     size=buffer_size)
                 )
-            elif column_owner and isinstance(data_owner, CopyOnWriteBuffer):
-                # TODO: In future, see if we can just pass on the
-                # CopyOnWriteBuffer reference to another column
-                # and still create a weak reference.
-                # With the current design that's not possible.
-                # https://github.com/rapidsai/cudf/issues/12734
-                data = data_owner.copy(deep=False)
+            elif (
+                column_owner and
+                isinstance(data_owner, ExposureTrackedBuffer)
+            ):
+                data = as_buffer(
+                    data=data_ptr,
+                    size=base_nbytes,
+                    owner=data_owner,
+                    exposed=False,
+                )
             elif (
                 # This is an optimization of the most common case where
                 # from_column_view creates a "view" that is identical to
@@ -564,9 +723,9 @@ cdef class Column:
                     owner=data_owner,
                     exposed=True,
                 )
-                if isinstance(data_owner, CopyOnWriteBuffer):
-                    data_owner.get_ptr(mode="write")
-                    # accessing the pointer marks it exposed.
+                if isinstance(data_owner, ExposureTrackedBuffer):
+                    # accessing the pointer marks it exposed permanently.
+                    data_owner.mark_exposed()
                 elif isinstance(data_owner, SpillableBuffer):
                     if data_owner.is_spilled:
                         raise ValueError(

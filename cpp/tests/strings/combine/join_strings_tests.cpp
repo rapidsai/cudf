@@ -73,8 +73,8 @@ TEST_F(JoinStringsTest, JoinLongStrings)
 
 TEST_F(JoinStringsTest, JoinZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto strings_view = cudf::strings_column_view(zero_size_strings_column);
   auto results      = cudf::strings::join_strings(strings_view);
   cudf::test::expect_column_empty(results->view());

@@ -676,8 +676,8 @@ TEST_F(StringsSplitTest, RSplitRegexWithMaxSplit)
 
 TEST_F(StringsSplitTest, SplitZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto prog    = cudf::strings::regex_program::create("\\s");
   auto results = cudf::strings::split(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 1);
@@ -912,8 +912,8 @@ TEST_F(StringsSplitTest, RPartitionWhitespace)
 
 TEST_F(StringsSplitTest, PartitionZeroSizeStringsColumns)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+
   auto results = cudf::strings::partition(zero_size_strings_column);
   EXPECT_TRUE(results->num_columns() == 0);
   results = cudf::strings::rpartition(zero_size_strings_column);

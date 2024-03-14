@@ -75,6 +75,7 @@ struct regex_program;
  * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned result's device memory
  * @return A table of columns of strings
  */
@@ -82,6 +83,7 @@ std::unique_ptr<table> split_re(
   strings_column_view const& input,
   regex_program const& prog,
   size_type maxsplit                  = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -125,17 +127,19 @@ std::unique_ptr<table> split_re(
  *
  * @throw cudf::logic_error if `pattern` is empty.
  *
- * @param input A column of string elements to be split.
+ * @param input A column of string elements to be split
  * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
- * @param mr Device memory resource used to allocate the returned result's device memory.
- * @return A table of columns of strings.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned result's device memory
+ * @return A table of columns of strings
  */
 std::unique_ptr<table> rsplit_re(
   strings_column_view const& input,
   regex_program const& prog,
   size_type maxsplit                  = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -185,13 +189,15 @@ std::unique_ptr<table> rsplit_re(
  * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned result's device memory
- * @return Lists column of strings.
+ * @return Lists column of strings
  */
 std::unique_ptr<column> split_record_re(
   strings_column_view const& input,
   regex_program const& prog,
   size_type maxsplit                  = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -243,6 +249,7 @@ std::unique_ptr<column> split_record_re(
  * @param prog Regex program instance
  * @param maxsplit Maximum number of splits to perform.
  *        Default of -1 indicates all possible splits on each string.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned result's device memory
  * @return Lists column of strings
  */
@@ -250,6 +257,7 @@ std::unique_ptr<column> rsplit_record_re(
   strings_column_view const& input,
   regex_program const& prog,
   size_type maxsplit                  = -1,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

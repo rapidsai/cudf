@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,9 @@
 
 #pragma once
 
+#include "io/utilities/hostdevice_vector.hpp"
 #include "orc.hpp"
 #include "orc_gpu.hpp"
-
-#include <io/utilities/hostdevice_vector.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
@@ -39,15 +38,11 @@
 #include <string>
 #include <vector>
 
-namespace cudf {
-namespace io {
-namespace detail {
-namespace orc {
+namespace cudf::io::orc::detail {
 // Forward internal classes
 class orc_column_view;
 
-using namespace cudf::io::orc;
-using namespace cudf::io;
+using namespace cudf::io::detail;
 using cudf::detail::device_2dspan;
 using cudf::detail::host_2dspan;
 using cudf::detail::hostdevice_2dvector;
@@ -171,9 +166,11 @@ struct stripe_size_limits {
 struct intermediate_statistics {
   explicit intermediate_statistics(rmm::cuda_stream_view stream) : stripe_stat_chunks(0, stream) {}
 
+  intermediate_statistics(orc_table_view const& table, rmm::cuda_stream_view stream);
+
   intermediate_statistics(std::vector<ColStatsBlob> rb,
                           rmm::device_uvector<statistics_chunk> sc,
-                          hostdevice_vector<statistics_merge_group> smg,
+                          cudf::detail::hostdevice_vector<statistics_merge_group> smg,
                           std::vector<statistics_dtype> sdt,
                           std::vector<data_type> sct)
     : rowgroup_blobs(std::move(rb)),
@@ -188,7 +185,7 @@ struct intermediate_statistics {
   std::vector<ColStatsBlob> rowgroup_blobs;
 
   rmm::device_uvector<statistics_chunk> stripe_stat_chunks;
-  hostdevice_vector<statistics_merge_group> stripe_stat_merge;
+  cudf::detail::hostdevice_vector<statistics_merge_group> stripe_stat_merge;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
 };
@@ -214,7 +211,7 @@ struct persisted_statistics {
                rmm::cuda_stream_view stream);
 
   std::vector<rmm::device_uvector<statistics_chunk>> stripe_stat_chunks;
-  std::vector<hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
+  std::vector<cudf::detail::hostdevice_vector<statistics_merge_group>> stripe_stat_merge;
   std::vector<rmm::device_uvector<char>> string_pools;
   std::vector<statistics_dtype> stats_dtypes;
   std::vector<data_type> col_types;
@@ -235,7 +232,7 @@ struct encoded_footer_statistics {
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
-  static constexpr const char* MAGIC = "ORC";
+  static constexpr char const* MAGIC = "ORC";
 
  public:
   /**
@@ -285,6 +282,11 @@ class writer::impl {
    * @brief Finishes the chunked/streamed write process.
    */
   void close();
+
+  /**
+   * @brief Skip writing the footer when closing/deleting the writer.
+   */
+  void skip_close() { _closed = true; }
 
  private:
   /**
@@ -346,6 +348,7 @@ class writer::impl {
   size_t const _compression_blocksize;
   std::shared_ptr<writer_compression_statistics> _compression_statistics;  // Optional output
   statistics_freq const _stats_freq;
+  bool const _sort_dictionaries;
   single_write_mode const _single_write_mode;  // Special parameter only used by `write()` to
                                                // indicate that we are guaranteeing a single table
                                                // write. This enables some internal optimizations.
@@ -357,13 +360,10 @@ class writer::impl {
 
   // Internal states, filled during `write()` and written to sink during `write` and `close()`.
   std::unique_ptr<table_input_metadata> _table_meta;
-  cudf::io::orc::FileFooter _ffooter;
-  cudf::io::orc::Metadata _orc_meta;
+  Footer _footer;
+  Metadata _orc_meta;
   persisted_statistics _persisted_stripe_statistics;  // Statistics data saved between calls.
   bool _closed = false;  // To track if the output has been written to sink.
 };
 
-}  // namespace orc
-}  // namespace detail
-}  // namespace io
-}  // namespace cudf
+}  // namespace cudf::io::orc::detail

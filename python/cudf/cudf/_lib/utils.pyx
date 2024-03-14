@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pyarrow as pa
@@ -7,7 +7,6 @@ import cudf
 
 from cython.operator cimport dereference
 from libcpp.memory cimport unique_ptr
-from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -22,12 +21,6 @@ try:
 except ImportError:
     import json
 
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
@@ -59,28 +52,6 @@ cdef table_view table_view_from_table(tbl, ignore_index=False) except*:
         if not ignore_index and tbl._index is not None
         else tbl._data.columns
     )
-cdef vector[column_view] make_column_views(object columns):
-    cdef vector[column_view] views
-    views.reserve(len(columns))
-    for col in columns:
-        views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[string] get_column_names(object table, object index):
-    cdef vector[string] column_names
-    if index is not False:
-        if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-            for idx_name in table._index.names:
-                column_names.push_back(str.encode(idx_name))
-        else:
-            if table._index.name is not None:
-                column_names.push_back(str.encode(table._index.name))
-
-    for col_name in table._column_names:
-        column_names.push_back(str.encode(col_name))
-
-    return column_names
 
 
 cpdef generate_pandas_metadata(table, index):
@@ -91,17 +62,22 @@ cpdef generate_pandas_metadata(table, index):
 
     # Columns
     for name, col in table._data.items():
-        col_names.append(name)
-        if is_categorical_dtype(col):
+        if cudf.get_option("mode.pandas_compatible"):
+            # in pandas-compat mode, non-string column names are stringified.
+            col_names.append(str(name))
+        else:
+            col_names.append(name)
+
+        if isinstance(col.dtype, cudf.CategoricalDtype):
             raise ValueError(
                 "'category' column dtypes are currently not "
                 + "supported by the gpu accelerated parquet writer"
             )
-        elif (
-            is_list_dtype(col)
-            or is_struct_dtype(col)
-            or is_decimal_dtype(col)
-        ):
+        elif isinstance(col.dtype, (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.core.dtypes.DecimalDtype
+        )):
             types.append(col.dtype.to_arrow())
         else:
             # A boolean element takes 8 bits in cudf and 1 bit in
@@ -147,12 +123,12 @@ cpdef generate_pandas_metadata(table, index):
                         level=level,
                         column_names=col_names
                     )
-                if is_categorical_dtype(idx):
+                if isinstance(idx.dtype, cudf.CategoricalDtype):
                     raise ValueError(
                         "'category' column dtypes are currently not "
                         + "supported by the gpu accelerated parquet writer"
                     )
-                elif is_list_dtype(idx):
+                elif isinstance(idx.dtype, cudf.ListDtype):
                     types.append(col.dtype.to_arrow())
                 else:
                     # A boolean element takes 8 bits in cudf and 1 bit in
@@ -173,7 +149,9 @@ cpdef generate_pandas_metadata(table, index):
             col
             for col in table._columns
         ],
-        df=table,
+        # It is OKAY to do `.head(0).to_pandas()` because
+        # this method will extract `.columns` metadata only
+        df=table.head(0).to_pandas(),
         column_names=col_names,
         index_levels=index_levels,
         index_descriptors=index_descriptors,
@@ -246,14 +224,28 @@ cdef columns_from_unique_ptr(
     return columns
 
 
-cdef data_from_unique_ptr(
-    unique_ptr[table] c_tbl, column_names, index_names=None
-):
-    """Convert a libcudf table into a dict with an index.
+cdef columns_from_pylibcudf_table(tbl):
+    """Convert a pylibcudf table into list of columns.
+
+    Parameters
+    ----------
+    tbl : pylibcudf.Table
+        The pylibcudf table whose columns will be extracted
+
+    Returns
+    -------
+    list[Column]
+        A list of columns.
+    """
+    return [Column.from_pylibcudf(plc) for plc in tbl.columns()]
+
+
+cdef _data_from_columns(columns, column_names, index_names=None):
+    """Convert a list of columns into a dict with an index.
 
     This method is intended to provide the bridge between the columns returned
-    from calls to libcudf APIs and the cuDF Python Frame objects, which require
-    named columns and a separate index.
+    from calls to libcudf or pylibcudf APIs and the cuDF Python Frame objects, which
+    require named columns and a separate index.
 
     Since cuDF Python has an independent representation of a table as a
     collection of columns, this function simply returns a dict of columns
@@ -264,8 +256,8 @@ cdef data_from_unique_ptr(
 
     Parameters
     ----------
-    c_tbl : unique_ptr[cudf::table]
-        The libcudf table whose columns will be extracted
+    columns : list[Column]
+        The columns to be extracted
     column_names : iterable
         The keys associated with the columns in the output data.
     index_names : iterable, optional
@@ -273,16 +265,7 @@ cdef data_from_unique_ptr(
         corresponding first set of columns into a (Multi)Index. If this
         argument is omitted, all columns are assumed to be part of the output
         table and no index is constructed.
-
-
-    Returns
-    -------
-    tuple(Dict[str, Column], Optional[Index])
-        A dict of the columns in the output table.
     """
-
-    columns = columns_from_unique_ptr(move(c_tbl))
-
     # First construct the index, if any
     index = (
         # TODO: For performance, the _from_data methods of Frame types assume
@@ -309,6 +292,24 @@ cdef data_from_unique_ptr(
         for i, name in enumerate(column_names)
     }
     return data, index
+
+
+cdef data_from_unique_ptr(
+    unique_ptr[table] c_tbl, column_names, index_names=None
+):
+    return _data_from_columns(
+        columns_from_unique_ptr(move(c_tbl)),
+        column_names,
+        index_names
+    )
+
+
+cdef data_from_pylibcudf_table(tbl, column_names, index_names=None):
+    return _data_from_columns(
+        columns_from_pylibcudf_table(tbl),
+        column_names,
+        index_names
+    )
 
 cdef columns_from_table_view(
     table_view tv,

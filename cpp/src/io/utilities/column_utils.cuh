@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <io/statistics/statistics.cuh>
+#include "io/statistics/statistics.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -51,7 +51,7 @@ namespace io {
 template <typename ColumnDescriptor>
 rmm::device_uvector<column_device_view> create_leaf_column_device_views(
   typename cudf::device_span<ColumnDescriptor> col_desc,
-  const table_device_view& parent_table_device_view,
+  table_device_view const& parent_table_device_view,
   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<column_device_view> leaf_column_views(parent_table_device_view.num_columns(),

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,6 +41,23 @@ std::unique_ptr<column> sum_scan(column_view const& values,
                                  device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to calculate groupwise cumulative product
+ *
+ * Behaviour is undefined for signed integral types if any groupwise product overflows the type.
+ *
+ * @param values Grouped values to get product of
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> product_scan(column_view const& values,
+                                     size_type num_groups,
+                                     device_span<size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Internal API to calculate groupwise cumulative minimum value

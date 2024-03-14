@@ -1,9 +1,10 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 """Define common type operations."""
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import wraps
 from inspect import isclass
@@ -15,8 +16,11 @@ import pandas as pd
 from pandas.api import types as pd_types
 
 import cudf
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
+    _is_categorical_dtype,
+    _is_interval_dtype,
     dtype,
     is_categorical_dtype,
     is_decimal32_dtype,
@@ -86,7 +90,7 @@ def is_integer(obj):
     bool
     """
     if isinstance(obj, cudf.Scalar):
-        return pd.api.types.is_integer(obj.dtype)
+        return pd.api.types.is_integer_dtype(obj.dtype)
     return pd.api.types.is_integer(obj)
 
 
@@ -112,11 +116,11 @@ def is_string_dtype(obj):
         or (
             pd.api.types.is_string_dtype(obj)
             # Reject all cudf extension types.
-            and not is_categorical_dtype(obj)
+            and not _is_categorical_dtype(obj)
             and not is_decimal_dtype(obj)
             and not is_list_dtype(obj)
             and not is_struct_dtype(obj)
-            and not is_interval_dtype(obj)
+            and not _is_interval_dtype(obj)
         )
     )
 
@@ -141,7 +145,17 @@ def is_scalar(val):
             cudf._lib.scalar.DeviceScalar,
             cudf.core.tools.datetimes.DateOffset,
         ),
-    ) or pd_types.is_scalar(val)
+    ) or (
+        pd_types.is_scalar(val)
+        # Pytorch tensors advertise that they support the number
+        # protocol, and therefore return True for PyNumber_Check even
+        # when they have a shape. So, if we get through this, let's
+        # additionally check that if they have a shape property that
+        # it is empty.
+        # See https://github.com/pytorch/pytorch/issues/99646
+        # and https://github.com/pandas-dev/pandas/issues/52701
+        and len(getattr(val, "shape", ())) == 0
+    )
 
 
 def _is_scalar_or_zero_d_array(val):
@@ -161,10 +175,8 @@ def _is_scalar_or_zero_d_array(val):
         Return True if given object is scalar.
     """
     return (
-        (isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0)
-        or (isinstance(val, pd.Categorical) and len(val) == 1)
-        or is_scalar(val)
-    )
+        isinstance(val, (np.ndarray, cp.ndarray)) and val.ndim == 0
+    ) or is_scalar(val)
 
 
 # TODO: We should be able to reuse the pandas function for this, need to figure
@@ -229,9 +241,7 @@ def _union_categoricals(
         [obj._column for obj in to_union]
     )
     if sort_categories:
-        sorted_categories = result_col.categories.sort_by_values(
-            ascending=True
-        )[0]
+        sorted_categories = result_col.categories.sort_values(ascending=True)
         result_col = result_col.reorder_categories(
             new_categories=sorted_categories
         )
@@ -455,6 +465,55 @@ def is_any_real_numeric_dtype(arr_or_dtype) -> bool:
     )
 
 
+def _is_datetime64tz_dtype(obj):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+        return _wrap_pandas_is_dtype_api(pd_types.is_datetime64tz_dtype)(obj)
+
+
+def is_datetime64tz_dtype(obj):
+    # Do not remove until pandas 3.0 support is added.
+    assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+    warnings.warn(
+        "is_datetime64tz_dtype is deprecated and will be removed in a future "
+        "version.",
+        FutureWarning,
+    )
+    return _is_datetime64tz_dtype(obj)
+
+
+def _is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+    if isinstance(
+        dtype_to_check,
+        (
+            pd.UInt8Dtype,
+            pd.UInt16Dtype,
+            pd.UInt32Dtype,
+            pd.UInt64Dtype,
+            pd.Int8Dtype,
+            pd.Int16Dtype,
+            pd.Int32Dtype,
+            pd.Int64Dtype,
+            pd.Float32Dtype,
+            pd.Float64Dtype,
+            pd.BooleanDtype,
+            pd.StringDtype,
+            pd.ArrowDtype,
+        ),
+    ):
+        return True
+    elif isinstance(dtype_to_check, pd.CategoricalDtype):
+        if dtype_to_check.categories is None:
+            return False
+        return _is_pandas_nullable_extension_dtype(
+            dtype_to_check.categories.dtype
+        )
+    elif isinstance(dtype_to_check, pd.IntervalDtype):
+        return _is_pandas_nullable_extension_dtype(dtype_to_check.subtype)
+    return False
+
+
 # TODO: The below alias is removed for now since improving cudf categorical
 # support is ongoing and we don't want to introduce any ambiguities. The above
 # method _union_categoricals will take its place once exposed.
@@ -465,16 +524,19 @@ is_complex_dtype = pd_types.is_complex_dtype
 # TODO: Evaluate which of the datetime types need special handling for cudf.
 is_datetime_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
 is_datetime64_any_dtype = pd_types.is_datetime64_any_dtype
-is_datetime64_dtype = pd_types.is_datetime64_dtype
-is_datetime64_ns_dtype = pd_types.is_datetime64_ns_dtype
-is_datetime64tz_dtype = pd_types.is_datetime64tz_dtype
+is_datetime64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_datetime64_dtype)
+is_datetime64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_datetime64_ns_dtype
+)
 is_extension_array_dtype = pd_types.is_extension_array_dtype
 is_int64_dtype = pd_types.is_int64_dtype
 is_period_dtype = pd_types.is_period_dtype
 is_signed_integer_dtype = pd_types.is_signed_integer_dtype
 is_timedelta_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
-is_timedelta64_dtype = pd_types.is_timedelta64_dtype
-is_timedelta64_ns_dtype = pd_types.is_timedelta64_ns_dtype
+is_timedelta64_dtype = _wrap_pandas_is_dtype_api(pd_types.is_timedelta64_dtype)
+is_timedelta64_ns_dtype = _wrap_pandas_is_dtype_api(
+    pd_types.is_timedelta64_ns_dtype
+)
 is_unsigned_integer_dtype = pd_types.is_unsigned_integer_dtype
 is_sparse = pd_types.is_sparse
 # is_list_like = pd_types.is_list_like
@@ -483,7 +545,6 @@ is_file_like = pd_types.is_file_like
 is_named_tuple = pd_types.is_named_tuple
 is_iterator = pd_types.is_iterator
 is_bool = pd_types.is_bool
-is_categorical = pd_types.is_categorical_dtype
 is_complex = pd_types.is_complex
 is_float = pd_types.is_float
 is_hashable = pd_types.is_hashable

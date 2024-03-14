@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-#include <io/utilities/output_builder.cuh>
+#include "io/utilities/output_builder.cuh"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/text/data_chunk_source.hpp>
 #include <cudf/io/text/detail/multistate.hpp>
@@ -31,19 +33,18 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_pool.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cub/block/block_load.cuh>
+#include <cub/block/block_scan.cuh>
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cub/block/block_load.cuh>
-#include <cub/block/block_scan.cuh>
 
 #include <cstdint>
 #include <limits>
@@ -135,7 +136,7 @@ using byte_offset   = int64_t;
 // it begins in. From there, each thread can then take deterministic action. In this case, the
 // deterministic action is counting and outputting delimiter offsets when a delimiter is found.
 
-__global__ void multibyte_split_init_kernel(
+CUDF_KERNEL void multibyte_split_init_kernel(
   cudf::size_type base_tile_idx,
   cudf::size_type num_tiles,
   cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
@@ -143,7 +144,7 @@ __global__ void multibyte_split_init_kernel(
   cudf::io::text::detail::scan_tile_status status =
     cudf::io::text::detail::scan_tile_status::invalid)
 {
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   if (thread_idx < num_tiles) {
     auto const tile_idx = base_tile_idx + thread_idx;
     tile_multistates.set_status(tile_idx, status);
@@ -151,20 +152,7 @@ __global__ void multibyte_split_init_kernel(
   }
 }
 
-__global__ void multibyte_split_seed_kernel(
-  cudf::io::text::detail::scan_tile_state_view<multistate> tile_multistates,
-  cudf::io::text::detail::scan_tile_state_view<output_offset> tile_output_offsets,
-  multistate tile_multistate_seed,
-  output_offset tile_output_offset)
-{
-  auto const thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
-  if (thread_idx == 0) {
-    tile_multistates.set_inclusive_prefix(-1, tile_multistate_seed);
-    tile_output_offsets.set_inclusive_prefix(-1, tile_output_offset);
-  }
-}
-
-__global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -185,10 +173,12 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
-  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
-  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+  auto const tile_idx          = base_tile_idx + blockIdx.x;
+  auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  auto const thread_input_offset =
+    tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
+  auto const thread_input_size =
+    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -239,7 +229,7 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void multibyte_split_kernel(
   }
 }
 
-__global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
+CUDF_KERNEL __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
   cudf::size_type base_tile_idx,
   byte_offset base_input_offset,
   output_offset base_output_offset,
@@ -258,10 +248,12 @@ __global__ __launch_bounds__(THREADS_PER_TILE) void byte_split_kernel(
     typename OffsetScan::TempStorage offset_scan;
   } temp_storage;
 
-  int32_t const tile_idx            = base_tile_idx + blockIdx.x;
-  int32_t const tile_input_offset   = blockIdx.x * ITEMS_PER_TILE;
-  int32_t const thread_input_offset = tile_input_offset + threadIdx.x * ITEMS_PER_THREAD;
-  int32_t const thread_input_size   = chunk_input_chars.size() - thread_input_offset;
+  auto const tile_idx          = base_tile_idx + blockIdx.x;
+  auto const tile_input_offset = blockIdx.x * ITEMS_PER_TILE;
+  auto const thread_input_offset =
+    tile_input_offset + cudf::thread_index_type{threadIdx.x} * ITEMS_PER_THREAD;
+  auto const thread_input_size =
+    std::max<cudf::size_type>(chunk_input_chars.size() - thread_input_offset, 0);
 
   // STEP 1: Load inputs
 
@@ -309,44 +301,12 @@ namespace io {
 namespace text {
 namespace detail {
 
-void fork_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
-{
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreate(&event));
-  CUDF_CUDA_TRY(cudaEventRecord(event, stream));
-  for (uint32_t i = 0; i < streams.size(); i++) {
-    CUDF_CUDA_TRY(cudaStreamWaitEvent(streams[i], event, 0));
-  }
-  CUDF_CUDA_TRY(cudaEventDestroy(event));
-}
-
-void join_stream(std::vector<rmm::cuda_stream_view> streams, rmm::cuda_stream_view stream)
-{
-  cudaEvent_t event;
-  CUDF_CUDA_TRY(cudaEventCreate(&event));
-  for (uint32_t i = 0; i < streams.size(); i++) {
-    CUDF_CUDA_TRY(cudaEventRecord(event, streams[i]));
-    CUDF_CUDA_TRY(cudaStreamWaitEvent(stream, event, 0));
-  }
-  CUDF_CUDA_TRY(cudaEventDestroy(event));
-}
-
-std::vector<rmm::cuda_stream_view> get_streams(int32_t count, rmm::cuda_stream_pool& stream_pool)
-{
-  auto streams = std::vector<rmm::cuda_stream_view>();
-  for (int32_t i = 0; i < count; i++) {
-    streams.emplace_back(stream_pool.get_stream());
-  }
-  return streams;
-}
-
 std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source const& source,
                                               std::string const& delimiter,
                                               byte_range_info byte_range,
                                               bool strip_delimiters,
                                               rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr,
-                                              rmm::cuda_stream_pool& stream_pool)
+                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -373,8 +333,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   CUDF_EXPECTS(delimiter.size() < multistate::max_segment_value,
                "delimiter contains too many total tokens to produce a deterministic result.");
 
-  auto concurrency = 2;
-  auto streams     = get_streams(concurrency, stream_pool);
+  auto const concurrency = 2;
 
   // must be at least 32 when using warp-reduce on partials
   // must be at least 1 more than max possible concurrent tiles
@@ -401,11 +360,14 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   // Seeding the tile state with an identity value allows the 0th tile to follow the same logic as
   // the Nth tile, assuming it can look up an inclusive prefix. Without this seed, the 0th block
   // would have to follow separate logic.
-  multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
-    tile_multistates,
-    tile_offsets,
-    multistate_seed,
-    0);
+  cudf::detail::device_single_thread(
+    [tm = scan_tile_state_view<multistate>(tile_multistates),
+     to = scan_tile_state_view<output_offset>(tile_offsets),
+     multistate_seed] __device__() mutable {
+      tm.set_inclusive_prefix(-1, multistate_seed);
+      to.set_inclusive_prefix(-1, 0);
+    },
+    stream);
 
   auto reader               = source.create_reader();
   auto chunk_offset         = std::max<byte_offset>(0, byte_range.offset() - delimiter.size());
@@ -416,7 +378,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
   output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
 
-  fork_stream(streams, stream);
+  auto streams = cudf::detail::fork_streams(stream, concurrency);
 
   cudaEvent_t last_launch_event;
   CUDF_CUDA_TRY(cudaEventCreate(&last_launch_event));
@@ -537,7 +499,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
 
   CUDF_CUDA_TRY(cudaEventDestroy(last_launch_event));
 
-  join_stream(streams, stream);
+  cudf::detail::join_streams(streams, stream);
 
   // if the input was empty, we didn't find a delimiter at all,
   // or the first delimiter was also the last: empty output
@@ -565,29 +527,36 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets.begin() + insert_begin,
-                    [baseline = *first_row_offset] __device__(byte_offset global_offset) {
-                      return static_cast<int32_t>(global_offset - baseline);
-                    });
+                    cuda::proclaim_return_type<int32_t>(
+                      [baseline = *first_row_offset] __device__(byte_offset global_offset) {
+                        return static_cast<int32_t>(global_offset - baseline);
+                      }));
   auto string_count = offsets.size() - 1;
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
-      [ofs        = offsets.data(),
-       chars      = chars.data(),
-       delim_size = static_cast<size_type>(delimiter.size()),
-       last_row   = static_cast<size_type>(string_count) - 1,
-       insert_end] __device__(size_type row) {
-        auto const begin = ofs[row];
-        auto const len   = ofs[row + 1] - begin;
-        if (row == last_row && insert_end) {
-          return thrust::make_pair(chars + begin, len);
-        } else {
-          return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
-        };
-      });
+      cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
+        [ofs        = offsets.data(),
+         chars      = chars.data(),
+         delim_size = static_cast<size_type>(delimiter.size()),
+         last_row   = static_cast<size_type>(string_count) - 1,
+         insert_end] __device__(size_type row) {
+          auto const begin = ofs[row];
+          auto const len   = ofs[row + 1] - begin;
+          if (row == last_row && insert_end) {
+            return thrust::make_pair(chars + begin, len);
+          } else {
+            return thrust::make_pair(chars + begin, std::max<size_type>(0, len - delim_size));
+          };
+        }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);
   } else {
-    return cudf::make_strings_column(string_count, std::move(offsets), std::move(chars), {}, 0);
+    return cudf::make_strings_column(
+      string_count,
+      std::make_unique<cudf::column>(std::move(offsets), rmm::device_buffer{}, 0),
+      chars.release(),
+      0,
+      {});
   }
 }
 
@@ -607,11 +576,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
                                               parse_options options,
                                               rmm::mr::device_memory_resource* mr)
 {
-  auto stream      = cudf::get_default_stream();
-  auto stream_pool = rmm::cuda_stream_pool(2);
+  auto stream = cudf::get_default_stream();
 
   auto result = detail::multibyte_split(
-    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr, stream_pool);
+    source, delimiter, options.byte_range, options.strip_delimiters, stream, mr);
 
   return result;
 }

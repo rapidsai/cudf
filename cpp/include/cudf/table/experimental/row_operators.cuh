@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,11 +17,11 @@
 #pragma once
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
-#include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/hashing/detail/default_hash.cuh>
+#include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -33,6 +33,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 #include <thrust/detail/use_default.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -46,12 +48,10 @@
 #include <thrust/swap.h>
 #include <thrust/transform_reduce.h>
 
-#include <cuda/std/tuple>
-#include <cuda/std/utility>
-
 #include <limits>
 #include <memory>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace cudf {
@@ -264,6 +264,7 @@ template <bool has_nested_columns,
           typename Nullate,
           typename PhysicalElementComparator = sorting_physical_element_comparator>
 class device_row_comparator {
+ public:
   friend class self_comparator;       ///< Allow self_comparator to access private members
   friend class two_table_comparator;  ///< Allow two_table_comparator to access private members
 
@@ -274,6 +275,8 @@ class device_row_comparator {
    * @param check_nulls Indicates if any input column contains nulls.
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
+   * @param l_dremel_device_views lhs table dremel device view for list type
+   * @param r_dremel_device_views rhs table dremel device view for list type
    * @param depth Optional, device array the same length as a row that contains starting depths of
    * columns if they're nested, and 0 otherwise.
    * @param column_order Optional, device array the same length as a row that indicates the desired
@@ -306,6 +309,44 @@ class device_row_comparator {
   }
 
   /**
+   * @brief Construct a function object for performing a lexicographic
+   * comparison between the rows of two tables.
+   * This is a special overload to allow device-side construction of the
+   * comparator for cases where no preprocessing is needed, i.e. tables with
+   * non-nested type columns.
+   *
+   * @param check_nulls Indicates if any input column contains nulls.
+   * @param lhs The first table
+   * @param rhs The second table (may be the same table as `lhs`)
+   * @param column_order Optional, device array the same length as a row that indicates the desired
+   * ascending/descending order of each column in a row. If `nullopt`, it is assumed all columns are
+   * sorted in ascending order.
+   * @param null_precedence Optional, device array the same length as a row and indicates how null
+   * values compare to all other for every column. If `nullopt`, then null precedence would be
+   * `null_order::BEFORE` for all columns.
+   * @param comparator Physical element relational comparison functor.
+   */
+  template <bool nested_disable = not has_nested_columns, CUDF_ENABLE_IF(nested_disable)>
+  __device__ device_row_comparator(
+    Nullate check_nulls,
+    table_device_view lhs,
+    table_device_view rhs,
+    std::optional<device_span<order const>> column_order         = std::nullopt,
+    std::optional<device_span<null_order const>> null_precedence = std::nullopt,
+    PhysicalElementComparator comparator                         = {}) noexcept
+    : _lhs{lhs},
+      _rhs{rhs},
+      _l_dremel{},
+      _r_dremel{},
+      _check_nulls{check_nulls},
+      _depth{},
+      _column_order{column_order},
+      _null_precedence{null_precedence},
+      _comparator{comparator}
+  {
+  }
+
+  /**
    * @brief Performs a relational comparison between two elements in two columns.
    */
   class element_comparator {
@@ -323,6 +364,8 @@ class device_row_comparator {
      * @param depth The depth of the column if part of a nested column @see
      * preprocessed_table::depths
      * @param comparator Physical element relational comparison functor.
+     * @param l_dremel_device_view <>
+     * @param r_dremel_device_view <>
      */
     __device__ element_comparator(Nullate check_nulls,
                                   column_device_view lhs,
@@ -370,6 +413,13 @@ class device_row_comparator {
                              std::numeric_limits<int>::max());
     }
 
+    /**
+     * @brief Throws run-time error when columns types cannot be compared
+     *        or if this class is instantiated with `has_nested_columns = false` but
+     *        passed tables with nested columns
+     *
+     * @return Ordering
+     */
     template <typename Element,
               CUDF_ENABLE_IF(not cudf::is_relationally_comparable<Element, Element>() and
                              (not has_nested_columns or not cudf::is_nested<Element>()))>
@@ -379,6 +429,14 @@ class device_row_comparator {
       CUDF_UNREACHABLE("Attempted to compare elements of uncomparable types.");
     }
 
+    /**
+     * @brief Compares two struct-type columns
+     *
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
+     */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::struct_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(
@@ -413,6 +471,14 @@ class device_row_comparator {
         rhs_element_index);
     }
 
+    /**
+     * @brief Compares two list-type columns
+     *
+     * @param lhs_element_index The index of the first element
+     * @param rhs_element_index The index of the second element
+     * @return Indicates the relationship between the elements in the `lhs` and `rhs` columns, along
+     * with the depth at which a null value was encountered.
+     */
     template <typename Element,
               CUDF_ENABLE_IF(has_nested_columns and std::is_same_v<Element, cudf::list_view>)>
     __device__ cuda::std::pair<weak_ordering, int> operator()(size_type lhs_element_index,
@@ -542,8 +608,10 @@ class device_row_comparator {
                                                 size_type const rhs_index) const noexcept
   {
     int last_null_depth = std::numeric_limits<int>::max();
-    size_type list_column_index{0};
+    size_type list_column_index{-1};
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      if (_lhs.column(i).type().id() == type_id::LIST) { ++list_column_index; }
+
       int const depth = _depth.has_value() ? (*_depth)[i] : 0;
       if (depth > last_null_depth) { continue; }
 
@@ -556,15 +624,12 @@ class device_row_comparator {
       // TODO: At what point do we verify that the columns of lhs and rhs are
       // all of the same types? I assume that it's already happened before
       // here, otherwise the current code would be failing.
-      auto [l_dremel_i, r_dremel_i] = [&]() {
-        if (_lhs.column(i).type().id() == type_id::LIST) {
-          auto idx = list_column_index++;
-          return std::make_tuple(optional_dremel_view(_l_dremel[idx]),
-                                 optional_dremel_view(_r_dremel[idx]));
-        } else {
-          return std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
-        }
-      }();
+      auto const [l_dremel_i, r_dremel_i] =
+        _lhs.column(i).type().id() == type_id::LIST
+          ? std::make_tuple(optional_dremel_view(_l_dremel[list_column_index]),
+                            optional_dremel_view(_r_dremel[list_column_index]))
+          : std::make_tuple(optional_dremel_view{}, optional_dremel_view{});
+
       auto element_comp = element_comparator{_check_nulls,
                                              _lhs.column(i),
                                              _rhs.column(i),
@@ -1813,7 +1878,7 @@ class device_row_hasher {
 
     // Hash each element and combine all the hash values together
     return detail::accumulate(it, it + _table.num_columns(), _seed, [](auto hash, auto h) {
-      return cudf::detail::hash_combine(hash, h);
+      return cudf::hashing::detail::hash_combine(hash, h);
     });
   }
 
@@ -1854,7 +1919,8 @@ class device_row_hasher {
           auto validity_it = detail::make_validity_iterator<true>(curr_col);
           hash             = detail::accumulate(
             validity_it, validity_it + curr_col.size(), hash, [](auto hash, auto is_valid) {
-              return cudf::detail::hash_combine(hash, is_valid ? NON_NULL_HASH : NULL_HASH);
+              return cudf::hashing::detail::hash_combine(hash,
+                                                         is_valid ? NON_NULL_HASH : NULL_HASH);
             });
         }
         if (curr_col.type().id() == type_id::STRUCT) {
@@ -1866,13 +1932,13 @@ class device_row_hasher {
           auto list_sizes = make_list_size_iterator(list_col);
           hash            = detail::accumulate(
             list_sizes, list_sizes + list_col.size(), hash, [](auto hash, auto size) {
-              return cudf::detail::hash_combine(hash, hash_fn<size_type>{}(size));
+              return cudf::hashing::detail::hash_combine(hash, hash_fn<size_type>{}(size));
             });
           curr_col = list_col.get_sliced_child();
         }
       }
       for (int i = 0; i < curr_col.size(); ++i) {
-        hash = cudf::detail::hash_combine(
+        hash = cudf::hashing::detail::hash_combine(
           hash,
           type_dispatcher<dispatch_void_if_nested>(curr_col.type(), _element_hasher, curr_col, i));
       }
@@ -1941,7 +2007,7 @@ class row_hasher {
    * @param seed The seed to use for the hash function
    * @return A hash operator to use on the device
    */
-  template <template <typename> class hash_function = detail::default_hash,
+  template <template <typename> class hash_function = cudf::hashing::detail::default_hash,
             template <template <typename> class, typename>
             class DeviceRowHasher = device_row_hasher,
             typename Nullate>

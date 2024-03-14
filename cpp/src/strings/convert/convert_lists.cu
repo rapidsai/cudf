@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ struct format_lists_fn {
       auto const view = get_nested_child(stack_idx);
 
       auto offsets   = view.child(cudf::lists_column_view::offsets_column_index);
-      auto d_offsets = offsets.data<offset_type>() + view.offset();
+      auto d_offsets = offsets.data<size_type>() + view.offset();
 
       // add pending separator
       if (item.separator == item_separator::LIST) {
@@ -216,14 +216,14 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   auto const d_separators = column_device_view::create(separators.parent(), stream);
   auto const d_na_rep     = na_rep.value(stream);
 
-  auto children = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     format_lists_fn{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth},
     input.size(),
     stream,
     mr);
 
   return make_strings_column(
-    input.size(), std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
+    input.size(), std::move(offsets_column), chars.release(), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -233,10 +233,11 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
 std::unique_ptr<column> format_list_column(lists_column_view const& input,
                                            string_scalar const& na_rep,
                                            strings_column_view const& separators,
+                                           rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::format_list_column(input, na_rep, separators, cudf::get_default_stream(), mr);
+  return detail::format_list_column(input, na_rep, separators, stream, mr);
 }
 
 }  // namespace strings

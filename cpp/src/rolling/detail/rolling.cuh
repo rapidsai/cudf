@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,15 @@
 
 #pragma once
 
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/util.hpp"
 #include "lead_lag_nested.cuh"
 #include "nth_element.cuh"
+#include "reductions/nested_type_minmax_util.cuh"
 #include "rolling.hpp"
 #include "rolling_collect_list.cuh"
 #include "rolling_jit.hpp"
-
-#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -45,24 +47,19 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/util.hpp>
-
-#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/climits>
+#include <cuda/std/limits>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
-#include <cuda/std/climits>
-#include <cuda/std/limits>
+#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
 
 #include <memory>
 
@@ -70,7 +67,22 @@ namespace cudf {
 
 namespace detail {
 
-namespace {  // anonymous
+/// Helper function to materialize preceding/following offsets.
+template <typename Calculator>
+std::unique_ptr<column> expand_to_column(Calculator const& calc,
+                                         size_type const& num_rows,
+                                         rmm::cuda_stream_view stream)
+{
+  auto window_column = cudf::make_numeric_column(
+    cudf::data_type{type_to_id<size_type>()}, num_rows, cudf::mask_state::UNALLOCATED, stream);
+
+  auto begin = cudf::detail::make_counting_transform_iterator(0, calc);
+
+  thrust::copy_n(
+    rmm::exec_policy(stream), begin, num_rows, window_column->mutable_view().data<size_type>());
+
+  return window_column;
+}
 
 /**
  * @brief Operator for applying a generic (non-specialized) rolling aggregation on a single window.
@@ -91,14 +103,14 @@ struct DeviceRolling {
 
   // operations we do support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, std::enable_if_t<is_supported<T, O>()>* = nullptr)
+  explicit DeviceRolling(size_type _min_periods, std::enable_if_t<is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
   }
 
   // operations we don't support
   template <typename T = InputType, aggregation::Kind O = op>
-  DeviceRolling(size_type _min_periods, std::enable_if_t<!is_supported<T, O>()>* = nullptr)
+  explicit DeviceRolling(size_type _min_periods, std::enable_if_t<!is_supported<T, O>()>* = nullptr)
     : min_periods(_min_periods)
   {
     CUDF_FAIL("Invalid aggregation/type pair");
@@ -111,7 +123,7 @@ struct DeviceRolling {
                              mutable_column_device_view& output,
                              size_type start_index,
                              size_type end_index,
-                             size_type current_index)
+                             size_type current_index) const
   {
     using AggOp = typename corresponding_operator<op>::type;
     AggOp agg_op;
@@ -144,7 +156,7 @@ struct DeviceRolling {
 template <typename InputType, aggregation::Kind op>
 struct DeviceRollingArgMinMaxBase {
   size_type min_periods;
-  DeviceRollingArgMinMaxBase(size_type _min_periods) : min_periods(_min_periods) {}
+  explicit DeviceRollingArgMinMaxBase(size_type _min_periods) : min_periods(_min_periods) {}
 
   static constexpr bool is_supported()
   {
@@ -162,7 +174,7 @@ struct DeviceRollingArgMinMaxBase {
  */
 template <aggregation::Kind op>
 struct DeviceRollingArgMinMaxString : DeviceRollingArgMinMaxBase<cudf::string_view, op> {
-  DeviceRollingArgMinMaxString(size_type _min_periods)
+  explicit DeviceRollingArgMinMaxString(size_type _min_periods)
     : DeviceRollingArgMinMaxBase<cudf::string_view, op>(_min_periods)
   {
   }
@@ -454,15 +466,15 @@ struct agg_specific_empty_output {
 
     if constexpr (op == aggregation::COLLECT_LIST) {
       return cudf::make_lists_column(
-        0, make_empty_column(type_to_id<offset_type>()), empty_like(input), 0, {});
+        0, make_empty_column(type_to_id<size_type>()), empty_like(input), 0, {});
     }
 
     return empty_like(input);
   }
 };
 
-std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view const& input,
-                                                             rolling_aggregation const& agg)
+static std::unique_ptr<column> empty_output_for_rolling_aggregation(column_view const& input,
+                                                                    rolling_aggregation const& agg)
 {
   // TODO:
   //  Ideally, for UDF aggregations, the returned column would match
@@ -745,7 +757,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // MIN aggregations with strings are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMIN aggregation to generate indices instead of values.
   // Then a second pass uses those indices to gather the final strings.  This step
-  // translates the the MIN -> ARGMIN aggregation
+  // translates the MIN -> ARGMIN aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::min_aggregation const&) override
   {
@@ -759,7 +771,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   // MAX aggregations with strings are processed in 2 passes. The first pass performs
   // the rolling operation on a ARGMAX aggregation to generate indices instead of values.
   // Then a second pass uses those indices to gather the final strings.  This step
-  // translates the the MAX -> ARGMAX aggregation
+  // translates the MAX -> ARGMAX aggregation
   std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                   cudf::detail::max_aggregation const&) override
   {
@@ -1007,7 +1019,7 @@ template <typename OutputType,
           typename DeviceRollingOperator,
           typename PrecedingWindowIterator,
           typename FollowingWindowIterator>
-__launch_bounds__(block_size) __global__
+__launch_bounds__(block_size) CUDF_KERNEL
   void gpu_rolling(column_device_view input,
                    column_device_view default_outputs,
                    mutable_column_device_view output,
@@ -1214,8 +1226,6 @@ struct dispatch_rolling {
     return postprocessor.get_result();
   }
 };
-
-}  // namespace
 
 // Applies a user-defined rolling window function to the values in a column.
 template <typename PrecedingWindowIterator, typename FollowingWindowIterator>

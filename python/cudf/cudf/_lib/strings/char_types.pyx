@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 
 from libcpp cimport bool
@@ -14,7 +14,7 @@ from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.char_types cimport (
     all_characters_of_type as cpp_all_characters_of_type,
     filter_characters_of_type as cpp_filter_characters_of_type,
-    string_character_types as string_character_types,
+    string_character_types,
 )
 from cudf._lib.scalar cimport DeviceScalar
 

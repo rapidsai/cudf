@@ -1,9 +1,10 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version = environ['CONDA_PY'] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
+{% set cuda_major = cuda_version.split('.')[0] %}
 {% set date_string = environ['RAPIDS_DATE_STRING'] %}
 
 package:
@@ -11,11 +12,11 @@ package:
   version: {{ version }}
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_py{{ py_version }}_{{ date_string }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - AWS_ACCESS_KEY_ID
     - AWS_SECRET_ACCESS_KEY
@@ -32,28 +33,50 @@ build:
     - SCCACHE_S3_KEY_PREFIX=cudf-kafka-linux64 # [linux64]
     - SCCACHE_S3_USE_SSL
     - SCCACHE_S3_NO_CREDENTIALS
+  ignore_run_exports_from:
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    - cuda-cudart-dev
+    {% endif %}
 
 requirements:
   build:
-    - cmake >=3.23.1,!=3.25.0
+    - cmake {{ cmake_version }}
+    - ninja
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - ninja
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
     - python
-    - cython >=0.29,<0.30
+    - cython >=3.0.3
+    - cuda-version ={{ cuda_version }}
     - cudf ={{ version }}
     - libcudf_kafka ={{ version }}
+    - scikit-build-core >=0.7.0
     - setuptools
+    {% if cuda_major != "11" %}
+    - cuda-cudart-dev
+    {% endif %}
   run:
     - python
+    - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - libcudf_kafka ={{ version }}
     - cudf ={{ version }}
+    {% if cuda_major != "11" %}
+    - cuda-cudart
+    {% endif %}
 
 test:
   requires:
-    - cudatoolkit ={{ cuda_version }}
+    - cuda-version ={{ cuda_version }}
   imports:
     - cudf_kafka
 

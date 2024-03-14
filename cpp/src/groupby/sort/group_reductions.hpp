@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -213,6 +213,33 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group_offsets,
+                                        size_type num_groups,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr);
+/**
+ * @brief Internal API to compute histogram for each group in @p values.
+ *
+ * The returned column is a lists column, each list corresponds to one input group and stores the
+ * histogram of the distinct elements in that group in the form of `STRUCT<value, count>`.
+ *
+ * Note that the order of distinct elements in each output list is not specified.
+ *
+ * @code{.pseudo}
+ * values       = [2, 1, 1, 3, 5, 2, 2, 3, 1, 4]
+ * group_labels = [0, 0, 0, 1, 1, 1, 1, 1, 2, 2]
+ * num_groups   = 3
+ *
+ * output = [[<1, 2>, <2, 1>], [<2, 2>, <3, 2>, <5, 1>], [<1, 1>, <4, 1>]]
+ * @endcode
+ *
+ * @param values Grouped values to compute histogram
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_histogram(column_view const& values,
+                                        cudf::device_span<size_type const> group_labels,
                                         size_type num_groups,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
@@ -441,6 +468,34 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        size_type num_groups,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Internal API to merge multiple output of HISTOGRAM aggregation.
+ *
+ * The input values column should be given as a lists column in the form of
+ * `LIST<STRUCT<value, count>>`.
+ * After merging, the order of distinct elements in each output list is not specified.
+ *
+ * @code{.pseudo}
+ * values        = [ [<1, 2>, <2, 1>], [<2, 2>], [<3, 2>, <2, 1>], [<1, 1>, <2, 1>] ]
+ * group_offsets = [ 0,                          2,                                 4]
+ * num_groups    = 2
+ *
+ * output = [[<1, 2>, <2, 3>], [<1, 1>, <2, 2>, <3, 2>]]]
+ * @endcode
+ *
+ * @param values Grouped values to get valid count of
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_merge_histogram(column_view const& values,
+                                              cudf::device_span<size_type const> group_offsets,
+                                              size_type num_groups,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::mr::device_memory_resource* mr);
+
 /**
  * @brief Internal API to find covariance of child columns of a non-nullable struct column.
  *

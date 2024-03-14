@@ -15,7 +15,7 @@ Developers are strongly recommended to set up `pre-commit` prior to any developm
 The `.pre-commit-config.yaml` file at the root of the repo is the primary source of truth linting.
 Specifically, cuDF uses the following tools:
 
-- [`flake8`](https://github.com/pycqa/flake8) checks for general code formatting compliance.
+- [`ruff`](https://beta.ruff.rs/) checks for general code formatting compliance.
 - [`black`](https://github.com/psf/black) is an automatic code formatter.
 - [`isort`](https://pycqa.github.io/isort/) ensures imports are sorted consistently.
 - [`mypy`](http://mypy-lang.org/) performs static type checking.
@@ -28,10 +28,9 @@ Linter config data is stored in a number of files.
 We generally use `pyproject.toml` over `setup.cfg` and avoid project-specific files (e.g. `pyproject.toml` > `python/cudf/pyproject.toml`).
 However, differences between tools and the different packages in the repo result in the following caveats:
 
-- `flake8` has no plans to support `pyproject.toml`, so it must live in `.flake8`.
 - `isort` must be configured per project to set which project is the "first party" project.
 
-As a result, we currently maintain both root and project-level `pyproject.toml` files as well as a `.flake8` file.
+As a result, we currently maintain both root and project-level `pyproject.toml` files.
 
 For more information on how to use pre-commit hooks, see the code formatting section of the
 [overall contributing guide](https://github.com/rapidsai/cudf/blob/main/CONTRIBUTING.md#python--pre-commit-hooks).
@@ -41,6 +40,8 @@ For more information on how to use pre-commit hooks, see the code formatting sec
 cuDF follows the policy of deprecating code for one release prior to removal.
 For example, if we decide to remove an API during the 22.08 release cycle,
 it will be marked as deprecated in the 22.08 release and removed in the 22.10 release.
+Note that if it is explicitly mentioned in a comment (like `# Do not remove until..`),
+do not enforce the deprecation by removing the affected code until the condition in the comment is met.
 All internal usage of deprecated APIs in cuDF should be removed when the API is deprecated.
 This prevents users from encountering unexpected deprecation warnings when using other (non-deprecated) APIs.
 The documentation for the API should also be updated to reflect its deprecation.

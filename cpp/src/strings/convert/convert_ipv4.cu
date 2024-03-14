@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,8 +52,8 @@ struct ipv4_to_integers_fn {
     uint32_t ipvals[4] = {0};  // IPV4 format: xxx.xxx.xxx.xxx
     int32_t ipv_idx    = 0;
     int32_t factor     = 1;
-    const char* in_ptr = d_str.data();
-    const char* end    = in_ptr + d_str.size_bytes();
+    char const* in_ptr = d_str.data();
+    char const* end    = in_ptr + d_str.size_bytes();
     while ((in_ptr < end) && (ipv_idx < 4)) {
       char ch = *in_ptr++;
       if (ch < '0' || ch > '9') {
@@ -72,19 +72,21 @@ struct ipv4_to_integers_fn {
 }  // namespace
 
 // Convert strings column of IPv4 addresses to integers column
-std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
+std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  size_type strings_count = strings.size();
-  if (strings_count == 0) return make_numeric_column(data_type{type_id::INT64}, 0);
+  size_type strings_count = input.size();
+  if (strings_count == 0) {
+    return make_numeric_column(data_type{type_id::INT64}, 0, mask_state::UNALLOCATED, stream);
+  }
 
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   // create output column copying the strings' null-mask
   auto results   = make_numeric_column(data_type{type_id::INT64},
                                      strings_count,
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<int64_t>();
@@ -95,18 +97,19 @@ std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
                     d_results,
                     ipv4_to_integers_fn{*strings_column});
   // done
-  results->set_null_count(strings.null_count());
+  results->set_null_count(input.null_count());
   return results;
 }
 
 }  // namespace detail
 
 // external API
-std::unique_ptr<column> ipv4_to_integers(strings_column_view const& strings,
+std::unique_ptr<column> ipv4_to_integers(strings_column_view const& input,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ipv4_to_integers(strings, cudf::get_default_stream(), mr);
+  return detail::ipv4_to_integers(input, stream, mr);
 }
 
 namespace detail {
@@ -162,34 +165,34 @@ std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
 
   CUDF_EXPECTS(integers.type().id() == type_id::INT64, "Input column must be type_id::INT64 type");
 
-  auto d_column = column_device_view::create(integers, stream);
-  auto children = cudf::strings::detail::make_strings_children(
+  auto d_column                = column_device_view::create(integers, stream);
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     integers_to_ipv4_fn{*d_column}, integers.size(), stream, mr);
 
   return make_strings_column(integers.size(),
-                             std::move(children.first),
-                             std::move(children.second),
+                             std::move(offsets_column),
+                             chars.release(),
                              integers.null_count(),
                              cudf::detail::copy_bitmask(integers, stream, mr));
 }
 
-std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
+std::unique_ptr<column> is_ipv4(strings_column_view const& input,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  auto strings_column = column_device_view::create(strings.parent(), stream);
+  auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_column       = *strings_column;
   // create output column
   auto results   = make_numeric_column(data_type{type_id::BOOL8},
-                                     strings.size(),
-                                     cudf::detail::copy_bitmask(strings.parent(), stream, mr),
-                                     strings.null_count(),
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
                                      stream,
                                      mr);
   auto d_results = results->mutable_view().data<bool>();
   thrust::transform(rmm::exec_policy(stream),
                     thrust::make_counting_iterator<size_type>(0),
-                    thrust::make_counting_iterator<size_type>(strings.size()),
+                    thrust::make_counting_iterator<size_type>(input.size()),
                     d_results,
                     [d_column] __device__(size_type idx) {
                       if (d_column.is_null(idx)) return false;
@@ -197,7 +200,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                       if (d_str.empty()) return false;
                       constexpr int max_ip = 255;  // values must be in [0,255]
                       int ip_vals[4]       = {-1, -1, -1, -1};
-                      int ipv_idx          = 0;    // index into ip_vals
+                      int ipv_idx          = 0;  // index into ip_vals
                       for (auto const ch : d_str) {
                         if ((ch >= '0') && (ch <= '9')) {
                           auto const ip_val    = ip_vals[ipv_idx];
@@ -214,7 +217,7 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
                       return ip_vals[0] >= 0 && ip_vals[1] >= 0 && ip_vals[2] >= 0 &&
                              ip_vals[3] >= 0;
                     });
-  results->set_null_count(strings.null_count());
+  results->set_null_count(input.null_count());
   return results;
 }
 
@@ -223,17 +226,19 @@ std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
 // external API
 
 std::unique_ptr<column> integers_to_ipv4(column_view const& integers,
+                                         rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::integers_to_ipv4(integers, cudf::get_default_stream(), mr);
+  return detail::integers_to_ipv4(integers, stream, mr);
 }
 
-std::unique_ptr<column> is_ipv4(strings_column_view const& strings,
+std::unique_ptr<column> is_ipv4(strings_column_view const& input,
+                                rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_ipv4(strings, cudf::get_default_stream(), mr);
+  return detail::is_ipv4(input, stream, mr);
 }
 
 }  // namespace strings

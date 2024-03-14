@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,7 +54,7 @@ namespace detail {
  * @param output_column The destination for the results of evaluating the expression.
  */
 template <cudf::size_type max_block_size, bool has_nulls>
-__launch_bounds__(max_block_size) __global__
+__launch_bounds__(max_block_size) CUDF_KERNEL
   void compute_column_kernel(table_device_view const table,
                              ast::detail::expression_device_view device_expression_data,
                              mutable_column_device_view output_column)
@@ -69,9 +69,8 @@ __launch_bounds__(max_block_size) __global__
 
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
-  auto const start_idx =
-    static_cast<cudf::thread_index_type>(threadIdx.x + blockIdx.x * blockDim.x);
-  auto const stride = static_cast<cudf::thread_index_type>(blockDim.x * gridDim.x);
+  auto start_idx    = cudf::detail::grid_1d::global_thread_id();
+  auto const stride = cudf::detail::grid_1d::grid_stride();
   auto evaluator =
     cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 

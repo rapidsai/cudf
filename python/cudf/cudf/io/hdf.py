@@ -1,4 +1,4 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import warnings
 
@@ -27,4 +27,4 @@ def to_hdf(path_or_buf, key, value, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = value.to_pandas()
-    pd.io.pytables.to_hdf(path_or_buf, key, pd_value, *args, **kwargs)
+    pd_value.to_hdf(path_or_buf, key=key, *args, **kwargs)

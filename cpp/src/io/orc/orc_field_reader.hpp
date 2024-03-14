@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 #pragma once
 
 #include "orc.hpp"
+
 #include <string>
 
 /**
@@ -42,8 +43,8 @@ template <int index>
 struct FunctionSwitchImpl {
   template <typename... Operator>
   static inline void run(ProtobufReader* pbr,
-                         const uint8_t* end,
-                         const int& encoded_field_number,
+                         uint8_t const* end,
+                         int const& encoded_field_number,
                          std::tuple<Operator...>& ops)
   {
     if (encoded_field_number == std::get<index>(ops).encoded_field_number) {
@@ -58,8 +59,8 @@ template <>
 struct FunctionSwitchImpl<0> {
   template <typename... Operator>
   static inline void run(ProtobufReader* pbr,
-                         const uint8_t* end,
-                         const int& encoded_field_number,
+                         uint8_t const* end,
+                         int const& encoded_field_number,
                          std::tuple<Operator...>& ops)
   {
     if (encoded_field_number == std::get<0>(ops).encoded_field_number) {
