@@ -22,6 +22,19 @@ def column_to_arrow(plc_column):
     ]
 
 
+# This function is just a convenient wrapper for the metadata handling. We should update
+# the API to make naming more convenient when we don't need metadata objects.
+def table_to_arrow(plc_table):
+    """Create a PyArrow table from a pylibcudf Table."""
+    return plc_table.to_arrow(
+        [plc.interop.ColumnMetadata("")] * plc_table.num_columns()
+    )
+
+
+def scalar_to_arrow(plc_scalar):
+    return plc_scalar.to_arrow(plc.interop.ColumnMetadata(""))
+
+
 def assert_array_eq(plc_column, pa_array):
     """Verify that the pylibcudf array and PyArrow array are equal."""
     pa_equal = pa.compute.equal(column_to_arrow(plc_column), pa_array)
