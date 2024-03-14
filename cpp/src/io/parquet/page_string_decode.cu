@@ -1045,12 +1045,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       //
       if (!has_repetition) { dst_pos -= s->first_row; }
 
-      // need to do this before we branch on src_pos/dst_pos so we don't deadlock
-      // choose a character parallel string copy when the average string is longer than a warp
-      using cudf::detail::warp_size;
-      auto const use_char_ll =
-        s->page.num_valids > 0 && (s->page.str_bytes / s->page.num_valids) >= warp_size;
-
       if (me < warp_size) {
         for (int i = 0; i < decode_block_size - out_thread0; i += warp_size) {
           dst_pos = sb->nz_idx[rolling_index<rolling_buf_size>(src_pos + i)];
@@ -1061,9 +1055,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                               : cuda::std::pair<char const*, size_t>{nullptr, 0};
 
           __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
-          size_type offset;
-          cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
+          size_type offset, warp_total;
+          cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset, warp_total);
           offset += last_offset;
+
+          // choose a character parallel string copy when the average string is longer than a warp
+          auto const use_char_ll = warp_total / warp_size >= warp_size;
 
           if (use_char_ll) {
             __shared__ __align__(8) uint8_t const* pointers[warp_size];
