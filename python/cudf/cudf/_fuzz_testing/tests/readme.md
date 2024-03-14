@@ -80,21 +80,21 @@ def set_rand_params(self, params):
                 col_size = self._rand(len(self._current_buffer.columns))
                 params_dict[param] = list(
                     np.unique(
-                        np.random.choice(
+                        np.random.default_rng(2).choice(
                             self._current_buffer.columns, col_size
                         )
                     )
                 )
             elif param == "chunksize":
-                params_dict[param] = np.random.choice(
+                params_dict[param] = np.random.default_rng(2).choice(
                     [
                         None,
-                        np.random.randint(
+                        np.random.default_rng(2).integers(
                             low=1, high=max(1, len(self._current_buffer))
                         ),
                     ]
                 )
         else:
-            params_dict[param] = np.random.choice(values)
+            params_dict[param] = np.random.default_rng(2).choice(values)
     self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 ```

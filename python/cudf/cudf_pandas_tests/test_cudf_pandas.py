@@ -1083,8 +1083,7 @@ def test_private_method_result_wrapped():
 
 
 def test_numpy_var():
-    np.random.seed(42)
-    data = np.random.rand(1000)
+    data = np.arange(1000)
     psr = pd.Series(data)
     sr = xpd.Series(data)
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import logging
 import random
@@ -100,10 +100,14 @@ class ParquetReader(IOFuzz):
             if param == "columns" and values == ALL_POSSIBLE_VALUES:
                 col_size = self._rand(len(self._df.columns))
                 params_dict[param] = list(
-                    np.unique(np.random.choice(self._df.columns, col_size))
+                    np.unique(
+                        np.random.default_rng(2).choice(
+                            self._df.columns, col_size
+                        )
+                    )
                 )
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = np.random.default_rng(2).choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 

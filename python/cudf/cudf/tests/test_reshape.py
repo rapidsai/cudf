@@ -44,9 +44,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     id_vars = []
     for i in range(num_id_vars):
         colname = "id" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = np.random.default_rng(2).integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
+            idx = np.random.default_rng(2).choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
             data[idx] = np.nan
@@ -58,9 +58,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     value_vars = []
     for i in range(num_value_vars):
         colname = "val" + str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = np.random.default_rng(2).integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
+            idx = np.random.default_rng(2).choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
             data[idx] = np.nan
@@ -116,9 +116,9 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame()
     for i in range(num_cols):
         colname = str(i)
-        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        data = np.random.default_rng(2).integers(0, 26, num_rows).astype(dtype)
         if nulls == "some":
-            idx = np.random.choice(
+            idx = np.random.default_rng(2).choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
             data[idx] = np.nan
@@ -256,7 +256,9 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
         names=["exp", "animal", "hair_length"],
     )
 
-    df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
+    df = pd.DataFrame(
+        np.random.default_rng(2).standard_normal((4, 4)), columns=columns
+    )
 
     with pytest.warns(FutureWarning):
         expect = df.stack(level=level, future_stack=False)
@@ -285,10 +287,12 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(0, 26, num_rows)).astype(dtype)
+        data = pd.Series(
+            np.random.default_rng(2).integers(0, 26, num_rows)
+        ).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
+            idx = np.random.default_rng(2).choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
             data[idx] = np.nan
@@ -321,12 +325,12 @@ def test_tile(nulls, num_cols, num_rows, dtype, count):
     pdf = pd.DataFrame(dtype=dtype)
     for i in range(num_cols):
         colname = str(i)
-        data = pd.Series(np.random.randint(num_cols, 26, num_rows)).astype(
-            dtype
-        )
+        data = pd.Series(
+            np.random.default_rng(2).integers(num_cols, 26, num_rows)
+        ).astype(dtype)
 
         if nulls == "some":
-            idx = np.random.choice(
+            idx = np.random.default_rng(2).choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
             data[idx] = np.nan
@@ -705,8 +709,8 @@ def test_pivot_duplicate_error():
             "A": ["one", "one", "two", "three"] * 6,
             "B": ["A", "B", "C"] * 8,
             "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-            "D": np.random.randn(24),
-            "E": np.random.randn(24),
+            "D": np.random.default_rng(2).standard_normal(24),
+            "E": np.random.default_rng(2).standard_normal(24),
         }
     ],
 )
@@ -743,8 +747,8 @@ def test_pivot_table_simple(data, aggfunc, fill_value):
             "A": ["one", "one", "two", "three"] * 6,
             "B": ["A", "B", "C"] * 8,
             "C": ["foo", "foo", "foo", "bar", "bar", "bar"] * 4,
-            "D": np.random.randn(24),
-            "E": np.random.randn(24),
+            "D": np.random.default_rng(2).standard_normal(24),
+            "E": np.random.default_rng(2).standard_normal(24),
         }
     ],
 )

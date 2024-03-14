@@ -13,10 +13,11 @@ from cudf.testing._utils import assert_eq
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
 def test_factorize_series_obj(ncats, nelem):
     df = DataFrame()
-    np.random.seed(0)
 
     # initialize data frame
-    df["cats"] = arr = np.random.randint(2, size=10, dtype=np.int32)
+    df["cats"] = arr = np.random.default_rng(2).integers(
+        2, size=10, dtype=np.int32
+    )
 
     uvals, labels = df["cats"].factorize()
     np.testing.assert_array_equal(labels.to_numpy(), sorted(set(arr)))
@@ -31,10 +32,11 @@ def test_factorize_series_obj(ncats, nelem):
 @pytest.mark.parametrize("ncats,nelem", [(2, 2), (2, 10), (10, 100)])
 def test_factorize_index_obj(ncats, nelem):
     df = DataFrame()
-    np.random.seed(0)
 
     # initialize data frame
-    df["cats"] = arr = np.random.randint(2, size=10, dtype=np.int32)
+    df["cats"] = arr = np.random.default_rng(2).integers(
+        2, size=10, dtype=np.int32
+    )
     df = df.set_index("cats")
 
     uvals, labels = df.index.factorize()

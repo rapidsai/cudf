@@ -71,8 +71,8 @@ def _get_space_util(bins, init_bins):
 
 def _pick_initial_a_b(data, max_constant, init_bins):
     while True:
-        a = np.random.randint(2**12, 2**15)
-        b = np.random.randint(2**12, 2**15)
+        a = np.random.randint(2**12, 2**15)  # noqa: NPY002
+        b = np.random.randint(2**12, 2**15)  # noqa: NPY002
         bins = _make_bins(data, init_bins, a, b)
         score = _get_space_util(bins, init_bins) / len(data)
 
@@ -93,10 +93,10 @@ def _find_hash_for_internal(hash_bin):
     new_length = _new_bin_length(len(hash_bin))
 
     while True:
-        a = np.random.randint(
+        a = np.random.randint(  # noqa: NPY002
             A_LBOUND_SECOND_LEVEL_HASH, A_HBOUND_SECOND_LEVEL_HASH
         )
-        b = np.random.randint(
+        b = np.random.randint(  # noqa: NPY002
             B_LBOUND_SECOND_LEVEL_HASH, B_HBOUND_SECOND_LEVEL_HASH
         )
         bins = _make_bins(hash_bin, new_length, a, b)
@@ -244,7 +244,7 @@ def hash_vocab(
     """
     Write the vocab vocabulary hashtable to the output_path
     """
-    np.random.seed(1243342)
+    np.random.seed(1243342)  # noqa: NPY002
     vocab = _load_vocab_dict(vocab_path)
     keys = list(map(_sdbm_hash, vocab.keys()))
 

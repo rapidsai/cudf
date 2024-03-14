@@ -77,23 +77,23 @@ def make_frame(
     extra_vals=(),
     with_datetime=False,
 ):
-    np.random.seed(seed)
-
     df = dataframe_class()
 
-    df["x"] = np.random.randint(0, 5, nelem)
-    df["y"] = np.random.randint(0, 3, nelem)
+    df["x"] = np.random.default_rng(2).integers(0, 5, nelem)
+    df["y"] = np.random.default_rng(2).integers(0, 3, nelem)
     for lvl in extra_levels:
-        df[lvl] = np.random.randint(0, 2, nelem)
+        df[lvl] = np.random.default_rng(2).integers(0, 2, nelem)
 
-    df["val"] = np.random.random(nelem)
+    df["val"] = np.random.default_rng(2).random(nelem)
     for val in extra_vals:
-        df[val] = np.random.random(nelem)
+        df[val] = np.random.default_rng(2).random(nelem)
 
     if with_datetime:
-        df["datetime"] = np.random.randint(
-            _now, _tomorrow, nelem, dtype=np.int64
-        ).astype("datetime64[ns]")
+        df["datetime"] = (
+            np.random.default_rng(2)
+            .integers(_now, _tomorrow, nelem, dtype=np.int64)
+            .astype("datetime64[ns]")
+        )
 
     return df
 
@@ -264,7 +264,7 @@ def test_groupby_getitem_getattr(as_index):
 def test_groupby_cats():
     df = DataFrame()
     df["cats"] = pd.Categorical(list("aabaacaab"))
-    df["vals"] = np.random.random(len(df))
+    df["vals"] = np.random.default_rng(2).random(len(df))
 
     cats = df["cats"].values_host
     vals = df["vals"].to_numpy()
@@ -281,13 +281,12 @@ def test_groupby_cats():
 
 
 def test_groupby_iterate_groups():
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df["key1"] = np.random.default_rng(2).integers(0, 3, nelem)
+    df["key2"] = np.random.default_rng(2).integers(0, 2, nelem)
+    df["val1"] = np.random.default_rng(2).random(nelem)
+    df["val2"] = np.random.default_rng(2).random(nelem)
 
     def assert_values_equal(arr):
         np.testing.assert_array_equal(arr[0], arr)
@@ -299,13 +298,12 @@ def test_groupby_iterate_groups():
 
 
 def test_groupby_apply():
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df["key1"] = np.random.default_rng(2).integers(0, 3, nelem)
+    df["key2"] = np.random.default_rng(2).integers(0, 2, nelem)
+    df["val1"] = np.random.default_rng(2).random(nelem)
+    df["val2"] = np.random.default_rng(2).random(nelem)
 
     expect_grpby = df.to_pandas().groupby(
         ["key1", "key2"], as_index=False, group_keys=False
@@ -339,13 +337,12 @@ def create_test_groupby_apply_args_params():
 
 @pytest.mark.parametrize("func,args", create_test_groupby_apply_args_params())
 def test_groupby_apply_args(func, args):
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
-    df["key1"] = np.random.randint(0, 3, nelem)
-    df["key2"] = np.random.randint(0, 2, nelem)
-    df["val1"] = np.random.random(nelem)
-    df["val2"] = np.random.random(nelem)
+    df["key1"] = np.random.default_rng(2).integers(0, 3, nelem)
+    df["key2"] = np.random.default_rng(2).integers(0, 2, nelem)
+    df["val1"] = np.random.default_rng(2).random(nelem)
+    df["val2"] = np.random.default_rng(2).random(nelem)
 
     expect_grpby = df.to_pandas().groupby(
         ["key1", "key2"], as_index=False, group_keys=False
@@ -357,7 +354,6 @@ def test_groupby_apply_args(func, args):
 
 
 def test_groupby_apply_grouped():
-    np.random.seed(0)
     df = DataFrame()
     nelem = 20
     df["key1"] = range(nelem)
@@ -955,8 +951,12 @@ def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # https://github.com/pandas-dev/pandas/issues/40685). However, if that is
     # ever enabled, then this issue will crop up again so we may as well have
     # it fixed now.
-    x = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
-    y = np.unique((np.random.rand(nelem) * scale).round(decimal_digits))
+    x = np.unique(
+        (np.random.default_rng(2).random(nelem) * scale).round(decimal_digits)
+    )
+    y = np.unique(
+        (np.random.default_rng(2).random(nelem) * scale).round(decimal_digits)
+    )
 
     if x.size < y.size:
         total_elements = x.size
@@ -1242,9 +1242,10 @@ def test_empty_groupby(func):
 
 
 def test_groupby_unsupported_columns():
-    np.random.seed(12)
     pd_cat = pd.Categorical(
-        pd.Series(np.random.choice(["a", "b", 1], 3), dtype="category")
+        pd.Series(
+            np.random.default_rng(2).choice(["a", "b", 1], 3), dtype="category"
+        )
     )
     pdf = pd.DataFrame(
         {
@@ -1352,8 +1353,8 @@ def test_groupby_apply_basic_agg_single_column():
 def test_groupby_multi_agg_single_groupby_series():
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
+            "x": np.random.default_rng(2).integers(0, 5, size=10000),
+            "y": np.random.default_rng(2).normal(size=10000),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1366,10 +1367,10 @@ def test_groupby_multi_agg_single_groupby_series():
 def test_groupby_multi_agg_multi_groupby():
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 5, 10),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "a": np.random.default_rng(2).integers(0, 5, 10),
+            "b": np.random.default_rng(2).integers(0, 5, 10),
+            "c": np.random.default_rng(2).integers(0, 5, 10),
+            "d": np.random.default_rng(2).integers(0, 5, 10),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -1386,9 +1387,9 @@ def test_groupby_datetime_multi_agg_multi_groupby():
                 datetime.datetime.now() + datetime.timedelta(9),
                 freq="D",
             ),
-            "b": np.random.randint(0, 5, 10),
-            "c": np.random.randint(0, 5, 10),
-            "d": np.random.randint(0, 5, 10),
+            "b": np.random.default_rng(2).integers(0, 5, 10),
+            "c": np.random.default_rng(2).integers(0, 5, 10),
+            "d": np.random.default_rng(2).integers(0, 5, 10),
         }
     )
     gdf = cudf.from_pandas(pdf)

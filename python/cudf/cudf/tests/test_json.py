@@ -38,7 +38,9 @@ def pdf(request):
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
         {
-            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            f"col_{typ}": np.random.default_rng(2)
+            .integers(0, nrows, nrows)
+            .astype(typ)
             for typ in types
         }
     )

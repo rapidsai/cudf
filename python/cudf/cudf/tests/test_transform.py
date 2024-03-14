@@ -25,7 +25,7 @@ def _generic_function(a):
 def test_apply_python_lambda(dtype, udf, testfunc):
     size = 500
 
-    lhs_arr = np.random.random(size).astype(dtype)
+    lhs_arr = np.random.default_rng(2).random(size).astype(dtype)
     lhs_ser = Series(lhs_arr)
 
     out_ser = lhs_ser.apply(udf)

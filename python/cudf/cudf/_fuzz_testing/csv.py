@@ -81,11 +81,13 @@ class CSVReader(IOFuzz):
             if values == ALL_POSSIBLE_VALUES:
                 if param == "usecols":
                     col_size = self._rand(len(self._df.columns))
-                    col_val = np.random.choice(
+                    col_val = np.random.default_rng(2).choice(
                         [
                             None,
                             np.unique(
-                                np.random.choice(self._df.columns, col_size)
+                                np.random.default_rng(2).choice(
+                                    self._df.columns, col_size
+                                )
                             ),
                         ]
                     )
@@ -93,7 +95,7 @@ class CSVReader(IOFuzz):
                         col_val if col_val is None else list(col_val)
                     )
                 elif param == "dtype":
-                    dtype_val = np.random.choice(
+                    dtype_val = np.random.default_rng(2).choice(
                         [None, self._df.dtypes.to_dict()]
                     )
                     if dtype_val is not None:
@@ -105,25 +107,35 @@ class CSVReader(IOFuzz):
                         }
                     params_dict[param] = dtype_val
                 elif param == "header":
-                    header_val = np.random.choice(
-                        ["infer", np.random.randint(low=0, high=len(self._df))]
+                    header_val = np.random.default_rng(2).choice(
+                        [
+                            "infer",
+                            np.random.default_rng(2).integers(
+                                low=0, high=len(self._df)
+                            ),
+                        ]
                     )
                     params_dict[param] = header_val
                 elif param == "skiprows":
-                    params_dict[param] = np.random.randint(
+                    params_dict[param] = np.random.default_rng(2).integers(
                         low=0, high=len(self._df)
                     )
                 elif param == "skipfooter":
-                    params_dict[param] = np.random.randint(
+                    params_dict[param] = np.random.default_rng(2).integers(
                         low=0, high=len(self._df)
                     )
                 elif param == "nrows":
-                    nrows_val = np.random.choice(
-                        [None, np.random.randint(low=0, high=len(self._df))]
+                    nrows_val = np.random.default_rng(2).choice(
+                        [
+                            None,
+                            np.random.default_rng(2).integers(
+                                low=0, high=len(self._df)
+                            ),
+                        ]
                     )
                     params_dict[param] = nrows_val
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = np.random.default_rng(2).choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
@@ -188,20 +200,20 @@ class CSVWriter(IOFuzz):
                     col_size = self._rand(len(self._current_buffer.columns))
                     params_dict[param] = list(
                         np.unique(
-                            np.random.choice(
+                            np.random.default_rng(2).choice(
                                 self._current_buffer.columns, col_size
                             )
                         )
                     )
                 elif param == "chunksize":
-                    params_dict[param] = np.random.choice(
+                    params_dict[param] = np.random.default_rng(2).choice(
                         [
                             None,
-                            np.random.randint(
+                            np.random.default_rng(2).integers(
                                 low=1, high=max(1, len(self._current_buffer))
                             ),
                         ]
                     )
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = np.random.default_rng(2).choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)

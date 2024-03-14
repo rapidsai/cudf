@@ -598,7 +598,7 @@ def test_avro_reader_multiblock(
         # execution time of each test by a factor of 10 or more (it appears
         # to use a very costly approach to generating random data).
         # See also: https://github.com/rapidsai/cudf/issues/13128
-        values = np.random.rand(total_rows).astype(dtype)
+        values = np.random.default_rng(2).random(total_rows).astype(dtype)
         bytes_per_row = values.dtype.itemsize
 
     # The sync_interval is the number of bytes between sync blocks.  We know

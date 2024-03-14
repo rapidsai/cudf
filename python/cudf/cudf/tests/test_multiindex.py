@@ -159,7 +159,7 @@ def test_multiindex_swaplevel():
 def test_string_index():
     from cudf.core.index import Index
 
-    pdf = pd.DataFrame(np.random.rand(5, 5))
+    pdf = pd.DataFrame(np.random.default_rng(2).random((5, 5)))
     gdf = cudf.from_pandas(pdf)
     stringIndex = ["a", "b", "c", "d", "e"]
     pdf.index = stringIndex
@@ -180,7 +180,7 @@ def test_string_index():
 
 
 def test_multiindex_row_shape():
-    pdf = pd.DataFrame(np.random.rand(0, 5))
+    pdf = pd.DataFrame(np.random.default_rng(2).random((0, 5)))
     gdf = cudf.from_pandas(pdf)
     pdfIndex = pd.MultiIndex([["a", "b", "c"]], [[0]])
     pdfIndex.names = ["alpha"]
@@ -197,7 +197,7 @@ def test_multiindex_row_shape():
 
 @pytest.fixture
 def pdf():
-    return pd.DataFrame(np.random.rand(7, 5))
+    return pd.DataFrame(np.random.default_rng(2).random((7, 5)))
 
 
 @pytest.fixture
@@ -275,7 +275,7 @@ def test_from_pandas_series():
 
 
 def test_series_multiindex(pdfIndex):
-    ps = pd.Series(np.random.rand(7))
+    ps = pd.Series(np.random.default_rng(2).random(7))
     gs = cudf.from_pandas(ps)
     ps.index = pdfIndex
     gs.index = cudf.from_pandas(pdfIndex)
@@ -443,7 +443,7 @@ def test_multiindex_loc_rows_1_1_key(pdf, gdf, pdfIndex):
 
 
 def test_multiindex_column_shape():
-    pdf = pd.DataFrame(np.random.rand(5, 0))
+    pdf = pd.DataFrame(np.random.default_rng(2).random((5, 0)))
     gdf = cudf.from_pandas(pdf)
     pdfIndex = pd.MultiIndex([["a", "b", "c"]], [[0]])
     pdfIndex.names = ["alpha"]
@@ -527,8 +527,8 @@ def test_multiindex_from_product(arrays):
 
 def test_multiindex_index_and_columns():
     gdf = cudf.DataFrame()
-    gdf["x"] = np.random.randint(0, 5, 5)
-    gdf["y"] = np.random.randint(0, 5, 5)
+    gdf["x"] = np.random.default_rng(2).integers(0, 5, 5)
+    gdf["y"] = np.random.default_rng(2).integers(0, 5, 5)
     pdf = gdf.to_pandas()
     mi = cudf.MultiIndex(
         levels=[[0, 1, 2], [3, 4]],
@@ -550,7 +550,7 @@ def test_multiindex_multiple_groupby():
         {
             "a": [4, 17, 4, 9, 5],
             "b": [1, 4, 4, 3, 2],
-            "x": np.random.normal(size=5),
+            "x": np.random.default_rng(2).normal(size=5),
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -572,9 +572,9 @@ def test_multiindex_multiple_groupby():
 def test_multi_column(func):
     pdf = pd.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=1000),
-            "y": np.random.randint(0, 10, size=1000),
-            "z": np.random.normal(size=1000),
+            "x": np.random.default_rng(2).integers(0, 5, size=1000),
+            "y": np.random.default_rng(2).integers(0, 10, size=1000),
+            "z": np.random.default_rng(2).normal(size=1000),
         }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)

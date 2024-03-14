@@ -107,12 +107,12 @@ class JSONReader(IOFuzz):
         params_dict = {}
         for param, values in params.items():
             if param == "dtype" and values == ALL_POSSIBLE_VALUES:
-                dtype_val = np.random.choice(
+                dtype_val = np.random.default_rng(2).choice(
                     [True, self._current_buffer.dtypes.to_dict()]
                 )
                 params_dict[param] = _get_dtype_param_value(dtype_val)
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = np.random.default_rng(2).choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 
@@ -182,10 +182,10 @@ class JSONWriter(IOFuzz):
         params_dict = {}
         for param, values in params.items():
             if param == "dtype" and values == ALL_POSSIBLE_VALUES:
-                dtype_val = np.random.choice(
+                dtype_val = np.random.default_rng(2).choice(
                     [True, self._current_buffer.dtypes.to_dict()]
                 )
                 params_dict[param] = _get_dtype_param_value(dtype_val)
             else:
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = np.random.default_rng(2).choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)

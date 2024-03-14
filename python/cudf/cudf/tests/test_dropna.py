@@ -25,10 +25,10 @@ def test_dropna_series(data, nulls, inplace):
 
     if len(data) > 0:
         if nulls == "one":
-            p = np.random.randint(0, 4)
+            p = np.random.default_rng(2).integers(0, 4)
             psr[p] = None
         elif nulls == "some":
-            p1, p2 = np.random.randint(0, 4, (2,))
+            p1, p2 = np.random.default_rng(2).integers(0, 4, (2,))
             psr[p1] = None
             psr[p2] = None
         elif nulls == "all":

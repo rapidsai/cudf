@@ -22,18 +22,20 @@ param_nrows = [5, 10, 50, 100]
 def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
     chunksize = 50
 
-    np.random.seed(0)
-
     # cuDF
     left = cudf.DataFrame(
         {
-            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, left_nkeys, size=left_nrows
+            ),
             "a": np.arange(left_nrows),
         }
     )
     right = cudf.DataFrame(
         {
-            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, right_nkeys, size=right_nrows
+            ),
             "a": 1000 * np.arange(right_nrows),
         }
     )
@@ -80,18 +82,20 @@ def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
 def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
     chunksize = 50
 
-    np.random.seed(0)
-
     # cuDF
     left = cudf.DataFrame(
         {
-            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, left_nkeys, size=left_nrows
+            ),
             "a": np.arange(left_nrows, dtype=np.float64),
         }
     )
     right = cudf.DataFrame(
         {
-            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, right_nkeys, size=right_nrows
+            ),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
         }
     )
@@ -145,20 +149,26 @@ def test_merge_left(
 ):
     chunksize = 3
 
-    np.random.seed(0)
-
     # cuDF
     left = cudf.DataFrame(
         {
-            "x": np.random.randint(0, left_nkeys, size=left_nrows),
-            "y": np.random.randint(0, left_nkeys, size=left_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, left_nkeys, size=left_nrows
+            ),
+            "y": np.random.default_rng(2).integers(
+                0, left_nkeys, size=left_nrows
+            ),
             "a": np.arange(left_nrows, dtype=np.float64),
         }
     )
     right = cudf.DataFrame(
         {
-            "x": np.random.randint(0, right_nkeys, size=right_nrows),
-            "y": np.random.randint(0, right_nkeys, size=right_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, right_nkeys, size=right_nrows
+            ),
+            "y": np.random.default_rng(2).integers(
+                0, right_nkeys, size=right_nrows
+            ),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
         }
     )
@@ -192,18 +202,20 @@ def test_merge_1col_left(
 ):
     chunksize = 3
 
-    np.random.seed(0)
-
     # cuDF
     left = cudf.DataFrame(
         {
-            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, left_nkeys, size=left_nrows
+            ),
             "a": np.arange(left_nrows, dtype=np.float64),
         }
     )
     right = cudf.DataFrame(
         {
-            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "x": np.random.default_rng(2).integers(
+                0, right_nkeys, size=right_nrows
+            ),
             "a": 1000 * np.arange(right_nrows, dtype=np.float64),
         }
     )
@@ -232,11 +244,11 @@ def test_merge_should_fail():
     # Expected failure cases described in #2694
     df1 = cudf.DataFrame()
     df1["a"] = [1, 2, 3, 4, 5, 6] * 2
-    df1["b"] = np.random.randint(0, 12, 12)
+    df1["b"] = np.random.default_rng(2).integers(0, 12, 12)
 
     df2 = cudf.DataFrame()
     df2["a"] = [7, 2, 3, 8, 5, 9] * 2
-    df2["c"] = np.random.randint(0, 12, 12)
+    df2["c"] = np.random.default_rng(2).integers(0, 12, 12)
 
     left = dask_cudf.from_cudf(df1, 1).groupby("a").b.min().to_frame()
     right = dask_cudf.from_cudf(df2, 1).groupby("a").c.min().to_frame()
@@ -249,7 +261,7 @@ def test_merge_should_fail():
         left.merge(right, how="left", on=["c"])
 
     # Same column names
-    df2["b"] = np.random.randint(0, 12, 12)
+    df2["b"] = np.random.default_rng(2).integers(0, 12, 12)
     right = dask_cudf.from_cudf(df2, 1).groupby("a").b.min().to_frame()
 
     with pytest.raises(KeyError):

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 import json
@@ -92,7 +92,8 @@ class IOFuzz:
 
     def set_rand_params(self, params):
         params_dict = {
-            param: np.random.choice(values) for param, values in params.items()
+            param: np.random.default_rng(2).choice(values)
+            for param, values in params.items()
         }
         self._current_params["test_kwargs"] = self.process_kwargs(
             params_dict=params_dict

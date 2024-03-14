@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 import io
@@ -99,20 +99,24 @@ class OrcReader(IOFuzz):
                 if param == "columns":
                     col_size = self._rand(len(self._df.columns))
                     params_dict[param] = list(
-                        np.unique(np.random.choice(self._df.columns, col_size))
+                        np.unique(
+                            np.random.default_rng(2).choice(
+                                self._df.columns, col_size
+                            )
+                        )
                     )
                 elif param == "stripes":
                     f = io.BytesIO(self._current_buffer)
                     orcFile = pa.orc.ORCFile(f)
                     stripes = list(range(orcFile.nstripes))
-                    params_dict[param] = np.random.choice(
+                    params_dict[param] = np.random.default_rng(2).choice(
                         [
                             None,
                             list(
                                 map(
                                     int,
                                     np.unique(
-                                        np.random.choice(
+                                        np.random.default_rng(2).choice(
                                             stripes, orcFile.nstripes
                                         )
                                     ),
@@ -121,15 +125,17 @@ class OrcReader(IOFuzz):
                         ]
                     )
                 elif param == "use_index":
-                    params_dict[param] = np.random.choice([True, False])
+                    params_dict[param] = np.random.default_rng(2).choice(
+                        [True, False]
+                    )
                 elif param in ("skiprows", "num_rows"):
-                    params_dict[param] = np.random.choice(
+                    params_dict[param] = np.random.default_rng(2).choice(
                         [None, self._rand(len(self._df))]
                     )
             else:
                 if not isinstance(values, list):
                     raise TypeError("values must be of type list")
-                params_dict[param] = np.random.choice(values)
+                params_dict[param] = np.random.default_rng(2).choice(values)
         self._current_params["test_kwargs"] = self.process_kwargs(params_dict)
 
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 
 import datetime
@@ -45,10 +45,10 @@ def test_query(data, fn, nulls):
     # prepare
     nelem, seed = data
     expect_fn, query_expr = fn
-    np.random.seed(seed)
+
     pdf = pd.DataFrame()
     pdf["a"] = np.arange(nelem)
-    pdf["b"] = np.random.random(nelem) * nelem
+    pdf["b"] = np.random.default_rng(2).random(nelem) * nelem
     if nulls:
         pdf.loc[::2, "a"] = None
     gdf = cudf.from_pandas(pdf)
@@ -71,10 +71,10 @@ def test_query_ref_env(data, fn):
     # prepare
     nelem, seed = data
     expect_fn, query_expr = fn
-    np.random.seed(seed)
+
     df = DataFrame()
     df["a"] = aa = np.arange(nelem)
-    df["b"] = bb = np.random.random(nelem) * nelem
+    df["b"] = bb = np.random.default_rng(2).random(nelem) * nelem
     c = 2.3
     d = 1.2
     # udt
@@ -121,9 +121,11 @@ def test_query_local_dict():
 
 
 def test_query_splitted_combine():
-    np.random.seed(0)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10), "y": np.random.normal(size=10)}
+        {
+            "x": np.random.default_rng(2).integers(0, 5, size=10),
+            "y": np.random.default_rng(2).normal(size=10),
+        }
     )
     gdf = DataFrame.from_pandas(df)
 

@@ -426,7 +426,6 @@ def test_series_init_none():
 
 
 def test_dataframe_basic():
-    np.random.seed(0)
     df = cudf.DataFrame()
 
     # Populate with cuda memory
@@ -435,7 +434,7 @@ def test_dataframe_basic():
     assert len(df) == 10
 
     # Populate with numpy array
-    rnd_vals = np.random.random(10)
+    rnd_vals = np.random.default_rng(2).random(10)
     df["vals"] = rnd_vals
     np.testing.assert_equal(df["vals"].to_numpy(), rnd_vals)
     assert len(df) == 10
@@ -1226,7 +1225,7 @@ def test_empty_dataframe_to_cupy():
     df = cudf.DataFrame()
     nelem = 123
     for k in "abc":
-        df[k] = np.random.random(nelem)
+        df[k] = np.random.default_rng(2).random(nelem)
 
     # Check all columns in empty dataframe.
     mat = df.head(0).to_cupy()
@@ -1238,7 +1237,7 @@ def test_dataframe_to_cupy():
 
     nelem = 123
     for k in "abcd":
-        df[k] = np.random.random(nelem)
+        df[k] = np.random.default_rng(2).random(nelem)
 
     # Check all columns
     mat = df.to_cupy()
@@ -1267,7 +1266,7 @@ def test_dataframe_to_cupy_null_values():
 
     refvalues = {}
     for k in "abcd":
-        df[k] = data = np.random.random(nelem)
+        df[k] = data = np.random.default_rng(2).random(nelem)
         bitmask = utils.random_bitmask(nelem)
         df[k] = df[k]._column.set_mask(bitmask)
         boolmask = np.asarray(
@@ -1308,10 +1307,10 @@ def test_dataframe_append_empty():
 
 
 def test_dataframe_setitem_from_masked_object():
-    ary = np.random.randn(100)
+    ary = np.random.default_rng(2).standard_normal(100)
     mask = np.zeros(100, dtype=bool)
     mask[:20] = True
-    np.random.shuffle(mask)
+    np.random.default_rng(2).shuffle(mask)
     ary[mask] = np.nan
 
     test1_null = cudf.Series(ary, nan_as_null=True)
@@ -1521,14 +1520,13 @@ def test_dataframe_hash_values_xxhash64():
 @pytest.mark.parametrize("nparts", [1, 2, 8, 13])
 @pytest.mark.parametrize("nkeys", [1, 2])
 def test_dataframe_hash_partition(nrows, nparts, nkeys):
-    np.random.seed(123)
     gdf = cudf.DataFrame()
     keycols = []
     for i in range(nkeys):
         keyname = f"key{i}"
-        gdf[keyname] = np.random.randint(0, 7 - i, nrows)
+        gdf[keyname] = np.random.default_rng(2).integers(0, 7 - i, nrows)
         keycols.append(keyname)
-    gdf["val1"] = np.random.randint(0, nrows * 2, nrows)
+    gdf["val1"] = np.random.default_rng(2).integers(0, nrows * 2, nrows)
 
     got = gdf.partition_by_hash(keycols, nparts=nparts)
     # Must return a list
@@ -1739,7 +1737,7 @@ def test_concat_with_axis():
     assert_eq(concat_cdf_s, concat_s, check_index_type=True)
 
     # concat series and dataframes
-    s3 = pd.Series(np.random.random(5))
+    s3 = pd.Series(np.random.default_rng(2).random(5))
     cs3 = cudf.Series.from_pandas(s3)
 
     concat_cdf_all = cudf.concat([cdf1, cs3, cdf2], axis=1)
@@ -1777,10 +1775,10 @@ def test_concat_with_axis():
     # concat groupby multi index
     gdf1 = cudf.DataFrame(
         {
-            "x": np.random.randint(0, 10, 10),
-            "y": np.random.randint(0, 10, 10),
-            "z": np.random.randint(0, 10, 10),
-            "v": np.random.randint(0, 10, 10),
+            "x": np.random.default_rng(2).integers(0, 10, 10),
+            "y": np.random.default_rng(2).integers(0, 10, 10),
+            "z": np.random.default_rng(2).integers(0, 10, 10),
+            "v": np.random.default_rng(2).integers(0, 10, 10),
         }
     )
     gdf2 = gdf1[5:]
@@ -1820,14 +1818,12 @@ def test_concat_with_axis():
 
 @pytest.mark.parametrize("nrows", [0, 3, 10, 100, 1000])
 def test_nonmatching_index_setitem(nrows):
-    np.random.seed(0)
-
     gdf = cudf.DataFrame()
-    gdf["a"] = np.random.randint(2147483647, size=nrows)
-    gdf["b"] = np.random.randint(2147483647, size=nrows)
+    gdf["a"] = np.random.default_rng(2).integers(2147483647, size=nrows)
+    gdf["b"] = np.random.default_rng(2).integers(2147483647, size=nrows)
     gdf = gdf.set_index("b")
 
-    test_values = np.random.randint(2147483647, size=nrows)
+    test_values = np.random.default_rng(2).integers(2147483647, size=nrows)
     gdf["c"] = test_values
     assert len(test_values) == len(gdf["c"])
     gdf_series = cudf.Series(test_values, index=gdf.index, name="c")
@@ -1963,8 +1959,12 @@ dtypes = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
 def test_from_arrow(nelem, data_type):
     df = pd.DataFrame(
         {
-            "a": np.random.randint(0, 1000, nelem).astype(data_type),
-            "b": np.random.randint(0, 1000, nelem).astype(data_type),
+            "a": np.random.default_rng(2)
+            .integers(0, 1000, nelem)
+            .astype(data_type),
+            "b": np.random.default_rng(2)
+            .integers(0, 1000, nelem)
+            .astype(data_type),
         }
     )
     padf = pa.Table.from_pandas(
@@ -1989,8 +1989,12 @@ def test_from_arrow(nelem, data_type):
 def test_to_arrow(nelem, data_type):
     df = pd.DataFrame(
         {
-            "a": np.random.randint(0, 1000, nelem).astype(data_type),
-            "b": np.random.randint(0, 1000, nelem).astype(data_type),
+            "a": np.random.default_rng(2)
+            .integers(0, 1000, nelem)
+            .astype(data_type),
+            "b": np.random.default_rng(2)
+            .integers(0, 1000, nelem)
+            .astype(data_type),
         }
     )
     gdf = cudf.DataFrame.from_pandas(df)
@@ -2097,14 +2101,16 @@ def test_from_scalar_typing(data_type):
     if data_type == "datetime64[ms]":
         scalar = (
             np.dtype("int64")
-            .type(np.random.randint(0, 5))
+            .type(np.random.default_rng(2).integers(0, 5))
             .astype("datetime64[ms]")
         )
     elif data_type.startswith("datetime64"):
         scalar = np.datetime64(datetime.date.today()).astype("datetime64[ms]")
         data_type = "datetime64[ms]"
     else:
-        scalar = np.dtype(data_type).type(np.random.randint(0, 5))
+        scalar = np.dtype(data_type).type(
+            np.random.default_rng(2).integers(0, 5)
+        )
 
     gdf = cudf.DataFrame()
     gdf["a"] = [1, 2, 3, 4, 5]
@@ -2115,7 +2121,7 @@ def test_from_scalar_typing(data_type):
 
 @pytest.mark.parametrize("data_type", NUMERIC_TYPES)
 def test_from_python_array(data_type):
-    np_arr = np.random.randint(0, 100, 10).astype(data_type)
+    np_arr = np.random.default_rng(2).integers(0, 100, 10).astype(data_type)
     data = memoryview(np_arr)
     data = arr.array(data.format, data)
 
@@ -2203,11 +2209,13 @@ def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     for i in range(num_cols):
         colname = string.ascii_lowercase[i]
         data = pd.Series(
-            np.random.randint(0, 26, num_rows).astype(np_dtype),
+            np.random.default_rng(2)
+            .integers(0, 26, num_rows)
+            .astype(np_dtype),
             dtype=dtype,
         )
         if nulls == "some":
-            idx = np.random.choice(
+            idx = np.random.default_rng(2).choice(
                 num_rows, size=int(num_rows / 2), replace=False
             )
             if len(idx):
@@ -2627,8 +2635,7 @@ def test_unaryops_df(pdf, unaryop, col_name, assign_col_name):
 
 
 def test_df_abs(pdf):
-    np.random.seed(0)
-    disturbance = pd.Series(np.random.rand(10))
+    disturbance = pd.Series(np.random.default_rng(2).random(10))
     pdf = pdf - 5 + disturbance
     d = pdf.apply(np.abs)
     g = cudf.from_pandas(pdf).abs()
@@ -2682,7 +2689,11 @@ def test_quantile(q, numeric_only):
     ts = pd.date_range("2018-08-24", periods=5, freq="D")
     td = pd.to_timedelta(np.arange(5), unit="h")
     pdf = pd.DataFrame(
-        {"date": ts, "delta": td, "val": np.random.randn(len(ts))}
+        {
+            "date": ts,
+            "delta": td,
+            "val": np.random.default_rng(2).standard_normal(len(ts)),
+        }
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
 
@@ -2706,7 +2717,10 @@ def test_quantile(q, numeric_only):
 def test_decimal_quantile(q, interpolation, decimal_type):
     data = ["244.8", "32.24", "2.22", "98.14", "453.23", "5.45"]
     gdf = cudf.DataFrame(
-        {"id": np.random.randint(0, 10, size=len(data)), "val": data}
+        {
+            "id": np.random.default_rng(2).integers(0, 10, size=len(data)),
+            "val": data,
+        }
     )
     gdf["id"] = gdf["id"].astype("float64")
     gdf["val"] = gdf["val"].astype(decimal_type(7, 2))
@@ -2789,7 +2803,7 @@ def test_cuda_array_interface(dtype):
 @pytest.mark.parametrize("data_type", dtypes)
 def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     np_list_data = [
-        np.random.randint(0, 100, nelem).astype(data_type)
+        np.random.default_rng(2).integers(0, 100, nelem).astype(data_type)
         for i in range(nchunks)
     ]
     pa_chunk_array = pa.chunked_array(np_list_data)
@@ -2806,7 +2820,7 @@ def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
     assert_eq(expect, got)
 
     np_list_data2 = [
-        np.random.randint(0, 100, nelem).astype(data_type)
+        np.random.default_rng(2).integers(0, 100, nelem).astype(data_type)
         for i in range(nchunks)
     ]
     pa_chunk_array2 = pa.chunked_array(np_list_data2)
@@ -2838,11 +2852,15 @@ def test_gpu_memory_usage_with_boolmask():
     cuda.current_context().deallocations.clear()
     nRows = int(1e8)
     nCols = 2
-    dataNumpy = np.asfortranarray(np.random.rand(nRows, nCols))
+    dataNumpy = np.asfortranarray(
+        np.random.default_rng(2).random(nRows, nCols)
+    )
     colNames = ["col" + str(iCol) for iCol in range(nCols)]
     pandasDF = pd.DataFrame(data=dataNumpy, columns=colNames, dtype=np.float32)
     cudaDF = cudf.core.DataFrame.from_pandas(pandasDF)
-    boolmask = cudf.Series(np.random.randint(1, 2, len(cudaDF)).astype("bool"))
+    boolmask = cudf.Series(
+        np.random.default_rng(2).integers(1, 2, len(cudaDF)).astype("bool")
+    )
 
     memory_used = query_GPU_memory()
     cudaDF = cudaDF[boolmask]
@@ -2860,7 +2878,7 @@ def test_gpu_memory_usage_with_boolmask():
 
 
 def test_boolmask(pdf, gdf):
-    boolmask = np.random.randint(0, 2, len(pdf)) > 0
+    boolmask = np.random.default_rng(2).integers(0, 2, len(pdf)) > 0
     gdf = gdf[boolmask]
     pdf = pdf[boolmask]
     assert_eq(pdf, gdf)
@@ -2881,10 +2899,12 @@ def test_boolmask(pdf, gdf):
 def test_dataframe_boolmask(mask_shape):
     pdf = pd.DataFrame()
     for col in "abc":
-        pdf[col] = np.random.randint(0, 10, 3)
+        pdf[col] = np.random.default_rng(2).integers(0, 10, 3)
     pdf_mask = pd.DataFrame()
     for col in mask_shape[1]:
-        pdf_mask[col] = np.random.randint(0, 2, mask_shape[0]) > 0
+        pdf_mask[col] = (
+            np.random.default_rng(2).integers(0, 2, mask_shape[0]) > 0
+        )
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdf_mask = cudf.DataFrame.from_pandas(pdf_mask)
     gdf = gdf[gdf_mask]
@@ -3011,8 +3031,12 @@ def test_series_rename():
 def test_head_tail(nelem, data_type):
     pdf = pd.DataFrame(
         {
-            "a": np.random.randint(0, 1000, nelem).astype(data_type),
-            "b": np.random.randint(0, 1000, nelem).astype(data_type),
+            "a": np.random.default_rng(2)
+            .integers(0, 1000, nelem)
+            .astype(data_type),
+            "b": np.random.default_rng(2)
+            .integers(0, 1000, nelem)
+            .astype(data_type),
         }
     )
     gdf = cudf.from_pandas(pdf)
@@ -3257,15 +3281,16 @@ def test_set_index_verify_integrity(data, index, verify_integrity):
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
 def test_set_index_multi(drop, nelem):
-    np.random.seed(0)
     a = np.arange(nelem)
-    np.random.shuffle(a)
+    np.random.default_rng(2).shuffle(a)
     df = pd.DataFrame(
         {
             "a": a,
-            "b": np.random.randint(0, 4, size=nelem),
-            "c": np.random.uniform(low=0, high=4, size=nelem),
-            "d": np.random.choice(["green", "black", "white"], nelem),
+            "b": np.random.default_rng(2).integers(0, 4, size=nelem),
+            "c": np.random.default_rng(2).uniform(low=0, high=4, size=nelem),
+            "d": np.random.default_rng(2).choice(
+                ["green", "black", "white"], nelem
+            ),
         }
     )
     df["e"] = df["d"].astype("category")
@@ -3830,13 +3855,12 @@ def test_select_dtype_datetime_with_frequency():
 
 
 def test_dataframe_describe_exclude():
-    np.random.seed(12)
     data_length = 10000
 
     df = cudf.DataFrame()
-    df["x"] = np.random.normal(10, 1, data_length)
+    df["x"] = np.random.default_rng(2).normal(10, 1, data_length)
     df["x"] = df.x.astype("int64")
-    df["y"] = np.random.normal(10, 1, data_length)
+    df["y"] = np.random.default_rng(2).normal(10, 1, data_length)
     pdf = df.to_pandas()
 
     gdf_results = df.describe(exclude=["float"])
@@ -3846,13 +3870,12 @@ def test_dataframe_describe_exclude():
 
 
 def test_dataframe_describe_include():
-    np.random.seed(12)
     data_length = 10000
 
     df = cudf.DataFrame()
-    df["x"] = np.random.normal(10, 1, data_length)
+    df["x"] = np.random.default_rng(2).normal(10, 1, data_length)
     df["x"] = df.x.astype("int64")
-    df["y"] = np.random.normal(10, 1, data_length)
+    df["y"] = np.random.default_rng(2).normal(10, 1, data_length)
     pdf = df.to_pandas()
     gdf_results = df.describe(include=["int"])
     pdf_results = pdf.describe(include=["int"])
@@ -3861,12 +3884,11 @@ def test_dataframe_describe_include():
 
 
 def test_dataframe_describe_default():
-    np.random.seed(12)
     data_length = 10000
 
     df = cudf.DataFrame()
-    df["x"] = np.random.normal(10, 1, data_length)
-    df["y"] = np.random.normal(10, 1, data_length)
+    df["x"] = np.random.default_rng(2).normal(10, 1, data_length)
+    df["y"] = np.random.default_rng(2).normal(10, 1, data_length)
     pdf = df.to_pandas()
     gdf_results = df.describe()
     pdf_results = pdf.describe()
@@ -3875,14 +3897,15 @@ def test_dataframe_describe_default():
 
 
 def test_series_describe_include_all():
-    np.random.seed(12)
     data_length = 10000
 
     df = cudf.DataFrame()
-    df["x"] = np.random.normal(10, 1, data_length)
+    df["x"] = np.random.default_rng(2).normal(10, 1, data_length)
     df["x"] = df.x.astype("int64")
-    df["y"] = np.random.normal(10, 1, data_length)
-    df["animal"] = np.random.choice(["dog", "cat", "bird"], data_length)
+    df["y"] = np.random.default_rng(2).normal(10, 1, data_length)
+    df["animal"] = np.random.default_rng(2).choice(
+        ["dog", "cat", "bird"], data_length
+    )
 
     pdf = df.to_pandas()
     gdf_results = df.describe(include="all")
@@ -3898,13 +3921,12 @@ def test_series_describe_include_all():
 
 
 def test_dataframe_describe_percentiles():
-    np.random.seed(12)
     data_length = 10000
     sample_percentiles = [0.0, 0.1, 0.33, 0.84, 0.4, 0.99]
 
     df = cudf.DataFrame()
-    df["x"] = np.random.normal(10, 1, data_length)
-    df["y"] = np.random.normal(10, 1, data_length)
+    df["x"] = np.random.default_rng(2).normal(10, 1, data_length)
+    df["y"] = np.random.default_rng(2).normal(10, 1, data_length)
     pdf = df.to_pandas()
     gdf_results = df.describe(percentiles=sample_percentiles)
     pdf_results = pdf.describe(percentiles=sample_percentiles)
@@ -4053,7 +4075,7 @@ def test_dataframe_round(decimals):
     gdf = cudf.DataFrame(
         {
             "floats": np.arange(0.5, 10.5, 1),
-            "ints": np.random.normal(-100, 100, 10),
+            "ints": np.random.default_rng(2).normal(-100, 100, 10),
             "floats_with_na": np.array(
                 [
                     14.123,
@@ -4069,9 +4091,13 @@ def test_dataframe_round(decimals):
                 ]
             ),
             "floats_same": np.repeat([-0.6459412758761901], 10),
-            "bools": np.random.choice([True, None, False], 10),
-            "strings": np.random.choice(["abc", "xyz", None], 10),
-            "struct": np.random.choice([{"abc": 1}, {"xyz": 2}, None], 10),
+            "bools": np.random.default_rng(2).choice([True, None, False], 10),
+            "strings": np.random.default_rng(2).choice(
+                ["abc", "xyz", None], 10
+            ),
+            "struct": np.random.default_rng(2).choice(
+                [{"abc": 1}, {"xyz": 2}, None], 10
+            ),
             "list": [[1], [2], None, [4], [3]] * 2,
         }
     )
@@ -5764,7 +5790,9 @@ def test_memory_usage_string():
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
-            "B": np.random.choice(["apple", "banana", "orange"], rows),
+            "B": np.random.default_rng(2).choice(
+                ["apple", "banana", "orange"], rows
+            ),
         }
     )
     gdf = cudf.from_pandas(df)
@@ -5790,7 +5818,9 @@ def test_memory_usage_cat():
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
-            "B": np.random.choice(["apple", "banana", "orange"], rows),
+            "B": np.random.default_rng(2).choice(
+                ["apple", "banana", "orange"], rows
+            ),
         }
     )
     df["B"] = df.B.astype("category")
@@ -5823,10 +5853,10 @@ def test_memory_usage_multi(rows):
     df = pd.DataFrame(
         {
             "A": np.arange(rows, dtype="int32"),
-            "B": np.random.choice(
+            "B": np.random.default_rng(2).choice(
                 np.arange(rows, dtype="int64"), rows, replace=False
             ),
-            "C": np.random.choice(
+            "C": np.random.default_rng(2).choice(
                 np.arange(rows, dtype="float64"), rows, replace=False
             ),
         }
@@ -6646,8 +6676,16 @@ def test_dataframe_init_1d_list(data, columns):
         (cupy.array([11, 123, -2342, 232]), ["z"], [0, 1, 1, 0]),
         (cupy.array([11, 123, -2342, 232]), ["z"], [1, 2, 3, 4]),
         (cupy.array([11, 123, -2342, 232]), ["z"], ["a", "z", "d", "e"]),
-        (np.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
-        (np.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (
+            np.random.default_rng(2).standard_normal((2, 4)),
+            ["a", "b", "c", "d"],
+            ["a", "b"],
+        ),
+        (
+            np.random.default_rng(2).standard_normal((2, 4)),
+            ["a", "b", "c", "d"],
+            [1, 0],
+        ),
         (cupy.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
         (cupy.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
     ],
@@ -6818,7 +6856,7 @@ def test_dataframe_info_basic():
     """
     )
     df = pd.DataFrame(
-        np.random.randn(10, 10),
+        np.random.default_rng(2).standard_normal(10, 10),
         index=["a", "2", "3", "4", "5", "6", "7", "8", "100", "1111"],
     )
     cudf.from_pandas(df).info(buf=buffer, verbose=True)
@@ -9318,8 +9356,7 @@ def test_dataframe_roundtrip_arrow_struct_dtype(gdf):
 
 
 def test_dataframe_setitem_cupy_array():
-    np.random.seed(0)
-    pdf = pd.DataFrame(np.random.randn(10, 2))
+    pdf = pd.DataFrame(np.random.default_rng(2).standard_normal((10, 2)))
     gdf = cudf.from_pandas(pdf)
 
     gpu_array = cupy.array([True, False] * 5)
@@ -10435,10 +10472,10 @@ def test_dataframe_init_length_error(data, index):
 
 def test_dataframe_binop_with_mixed_date_types():
     df = pd.DataFrame(
-        np.random.rand(2, 2),
+        np.random.default_rng(2).random(2, 2),
         columns=pd.Index(["2000-01-03", "2000-01-04"], dtype="datetime64[ns]"),
     )
-    ser = pd.Series(np.random.rand(3), index=[0, 1, 2])
+    ser = pd.Series(np.random.default_rng(2).random(3), index=[0, 1, 2])
     gdf = cudf.from_pandas(df)
     gser = cudf.from_pandas(ser)
     expected = df - ser
@@ -10447,9 +10484,11 @@ def test_dataframe_binop_with_mixed_date_types():
 
 
 def test_dataframe_binop_with_mixed_string_types():
-    df1 = pd.DataFrame(np.random.rand(3, 3), columns=pd.Index([0, 1, 2]))
+    df1 = pd.DataFrame(
+        np.random.default_rng(2).random((3, 3)), columns=pd.Index([0, 1, 2])
+    )
     df2 = pd.DataFrame(
-        np.random.rand(6, 6),
+        np.random.default_rng(2).random((6, 6)),
         columns=pd.Index([0, 1, 2, "VhDoHxRaqt", "X0NNHBIPfA", "5FbhPtS0D1"]),
     )
     gdf1 = cudf.from_pandas(df1)
@@ -10462,7 +10501,10 @@ def test_dataframe_binop_with_mixed_string_types():
 
 
 def test_dataframe_binop_and_where():
-    df = pd.DataFrame(np.random.rand(2, 2), columns=pd.Index([True, False]))
+    df = pd.DataFrame(
+        np.random.default_rng(2).random((2, 2)),
+        columns=pd.Index([True, False]),
+    )
     gdf = cudf.from_pandas(df)
 
     expected = df > 1
@@ -10478,11 +10520,11 @@ def test_dataframe_binop_and_where():
 
 def test_dataframe_binop_with_datetime_index():
     df = pd.DataFrame(
-        np.random.rand(2, 2),
+        np.random.default_rng(2).random((2, 2)),
         columns=pd.Index(["2000-01-03", "2000-01-04"], dtype="datetime64[ns]"),
     )
     ser = pd.Series(
-        np.random.rand(2),
+        np.random.default_rng(2).random(2),
         index=pd.Index(
             [
                 "2000-01-04",
@@ -10520,8 +10562,7 @@ def test_dataframe_dict_like_with_columns(columns, index):
 
 
 def test_dataframe_init_columns_named_multiindex():
-    np.random.seed(0)
-    data = np.random.randn(2, 2)
+    data = np.random.default_rng(2).standard_normal((2, 2))
     columns = cudf.MultiIndex.from_tuples(
         [("A", "one"), ("A", "two")], names=["y", "z"]
     )
@@ -10532,8 +10573,7 @@ def test_dataframe_init_columns_named_multiindex():
 
 
 def test_dataframe_init_columns_named_index():
-    np.random.seed(0)
-    data = np.random.randn(2, 2)
+    data = np.random.default_rng(2).standard_normal((2, 2))
     columns = pd.Index(["a", "b"], name="custom_name")
     gdf = cudf.DataFrame(data, columns=columns)
     pdf = pd.DataFrame(data, columns=columns)

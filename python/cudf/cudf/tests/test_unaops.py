@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import itertools
 import operator
@@ -17,7 +17,7 @@ _unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 
 @pytest.mark.parametrize("dtype", utils.NUMERIC_TYPES)
 def test_series_abs(dtype):
-    arr = (np.random.random(1000) * 100).astype(dtype)
+    arr = (np.random.default_rng(2).random(1000) * 100).astype(dtype)
     sr = Series(arr)
     np.testing.assert_equal(sr.abs().to_numpy(), np.abs(arr))
     np.testing.assert_equal(abs(sr).to_numpy(), abs(arr))
@@ -25,22 +25,21 @@ def test_series_abs(dtype):
 
 @pytest.mark.parametrize("dtype", utils.INTEGER_TYPES)
 def test_series_invert(dtype):
-    arr = (np.random.random(1000) * 100).astype(dtype)
+    arr = (np.random.default_rng(2).random(1000) * 100).astype(dtype)
     sr = Series(arr)
     np.testing.assert_equal((~sr).to_numpy(), np.invert(arr))
     np.testing.assert_equal((~sr).to_numpy(), ~arr)
 
 
 def test_series_neg():
-    arr = np.random.random(100) * 100
+    arr = np.random.default_rng(2).random(100) * 100
     sr = Series(arr)
     np.testing.assert_equal((-sr).to_numpy(), -arr)
 
 
 @pytest.mark.parametrize("mth", ["min", "max", "sum", "product"])
 def test_series_pandas_methods(mth):
-    np.random.seed(0)
-    arr = (1 + np.random.random(5) * 100).astype(np.int64)
+    arr = (1 + np.random.default_rng(2).random(5) * 100).astype(np.int64)
     sr = Series(arr)
     psr = pd.Series(arr)
     np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())

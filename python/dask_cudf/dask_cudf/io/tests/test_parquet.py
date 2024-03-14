@@ -375,9 +375,11 @@ def test_split_row_groups(tmpdir, row_groups, index):
 
     df = pd.DataFrame(
         {
-            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "a": np.random.default_rng(2).choice(
+                ["apple", "banana", "carrot"], size=df_size
+            ),
             "b": np.random.random(size=df_size),
-            "c": np.random.randint(1, 5, size=df_size),
+            "c": np.random.default_rng(2).integers(1, 5, size=df_size),
             "index": np.arange(0, df_size),
         }
     )

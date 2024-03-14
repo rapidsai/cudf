@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -15,12 +15,11 @@ import pandas as pd
 
 
 def test_profiler():
-    np.random.seed(42)
     with Profiler() as profiler:
         df = pd.DataFrame(
             {
-                "idx": np.random.randint(0, 10, 1000),
-                "data": np.random.rand(1000),
+                "idx": np.arange(1000),
+                "data": np.linspace(0, 100, 1000),
             }
         )
         sums = df.groupby("idx").sum()
@@ -47,8 +46,8 @@ def test_profiler():
     calls = [
         "pd.DataFrame",
         "",
-        "np.random.randint",
-        "np.random.rand",
+        "np.arange",
+        "np.linspace",
         'df.groupby("idx").sum',
         'df.sum()["data"]',
         "np.isclose",

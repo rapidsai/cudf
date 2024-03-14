@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import os
 from string import ascii_letters
@@ -20,7 +20,9 @@ def pdf(request):
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
         {
-            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            f"col_{typ}": np.random.default_rng(2)
+            .integers(0, nrows, nrows)
+            .astype(typ)
             for typ in types
         }
     )
@@ -29,7 +31,10 @@ def pdf(request):
     test_pdf.index.name = "index"
 
     # Create non-numeric categorical data otherwise may get typecasted
-    data = [ascii_letters[np.random.randint(0, 52)] for i in range(nrows)]
+    data = [
+        ascii_letters[np.random.default_rng(2).integers(0, 52)]
+        for i in range(nrows)
+    ]
     test_pdf["col_category"] = pd.Series(data, dtype="category")
 
     # Feather can't handle indexes properly

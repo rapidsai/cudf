@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 from copy import copy, deepcopy
 
 import cupy as cp
@@ -95,7 +95,7 @@ def test_cudf_dataframe_copy(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):
         pdf[chr(i + ord("a"))] = pd.Series(
-            np.random.randint(0, 1000, 20)
+            np.random.default_rng(2).integers(0, 1000, 20)
         ).astype(data_type)
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
@@ -118,15 +118,17 @@ def test_cudf_dataframe_copy_then_insert(copy_fn, ncols, data_type):
     pdf = pd.DataFrame()
     for i in range(ncols):
         pdf[chr(i + ord("a"))] = pd.Series(
-            np.random.randint(0, 1000, 20)
+            np.random.default_rng(2).integers(0, 1000, 20)
         ).astype(data_type)
     df = DataFrame.from_pandas(pdf)
     copy_df = copy_fn(df)
     copy_pdf = copy_fn(pdf)
-    copy_df["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(data_type)
-    copy_pdf["aa"] = pd.Series(np.random.randint(0, 1000, 20)).astype(
-        data_type
-    )
+    copy_df["aa"] = pd.Series(
+        np.random.default_rng(2).integers(0, 1000, 20)
+    ).astype(data_type)
+    copy_pdf["aa"] = pd.Series(
+        np.random.default_rng(2).integers(0, 1000, 20)
+    ).astype(data_type)
     assert not copy_pdf.to_string().split() == pdf.to_string().split()
     assert not copy_df.to_string().split() == df.to_string().split()
 

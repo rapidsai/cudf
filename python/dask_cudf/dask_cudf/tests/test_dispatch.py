@@ -31,7 +31,9 @@ def test_pyarrow_conversion_dispatch(preserve_index):
         to_pyarrow_table_dispatch,
     )
 
-    df1 = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df1 = cudf.DataFrame(
+        np.random.default_rng(2).standard_normal((10, 3)), columns=list("abc")
+    )
     df2 = from_pyarrow_table_dispatch(
         df1, to_pyarrow_table_dispatch(df1, preserve_index=preserve_index)
     )
@@ -101,7 +103,9 @@ def test_pyarrow_schema_dispatch(preserve_index):
         to_pyarrow_table_dispatch,
     )
 
-    df = cudf.DataFrame(np.random.randn(10, 3), columns=list("abc"))
+    df = cudf.DataFrame(
+        np.random.default_rng(2).standard_normal((10, 3)), columns=list("abc")
+    )
     df["d"] = cudf.Series(["cat", "dog"] * 5)
     table = to_pyarrow_table_dispatch(df, preserve_index=preserve_index)
     schema = pyarrow_schema_dispatch(df, preserve_index=preserve_index)

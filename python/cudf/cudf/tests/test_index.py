@@ -2598,7 +2598,7 @@ def test_isin_multiindex(data, values, level, err):
 
 
 range_data = [
-    range(np.random.randint(0, 100)),
+    range(np.random.default_rng(2).integers(0, 100)),
     range(9, 12, 2),
     range(20, 30),
     range(100, 1000, 10),
@@ -2783,7 +2783,7 @@ def test_rangeindex_append_return_rangeindex():
 
 
 index_data = [
-    range(np.random.randint(0, 100)),
+    range(np.random.default_rng(2).integers(0, 100)),
     range(0, 10, -2),
     range(0, -10, 2),
     range(0, -10, -2),

@@ -431,7 +431,7 @@ def test_datetime_unique(data, nulls):
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = np.random.default_rng(2).integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
@@ -459,7 +459,7 @@ def test_datetime_nunique(data, nulls):
 
     if len(data) > 0:
         if nulls == "some":
-            p = np.random.randint(0, len(data), 2)
+            p = np.random.default_rng(2).integers(0, len(data), 2)
             psr[p] = None
 
     gsr = cudf.from_pandas(psr)
