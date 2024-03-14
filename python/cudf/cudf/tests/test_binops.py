@@ -13,7 +13,7 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.core._compat import PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
@@ -829,7 +829,7 @@ def test_operator_func_series_and_scalar_logical(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and fill_value == 1.0
             and scalar is np.nan
             and (has_nulls or (not has_nulls and func not in {"eq", "ne"})),
@@ -1719,7 +1719,7 @@ def test_datetime_dateoffset_binaryop(
 ):
     request.applymarker(
         pytest.mark.xfail(
-            PANDAS_GE_220
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
             and dtype in {"datetime64[ms]", "datetime64[s]"}
             and frequency == "microseconds"
             and n_periods == 0,
@@ -1829,7 +1829,7 @@ def test_datetime_dateoffset_binaryop_reflected(n_periods, frequency, dtype):
 
     # TODO: Remove check_dtype once we get some clarity on:
     # https://github.com/pandas-dev/pandas/issues/57448
-    utils.assert_eq(expect, got, check_dtype=not PANDAS_GE_220)
+    utils.assert_eq(expect, got, check_dtype=False)
 
     with pytest.raises(TypeError):
         poffset - psr

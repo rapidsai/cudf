@@ -174,9 +174,9 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
 template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
-  thrust::host_vector<T> host_data(c.size());
-  CUDF_CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDefault));
-  return {host_data, bitmask_to_host(c)};
+  auto col_span  = cudf::device_span<T const>(c.data<T>(), c.size());
+  auto host_data = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
+  return {std::move(host_data), bitmask_to_host(c)};
 }
 
 // This signature is identical to the above overload apart from SFINAE so
