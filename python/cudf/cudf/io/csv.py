@@ -65,8 +65,7 @@ def read_csv(
 
     if use_python_file_object and bytes_per_thread is not None:
         raise ValueError(
-            "bytes_per_thread is only supported when "
-            "`use_python_file_object=False`"
+            "bytes_per_thread is only supported when " "`use_python_file_object=False`"
         )
 
     if bytes_per_thread is None:
@@ -199,20 +198,16 @@ def to_csv(
         try:
             df = df[columns]
         except KeyError:
-            raise NameError(
-                "Dataframe doesn't have the labels provided in columns"
-            )
+            raise NameError("Dataframe doesn't have the labels provided in columns")
 
     for col in df._data.columns:
         if isinstance(col, cudf.core.column.ListColumn):
             raise NotImplementedError(
-                "Writing to csv format is not yet supported with "
-                "list columns."
+                "Writing to csv format is not yet supported with " "list columns."
             )
         elif isinstance(col, cudf.core.column.StructColumn):
             raise NotImplementedError(
-                "Writing to csv format is not yet supported with "
-                "Struct columns."
+                "Writing to csv format is not yet supported with " "Struct columns."
             )
 
     # TODO: Need to typecast categorical columns to the underlying
@@ -220,8 +215,7 @@ def to_csv(
     # workaround once following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6661
     if any(
-        isinstance(col, cudf.core.column.CategoricalColumn)
-        for col in df._data.columns
+        isinstance(col, cudf.core.column.CategoricalColumn) for col in df._data.columns
     ) or isinstance(df.index, cudf.CategoricalIndex):
         df = df.copy(deep=False)
         for col_name, col in df._data.items():

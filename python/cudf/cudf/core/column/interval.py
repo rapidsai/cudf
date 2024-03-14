@@ -65,9 +65,7 @@ class IntervalColumn(StructColumn):
         first_field_name = next(iter(struct_column.dtype.fields.keys()))
         return IntervalColumn(
             size=struct_column.size,
-            dtype=IntervalDtype(
-                struct_column.dtype.fields[first_field_name], closed
-            ),
+            dtype=IntervalDtype(struct_column.dtype.fields[first_field_name], closed),
             mask=struct_column.base_mask,
             offset=struct_column.offset,
             null_count=struct_column.null_count,
@@ -78,9 +76,7 @@ class IntervalColumn(StructColumn):
         struct_copy = super().copy(deep=deep)
         return IntervalColumn(
             size=struct_copy.size,
-            dtype=IntervalDtype(
-                struct_copy.dtype.fields["left"], self.dtype.closed
-            ),
+            dtype=IntervalDtype(struct_copy.dtype.fields["left"], self.dtype.closed),
             mask=struct_copy.base_mask,
             offset=struct_copy.offset,
             null_count=struct_copy.null_count,
@@ -119,9 +115,7 @@ class IntervalColumn(StructColumn):
         # types into pandas (trying to convert the underlying numerical columns
         # directly is problematic), so we're stuck with this for now.
         if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
+            raise ValueError(f"{arrow_type=} and {nullable=} cannot both be set.")
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         elif arrow_type:

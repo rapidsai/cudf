@@ -190,9 +190,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             if dtype is not None:
                 raise TypeError("Lists may not be cast to a different dtype")
             else:
-                dtype = ListDtype.from_arrow(
-                    pa.infer_type([value], from_pandas=True)
-                )
+                dtype = ListDtype.from_arrow(pa.infer_type([value], from_pandas=True))
                 return value, dtype
         elif isinstance(dtype, ListDtype):
             if value not in {None, NA}:
@@ -202,9 +200,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if isinstance(value, dict):
             if dtype is None:
-                dtype = StructDtype.from_arrow(
-                    pa.infer_type([value], from_pandas=True)
-                )
+                dtype = StructDtype.from_arrow(pa.infer_type([value], from_pandas=True))
             return value, dtype
         elif isinstance(dtype, StructDtype):
             if value not in {None, NA}:
@@ -226,15 +222,11 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
                 if isinstance(value, (np.datetime64, np.timedelta64)):
                     unit, _ = np.datetime_data(value)
                     if unit == "generic":
-                        raise TypeError(
-                            "Cant convert generic NaT to null scalar"
-                        )
+                        raise TypeError("Cant convert generic NaT to null scalar")
                     else:
                         dtype = value.dtype
                 else:
-                    raise TypeError(
-                        "dtype required when constructing a null scalar"
-                    )
+                    raise TypeError("dtype required when constructing a null scalar")
             else:
                 dtype = value.dtype
 
@@ -243,9 +235,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
 
         if not valid:
             value = (
-                NaT
-                if is_datetime64_dtype(dtype) or is_timedelta64_dtype(dtype)
-                else NA
+                NaT if is_datetime64_dtype(dtype) or is_timedelta64_dtype(dtype) else NA
             )
 
         return value, dtype
@@ -303,18 +293,13 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def __repr__(self):
         # str() fixes a numpy bug with NaT
         # https://github.com/numpy/numpy/issues/17552
-        return (
-            f"{self.__class__.__name__}"
-            f"({str(self.value)}, dtype={self.dtype})"
-        )
+        return f"{self.__class__.__name__}" f"({str(self.value)}, dtype={self.dtype})"
 
     def _binop_result_dtype_or_error(self, other, op):
         if op in {"__eq__", "__ne__", "__lt__", "__gt__", "__le__", "__ge__"}:
             return np.bool_
 
-        out_dtype = get_allowed_combinations_for_operator(
-            self.dtype, other.dtype, op
-        )
+        out_dtype = get_allowed_combinations_for_operator(self.dtype, other.dtype, op)
 
         # datetime handling
         if out_dtype in {"M", "m"}:
@@ -329,10 +314,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
             }:
                 return other.dtype
             else:
-                if (
-                    op == "__sub__"
-                    and self.dtype.char == other.dtype.char == "M"
-                ):
+                if op == "__sub__" and self.dtype.char == other.dtype.char == "M":
                     res, _ = np.datetime_data(max(self.dtype, other.dtype))
                     return cudf.dtype("m8" + f"[{res}]")
                 return np.result_type(self.dtype, other.dtype)
@@ -371,8 +353,7 @@ class Scalar(BinaryOperand, metaclass=CachedScalarInstanceMeta):
     def _unaop_result_type_or_error(self, op):
         if op == "__neg__" and self.dtype == "bool":
             raise TypeError(
-                "Boolean scalars in cuDF do not support"
-                " negation, use logical not"
+                "Boolean scalars in cuDF do not support" " negation, use logical not"
             )
 
         if op in {"__ceil__", "__floor__"}:

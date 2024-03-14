@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 import math
 
 import numpy as np
@@ -122,9 +122,7 @@ def _row_kernel_string_from_template(frame, row_type, args):
             else unmasked_input_initializer_template
         )
         initializers.append(template.format(idx=idx))
-        row_initializers.append(
-            row_initializer_template.format(idx=idx, name=colname)
-        )
+        row_initializers.append(row_initializer_template.format(idx=idx, name=colname))
 
     return row_kernel_template.format(
         input_columns=input_columns,
@@ -145,9 +143,7 @@ def _get_row_kernel(frame, func, args):
     sig = _construct_signature(frame, scalar_return_type, args)
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    np_field_types = np.dtype(
-        list(_supported_dtypes_from_frame(frame).items())
-    )
+    np_field_types = np.dtype(list(_supported_dtypes_from_frame(frame).items()))
     row_type = _get_frame_row_type(np_field_types)
 
     # Dict of 'local' variables into which `_kernel` is defined

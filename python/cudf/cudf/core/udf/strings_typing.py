@@ -190,9 +190,7 @@ class StringViewReplace(AbstractTemplate):
     key = "StringView.replace"
 
     def generic(self, args, kws):
-        return nb_signature(
-            udf_string, string_view, string_view, recvr=self.this
-        )
+        return nb_signature(udf_string, string_view, string_view, recvr=self.this)
 
 
 class StringViewAttrs(AttributeTemplate):
@@ -237,9 +235,7 @@ for func in string_return_attrs:
 
 
 for func in int_binary_funcs:
-    setattr(
-        StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type)
-    )
+    setattr(StringViewAttrs, f"resolve_{func}", create_binary_attr(func, size_type))
 
 for func in id_unary_funcs:
     setattr(

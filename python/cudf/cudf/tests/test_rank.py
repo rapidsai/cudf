@@ -15,9 +15,7 @@ def pdf():
     return pd.DataFrame(
         {
             "col1": np.array([5, 4, 3, 5, 8, 5, 2, 1, 6, 6]),
-            "col2": np.array(
-                [5, 4, np.nan, 5, 8, 5, np.inf, np.nan, 6, -np.inf]
-            ),
+            "col2": np.array([5, 4, np.nan, 5, 8, 5, np.inf, np.nan, 6, -np.inf]),
         },
         index=np.array([5, 4, 3, 2, 1, 6, 7, 8, 9, 10]),
     )
@@ -38,9 +36,7 @@ def test_rank_all_arguments(
 
     pdf = pdf.copy(deep=True)  # for parallel pytest
     if numeric_only:
-        pdf["str"] = np.array(
-            ["a", "b", "c", "d", "e", "1", "2", "3", "4", "5"]
-        )
+        pdf["str"] = np.array(["a", "b", "c", "d", "e", "1", "2", "3", "4", "5"])
     gdf = DataFrame.from_pandas(pdf)
 
     kwargs = {

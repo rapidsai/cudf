@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import os
 import textwrap
@@ -62,9 +62,7 @@ def _register_option(
         Raised by validator if the value is invalid.
     """
     validator(default_value)
-    _OPTIONS[name] = Option(
-        default_value, default_value, description, validator
-    )
+    _OPTIONS[name] = Option(default_value, default_value, description, validator)
 
 
 def get_option(name: str) -> Any:
@@ -144,8 +142,7 @@ def _make_contains_validator(valid_options: Container) -> Callable:
     def _validator(val):
         if val not in valid_options:
             raise ValueError(
-                f"{val} is not a valid option. "
-                f"Must be one of {set(valid_options)}."
+                f"{val} is not a valid option. " f"Must be one of {set(valid_options)}."
             )
 
     return _validator
@@ -183,9 +180,7 @@ def _integer_validator(val):
         int(val)
         return True
     except ValueError:
-        raise ValueError(
-            f"{val} is not a valid option. " f"Must be an integer."
-        )
+        raise ValueError(f"{val} is not a valid option. " f"Must be an integer.")
 
 
 def _integer_and_none_validator(val):
@@ -339,8 +334,7 @@ class option_context(ContextDecorator):
     def __init__(self, *args) -> None:
         if len(args) % 2 != 0:
             raise ValueError(
-                "Need to invoke as option_context(pat, val, "
-                "[(pat, val), ...])."
+                "Need to invoke as option_context(pat, val, " "[(pat, val), ...])."
             )
 
         self.ops = tuple(zip(args[::2], args[1::2]))

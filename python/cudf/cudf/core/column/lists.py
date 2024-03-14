@@ -71,9 +71,9 @@ class ListColumn(ColumnBase):
             child0_size = (
                 current_base_child.size + 1 - current_offset
             ) * current_base_child.base_children[0].dtype.itemsize
-            current_offset = current_base_child.base_children[
-                0
-            ].element_indexing(current_offset)
+            current_offset = current_base_child.base_children[0].element_indexing(
+                current_offset
+            )
             n += child0_size
             current_base_child = current_base_child.base_children[1]
 
@@ -117,8 +117,7 @@ class ListColumn(ColumnBase):
                 return concatenate_rows([self, other])
             else:
                 raise NotImplementedError(
-                    "Lists concatenation for this operation is not yet"
-                    "supported"
+                    "Lists concatenation for this operation is not yet" "supported"
                 )
         else:
             raise TypeError("can only concatenate list to list")
@@ -185,9 +184,7 @@ class ListColumn(ColumnBase):
         self: "cudf.core.column.ListColumn", dtype: Dtype
     ) -> "cudf.core.column.ListColumn":
         if isinstance(dtype, ListDtype):
-            elements = self.base_children[1]._with_type_metadata(
-                dtype.element_type
-            )
+            elements = self.base_children[1]._with_type_metadata(dtype.element_type)
             return ListColumn(
                 dtype=dtype,
                 mask=self.base_mask,
@@ -299,16 +296,12 @@ class ListColumn(ColumnBase):
         # Can't rely on Column.to_pandas implementation for lists.
         # Need to perform `to_pylist` to preserve list types.
         if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
+            raise ValueError(f"{arrow_type=} and {nullable=} cannot both be set.")
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
         if arrow_type:
-            return pd.Series(
-                pd.arrays.ArrowExtensionArray(pa_array), index=index
-            )
+            return pd.Series(pd.arrays.ArrowExtensionArray(pa_array), index=index)
         else:
             return pd.Series(pa_array.tolist(), dtype="object", index=index)
 
@@ -322,9 +315,7 @@ class ListMethods(ColumnMethods):
 
     def __init__(self, parent: ParentType):
         if not isinstance(parent.dtype, ListDtype):
-            raise AttributeError(
-                "Can only use .list accessor with a 'list' dtype"
-            )
+            raise AttributeError("Can only use .list accessor with a 'list' dtype")
         super().__init__(parent=parent)
 
     def get(
@@ -392,15 +383,11 @@ class ListMethods(ColumnMethods):
         if not (default is None or default is NA):
             # determine rows for which `index` is out-of-bounds
             lengths = count_elements(self._column)
-            out_of_bounds_mask = (np.negative(index) > lengths) | (
-                index >= lengths
-            )
+            out_of_bounds_mask = (np.negative(index) > lengths) | (index >= lengths)
 
             # replace the value in those rows (should be NA) with `default`
             if out_of_bounds_mask.any():
-                out = out._scatter_by_column(
-                    out_of_bounds_mask, cudf.Scalar(default)
-                )
+                out = out._scatter_by_column(out_of_bounds_mask, cudf.Scalar(default))
         if out.dtype != self._column.dtype.element_type:
             # libcudf doesn't maintain struct labels so we must transfer over
             # manually from the input column if we lost some information
@@ -510,9 +497,7 @@ class ListMethods(ColumnMethods):
         5       6
         dtype: int64
         """
-        return self._return_or_inplace(
-            self._column.leaves(), retain_index=False
-        )
+        return self._return_or_inplace(self._column.leaves(), retain_index=False)
 
     def len(self) -> ParentType:
         """
@@ -570,17 +555,11 @@ class ListMethods(ColumnMethods):
         if not isinstance(lists_indices_col, ListColumn):
             raise ValueError("lists_indices should be list type array.")
         if not lists_indices_col.size == self._column.size:
-            raise ValueError(
-                "lists_indices and list column is of different " "size."
-            )
+            raise ValueError("lists_indices and list column is of different " "size.")
         if not _is_non_decimal_numeric_dtype(
             lists_indices_col.children[1].dtype
-        ) or not np.issubdtype(
-            lists_indices_col.children[1].dtype, np.integer
-        ):
-            raise TypeError(
-                "lists_indices should be column of values of index types."
-            )
+        ) or not np.issubdtype(lists_indices_col.children[1].dtype, np.integer):
+            raise TypeError("lists_indices should be column of values of index types.")
 
         return self._return_or_inplace(
             segmented_gather(self._column, lists_indices_col)
@@ -745,7 +724,5 @@ class ListMethods(ColumnMethods):
         ListDtype(float64)
         """
         return self._return_or_inplace(
-            self._column._transform_leaves(
-                lambda col, dtype: col.astype(dtype), dtype
-            )
+            self._column._transform_leaves(lambda col, dtype: col.astype(dtype), dtype)
         )

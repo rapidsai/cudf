@@ -41,19 +41,13 @@ from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import initfunc
 
 # Maximum size of a string column is 2 GiB
-_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get(
-    "STRINGS_UDF_HEAP_SIZE", 2**31
-)
+_STRINGS_UDF_DEFAULT_HEAP_SIZE = os.environ.get("STRINGS_UDF_HEAP_SIZE", 2**31)
 _heap_size = 0
 _cudf_str_dtype = dtype(str)
 
 
 JIT_SUPPORTED_TYPES = (
-    NUMERIC_TYPES
-    | BOOL_TYPES
-    | DATETIME_TYPES
-    | TIMEDELTA_TYPES
-    | STRING_TYPES
+    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | STRING_TYPES
 )
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
@@ -65,9 +59,7 @@ launch_arg_getters: Dict[Any, Any] = {}
 @functools.cache
 def _ptx_file():
     return _get_ptx_file(
-        os.path.join(
-            os.path.dirname(strings_udf.__file__), "..", "core", "udf"
-        ),
+        os.path.join(os.path.dirname(strings_udf.__file__), "..", "core", "udf"),
         "shim_",
     )
 
@@ -124,9 +116,7 @@ def _get_udf_return_type(argty, func: Callable, args=()):
 
 def _all_dtypes_from_frame(frame, supported_types=JIT_SUPPORTED_TYPES):
     return {
-        colname: col.dtype
-        if str(col.dtype) in supported_types
-        else np.dtype("O")
+        colname: col.dtype if str(col.dtype) in supported_types else np.dtype("O")
         for colname, col in frame._data.items()
     }
 
@@ -227,9 +217,7 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
     """
     scalar_argtypes = tuple(typeof(arg) for arg in args)
     return (
-        *cudautils.make_cache_key(
-            func, tuple(_all_dtypes_from_frame(frame).values())
-        ),
+        *cudautils.make_cache_key(func, tuple(_all_dtypes_from_frame(frame).values())),
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),
         scalar_argtypes,
@@ -238,9 +226,7 @@ def _generate_cache_key(frame, func: Callable, args, suffix="__APPLY_UDF"):
 
 
 @_cudf_nvtx_annotate
-def _compile_or_get(
-    frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"
-):
+def _compile_or_get(frame, func, args, kernel_getter=None, suffix="__APPLY_UDF"):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
@@ -291,9 +277,9 @@ def _get_kernel(kernel_string, globals_, sig, func):
     globals_["f_"] = f_
     exec(kernel_string, globals_)
     _kernel = globals_["_kernel"]
-    kernel = cuda.jit(
-        sig, link=[_ptx_file()], extensions=[str_view_arg_handler]
-    )(_kernel)
+    kernel = cuda.jit(sig, link=[_ptx_file()], extensions=[str_view_arg_handler])(
+        _kernel
+    )
 
     return kernel
 

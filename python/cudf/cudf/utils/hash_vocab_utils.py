@@ -24,9 +24,7 @@ MAX_SIZE_FOR_INITIAL_BIN = 2**8 - 1
 
 # Shifts for bit packing
 A_SECOND_LEVEL_SHIFT_AMT = np.uint8(64 - A_SECOND_LEVEL_POW)
-B_SECOND_LEVEL_SHIFT_AMT = np.uint8(
-    64 - A_SECOND_LEVEL_POW - B_SECOND_LEVEL_POW
-)
+B_SECOND_LEVEL_SHIFT_AMT = np.uint8(64 - A_SECOND_LEVEL_POW - B_SECOND_LEVEL_POW)
 BITS_FOR_INNER_TABLE_SIZE = np.uint8(8)
 
 NOT_FOUND = -1
@@ -93,12 +91,8 @@ def _find_hash_for_internal(hash_bin):
     new_length = _new_bin_length(len(hash_bin))
 
     while True:
-        a = np.random.randint(
-            A_LBOUND_SECOND_LEVEL_HASH, A_HBOUND_SECOND_LEVEL_HASH
-        )
-        b = np.random.randint(
-            B_LBOUND_SECOND_LEVEL_HASH, B_HBOUND_SECOND_LEVEL_HASH
-        )
+        a = np.random.randint(A_LBOUND_SECOND_LEVEL_HASH, A_HBOUND_SECOND_LEVEL_HASH)
+        b = np.random.randint(B_LBOUND_SECOND_LEVEL_HASH, B_HBOUND_SECOND_LEVEL_HASH)
         bins = _make_bins(hash_bin, new_length, a, b)
 
         max_length = len(max(bins, key=len))
@@ -115,9 +109,7 @@ def _perfect_hash(integers, max_constant):
     )
     flattened_bins = []
 
-    internal_table_coeffs = np.zeros(
-        shape=[num_top_level_bins], dtype=np.uint64
-    )
+    internal_table_coeffs = np.zeros(shape=[num_top_level_bins], dtype=np.uint64)
     offset_into_flattened_table = np.zeros(
         shape=[num_top_level_bins + 1], dtype=np.uint64
     )
@@ -134,9 +126,7 @@ def _perfect_hash(integers, max_constant):
             | coeff_b << B_SECOND_LEVEL_SHIFT_AMT
             | bin_length
         )
-        offset_into_flattened_table[i + 1] = (
-            offset_into_flattened_table[i] + bin_length
-        )
+        offset_into_flattened_table[i + 1] = offset_into_flattened_table[i] + bin_length
         flattened_bins.extend(internal_table)
 
     print(
@@ -199,8 +189,7 @@ def _store_func(
         f.write(f"{len(hash_table)}\n")
         f.writelines(f"{kv}\n" for kv in hash_table)
         f.writelines(
-            f"{tok_id}\n"
-            for tok_id in [unk_tok_id, first_token_id, sep_token_id]
+            f"{tok_id}\n" for tok_id in [unk_tok_id, first_token_id, sep_token_id]
         )
 
 
@@ -289,8 +278,6 @@ def hash_vocab(
             inner_table_coeffs,
             offsets_into_ht,
         )
-        assert (
-            val == value
-        ), f"Incorrect value found. Got {val} expected {value}"
+        assert val == value, f"Incorrect value found. Got {val} expected {value}"
 
     print("All present tokens return correct value.")

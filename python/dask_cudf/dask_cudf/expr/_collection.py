@@ -43,9 +43,7 @@ class VarMixin:
             index = self._meta.to_pandas().var(numeric_only=True).index
             frame = frame[list(index)]
         return new_collection(
-            frame.expr.var(
-                axis, skipna, ddof, numeric_only, split_every=split_every
-            )
+            frame.expr.var(axis, skipna, ddof, numeric_only, split_every=split_every)
         )
 
 

@@ -169,9 +169,7 @@ class ColumnAccessor(abc.MutableMapping):
             f"multiindex={self.multiindex}, "
             f"level_names={self.level_names})"
         )
-        column_info = "\n".join(
-            [f"{name}: {col.dtype}" for name, col in self.items()]
-        )
+        column_info = "\n".join([f"{name}: {col.dtype}" for name, col in self.items()])
         return f"{type_info}\n{column_info}"
 
     @property
@@ -243,9 +241,7 @@ class ColumnAccessor(abc.MutableMapping):
             # Determine if we can return a RangeIndex
             if self.rangeindex:
                 if not self.names:
-                    return pd.RangeIndex(
-                        start=0, stop=0, step=1, name=self.name
-                    )
+                    return pd.RangeIndex(start=0, stop=0, step=1, name=self.name)
                 elif cudf.api.types.infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
                         start = self.names[0]
@@ -255,9 +251,7 @@ class ColumnAccessor(abc.MutableMapping):
                     uniques = np.unique(np.diff(np.array(self.names)))
                     if len(uniques) == 1 and uniques[0] != 0:
                         diff = uniques[0]
-                        new_range = range(
-                            self.names[0], self.names[-1] + diff, diff
-                        )
+                        new_range = range(self.names[0], self.names[-1] + diff, diff)
                         return pd.RangeIndex(new_range, name=self.name)
             result = pd.Index(
                 self.names,
@@ -267,9 +261,7 @@ class ColumnAccessor(abc.MutableMapping):
             )
         return result
 
-    def insert(
-        self, name: Any, value: Any, loc: int = -1, validate: bool = True
-    ):
+    def insert(self, name: Any, value: Any, loc: int = -1, validate: bool = True):
         """
         Insert column into the ColumnAccessor at the specified location.
 
@@ -292,9 +284,7 @@ class ColumnAccessor(abc.MutableMapping):
         if loc == -1:
             loc = ncols
         if not (0 <= loc <= ncols):
-            raise ValueError(
-                "insert: loc out of bounds: must be  0 <= loc <= ncols"
-            )
+            raise ValueError("insert: loc out of bounds: must be  0 <= loc <= ncols")
         # TODO: we should move all insert logic here
         if name in self._data:
             raise ValueError(f"Cannot insert '{name}', already exists")
@@ -370,9 +360,7 @@ class ColumnAccessor(abc.MutableMapping):
             return (self.names[index],)
         elif (bn := len(index)) > 0 and all(map(is_bool, index)):
             if bn != (n := len(self.names)):
-                raise IndexError(
-                    f"Boolean mask has wrong length: {bn} not {n}"
-                )
+                raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
             if isinstance(index, (pd.Series, cudf.Series)):
                 # Don't allow iloc indexing with series
                 raise NotImplementedError(
@@ -474,13 +462,9 @@ class ColumnAccessor(abc.MutableMapping):
         # Special-casing for boolean mask
         if (bn := len(key)) > 0 and all(map(is_bool, key)):
             if bn != (n := len(self.names)):
-                raise IndexError(
-                    f"Boolean mask has wrong length: {bn} not {n}"
-                )
+                raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
             data = dict(
-                item
-                for item, keep in zip(self._grouped_data.items(), key)
-                if keep
+                item for item, keep in zip(self._grouped_data.items(), key) if keep
             )
         else:
             data = {k: self._grouped_data[k] for k in key}
@@ -641,12 +625,9 @@ class ColumnAccessor(abc.MutableMapping):
             level += self.nlevels
 
         self._data = {
-            _remove_key_level(key, level): value
-            for key, value in self._data.items()
+            _remove_key_level(key, level): value for key, value in self._data.items()
         }
-        self._level_names = (
-            self._level_names[:level] + self._level_names[level + 1 :]
-        )
+        self._level_names = self._level_names[:level] + self._level_names[level + 1 :]
 
         if (
             len(self._level_names) == 1
@@ -704,9 +685,7 @@ def _get_level(x, nlevels, level_names):
         if x < 0:
             x += nlevels
         if x >= nlevels:
-            raise IndexError(
-                f"Level {x} out of bounds. Index has {nlevels} levels."
-            )
+            raise IndexError(f"Level {x} out of bounds. Index has {nlevels} levels.")
         return x
     else:
         x = level_names.index(x)

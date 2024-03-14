@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import cudf
 from cudf import _lib as libcudf
@@ -33,7 +33,5 @@ def read_avro(
         ValueError("URL content-encoding decompression is not supported")
 
     return cudf.DataFrame._from_data(
-        *libcudf.avro.read_avro(
-            filepath_or_buffer, columns, skiprows, num_rows
-        )
+        *libcudf.avro.read_avro(filepath_or_buffer, columns, skiprows, num_rows)
     )

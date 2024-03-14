@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
@@ -61,18 +61,14 @@ class GatherMap:
             # TODO: we should fix this further up.
             # Alternately we can have an Optional[Column] and handle None
             # specially in _gather.
-            self.column = cast(
-                "NumericalColumn", self.column.astype(size_type_dtype)
-            )
+            self.column = cast("NumericalColumn", self.column.astype(size_type_dtype))
         else:
             if self.column.dtype.kind not in {"i", "u"}:
                 raise TypeError("Gather map must have integer dtype")
             if not nullify:
                 lo, hi = libcudf.reduce.minmax(self.column)
                 if lo.value < -nrows or hi.value >= nrows:
-                    raise IndexError(
-                        f"Gather map is out of bounds for [0, {nrows})"
-                    )
+                    raise IndexError(f"Gather map is out of bounds for [0, {nrows})")
 
     @classmethod
     def from_column_unchecked(

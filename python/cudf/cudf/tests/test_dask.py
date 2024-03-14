@@ -1,12 +1,10 @@
-# Copyright (c) 2019, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import pytest
 
 import cudf
 
-is_dataframe_like = pytest.importorskip(
-    "dask.dataframe.utils"
-).is_dataframe_like
+is_dataframe_like = pytest.importorskip("dask.dataframe.utils").is_dataframe_like
 is_index_like = pytest.importorskip("dask.dataframe.utils").is_index_like
 is_series_like = pytest.importorskip("dask.dataframe.utils").is_series_like
 

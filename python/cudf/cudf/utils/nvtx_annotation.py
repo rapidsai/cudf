@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import hashlib
 from functools import partial
@@ -25,6 +25,4 @@ def _cudf_nvtx_annotate(func, domain="cudf_python"):
     )(func)
 
 
-_dask_cudf_nvtx_annotate = partial(
-    _cudf_nvtx_annotate, domain="dask_cudf_python"
-)
+_dask_cudf_nvtx_annotate = partial(_cudf_nvtx_annotate, domain="dask_cudf_python")

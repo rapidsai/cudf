@@ -74,8 +74,7 @@ def to_dlpack(cudf_obj):
         gdf = cudf.Series._from_data({None: cudf_obj})
     else:
         raise TypeError(
-            f"Input of type {type(cudf_obj)} cannot be converted "
-            "to DLPack tensor"
+            f"Input of type {type(cudf_obj)} cannot be converted " "to DLPack tensor"
         )
 
     if any(
@@ -84,9 +83,7 @@ def to_dlpack(cudf_obj):
     ):
         raise TypeError("non-numeric data not yet supported")
 
-    dtype = cudf.utils.dtypes.find_common_type(
-        [col.dtype for col in gdf._data.columns]
-    )
+    dtype = cudf.utils.dtypes.find_common_type([col.dtype for col in gdf._data.columns])
     gdf = gdf.astype(dtype)
 
     return libdlpack.to_dlpack([*gdf._columns])

@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -108,17 +108,13 @@ def destructure_iloc_key(
         # shape of frame
         indexers = key + (slice(None),) * (n - len(key))
         if len(indexers) > n:
-            raise IndexError(
-                f"Too many indexers: got {len(indexers)} expected {n}"
-            )
+            raise IndexError(f"Too many indexers: got {len(indexers)} expected {n}")
     else:
         # Key indexes rows, slice-expand to shape of frame
         indexers = (key, *(slice(None),) * (n - 1))
     indexers = tuple(k(frame) if callable(k) else k for k in indexers)
     if any(isinstance(k, tuple) for k in indexers):
-        raise IndexError(
-            "Too many indexers: can't have nested tuples in iloc indexing"
-        )
+        raise IndexError("Too many indexers: can't have nested tuples in iloc indexing")
     return indexers
 
 
@@ -154,17 +150,14 @@ def destructure_dataframe_iloc_indexer(
         cols = slice(None)
     scalar = is_integer(cols)
     try:
-        column_names: ColumnLabels = list(
-            frame._data.get_labels_by_index(cols)
-        )
+        column_names: ColumnLabels = list(frame._data.get_labels_by_index(cols))
         if len(set(column_names)) != len(column_names):
             raise NotImplementedError(
                 "cudf DataFrames do not support repeated column names"
             )
     except TypeError:
         raise TypeError(
-            "Column indices must be integers, slices, "
-            "or list-like of integers"
+            "Column indices must be integers, slices, " "or list-like of integers"
         )
     if scalar:
         assert (
@@ -238,6 +231,5 @@ def parse_row_iloc_indexer(key: Any, n: int) -> IndexingSpec:
             return MapIndexer(GatherMap(key, n, nullify=False))
         else:
             raise TypeError(
-                "Cannot index by location "
-                f"with non-integer key of type {type(key)}"
+                "Cannot index by location " f"with non-integer key of type {type(key)}"
             )

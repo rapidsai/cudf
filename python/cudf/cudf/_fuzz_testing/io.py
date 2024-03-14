@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import copy
 import json
@@ -49,9 +49,7 @@ class IOFuzz:
             else:
                 for i in os.listdir(path):
                     file_name = os.path.join(path, i)
-                    if os.path.isfile(file_name) and file_name.endswith(
-                        "_crash.json"
-                    ):
+                    if os.path.isfile(file_name) and file_name.endswith("_crash.json"):
                         self._load_params(file_name)
         self._regression = bool(self._inputs)
         self._idx = 0
@@ -76,9 +74,7 @@ class IOFuzz:
 
     def get_next_regression_params(self):
         if self._idx >= len(self._inputs):
-            logging.info(
-                "Reached the end of all crash.json files to run..Exiting.."
-            )
+            logging.info("Reached the end of all crash.json files to run..Exiting..")
             sys.exit(0)
         param = self._inputs[self._idx]
         dtypes_meta = param["dtypes_meta"]

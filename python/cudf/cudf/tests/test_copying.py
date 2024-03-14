@@ -113,9 +113,7 @@ def test_series_setitem_partial_slice_cow_on():
         assert_eq(new_copy, cudf.Series([1, 2, 300, 300, 5]))
 
         new_slice = actual[2:]
-        assert (
-            new_slice._column.base_data.owner == actual._column.base_data.owner
-        )
+        assert new_slice._column.base_data.owner == actual._column.base_data.owner
         new_slice[0:2] = 10
         assert_eq(new_slice, cudf.Series([10, 10, 5], index=[2, 3, 4]))
         assert_eq(actual, cudf.Series([1, 2, 3, 4, 5]))
@@ -400,29 +398,21 @@ def test_series_cat_copy(copy_on_write):
 
 def test_dataframe_cow_slice_setitem():
     with cudf.option_context("copy_on_write", True):
-        df = cudf.DataFrame(
-            {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
-        )
+        df = cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]})
         slice_df = df[1:4]
 
         assert_eq(
             slice_df,
-            cudf.DataFrame(
-                {"a": [11, 12, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
-            ),
+            cudf.DataFrame({"a": [11, 12, 13], "b": [30, 40, 50]}, index=[1, 2, 3]),
         )
 
         slice_df["a"][2] = 1111
 
         assert_eq(
             slice_df,
-            cudf.DataFrame(
-                {"a": [11, 1111, 13], "b": [30, 40, 50]}, index=[1, 2, 3]
-            ),
+            cudf.DataFrame({"a": [11, 1111, 13], "b": [30, 40, 50]}, index=[1, 2, 3]),
         )
         assert_eq(
             df,
-            cudf.DataFrame(
-                {"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}
-            ),
+            cudf.DataFrame({"a": [10, 11, 12, 13, 14], "b": [20, 30, 40, 50, 60]}),
         )

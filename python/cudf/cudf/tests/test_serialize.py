@@ -83,17 +83,13 @@ from cudf.testing._utils import assert_eq
         lambda: cudf.DataFrame(
             {"a": list(range(13)), "b": [float(x) for x in range(13)]},
             index=cudf.Index(
-                cudf.date_range(
-                    start="2011-01-01", end="2012-01-01", periods=13
-                )
+                cudf.date_range(start="2011-01-01", end="2012-01-01", periods=13)
             ),
         ),
         lambda: cudf.Series(
             list(range(13)),
             index=cudf.Index(
-                cudf.date_range(
-                    start="2011-01-01", end="2012-01-01", periods=13
-                )
+                cudf.date_range(start="2011-01-01", end="2012-01-01", periods=13)
             ),
         ),
         lambda: cudf.TimedeltaIndex(
@@ -163,9 +159,7 @@ def test_serialize_dataframe():
     df = cudf.DataFrame()
     df["a"] = np.arange(100)
     df["b"] = np.arange(100, dtype=np.float32)
-    df["c"] = pd.Categorical(
-        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
-    )
+    df["c"] = pd.Categorical(["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"])
     outdf = cudf.DataFrame.deserialize(*df.serialize())
     assert_eq(df, outdf)
 
@@ -174,9 +168,7 @@ def test_serialize_dataframe_with_index():
     df = cudf.DataFrame()
     df["a"] = np.arange(100)
     df["b"] = np.random.random(100)
-    df["c"] = pd.Categorical(
-        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
-    )
+    df["c"] = pd.Categorical(["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"])
     df = df.sort_values("b")
     outdf = cudf.DataFrame.deserialize(*df.serialize())
     assert_eq(df, outdf)
@@ -211,9 +203,7 @@ def test_serialize_multi_index():
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdg = gdf.groupby(["a", "b"]).sum()
     multiindex = gdg.index
-    outindex = cudf.core.multiindex.MultiIndex.deserialize(
-        *multiindex.serialize()
-    )
+    outindex = cudf.core.multiindex.MultiIndex.deserialize(*multiindex.serialize())
     assert_eq(multiindex, outindex)
 
 

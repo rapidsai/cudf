@@ -129,9 +129,7 @@ def test_read_parquet(s3_base, s3so, open_file_options):
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
     buffer.seek(0)
-    with s3_context(
-        s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
-    ):
+    with s3_context(s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}):
         if "open_file_func" in open_file_options:
             fs = pa_fs.S3FileSystem(
                 endpoint_override=s3so["client_kwargs"]["endpoint_url"],

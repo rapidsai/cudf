@@ -7,10 +7,7 @@ def validate_setup():
     # TODO: Remove the following check once we arrive at a solution for #4827
     # This is a temporary workaround to unblock internal testing
     # related issue: https://github.com/rapidsai/cudf/issues/4827
-    if (
-        "RAPIDS_NO_INITIALIZE" in os.environ
-        or "CUDF_NO_INITIALIZE" in os.environ
-    ):
+    if "RAPIDS_NO_INITIALIZE" in os.environ or "CUDF_NO_INITIALIZE" in os.environ:
         return
 
     import warnings
@@ -129,8 +126,7 @@ def validate_setup():
             # Driver Runtime version is >= Runtime version
             pass
         elif (
-            cuda_driver_supported_rt_version >= 11000
-            and cuda_runtime_version >= 11000
+            cuda_driver_supported_rt_version >= 11000 and cuda_runtime_version >= 11000
         ):
             # With cuda enhanced compatibility any code compiled
             # with 11.x version of cuda can now run on any

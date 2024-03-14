@@ -21,9 +21,7 @@ from cudf.options import get_option
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.string import format_bytes
 
-_spill_cudf_nvtx_annotate = partial(
-    _cudf_nvtx_annotate, domain="cudf_python-spill"
-)
+_spill_cudf_nvtx_annotate = partial(_cudf_nvtx_annotate, domain="cudf_python-spill")
 
 
 def get_traceback() -> str:
@@ -382,21 +380,15 @@ class SpillManager:
         int
             The number of bytes spilled.
         """
-        limit = (
-            self._device_memory_limit if device_limit is None else device_limit
-        )
+        limit = self._device_memory_limit if device_limit is None else device_limit
         if limit is None:
             return 0
-        unspilled = sum(
-            buf.size for buf in self.buffers() if not buf.is_spilled
-        )
+        unspilled = sum(buf.size for buf in self.buffers() if not buf.is_spilled)
         return self.spill_device_memory(nbytes=unspilled - limit)
 
     def __repr__(self) -> str:
         spilled = sum(buf.size for buf in self.buffers() if buf.is_spilled)
-        unspilled = sum(
-            buf.size for buf in self.buffers() if not buf.is_spilled
-        )
+        unspilled = sum(buf.size for buf in self.buffers() if not buf.is_spilled)
         unspillable = 0
         for buf in self.buffers():
             if not (buf.is_spilled or buf.spillable):

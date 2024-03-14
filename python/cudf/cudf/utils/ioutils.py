@@ -85,9 +85,7 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-""".format(
-    remote_data_sources=_docstring_remote_sources
-)
+""".format(remote_data_sources=_docstring_remote_sources)
 doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
@@ -120,9 +118,7 @@ See Also
 --------
 cudf.read_parquet
 """
-doc_read_parquet_metadata = docfmt_partial(
-    docstring=_docstring_read_parquet_metadata
-)
+doc_read_parquet_metadata = docfmt_partial(docstring=_docstring_read_parquet_metadata)
 
 _docstring_read_parquet = """
 Load a Parquet dataset into a DataFrame
@@ -396,9 +392,7 @@ See Also
 --------
 cudf.read_orc
 """
-doc_read_orc_statistics = docfmt_partial(
-    docstring=_docstring_read_orc_statistics
-)
+doc_read_orc_statistics = docfmt_partial(docstring=_docstring_read_orc_statistics)
 
 _docstring_read_orc = """
 Load an ORC dataset into a DataFrame
@@ -1416,9 +1410,7 @@ filepath_or_buffer : str, bytes, BytesIO, list
     list of Filepath strings or in-memory buffers of data.
 compression : str
     Type of compression algorithm for the content
-    """.format(
-    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT
-)
+    """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
 doc_get_reader_filepath_or_buffer = docfmt_partial(
@@ -1621,9 +1613,7 @@ def _open_remote_files(
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.
-        row_groups = precache_options.pop("row_groups", None) or (
-            [None] * len(paths)
-        )
+        row_groups = precache_options.pop("row_groups", None) or ([None] * len(paths))
         return [
             ArrowPythonFile(
                 _set_context(
@@ -1652,8 +1642,7 @@ def _open_remote_files(
     # Default open - Use pyarrow filesystem API
     pa_fs = PyFileSystem(FSSpecHandler(fs))
     return [
-        _set_context(pa_fs.open_input_file(fpath), context_stack)
-        for fpath in paths
+        _set_context(pa_fs.open_input_file(fpath), context_stack) for fpath in paths
     ]
 
 
@@ -1680,9 +1669,7 @@ def get_reader_filepath_or_buffer(
         # Get a filesystem object if one isn't already available
         paths = [path_or_data]
         if fs is None:
-            fs, paths = _get_filesystem_and_paths(
-                path_or_data, storage_options
-            )
+            fs, paths = _get_filesystem_and_paths(path_or_data, storage_options)
             if fs is None:
                 if warn_on_raw_text_input:
                     # Do not remove until pandas 3.0 support is added.
@@ -1722,9 +1709,7 @@ def get_reader_filepath_or_buffer(
                     )
             elif warn_on_raw_text_input:
                 # Do not remove until pandas 3.0 support is added.
-                assert (
-                    PANDAS_LT_300
-                ), "Need to drop after pandas-3.0 support is added."
+                assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
                 warnings.warn(
                     f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
                     "deprecated and will be removed in a future version. "
@@ -1979,10 +1964,7 @@ def _apply_predicate(op, val, col_stats):
 
 def _apply_filters(filters, stats):
     for conjunction in filters:
-        if all(
-            _apply_predicate(op, val, stats[col])
-            for col, op, val in conjunction
-        ):
+        if all(_apply_predicate(op, val, stats[col]) for col, op, val in conjunction):
             return True
     return False
 
@@ -2023,9 +2005,7 @@ def _fsspec_data_transfer(
     # Require `fs` if `path_or_fob` is not file-like
     file_like = is_file_like(path_or_fob)
     if fs is None and not file_like:
-        raise ValueError(
-            "fs must be defined if `path_or_fob` is not file-like"
-        )
+        raise ValueError("fs must be defined if `path_or_fob` is not file-like")
 
     # Calculate total file size
     if file_like:

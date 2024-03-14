@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from collections import abc
 
@@ -159,9 +159,7 @@ def cut(
     # create bins if given an int or single scalar
     if not isinstance(bins, pd.IntervalIndex):
         if not isinstance(bins, (abc.Sequence)):
-            if isinstance(
-                x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
-            ):
+            if isinstance(x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)):
                 mn = x.min()
                 mx = x.max()
             else:
@@ -208,14 +206,10 @@ def cut(
                     old_bins[0], old_bins[1], periods=1, closed=closed
                 )
             else:
-                interval_labels = IntervalIndex.from_breaks(
-                    old_bins, closed=closed
-                )
+                interval_labels = IntervalIndex.from_breaks(old_bins, closed=closed)
         else:
             # get labels for categories
-            interval_labels = IntervalIndex.from_breaks(
-                int_label_bins, closed=closed
-            )
+            interval_labels = IntervalIndex.from_breaks(int_label_bins, closed=closed)
     elif labels is not False:
         if not (is_list_like(labels)):
             raise ValueError(
@@ -238,9 +232,7 @@ def cut(
                 labels, categories=None, ordered=False
             )
         else:
-            interval_labels = (
-                labels if len(set(labels)) == len(labels) else None
-            )
+            interval_labels = labels if len(set(labels)) == len(labels) else None
 
     if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns

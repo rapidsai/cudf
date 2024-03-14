@@ -105,9 +105,7 @@ def test_searchsorted_categorical(side):
 
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted_datetime(side):
-    psr1 = pd.Series(
-        pd.date_range("20190101", "20200101", freq="400h", name="times")
-    )
+    psr1 = pd.Series(pd.date_range("20190101", "20200101", freq="400h", name="times"))
     sr1 = cudf.from_pandas(psr1)
 
     psr2 = pd.Series(

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pytest
@@ -48,9 +48,7 @@ def test_from_records_noindex(columns):
 
 @pytest.mark.parametrize("columns", [None, ("a", "b"), ("a",), ("b",)])
 def test_from_records_withindex(columns):
-    recdtype = np.dtype(
-        [("index", np.int64), ("a", np.int32), ("b", np.float64)]
-    )
+    recdtype = np.dtype([("index", np.int64), ("a", np.int32), ("b", np.float64)])
     rec = np.recarray(10, dtype=recdtype)
     rec.index = ii = np.arange(30, 40)
     rec.a = aa = np.arange(10, dtype=np.int32)
@@ -82,9 +80,7 @@ def test_numpy_non_contiguious():
         Series([1, 2, 3, -12, 12, 44], dtype="str"),
         Series([1, 2, 3, -12, 12, 44]).index,
         DataFrame({"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}),
-        DataFrame(
-            {"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}
-        ).index,
+        DataFrame({"a": [1, 2, 3, -1234], "b": [0.1, 0.2222, 0.4, -3.14]}).index,
     ],
 )
 @pytest.mark.parametrize("dtype", [None, "float", "int", "str"])

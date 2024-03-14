@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2022, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 
@@ -27,9 +27,7 @@ def cudf_num_series(start, stop, step=1):
 
 def get_categorical_series():
     return Series(
-        pd.Categorical(
-            ["ab", "ac", "cd", "ab", "cd"], categories=["ab", "ac", "cd"]
-        )
+        pd.Categorical(["ab", "ac", "cd", "ab", "cd"], categories=["ab", "ac", "cd"])
     )
 
 

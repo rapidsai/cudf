@@ -277,9 +277,7 @@ def test_getitem(stream):
     "indexer", [lambda g: g, lambda g: g[["y"]], lambda g: g[["x", "y"]]]
 )
 def test_groupby_aggregate(agg, grouper, indexer, stream):
-    df = cudf.DataFrame(
-        {"x": (np.arange(10) // 2).astype(float), "y": [1.0, 2.0] * 5}
-    )
+    df = cudf.DataFrame({"x": (np.arange(10) // 2).astype(float), "y": [1.0, 2.0] * 5})
 
     a = DataFrame(example=df.iloc[:0], stream=stream)
 
@@ -302,9 +300,7 @@ def test_groupby_aggregate(agg, grouper, indexer, stream):
 
 
 def test_repr(stream):
-    df = cudf.DataFrame(
-        {"x": (np.arange(10) // 2).astype(float), "y": [1.0] * 10}
-    )
+    df = cudf.DataFrame({"x": (np.arange(10) // 2).astype(float), "y": [1.0] * 10})
     a = DataFrame(example=df, stream=stream)
 
     text = repr(a)
@@ -321,9 +317,7 @@ def test_repr(stream):
 
 
 def test_repr_html(stream):
-    df = cudf.DataFrame(
-        {"x": (np.arange(10) // 2).astype(float), "y": [1.0] * 10}
-    )
+    df = cudf.DataFrame({"x": (np.arange(10) // 2).astype(float), "y": [1.0] * 10})
     a = DataFrame(example=df, stream=stream)
 
     for x in [a, a.y, a.y.mean()]:
@@ -420,12 +414,8 @@ def test_setitem_overwrites(stream):
         (lambda df: df, lambda df: df.x),
     ],
 )
-def test_rolling_count_aggregations(
-    op, window, m, pre_get, post_get, kwargs, stream
-):
-    index = pd.DatetimeIndex(
-        pd.date_range("2000-01-01", "2000-01-03", freq="1h")
-    )
+def test_rolling_count_aggregations(op, window, m, pre_get, post_get, kwargs, stream):
+    index = pd.DatetimeIndex(pd.date_range("2000-01-01", "2000-01-03", freq="1h"))
     df = cudf.DataFrame({"x": np.arange(len(index))}, index=index)
 
     expected = getattr(post_get(pre_get(df).rolling(window)), op)(**kwargs)
@@ -620,16 +610,12 @@ def test_windowing_n(func, n, getter):
 @pytest.mark.parametrize("func", [lambda x: x.sum(), lambda x: x.mean()])
 @pytest.mark.parametrize("value", ["10h", "1d"])
 @pytest.mark.parametrize("getter", [lambda df: df, lambda df: df.x])
-@pytest.mark.parametrize(
-    "grouper", [lambda a: "y", lambda a: a.index, lambda a: ["y"]]
-)
+@pytest.mark.parametrize("grouper", [lambda a: "y", lambda a: a.index, lambda a: ["y"]])
 @pytest.mark.parametrize(
     "indexer", [lambda g: g, lambda g: g[["x"]], lambda g: g[["x", "y"]]]
 )
 def test_groupby_windowing_value(func, value, getter, grouper, indexer):
-    index = pd.DatetimeIndex(
-        pd.date_range("2000-01-01", "2000-01-03", freq="1h")
-    )
+    index = pd.DatetimeIndex(pd.date_range("2000-01-01", "2000-01-03", freq="1h"))
     df = cudf.DataFrame(
         {
             "x": np.arange(len(index), dtype=float),
@@ -753,9 +739,7 @@ def test_groupby_aggregate_with_start_state(stream):
     sdf = DataFrame(stream, example=example).groupby(["name"])
     output0 = sdf.amount.sum(start=None).stream.gather().sink_to_list()
     output1 = (
-        sdf.amount.mean(with_state=True, start=None)
-        .stream.gather()
-        .sink_to_list()
+        sdf.amount.mean(with_state=True, start=None).stream.gather().sink_to_list()
     )
     output2 = sdf.amount.count(start=None).stream.gather().sink_to_list()
 
@@ -763,9 +747,7 @@ def test_groupby_aggregate_with_start_state(stream):
     stream.emit(df)
 
     out_df0 = cudf.DataFrame({"name": ["Alice", "Tom"], "amount": [50, 100]})
-    out_df1 = cudf.DataFrame(
-        {"name": ["Alice", "Tom"], "amount": [50.0, 100.0]}
-    )
+    out_df1 = cudf.DataFrame({"name": ["Alice", "Tom"], "amount": [50.0, 100.0]})
     out_df2 = cudf.DataFrame({"name": ["Alice", "Tom"], "amount": [1, 1]})
     assert assert_eq(output0[0].reset_index(), out_df0)
     assert assert_eq(output1[0][1].reset_index(), out_df1)
@@ -780,9 +762,7 @@ def test_groupby_aggregate_with_start_state(stream):
         .sink_to_list()
     )
     output5 = sdf.amount.count(start=output2[0]).stream.gather().sink_to_list()
-    df = cudf.DataFrame(
-        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
-    )
+    df = cudf.DataFrame({"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]})
     stream.emit(df)
 
     out_df2 = cudf.DataFrame(
@@ -791,9 +771,7 @@ def test_groupby_aggregate_with_start_state(stream):
     out_df3 = cudf.DataFrame(
         {"name": ["Alice", "Linda", "Tom"], "amount": [50.0, 200.0, 100.0]}
     )
-    out_df4 = cudf.DataFrame(
-        {"name": ["Alice", "Linda", "Tom"], "amount": [2, 1, 2]}
-    )
+    out_df4 = cudf.DataFrame({"name": ["Alice", "Linda", "Tom"], "amount": [2, 1, 2]})
     assert assert_eq(output3[0].reset_index(), out_df2)
     assert assert_eq(output4[0][1].reset_index(), out_df3)
     assert assert_eq(output5[0].reset_index(), out_df4)
@@ -806,9 +784,7 @@ def test_reductions_with_start_state(stream):
     output1 = sdf.amount.count(start=3).stream.gather().sink_to_list()
     output2 = sdf.amount.sum(start=10).stream.gather().sink_to_list()
 
-    df = cudf.DataFrame(
-        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
-    )
+    df = cudf.DataFrame({"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]})
     stream.emit(df)
 
     assert output0[0] == 72.0
@@ -826,9 +802,7 @@ def test_rolling_aggs_with_start_state(stream):
         .sink_to_list()
     )
 
-    df = cudf.DataFrame(
-        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
-    )
+    df = cudf.DataFrame({"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]})
     stream.emit(df)
     df = cudf.DataFrame({"name": ["Bob"], "amount": [250]})
     stream.emit(df)
@@ -872,9 +846,7 @@ def test_window_aggs_with_start_state(stream):
         .sink_to_list()
     )
 
-    df = cudf.DataFrame(
-        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
-    )
+    df = cudf.DataFrame({"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]})
     stream.emit(df)
     df = cudf.DataFrame({"name": ["Bob"], "amount": [250]})
     stream.emit(df)
@@ -905,13 +877,9 @@ def test_windowed_groupby_aggs_with_start_state(stream):
         .sink_to_list()
     )
 
-    df = cudf.DataFrame(
-        {"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]}
-    )
+    df = cudf.DataFrame({"name": ["Alice", "Tom", "Linda"], "amount": [50, 100, 200]})
     stream.emit(df)
-    df = cudf.DataFrame(
-        {"name": ["Alice", "Linda", "Bob"], "amount": [250, 300, 350]}
-    )
+    df = cudf.DataFrame({"name": ["Alice", "Linda", "Bob"], "amount": [250, 300, 350]})
     stream.emit(df)
 
     stream = Stream()

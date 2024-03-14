@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -47,9 +47,7 @@ def get_per_module_results(log_file_name):
                         # it's an xpassed test
                         outcome = "failed"
                 module_name = (
-                    line["nodeid"]
-                    .split("::")[0]
-                    .removeprefix(PANDAS_TEST_PREFIX)
+                    line["nodeid"].split("::")[0].removeprefix(PANDAS_TEST_PREFIX)
                 )
                 per_module_results.setdefault(module_name, {})
                 per_module_results[module_name].setdefault("total", 0)
@@ -60,9 +58,7 @@ def get_per_module_results(log_file_name):
 
 
 def sort_results(results):
-    sorted_keys = sorted(
-        results, key=lambda key: results[key].get("failed", 0)
-    )
+    sorted_keys = sorted(results, key=lambda key: results[key].get("failed", 0))
     return {key: results[key] for key in sorted_keys}
 
 
@@ -98,9 +94,7 @@ def print_results_as_table(results):
 if __name__ == "__main__":
     # parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "log_file_name", nargs=1, help="The input log file name"
-    )
+    parser.add_argument("log_file_name", nargs=1, help="The input log file name")
     parser.add_argument(
         "--output",
         choices=["json", "table"],

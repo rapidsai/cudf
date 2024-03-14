@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import ast
 import functools
@@ -208,8 +208,7 @@ class libcudfASTVisitor(ast.NodeVisitor):
         # Assuming only unary functions are supported, which is checked above.
         if len(node.args) != 1 or node.keywords:
             raise ValueError(
-                f"Function {node.func} only accepts one positional "
-                "argument."
+                f"Function {node.func} only accepts one positional " "argument."
             )
         self.visit(node.args[0])
 

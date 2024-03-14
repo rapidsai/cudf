@@ -84,9 +84,7 @@ _cmpops = [
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
 def test_timedelta_series_create(data, dtype):
     if dtype not in ("timedelta64[ns]"):
-        pytest.skip(
-            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
-        )
+        pytest.skip("Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465")
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
     )
@@ -108,9 +106,7 @@ def test_timedelta_series_create(data, dtype):
 @pytest.mark.parametrize("cast_dtype", ["int64", "category"])
 def test_timedelta_from_typecast(data, dtype, cast_dtype):
     if dtype not in ("timedelta64[ns]"):
-        pytest.skip(
-            "Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465"
-        )
+        pytest.skip("Bug in pandas : https://github.com/pandas-dev/pandas/issues/35465")
     psr = pd.Series(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
     )
@@ -367,9 +363,7 @@ def test_timedelta_ops_datetime_inputs(
         ),
         pd.DataFrame(
             {
-                "A": pd.Series(
-                    pd.date_range("1994-1-1", periods=50, freq="D")
-                ),
+                "A": pd.Series(pd.date_range("1994-1-1", periods=50, freq="D")),
                 "B": pd.Series([pd.Timedelta(days=i) for i in range(50)]),
             }
         ),
@@ -664,9 +658,7 @@ def test_timedelta_reduction_ops(data, dtype, reduction_op):
     actual = getattr(gsr, reduction_op)()
     if pd.isna(expected) and pd.isna(actual):
         pass
-    elif isinstance(expected, pd.Timedelta) and isinstance(
-        actual, pd.Timedelta
-    ):
+    elif isinstance(expected, pd.Timedelta) and isinstance(actual, pd.Timedelta):
         assert (
             expected.round(gsr._column.time_unit).value
             == actual.round(gsr._column.time_unit).value
@@ -744,9 +736,7 @@ def test_timedelta_index(data, dtype):
 @pytest.mark.parametrize("data", _TIMEDELTA_DATA_NON_OVERFLOW)
 @pytest.mark.parametrize("datetime_dtype", utils.DATETIME_TYPES)
 @pytest.mark.parametrize("timedelta_dtype", utils.TIMEDELTA_TYPES)
-def test_timedelta_index_datetime_index_ops(
-    data, datetime_dtype, timedelta_dtype
-):
+def test_timedelta_index_datetime_index_ops(data, datetime_dtype, timedelta_dtype):
     gdt = cudf.Index(data, dtype=datetime_dtype)
     gtd = cudf.Index(data, dtype=timedelta_dtype)
 
@@ -846,9 +836,7 @@ def test_timedelta_datetime_index_ops_misc(
     ],
 )
 @pytest.mark.filterwarnings("ignore:divide by zero:RuntimeWarning:pandas")
-def test_timedelta_index_ops_with_scalars(
-    request, data, other_scalars, dtype, op
-):
+def test_timedelta_index_ops_with_scalars(request, data, other_scalars, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
 
@@ -919,9 +907,7 @@ def test_timedelta_index_ops_with_scalars(
         "floordiv",
     ],
 )
-def test_timedelta_index_ops_with_cudf_scalars(
-    request, data, cpu_scalar, dtype, op
-):
+def test_timedelta_index_ops_with_cudf_scalars(request, data, cpu_scalar, dtype, op):
     gtdi = cudf.Index(data=data, dtype=dtype)
     ptdi = gtdi.to_pandas()
 
@@ -1066,20 +1052,14 @@ def test_timedelta_fillna(data, dtype, fill_value):
         ),
         (
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[ms]"),
-            cudf.Series(
-                ["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"]
-            ),
+            cudf.Series(["0 days 00:16:40", "0 days 00:03:20", "0 days 00:50:00"]),
         ),
         (
             cudf.Series([1000000, 200000, 3000000], dtype="timedelta64[s]"),
-            cudf.Series(
-                ["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"]
-            ),
+            cudf.Series(["11 days 13:46:40", "2 days 07:33:20", "34 days 17:20:00"]),
         ),
         (
-            cudf.Series(
-                [None, None, None, None, None], dtype="timedelta64[us]"
-            ),
+            cudf.Series([None, None, None, None, None], dtype="timedelta64[us]"),
             cudf.Series([None, None, None, None, None], dtype="str"),
         ),
         (

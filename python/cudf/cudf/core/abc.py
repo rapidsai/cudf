@@ -42,9 +42,7 @@ class Serializable:
 
         :meta private:
         """
-        raise NotImplementedError(
-            "Subclasses of Serializable must implement serialize"
-        )
+        raise NotImplementedError("Subclasses of Serializable must implement serialize")
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -99,9 +97,7 @@ class Serializable:
             for f in frames
         )
         header["type-serialized"] = pickle.dumps(type(self))
-        header["is-cuda"] = [
-            hasattr(f, "__cuda_array_interface__") for f in frames
-        ]
+        header["is-cuda"] = [hasattr(f, "__cuda_array_interface__") for f in frames]
         header["lengths"] = [f.nbytes for f in frames]
         return header, frames
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from itertools import product
 from math import floor
@@ -54,9 +54,7 @@ def test_series_map_callable_numeric_random(nelem):
 
     # Call map
     got = sr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
-    expect = pdsr.map(
-        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
-    )
+    expect = pdsr.map(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x)))
 
     # Check
     assert_eq(expect, got, check_dtype=False)

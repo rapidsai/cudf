@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 import confluent_kafka as ck
 from cudf_kafka._lib.kafka import KafkaDatasource
 
@@ -129,8 +129,7 @@ class Consumer(CudfKafkaClient):
 
         if topic is None:
             raise ValueError(
-                "ERROR: You must specify the topic "
-                "that you want to consume from"
+                "ERROR: You must specify the topic " "that you want to consume from"
             )
 
         kafka_datasource = KafkaDatasource(

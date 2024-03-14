@@ -31,16 +31,12 @@ def _deprecate_shuffle_kwarg(func):
         if old_arg_value is not None:
             new_arg_value = old_arg_value
             msg = (
-                "the 'shuffle' keyword is deprecated, "
-                "use 'shuffle_method' instead."
+                "the 'shuffle' keyword is deprecated, " "use 'shuffle_method' instead."
             )
 
             warnings.warn(msg, FutureWarning)
             if kwargs.get("shuffle_method") is not None:
-                msg = (
-                    "Can only specify 'shuffle' "
-                    "or 'shuffle_method', not both."
-                )
+                msg = "Can only specify 'shuffle' " "or 'shuffle_method', not both."
                 raise TypeError(msg)
             kwargs["shuffle_method"] = new_arg_value
         return func(*args, **kwargs)
@@ -60,9 +56,7 @@ def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     if ascending:
         partitions = divisions.searchsorted(s, side="right") - 1
     else:
-        partitions = (
-            len(divisions) - divisions.searchsorted(s, side="right") - 1
-        )
+        partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         0 if ascending else (len(divisions) - 2)
     )
@@ -198,8 +192,7 @@ def _approximate_quantile(df, q):
 
     name = "quantiles-1-" + token
     val_dsk = {
-        (name, i): (_quantile, key, qs)
-        for i, key in enumerate(df.__dask_keys__())
+        (name, i): (_quantile, key, qs) for i, key in enumerate(df.__dask_keys__())
     }
 
     name2 = "quantiles-2-" + token

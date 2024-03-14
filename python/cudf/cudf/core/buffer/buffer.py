@@ -160,9 +160,7 @@ class BufferOwner(Serializable):
             ret._ptr = data.ptr
             ret._size = data.size
         else:
-            ret._ptr, ret._size = get_ptr_and_size(
-                data.__cuda_array_interface__
-            )
+            ret._ptr, ret._size = get_ptr_and_size(data.__cuda_array_interface__)
         if ret.size < 0:
             raise ValueError("size cannot be negative")
         return ret
@@ -258,9 +256,7 @@ class BufferOwner(Serializable):
         """
         return self._ptr
 
-    def memoryview(
-        self, *, offset: int = 0, size: Optional[int] = None
-    ) -> memoryview:
+    def memoryview(self, *, offset: int = 0, size: Optional[int] = None) -> memoryview:
         """Read-only access to the buffer through host memory."""
         size = self._size if size is None else size
         host_buf = host_memory_allocation(size)
@@ -308,9 +304,7 @@ class Buffer(Serializable):
         if offset < 0:
             raise ValueError("offset cannot be negative")
         if offset + size > owner.size:
-            raise ValueError(
-                "offset+size cannot be greater than the size of owner"
-            )
+            raise ValueError("offset+size cannot be greater than the size of owner")
         self._owner = owner
         self._offset = offset
         self._size = size

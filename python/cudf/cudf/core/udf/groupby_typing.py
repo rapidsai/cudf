@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 from typing import Any, Dict
 
 import numba
@@ -30,9 +30,7 @@ SUPPORTED_GROUPBY_NUMPY_TYPES = [
     numpy_support.as_dtype(dt) for dt in SUPPORTED_GROUPBY_NUMBA_TYPES
 ]
 
-_UDF_DOC_URL = (
-    "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
-)
+_UDF_DOC_URL = "https://docs.rapids.ai/api/cudf/stable/user_guide/guide-to-udfs/"
 
 
 class Group:
@@ -54,9 +52,8 @@ class GroupType(numba.types.Type):
     """
 
     def __init__(self, group_scalar_type, index_type=index_default_type):
-        if (
-            group_scalar_type not in SUPPORTED_GROUPBY_NUMBA_TYPES
-            and not isinstance(group_scalar_type, types.Poison)
+        if group_scalar_type not in SUPPORTED_GROUPBY_NUMBA_TYPES and not isinstance(
+            group_scalar_type, types.Poison
         ):
             # A frame containing an column with an unsupported dtype
             # is calling groupby apply. Construct a GroupType with
@@ -68,9 +65,7 @@ class GroupType(numba.types.Type):
         self.group_data_type = types.CPointer(group_scalar_type)
         self.group_size_type = group_size_type
         self.group_index_type = types.CPointer(index_type)
-        super().__init__(
-            name=f"Group({self.group_scalar_type}, {self.index_type})"
-        )
+        super().__init__(name=f"Group({self.group_scalar_type}, {self.index_type})")
 
 
 class GroupByJITDataFrame(Row):
@@ -201,9 +196,7 @@ class GroupOpBase(AbstractTemplate):
                 )
         if funcs := call_cuda_functions.get(self.key.__name__):
             for sig in funcs.keys():
-                if all(
-                    arg.group_scalar_type == ty for arg, ty in zip(args, sig)
-                ):
+                if all(arg.group_scalar_type == ty for arg, ty in zip(args, sig)):
                     return nb_signature(sig[0], *args)
         raise UDFError(self.make_error_string(args))
 
@@ -239,8 +232,7 @@ class GroupAttrBase(AbstractTemplate):
             for sig in funcs.keys():
                 retty, selfty, *argtys = sig
                 if self.this.group_scalar_type == selfty and all(
-                    arg.group_scalar_type == ty
-                    for arg, ty in zip(args, argtys)
+                    arg.group_scalar_type == ty for arg, ty in zip(args, argtys)
                 ):
                     return nb_signature(retty, *args, recvr=self.this)
         raise UDFError(self.make_error_string(args))
@@ -307,9 +299,7 @@ class GroupCorr(GroupBinaryAttrBase):
 
 class DataFrameAttributeTemplate(AttributeTemplate):
     def resolve(self, value, attr):
-        raise UDFError(
-            f"JIT GroupBy.apply() does not support DataFrame.{attr}(). "
-        )
+        raise UDFError(f"JIT GroupBy.apply() does not support DataFrame.{attr}(). ")
 
 
 @cuda_registry.register_attr
@@ -329,12 +319,8 @@ class GroupAttr(AttributeTemplate):
     resolve_var = _make_unary_attr("var")
     resolve_std = _make_unary_attr("std")
 
-    resolve_size = _create_reduction_attr(
-        "GroupType.size", retty=group_size_type
-    )
-    resolve_count = _create_reduction_attr(
-        "GroupType.count", retty=types.int64
-    )
+    resolve_size = _create_reduction_attr("GroupType.size", retty=group_size_type)
+    resolve_count = _create_reduction_attr("GroupType.count", retty=types.int64)
 
     def resolve_idxmax(self, mod):
         return types.BoundFunction(

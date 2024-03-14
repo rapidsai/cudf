@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 from io import StringIO
 
@@ -23,10 +23,7 @@ def test_read_text(datadir):
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
     expected = cudf.Series(
-        [
-            c + delimiter if i < (len(content) - 1) else c
-            for i, c in enumerate(content)
-        ]
+        [c + delimiter if i < (len(content) - 1) else c for i, c in enumerate(content)]
     )
 
     actual = cudf.read_text(chess_file, delimiter=delimiter)
@@ -45,10 +42,7 @@ def test_read_text_byte_range(datadir):
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
     expected = cudf.Series(
-        [
-            c + delimiter if i < (len(content) - 1) else c
-            for i, c in enumerate(content)
-        ]
+        [c + delimiter if i < (len(content) - 1) else c for i, c in enumerate(content)]
     )
 
     byte_range_size = (len(data) // 3) + (len(data) % 3 != 0)
@@ -84,9 +78,7 @@ def test_read_text_byte_range_large(tmpdir):
 
     expected = cudf.Series(["xxxx\n" for i in range(0, 200)])
 
-    actual = cudf.read_text(
-        temp_file, delimiter=delimiter, byte_range=[1000, 1000]
-    )
+    actual = cudf.read_text(temp_file, delimiter=delimiter, byte_range=[1000, 1000])
 
     assert_eq(expected, actual)
 
@@ -106,9 +98,7 @@ def test_read_text_in_memory_strip_delimiter(datadir):
     # not we need to add it back to the 'content'
     expected = cudf.Series(["x", "y", "z"])
 
-    actual = cudf.read_text(
-        StringIO("x::y::z"), delimiter="::", strip_delimiters=True
-    )
+    actual = cudf.read_text(StringIO("x::y::z"), delimiter="::", strip_delimiters=True)
 
     assert_eq(expected, actual)
 
@@ -124,10 +114,7 @@ def test_read_text_bgzip(datadir):
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
     expected = cudf.Series(
-        [
-            c + delimiter if i < (len(content) - 1) else c
-            for i, c in enumerate(content)
-        ]
+        [c + delimiter if i < (len(content) - 1) else c for i, c in enumerate(content)]
     )
 
     actual = cudf.read_text(
@@ -148,10 +135,7 @@ def test_read_text_bgzip_offsets(datadir):
     # Since Python split removes the delimiter and read_text does
     # not we need to add it back to the 'content'
     expected = cudf.Series(
-        [
-            c + delimiter if i < (len(content) - 1) else c
-            for i, c in enumerate(content)
-        ]
+        [c + delimiter if i < (len(content) - 1) else c for i, c in enumerate(content)]
     )
 
     actual = cudf.read_text(

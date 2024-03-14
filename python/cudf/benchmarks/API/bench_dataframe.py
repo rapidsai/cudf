@@ -30,9 +30,7 @@ def bench_eval_func(benchmark, expr, dataframe):
     [2, 3, 4],
 )
 def bench_merge(benchmark, dataframe, num_key_cols):
-    benchmark(
-        dataframe.merge, dataframe, on=list(dataframe.columns[:num_key_cols])
-    )
+    benchmark(dataframe.merge, dataframe, on=list(dataframe.columns[:num_key_cols]))
 
 
 # TODO: Some of these cases could be generalized to an IndexedFrame benchmark
@@ -67,9 +65,7 @@ def random_state(request):
 def bench_sample(benchmark, dataframe, axis, frac, random_state):
     if axis == 1 and isinstance(random_state, cupy.random.RandomState):
         pytest.skip("Unsupported params.")
-    benchmark(
-        dataframe.sample, frac=frac, axis=axis, random_state=random_state
-    )
+    benchmark(dataframe.sample, frac=frac, axis=axis, random_state=random_state)
 
 
 @benchmark_with_object(cls="dataframe", dtype="int")
@@ -121,10 +117,7 @@ def bench_groupby(benchmark, dataframe, num_key_cols):
     [
         "sum",
         ["sum", "mean"],
-        {
-            f"{string.ascii_lowercase[i]}": ["sum", "mean", "count"]
-            for i in range(6)
-        },
+        {f"{string.ascii_lowercase[i]}": ["sum", "mean", "count"] for i in range(6)},
     ],
 )
 @pytest.mark.parametrize(
@@ -154,9 +147,7 @@ def bench_groupby_sample(
         kwargs = {"frac": target_sample_frac, "replace": replace}
     else:
         minsize = grouper.size().min()
-        target_size = numpy.round(
-            target_sample_frac * minsize, decimals=0
-        ).astype(int)
+        target_size = numpy.round(target_sample_frac * minsize, decimals=0).astype(int)
         kwargs = {"n": target_size, "replace": replace}
 
     benchmark(grouper.sample, **kwargs)
@@ -165,9 +156,7 @@ def bench_groupby_sample(
 @benchmark_with_object(cls="dataframe", dtype="int")
 @pytest.mark.parametrize("num_cols_to_sort", [1])
 def bench_sort_values(benchmark, dataframe, num_cols_to_sort):
-    benchmark(
-        dataframe.sort_values, list(dataframe.columns[:num_cols_to_sort])
-    )
+    benchmark(dataframe.sort_values, list(dataframe.columns[:num_cols_to_sort]))
 
 
 @benchmark_with_object(cls="dataframe", dtype="int")

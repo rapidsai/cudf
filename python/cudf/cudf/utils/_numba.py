@@ -120,17 +120,13 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        ptx_toolkit_version = _get_cuda_version_from_ptx_file(
-            _get_cc_60_ptx_file()
-        )
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(_get_cc_60_ptx_file())
 
         # MVC is required whenever any PTX is newer than the driver
         # This could be the shipped PTX file or the PTX emitted by
         # the version of NVVM on the user system, the latter aligning
         # with the runtime version
-        if (driver_version < ptx_toolkit_version) or (
-            driver_version < runtime_version
-        ):
+        if (driver_version < ptx_toolkit_version) or (driver_version < runtime_version):
             if driver_version < (12, 0):
                 patch_numba_linker_cuda_11()
             else:
@@ -186,25 +182,19 @@ def _get_cuda_version_from_ptx_file(path):
 
     cuda_ver = ver_map.get(version)
     if cuda_ver is None:
-        raise ValueError(
-            f"Could not map PTX version {version} to a CUDA version"
-        )
+        raise ValueError(f"Could not map PTX version {version} to a CUDA version")
 
     return cuda_ver
 
 
 class _CUDFNumbaConfig:
     def __enter__(self):
-        self.CUDA_LOW_OCCUPANCY_WARNINGS = (
-            numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
-        )
+        self.CUDA_LOW_OCCUPANCY_WARNINGS = numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
         numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
 
         self.CAPTURED_ERRORS = numba_config.CAPTURED_ERRORS
         numba_config.CAPTURED_ERRORS = "new_style"
 
     def __exit__(self, exc_type, exc_value, traceback):
-        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = (
-            self.CUDA_LOW_OCCUPANCY_WARNINGS
-        )
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = self.CUDA_LOW_OCCUPANCY_WARNINGS
         numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS

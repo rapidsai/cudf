@@ -141,8 +141,7 @@ def _index_from_data(data: MutableMapping, name: Any = no_default):
             index_class_type = IntervalIndex
         else:
             raise NotImplementedError(
-                "Unsupported column type passed to "
-                f"create an Index: {type(values)}"
+                "Unsupported column type passed to " f"create an Index: {type(values)}"
             )
     else:
         index_class_type = cudf.MultiIndex
@@ -201,9 +200,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     _range: range
 
     @_cudf_nvtx_annotate
-    def __init__(
-        self, start, stop=None, step=1, dtype=None, copy=False, name=None
-    ):
+    def __init__(self, start, stop=None, step=1, dtype=None, copy=False, name=None):
         if step == 0:
             raise ValueError("Step must not be zero.")
         if not cudf.api.types.is_hashable(name):
@@ -219,20 +216,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if stop is None:
             start, stop = 0, start
         if not is_integer(start):
-            raise TypeError(
-                f"start must be an integer, not {type(start).__name__}"
-            )
+            raise TypeError(f"start must be an integer, not {type(start).__name__}")
         self._start = int(start)
         if not is_integer(stop):
-            raise TypeError(
-                f"stop must be an integer, not {type(stop).__name__}"
-            )
+            raise TypeError(f"stop must be an integer, not {type(stop).__name__}")
         self._stop = int(stop)
         if step is not None:
             if not is_integer(step):
-                raise TypeError(
-                    f"step must be an integer, not {type(step).__name__}"
-                )
+                raise TypeError(f"step must be an integer, not {type(step).__name__}")
             self._step = int(step)
         else:
             self._step = 1
@@ -243,9 +234,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         # whereas _stop is an upper bound.
         self._end = self._start + self._step * (len(self._range) - 1)
 
-    def _copy_type_metadata(
-        self, other: RangeIndex, *, override_dtypes=None
-    ) -> Self:
+    def _copy_type_metadata(self, other: RangeIndex, *, override_dtypes=None) -> Self:
         # There is no metadata to be copied for RangeIndex since it does not
         # have an underlying column.
         return self
@@ -341,9 +330,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
     @property  # type: ignore
     @_cudf_nvtx_annotate
     def _data(self):
-        return cudf.core.column_accessor.ColumnAccessor(
-            {self.name: self._values}
-        )
+        return cudf.core.column_accessor.ColumnAccessor({self.name: self._values})
 
     @_cudf_nvtx_annotate
     def __contains__(self, item):
@@ -541,9 +528,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         ):
             other = other.item()
         if isinstance(other, (int, np.integer)):
-            return RangeIndex(
-                self.start * other, self.stop * other, self.step * other
-            )
+            return RangeIndex(self.start * other, self.stop * other, self.step * other)
         return self._as_int_index().__mul__(other)
 
     @_cudf_nvtx_annotate
@@ -559,9 +544,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
     @_cudf_nvtx_annotate
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        return self._as_int_index().__array_ufunc__(
-            ufunc, method, *inputs, **kwargs
-        )
+        return self._as_int_index().__array_ufunc__(ufunc, method, *inputs, **kwargs)
 
     @_cudf_nvtx_annotate
     def get_indexer(self, target, limit=None, method=None, tolerance=None):
@@ -716,9 +699,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
 
         # calculate parameters for the RangeIndex describing the
         # intersection disregarding the lower bounds
-        tmp_start = (
-            first.start + (second.start - first.start) * first.step // gcd * s
-        )
+        tmp_start = first.start + (second.start - first.start) * first.step // gcd * s
         new_step = first.step * second.step // gcd
         no_steps = -(-(int_low - tmp_start) // abs(new_step))
         new_start = tmp_start + abs(new_step) * no_steps
@@ -737,9 +718,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         if isinstance(other, RangeIndex) and self.equals(other):
             return self[:0]._get_reconciled_name_object(other)
 
-        return self._try_reconstruct_range_index(
-            super().difference(other, sort=sort)
-        )
+        return self._try_reconstruct_range_index(super().difference(other, sort=sort))
 
     def _try_reconstruct_range_index(self, index):
         if isinstance(index, RangeIndex) or index.dtype.kind == "f":
@@ -801,18 +780,14 @@ class RangeIndex(BaseIndex, BinaryOperand):
         return self._as_int_index().repeat(repeats, axis)
 
     def _split(self, splits):
-        return cudf.Index._from_data(
-            {self.name: self._as_int_index()._split(splits)}
-        )
+        return cudf.Index._from_data({self.name: self._as_int_index()._split(splits)})
 
     def _binaryop(self, other, op: str):
         # TODO: certain binops don't require materializing range index and
         # could use some optimization.
         return self._as_int_index()._binaryop(other, op=op)
 
-    def join(
-        self, other, how="left", level=None, return_indexers=False, sort=False
-    ):
+    def join(self, other, how="left", level=None, return_indexers=False, sort=False):
         if how in {"left", "right"} or self.equals(other):
             # pandas supports directly merging RangeIndex objects and can
             # intelligently create RangeIndex outputs depending on the type of
@@ -827,14 +802,10 @@ class RangeIndex(BaseIndex, BinaryOperand):
                     sort=sort,
                 )
                 if return_indexers:
-                    return tuple(
-                        cudf.from_pandas(result[0]), result[1], result[2]
-                    )
+                    return tuple(cudf.from_pandas(result[0]), result[1], result[2])
                 else:
                     return cudf.from_pandas(result)
-        return self._as_int_index().join(
-            other, how, level, return_indexers, sort
-        )
+        return self._as_int_index().join(other, how, level, return_indexers, sort)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -861,9 +832,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
             raise ValueError(f"invalid na_position: {na_position}")
 
         indices = cupy.arange(0, len(self))
-        if (ascending and self._step < 0) or (
-            not ascending and self._step > 0
-        ):
+        if (ascending and self._step < 0) or (not ascending and self._step > 0):
             indices = indices[::-1]
         return indices
 
@@ -908,9 +877,7 @@ class RangeIndex(BaseIndex, BinaryOperand):
         no_steps = len(self) - 1
         if no_steps == -1:
             return np.nan
-        elif (meth == "min" and self.step > 0) or (
-            meth == "max" and self.step < 0
-        ):
+        elif (meth == "min" and self.step > 0) or (meth == "max" and self.step < 0):
             return self.start
 
         return self.start + self.step * no_steps
@@ -1007,8 +974,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                 inputs = self._make_operands_for_binop(other)
             else:
                 inputs = {
-                    name: (col, None, False, None)
-                    for name, col in self._data.items()
+                    name: (col, None, False, None) for name, col in self._data.items()
                 }
 
             data = self._apply_cupy_ufunc_to_operands(
@@ -1075,9 +1041,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             other_name = getattr(other, "name", self.name)
 
         ret.name = (
-            self.name
-            if cudf.utils.utils._is_same_name(self.name, other_name)
-            else None
+            self.name if cudf.utils.utils._is_same_name(self.name, other_name) else None
         )
 
         # pandas returns numpy arrays when the outputs are boolean. We
@@ -1092,12 +1056,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     # Override just to make mypy happy.
     @_cudf_nvtx_annotate
-    def _copy_type_metadata(
-        self, other: Self, *, override_dtypes=None
-    ) -> Self:
-        return super()._copy_type_metadata(
-            other, override_dtypes=override_dtypes
-        )
+    def _copy_type_metadata(self, other: Self, *, override_dtypes=None) -> Self:
+        return super()._copy_type_metadata(other, override_dtypes=override_dtypes)
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -1110,9 +1070,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         non_empties = [index for index in objs if len(index)]
         if len(objs) != len(non_empties):
             # Do not remove until pandas-3.0 support is added.
-            assert (
-                PANDAS_LT_300
-            ), "Need to drop after pandas-3.0 support is added."
+            assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
             warnings.warn(
                 "The behavior of array concatenation with empty entries is "
                 "deprecated. In a future version, this will no longer exclude "
@@ -1147,11 +1105,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     @_cudf_nvtx_annotate
     def equals(self, other):
-        if (
-            other is None
-            or not isinstance(other, BaseIndex)
-            or len(self) != len(other)
-        ):
+        if other is None or not isinstance(other, BaseIndex) or len(self) != len(other):
             return False
 
         check_dtypes = False
@@ -1166,9 +1120,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
             check_dtypes = True
 
         try:
-            return self._column.equals(
-                other._column, check_dtypes=check_dtypes
-            )
+            return self._column.equals(other._column, check_dtypes=check_dtypes)
         except TypeError:
             return False
 
@@ -1220,9 +1172,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if not self.is_unique:
             raise ValueError("Cannot get index for a non-unique Index.")
 
-        is_sorted = (
-            self.is_monotonic_increasing or self.is_monotonic_decreasing
-        )
+        is_sorted = self.is_monotonic_increasing or self.is_monotonic_decreasing
 
         if not is_sorted and method is not None:
             raise ValueError(
@@ -1276,9 +1226,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if not is_scalar(key):
             raise TypeError("Should be a scalar-like")
 
-        is_sorted = (
-            self.is_monotonic_increasing or self.is_monotonic_decreasing
-        )
+        is_sorted = self.is_monotonic_increasing or self.is_monotonic_decreasing
 
         target_as_table = cudf.core.frame.Frame({"None": as_column([key])})
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
@@ -1290,11 +1238,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
         if lower_bound + 1 == upper_bound:
             # Search result is unique, return int.
-            return (
-                lower_bound
-                if is_sorted
-                else sort_inds.element_indexing(lower_bound)
-            )
+            return lower_bound if is_sorted else sort_inds.element_indexing(lower_bound)
 
         if is_sorted:
             # In monotonic index, lex search result is continuous. A slice for
@@ -1342,9 +1286,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
                     )
                 )
                 break_idx = output.find("ordered=")
-                output = (
-                    output[:break_idx].replace("'", "") + output[break_idx:]
-                )
+                output = output[:break_idx].replace("'", "") + output[break_idx:]
             else:
                 output = repr(preprocess.to_pandas())
 
@@ -1593,9 +1535,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         if isinstance(self._values, cudf.core.column.StringColumn):
             return StringMethods(parent=self)
         else:
-            raise AttributeError(
-                "Can only use .str accessor with string values!"
-            )
+            raise AttributeError("Can only use .str accessor with string values!")
 
     @cache
     @_warn_no_dask_cudf
@@ -1738,9 +1678,7 @@ class DatetimeIndex(Index):
         return self
 
     @classmethod
-    def _from_data(
-        cls, data: MutableMapping, name: Any = no_default, freq: Any = None
-    ):
+    def _from_data(cls, data: MutableMapping, name: Any = no_default, freq: Any = None):
         result = super()._from_data(data, name)
         result._freq = _validate_freq(freq)
         return result
@@ -2105,9 +2043,7 @@ class DatetimeIndex(Index):
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.DatetimeIndex:
         if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
+            raise ValueError(f"{arrow_type=} and {nullable=} cannot both be set.")
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
@@ -2293,9 +2229,7 @@ class DatetimeIndex(Index):
             result_col = delocalize(self._column)
         else:
             result_col = localize(self._column, tz, ambiguous, nonexistent)
-        return DatetimeIndex._from_data(
-            {self.name: result_col}, freq=self._freq
-        )
+        return DatetimeIndex._from_data({self.name: result_col}, freq=self._freq)
 
     def tz_convert(self, tz):
         """
@@ -2445,9 +2379,7 @@ class TimedeltaIndex(Index):
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.TimedeltaIndex:
         if arrow_type and nullable:
-            raise ValueError(
-                f"{arrow_type=} and {nullable=} cannot both be set."
-            )
+            raise ValueError(f"{arrow_type=} and {nullable=} cannot both be set.")
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
 
@@ -2464,9 +2396,7 @@ class TimedeltaIndex(Index):
         Number of days for each element.
         """
         # Need to specifically return `int64` to avoid overflow.
-        return as_index(
-            arbitrary=self._values.days, name=self.name, dtype="int64"
-        )
+        return as_index(arbitrary=self._values.days, name=self.name, dtype="int64")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2474,9 +2404,7 @@ class TimedeltaIndex(Index):
         """
         Number of seconds (>= 0 and less than 1 day) for each element.
         """
-        return as_index(
-            arbitrary=self._values.seconds, name=self.name, dtype="int32"
-        )
+        return as_index(arbitrary=self._values.seconds, name=self.name, dtype="int32")
 
     @property  # type: ignore
     @_cudf_nvtx_annotate
@@ -2588,8 +2516,7 @@ class CategoricalIndex(Index):
         if isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             if categories is not None or ordered is not None:
                 raise ValueError(
-                    "Cannot specify `categories` or "
-                    "`ordered` together with `dtype`."
+                    "Cannot specify `categories` or " "`ordered` together with `dtype`."
                 )
         if copy:
             data = column.as_column(data, dtype=dtype).copy(deep=True)
@@ -2613,9 +2540,7 @@ class CategoricalIndex(Index):
                 ordered=data.ordered,
             )
         else:
-            data = column.as_column(
-                data, dtype="category" if dtype is None else dtype
-            )
+            data = column.as_column(data, dtype="category" if dtype is None else dtype)
             # dtype has already been taken care
             dtype = None
 
@@ -2740,8 +2665,7 @@ def interval_range(
         end = start + periods * freq
 
     if any(
-        not _is_non_decimal_numeric_dtype(x.dtype)
-        for x in (start, periods, freq, end)
+        not _is_non_decimal_numeric_dtype(x.dtype) for x in (start, periods, freq, end)
     ):
         raise ValueError("start, end, periods, freq must be numeric values.")
 
@@ -2867,9 +2791,7 @@ class IntervalIndex(Index):
     def from_breaks(
         cls,
         breaks,
-        closed: Optional[
-            Literal["left", "right", "neither", "both"]
-        ] = "right",
+        closed: Optional[Literal["left", "right", "neither", "both"]] = "right",
         name=None,
         copy: bool = False,
         dtype=None,

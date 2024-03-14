@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -37,11 +37,7 @@ def test_profiler():
         "Series.__getitem__",
     }
     for name, func in per_function_stats.items():
-        assert (
-            len(func["cpu"]) == 0
-            if "Time" not in name
-            else len(func["gpu"]) == 0
-        )
+        assert len(func["cpu"]) == 0 if "Time" not in name else len(func["gpu"]) == 0
 
     per_line_stats = profiler.per_line_stats
     calls = [

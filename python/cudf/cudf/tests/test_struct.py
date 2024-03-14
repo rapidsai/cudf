@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
@@ -226,9 +226,7 @@ def test_dataframe_to_struct():
     assert_eq(expect, got)
 
     df = cudf.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
-    expect = cudf.Series(
-        [{"a": 1, "b": "x"}, {"a": 2, "b": "y"}, {"a": 3, "b": "z"}]
-    )
+    expect = cudf.Series([{"a": 1, "b": "x"}, {"a": 2, "b": "y"}, {"a": 3, "b": "z"}])
     got = df.to_struct()
     assert_eq(expect, got)
 
@@ -345,9 +343,7 @@ def test_struct_with_datetime_and_timedelta(dtype):
 
 
 def test_struct_int_values():
-    series = cudf.Series(
-        [{"a": 1, "b": 2}, {"a": 10, "b": None}, {"a": 5, "b": 6}]
-    )
+    series = cudf.Series([{"a": 1, "b": 2}, {"a": 10, "b": None}, {"a": 5, "b": 6}])
     actual_series = series.to_pandas()
 
     assert isinstance(actual_series[0]["b"], int)
@@ -443,8 +439,6 @@ def test_struct_empty_children_slice(indices, values):
 
 
 def test_struct_iterate_error():
-    s = cudf.Series(
-        [{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}]
-    )
+    s = cudf.Series([{"f2": {"a": "sf21"}, "f1": "a"}, {"f1": "sf12", "f2": None}])
     with pytest.raises(TypeError):
         iter(s.struct)

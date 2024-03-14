@@ -88,8 +88,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         if col.size > 0:
             assert col.size == (col.children[0].size - 1)
             assert col.size == (
-                (col.children[0].data.size / col.children[0].dtype.itemsize)
-                - 1
+                (col.children[0].data.size / col.children[0].dtype.itemsize) - 1
             )
     else:
         assert col.size == (col.data.size / col.dtype.itemsize)
@@ -200,11 +199,7 @@ def test_column_mixed_dtype(data, error):
 )
 @pytest.mark.parametrize("size", [1, 10])
 def test_as_column_scalar_with_nan(nan_as_null, scalar, size):
-    expected = (
-        cudf.Series([scalar] * size, nan_as_null=nan_as_null)
-        .dropna()
-        .to_numpy()
-    )
+    expected = cudf.Series([scalar] * size, nan_as_null=nan_as_null).dropna().to_numpy()
 
     got = (
         cudf.Series(as_column(scalar, length=size, nan_as_null=nan_as_null))
@@ -335,8 +330,7 @@ def test_column_view_valid_string_to_numeric(data, to_dtype):
 def test_column_view_nulls_widths_even():
     data = [1, 2, None, 4, None]
     expect_data = [
-        np.int32(val).view("float32") if val is not None else np.nan
-        for val in data
+        np.int32(val).view("float32") if val is not None else np.nan for val in data
     ]
 
     sr = cudf.Series(data, dtype="int32")
@@ -347,8 +341,7 @@ def test_column_view_nulls_widths_even():
 
     data = [None, 2.1, None, 5.3, 8.8]
     expect_data = [
-        np.float64(val).view("int64") if val is not None else val
-        for val in data
+        np.float64(val).view("int64") if val is not None else val for val in data
     ]
 
     sr = cudf.Series(data, dtype="float64")
@@ -369,9 +362,7 @@ def test_column_view_numeric_slice(slc):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "slc", [slice(3, 5), slice(0, 4), slice(2, 5), slice(1, 3)]
-)
+@pytest.mark.parametrize("slc", [slice(3, 5), slice(0, 4), slice(2, 5), slice(1, 3)])
 def test_column_view_string_slice(slc):
     data = ["a", "bcde", "cd", "efg", "h"]
 
@@ -507,9 +498,7 @@ def test_build_series_from_nullable_pandas_dtype(pd_dtype, expect_dtype):
 
     # check mask
     expect_mask = [x is not pd.NA for x in pd_data]
-    got_mask = mask_to_bools(
-        gd_data._column.base_mask, 0, len(gd_data)
-    ).values_host
+    got_mask = mask_to_bools(gd_data._column.base_mask, 0, len(gd_data)).values_host
 
     np.testing.assert_array_equal(expect_mask, got_mask)
 

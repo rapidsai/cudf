@@ -316,9 +316,9 @@ class SingleColumnFrame(Frame, NotIterable):
         # Get the appropriate name for output operations involving two objects
         # that are Series-like objects. The output shares the lhs's name unless
         # the rhs is a _differently_ named Series-like object.
-        if isinstance(
-            other, SingleColumnFrame
-        ) and not cudf.utils.utils._is_same_name(self.name, other.name):
+        if isinstance(other, SingleColumnFrame) and not cudf.utils.utils._is_same_name(
+            self.name, other.name
+        ):
             result_name = None
         else:
             result_name = self.name
@@ -326,9 +326,9 @@ class SingleColumnFrame(Frame, NotIterable):
         if isinstance(other, SingleColumnFrame):
             other = other._column
         elif not _is_scalar_or_zero_d_array(other):
-            if not hasattr(
-                other, "__cuda_array_interface__"
-            ) and not isinstance(other, cudf.RangeIndex):
+            if not hasattr(other, "__cuda_array_interface__") and not isinstance(
+                other, cudf.RangeIndex
+            ):
                 return NotImplemented
 
             # Non-scalar right operands are valid iff they convert to columns.
@@ -381,9 +381,7 @@ class SingleColumnFrame(Frame, NotIterable):
                 return self._column.take(arg)
             if is_bool_dtype(arg.dtype):
                 if (bn := len(arg)) != (n := len(self)):
-                    raise IndexError(
-                        f"Boolean mask has wrong length: {bn} not {n}"
-                    )
+                    raise IndexError(f"Boolean mask has wrong length: {bn} not {n}")
                 return self._column.apply_boolean_mask(arg)
             raise NotImplementedError(f"Unknown indexer {type(arg)}")
 
@@ -395,14 +393,10 @@ class SingleColumnFrame(Frame, NotIterable):
         )
 
         if isinstance(other, cudf.DataFrame):
-            raise NotImplementedError(
-                "cannot align with a higher dimensional Frame"
-            )
+            raise NotImplementedError("cannot align with a higher dimensional Frame")
         cond = as_column(cond)
         if len(cond) != len(self):
-            raise ValueError(
-                """Array conditional must be same shape as self"""
-            )
+            raise ValueError("""Array conditional must be same shape as self""")
 
         if not cudf.api.types.is_scalar(other):
             other = cudf.core.column.as_column(other)
