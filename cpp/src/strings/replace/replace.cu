@@ -78,7 +78,6 @@ struct replace_parallel_chars_fn {
    * in the input strings column and is legally within a string row
    *
    * @param idx Index of the byte position in the chars column
-   * @param chars_bytes Number of bytes in the chars column
    */
   __device__ bool is_target_within_row(int64_t idx) const
   {
@@ -101,7 +100,6 @@ struct replace_parallel_chars_fn {
    * @brief Returns true if the target string found at the given byte position
    *
    * @param idx Index of the byte position in the chars column
-   * @param chars_bytes Number of bytes in the chars column
    */
   __device__ bool has_target(int64_t idx) const
   {
@@ -261,7 +259,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // Count the number of targets in the entire column.
   // Note this may over-count in the case where a target spans adjacent strings.
-  auto target_count = thrust::count_if(rmm::exec_policy(stream),
+  auto target_count = thrust::count_if(rmm::exec_policy_nosync(stream),
                                        thrust::make_counting_iterator<int64_t>(0),
                                        thrust::make_counting_iterator<int64_t>(chars_bytes),
                                        [fn] __device__(int64_t idx) { return fn.has_target(idx); });
@@ -290,7 +288,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // compute the number of string segments produced by replace in each string
   auto counts = rmm::device_uvector<size_type>(strings_count, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(strings_count),
                     counts.begin(),
@@ -310,7 +308,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_indices = indices.data();
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [fn, d_strings_offsets, d_positions, d_targets_offsets, d_indices, d_sizes] __device__(
@@ -346,7 +344,7 @@ struct replace_fn {
   string_view d_target;
   string_view d_replacement;
   cudf::size_type maxrepl;
-  int32_t* d_offsets{};
+  cudf::size_type* d_offsets{};
   char* d_chars{};
 
   __device__ void operator()(size_type idx)
@@ -382,10 +380,11 @@ struct replace_fn {
       }
       ++spos;
     }
-    if (out_ptr)  // copy remainder
+    if (out_ptr) {  // copy remainder
       memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);
-    else
+    } else {
       d_offsets[idx] = bytes;
+    }
   }
 };
 

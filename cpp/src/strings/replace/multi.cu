@@ -308,7 +308,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   // Count the number of targets in the entire column.
   // Note this may over-count in the case where a target spans adjacent strings.
   auto target_count = thrust::count_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<int64_t>(0),
     thrust::make_counting_iterator<int64_t>(chars_bytes),
     [fn, chars_bytes] __device__(int64_t idx) { return fn.has_target(idx, chars_bytes); });
@@ -341,7 +341,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
 
   // compute the number of string segments produced by replace in each string
   auto counts = rmm::device_uvector<size_type>(strings_count, stream);
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream),
                     thrust::counting_iterator<size_type>(0),
                     thrust::counting_iterator<size_type>(strings_count),
                     counts.begin(),
@@ -363,7 +363,7 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
   auto d_indices = indices.data();
   auto d_sizes   = counts.data();  // reusing this vector to hold output sizes now
   thrust::for_each_n(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator<size_type>(0),
     strings_count,
     [fn,
