@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -740,8 +740,8 @@ std::unique_ptr<table> boolean_mask_scatter(
  *
  * @ingroup copy_scatter
  *
- * The `i`th scalar in `input` will be written to all columns of the output
- * table at the location of the `i`th true value in `boolean_mask`.
+ * The `i`th scalar in `input` will be written to the ith column of the output
+ * table at the location of every true value in `boolean_mask`.
  * All other rows in the output will equal the same row in `target`.
  *
  * @code{.pseudo}
