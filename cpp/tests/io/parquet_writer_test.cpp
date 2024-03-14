@@ -1626,7 +1626,7 @@ TEST_F(ParquetWriterTest, DeltaBinaryStartsWithNulls)
 TEST_F(ParquetWriterTest, ByteStreamSplit)
 {
   constexpr auto num_rows = 100;
-
+  std::mt19937 engine{31337};
   auto col0_data = random_values<int32_t>(num_rows);
   auto col1_data = random_values<int64_t>(num_rows);
   auto col2_data = random_values<float>(num_rows);
@@ -1637,16 +1637,23 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
   column_wrapper<float> col2{col2_data.begin(), col2_data.end(), no_nulls()};
   column_wrapper<double> col3{col3_data.begin(), col3_data.end(), no_nulls()};
 
-  auto expected = table_view{{col0, col1, col2, col3}};
+  // throw in a list to make sure both decoders are working
+  auto col4 = make_parquet_list_col<int32_t>(engine, num_rows, 5, true);
+
+  auto expected = table_view{{col0, col1, col2, col3, *col4}};
 
   cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("int32s");
   expected_metadata.column_metadata[1].set_name("int64s");
   expected_metadata.column_metadata[2].set_name("floats");
   expected_metadata.column_metadata[3].set_name("doubles");
-  for (size_t i = 0; i < expected_metadata.column_metadata.size(); i++) {
-    expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+  expected_metadata.column_metadata[4].set_name("int32list");
+  auto const encoding = cudf::io::column_encoding::BYTE_STREAM_SPLIT;
+  for (int i = 0; i < 3; i++) {
+    expected_metadata.column_metadata[i].set_encoding(encoding);
   }
+
+  expected_metadata.column_metadata[4].child(1).set_encoding(encoding);
 
   auto const filepath = temp_env->get_temp_filepath("ByteStreamSplit.parquet");
   cudf::io::parquet_writer_options out_opts =

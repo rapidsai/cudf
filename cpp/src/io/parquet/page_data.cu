@@ -28,49 +28,6 @@ namespace {
 constexpr int decode_block_size = 128;
 constexpr int rolling_buf_size  = decode_block_size * 2;
 
-template <size_t byte_length>
-__device__ inline void gpuOutputByteStreamSplit(uint8_t* dst, uint8_t const* src, size_type stride)
-{
-  for (int i = 0; i < byte_length; i++) {
-    dst[i] = src[i * stride];
-  }
-}
-
-inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
-                                                    uint8_t const* src,
-                                                    size_type stride,
-                                                    int32_t ts_scale)
-{
-  gpuOutputByteStreamSplit<sizeof(int64_t)>(reinterpret_cast<uint8_t*>(dst), src, stride);
-  if (ts_scale < 0) {
-    // round towards negative infinity
-    int sign = (*dst < 0);
-    *dst     = ((*dst + sign) / -ts_scale) + sign;
-  } else {
-    *dst = *dst * ts_scale;
-  }
-}
-
-template <typename T>
-__device__ void gpuOutputSplitFixedLenByteArrayAsInt(T* dst,
-                                                     uint8_t const* src,
-                                                     size_type stride,
-                                                     uint32_t dtype_len_in)
-{
-  T unscaled = 0;
-  // fixed_len_byte_array decimals are big endian
-  for (unsigned int i = 0; i < dtype_len_in; i++) {
-    unscaled = (unscaled << 8) | src[i * stride];
-  }
-  // Shift the unscaled value up and back down when it isn't all 8 bytes,
-  // which sign extend the value for correctly representing negative numbers.
-  if (dtype_len_in < sizeof(T)) {
-    unscaled <<= (sizeof(T) - dtype_len_in) * 8;
-    unscaled >>= (sizeof(T) - dtype_len_in) * 8;
-  }
-  *dst = unscaled;
-}
-
 /**
  * @brief Kernel for computing the BYTE_STREAM_SPLIT column data stored in the pages
  *

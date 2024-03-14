@@ -209,6 +209,8 @@ enum class decode_kernel_mask {
   FIXED_WIDTH_NO_DICT = (1 << 5),  // Run decode kernel for fixed width non-dictionary pages
   FIXED_WIDTH_DICT    = (1 << 6),  // Run decode kernel for fixed width dictionary pages
   BYTE_STREAM_SPLIT   = (1 << 7),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data
+  BYTE_STREAM_SPLIT_FLAT =
+    (1 << 8),  // Run decode kernel for BYTE_STREAM_SPLIT encoded data with a flat schema
 };
 
 // mask representing all the ways in which a string can be encoded
@@ -903,6 +905,28 @@ void DecodePageDataFixed(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in] stream CUDA stream to use
  */
 void DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pages,
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                             std::size_t num_rows,
+                             size_t min_row,
+                             int level_type_size,
+                             kernel_error::pointer error_code,
+                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Launches kernel for reading dictionary fixed width column data stored in the pages
+ *
+ * The page data will be written to the output pointed to in the page's
+ * associated column chunk.
+ *
+ * @param[in,out] pages All pages to be decoded
+ * @param[in] chunks All chunks to be decoded
+ * @param[in] num_rows Total number of rows to read
+ * @param[in] min_row Minimum number of rows to read
+ * @param[in] level_type_size Size in bytes of the type for level decoding
+ * @param[out] error_code Error code for kernel failures
+ * @param[in] stream CUDA stream to use
+ */
+void DecodeSplitPageDataFlat(cudf::detail::hostdevice_span<PageInfo> pages,
                              cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              std::size_t num_rows,
                              size_t min_row,

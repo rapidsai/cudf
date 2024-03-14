@@ -176,8 +176,6 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
   } else if (is_string_col(chunk)) {
     // check for string before byte_stream_split so FLBA will go to the right kernel
     return decode_kernel_mask::STRING;
-  } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
-    return decode_kernel_mask::BYTE_STREAM_SPLIT;
   }
 
   if (!is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
@@ -186,10 +184,16 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
     } else if (page.encoding == Encoding::PLAIN_DICTIONARY ||
                page.encoding == Encoding::RLE_DICTIONARY) {
       return decode_kernel_mask::FIXED_WIDTH_DICT;
+    } else if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+      return decode_kernel_mask::BYTE_STREAM_SPLIT_FLAT;
     }
   }
 
-  // non-string, non-delta
+  if (page.encoding == Encoding::BYTE_STREAM_SPLIT) {
+    return decode_kernel_mask::BYTE_STREAM_SPLIT;
+  }
+
+  // non-string, non-delta, non-split_stream
   return decode_kernel_mask::GENERAL;
 }
 
