@@ -411,3 +411,39 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view2, output_column_view2);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_column_view3, output_column_view3);
 }
+
+class MergeLargeStringsTest : public cudf::test::BaseFixture {};
+
+TEST_F(MergeLargeStringsTest, DISABLED_MergeLargeStrings)
+{
+  // CUDF_TEST_ENABLE_LARGE_STRINGS(); waiting on PR 15195
+  auto itr = thrust::constant_iterator<std::string_view>(
+    "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
+  auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
+  std::vector<cudf::table_view> input_views;
+  for (int i = 0; i < 10; ++i) {  // 2500MB > 2GB
+    input_views.push_back(cudf::table_view({input}));
+  }
+  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
+  std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
+
+  auto result = cudf::merge(input_views, {0}, column_order, null_precedence);
+  auto sv     = cudf::strings_column_view(result->view().column(0));
+  EXPECT_EQ(sv.size(), 50'000'000);
+  EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+
+  // verify results in sections
+  auto splits = std::vector<cudf::size_type>({5'000'000,
+                                              10'000'000,
+                                              15'000'000,
+                                              20'000'000,
+                                              25'000'000,
+                                              30'000'000,
+                                              35'000'000,
+                                              40'000'000,
+                                              45'000'000});
+  auto sliced = cudf::split(sv.parent(), splits);
+  for (auto c : sliced) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
+  }
+}

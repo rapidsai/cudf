@@ -153,32 +153,38 @@ std::pair<std::unique_ptr<column>, int64_t> make_offsets_child_column(
     data_type{type_id::INT32}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto d_offsets = offsets_column->mutable_view().template data<int32_t>();
 
-  // The number of offsets is strings_count+1 so to build the offsets from the sizes
-  // using exclusive-scan technically requires strings_count+1 input values even though
-  // the final input value is never used.
-  // The input iterator is wrapped here to allow the 'last value' to be safely read.
-  auto map_fn = cuda::proclaim_return_type<size_type>(
-    [begin, strings_count] __device__(size_type idx) -> size_type {
-      return idx < strings_count ? static_cast<size_type>(begin[idx]) : size_type{0};
-    });
-  auto input_itr = cudf::detail::make_counting_transform_iterator(0, map_fn);
+  // First, store the sizes into a temporary vector.
+  // This helps minimize calls to the input iterators which may have expensive
+  // logic to compute each size. This can also speed up the scan-to-offsets
+  // since the scan uses aggressive inlining on the iterator calls.
+  // Also, if this requires int64 offsets, the sizes can be reused.
+  auto sizes = rmm::device_uvector<size_type>(strings_count + 1, stream);
+  // The number of offsets is strings_count+1 so the sizes occupy all except the
+  // last entry which is filled in by the scan and technically should never be read.
+  thrust::copy(rmm::exec_policy_nosync(stream), begin, end, sizes.begin());
   // Use the sizes-to-offsets iterator to compute the total number of elements
-  auto const total_elements =
-    cudf::detail::sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets, stream);
+  auto const total_bytes =
+    cudf::detail::sizes_to_offsets(sizes.begin(), sizes.end(), d_offsets, stream);
 
   // TODO: replace exception with if-statement when enabling creating INT64 offsets
-  CUDF_EXPECTS(total_elements <= size_type_max,
+  CUDF_EXPECTS(total_bytes <= size_type_max,
                "Size of output exceeds the character size limit",
                std::overflow_error);
-  // if (total_elements >= get_offset64_threshold()) {
+  // auto const threshold = get_offset64_threshold();
+  // if (!is_large_strings_enabled()) {
+  //   CUDF_EXPECTS(
+  //     total_bytes < threshold, "Size of output exceeds the column size limit",
+  //     std::overflow_error);
+  // }
+  // if (total_bytes >= get_offset64_threshold()) {
   //   // recompute as int64 offsets when above the threshold
   //   offsets_column = make_numeric_column(
   //     data_type{type_id::INT64}, strings_count + 1, mask_state::UNALLOCATED, stream, mr);
   //   auto d_offsets64 = offsets_column->mutable_view().template data<int64_t>();
-  //   sizes_to_offsets(input_itr, input_itr + strings_count + 1, d_offsets64, stream);
+  //   cudf::detail::sizes_to_offsets(sizes.begin(), sizes.end(), d_offsets64, stream);
   // }
 
-  return std::pair(std::move(offsets_column), total_elements);
+  return std::pair(std::move(offsets_column), total_bytes);
 }
 
 }  // namespace detail
