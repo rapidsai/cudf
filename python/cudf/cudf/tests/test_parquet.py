@@ -2112,13 +2112,14 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
 def test_read_parquet_partitioned_filtered(
     tmpdir, pfilters, selection, use_cat
 ):
+    rng = np.random.default_rng(2)
     path = str(tmpdir)
     size = 100
     df = cudf.DataFrame(
         {
             "a": np.arange(0, stop=size, dtype="int64"),
-            "b": np.random.choice(list("abcd"), size=size),
-            "c": np.random.choice(np.arange(4), size=size),
+            "b": rng.choice(list("abcd"), size=size),
+            "c": rng.choice(np.arange(4), size=size),
         }
     )
     df.to_parquet(path, partition_cols=["c", "b"])
