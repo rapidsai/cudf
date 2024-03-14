@@ -19,8 +19,6 @@
 
 package ai.rapids.cudf;
 
-import java.util.Arrays;
-
 /**
  * A table along with some metadata about the table. This is typically returned when
  * reading data from an input file where the metadata can be important.

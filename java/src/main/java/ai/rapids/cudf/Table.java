@@ -1218,6 +1218,10 @@ public final class Table implements AutoCloseable {
       ColumnVector[] columns = new ColumnVector[neededColumns.length];
       try (Table tbl = twm.releaseTable()) {
         int rowCount = tbl == null ? emptyRowCount : (int)tbl.getRowCount();
+        if (rowCount < 0) {
+          throw new IllegalStateException(
+              "No empty row count provided and the table read has no row count or columns");
+        }
         for (int i = 0; i < columns.length; i++) {
           String neededColumnName = neededColumns[i];
           Integer index = indices.get(neededColumnName);
