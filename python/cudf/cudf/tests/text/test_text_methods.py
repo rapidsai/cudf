@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import random
 import string
@@ -109,7 +109,9 @@ def test_detokenize():
     assert type(expected) == type(actual)
     assert_eq(expected, actual)
 
-    indices = cudf.Series([4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8)
+    indices = cudf.Series(
+        [4, 0, 0, 0, 0, 4, 1, 1, 4, 2, 2, 2, 2, 4, 3], dtype=np.int8
+    )
     actual = strings.str.detokenize(indices, "+")
     expected = cudf.Series(
         [
@@ -679,7 +681,9 @@ def test_text_replace_tokens():
             "emptyme",
         ],
     )
-    targets = cudf.Series(["a", "☕", "\t", "looooooooooonnnnnnnggggggg", "emptyme"])
+    targets = cudf.Series(
+        ["a", "☕", "\t", "looooooooooonnnnnnnggggggg", "emptyme"]
+    )
     replacements = cudf.Series(["the", "🚒", "🚒🚒🚒🚒", "🔥🔥", ""])
 
     expected = cudf.Series(
@@ -693,7 +697,9 @@ def test_text_replace_tokens():
 
     assert_eq(expected, actual)
 
-    sr = cudf.Series(["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"])
+    sr = cudf.Series(
+        ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
+    )
     targets = cudf.Series(["🌬", "🔥", "🌊"])
     replacements = "🚰"
 
@@ -749,7 +755,9 @@ def test_text_filter_tokens():
     actual = sr.str.filter_tokens(5, "🔥")
     assert_eq(expected, actual)
 
-    sr = cudf.Series(["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"])
+    sr = cudf.Series(
+        ["All-we-need;is;🔥", "\tall-we-need0is;🌊", "all;we:need+is;🌬"]
+    )
     expected = cudf.Series(
         ["All-we-need;is;--", "\tall-we-need0is;--", "all;we:need+is;--"]
     )
@@ -962,7 +970,9 @@ def test_jaccard_index():
         str1.str.jaccard_index(str3, 5)
 
 
-def _make_list_of_strings_of_random_length(num_strings, min_length, max_length):
+def _make_list_of_strings_of_random_length(
+    num_strings, min_length, max_length
+):
     return [
         "".join(
             random.choice(string.ascii_lowercase)

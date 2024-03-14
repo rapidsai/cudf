@@ -175,7 +175,11 @@ def test_string_repr(ps_gs, item):
     "dtype", NUMERIC_TYPES + DATETIME_TYPES + ["bool", "object", "str"]
 )
 def test_string_astype(dtype):
-    if dtype.startswith("int") or dtype.startswith("uint") or dtype.startswith("long"):
+    if (
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
+    ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
         data = [
@@ -295,7 +299,9 @@ def test_string_numeric_astype(dtype):
     if dtype.startswith("bool"):
         data = [1, 0, 1, 0, 1]
     elif (
-        dtype.startswith("int") or dtype.startswith("uint") or dtype.startswith("long")
+        dtype.startswith("int")
+        or dtype.startswith("uint")
+        or dtype.startswith("long")
     ):
         data = [1, 2, 3, 4, 5]
     elif dtype.startswith("float"):
@@ -387,7 +393,9 @@ def _cat_convert_seq_to_cudf(others):
         gd_others = pd_others
     if isinstance(gd_others, (list, tuple)):
         temp_tuple = [
-            cudf.from_pandas(elem) if isinstance(elem, (pd.Series, pd.Index)) else elem
+            cudf.from_pandas(elem)
+            if isinstance(elem, (pd.Series, pd.Index))
+            else elem
             for elem in gd_others
         ]
 
@@ -761,7 +769,9 @@ def test_string_join(ps_gs, sep):
 
 @pytest.mark.parametrize("pat", [r"(a)", r"(f)", r"([a-z])", r"([A-Z])"])
 @pytest.mark.parametrize("expand", [True, False])
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise", [(0, 0), (re.M | re.S, 0), (re.I, 1)]
+)
 def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ps, gs = ps_gs
     expectation = raise_builder([flags_raise], NotImplementedError)
@@ -882,7 +892,9 @@ def test_string_repeat(data, repeats):
 @pytest.mark.parametrize("repl", ["qwerty", "", " "])
 @pytest.mark.parametrize("case,case_raise", [(None, 0), (True, 1), (False, 1)])
 @pytest.mark.parametrize("flags,flags_raise", [(0, 0), (re.U, 1)])
-def test_string_replace(ps_gs, pat, repl, case, case_raise, flags, flags_raise, regex):
+def test_string_replace(
+    ps_gs, pat, repl, case, case_raise, flags, flags_raise, regex
+):
     ps, gs = ps_gs
 
     expectation = raise_builder([case_raise, flags_raise], NotImplementedError)
@@ -1185,7 +1197,9 @@ def test_string_no_children_properties():
         ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""],
     ],
 )
-@pytest.mark.parametrize("index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100])
+@pytest.mark.parametrize(
+    "index", [-100, -5, -2, -6, -1, 0, 1, 2, 3, 9, 10, 100]
+)
 def test_string_get(string, index):
     pds = pd.Series(string)
     gds = cudf.Series(string)
@@ -1547,7 +1561,10 @@ def test_string_rsplit_re(n, expand):
     # Pandas does not yet support the regex parameter for rsplit
     import inspect
 
-    assert "regex" not in inspect.signature(pd.Series.str.rsplit).parameters.keys()
+    assert (
+        "regex"
+        not in inspect.signature(pd.Series.str.rsplit).parameters.keys()
+    )
 
     expect = ps.str.rsplit(pat=" ", n=n, expand=expand)
     got = gs.str.rsplit(pat="\\s", n=n, expand=expand, regex=True)
@@ -1615,15 +1632,23 @@ def test_strings_strip_tests(data, to_strip):
     ps = pd.Series(data)
 
     assert_eq(ps.str.strip(to_strip=to_strip), gs.str.strip(to_strip=to_strip))
-    assert_eq(ps.str.rstrip(to_strip=to_strip), gs.str.rstrip(to_strip=to_strip))
-    assert_eq(ps.str.lstrip(to_strip=to_strip), gs.str.lstrip(to_strip=to_strip))
+    assert_eq(
+        ps.str.rstrip(to_strip=to_strip), gs.str.rstrip(to_strip=to_strip)
+    )
+    assert_eq(
+        ps.str.lstrip(to_strip=to_strip), gs.str.lstrip(to_strip=to_strip)
+    )
 
     gi = as_index(data)
     pi = pd.Index(data)
 
     assert_eq(pi.str.strip(to_strip=to_strip), gi.str.strip(to_strip=to_strip))
-    assert_eq(pi.str.rstrip(to_strip=to_strip), gi.str.rstrip(to_strip=to_strip))
-    assert_eq(pi.str.lstrip(to_strip=to_strip), gi.str.lstrip(to_strip=to_strip))
+    assert_eq(
+        pi.str.rstrip(to_strip=to_strip), gi.str.rstrip(to_strip=to_strip)
+    )
+    assert_eq(
+        pi.str.lstrip(to_strip=to_strip), gi.str.lstrip(to_strip=to_strip)
+    )
 
 
 def test_string_strip_fail():
@@ -1967,8 +1992,12 @@ def test_string_starts_ends(data, pat):
             rfunc_args_and_kwargs=([pat],),
         )
     else:
-        assert_eq(ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False)
-        assert_eq(ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False)
+        assert_eq(
+            ps.str.startswith(pat), gs.str.startswith(pat), check_dtype=False
+        )
+        assert_eq(
+            ps.str.endswith(pat), gs.str.endswith(pat), check_dtype=False
+        )
 
 
 @pytest.mark.parametrize(
@@ -2306,7 +2335,9 @@ def test_string_str_match(data, pat):
     gs = cudf.Series(data)
 
     assert_eq(ps.str.match(pat), gs.str.match(pat))
-    assert_eq(pd.Index(pd.Index(ps).str.match(pat)), as_index(gs).str.match(pat))
+    assert_eq(
+        pd.Index(pd.Index(ps).str.match(pat)), as_index(gs).str.match(pat)
+    )
 
 
 @pytest.mark.parametrize(
@@ -2339,12 +2370,20 @@ def test_string_str_translate(data):
         gs.str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
     )
     assert_eq(
-        pd.Index(ps).str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
-        as_index(gs).str.translate(str.maketrans({"a": "z", "i": "$", "z": "1"})),
+        pd.Index(ps).str.translate(
+            str.maketrans({"a": "z", "i": "$", "z": "1"})
+        ),
+        as_index(gs).str.translate(
+            str.maketrans({"a": "z", "i": "$", "z": "1"})
+        ),
     )
     assert_eq(
-        ps.str.translate(str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})),
-        gs.str.translate(str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})),
+        ps.str.translate(
+            str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
+        ),
+        gs.str.translate(
+            str.maketrans({"+": "-", "-": "$", "?": "!", "B": "."})
+        ),
     )
     assert_eq(
         pd.Index(ps).str.translate(
@@ -2371,7 +2410,9 @@ def test_string_str_filter_characters():
         "",
     ]
     gs = cudf.Series(data)
-    expected = cudf.Series(["helloworld", "ABCD", "", "accnt", None, "150", ""])
+    expected = cudf.Series(
+        ["helloworld", "ABCD", "", "accnt", None, "150", ""]
+    )
     filter = {"a": "z", "A": "Z", "0": "9"}
     assert_eq(expected, gs.str.filter_characters(filter))
 
@@ -2618,7 +2659,9 @@ def test_istimestamp_empty():
 
 
 def test_string_ip4_to_int():
-    gsr = cudf.Series(["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"])
+    gsr = cudf.Series(
+        ["", None, "hello", "41.168.0.1", "127.0.0.1", "41.197.0.1"]
+    )
     expected = cudf.Series([0, None, 0, 698875905, 2130706433, 700776449])
 
     got = gsr.str.ip2int()
@@ -3128,20 +3171,28 @@ def test_string_get_json_object_allow_single_quotes():
         ]
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[0].author", allow_single_quotes=True),
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=True
+        ),
         cudf.Series(["Nigel Rees"]),
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[*].title", allow_single_quotes=True),
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=True
+        ),
         cudf.Series(["['Sayings of the Century',\"Sword of Honour\"]"]),
     )
 
     assert_eq(
-        gs.str.get_json_object("$.store.book[0].author", allow_single_quotes=False),
+        gs.str.get_json_object(
+            "$.store.book[0].author", allow_single_quotes=False
+        ),
         cudf.Series([None]),
     )
     assert_eq(
-        gs.str.get_json_object("$.store.book[*].title", allow_single_quotes=False),
+        gs.str.get_json_object(
+            "$.store.book[*].title", allow_single_quotes=False
+        ),
         cudf.Series([None]),
     )
 
@@ -3333,7 +3384,9 @@ def test_str_join_lists_error():
             ["-", "_", "**", None],
             "rep_str",
             "sep_str",
-            cudf.Series(["a-rep_str-b", None, "rep_str**hello**rep_str**world", None]),
+            cudf.Series(
+                ["a-rep_str-b", None, "rep_str**hello**rep_str**world", None]
+            ),
         ),
         (
             cudf.Series([[None, "a"], [None], None]),
@@ -3352,7 +3405,9 @@ def test_str_join_lists_error():
     ],
 )
 def test_str_join_lists(sr, sep, string_na_rep, sep_na_rep, expected):
-    actual = sr.str.join(sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep)
+    actual = sr.str.join(
+        sep=sep, string_na_rep=string_na_rep, sep_na_rep=sep_na_rep
+    )
     assert_eq(actual, expected)
 
 

@@ -53,13 +53,16 @@ class CSVReader(IOFuzz):
             seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self, dtypes_list)
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
+                self, dtypes_list
+            )
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
         logging.info(
-            f"Generating DataFrame with rows: {num_rows} " f"and columns: {num_cols}"
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
@@ -81,12 +84,18 @@ class CSVReader(IOFuzz):
                     col_val = np.random.choice(
                         [
                             None,
-                            np.unique(np.random.choice(self._df.columns, col_size)),
+                            np.unique(
+                                np.random.choice(self._df.columns, col_size)
+                            ),
                         ]
                     )
-                    params_dict[param] = col_val if col_val is None else list(col_val)
+                    params_dict[param] = (
+                        col_val if col_val is None else list(col_val)
+                    )
                 elif param == "dtype":
-                    dtype_val = np.random.choice([None, self._df.dtypes.to_dict()])
+                    dtype_val = np.random.choice(
+                        [None, self._df.dtypes.to_dict()]
+                    )
                     if dtype_val is not None:
                         dtype_val = {
                             col_name: "category"
@@ -101,9 +110,13 @@ class CSVReader(IOFuzz):
                     )
                     params_dict[param] = header_val
                 elif param == "skiprows":
-                    params_dict[param] = np.random.randint(low=0, high=len(self._df))
+                    params_dict[param] = np.random.randint(
+                        low=0, high=len(self._df)
+                    )
                 elif param == "skipfooter":
-                    params_dict[param] = np.random.randint(low=0, high=len(self._df))
+                    params_dict[param] = np.random.randint(
+                        low=0, high=len(self._df)
+                    )
                 elif param == "nrows":
                     nrows_val = np.random.choice(
                         [None, np.random.randint(low=0, high=len(self._df))]
@@ -145,13 +158,16 @@ class CSVWriter(IOFuzz):
             seed = random.randint(0, 2**32 - 1)
             random.seed(seed)
             dtypes_list = list(cudf.utils.dtypes.ALL_TYPES)
-            dtypes_meta, num_rows, num_cols = _generate_rand_meta(self, dtypes_list)
+            dtypes_meta, num_rows, num_cols = _generate_rand_meta(
+                self, dtypes_list
+            )
             self._current_params["dtypes_meta"] = dtypes_meta
             self._current_params["seed"] = seed
             self._current_params["num_rows"] = num_rows
             self._current_params["num_columns"] = num_cols
         logging.info(
-            f"Generating DataFrame with rows: {num_rows} " f"and columns: {num_cols}"
+            f"Generating DataFrame with rows: {num_rows} "
+            f"and columns: {num_cols}"
         )
         table = dg.rand_dataframe(dtypes_meta, num_rows, seed)
         df = pyarrow_to_pandas(table)
@@ -172,7 +188,9 @@ class CSVWriter(IOFuzz):
                     col_size = self._rand(len(self._current_buffer.columns))
                     params_dict[param] = list(
                         np.unique(
-                            np.random.choice(self._current_buffer.columns, col_size)
+                            np.random.choice(
+                                self._current_buffer.columns, col_size
+                            )
                         )
                     )
                 elif param == "chunksize":

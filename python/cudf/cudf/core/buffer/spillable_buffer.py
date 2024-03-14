@@ -111,7 +111,8 @@ class SpillableBufferOwner(BufferOwner):
         manager = get_global_manager()
         if manager is None:
             raise ValueError(
-                f"cannot create {self.__class__} without " "a global spill manager"
+                f"cannot create {self.__class__} without "
+                "a global spill manager"
             )
 
         self._manager = manager
@@ -197,7 +198,9 @@ class SpillableBufferOwner(BufferOwner):
                 return
 
             if not self.spillable:
-                raise ValueError(f"Cannot in-place move an unspillable buffer: {self}")
+                raise ValueError(
+                    f"Cannot in-place move an unspillable buffer: {self}"
+                )
 
             if (ptr_type, target) == ("gpu", "cpu"):
                 with annotate(
@@ -206,7 +209,9 @@ class SpillableBufferOwner(BufferOwner):
                     domain="cudf_python-spill",
                 ):
                     host_mem = host_memory_allocation(self.size)
-                    rmm._lib.device_buffer.copy_ptr_to_host(self._ptr, host_mem)
+                    rmm._lib.device_buffer.copy_ptr_to_host(
+                        self._ptr, host_mem
+                    )
                 self._ptr_desc["memoryview"] = host_mem
                 self._ptr = 0
                 self._owner = None
@@ -338,7 +343,9 @@ class SpillableBufferOwner(BufferOwner):
             "version": 0,
         }
 
-    def memoryview(self, *, offset: int = 0, size: Optional[int] = None) -> memoryview:
+    def memoryview(
+        self, *, offset: int = 0, size: Optional[int] = None
+    ) -> memoryview:
         size = self._size if size is None else size
         with self.lock:
             if self.spillable:
@@ -347,7 +354,9 @@ class SpillableBufferOwner(BufferOwner):
             else:
                 assert self._ptr_desc["type"] == "gpu"
                 ret = host_memory_allocation(size)
-                rmm._lib.device_buffer.copy_ptr_to_host(self._ptr + offset, ret)
+                rmm._lib.device_buffer.copy_ptr_to_host(
+                    self._ptr + offset, ret
+                )
                 return ret
 
     def __str__(self) -> str:

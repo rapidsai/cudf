@@ -175,9 +175,12 @@ def _get_datetime_format(col, dtype, time_unit):
         sub_second_res_len = 0
 
     has_nanos = time_unit in {"ns"} and col.get_dt_field("nanosecond").any()
-    has_micros = time_unit in {"ns", "us"} and col.get_dt_field("microsecond").any()
+    has_micros = (
+        time_unit in {"ns", "us"} and col.get_dt_field("microsecond").any()
+    )
     has_millis = (
-        time_unit in {"ns", "us", "ms"} and col.get_dt_field("millisecond").any()
+        time_unit in {"ns", "us", "ms"}
+        and col.get_dt_field("millisecond").any()
     )
     has_seconds = col.get_dt_field("second").any()
     has_minutes = col.get_dt_field("minute").any()
@@ -266,7 +269,9 @@ class DatetimeColumn(column.ColumnBase):
             # np.datetime64 raises ValueError, hence `item`
             # cannot exist in `self`.
             return False
-        return item_as_dt64.astype("int64") in self.as_numerical_column("int64")
+        return item_as_dt64.astype("int64") in self.as_numerical_column(
+            "int64"
+        )
 
     @property
     def time_unit(self) -> str:
@@ -313,7 +318,9 @@ class DatetimeColumn(column.ColumnBase):
         """
         Return a CuPy representation of the DateTimeColumn.
         """
-        raise NotImplementedError("DateTime Arrays is not yet implemented in cudf")
+        raise NotImplementedError(
+            "DateTime Arrays is not yet implemented in cudf"
+        )
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
@@ -354,7 +361,9 @@ class DatetimeColumn(column.ColumnBase):
                 if other_time_unit not in {"s", "ms", "ns", "us"}:
                     other_time_unit = "ns"
 
-                return cudf.Scalar(None, dtype=f"datetime64[{other_time_unit}]")
+                return cudf.Scalar(
+                    None, dtype=f"datetime64[{other_time_unit}]"
+                )
 
             other = other.astype(self.dtype)
             return cudf.Scalar(other)
@@ -415,9 +424,13 @@ class DatetimeColumn(column.ColumnBase):
     def as_timedelta_column(
         self, dtype: Dtype, format: str | None = None
     ) -> "cudf.core.column.TimeDeltaColumn":
-        raise TypeError(f"cannot astype a datetimelike from {self.dtype} to {dtype}")
+        raise TypeError(
+            f"cannot astype a datetimelike from {self.dtype} to {dtype}"
+        )
 
-    def as_numerical_column(self, dtype: Dtype) -> "cudf.core.column.NumericalColumn":
+    def as_numerical_column(
+        self, dtype: Dtype
+    ) -> "cudf.core.column.NumericalColumn":
         col = column.build_column(
             data=self.base_data,
             dtype=np.int64,
@@ -441,18 +454,22 @@ class DatetimeColumn(column.ColumnBase):
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = cudf.core.column.column_empty(0, dtype="object", masked=False)
-        if len(self) > 0:
-            return string._datetime_to_str_typecast_functions[cudf.dtype(self.dtype)](
-                self, format, names
+            names = cudf.core.column.column_empty(
+                0, dtype="object", masked=False
             )
+        if len(self) > 0:
+            return string._datetime_to_str_typecast_functions[
+                cudf.dtype(self.dtype)
+            ](self, format, names)
         else:
             return cast(
                 "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def mean(self, skipna=None, min_count: int = 0, dtype=np.float64) -> ScalarLike:
+    def mean(
+        self, skipna=None, min_count: int = 0, dtype=np.float64
+    ) -> ScalarLike:
         return pd.Timestamp(
             self.as_numerical_column("int64").mean(
                 skipna=skipna, min_count=min_count, dtype=dtype
@@ -485,7 +502,9 @@ class DatetimeColumn(column.ColumnBase):
             raise TypeError(
                 f"cannot perform cov with types {self.dtype}, {other.dtype}"
             )
-        return self.as_numerical_column("int64").cov(other.as_numerical_column("int64"))
+        return self.as_numerical_column("int64").cov(
+            other.as_numerical_column("int64")
+        )
 
     def corr(self, other: DatetimeColumn) -> float:
         if not isinstance(other, DatetimeColumn):
@@ -510,7 +529,9 @@ class DatetimeColumn(column.ColumnBase):
             return_scalar=return_scalar,
         )
         if return_scalar:
-            return pd.Timestamp(result, unit=self.time_unit).as_unit(self.time_unit)
+            return pd.Timestamp(result, unit=self.time_unit).as_unit(
+                self.time_unit
+            )
         return result.astype(self.dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -562,7 +583,9 @@ class DatetimeColumn(column.ColumnBase):
             "__ne__",
         }:
             out_dtype = cudf.dtype(np.bool_)
-            if isinstance(other, ColumnBase) and not isinstance(other, DatetimeColumn):
+            if isinstance(other, ColumnBase) and not isinstance(
+                other, DatetimeColumn
+            ):
                 result = _all_bools_with_nulls(
                     self, other, bool_fill_value=op == "__ne__"
                 )
@@ -576,9 +599,9 @@ class DatetimeColumn(column.ColumnBase):
         result_col = libcudf.binaryop.binaryop(lhs, rhs, op, out_dtype)
         if out_dtype != cudf.dtype(np.bool_) and op == "__add__":
             return result_col
-        elif cudf.get_option("mode.pandas_compatible") and out_dtype == cudf.dtype(
-            np.bool_
-        ):
+        elif cudf.get_option(
+            "mode.pandas_compatible"
+        ) and out_dtype == cudf.dtype(np.bool_):
             return result_col.fillna(op == "__ne__")
         else:
             return result_col
@@ -599,7 +622,9 @@ class DatetimeColumn(column.ColumnBase):
 
         return super().fillna(fill_value, method)
 
-    def indices_of(self, value: ScalarLike) -> cudf.core.column.NumericalColumn:
+    def indices_of(
+        self, value: ScalarLike
+    ) -> cudf.core.column.NumericalColumn:
         value = column.as_column(
             pd.to_datetime(value), dtype=self.dtype
         ).as_numerical_column("int64")
@@ -630,7 +655,9 @@ class DatetimeColumn(column.ColumnBase):
 
             if max_dist <= np.timedelta64(max_int, to_res).astype(
                 self_delta_dtype
-            ) and min_dist <= np.timedelta64(max_int, to_res).astype(self_delta_dtype):
+            ) and min_dist <= np.timedelta64(max_int, to_res).astype(
+                self_delta_dtype
+            ):
                 return True
             else:
                 return False
@@ -681,7 +708,9 @@ class DatetimeTZColumn(DatetimeColumn):
         arrow_type: bool = False,
     ) -> pd.Series:
         if arrow_type and nullable:
-            raise ValueError(f"{arrow_type=} and {nullable=} cannot both be set.")
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         elif arrow_type:
@@ -726,7 +755,9 @@ class DatetimeTZColumn(DatetimeColumn):
         return self._local_time.as_string_column(dtype, format)
 
     def get_dt_field(self, field: str) -> ColumnBase:
-        return libcudf.datetime.extract_datetime_component(self._local_time, field)
+        return libcudf.datetime.extract_datetime_component(
+            self._local_time, field
+        )
 
     def __repr__(self):
         # Arrow prints the UTC timestamps, but we want to print the
@@ -735,5 +766,7 @@ class DatetimeTZColumn(DatetimeColumn):
             pa.timestamp(self.dtype.unit, str(self.dtype.tz))
         )
         return (
-            f"{object.__repr__(self)}\n" f"{arr.to_string()}\n" f"dtype: {self.dtype}"
+            f"{object.__repr__(self)}\n"
+            f"{arr.to_string()}\n"
+            f"dtype: {self.dtype}"
         )

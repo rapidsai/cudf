@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import operator
 
@@ -55,11 +55,17 @@ def make_arithmetic_op(op):
 
         # Let there be two actual LLVM structs backing the two inputs
         # https://mapping-high-level-constructs-to-llvm-ir.readthedocs.io/en/latest/basic-constructs/structures.html
-        m1 = cgutils.create_struct_proxy(masked_type_1)(context, builder, value=args[0])
-        m2 = cgutils.create_struct_proxy(masked_type_2)(context, builder, value=args[1])
+        m1 = cgutils.create_struct_proxy(masked_type_1)(
+            context, builder, value=args[0]
+        )
+        m2 = cgutils.create_struct_proxy(masked_type_2)(
+            context, builder, value=args[1]
+        )
 
         # we will return an output struct
-        result = cgutils.create_struct_proxy(masked_return_type)(context, builder)
+        result = cgutils.create_struct_proxy(masked_return_type)(
+            context, builder
+        )
         # compute output validity
         valid = builder.and_(m1.valid, m2.valid)
         result.valid = valid
@@ -97,10 +103,14 @@ def make_unary_op(op):
         # MaskedType(...)
         masked_return_type = sig.return_type
 
-        m1 = cgutils.create_struct_proxy(masked_type_1)(context, builder, value=args[0])
+        m1 = cgutils.create_struct_proxy(masked_type_1)(
+            context, builder, value=args[0]
+        )
 
         # we will return an output struct
-        result = cgutils.create_struct_proxy(masked_return_type)(context, builder)
+        result = cgutils.create_struct_proxy(masked_return_type)(
+            context, builder
+        )
 
         # compute output validity
         result.valid = m1.valid
@@ -249,7 +259,9 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
         na, masked_type = sig.args
         value = args[1]
 
-    indata = cgutils.create_struct_proxy(masked_type)(context, builder, value=value)
+    indata = cgutils.create_struct_proxy(masked_type)(
+        context, builder, value=value
+    )
     result = cgutils.alloca_once(builder, ir.IntType(1))
     with builder.if_else(indata.valid) as (then, otherwise):
         with then:
@@ -283,7 +295,9 @@ def pack_return_scalar_impl(context, builder, sig, args):
 @cuda_lower(operator.truth, MaskedType)
 @cuda_lower(bool, MaskedType)
 def masked_scalar_bool_impl(context, builder, sig, args):
-    indata = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
+    indata = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
     result = cgutils.alloca_once(builder, ir.IntType(1))
     with builder.if_else(indata.valid) as (then, otherwise):
         with then:
@@ -304,7 +318,9 @@ def masked_scalar_bool_impl(context, builder, sig, args):
 @cuda_lower(float, MaskedType)
 @cuda_lower(int, MaskedType)
 def masked_scalar_cast_impl(context, builder, sig, args):
-    input = cgutils.create_struct_proxy(sig.args[0])(context, builder, value=args[0])
+    input = cgutils.create_struct_proxy(sig.args[0])(
+        context, builder, value=args[0]
+    )
     result = cgutils.create_struct_proxy(sig.return_type)(context, builder)
 
     casted = context.cast(
@@ -351,7 +367,9 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
     # We will
     operand = cgutils.create_struct_proxy(fromty)(context, builder, value=val)
-    casted = context.cast(builder, operand.value, fromty.value_type, toty.value_type)
+    casted = context.cast(
+        builder, operand.value, fromty.value_type, toty.value_type
+    )
     ext = cgutils.create_struct_proxy(toty)(context, builder)
     ext.value = casted
     ext.valid = operand.valid

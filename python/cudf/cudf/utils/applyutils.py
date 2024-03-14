@@ -66,7 +66,9 @@ doc_applychunks = docfmt_partial(
 
 
 @doc_apply()
-def apply_rows(df, func, incols, outcols, kwargs, pessimistic_nulls, cache_key):
+def apply_rows(
+    df, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
+):
     """Row-wise transformation
 
     Parameters
@@ -114,15 +116,21 @@ def make_aggregate_nullmask(df, columns=None, op="__and__"):
         nullmask = column.as_column(df[k]._column.nullmask)
 
         if out_mask is None:
-            out_mask = column.as_column(nullmask.copy(), dtype=utils.mask_dtype)
+            out_mask = column.as_column(
+                nullmask.copy(), dtype=utils.mask_dtype
+            )
         else:
-            out_mask = libcudf.binaryop.binaryop(nullmask, out_mask, op, out_mask.dtype)
+            out_mask = libcudf.binaryop.binaryop(
+                nullmask, out_mask, op, out_mask.dtype
+            )
 
     return out_mask
 
 
 class ApplyKernelCompilerBase:
-    def __init__(self, func, incols, outcols, kwargs, pessimistic_nulls, cache_key):
+    def __init__(
+        self, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
+    ):
         # Get signature of user function
         sig = pysignature(func)
         self.sig = sig
@@ -143,14 +151,15 @@ class ApplyKernelCompilerBase:
             }
         else:
             inputs = {
-                k: df[k]._column.data_array_view(mode="read") for k in self.incols
+                k: df[k]._column.data_array_view(mode="read")
+                for k in self.incols
             }
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
-            outputs[k] = column.column_empty(len(df), dt, False).data_array_view(
-                mode="write"
-            )
+            outputs[k] = column.column_empty(
+                len(df), dt, False
+            ).data_array_view(mode="write")
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
@@ -166,7 +175,9 @@ class ApplyKernelCompilerBase:
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
-            outdf[k] = cudf.Series(outputs[k], index=outdf.index, nan_as_null=False)
+            outdf[k] = cudf.Series(
+                outputs[k], index=outdf.index, nan_as_null=False
+            )
             if out_mask is not None:
                 outdf._data[k] = outdf[k]._column.set_mask(
                     out_mask.data_array_view(mode="write")
@@ -191,7 +202,9 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def compile(self, func, argnames, extra_argnames):
         # Compile kernel
-        kernel = _load_cache_or_make_chunk_wise_kernel(func, argnames, extra_argnames)
+        kernel = _load_cache_or_make_chunk_wise_kernel(
+            func, argnames, extra_argnames
+        )
         return kernel
 
     def launch_kernel(self, df, args, chunks, blkct=None, tpb=None):
@@ -209,9 +222,9 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, int):
             # *chunks* is the chunksize
-            return cuda.as_cuda_array(cp.arange(start=0, stop=size, step=chunks)).view(
-                "int64"
-            )
+            return cuda.as_cuda_array(
+                cp.arange(start=0, stop=size, step=chunks)
+            ).view("int64")
         else:
             # *chunks* is an array of chunk leading offset
             return cuda.as_cuda_array(cp.asarray(chunks)).view("int64")
@@ -246,7 +259,9 @@ def row_wise_kernel({args}):
             stop = ""
             stride = "ntid"
             srcidx = "{a} = {a}[{start}:{stop}:{stride}]"
-            body.append(srcidx.format(a=a, start=start, stop=stop, stride=stride))
+            body.append(
+                srcidx.format(a=a, start=start, stop=stop, stride=stride)
+            )
 
     body.append(f"inner({args})")
 
@@ -296,7 +311,9 @@ def chunk_wise_kernel(nrows, chunks, {args}):
 
     body.append(indent + "start = chunks[curblk]")
     body.append(
-        indent + "stop = chunks[curblk + 1]" + " if curblk + 1 < chunks.size else nrows"
+        indent
+        + "stop = chunks[curblk + 1]"
+        + " if curblk + 1 < chunks.size else nrows"
     )
 
     slicedargs = {}
@@ -306,7 +323,9 @@ def chunk_wise_kernel(nrows, chunks, {args}):
         else:
             slicedargs[a] = str(a)
     body.append(
-        "{}inner({})".format(indent, ", ".join(slicedargs[k] for k in argnames))
+        "{}inner({})".format(
+            indent, ", ".join(slicedargs[k] for k in argnames)
+        )
     )
 
     indented = ["{}{}".format(" " * 4, ln) for ln in body]

@@ -31,7 +31,9 @@ def bench_unique_single_column(benchmark, column):
 @pytest.mark.parametrize("nullify", [True, False])
 @pytest.mark.parametrize("gather_how", ["sequence", "reverse", "random"])
 def bench_take(benchmark, column, gather_how, nullify):
-    gather_map = make_gather_map(column.size * 0.4, column.size, gather_how)._column
+    gather_map = make_gather_map(
+        column.size * 0.4, column.size, gather_how
+    )._column
     benchmark(column.take, gather_map, nullify=nullify)
 
 
@@ -105,6 +107,8 @@ def setitem_case_int_column_align_to_col_size(column):
 #           column (len(val) != len(key) and len == num_true)
 
 
-@pytest_cases.parametrize_with_cases("column,key,value", cases=".", prefix="setitem")
+@pytest_cases.parametrize_with_cases(
+    "column,key,value", cases=".", prefix="setitem"
+)
 def bench_setitem(benchmark, column, key, value):
     benchmark(column.__setitem__, key, value)

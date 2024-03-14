@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# Copyright (c) 2019-2023, NVIDIA CORPORATION.
 
 import datetime
 import warnings
@@ -45,10 +45,14 @@ def _parse_column_statistics(cs, column_statistics_blob):
 
     if cs.HasField("intStatistics"):
         column_statistics["minimum"] = (
-            cs.intStatistics.minimum if cs.intStatistics.HasField("minimum") else None
+            cs.intStatistics.minimum
+            if cs.intStatistics.HasField("minimum")
+            else None
         )
         column_statistics["maximum"] = (
-            cs.intStatistics.maximum if cs.intStatistics.HasField("maximum") else None
+            cs.intStatistics.maximum
+            if cs.intStatistics.HasField("maximum")
+            else None
         )
         column_statistics["sum"] = (
             cs.intStatistics.sum if cs.intStatistics.HasField("sum") else None
@@ -66,7 +70,9 @@ def _parse_column_statistics(cs, column_statistics_blob):
             else None
         )
         column_statistics["sum"] = (
-            cs.doubleStatistics.sum if cs.doubleStatistics.HasField("sum") else None
+            cs.doubleStatistics.sum
+            if cs.doubleStatistics.HasField("sum")
+            else None
         )
 
     elif cs.HasField("stringStatistics"):
@@ -85,7 +91,8 @@ def _parse_column_statistics(cs, column_statistics_blob):
     elif cs.HasField("bucketStatistics"):
         column_statistics["true_count"] = cs.bucketStatistics.count[0]
         column_statistics["false_count"] = (
-            column_statistics["number_of_values"] - column_statistics["true_count"]
+            column_statistics["number_of_values"]
+            - column_statistics["true_count"]
         )
 
     elif cs.HasField("decimalStatistics"):
@@ -180,7 +187,9 @@ def read_orc_statistics(
         ) = liborc.read_raw_orc_statistics(path_or_buf)
 
         # Parse column names
-        column_names = [column_name.decode("utf-8") for column_name in column_names]
+        column_names = [
+            column_name.decode("utf-8") for column_name in column_names
+        ]
 
         # Parse statistics
         cs = cs_pb2.ColumnStatistics()
@@ -190,7 +199,10 @@ def read_orc_statistics(
             for i, raw_file_stats in enumerate(raw_file_statistics)
             if columns is None or column_names[i] in columns
         }
-        if any(not parsed_statistics for parsed_statistics in file_statistics.values()):
+        if any(
+            not parsed_statistics
+            for parsed_statistics in file_statistics.values()
+        ):
             continue
         else:
             files_statistics.append(file_statistics)
@@ -313,11 +325,15 @@ def read_orc(
 
         # Must ensure a stripe for each source is specified, unless None
         if not len(stripes) == len(filepath_or_buffer):
-            raise ValueError("A list of stripes must be provided for each input source")
+            raise ValueError(
+                "A list of stripes must be provided for each input source"
+            )
 
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
-        if ioutils.is_directory(path_or_data=source, storage_options=storage_options):
+        if ioutils.is_directory(
+            path_or_data=source, storage_options=storage_options
+        ):
             fs = ioutils._ensure_filesystem(
                 passed_filesystem=None,
                 path=source,
@@ -334,7 +350,9 @@ def read_orc(
             bytes_per_thread=bytes_per_thread,
         )
         if compression is not None:
-            raise ValueError("URL content-encoding decompression is not supported")
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
         if isinstance(tmp_source, list):
             filepaths_or_buffers.extend(tmp_source)
         else:
@@ -375,14 +393,16 @@ def read_orc(
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
         if len(filepath_or_buffer) > 1:
             raise NotImplementedError(
-                "Using CPU via PyArrow only supports a single a " "single input source"
+                "Using CPU via PyArrow only supports a single a "
+                "single input source"
             )
 
         orc_file = orc.ORCFile(filepath_or_buffer[0])
         if stripes is not None and len(stripes) > 0:
             for stripe_source_file in stripes:
                 pa_tables = [
-                    read_orc_stripe(orc_file, i, columns) for i in stripe_source_file
+                    read_orc_stripe(orc_file, i, columns)
+                    for i in stripe_source_file
                 ]
                 pa_table = pa.concat_tables(pa_tables)
         else:
@@ -416,7 +436,8 @@ def to_orc(
 
     if isinstance(df.index, cudf.CategoricalIndex):
         raise NotImplementedError(
-            "Writing to ORC format is not yet supported with " "Categorical columns."
+            "Writing to ORC format is not yet supported with "
+            "Categorical columns."
         )
 
     if cols_as_map_type is not None and not isinstance(cols_as_map_type, list):

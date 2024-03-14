@@ -87,7 +87,9 @@ class Frame(BinaryOperand, Scannable):
 
     @property
     def _dtypes(self):
-        return dict(zip(self._data.names, (col.dtype for col in self._data.columns)))
+        return dict(
+            zip(self._data.names, (col.dtype for col in self._data.columns))
+        )
 
     @_cudf_nvtx_annotate
     def serialize(self):
@@ -119,7 +121,9 @@ class Frame(BinaryOperand, Scannable):
             key = f"column_{metadata}"
             if key in header:
                 kwargs[metadata] = pickle.loads(header[key])
-        col_accessor = ColumnAccessor(data=dict(zip(column_names, columns)), **kwargs)
+        col_accessor = ColumnAccessor(
+            data=dict(zip(column_names, columns)), **kwargs
+        )
         return cls_deserialize._from_data(col_accessor)
 
     @classmethod
@@ -152,11 +156,15 @@ class Frame(BinaryOperand, Scannable):
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     @_cudf_nvtx_annotate
-    def _mimic_inplace(self, result: Self, inplace: bool = False) -> Optional[Self]:
+    def _mimic_inplace(
+        self, result: Self, inplace: bool = False
+    ) -> Optional[Self]:
         if inplace:
             for col in self._data:
                 if col in result._data:
-                    self._data[col]._mimic_inplace(result._data[col], inplace=True)
+                    self._data[col]._mimic_inplace(
+                        result._data[col], inplace=True
+                    )
             self._data = result._data
             return None
         else:
@@ -345,7 +353,9 @@ class Frame(BinaryOperand, Scannable):
 
         return all(
             self_col.equals(other_col, check_dtypes=True)
-            for self_col, other_col in zip(self._data.values(), other._data.values())
+            for self_col, other_col in zip(
+                self._data.values(), other._data.values()
+            )
         )
 
     @_cudf_nvtx_annotate
@@ -443,7 +453,9 @@ class Frame(BinaryOperand, Scannable):
                     )
             dtype = find_common_type(dtypes)
 
-        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype, order="F")
+        matrix = make_empty_matrix(
+            shape=(len(self), ncol), dtype=dtype, order="F"
+        )
         for i, col in enumerate(self._data.values()):
             # TODO: col.values may fail if there is nullable data or an
             # unsupported dtype. We may want to catch and provide a more
@@ -484,7 +496,9 @@ class Frame(BinaryOperand, Scannable):
         cupy.ndarray
         """
         return self._to_array(
-            (lambda col: col.values.copy()) if copy else (lambda col: col.values),
+            (lambda col: col.values.copy())
+            if copy
+            else (lambda col: col.values),
             cupy.empty,
             dtype,
             na_value,
@@ -521,7 +535,9 @@ class Frame(BinaryOperand, Scannable):
                 "array always copies the data."
             )
 
-        return self._to_array((lambda col: col.values_host), np.empty, dtype, na_value)
+        return self._to_array(
+            (lambda col: col.values_host), np.empty, dtype, na_value
+        )
 
     @_cudf_nvtx_annotate
     def where(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
@@ -712,7 +728,9 @@ class Frame(BinaryOperand, Scannable):
 
         if method:
             if method not in {"ffill", "bfill", "pad", "backfill"}:
-                raise NotImplementedError(f"Fill method {method} is not supported")
+                raise NotImplementedError(
+                    f"Fill method {method} is not supported"
+                )
             if method == "pad":
                 method = "ffill"
             elif method == "backfill":
@@ -791,7 +809,9 @@ class Frame(BinaryOperand, Scannable):
 
         column_order = [libcudf.types.Order[key] for key in column_order]
 
-        null_precedence = [libcudf.types.NullOrder[key] for key in null_precedence]
+        null_precedence = [
+            libcudf.types.NullOrder[key] for key in null_precedence
+        ]
 
         return self._from_columns_like_self(
             libcudf.quantiles.quantile_table(
@@ -892,13 +912,17 @@ class Frame(BinaryOperand, Scannable):
                     size=codes.size,
                     ordered=dict_ordered[name],
                 )
-                for name, codes in zip(dict_indices_table.column_names, indices_columns)
+                for name, codes in zip(
+                    dict_indices_table.column_names, indices_columns
+                )
             }
 
         # Handle non-dict arrays
         cudf_non_category_frame = {
             name: col
-            for name, col in zip(data.column_names, libcudf.interop.from_arrow(data))
+            for name, col in zip(
+                data.column_names, libcudf.interop.from_arrow(data)
+            )
         }
 
         result = {**cudf_non_category_frame, **cudf_category_frame}
@@ -906,13 +930,19 @@ class Frame(BinaryOperand, Scannable):
         # There are some special cases that need to be handled
         # based on metadata.
         for name in result:
-            if len(result[name]) == 0 and pandas_dtypes.get(name) == "categorical":
+            if (
+                len(result[name]) == 0
+                and pandas_dtypes.get(name) == "categorical"
+            ):
                 # When pandas_dtype is a categorical column and the size
                 # of column is 0 (i.e., empty) then we will have an
                 # int8 column in result._data[name] returned by libcudf,
                 # which needs to be type-casted to 'category' dtype.
                 result[name] = result[name].as_categorical_column("category")
-            elif pandas_dtypes.get(name) == "empty" and np_dtypes.get(name) == "object":
+            elif (
+                pandas_dtypes.get(name) == "empty"
+                and np_dtypes.get(name) == "object"
+            ):
                 # When a string column has all null values, pandas_dtype is
                 # is specified as 'empty' and np_dtypes as 'object',
                 # hence handling this special case to type-cast the empty
@@ -981,7 +1011,9 @@ class Frame(BinaryOperand, Scannable):
         Frame.
         """
         return [
-            i for i, name in enumerate(self._column_names) if name in set(column_names)
+            i
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
         ]
 
     @_cudf_nvtx_annotate
@@ -1258,11 +1290,15 @@ class Frame(BinaryOperand, Scannable):
             for col, val in zip(self._columns, values)
         ]
         sources = [
-            col if is_dtype_equal(col.dtype, common_dtype) else col.astype(common_dtype)
+            col
+            if is_dtype_equal(col.dtype, common_dtype)
+            else col.astype(common_dtype)
             for col, common_dtype in zip(self._columns, common_dtype_list)
         ]
         values = [
-            val if is_dtype_equal(val.dtype, common_dtype) else val.astype(common_dtype)
+            val
+            if is_dtype_equal(val.dtype, common_dtype)
+            else val.astype(common_dtype)
             for val, common_dtype in zip(values, common_dtype_list)
         ]
 
@@ -1428,12 +1464,16 @@ class Frame(BinaryOperand, Scannable):
             Returns True, if sorted as expected by ``ascending`` and
             ``null_position``, False otherwise.
         """
-        if ascending is not None and not cudf.api.types.is_list_like(ascending):
+        if ascending is not None and not cudf.api.types.is_list_like(
+            ascending
+        ):
             raise TypeError(
                 f"Expected a list-like or None for `ascending`, got "
                 f"{type(ascending)}"
             )
-        if null_position is not None and not cudf.api.types.is_list_like(null_position):
+        if null_position is not None and not cudf.api.types.is_list_like(
+            null_position
+        ):
             raise TypeError(
                 f"Expected a list-like or None for `null_position`, got "
                 f"{type(null_position)}"
@@ -1449,7 +1489,9 @@ class Frame(BinaryOperand, Scannable):
         """
         return [
             self._from_columns_like_self(
-                libcudf.copying.columns_split([*self._data.columns], splits)[split_idx],
+                libcudf.copying.columns_split([*self._data.columns], splits)[
+                    split_idx
+                ],
                 self._column_names,
             )
             for split_idx in range(len(splits) + 1)
@@ -1552,7 +1594,9 @@ class Frame(BinaryOperand, Scannable):
 
     @_cudf_nvtx_annotate
     @acquire_spill_lock()
-    def _apply_cupy_ufunc_to_operands(self, ufunc, cupy_func, operands, **kwargs):
+    def _apply_cupy_ufunc_to_operands(
+        self, ufunc, cupy_func, operands, **kwargs
+    ):
         # Note: There are some operations that may be supported by libcudf but
         # are not supported by pandas APIs. In particular, libcudf binary
         # operations support logical and/or operations as well as
@@ -1865,7 +1909,10 @@ class Frame(BinaryOperand, Scannable):
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
-            {name: _apply_inverse_column(col) for name, col in self._data.items()}
+            {
+                name: _apply_inverse_column(col)
+                for name, col in self._data.items()
+            }
         )
 
     @_cudf_nvtx_annotate
@@ -1885,14 +1932,19 @@ class Frame(BinaryOperand, Scannable):
             Name and unique value counts of each column in frame.
         """
         return {
-            name: col.distinct_count(dropna=dropna) for name, col in self._data.items()
+            name: col.distinct_count(dropna=dropna)
+            for name, col in self._data.items()
         }
 
     @staticmethod
     @_cudf_nvtx_annotate
-    def _repeat(columns: List[ColumnBase], repeats, axis=None) -> List[ColumnBase]:
+    def _repeat(
+        columns: List[ColumnBase], repeats, axis=None
+    ) -> List[ColumnBase]:
         if axis is not None:
-            raise NotImplementedError("Only axis=`None` supported at this time.")
+            raise NotImplementedError(
+                "Only axis=`None` supported at this time."
+            )
 
         if not is_scalar(repeats):
             repeats = as_column(repeats)
@@ -1918,4 +1970,6 @@ def _apply_inverse_column(col: ColumnBase) -> ColumnBase:
     elif is_bool_dtype(col.dtype):
         return col.unary_operator("not")
     else:
-        raise TypeError(f"Operation `~` not supported on {col.dtype.type.__name__}")
+        raise TypeError(
+            f"Operation `~` not supported on {col.dtype.type.__name__}"
+        )

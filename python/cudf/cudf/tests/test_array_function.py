@@ -58,7 +58,9 @@ def test_array_func_cudf_series(np_ar, func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-@pytest.mark.parametrize("pd_df", [pd.DataFrame(np.random.uniform(size=(100, 10)))])
+@pytest.mark.parametrize(
+    "pd_df", [pd.DataFrame(np.random.uniform(size=(100, 10)))]
+)
 @pytest.mark.parametrize(
     "func",
     [
@@ -80,7 +82,9 @@ def test_array_func_cudf_dataframe(pd_df, func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-@pytest.mark.parametrize("pd_df", [pd.DataFrame(np.random.uniform(size=(100, 10)))])
+@pytest.mark.parametrize(
+    "pd_df", [pd.DataFrame(np.random.uniform(size=(100, 10)))]
+)
 @pytest.mark.parametrize(
     "func",
     [

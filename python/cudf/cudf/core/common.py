@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020, NVIDIA CORPORATION.
 
 
 def pipe(obj, func, *args, **kwargs):
@@ -28,7 +28,9 @@ def pipe(obj, func, *args, **kwargs):
     if isinstance(func, tuple):
         func, target = func
         if target in kwargs:
-            raise ValueError(f"{target} is both the pipe target and a keyword argument")
+            raise ValueError(
+                f"{target} is both the pipe target and a keyword argument"
+            )
         kwargs[target] = obj
         return func(*args, **kwargs)
     else:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.  # noqa: E501
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import copyreg
@@ -412,7 +412,9 @@ BooleanArray = make_final_proxy_type(
     pd.arrays.BooleanArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__array_ufunc__": _FastSlowAttribute("__array_ufunc__")},
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 BooleanDtype = make_final_proxy_type(
@@ -430,7 +432,9 @@ IntegerArray = make_final_proxy_type(
     pd.arrays.IntegerArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__array_ufunc__": _FastSlowAttribute("__array_ufunc__")},
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 Int8Dtype = make_final_proxy_type(
@@ -548,7 +552,9 @@ FloatingArray = make_final_proxy_type(
     pd.arrays.FloatingArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__array_ufunc__": _FastSlowAttribute("__array_ufunc__")},
+    additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__")
+    },
 )
 
 Float32Dtype = make_final_proxy_type(
@@ -813,7 +819,9 @@ _TextFileReader = make_intermediate_proxy_type(
     "_TextFileReader", _Unusable, pd.io.parsers.readers.TextFileReader
 )
 
-_XportReader = make_intermediate_proxy_type("_XportReader", _Unusable, pd_XportReader)
+_XportReader = make_intermediate_proxy_type(
+    "_XportReader", _Unusable, pd_XportReader
+)
 
 _SAS7BDATReader = make_intermediate_proxy_type(
     "_SAS7BDATReader", _Unusable, pd_SAS7BDATReader

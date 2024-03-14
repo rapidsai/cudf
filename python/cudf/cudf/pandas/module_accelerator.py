@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.  # noqa: E501
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -79,16 +79,22 @@ def deduce_cudf_pandas_mode(slow_lib: str, fast_lib: str) -> DeducedMode:
     if "CUDF_PANDAS_FALLBACK_MODE" not in os.environ:
         try:
             importlib.import_module(fast_lib)
-            return DeducedMode(use_fast_lib=True, slow_lib=slow_lib, fast_lib=fast_lib)
+            return DeducedMode(
+                use_fast_lib=True, slow_lib=slow_lib, fast_lib=fast_lib
+            )
         except Exception as e:
             warnings.warn(
                 f"Exception encountered importing {fast_lib}: {e}."
                 f"Falling back to only using {slow_lib}."
             )
-    return DeducedMode(use_fast_lib=False, slow_lib=slow_lib, fast_lib=slow_lib)
+    return DeducedMode(
+        use_fast_lib=False, slow_lib=slow_lib, fast_lib=slow_lib
+    )
 
 
-class ModuleAcceleratorBase(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+class ModuleAcceleratorBase(
+    importlib.abc.MetaPathFinder, importlib.abc.Loader
+):
     _instance: ModuleAcceleratorBase | None = None
     mod_name: str
     fast_lib: str
@@ -121,7 +127,9 @@ class ModuleAcceleratorBase(importlib.abc.MetaPathFinder, importlib.abc.Loader):
              Name of package that provides "slow" fallback implementation
         """
         if ModuleAcceleratorBase._instance is not None:
-            raise RuntimeError("Only one instance of ModuleAcceleratorBase allowed")
+            raise RuntimeError(
+                "Only one instance of ModuleAcceleratorBase allowed"
+            )
         self = object.__new__(cls)
         self.mod_name = mod_name
         self.fast_lib = fast_lib
@@ -143,7 +151,8 @@ class ModuleAcceleratorBase(importlib.abc.MetaPathFinder, importlib.abc.Loader):
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}" f"(fast={self.fast_lib}, slow={self.slow_lib})"
+            f"{self.__class__.__name__}"
+            f"(fast={self.fast_lib}, slow={self.slow_lib})"
         )
 
     def find_spec(
@@ -163,7 +172,9 @@ class ModuleAcceleratorBase(importlib.abc.MetaPathFinder, importlib.abc.Loader):
         A ModuleSpec with ourself as loader if we're interposing,
         otherwise None to pass off to the next loader.
         """
-        if fullname == self.mod_name or fullname.startswith(f"{self.mod_name}."):
+        if fullname == self.mod_name or fullname.startswith(
+            f"{self.mod_name}."
+        ):
             return importlib.machinery.ModuleSpec(
                 name=fullname,
                 loader=self,
@@ -305,7 +316,9 @@ class ModuleAcceleratorBase(importlib.abc.MetaPathFinder, importlib.abc.Loader):
             # now, attempt to import the wrapped module, which will
             # recursively wrap all of its attributes:
             return importlib.import_module(
-                rename_root_module(slow_attr.__name__, self.slow_lib, self.mod_name)
+                rename_root_module(
+                    slow_attr.__name__, self.slow_lib, self.mod_name
+                )
             )
         if slow_attr in self._wrapped_objs:
             if type(fast_attr) is _Unusable:
@@ -544,8 +557,11 @@ class ModuleAccelerator(ModuleAcceleratorBase):
             # We cannot possibly be at the top level.
             assert frame.f_back
             calling_module = pathlib.PurePath(frame.f_back.f_code.co_filename)
-            use_real = not calling_module.is_relative_to(CUDF_PANDAS_PATH) and any(
-                calling_module.is_relative_to(path) for path in loader._denylist
+            use_real = not calling_module.is_relative_to(
+                CUDF_PANDAS_PATH
+            ) and any(
+                calling_module.is_relative_to(path)
+                for path in loader._denylist
             )
         try:
             if use_real:
@@ -580,7 +596,9 @@ class ModuleAccelerator(ModuleAcceleratorBase):
                 )
             mode = deduce_cudf_pandas_mode(slow_lib, fast_lib)
             if mode.use_fast_lib:
-                importlib.import_module(f".._wrappers.{mode.slow_lib}", __name__)
+                importlib.import_module(
+                    f".._wrappers.{mode.slow_lib}", __name__
+                )
             try:
                 (self,) = (
                     p

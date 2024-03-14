@@ -138,7 +138,9 @@ def _index_or_values_interpolation(column, index=None):
         return column
 
     to_interp = IndexedFrame(data={None: column}, index=index)
-    known_x_and_y = to_interp._apply_boolean_mask(BooleanMask(~mask, len(to_interp)))
+    known_x_and_y = to_interp._apply_boolean_mask(
+        BooleanMask(~mask, len(to_interp))
+    )
 
     known_x = known_x_and_y._index._column.values
     known_y = known_x_and_y._data.columns[0].values

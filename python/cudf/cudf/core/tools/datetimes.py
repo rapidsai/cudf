@@ -164,9 +164,9 @@ def to_datetime(
 
     if errors == "ignore":
         warnings.warn(
-            "errors='ignore' is deprecated and will raise in a future version. "
-            "Use to_datetime without passing `errors` and catch exceptions "
-            "explicitly instead",
+            "errors='ignore' is deprecated and will raise in a "
+            "future version. Use to_datetime without passing `errors` "
+            "and catch exceptions explicitly instead",
             FutureWarning,
         )
 
@@ -231,7 +231,9 @@ def to_datetime(
                 + arg[unit_rev["day"]].astype("str").str.zfill(2)
             )
             format = "%Y-%m-%d"
-            col = new_series._column.as_datetime_column("datetime64[s]", format=format)
+            col = new_series._column.as_datetime_column(
+                "datetime64[s]", format=format
+            )
 
             for u in ["h", "m", "s", "ms", "us", "ns"]:
                 value = unit_rev.get(u)
@@ -265,7 +267,9 @@ def to_datetime(
                     factor = cudf.Scalar(
                         column.datetime._unit_to_nanoseconds_conversion[u]
                         / (
-                            column.datetime._unit_to_nanoseconds_conversion["s"]
+                            column.datetime._unit_to_nanoseconds_conversion[
+                                "s"
+                            ]
                             if np.datetime_data(col.dtype)[0] == "s"
                             else 1
                         )
@@ -276,7 +280,9 @@ def to_datetime(
                     else:
                         times_column = times_column + (current_col * factor)
             if times_column is not None:
-                col = (col.astype(dtype="int64") + times_column).astype(dtype=col.dtype)
+                col = (col.astype(dtype="int64") + times_column).astype(
+                    dtype=col.dtype
+                )
             col = _process_col(
                 col=col,
                 unit=unit,
@@ -331,7 +337,9 @@ def _process_col(
 
     if col.dtype.kind == "f":
         if unit not in (None, "ns"):
-            factor = cudf.Scalar(column.datetime._unit_to_nanoseconds_conversion[unit])
+            factor = cudf.Scalar(
+                column.datetime._unit_to_nanoseconds_conversion[unit]
+            )
             col = col * factor
 
         if format is not None:
@@ -345,7 +353,9 @@ def _process_col(
                 col.astype("int")
                 .astype("str")
                 .as_datetime_column(
-                    dtype="datetime64[us]" if "%f" in format else "datetime64[s]",
+                    dtype="datetime64[us]"
+                    if "%f" in format
+                    else "datetime64[s]",
                     format=format,
                 )
             )
@@ -526,7 +536,9 @@ class DateOffset:
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
-            raise NotImplementedError("normalize not yet supported for DateOffset")
+            raise NotImplementedError(
+                "normalize not yet supported for DateOffset"
+            )
 
         all_possible_units = {
             "years",
@@ -607,7 +619,9 @@ class DateOffset:
 
     def _combine_months_and_years(self, **kwargs):
         # TODO: if months is zero, don't do a binop
-        kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop("months", 0)
+        kwargs["months"] = kwargs.pop("years", 0) * 12 + kwargs.pop(
+            "months", 0
+        )
         return kwargs
 
     def _combine_kwargs_to_seconds(self, **kwargs):
@@ -632,7 +646,9 @@ class DateOffset:
             kwargs["seconds"] = seconds
         return kwargs
 
-    def _datetime_binop(self, datetime_col, op, reflect=False) -> column.DatetimeColumn:
+    def _datetime_binop(
+        self, datetime_col, op, reflect=False
+    ) -> column.DatetimeColumn:
         if reflect and op == "__sub__":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
@@ -962,7 +978,8 @@ def date_range(
         # are dropped in conversion during the binops
         warnings.simplefilter("ignore", UserWarning)
         end_estim = (
-            pd.Timestamp(start.value) + periods * offset._maybe_as_fast_pandas_offset()
+            pd.Timestamp(start.value)
+            + periods * offset._maybe_as_fast_pandas_offset()
         ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
@@ -1049,10 +1066,13 @@ def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
 def _to_iso_calendar(arg):
     formats = ["%G", "%V", "%u"]
     if not isinstance(arg, (cudf.Index, cudf.core.series.DatetimeProperties)):
-        raise AttributeError("Can only use .isocalendar accessor with series or index")
+        raise AttributeError(
+            "Can only use .isocalendar accessor with series or index"
+        )
     if isinstance(arg, cudf.Index):
         iso_params = [
-            arg._column.as_string_column(arg._values.dtype, fmt) for fmt in formats
+            arg._column.as_string_column(arg._values.dtype, fmt)
+            for fmt in formats
         ]
         index = arg._column
     elif isinstance(arg.series, cudf.Series):

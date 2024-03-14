@@ -117,7 +117,9 @@ doc_register_dataframe_accessor = docfmt_partial(
 )
 
 doc_register_index_accessor = docfmt_partial(
-    docstring=_docstring_register_accessor.format(klass="Index", example=_index_example)
+    docstring=_docstring_register_accessor.format(
+        klass="Index", example=_index_example
+    )
 )
 
 doc_register_series_accessor = docfmt_partial(

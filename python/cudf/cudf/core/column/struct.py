@@ -35,12 +35,17 @@ class StructColumn(ColumnBase):
 
     def to_arrow(self):
         children = [
-            pa.nulls(len(child)) if len(child) == child.null_count else child.to_arrow()
+            pa.nulls(len(child))
+            if len(child) == child.null_count
+            else child.to_arrow()
             for child in self.children
         ]
 
         pa_type = pa.struct(
-            {field: child.type for field, child in zip(self.dtype.fields, children)}
+            {
+                field: child.type
+                for field, child in zip(self.dtype.fields, children)
+            }
         )
 
         if self.nullable:
@@ -62,12 +67,16 @@ class StructColumn(ColumnBase):
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
         if arrow_type and nullable:
-            raise ValueError(f"{arrow_type=} and {nullable=} cannot both be set.")
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
         elif nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
         pa_array = self.to_arrow()
         if arrow_type:
-            return pd.Series(pd.arrays.ArrowExtensionArray(pa_array), index=index)
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(pa_array), index=index
+            )
         else:
             return pd.Series(pa_array.tolist(), dtype="object", index=index)
 
@@ -85,7 +94,8 @@ class StructColumn(ColumnBase):
     def element_indexing(self, index: int):
         result = super().element_indexing(index)
         return {
-            field: value for field, value in zip(self.dtype.fields, result.values())
+            field: value
+            for field, value in zip(self.dtype.fields, result.values())
         }
 
     def __setitem__(self, key, value):
@@ -162,7 +172,9 @@ class StructMethods(ColumnMethods):
 
     def __init__(self, parent=None):
         if not isinstance(parent.dtype, StructDtype):
-            raise AttributeError("Can only use .struct accessor with a 'struct' dtype")
+            raise AttributeError(
+                "Can only use .struct accessor with a 'struct' dtype"
+            )
         super().__init__(parent=parent)
 
     def field(self, key):

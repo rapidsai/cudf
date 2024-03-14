@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+# Copyright (c) 2018-2023, NVIDIA CORPORATION.
 """Define an interface for columns that can perform numerical operations."""
 
 from __future__ import annotations
@@ -99,7 +99,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         return_scalar: bool,
     ) -> NumericalBaseColumn:
         if np.logical_or(q < 0, q > 1).any():
-            raise ValueError("percentiles should all be in the interval [0, 1]")
+            raise ValueError(
+                "percentiles should all be in the interval [0, 1]"
+            )
         # Beyond this point, q either being scalar or list-like
         # will only have values in range [0, 1]
         if len(self) == 0:
@@ -117,7 +119,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
                 try:
                     new_scalar = self.dtype.type(scalar_result)
                     scalar_result = (
-                        new_scalar if new_scalar == scalar_result else scalar_result
+                        new_scalar
+                        if new_scalar == scalar_result
+                        else scalar_result
                     )
                 except (TypeError, ValueError):
                     pass
@@ -134,7 +138,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         min_count: int = 0,
         dtype=np.float64,
     ):
-        return self._reduce("mean", skipna=skipna, min_count=min_count, dtype=dtype)
+        return self._reduce(
+            "mean", skipna=skipna, min_count=min_count, dtype=dtype
+        )
 
     def var(
         self,
@@ -176,14 +182,20 @@ class NumericalBaseColumn(ColumnBase, Scannable):
         self, q: np.ndarray, interpolation: str, exact: bool
     ) -> NumericalBaseColumn:
         # get sorted indices and exclude nulls
-        indices = libcudf.sort.order_by([self], [True], "first", stable=True).slice(
-            self.null_count, len(self)
+        indices = libcudf.sort.order_by(
+            [self], [True], "first", stable=True
+        ).slice(self.null_count, len(self))
+
+        return libcudf.quantiles.quantile(
+            self, q, interpolation, indices, exact
         )
 
-        return libcudf.quantiles.quantile(self, q, interpolation, indices, exact)
-
     def cov(self, other: NumericalBaseColumn) -> float:
-        if len(self) == 0 or len(other) == 0 or (len(self) == 1 and len(other) == 1):
+        if (
+            len(self) == 0
+            or len(other) == 0
+            or (len(self) == 1 and len(other) == 1)
+        ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         result = (self - self.mean()) * (other - other.mean())
@@ -201,7 +213,9 @@ class NumericalBaseColumn(ColumnBase, Scannable):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return cov / lhs_std / rhs_std
 
-    def round(self, decimals: int = 0, how: str = "half_even") -> NumericalBaseColumn:
+    def round(
+        self, decimals: int = 0, how: str = "half_even"
+    ) -> NumericalBaseColumn:
         if not cudf.api.types.is_integer(decimals):
             raise TypeError("Values in decimals must be integers")
         """Round the values in the Column to the given number of decimals."""

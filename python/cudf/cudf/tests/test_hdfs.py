@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import os
 from io import BytesIO
@@ -57,7 +57,9 @@ def test_read_csv(tmpdir, pdf, hdfs, test_url):
     hdfs.upload(basedir + "/test_csv_reader.csv", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/test_csv_reader.csv".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_csv_reader.csv".format(
+            host, port, basedir
+        )
     else:
         hd_fpath = f"hdfs://{basedir}/test_csv_reader.csv"
 
@@ -74,7 +76,9 @@ def test_read_csv(tmpdir, pdf, hdfs, test_url):
 def test_write_csv(pdf, hdfs, test_url):
     gdf = cudf.from_pandas(pdf)
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/test_csv_writer.csv".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_csv_writer.csv".format(
+            host, port, basedir
+        )
     else:
         hd_fpath = f"hdfs://{basedir}/test_csv_writer.csv"
 
@@ -132,7 +136,9 @@ def test_write_parquet(pdf, hdfs, test_url):
     assert_eq(pdf, got)
 
 
-@pytest.mark.xfail(reason="Writing string columns with parition_cols is incorrect")
+@pytest.mark.xfail(
+    reason="Writing string columns with parition_cols is incorrect"
+)
 @pytest.mark.parametrize("test_url", [False, True])
 def test_write_parquet_partitioned(tmpdir, pdf, hdfs, test_url):
     pdf.to_parquet(
@@ -149,11 +155,15 @@ def test_write_parquet_partitioned(tmpdir, pdf, hdfs, test_url):
         hd_fpath = f"hdfs://{basedir}/test_parquet_partitioned.parquet"
     # Clear data written from previous runs
     hdfs.rm(f"{basedir}/test_parquet_partitioned.parquet", recursive=True)
-    gdf.to_parquet(hd_fpath, index=False, partition_cols=["Integer", "Boolean"])
+    gdf.to_parquet(
+        hd_fpath, index=False, partition_cols=["Integer", "Boolean"]
+    )
 
     assert hdfs.exists(f"{basedir}/test_parquet_partitioned.parquet")
     got = pd.read_parquet(hd_fpath)
-    expect = pd.read_parquet(tmpdir.join("pandas_parquet_writer_partitioned.parquet"))
+    expect = pd.read_parquet(
+        tmpdir.join("pandas_parquet_writer_partitioned.parquet")
+    )
     assert_eq(expect, got)
 
 
@@ -171,7 +181,9 @@ def test_read_json(tmpdir, pdf, hdfs, test_url):
     hdfs.upload(basedir + "/test_json_reader.json", buffer)
 
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/test_json_reader.json".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_json_reader.json".format(
+            host, port, basedir
+        )
     else:
         hd_fpath = f"hdfs://{basedir}/test_json_reader.json"
 
@@ -209,7 +221,9 @@ def test_write_orc(pdf, hdfs, test_url):
     pdf["Integer2"] = pdf["Integer2"].astype("int64")
     gdf = cudf.from_pandas(pdf)
     if test_url:
-        hd_fpath = "hdfs://{}:{}{}/test_orc_writer.orc".format(host, port, basedir)
+        hd_fpath = "hdfs://{}:{}{}/test_orc_writer.orc".format(
+            host, port, basedir
+        )
     else:
         hd_fpath = f"hdfs://{basedir}/test_orc_writer.orc"
 

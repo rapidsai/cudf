@@ -48,7 +48,7 @@ exclude = [
     # TODO: Remove this in a follow-up where we fix __all__.
     "__init__.py",
 ]
-line-length = 88
+line-length = 79
 
 [tool.ruff.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py

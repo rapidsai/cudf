@@ -35,9 +35,13 @@ def dtype_can_compare_equal_to_other(dtype):
 
 def _check_isinstance(left, right, obj):
     if not isinstance(left, obj):
-        raise AssertionError(f"{obj} Expected type {obj}, found {type(left)} instead")
+        raise AssertionError(
+            f"{obj} Expected type {obj}, found {type(left)} instead"
+        )
     elif not isinstance(right, obj):
-        raise AssertionError(f"{obj} Expected type {obj}, found {type(right)} instead")
+        raise AssertionError(
+            f"{obj} Expected type {obj}, found {type(right)} instead"
+        )
 
 
 def raise_assert_detail(obj, message, left, right, diff=None):
@@ -53,7 +57,9 @@ def raise_assert_detail(obj, message, left, right, diff=None):
     raise AssertionError(msg)
 
 
-def _check_types(left, right, check_categorical=True, exact="equiv", obj="Index"):
+def _check_types(
+    left, right, check_categorical=True, exact="equiv", obj="Index"
+):
     if not exact or exact == "equiv":
         if (
             isinstance(left, cudf.RangeIndex)
@@ -77,9 +83,15 @@ def _check_types(left, right, check_categorical=True, exact="equiv", obj="Index"
             obj, "Class types are different", f"{type(left)}", f"{type(right)}"
         )
 
-    if exact and not isinstance(left, cudf.MultiIndex) and _is_categorical_dtype(left):
+    if (
+        exact
+        and not isinstance(left, cudf.MultiIndex)
+        and _is_categorical_dtype(left)
+    ):
         if left.dtype != right.dtype:
-            raise_assert_detail(obj, "Categorical difference", f"{left}", f"{right}")
+            raise_assert_detail(
+                obj, "Categorical difference", f"{left}", f"{right}"
+            )
 
 
 def assert_column_equal(
@@ -193,7 +205,11 @@ def assert_column_equal(
                     f"{obj} category", "Orders are different", msg1, msg2
                 )
 
-    if not check_dtype and _is_categorical_dtype(left) and _is_categorical_dtype(right):
+    if (
+        not check_dtype
+        and _is_categorical_dtype(left)
+        and _is_categorical_dtype(right)
+    ):
         left = left.astype(left.categories.dtype)
         right = right.astype(right.categories.dtype)
     columns_equal = False
@@ -211,18 +227,30 @@ def assert_column_equal(
     ):
         try:
             # nulls must be in the same places for all dtypes
-            columns_equal = cp.all(left.isnull().values == right.isnull().values)
+            columns_equal = cp.all(
+                left.isnull().values == right.isnull().values
+            )
 
-            if columns_equal and not check_exact and is_numeric_dtype(left.dtype):
+            if (
+                columns_equal
+                and not check_exact
+                and is_numeric_dtype(left.dtype)
+            ):
                 # non-null values must be the same
                 columns_equal = cp.allclose(
-                    left.apply_boolean_mask(left.isnull().unary_operator("not")).values,
+                    left.apply_boolean_mask(
+                        left.isnull().unary_operator("not")
+                    ).values,
                     right.apply_boolean_mask(
                         right.isnull().unary_operator("not")
                     ).values,
                 )
-                if columns_equal and (left.dtype.kind == right.dtype.kind == "f"):
-                    columns_equal = cp.all(is_nan(left).values == is_nan(right).values)
+                if columns_equal and (
+                    left.dtype.kind == right.dtype.kind == "f"
+                ):
+                    columns_equal = cp.all(
+                        is_nan(left).values == is_nan(right).values
+                    )
             else:
                 columns_equal = left.equals(right)
         except TypeError as e:
@@ -345,7 +373,9 @@ def assert_index_equal(
     # instance validation
     _check_isinstance(left, right, cudf.BaseIndex)
 
-    _check_types(left, right, exact=exact, check_categorical=check_categorical, obj=obj)
+    _check_types(
+        left, right, exact=exact, check_categorical=check_categorical, obj=obj
+    )
 
     if len(left) != len(right):
         raise_assert_detail(
@@ -391,7 +421,9 @@ def assert_index_equal(
 
     # metadata comparison
     if check_names and (left.name != right.name):
-        raise_assert_detail(obj, "name mismatch", f"{left.name}", f"{right.name}")
+        raise_assert_detail(
+            obj, "name mismatch", f"{left.name}", f"{right.name}"
+        )
 
 
 def assert_series_equal(
@@ -516,7 +548,9 @@ def assert_series_equal(
 
     # metadata comparison
     if check_names and (left.name != right.name):
-        raise_assert_detail(obj, "name mismatch", f"{left.name}", f"{right.name}")
+        raise_assert_detail(
+            obj, "name mismatch", f"{left.name}", f"{right.name}"
+        )
 
 
 def assert_frame_equal(

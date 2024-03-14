@@ -78,7 +78,9 @@ def _find_and_read_tzfile_tzdata(zone_name):
 
 
 def _read_tzfile_as_frame(tzdir, zone_name):
-    transition_times_and_offsets = make_timezone_transition_table(tzdir, zone_name)
+    transition_times_and_offsets = make_timezone_transition_table(
+        tzdir, zone_name
+    )
 
     if not transition_times_and_offsets:
         # this happens for UTC-like zones
@@ -89,11 +91,15 @@ def _read_tzfile_as_frame(tzdir, zone_name):
         )
 
     return DataFrame._from_data(
-        dict(zip(["transition_times", "offsets"], transition_times_and_offsets))
+        dict(
+            zip(["transition_times", "offsets"], transition_times_and_offsets)
+        )
     )
 
 
-def _find_ambiguous_and_nonexistent(data: DatetimeColumn, zone_name: str) -> Tuple:
+def _find_ambiguous_and_nonexistent(
+    data: DatetimeColumn, zone_name: str
+) -> Tuple:
     """
     Recognize ambiguous and nonexistent timestamps for the given timezone.
 
@@ -107,7 +113,9 @@ def _find_ambiguous_and_nonexistent(data: DatetimeColumn, zone_name: str) -> Tup
     """
     tz_data_for_zone = get_tz_data(zone_name)
     transition_times = tz_data_for_zone["transition_times"]
-    offsets = tz_data_for_zone["offsets"].astype(f"timedelta64[{data._time_unit}]")
+    offsets = tz_data_for_zone["offsets"].astype(
+        f"timedelta64[{data._time_unit}]"
+    )
 
     if len(offsets) == 1:  # no transitions
         return False, False
@@ -163,12 +171,17 @@ def localize(
     data: DatetimeColumn, zone_name: str, ambiguous, nonexistent
 ) -> DatetimeTZColumn:
     if ambiguous != "NaT":
-        raise NotImplementedError("Only ambiguous='NaT' is currently supported")
+        raise NotImplementedError(
+            "Only ambiguous='NaT' is currently supported"
+        )
     if nonexistent != "NaT":
-        raise NotImplementedError("Only nonexistent='NaT' is currently supported")
+        raise NotImplementedError(
+            "Only nonexistent='NaT' is currently supported"
+        )
     if isinstance(data, DatetimeTZColumn):
         raise ValueError(
-            "Already localized. " "Use `tz_convert` to convert between time zones."
+            "Already localized. "
+            "Use `tz_convert` to convert between time zones."
         )
     dtype = pd.DatetimeTZDtype(data._time_unit, zone_name)
     ambiguous, nonexistent = _find_ambiguous_and_nonexistent(data, zone_name)

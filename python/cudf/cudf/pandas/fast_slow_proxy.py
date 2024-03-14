@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.   # noqa: E501
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -267,7 +267,9 @@ def make_intermediate_proxy_type(
         # disallow __init__. An intermediate proxy type can only be
         # instantiated from (possibly chained) operations on a final
         # proxy type.
-        raise TypeError(f"Cannot directly instantiate object of type {type(self)}")
+        raise TypeError(
+            f"Cannot directly instantiate object of type {type(self)}"
+        )
 
     @property  # type: ignore
     def _fsproxy_state(self):
@@ -404,7 +406,8 @@ class _FastSlowAttribute:
             obj = owner
 
         if not (
-            isinstance(obj, _FastSlowProxy) or issubclass(type(obj), _FastSlowProxyMeta)
+            isinstance(obj, _FastSlowProxy)
+            or issubclass(type(obj), _FastSlowProxyMeta)
         ):
             # we only want to look up attributes on the underlying
             # fast/slow objects for instances of _FastSlowProxy or
@@ -574,7 +577,9 @@ class _FastSlowProxy:
                 return obj
 
             if not _is_function_or_method(obj):
-                return _maybe_wrap_result(obj, getattr, self._fsproxy_slow, name)
+                return _maybe_wrap_result(
+                    obj, getattr, self._fsproxy_slow, name
+                )
 
             @functools.wraps(obj)
             def _wrapped_private_slow(*args, **kwargs):
@@ -932,7 +937,8 @@ def _transform_arg(
             # transformed pieces
             # This handles scipy._lib._bunch._make_tuple_bunch
             args, kwargs = (
-                _transform_arg(a, attribute_name, seen) for a in arg.__getnewargs_ex__()
+                _transform_arg(a, attribute_name, seen)
+                for a in arg.__getnewargs_ex__()
             )
             obj = type(arg).__new__(type(arg), *args, **kwargs)
             if hasattr(obj, "__setstate__"):
@@ -954,7 +960,9 @@ def _transform_arg(
             return type(arg).__new__(type(arg), *args)
         else:
             # Hope we can just call the constructor with transformed entries.
-            return type(arg)(_transform_arg(a, attribute_name, seen) for a in args)
+            return type(arg)(
+                _transform_arg(a, attribute_name, seen) for a in args
+            )
     elif isinstance(arg, dict):
         return {
             _transform_arg(k, attribute_name, seen): _transform_arg(
@@ -963,7 +971,9 @@ def _transform_arg(
             for k, a in arg.items()
         }
     elif isinstance(arg, np.ndarray) and arg.dtype == "O":
-        transformed = [_transform_arg(a, attribute_name, seen) for a in arg.flat]
+        transformed = [
+            _transform_arg(a, attribute_name, seen) for a in arg.flat
+        ]
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
         if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
             order = "F"
@@ -1037,7 +1047,9 @@ def _maybe_wrap_result(result: Any, func: Callable, /, *args, **kwargs) -> Any:
     elif isinstance(result, Iterator):
         return (_maybe_wrap_result(r, lambda x: x, r) for r in result)
     elif _is_function_or_method(result):
-        return _MethodProxy._fsproxy_wrap(result, method_chain=(func, args, kwargs))
+        return _MethodProxy._fsproxy_wrap(
+            result, method_chain=(func, args, kwargs)
+        )
     else:
         return result
 

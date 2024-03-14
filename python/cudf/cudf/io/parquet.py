@@ -392,9 +392,14 @@ def _process_dataset(
             # Extract hive-partition keys, and make sure they
             # are ordered the same as they are in `partition_categories`
             if partition_categories:
-                raw_keys = ds._get_partition_keys(file_fragment.partition_expression)
+                raw_keys = ds._get_partition_keys(
+                    file_fragment.partition_expression
+                )
                 partition_keys.append(
-                    [(name, raw_keys[name]) for name in partition_categories.keys()]
+                    [
+                        (name, raw_keys[name])
+                        for name in partition_categories.keys()
+                    ]
                 )
 
             # Apply row-group filtering
@@ -414,7 +419,11 @@ def _process_dataset(
                     row_groups.append(filtered_row_groups)
                 else:
                     row_groups.append(
-                        [rg_id for rg_id in filtered_row_groups if rg_id in selection]
+                        [
+                            rg_id
+                            for rg_id in filtered_row_groups
+                            if rg_id in selection
+                        ]
                     )
 
     return (
@@ -530,7 +539,9 @@ def read_parquet(
         )
 
         if compression is not None:
-            raise ValueError("URL content-encoding decompression is not supported")
+            raise ValueError(
+                "URL content-encoding decompression is not supported"
+            )
         if isinstance(tmp_source, list):
             filepath_or_buffer.extend(tmp_source)
         else:
@@ -558,7 +569,8 @@ def read_parquet(
     if columns and filters:
         projected_columns = columns
         columns = sorted(
-            set(v[0] for v in itertools.chain.from_iterable(filters)) | set(columns)
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
         )
 
     # Convert parquet data to a cudf.DataFrame
@@ -641,7 +653,9 @@ def _apply_post_filters(
 
     def _handle_is(column: cudf.Series, value, *, negate) -> cudf.Series:
         if value not in {np.nan, None}:
-            raise TypeError("Value of 'is'/'is not' filter must be np.nan or None.")
+            raise TypeError(
+                "Value of 'is'/'is not' filter must be np.nan or None."
+            )
         return ~column.isna() if negate else column.isna()
 
     handlers: Dict[str, Callable] = {
@@ -673,7 +687,10 @@ def _apply_post_filters(
             (
                 reduce(
                     operator.and_,
-                    (handlers[op](df[column], value) for (column, op, value) in expr),
+                    (
+                        handlers[op](df[column], value)
+                        for (column, op, value) in expr
+                    ),
                 )
                 for expr in filters
             ),
@@ -682,7 +699,9 @@ def _apply_post_filters(
             return df[selection].reset_index(drop=True)
         return df[selection]
     except (KeyError, TypeError):
-        warnings.warn(f"Row-wise filtering failed in read_parquet for {filters}")
+        warnings.warn(
+            f"Row-wise filtering failed in read_parquet for {filters}"
+        )
         return df
 
 
@@ -709,7 +728,9 @@ def _parquet_to_frame(
     partition_meta = None
     partitioning = (dataset_kwargs or {}).get("partitioning", None)
     if hasattr(partitioning, "schema"):
-        partition_meta = cudf.DataFrame.from_arrow(partitioning.schema.empty_table())
+        partition_meta = cudf.DataFrame.from_arrow(
+            partitioning.schema.empty_table()
+        )
 
     # For partitioned data, we need a distinct read for each
     # unique set of partition keys. Therefore, we start by
@@ -756,7 +777,9 @@ def _parquet_to_frame(
                 # Not building categorical columns, so
                 # `value` is already what we want
                 _dtype = (
-                    partition_meta[name].dtype if partition_meta is not None else None
+                    partition_meta[name].dtype
+                    if partition_meta is not None
+                    else None
                 )
                 if pd.isna(value):
                     dfs[-1][name] = column_empty(
@@ -812,7 +835,10 @@ def _read_parquet(
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
-        if isinstance(filepaths_or_buffers, list) and len(filepaths_or_buffers) == 1:
+        if (
+            isinstance(filepaths_or_buffers, list)
+            and len(filepaths_or_buffers) == 1
+        ):
             filepaths_or_buffers = filepaths_or_buffers[0]
 
         return cudf.DataFrame.from_pandas(
@@ -901,7 +927,10 @@ def to_parquet(
             )
 
         partition_info = (
-            [(i, j - i) for i, j in zip(partition_offsets, partition_offsets[1:])]
+            [
+                (i, j - i)
+                for i, j in zip(partition_offsets, partition_offsets[1:])
+            ]
             if partition_offsets is not None
             else None
         )
@@ -928,7 +957,9 @@ def to_parquet(
         import pyarrow.parquet as pq
 
         if partition_offsets is not None:
-            warnings.warn("partition_offsets will be ignored when engine is not cudf")
+            warnings.warn(
+                "partition_offsets will be ignored when engine is not cudf"
+            )
 
         # If index is empty set it to the expected default value of True
         if index is None:
@@ -987,7 +1018,9 @@ def _get_partitioned(
     preserve_index=False,
     storage_options=None,
 ):
-    fs = ioutils._ensure_filesystem(fs, root_path, storage_options=storage_options)
+    fs = ioutils._ensure_filesystem(
+        fs, root_path, storage_options=storage_options
+    )
     fs.mkdirs(root_path, exist_ok=True)
 
     part_names, grouped_df, part_offsets = _get_groups_and_offsets(
@@ -998,7 +1031,10 @@ def _get_partitioned(
     metadata_file_paths = []
     for keys in part_names.itertuples(index=False):
         subdir = fs.sep.join(
-            [_hive_dirname(name, val) for name, val in zip(partition_cols, keys)]
+            [
+                _hive_dirname(name, val)
+                for name, val in zip(partition_cols, keys)
+            ]
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
@@ -1029,7 +1065,9 @@ def _get_groups_and_offsets(
     grouped_df.drop(columns=partition_cols, inplace=True)
     # Copy the entire keys df in one operation rather than using iloc
     part_names = (
-        part_keys.take(part_offsets[:-1]).to_pandas(nullable=True).to_frame(index=False)
+        part_keys.take(part_offsets[:-1])
+        .to_pandas(nullable=True)
+        .to_frame(index=False)
     )
     return part_names, grouped_df, part_offsets
 
@@ -1084,12 +1122,16 @@ def _parse_bytes(s):
     try:
         n = float(prefix)
     except ValueError as e:
-        raise ValueError("Could not interpret '%s' as a number" % prefix) from e
+        raise ValueError(
+            "Could not interpret '%s' as a number" % prefix
+        ) from e
 
     try:
         multiplier = BYTE_SIZES[suffix.lower()]
     except KeyError as e:
-        raise ValueError("Could not interpret '%s' as a byte unit" % suffix) from e
+        raise ValueError(
+            "Could not interpret '%s' as a byte unit" % suffix
+        ) from e
 
     result = n * multiplier
     return int(result)
@@ -1207,7 +1249,8 @@ class ParquetDatasetWriter:
         if max_file_size is not None:
             if file_name_prefix is None:
                 raise ValueError(
-                    "file_name_prefix cannot be None if max_file_size is " "passed"
+                    "file_name_prefix cannot be None if max_file_size is "
+                    "passed"
                 )
             self.max_file_size = _parse_bytes(max_file_size)
 
@@ -1232,7 +1275,10 @@ class ParquetDatasetWriter:
 
         for idx, keys in enumerate(part_names.itertuples(index=False)):
             subdir = fs.sep.join(
-                [f"{name}={val}" for name, val in zip(self.partition_cols, keys)]
+                [
+                    f"{name}={val}"
+                    for name, val in zip(self.partition_cols, keys)
+                ]
             )
             prefix = fs.sep.join([self.path, subdir])
             fs.mkdirs(prefix, exist_ok=True)
@@ -1250,9 +1296,9 @@ class ParquetDatasetWriter:
                     # if the file is too large, compute metadata for
                     # smaller chunks
                     parts = math.ceil(current_file_size / self.max_file_size)
-                    new_offsets = list(range(start, end, int((end - start) / parts)))[
-                        1:
-                    ]
+                    new_offsets = list(
+                        range(start, end, int((end - start) / parts))
+                    )[1:]
                     new_offsets.append(end)
                     num_chunks = len(new_offsets)
                     parts = len(new_offsets)
@@ -1269,24 +1315,31 @@ class ParquetDatasetWriter:
                     # Check if the same `new_file_name` exists and
                     # generate a `new_file_name`
                     while new_full_path in self._file_sizes and (
-                        self._file_sizes[new_full_path] + (current_file_size / parts)
+                        self._file_sizes[new_full_path]
+                        + (current_file_size / parts)
                     ) > (self.max_file_size):
                         curr_file_num += 1
-                        new_file_name = f"{self.filename}_{curr_file_num}.parquet"
+                        new_file_name = (
+                            f"{self.filename}_{curr_file_num}.parquet"
+                        )
                         new_full_path = fs.sep.join([prefix, new_file_name])
 
                     self._file_sizes[new_full_path] = self._file_sizes.get(
                         new_full_path, 0
                     ) + (current_file_size / parts)
                     full_paths.append(new_full_path)
-                    metadata_file_paths.append(fs.sep.join([subdir, new_file_name]))
+                    metadata_file_paths.append(
+                        fs.sep.join([subdir, new_file_name])
+                    )
                     num_chunks += 1
                     curr_file_num += 1
             else:
                 self.filename = self.filename or _generate_filename()
                 full_path = fs.sep.join([prefix, self.filename])
                 full_paths.append(full_path)
-                metadata_file_paths.append(fs.sep.join([subdir, self.filename]))
+                metadata_file_paths.append(
+                    fs.sep.join([subdir, self.filename])
+                )
                 full_offsets.append(current_offset[1])
 
         paths, metadata_file_paths, offsets = (
@@ -1372,7 +1425,9 @@ class ParquetDatasetWriter:
         self.close()
 
 
-def _default_open_file_options(open_file_options, columns, row_groups, fs=None):
+def _default_open_file_options(
+    open_file_options, columns, row_groups, fs=None
+):
     """
     Set default fields in open_file_options.
 

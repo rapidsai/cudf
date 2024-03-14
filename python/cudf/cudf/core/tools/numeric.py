@@ -97,16 +97,18 @@ def to_numeric(arg, errors="raise", downcast=None):
         raise ValueError("invalid error value specified")
     elif errors == "ignore":
         warnings.warn(
-            "errors='ignore' is deprecated and will raise in a future version. "
-            "Use to_numeric without passing `errors` and catch exceptions "
-            "explicitly instead",
+            "errors='ignore' is deprecated and will raise in "
+            "a future version. Use to_numeric without passing `errors` "
+            "and catch exceptions explicitly instead",
             FutureWarning,
         )
 
     if downcast not in {None, "integer", "signed", "unsigned", "float"}:
         raise ValueError("invalid downcasting method provided")
 
-    if not can_convert_to_column(arg) or (hasattr(arg, "ndim") and arg.ndim > 1):
+    if not can_convert_to_column(arg) or (
+        hasattr(arg, "ndim") and arg.ndim > 1
+    ):
         raise ValueError("arg must be column convertible")
 
     col = as_column(arg)
