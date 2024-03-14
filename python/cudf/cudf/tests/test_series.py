@@ -2769,3 +2769,18 @@ def test_series_to_pandas_arrow_type(scalar):
     result = ser.to_pandas(arrow_type=True)
     expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
     pd.testing.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize("axis", [None, 0, "index"])
+@pytest.mark.parametrize("data", [[1, 2], [1]])
+def test_squeeze(axis, data):
+    ser = cudf.Series(data)
+    result = ser.squeeze(axis=axis)
+    expected = ser.to_pandas().squeeze(axis=axis)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_squeeze_invalid_axis(axis):
+    with pytest.raises(ValueError):
+        cudf.Series([1]).squeeze(axis=axis)
