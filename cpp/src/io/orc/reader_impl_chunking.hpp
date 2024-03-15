@@ -298,28 +298,28 @@ range get_range(std::vector<range> const& input_ranges, range const& selected_ra
  * @brief Function that populates descriptors for either individual streams or chunks of column
  * data, but not both.
  *
- * This function is used in the global step, to gather information for streams of all stripes in
- * the data sources (when `stream_info` is present). Later on, it is used again to populate column
- * descriptors (`chunks` is present) during decompression and decoding. The two steps share
- * most of the execution path thus this function takes mutually exclusive parameters `stream_info`
- * or `chunks` depending on each use case.
+ * This function is firstly used in the global step, to gather information for streams of all
+ * stripes in the data sources (when `stream_info` is present). Later on, it is used again to
+ * populate column descriptors (`chunks` is present) during decompression and decoding. The two
+ * steps share most of the execution path thus this function takes mutually exclusive parameters
+ * `stream_info` or `chunks` depending on each use case.
  *
- * @param global_stripe_order The global index of the current decoding stripe
- * @param level The nested level of the current decoding column
- * @param stripeinfo The pointer to current decoding stripe's information
- * @param stripefooter The pointer to current decoding stripe's footer
+ * @param stripe_order The index of the current stripe, can be global index or local decoding index
+ * @param level The current processing nested level
+ * @param stripeinfo The pointer to current stripe's information
+ * @param stripefooter The pointer to current stripe's footer
  * @param orc2gdf The mapping from ORC column ids to gdf column ids
  * @param types The schema type
  * @param use_index Whether to use the row index for parsing
  * @param apply_struct_map Indicating if this is the root level
  * @param num_dictionary_entries The number of dictionary entries
- * @param local_stream_order For retrieving 0-based orders of streams in the current decoding step
+ * @param local_stream_order For retrieving 0-based orders of streams in the decoding step
  * @param stream_info The vector of streams' information
  * @param chunks The vector of column descriptors
  * @return The number of bytes in the gathered streams
  */
 std::size_t gather_stream_info_and_column_desc(
-  std::size_t global_stripe_order,
+  std::size_t stripe_order,
   std::size_t level,
   orc::StripeInformation const* stripeinfo,
   orc::StripeFooter const* stripefooter,
