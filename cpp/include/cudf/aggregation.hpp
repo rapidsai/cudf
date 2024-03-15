@@ -119,7 +119,7 @@ class aggregation {
     MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
     HISTOGRAM,        ///< compute frequency of each element
     MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation,
-    TOP_K,            ///< get the top-k values per group as a list column
+    TOP_K             ///< get the top-k values per group as a list column
   };
 
   aggregation() = delete;
@@ -531,13 +531,15 @@ std::unique_ptr<Base> make_collect_set_aggregation(
 /**
  * @brief Factory to create a TOP_K aggregation
  *
- * `TOP_K` returns a list column of the top-k elements in the
- * group/series. If a group has fewer than k elements, the whole group
- * is returned.
+ * `TOP_K` returns a list column of the first k elements in the
+ * group/series, each group sorted in @p order, with null elements
+ * comparing smaller than non-null. If a group has fewer than k
+ * elements, the whole groupis returned.
  *
  * @param k Number of values to return.
- * @param order What order should the groups be sorted in.
- * @return A TOP_K aggregation
+ * @param order Controls the sorting order of the group, i.e., whether
+ * to return the k smallest or largest elements.
+ * @return A TOP_K aggregation object.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_top_k_aggregation(size_type k, order order = order::DESCENDING);

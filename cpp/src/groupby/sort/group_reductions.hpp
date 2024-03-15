@@ -539,15 +539,15 @@ std::unique_ptr<column> group_correlation(column_view const& covariance,
                                           rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Internal API to calculate topk in each group of  @p values
+ * @brief Internal API to calculate topk in each group of @p values.
  *
  * @param values Grouped values to get top-k values from
  * @param group_sizes Number of elements per group
  * @param group_offsets Offsets of groups' starting points within @p values
- * @param num_groups Number of groups ( unique values in @p group_labels )
+ * @param num_groups Number of groups (unique values in @p group_labels)
  * @param k How many elements to take from the front of each group of @p values
  * @param order Sort order within each group (use ASCENDING for bottom-k, DESCENDING for top-k)
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_topk(column_view const& values,

@@ -397,6 +397,7 @@ void aggregate_result_functor::operator()<aggregation::TOP_K>(aggregation const&
                                       stream,
                                       mr));
 }
+
 template <>
 void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation const& agg)
 {
