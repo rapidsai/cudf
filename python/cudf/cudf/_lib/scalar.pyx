@@ -18,6 +18,12 @@ from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
 cimport cudf._lib.cpp.types as libcudf_types
+# We currently need this cimport because some of the implementations here
+# access the c_obj of the scalar, and because we need to be able to call
+# pylibcudf.Scalar.from_libcudf. Both of those are temporarily acceptable until
+# DeviceScalar is phased out entirely from cuDF Cython (at which point
+# cudf.Scalar will be directly backed by pylibcudf.Scalar).
+from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     list_scalar,
@@ -200,7 +206,7 @@ cdef class DeviceScalar:
         return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        return self.c_value.c_obj.get()
+        return (<pylibcudf.Scalar> self.c_value).c_obj.get()
 
     cpdef bool is_valid(self):
         """
@@ -223,12 +229,13 @@ cdef class DeviceScalar:
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
+        # Note: This line requires pylibcudf to be cimported
         s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
         s._set_dtype(dtype)
         return s
 
     @staticmethod
-    cdef DeviceScalar from_pylibcudf(pylibcudf.Scalar pscalar, dtype=None):
+    cdef DeviceScalar from_pylibcudf(pscalar, dtype=None):
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         s.c_value = pscalar
         s._set_dtype(dtype)
@@ -360,9 +367,13 @@ def _create_proxy_nat_scalar(dtype):
     if dtype.char in 'mM':
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:
-            _set_datetime64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
+            _set_datetime64_from_np_scalar(
+                (<pylibcudf.Scalar> result.c_value).c_obj, nat, dtype, True
+            )
         elif dtype.type == np.timedelta64:
-            _set_timedelta64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
+            _set_timedelta64_from_np_scalar(
+                (<pylibcudf.Scalar> result.c_value).c_obj, nat, dtype, True
+            )
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')
