@@ -40,7 +40,6 @@ __all__ = [
     "filling",
     "gpumemoryview",
     "groupby",
-    "interop",
     "join",
     "lists",
     "merge",

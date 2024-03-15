@@ -7,6 +7,7 @@ from libcpp.vector cimport vector
 from pyarrow cimport lib as pa
 
 from dataclasses import dataclass, field
+from functools import singledispatch
 
 from cudf._lib.cpp.interop cimport (
     column_metadata,
@@ -47,14 +48,13 @@ cdef column_metadata _metadata_to_libcudf(metadata):
 class ColumnMetadata:
     """Metadata associated with a column.
 
-    This is the Cython representation of :cpp:class:`cudf::column_metadata`.
+    This is the Python representation of :cpp:class:`cudf::column_metadata`.
     """
     name: str = ""
     children_meta: list[ColumnMetadata] = field(default_factory=list)
 
 
-# These functions are pure Python functions in anticipation of when we no
-# longer use pyarrow's Cython and instead just leverage the capsule interface.
+@singledispatch
 def from_arrow(pyarrow_object, *, DataType data_type=None):
     """Create a cudf object from a pyarrow object.
 
@@ -68,111 +68,109 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
     Union[Table, Scalar]
         The converted object of type corresponding to the input type in cudf.
     """
-    # Variables used in the Table block
-    cdef shared_ptr[pa.CTable] arrow_table
-    cdef unique_ptr[table] c_table_result
-
-    # Variables used in the Scalar block
-    cdef shared_ptr[pa.CScalar] arrow_scalar
-    cdef unique_ptr[scalar] c_scalar_result
-    cdef Scalar scalar_result
-    cdef type_id tid
-
-    if isinstance(pyarrow_object, pa.Table):
-        if data_type is not None:
-            raise ValueError("data_type may not be passed for tables")
-        arrow_table = pa.pyarrow_unwrap_table(pyarrow_object)
-
-        with nogil:
-            c_table_result = move(cpp_from_arrow(dereference(arrow_table)))
-
-        return Table.from_libcudf(move(c_table_result))
-    elif isinstance(pyarrow_object, pa.Scalar):
-        arrow_scalar = pa.pyarrow_unwrap_scalar(pyarrow_object)
-
-        with nogil:
-            c_scalar_result = move(cpp_from_arrow(dereference(arrow_scalar)))
-
-        scalar_result = Scalar.from_libcudf(move(c_scalar_result))
-
-        if scalar_result.type().id() != type_id.DECIMAL128:
-            if data_type is not None:
-                raise ValueError(
-                    "dtype may not be passed for non-decimal types"
-                )
-            return scalar_result
-
-        if data_type is None:
-            raise ValueError(
-                "Decimal scalars must be constructed with a dtype"
-            )
-
-        tid = data_type.id()
-
-        if tid == type_id.DECIMAL32:
-            scalar_result.c_obj.reset(
-                new fixed_point_scalar[decimal32](
-                    (
-                        <fixed_point_scalar[decimal128]*> scalar_result.c_obj.get()
-                    ).value(),
-                    scale_type(-pyarrow_object.type.scale),
-                    scalar_result.c_obj.get().is_valid()
-                )
-            )
-        elif tid == type_id.DECIMAL64:
-            scalar_result.c_obj.reset(
-                new fixed_point_scalar[decimal64](
-                    (
-                        <fixed_point_scalar[decimal128]*> scalar_result.c_obj.get()
-                    ).value(),
-                    scale_type(-pyarrow_object.type.scale),
-                    scalar_result.c_obj.get().is_valid()
-                )
-            )
-        elif tid != type_id.DECIMAL128:
-            raise ValueError(
-                "Decimal scalars may only be cast to decimals"
-            )
-
-        return scalar_result
-
     raise TypeError("from_arrow only accepts Table and Scalar objects")
 
 
+@from_arrow.register(pa.Table)
+def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
+    if data_type is not None:
+        raise ValueError("data_type may not be passed for tables")
+    cdef shared_ptr[pa.CTable] arrow_table = pa.pyarrow_unwrap_table(pyarrow_object)
+
+    cdef unique_ptr[table] c_result
+    with nogil:
+        c_result = move(cpp_from_arrow(dereference(arrow_table)))
+
+    return Table.from_libcudf(move(c_result))
+
+
+@from_arrow.register(pa.Scalar)
+def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
+    cdef shared_ptr[pa.CScalar] arrow_scalar = pa.pyarrow_unwrap_scalar(pyarrow_object)
+
+    cdef unique_ptr[scalar] c_result
+    with nogil:
+        c_result = move(cpp_from_arrow(dereference(arrow_scalar)))
+
+    cdef Scalar result = Scalar.from_libcudf(move(c_result))
+
+    if result.type().id() != type_id.DECIMAL128:
+        if data_type is not None:
+            raise ValueError(
+                "dtype may not be passed for non-decimal types"
+            )
+        return result
+
+    if data_type is None:
+        raise ValueError(
+            "Decimal scalars must be constructed with a dtype"
+        )
+
+    cdef type_id tid = data_type.id()
+
+    if tid == type_id.DECIMAL32:
+        result.c_obj.reset(
+            new fixed_point_scalar[decimal32](
+                (
+                    <fixed_point_scalar[decimal128]*> result.c_obj.get()
+                ).value(),
+                scale_type(-pyarrow_object.type.scale),
+                result.c_obj.get().is_valid()
+            )
+        )
+    elif tid == type_id.DECIMAL64:
+        result.c_obj.reset(
+            new fixed_point_scalar[decimal64](
+                (
+                    <fixed_point_scalar[decimal128]*> result.c_obj.get()
+                ).value(),
+                scale_type(-pyarrow_object.type.scale),
+                result.c_obj.get().is_valid()
+            )
+        )
+    elif tid != type_id.DECIMAL128:
+        raise ValueError(
+            "Decimal scalars may only be cast to decimals"
+        )
+
+    return result
+
+
+@singledispatch
 def to_arrow(cudf_object, metadata=None):
-    """Convert to a PyArrow Table.
+    """Convert to a PyArrow object.
 
     Parameters
     ----------
     metadata : list
         The metadata to attach to the columns of the table.
     """
-    # Variables used in the Table block
-    cdef shared_ptr[pa.CTable] c_table_result
-    cdef vector[column_metadata] c_table_metadata
-
-    # Variables used in the Scalar block
-    cdef shared_ptr[pa.CScalar] c_scalar_result
-    cdef column_metadata c_scalar_metadata
-
-    if isinstance(cudf_object, Table):
-        for meta in metadata:
-            c_table_metadata.push_back(_metadata_to_libcudf(meta))
-        with nogil:
-            c_table_result = move(
-                cpp_to_arrow((<Table> cudf_object).view(), c_table_metadata)
-            )
-
-        return pa.pyarrow_wrap_table(c_table_result)
-    elif isinstance(cudf_object, Scalar):
-        c_scalar_metadata = _metadata_to_libcudf(metadata)
-        with nogil:
-            c_scalar_result = move(
-                cpp_to_arrow(
-                    dereference((<Scalar> cudf_object).c_obj), c_scalar_metadata
-                )
-            )
-
-        return pa.pyarrow_wrap_scalar(c_scalar_result)
-
     raise TypeError("to_arrow only accepts Table and Scalar objects")
+
+
+@to_arrow.register(Table)
+def _to_arrow_table(cudf_object, metadata=None):
+    cdef vector[column_metadata] c_table_metadata
+    cdef shared_ptr[pa.CTable] c_table_result
+    for meta in metadata:
+        c_table_metadata.push_back(_metadata_to_libcudf(meta))
+    with nogil:
+        c_table_result = move(
+            cpp_to_arrow((<Table> cudf_object).view(), c_table_metadata)
+        )
+
+    return pa.pyarrow_wrap_table(c_table_result)
+
+
+@to_arrow.register(Scalar)
+def _to_arrow_scalar(cudf_object, metadata=None):
+    cdef column_metadata c_scalar_metadata = _metadata_to_libcudf(metadata)
+    cdef shared_ptr[pa.CScalar] c_scalar_result
+    with nogil:
+        c_scalar_result = move(
+            cpp_to_arrow(
+                dereference((<Scalar> cudf_object).c_obj), c_scalar_metadata
+            )
+        )
+
+    return pa.pyarrow_wrap_scalar(c_scalar_result)
