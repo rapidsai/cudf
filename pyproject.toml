@@ -1,22 +1,4 @@
-[tool.black]
-line-length = 79
-target-version = ["py39"]
-include = '\.py?$'
-force-exclude = '''
-/(
-    thirdparty |
-    \.eggs |
-    \.git |
-    \.hg |
-    \.mypy_cache |
-    \.tox |
-    \.venv |
-    _build |
-    buck-out |
-    build |
-    dist
-)/
-'''
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 [tool.pydocstyle]
 # Due to https://github.com/PyCQA/pydocstyle/issues/363, we must exclude rather
@@ -60,13 +42,15 @@ select = ["E", "F", "W"]
 ignore = [
     # whitespace before :
     "E203",
+    # line-too-long (due to Copyright header)
+    "E501",
 ]
 fixable = ["ALL"]
 exclude = [
     # TODO: Remove this in a follow-up where we fix __all__.
     "__init__.py",
 ]
-line-length = 88
+line-length = 79
 
 [tool.ruff.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
