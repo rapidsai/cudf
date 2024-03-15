@@ -748,7 +748,7 @@ void reader::impl::load_data()
 
     // If `data_read_limit` is too small, make sure not to pass 0 byte limit to compute splits.
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
-                                              (1.0 - chunk_read_data::load_limit_ratio));
+                                              chunk_read_data::decode_limit_ratio);
     return tmp > 0UL ? tmp : 1UL;
   }();
   _chunk_read_data.decode_stripe_ranges =

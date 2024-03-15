@@ -184,13 +184,18 @@ struct chunk_read_data {
   {
   }
 
-  // TODO: const for 3 below?
   std::size_t const
     output_size_limit;  // maximum size (in bytes) of an output chunk, or 0 for no limit
-  std::size_t const data_read_limit;       // approximate maximum size (in bytes) used for store
-                                           // intermediate data, or 0 for no limit
-  size_type const output_row_granularity;  // TODO
-  static double constexpr load_limit_ratio{0.4};  // TODO
+  std::size_t const data_read_limit;  // approximate maximum size (in bytes) used for store
+                                      // intermediate data, or 0 for no limit
+  size_type const output_row_granularity;
+
+  // Memory limits for loading data and decoding are computed as
+  // `load/decode_limit_ratio * data_read_limit`.
+  // This is to maintain the total memory usage to be **around** the given `data_read_limit`.
+  // Note that sum of these limits may not be `1.0`, and their values are set empirically.
+  static double constexpr load_limit_ratio{0.25};
+  static double constexpr decode_limit_ratio{0.6};
 
   // Chunks of stripes that can be load into memory such that their data size is within a size
   // limit.
