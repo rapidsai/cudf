@@ -19,6 +19,7 @@
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
 
+#include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -29,6 +30,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
+#include <algorithm>
 #include <tuple>
 
 namespace cudf::io::orc::detail {
@@ -250,6 +252,20 @@ void reader::impl::global_preprocess(read_mode mode)
   auto const& selected_stripes = _file_itm_data.selected_stripes;
   auto const num_total_stripes = selected_stripes.size();
   auto const num_levels        = _selected_columns.num_levels();
+
+  // Set up table for converting timestamp columns from local to UTC time
+  _file_itm_data.tz_table = [&] {
+    auto const has_timestamp_column = std::any_of(
+      _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto const& col_lvl) {
+        return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
+          return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
+        });
+      });
+
+    return has_timestamp_column ? cudf::detail::make_timezone_transition_table(
+                                    {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
+                                : std::make_unique<cudf::table>();
+  }();
 
   //
   // Pre allocate necessary memory for data processed in the other reading steps:

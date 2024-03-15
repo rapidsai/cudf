@@ -168,6 +168,9 @@ struct file_intermediate_data {
   // List of nested type columns at each nested level.
   std::vector<std::vector<orc_column_meta>> lvl_nested_cols;
 
+  // Table for converting timestamp columns from local to UTC time.
+  std::unique_ptr<cudf::table> tz_table;
+
   bool global_preprocessed{false};
 };
 

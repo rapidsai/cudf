@@ -22,7 +22,6 @@
 #include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/timezone.hpp>
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -736,23 +735,8 @@ void reader::impl::decompress_and_decode()
                "Number or rows to decode exceeds the column size limit.",
                std::overflow_error);
 
-  // TODO: move this to global process
-  // Set up table for converting timestamp columns from local to UTC time
-  auto const tz_table = [&, &writerTimezone = selected_stripes[0].stripe_footer->writerTimezone] {
-    auto const has_timestamp_column = std::any_of(
-      _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto const& col_lvl) {
-        return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
-          return _metadata.get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
-        });
-      });
-
-    return has_timestamp_column
-             ? cudf::detail::make_timezone_transition_table({}, writerTimezone, _stream)
-             : std::make_unique<cudf::table>();
-  }();
-  auto const tz_table_dptr = table_device_view::create(tz_table->view(), _stream);
-
-  auto const num_levels = _selected_columns.num_levels();
+  auto const tz_table_dptr = table_device_view::create(_file_itm_data.tz_table->view(), _stream);
+  auto const num_levels    = _selected_columns.num_levels();
   _out_buffers.resize(num_levels);
 
   // Column descriptors ('chunks').
