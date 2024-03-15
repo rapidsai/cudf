@@ -405,10 +405,11 @@ void reader::impl::global_preprocess(read_mode mode)
       lvl_stripe_sizes[level][stripe_global_idx] = stripe_level_size;
       this_stripe_size += stripe_level_size;
 
+      // Range of the streams in `stream_info` corresponding to this stripe at the current level.
       lvl_stripe_stream_ranges[level][stripe_global_idx] =
         range{stream_level_count, stream_info.size()};
 
-      // Coalesce consecutive streams into one read
+      // Coalesce consecutive streams into one read.
       while (not is_stripe_data_empty and stream_level_count < stream_info.size()) {
         auto const d_dst  = stream_info[stream_level_count].dst_pos;
         auto const offset = stream_info[stream_level_count].offset;
@@ -422,8 +423,11 @@ void reader::impl::global_preprocess(read_mode mode)
         }
         read_info.emplace_back(offset, d_dst, len, stripe.source_idx, stripe_global_idx, level);
       }
-    }
-    total_stripe_sizes[stripe_global_idx]      = {1, this_stripe_size};
+    }  // end loop level
+
+    total_stripe_sizes[stripe_global_idx] = {1, this_stripe_size};
+
+    // Range of all stream reads in `read_info` corresponding to this stripe, in all levels.
     stripe_data_read_ranges[stripe_global_idx] = range{last_read_size, read_info.size()};
   }
 
@@ -433,25 +437,11 @@ void reader::impl::global_preprocess(read_mode mode)
 
   _chunk_read_data.curr_load_stripe_range = 0;
 
-  // Load all chunks if there is no read limit.
+  // Load all stripes if there is no read limit.
   if (_chunk_read_data.data_read_limit == 0) {
-#ifdef LOCAL_TEST
-    printf("0 limit: output load stripe chunk = 0, %d\n", (int)num_total_stripes);
-#endif
-
-    _chunk_read_data.load_stripe_ranges = {range{0ul, num_total_stripes}};
+    _chunk_read_data.load_stripe_ranges = {range{0UL, num_total_stripes}};
     return;
   }
-
-#ifdef LOCAL_TEST
-  printf("total stripe sizes:\n");
-  int count{0};
-  for (auto& size : total_stripe_sizes) {
-    ++count;
-    printf("size: %ld, %zu\n", size.count, size.size_bytes);
-    if (count > 5) break;
-  }
-#endif
 
   // TODO: exec_policy_nosync
   // Compute the prefix sum of stripes' data sizes.
@@ -461,36 +451,17 @@ void reader::impl::global_preprocess(read_mode mode)
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
                          cumulative_size_sum{});
-
   total_stripe_sizes.device_to_host_sync(_stream);
-
-#ifdef LOCAL_TEST
-  count = 0;
-  printf("prefix sum total stripe sizes:\n");
-  for (auto& size : total_stripe_sizes) {
-    ++count;
-    printf("size: %ld, %zu\n", size.count, size.size_bytes);
-    if (count > 5) break;
-  }
-#endif
 
   auto const load_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
                                               chunk_read_data::load_limit_ratio);
-    // Make sure not to pass 0 byte limit (due to round-off) to compute splits.
+    // Make sure not to pass 0 byte limit (due to round-off) to `find_splits`.
     return tmp > 0UL ? tmp : 1UL;
   }();
+
   _chunk_read_data.load_stripe_ranges =
     find_splits<cumulative_size>(total_stripe_sizes, num_total_stripes, load_limit);
-
-#ifdef LOCAL_TEST
-  auto& splits = _chunk_read_data.load_stripe_ranges;
-  printf("------------\nSplits (/total num stripe = %d): \n", (int)num_total_stripes);
-  for (size_t idx = 0; idx < splits.size(); idx++) {
-    printf("{%ld, %ld}\n", splits[idx].begin, splits[idx].end);
-  }
-  fflush(stdout);
-#endif
 }
 
 // Load each chunk from `load_stripe_chunks`.
