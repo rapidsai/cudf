@@ -51,6 +51,7 @@ exclude = [
     "__init__.py",
 ]
 line-length = 79
+
 [tool.ruff.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
