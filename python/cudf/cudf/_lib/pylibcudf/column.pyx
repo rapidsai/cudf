@@ -13,6 +13,7 @@ from cudf._lib.cpp.column.column_factories cimport (
 )
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.unary cimport cast as libcudf_cast
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -139,14 +140,17 @@ cdef class Column:
         cdef size_type size = libcudf_col.get().size()
 
         # TODO: This behavior is consistent with how the legacy cuDF Python handled
-        # getting empty columns from libcudf, but long-term we should think about what
-        # we really want pylibcudf to do here.
-        if dtype.id() == type_id.EMPTY:
+        # getting empty or TIMESTAMP_DAYS columns from libcudf, but we should really
+        # think about what we really want pylibcudf to do here. Is there a
+        # higher-level layer where we should be handling this?
+        if dtype.id() == type_id.TIMESTAMP_DAYS:
+            dtype = DataType(type_id.TIMESTAMP_SECONDS)
+            libcudf_col.swap(libcudf_cast(libcudf_col.get().view(), dtype.c_obj))
+        elif dtype.id() == type_id.EMPTY:
             dtype = DataType(type_id.INT8)
-            with nogil:
-                libcudf_col.swap(
-                    make_numeric_column(dtype.c_obj, size, mask_state.ALL_NULL)
-                )
+            libcudf_col.swap(
+                make_numeric_column(dtype.c_obj, size, mask_state.ALL_NULL)
+            )
 
         cdef size_type null_count = libcudf_col.get().null_count()
 
