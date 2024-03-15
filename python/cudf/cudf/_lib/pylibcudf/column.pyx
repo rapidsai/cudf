@@ -7,13 +7,16 @@ from libcpp.utility cimport move
 from rmm._lib.device_buffer cimport DeviceBuffer
 
 from cudf._lib.cpp.column.column cimport column, column_contents
-from cudf._lib.cpp.column.column_factories cimport make_column_from_scalar
+from cudf._lib.cpp.column.column_factories cimport (
+    make_column_from_scalar,
+    make_numeric_column,
+)
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport size_type
 
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
-from .types cimport DataType, type_id
+from .types cimport DataType, mask_state, type_id
 from .utils cimport int_to_bitmask_ptr, int_to_void_ptr
 
 
@@ -134,6 +137,17 @@ cdef class Column:
         """
         cdef DataType dtype = DataType.from_libcudf(libcudf_col.get().type())
         cdef size_type size = libcudf_col.get().size()
+
+        # TODO: This behavior is consistent with how the legacy cuDF Python handled
+        # getting empty columns from libcudf, but long-term we should think about what
+        # we really want pylibcudf to do here.
+        if dtype.id() == type_id.EMPTY:
+            dtype = DataType(type_id.INT8)
+            with nogil:
+                libcudf_col.swap(
+                    make_numeric_column(dtype.c_obj, size, mask_state.ALL_NULL)
+                )
+
         cdef size_type null_count = libcudf_col.get().null_count()
 
         cdef column_contents contents = move(libcudf_col.get().release())
