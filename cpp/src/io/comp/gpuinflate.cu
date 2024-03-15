@@ -61,14 +61,6 @@ constexpr int log2_len_lut  = 10;
 constexpr int log2_dist_lut = 8;
 
 /**
- * @brief Intermediate arrays for building huffman tables
- */
-struct scratch_arr {
-  int16_t lengths[max_l_codes + max_d_codes];  ///< descriptor code lengths
-  int16_t offs[max_bits + 1];                  ///< offset in symbol table for each length (scratch)
-};
-
-/**
  * @brief Huffman LUTs for length and distance codes
  */
 struct lut_arr {
@@ -149,10 +141,7 @@ struct inflate_state_s {
   int16_t distcnt[max_bits + 1];
   int16_t distsym[max_d_codes];
 
-  union {
-    scratch_arr scratch;
-    lut_arr lut;
-  } u;
+  lut_arr lut;
 };
 
 inline __device__ unsigned int bfe(unsigned int source,
@@ -283,7 +272,6 @@ __device__ int construct(
   int symbol;  // current symbol when stepping through length[]
   int len;     // current length when stepping through counts[]
   int left;    // number of possible codes left of current length
-  int16_t* offs = s->u.scratch.offs;
 
   // count number of codes of each length
   for (len = 0; len <= max_bits; len++)
@@ -302,6 +290,7 @@ __device__ int construct(
   }                             // left > 0 means incomplete
 
   // generate offsets into symbol table for each length for sorting
+  int16_t offs[max_bits + 1];
   offs[1] = 0;
   for (len = 1; len < max_bits; len++)
     offs[len + 1] = offs[len] + counts[len];
@@ -324,7 +313,7 @@ __device__ int init_dynamic(inflate_state_s* s)
   int nlen, ndist, ncode; /* number of lengths in descriptor */
   int index;              /* index of lengths[] */
   int err;                /* construct() return value */
-  int16_t* lengths = s->u.scratch.lengths;
+  int16_t lengths[max_l_codes + max_d_codes];
 
   // get number of lengths in each table, check lengths
   nlen  = getbits(s, 5) + 257;
@@ -409,7 +398,7 @@ __device__ int init_dynamic(inflate_state_s* s)
  */
 __device__ int init_fixed(inflate_state_s* s)
 {
-  int16_t* lengths = s->u.scratch.lengths;
+  int16_t lengths[max_l_codes + max_d_codes];
   int symbol;
 
   // literal/length table
@@ -535,7 +524,7 @@ __device__ void decode_symbols(inflate_state_s* s)
     do {
       uint32_t next32 = __funnelshift_rc(bitbuf.x, bitbuf.y, bitpos);  // nextbits32(s);
       uint32_t len;
-      sym = s->u.lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
+      sym = s->lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
       if ((uint32_t)sym < (uint32_t)(0x100 << 5)) {
         // We can lookup a second symbol if this was a short literal
         len = sym & 0x1f;
@@ -543,7 +532,7 @@ __device__ void decode_symbols(inflate_state_s* s)
         b[batch_len++] = sym;
         next32 >>= len;
         bitpos += len;
-        sym = s->u.lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
+        sym = s->lut.lenlut[next32 & ((1 << log2_len_lut) - 1)];
       }
       if (sym > 0)  // short symbol
       {
@@ -598,7 +587,7 @@ __device__ void decode_symbols(inflate_state_s* s)
         }
         // get distance
         next32 = __funnelshift_rc(bitbuf.x, bitbuf.y, bitpos);  // nextbits32(s);
-        dist   = s->u.lut.distlut[next32 & ((1 << log2_dist_lut) - 1)];
+        dist   = s->lut.distlut[next32 & ((1 << log2_dist_lut) - 1)];
         if (dist > 0) {
           len  = dist & 0x1f;
           dext = bfe(dist, 20, 5);
@@ -682,7 +671,7 @@ __device__ void decode_symbols(inflate_state_s* s)
  */
 __device__ void init_length_lut(inflate_state_s* s, int t)
 {
-  int32_t* lut = s->u.lut.lenlut;
+  int32_t* lut = s->lut.lenlut;
 
   for (uint32_t bits = t; bits < (1 << log2_len_lut); bits += blockDim.x) {
     int16_t const* cnt     = s->lencnt;
@@ -730,7 +719,7 @@ __device__ void init_length_lut(inflate_state_s* s, int t)
  */
 __device__ void init_distance_lut(inflate_state_s* s, int t)
 {
-  int32_t* lut = s->u.lut.distlut;
+  int32_t* lut = s->lut.distlut;
 
   for (uint32_t bits = t; bits < (1 << log2_dist_lut); bits += blockDim.x) {
     int16_t const* cnt     = s->distcnt;
@@ -1066,6 +1055,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
   // Main loop decoding blocks
   while (!state->err) {
+    __syncthreads();
     if (!t) {
       // Thread0: read last flag, block type and custom huffman tables if any
       if (state->cur + (state->bitpos >> 3) >= state->end)
@@ -1120,7 +1110,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       copy_stored(state, t);
     }
     if (state->blast) break;
-    __syncthreads();
   }
   __syncthreads();
   // Output decompression status and length
