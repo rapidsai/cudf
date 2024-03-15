@@ -427,10 +427,9 @@ void reader::impl::global_preprocess(read_mode mode)
     return;
   }
 
-  // TODO: exec_policy_nosync
   // Compute the prefix sum of stripes' data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy(_stream),  // todo no sync
+  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
                          total_stripe_sizes.d_begin(),
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
@@ -622,10 +621,9 @@ void reader::impl::load_data()
     return;
   }
 
-  // TODO: exec_policy_nosync
   // Compute the prefix sum of stripe data sizes and rows.
   stripe_decomp_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy(_stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
                          stripe_decomp_sizes.d_begin(),
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),

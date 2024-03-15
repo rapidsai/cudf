@@ -129,7 +129,7 @@ rmm::device_buffer decompress_stripe_data(
   rmm::device_uvector<device_span<uint8_t>> inflate_out(
     num_compressed_blocks + num_uncompressed_blocks, stream);
   rmm::device_uvector<compression_result> inflate_res(num_compressed_blocks, stream);
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream),
                inflate_res.begin(),
                inflate_res.end(),
                compression_result{0, compression_status::FAILURE});
@@ -233,7 +233,7 @@ rmm::device_buffer decompress_stripe_data(
     // Check if any block has been failed to decompress.
     // Not using `thrust::any` or `thrust::count_if` to defer stream sync.
     thrust::for_each(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream),
       thrust::make_counting_iterator(std::size_t{0}),
       thrust::make_counting_iterator(inflate_res.size()),
       [results           = inflate_res.begin(),
@@ -332,7 +332,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
       if (child_valid_map_base != nullptr) {
         rmm::device_uvector<uint32_t> dst_idx(child_mask_len, stream);
         // Copy indexes at which the parent has valid value.
-        thrust::copy_if(rmm::exec_policy(stream),
+        thrust::copy_if(rmm::exec_policy_nosync(stream),
                         thrust::make_counting_iterator(0),
                         thrust::make_counting_iterator(0) + parent_mask_len,
                         dst_idx.begin(),
@@ -346,7 +346,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
         uint32_t* dst_idx_ptr = dst_idx.data();
         // Copy child valid bits from child column to valid indexes, this will merge both child
         // and parent null masks
-        thrust::for_each(rmm::exec_policy(stream),
+        thrust::for_each(rmm::exec_policy_nosync(stream),
                          thrust::make_counting_iterator(0),
                          thrust::make_counting_iterator(0) + dst_idx.size(),
                          [child_valid_map_base, dst_idx_ptr, merged_mask] __device__(auto idx) {
@@ -481,8 +481,7 @@ void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& 
   auto const d_prefix_sums_to_update = cudf::detail::make_device_uvector_async(
     prefix_sums_to_update, stream, rmm::mr::get_current_device_resource());
 
-  // TODO: exec_policy_nosync
-  thrust::for_each(rmm::exec_policy(stream),
+  thrust::for_each(rmm::exec_policy_nosync(stream),
                    d_prefix_sums_to_update.begin(),
                    d_prefix_sums_to_update.end(),
                    [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
@@ -661,9 +660,8 @@ std::vector<range> find_table_splits(table_view const& input,
   auto segmented_sizes =
     cudf::detail::hostdevice_vector<cumulative_size>(d_segmented_sizes->size(), stream);
 
-  // TODO: exec_policy_nosync
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream),
     thrust::make_counting_iterator(0),
     thrust::make_counting_iterator(d_segmented_sizes->size()),
     segmented_sizes.d_begin(),
@@ -679,8 +677,7 @@ std::vector<range> find_table_splits(table_view const& input,
                              static_cast<std::size_t>(size)};
     });
 
-  // TODO: exec_policy_nosync
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                          segmented_sizes.d_begin(),
                          segmented_sizes.d_end(),
                          segmented_sizes.d_begin(),
