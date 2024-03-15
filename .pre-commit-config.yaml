@@ -57,9 +57,6 @@ repos:
         # Use the cudf_kafka isort orderings in notebooks so that dask
         # and RAPIDS packages have their own sections.
         args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
-      - id: nbqa-black
-        # Explicitly specify the pyproject.toml at the repo root, not per-project.
-        args: ["--config=pyproject.toml"]
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v16.0.6
     hooks:
