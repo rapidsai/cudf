@@ -431,10 +431,14 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.num_columns() == target.num_columns(),
-               "Mismatch in number of input columns and target columns");
+               "Mismatch in number of input columns and target columns",
+               std::invalid_argument);
   CUDF_EXPECTS(boolean_mask.size() == target.num_rows(),
-               "Boolean mask size and number of target rows mismatch");
-  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
+               "Boolean mask size and number of target rows mismatch",
+               std::invalid_argument);
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8,
+               "Mask must be of Boolean type",
+               cudf::data_type_error);
   // Count valid pair of input and columns as per type at each column index i
   CUDF_EXPECTS(
     std::all_of(thrust::counting_iterator<size_type>(0),
@@ -442,7 +446,8 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                 [&input, &target](auto index) {
                   return ((input.column(index).type().id()) == (target.column(index).type().id()));
                 }),
-    "Type mismatch in input column and target column");
+    "Type mismatch in input column and target column",
+    cudf::data_type_error);
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
@@ -469,10 +474,14 @@ std::unique_ptr<table> boolean_mask_scatter(
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(static_cast<size_type>(input.size()) == target.num_columns(),
-               "Mismatch in number of scalars and target columns");
+               "Mismatch in number of scalars and target columns",
+               std::invalid_argument);
   CUDF_EXPECTS(boolean_mask.size() == target.num_rows(),
-               "Boolean mask size and number of target rows mismatch");
-  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8, "Mask must be of Boolean type");
+               "Boolean mask size and number of target rows mismatch",
+               std::invalid_argument);
+  CUDF_EXPECTS(boolean_mask.type().id() == type_id::BOOL8,
+               "Mask must be of Boolean type",
+               cudf::data_type_error);
 
   // Count valid pair of input and columns as per type at each column/scalar index i
   CUDF_EXPECTS(
@@ -481,7 +490,8 @@ std::unique_ptr<table> boolean_mask_scatter(
                 [&input, &target](auto index) {
                   return (input[index].get().type().id() == target.column(index).type().id());
                 }),
-    "Type mismatch in input scalar and target column");
+    "Type mismatch in input scalar and target column",
+    cudf::data_type_error);
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
