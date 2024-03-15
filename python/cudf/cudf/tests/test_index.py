@@ -1721,8 +1721,7 @@ def test_get_indexer_single_unique_numeric(idx, key, method):
 
     if (
         # `method` only applicable to monotonic index
-        not pi.is_monotonic_increasing
-        and method is not None
+        not pi.is_monotonic_increasing and method is not None
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,

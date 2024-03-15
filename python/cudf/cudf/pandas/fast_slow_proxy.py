@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.   # noqa: E501
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -437,9 +437,7 @@ class _FastSlowAttribute:
                 # methods because dir for the method won't be the same as for
                 # the pure unbound function, but the alternative is
                 # materializing the slow object when we don't really want to.
-                result._fsproxy_slow_dir = dir(
-                    slow_result_type
-                )  # type: ignore
+                result._fsproxy_slow_dir = dir(slow_result_type)  # type: ignore
 
         return result
 
