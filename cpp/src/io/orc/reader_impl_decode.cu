@@ -14,15 +14,6 @@
  * limitations under the License.
  */
 
-// #define PRINT_DEBUG
-
-// TODO: remove
-#include <cudf_test/debug_utilities.hpp>
-
-#include <cudf/concatenate.hpp>
-//
-//
-//
 #include "io/comp/gpuinflate.hpp"
 #include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/reader_impl.hpp"
@@ -36,7 +27,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -45,7 +35,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
@@ -55,7 +44,7 @@
 #include <thrust/transform.h>
 
 #include <algorithm>
-#include <iterator>
+#include <numeric>
 
 namespace cudf::io::orc::detail {
 
@@ -65,7 +54,7 @@ namespace {
  * @brief  Decompresses the stripe data, at stream granularity.
  *
  * Only the streams in the provided `stream_range` are decoded. That range is determined in
- * the previous steps, after splitting stripes into subsets to maintain memory usage to be
+ * the previous steps, after splitting stripes into ranges to maintain memory usage to be
  * under data read limit.
  *
  * @param loaded_stripe_range Range of stripes that are already loaded in memory
@@ -107,27 +96,14 @@ rmm::device_buffer decompress_stripe_data(
   for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
     auto const& info = stream_info[stream_idx];
 
-#ifdef LOCAL_TEST
-//    printf("collec stream  again [%d, %d, %d, %d]: dst = %lu,  length = %lu\n",
-//           (int)info.source.stripe_idx,
-//           (int)info.source.level,
-//           (int)info.source.orc_col_idx,
-//           (int)info.source.kind,
-//           info.dst_pos,
-//           info.length);
-//    fflush(stdout);
-#endif
-
     compinfo.push_back(gpu::CompressedStreamInfo(
       static_cast<uint8_t const*>(
         stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
       info.length));
 
-    auto const& cached_comp_info = compinfo_map.at(stream_source_info{
-      info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind});
-    auto& stream_comp_info       = compinfo.back();
-
+    auto const& cached_comp_info             = compinfo_map.at(info.source);
+    auto& stream_comp_info                   = compinfo.back();
     stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
     stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
     stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
@@ -141,52 +117,12 @@ rmm::device_buffer decompress_stripe_data(
     not((num_uncompressed_blocks + num_compressed_blocks > 0) and (total_decomp_size == 0)),
     "Inconsistent info on compression blocks");
 
-#ifdef XXX
-  std::size_t old_num_compressed_blocks   = num_compressed_blocks;
-  std::size_t old_num_uncompressed_blocks = num_uncompressed_blocks;
-  std::size_t old_total_decomp_size       = total_decomp_size;
-
-  num_compressed_blocks   = 0;
-  num_uncompressed_blocks = 0;
-  total_decomp_size       = 0;
-  for (std::size_t i = 0; i < compinfo.size(); ++i) {
-    num_compressed_blocks += compinfo[i].num_compressed_blocks;
-    num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
-    total_decomp_size += compinfo[i].max_uncompressed_size;
-
-    auto const& info = stream_info[i];
-    printf("compute info [%d, %d, %d, %d]:  %lu | %lu | %lu\n",
-           (int)info.source.stripe_idx,
-           (int)info.source.level,
-           (int)info.source.orc_cold_idx,
-           (int)info.source.kind,
-           (size_t)compinfo[i].num_compressed_blocks,
-           (size_t)compinfo[i].num_uncompressed_blocks,
-           compinfo[i].max_uncompressed_size);
-    fflush(stdout);
-  }
-
-  if (old_num_compressed_blocks != num_compressed_blocks ||
-      old_num_uncompressed_blocks != num_uncompressed_blocks ||
-      old_total_decomp_size != total_decomp_size) {
-    printf("invalid: %d - %d, %d - %d, %d - %d\n",
-           (int)old_num_compressed_blocks,
-           (int)num_compressed_blocks,
-           (int)old_num_uncompressed_blocks,
-           (int)num_uncompressed_blocks,
-           (int)old_total_decomp_size,
-           (int)total_decomp_size
-
-    );
-  }
-#endif
-
-  // Buffer needs to be padded.
-  // Required by `gpuDecodeOrcColumnData`.
+  // Buffer needs to be padded.This is required by `gpuDecodeOrcColumnData`.
   rmm::device_buffer decomp_data(
     cudf::util::round_up_safe(total_decomp_size, BUFFER_PADDING_MULTIPLE), stream);
 
   // If total_decomp_size is zero, the input data may be just empty.
+  // This is still a valid input, thus do not be panick.
   if (decomp_data.is_empty()) { return decomp_data; }
 
   rmm::device_uvector<device_span<uint8_t const>> inflate_in(
@@ -471,10 +407,6 @@ void decode_stream_data(int64_t num_dicts,
   auto const num_stripes = chunks.size().first;
   auto const num_columns = chunks.size().second;
 
-#ifdef LOCAL_TEST
-  printf("decode %d stripess \n", (int)num_stripes);
-#endif
-
   thrust::counting_iterator<int> col_idx_it(0);
   thrust::counting_iterator<int> stripe_idx_it(0);
 
@@ -495,29 +427,11 @@ void decode_stream_data(int64_t num_dicts,
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
   if (level > 0) {
-#ifdef LOCAL_TEST
-    printf("update_null_mask\n");
-#endif
-
     // Update nullmasks for children if parent was a struct and had null mask
     update_null_mask(chunks, out_buffers, stream, mr);
   }
 
   rmm::device_scalar<size_type> error_count(0, stream);
-  // Update the null map for child columns
-
-  // printf(
-  //   "num col: %d, num stripe: %d, skip row: %d, row_groups size: %d, row index stride: %d, "
-  //   "level: "
-  //   "%d\n",
-  //   (int)num_columns,
-  //   (int)num_stripes,
-  //   (int)skip_rows,
-  //   (int)row_groups.size().first,
-  //   (int)row_index_stride,
-  //   (int)level
-  // );
-
   gpu::DecodeOrcColumnData(chunks.base_device_ptr(),
                            global_dict.data(),
                            row_groups,
@@ -541,12 +455,6 @@ void decode_stream_data(int64_t num_dicts,
                       stripe_idx_it + num_stripes,
                       0,
                       [&](auto null_count, auto const stripe_idx) {
-                        // printf(
-                        //   "null count: %d => %d\n", (int)stripe_idx,
-                        //   (int)chunks[stripe_idx][col_idx].null_count);
-                        // printf("num child rows: %d \n",
-                        // (int)chunks[stripe_idx][col_idx].num_child_rows);
-
                         return null_count + chunks[stripe_idx][col_idx].null_count;
                       });
   });
@@ -721,17 +629,18 @@ void generate_offsets_for_list(host_span<list_buffer_data> buff_data, rmm::cuda_
 }
 
 /**
- * @brief Find the splits of the input table such that each split range has cumulative size less
+ * @brief Find the splits of the input table such that each split range of rows has data size less
  * than a given `size_limit`.
  *
  * The parameter `segment_length` is to control the granularity of splits. The output ranges will
  * always have numbers of rows that are multiple of this value, except the last range that contains
  * the remaining rows.
  *
- * Similar to `find_splits`, the given limit is just a soft limit. The function will never output
+ * Similar to `find_splits`, the given limit is just a soft limit. This function will never output
  * empty ranges, even they have sizes exceed the value of `size_limit`.
  *
  * @param input The input table to find splits
+ * @param segment_length Value to control granularity of the output ranges
  * @param size_limit A limit on the output size of each split range
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return A vector of ranges as splits of the input
@@ -741,13 +650,8 @@ std::vector<range> find_table_splits(table_view const& input,
                                      std::size_t size_limit,
                                      rmm::cuda_stream_view stream)
 {
-#ifdef LOCAL_TEST
-  printf("find table split, seg length = %d, limit = %d \n", segment_length, (int)size_limit);
-#endif
-
-  // If segment_length is zero: we don't have any limit on granularity.
-  // As such, set segment length equal to the number of rows.
-  if (segment_length == 0) { segment_length = input.num_rows(); }
+  CUDF_EXPECTS(size_limit > 0, "Invalid size limit");
+  CUDF_EXPECTS(segment_length > 0, "Invalid segment_length");
 
   // `segmented_row_bit_count` requires that `segment_length` is not larger than number of rows.
   segment_length = std::min(segment_length, input.num_rows());
@@ -776,20 +680,6 @@ std::vector<range> find_table_splits(table_view const& input,
                              static_cast<std::size_t>(size)};
     });
 
-#ifdef LOCAL_TEST
-  {
-    int count{0};
-    // TODO: remove:
-    segmented_sizes.device_to_host_sync(stream);
-    printf("total row sizes by segment = %d:\n", (int)segment_length);
-    for (auto& size : segmented_sizes) {
-      printf("size: %ld, %zu\n", size.count, size.size_bytes / CHAR_BIT);
-      if (count > 5) break;
-      ++count;
-    }
-  }
-#endif
-
   // TODO: exec_policy_nosync
   thrust::inclusive_scan(rmm::exec_policy(stream),
                          segmented_sizes.d_begin(),
@@ -808,6 +698,8 @@ void reader::impl::decompress_and_decode()
 {
   if (_file_itm_data.has_no_data()) { return; }
 
+  CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_range > 0, "There is not any stripe loaded.");
+
   auto const stripe_range =
     _chunk_read_data.decode_stripe_ranges[_chunk_read_data.curr_decode_stripe_range++];
   auto const stripe_start = stripe_range.begin;
@@ -815,15 +707,9 @@ void reader::impl::decompress_and_decode()
   auto const stripe_count = stripe_range.end - stripe_range.begin;
 
   // The start index of loaded stripes. They are different from decoding stripes.
-  CUDF_EXPECTS(_chunk_read_data.curr_load_stripe_range > 0, "There is not any stripe loaded.");
   auto const load_stripe_range =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1];
   auto const load_stripe_start = load_stripe_range.begin;
-
-#ifdef LOCAL_TEST
-  printf("\ndecoding data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
-  printf("\n loaded stripe start %d \n", (int)load_stripe_start);
-#endif
 
   auto const rows_to_skip      = _file_itm_data.rows_to_skip;
   auto const& selected_stripes = _file_itm_data.selected_stripes;
@@ -834,13 +720,6 @@ void reader::impl::decompress_and_decode()
     auto const& stripe     = selected_stripes[stripe_idx];
     auto const stripe_rows = static_cast<int64_t>(stripe.stripe_info->numberOfRows);
     rows_to_decode += stripe_rows;
-
-    // The rows to skip should never be larger than number of rows in the first loaded stripes.
-    // Technically, overflow here should never happen since `select_stripes` already checked it.
-    // This is just to make sure there was not any bug there.
-    if (rows_to_skip > 0) {
-      CUDF_EXPECTS(rows_to_skip < stripe_rows, "Invalid rows_to_skip computation.");
-    }
   }
 
   CUDF_EXPECTS(rows_to_decode > rows_to_skip, "Invalid rows_to_decode computation.");
@@ -851,18 +730,15 @@ void reader::impl::decompress_and_decode()
   _file_itm_data.rows_to_skip = 0;
   _file_itm_data.rows_to_read -= rows_to_decode;
 
-#ifdef LOCAL_TEST
-  printf("decode, skip = %ld, decode = %ld\n", rows_to_skip, rows_to_decode);
-#endif
-
   // Technically, overflow here should never happen because the `load_data()` step
   // already handled it by splitting the loaded stripe range into multiple decode ranges.
   CUDF_EXPECTS(rows_to_decode <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
                "Number or rows to decode exceeds the column size limit.",
                std::overflow_error);
 
+  // TODO: move this to global process
   // Set up table for converting timestamp columns from local to UTC time
-  auto const tz_table = [&, &selected_stripes = selected_stripes] {
+  auto const tz_table = [&, &writerTimezone = selected_stripes[0].stripe_footer->writerTimezone] {
     auto const has_timestamp_column = std::any_of(
       _selected_columns.levels.cbegin(), _selected_columns.levels.cend(), [&](auto const& col_lvl) {
         return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto const& col_meta) {
@@ -870,9 +746,9 @@ void reader::impl::decompress_and_decode()
         });
       });
 
-    return has_timestamp_column ? cudf::detail::make_timezone_transition_table(
-                                    {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
-                                : std::make_unique<cudf::table>();
+    return has_timestamp_column
+             ? cudf::detail::make_timezone_transition_table({}, writerTimezone, _stream)
+             : std::make_unique<cudf::table>();
   }();
   auto const tz_table_dptr = table_device_view::create(tz_table->view(), _stream);
 
@@ -888,17 +764,6 @@ void reader::impl::decompress_and_decode()
 
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-#ifdef LOCAL_TEST
-    printf("processing level = %d\n", (int)level);
-
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
-
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
     auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
 
@@ -915,15 +780,6 @@ void reader::impl::decompress_and_decode()
       cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>(stripe_count, num_level_columns, _stream);
     memset(chunks.base_host_ptr(), 0, chunks.size_bytes());
 
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
-
     const bool use_index =
       _config.use_index &&
       // Do stripes have row group index
@@ -936,10 +792,6 @@ void reader::impl::decompress_and_decode()
       // Only use if first row is aligned to a stripe boundary
       // TODO: Fix logic to handle unaligned rows
       (rows_to_skip == 0);
-
-#ifdef LOCAL_TEST
-    printf(" use_index: %d\n", (int)use_index);
-#endif
 
     null_count_prefix_sums[level].reserve(num_level_columns);
     std::generate_n(std::back_inserter(null_count_prefix_sums[level]), num_level_columns, [&]() {
@@ -954,16 +806,11 @@ void reader::impl::decompress_and_decode()
     std::size_t local_stream_order{0};
 
     for (auto stripe_idx = stripe_start; stripe_idx < stripe_end; ++stripe_idx) {
-#ifdef LOCAL_TEST
-      printf("processing stripe_idx = %d\n", (int)stripe_idx);
-#endif
-
       auto const& stripe       = selected_stripes[stripe_idx];
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
-      // Gather only for the decoding stripes, thus the first parameter (`global_stripe_order`)
-      // needs to be normalized to 0-based.
+      // The first parameter (`stripe_order`) must be normalized to 0-based.
       auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx - stripe_start,
                                                                       level,
                                                                       stripe_info,
@@ -978,26 +825,18 @@ void reader::impl::decompress_and_decode()
                                                                       &chunks);
 
       auto const is_stripe_data_empty = total_data_size == 0;
-#ifdef LOCAL_TEST
-      printf("is_stripe_data_empty: %d\n", (int)is_stripe_data_empty);
-#endif
-
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
       auto const dst_base =
         static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
-      auto const num_rows_per_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
+      auto const num_rows_in_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
 
       uint32_t const rowgroup_id = num_rowgroups;
       uint32_t const stripe_num_rowgroups =
-        use_index ? (num_rows_per_stripe + _metadata.get_row_index_stride() - 1) /
+        use_index ? (num_rows_in_stripe + _metadata.get_row_index_stride() - 1) /
                       _metadata.get_row_index_stride()
                   : 0;
-
-#ifdef LOCAL_TEST
-      printf(" num_rows_per_stripe : %d\n", (int)num_rows_per_stripe);
-#endif
 
       // Update chunks to reference streams pointers.
       for (std::size_t col_idx = 0; col_idx < num_level_columns; col_idx++) {
@@ -1010,7 +849,7 @@ void reader::impl::decompress_and_decode()
             : col_meta.child_start_row[(stripe_idx - stripe_start) * num_level_columns + col_idx];
         chunk.num_rows =
           (level == 0)
-            ? num_rows_per_stripe
+            ? num_rows_in_stripe
             : col_meta.num_child_rows_per_stripe[(stripe_idx - stripe_start) * num_level_columns +
                                                  col_idx];
         chunk.column_num_rows = (level == 0) ? rows_to_decode : col_meta.num_child_rows[col_idx];
@@ -1052,7 +891,7 @@ void reader::impl::decompress_and_decode()
         }
       }
 
-      stripe_start_row += num_rows_per_stripe;
+      stripe_start_row += num_rows_in_stripe;
       num_rowgroups += stripe_num_rowgroups;
     }
 
@@ -1080,15 +919,6 @@ void reader::impl::decompress_and_decode()
 
     // Setup row group descriptors if using indexes.
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
-#ifdef LOCAL_TEST
-      {
-        _stream.synchronize();
-        auto peak_mem = mem_stats_logger.peak_memory_usage();
-        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-      }
-#endif
-
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
                                                 stripe_count,
@@ -1108,15 +938,6 @@ void reader::impl::decompress_and_decode()
         stripe_data[i + stripe_start - load_stripe_start] = {};
       }
 
-#ifdef LOCAL_TEST
-      {
-        _stream.synchronize();
-        auto peak_mem = mem_stats_logger.peak_memory_usage();
-        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-      }
-#endif
-
     } else {
       if (row_groups.size().first) {
         chunks.host_to_device_async(_stream);
@@ -1133,33 +954,12 @@ void reader::impl::decompress_and_decode()
       }
     }
 
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
-
-    _out_buffers[level].clear();
-
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
+    _out_buffers[level].resize(0);
 
     for (std::size_t i = 0; i < column_types.size(); ++i) {
       bool is_nullable = false;
       for (std::size_t j = 0; j < stripe_count; ++j) {
         if (chunks[j][i].strm_len[gpu::CI_PRESENT] != 0) {
-#ifdef LOCAL_TEST
-          printf("   is nullable\n");
-#endif
           is_nullable = true;
           break;
         }
@@ -1168,38 +968,10 @@ void reader::impl::decompress_and_decode()
       auto const is_list_type = (column_types[i].id() == type_id::LIST);
       auto const n_rows       = (level == 0) ? rows_to_decode : col_meta.num_child_rows[i];
 
-#ifdef LOCAL_TEST
-      {
-        _stream.synchronize();
-        auto peak_mem = mem_stats_logger.peak_memory_usage();
-        std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-      }
-#endif
-
       // For list column, offset column will be always size + 1.
       _out_buffers[level].emplace_back(
         column_types[i], is_list_type ? n_rows + 1 : n_rows, is_nullable, _stream, _mr);
-
-#ifdef LOCAL_TEST
-      {
-        _stream.synchronize();
-        auto peak_mem = mem_stats_logger.peak_memory_usage();
-        std::cout << __LINE__ << ", buffer size: " << n_rows
-                  << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                  << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-      }
-#endif
     }
-
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
 
     decode_stream_data(num_dict_entries,
                        rows_to_skip,
@@ -1212,20 +984,7 @@ void reader::impl::decompress_and_decode()
                        _stream,
                        _mr);
 
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
-
     if (nested_cols.size()) {
-#ifdef LOCAL_TEST
-      printf("have nested col\n");
-#endif
-
       // Extract information to process nested child columns.
       scan_null_counts(chunks, null_count_prefix_sums[level], _stream);
 
@@ -1247,15 +1006,6 @@ void reader::impl::decompress_and_decode()
     }
   }  // end loop level
 
-#ifdef LOCAL_TEST
-  {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-  }
-#endif
-
   // Now generate a table from the decoded result.
   std::vector<std::unique_ptr<column>> out_columns;
   _out_metadata = get_meta_with_user_data();
@@ -1271,9 +1021,9 @@ void reader::impl::decompress_and_decode()
     });
   _chunk_read_data.decoded_table = std::make_unique<table>(std::move(out_columns));
 
-  // Free up memory.
+  // Free up temp memory used for decoding.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
-    _out_buffers[level].clear();
+    _out_buffers[level].resize(0);
 
     auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
@@ -1285,16 +1035,11 @@ void reader::impl::decompress_and_decode()
     }
   }
 
-#ifdef LOCAL_TEST
-  {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << __LINE__ << ", decomp and decode, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-  }
-#endif
-
+  // Output table range is reset to start from the first position.
   _chunk_read_data.curr_output_table_range = 0;
+
+  // Split the decoded table into ranges that be output into chunks having size within the given
+  // output size limit.
   _chunk_read_data.output_table_ranges =
     _chunk_read_data.output_size_limit == 0
       ? std::vector<range>{range{
@@ -1303,23 +1048,6 @@ void reader::impl::decompress_and_decode()
                           _chunk_read_data.output_row_granularity,
                           _chunk_read_data.output_size_limit,
                           _stream);
-
-#ifdef LOCAL_TEST
-  auto& splits = _chunk_read_data.output_table_ranges;
-  printf("------------\nSplits decoded table (/total num rows = %d): \n",
-         (int)_chunk_read_data.decoded_table->num_rows());
-  for (size_t idx = 0; idx < splits.size(); idx++) {
-    printf("{%ld, %ld}\n", splits[idx].begin, splits[idx].end);
-  }
-  fflush(stdout);
-
-  {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "decomp and decode, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-  }
-#endif
 }
 
 }  // namespace cudf::io::orc::detail
