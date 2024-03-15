@@ -8,7 +8,6 @@ from . cimport (
     copying,
     filling,
     groupby,
-    interop,
     join,
     lists,
     merge,

@@ -6,6 +6,8 @@ from libcpp.utility cimport move
 from libcpp.vector cimport vector
 from pyarrow cimport lib as pa
 
+from dataclasses import dataclass, field
+
 from cudf._lib.cpp.interop cimport (
     column_metadata,
     from_arrow as cpp_from_arrow,
@@ -25,35 +27,30 @@ from .table cimport Table
 from .types cimport DataType, type_id
 
 
-cdef class ColumnMetadata:
+cdef column_metadata _metadata_to_libcudf(metadata):
+    """Convert a ColumnMetadata object to C++ column_metadata.
+
+    Since this class is mutable and cheap, it is easier to create the C++
+    object on the fly rather than have it directly backing the storage for
+    the Cython class. Additionally, this structure restricts the dependency
+    on C++ types to just within this module, allowing us to make the module a
+    pure Python module (from an import sense, i.e. no pxd declarations).
+    """
+    cdef column_metadata c_metadata
+    c_metadata.name = metadata.name.encode()
+    for child_meta in metadata.children_meta:
+        c_metadata.children_meta.push_back(_metadata_to_libcudf(child_meta))
+    return c_metadata
+
+
+@dataclass
+class ColumnMetadata:
     """Metadata associated with a column.
 
     This is the Cython representation of :cpp:class:`cudf::column_metadata`.
-
-    Parameters
-    ----------
-    id : TypeId
-        The type's identifier
-    scale : int
-        The scale associated with the data. Only used for decimal data types.
     """
-    def __init__(self, name):
-        self.name = name
-        self.children_meta = []
-
-    cdef column_metadata to_libcudf(self):
-        """Convert to C++ column_metadata.
-
-        Since this class is mutable and cheap, it is easier to create the C++
-        object on the fly rather than have it directly backing the storage for
-        the Cython class.
-        """
-        cdef column_metadata c_metadata
-        cdef ColumnMetadata child_meta
-        c_metadata.name = self.name.encode()
-        for child_meta in self.children_meta:
-            c_metadata.children_meta.push_back(child_meta.to_libcudf())
-        return c_metadata
+    name: str = ""
+    children_meta: list[ColumnMetadata] = field(default_factory=list)
 
 
 # These functions are pure Python functions in anticipation of when we no
@@ -150,8 +147,6 @@ def to_arrow(cudf_object, metadata=None):
     metadata : list
         The metadata to attach to the columns of the table.
     """
-    cdef ColumnMetadata meta
-
     # Variables used in the Table block
     cdef shared_ptr[pa.CTable] c_table_result
     cdef vector[column_metadata] c_table_metadata
@@ -162,7 +157,7 @@ def to_arrow(cudf_object, metadata=None):
 
     if isinstance(cudf_object, Table):
         for meta in metadata:
-            c_table_metadata.push_back(meta.to_libcudf())
+            c_table_metadata.push_back(_metadata_to_libcudf(meta))
         with nogil:
             c_table_result = move(
                 cpp_to_arrow((<Table> cudf_object).view(), c_table_metadata)
@@ -170,8 +165,7 @@ def to_arrow(cudf_object, metadata=None):
 
         return pa.pyarrow_wrap_table(c_table_result)
     elif isinstance(cudf_object, Scalar):
-        meta = metadata
-        c_scalar_metadata = meta.to_libcudf()
+        c_scalar_metadata = _metadata_to_libcudf(metadata)
         with nogil:
             c_scalar_result = move(
                 cpp_to_arrow(

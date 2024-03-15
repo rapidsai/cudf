@@ -7,7 +7,6 @@ from rmm._lib.memory_resource cimport DeviceMemoryResource
 
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
-from .interop cimport ColumnMetadata
 from .types cimport DataType
 
 
