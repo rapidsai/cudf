@@ -2143,6 +2143,13 @@ def as_column(
         return as_column(
             np.asarray(view), dtype=dtype, nan_as_null=nan_as_null
         )
+    elif hasattr(arbitrary, "__array__"):
+        # e.g. test_cuda_array_interface_pytorch
+        try:
+            arbitrary = cupy.asarray(arbitrary)
+        except (ValueError, TypeError):
+            arbitrary = np.asarray(arbitrary)
+        return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
     # Start of arbitrary that's not handed above but dtype provided
     elif isinstance(dtype, pd.DatetimeTZDtype):
         raise NotImplementedError(
@@ -2200,10 +2207,7 @@ def as_column(
                 return cudf.core.column.ListColumn.from_sequences(arbitrary)
             raise
         return as_column(data, nan_as_null=nan_as_null)
-    elif (
-        not isinstance(arbitrary, (abc.Iterable, abc.Sequence))
-        or getattr(arbitrary, "ndim", 1) != 1
-    ):
+    elif not isinstance(arbitrary, (abc.Iterable, abc.Sequence)):
         # TODO: This validation should probably be done earlier?
         raise TypeError(
             f"{type(arbitrary).__name__} must be an iterable or sequence."
