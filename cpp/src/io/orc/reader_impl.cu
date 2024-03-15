@@ -14,45 +14,13 @@
  * limitations under the License.
  */
 
-// TODO: remove
-#include <cudf_test/debug_utilities.hpp>
-
-//
-//
-//
-#include "io/comp/gpuinflate.hpp"
-#include "io/comp/nvcomp_adapter.hpp"
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
-#include "io/utilities/config_utils.hpp"
 
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/timezone.hpp>
-#include <cudf/detail/transform.hpp>
-#include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/table/table.hpp>
-#include <cudf/utilities/bit.hpp>
-#include <cudf/utilities/error.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <cuda/functional>
-#include <thrust/copy.h>
-#include <thrust/fill.h>
-#include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/pair.h>
-#include <thrust/scan.h>
-#include <thrust/transform.h>
 
 #include <algorithm>
-#include <iterator>
 
 namespace cudf::io::orc::detail {
 
@@ -61,55 +29,33 @@ void reader::impl::prepare_data(read_mode mode)
   // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return; }
 
-#ifdef LOCAL_TEST
-  std::cout << "call global, skip = " << _config.skip_rows << std::endl;
-#endif
-
+  // This will be no-op if it was called before.
   global_preprocess(mode);
 
   if (!_chunk_read_data.more_table_chunk_to_output()) {
     if (!_chunk_read_data.more_stripe_to_decode() && _chunk_read_data.more_stripe_to_load()) {
-#ifdef LOCAL_TEST
-      printf("load more data\n\n");
-#endif
-
+      // Only load stripe data if:
+      //  - There is more stripe to load, and
+      //  - All loaded stripes were decoded, and
+      //  - All the decoded results were output.
       load_data();
     }
-
     if (_chunk_read_data.more_stripe_to_decode()) {
-#ifdef LOCAL_TEST
-      printf("decode more data\n\n");
-#endif
-
+      // Only decompress/decode the loaded stripes if:
+      //  - There are loaded stripes that were not decoded yet, and
+      //  - All the decoded results were output.
       decompress_and_decode();
     }
   }
-
-#ifdef LOCAL_TEST
-  printf("done load and decode data\n\n");
-#endif
 }
 
 table_with_metadata reader::impl::make_output_chunk()
 {
-#ifdef LOCAL_TEST
-  {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "start to make out, peak_memory_usage: " << peak_mem << "("
-              << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-  }
-#endif
-
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
 
-  // If no rows or stripes to read, return empty columns
+  // If no rows or stripes to read, return empty columns.
   if (!_chunk_read_data.more_table_chunk_to_output()) {
-#ifdef LOCAL_TEST
-    printf("has no next\n");
-#endif
-
     std::vector<std::unique_ptr<column>> out_columns;
     auto out_metadata = get_meta_with_user_data();
     std::transform(_selected_columns.levels[0].begin(),
@@ -128,43 +74,23 @@ table_with_metadata reader::impl::make_output_chunk()
     return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
   }
 
-  auto out_table = [&] {
+  auto const make_output_table = [&] {
     if (_chunk_read_data.output_table_ranges.size() == 1) {
-      // Must change the index of output range, so calling `has_next()` after that
-      // can return the correct answer.
+      // Must change the index of the current output range such that calling `has_next()` after
+      // this will return the correct answer (`false`, since there is only one range).
       _chunk_read_data.curr_output_table_range++;
-#ifdef LOCAL_TEST
-      printf("one chunk, no more table---------------------------------\n");
-#endif
-      // If there is no slicing, just hand over the decoded table.
+
+      // Just hand over the decoded table without slicing.
       return std::move(_chunk_read_data.decoded_table);
     }
 
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << "prepare to make out, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
-
+    // The range of rows in the decoded table to output.
     auto const out_range =
       _chunk_read_data.output_table_ranges[_chunk_read_data.curr_output_table_range++];
     auto const out_tview = cudf::detail::slice(
       _chunk_read_data.decoded_table->view(),
       {static_cast<size_type>(out_range.begin), static_cast<size_type>(out_range.end)},
       _stream)[0];
-
-#ifdef LOCAL_TEST
-    {
-      _stream.synchronize();
-      auto peak_mem = mem_stats_logger.peak_memory_usage();
-      std::cout << "done make out, peak_memory_usage: " << peak_mem << "("
-                << (peak_mem * 1.0) / (1024.0 * 1024.0) << " MB)" << std::endl;
-    }
-#endif
-
     auto output = std::make_unique<table>(out_tview, _stream, _mr);
 
     // If this is the last slice, we also delete the decoded table to free up memory.
@@ -173,25 +99,9 @@ table_with_metadata reader::impl::make_output_chunk()
     }
 
     return output;
-  }();
+  };
 
-#ifdef LOCAL_TEST
-  if (!_chunk_read_data.has_next()) {
-    static int count{0};
-    count++;
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "complete, " << count << ", peak_memory_usage: " << peak_mem
-              << " , MB = " << (peak_mem * 1.0) / (1024.0 * 1024.0) << std::endl;
-  } else {
-    _stream.synchronize();
-    auto peak_mem = mem_stats_logger.peak_memory_usage();
-    std::cout << "done, partial, peak_memory_usage: " << peak_mem
-              << " , MB = " << (peak_mem * 1.0) / (1024.0 * 1024.0) << std::endl;
-  }
-#endif
-
-  return {std::move(out_table), _out_metadata};
+  return {make_output_table(), table_metadata{_out_metadata} /*copy cached metadata*/};
 }
 
 table_metadata reader::impl::get_meta_with_user_data()
@@ -256,9 +166,6 @@ reader::impl::impl(std::size_t output_size_limit,
                    rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
-#ifdef LOCAL_TEST
-    mem_stats_logger(mr),
-#endif
     _config{options.get_timestamp_type(),
             options.is_enabled_use_index(),
             options.is_enabled_use_np_dtypes(),

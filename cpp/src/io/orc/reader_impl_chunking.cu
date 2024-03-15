@@ -188,8 +188,8 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   auto const end = start + cumulative_sizes.size();
 
   while (cur_count < total_count) {
-    int64_t split_pos =
-      thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit));
+    int64_t split_pos = static_cast<int64_t>(
+      thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
 
     // If we're past the end, or if the returned range has size exceeds the given size limit,
     // move back one position.
@@ -208,9 +208,9 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
       }
     }
 
-    // In case we have moved back too in the steps above, far beyond the last split point: that
-    // means we cannot find any range that has size fits within the given size limit.
-    // In such case, we need to move forward until we move pass the last output range.
+    // In case we have moved back too much in the steps above, far beyond the last split point, that
+    // means we could not find any range that has size fits within the given size limit.
+    // In such situations, we need to move forward until we move pass the last output range.
     while (split_pos < (static_cast<int64_t>(cumulative_sizes.size()) - 1) &&
            (split_pos < 0 || cumulative_sizes[split_pos].count <= cur_count)) {
       split_pos++;
@@ -227,7 +227,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
     }
   }
 
-  // If the last range has size smaller than `merge_threshold` percent of the second last one,
+  // If the last range has size smaller than `merge_threshold` the size of the second last one,
   // merge it with the second last one.
   // This is to prevent having too small trailing range.
   if (splits.size() > 1) {
@@ -243,6 +243,8 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   return splits;
 }
 
+// Since `find_splits` is a template function, we need to explicitly instantiate it so it can be
+// used outside of this TU.
 template std::vector<range> find_splits<cumulative_size>(host_span<cumulative_size const> sizes,
                                                          std::size_t total_count,
                                                          std::size_t size_limit);
@@ -264,7 +266,9 @@ void reader::impl::global_preprocess(read_mode mode)
   if (_file_itm_data.global_preprocessed) { return; }
   _file_itm_data.global_preprocessed = true;
 
-  // Load stripes's metadata.
+  //
+  // Load stripes' metadata:
+  //
   std::tie(
     _file_itm_data.rows_to_skip, _file_itm_data.rows_to_read, _file_itm_data.selected_stripes) =
     _metadata.select_stripes(
@@ -274,30 +278,15 @@ void reader::impl::global_preprocess(read_mode mode)
   CUDF_EXPECTS(
     mode == read_mode::CHUNKED_READ ||
       _file_itm_data.rows_to_read <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-    "Number or rows to read exceeds the column size limit in READ_ALL mode.",
+    "READ_ALL mode does not support reading number of rows more than cudf's column size limit.",
     std::overflow_error);
-
-#ifdef LOCAL_TEST
-  {
-    auto const skip_rows    = _config.skip_rows;
-    auto const num_rows_opt = _config.num_read_rows;
-    printf("input skip rows: %ld, num rows: %ld\n", skip_rows, num_rows_opt.value_or(-1l));
-    printf("actual skip rows: %ld, num rows: %ld\n",
-           _file_itm_data.rows_to_skip,
-           _file_itm_data.rows_to_read);
-  }
-#endif
 
   auto const& selected_stripes = _file_itm_data.selected_stripes;
   auto const num_total_stripes = selected_stripes.size();
   auto const num_levels        = _selected_columns.num_levels();
 
-#ifdef LOCAL_TEST
-  printf("num load stripe: %d\n", (int)num_total_stripes);
-#endif
-
   //
-  // Pre allocate necessary memory for data processed in the next steps:
+  // Pre allocate necessary memory for data processed in the other reading steps:
   //
   auto& stripe_data_read_ranges = _file_itm_data.stripe_data_read_ranges;
   stripe_data_read_ranges.resize(num_total_stripes);
@@ -319,6 +308,10 @@ void reader::impl::global_preprocess(read_mode mode)
 
   auto& read_info = _file_itm_data.data_read_info;
   auto& col_meta  = *_col_meta;
+
+  //
+  // Collect columns' types.
+  //
 
   for (std::size_t level = 0; level < num_levels; ++level) {
     lvl_stripe_sizes[level].resize(num_total_stripes);
@@ -372,10 +365,10 @@ void reader::impl::global_preprocess(read_mode mode)
   }
 
   //
-  // Load all stripes' metadata.
+  // Collect all data streams' information:
   //
 
-  // Collect total data size for all data streams in each stripe.
+  // Accumulate data size for data streams in each stripe.
   cudf::detail::hostdevice_vector<cumulative_size> total_stripe_sizes(num_total_stripes, _stream);
 
   for (std::size_t stripe_global_idx = 0; stripe_global_idx < num_total_stripes;
@@ -384,11 +377,10 @@ void reader::impl::global_preprocess(read_mode mode)
     auto const stripe_info   = stripe.stripe_info;
     auto const stripe_footer = stripe.stripe_footer;
 
-    std::size_t stripe_size{0};
+    std::size_t this_stripe_size{0};
     auto const last_read_size = read_info.size();
     for (std::size_t level = 0; level < num_levels; ++level) {
-      auto& stream_info  = _file_itm_data.lvl_stream_info[level];
-      auto& stripe_sizes = lvl_stripe_sizes[level];
+      auto& stream_info = _file_itm_data.lvl_stream_info[level];
 
       auto stream_level_count = stream_info.size();
       auto const stripe_level_size =
@@ -401,7 +393,7 @@ void reader::impl::global_preprocess(read_mode mode)
                                            false,  // use_index,
                                            level == 0,
                                            nullptr,  // num_dictionary_entries
-                                           nullptr,  // stream_processing_order
+                                           nullptr,  // local_stream_order
                                            &stream_info,
                                            std::nullopt  // chunks
         );
@@ -410,8 +402,8 @@ void reader::impl::global_preprocess(read_mode mode)
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      stripe_sizes[stripe_global_idx] = stripe_level_size;
-      stripe_size += stripe_level_size;
+      lvl_stripe_sizes[level][stripe_global_idx] = stripe_level_size;
+      this_stripe_size += stripe_level_size;
 
       lvl_stripe_stream_ranges[level][stripe_global_idx] =
         range{stream_level_count, stream_info.size()};
@@ -431,7 +423,7 @@ void reader::impl::global_preprocess(read_mode mode)
         read_info.emplace_back(offset, d_dst, len, stripe.source_idx, stripe_global_idx, level);
       }
     }
-    total_stripe_sizes[stripe_global_idx]      = {1, stripe_size};
+    total_stripe_sizes[stripe_global_idx]      = {1, this_stripe_size};
     stripe_data_read_ranges[stripe_global_idx] = range{last_read_size, read_info.size()};
   }
 

@@ -24,7 +24,6 @@
 #include <cudf/io/orc.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>  // TODO: remove
 
 #include <io/utilities/column_buffer.hpp>
 
@@ -33,35 +32,6 @@
 #include <vector>
 
 namespace cudf::io::orc::detail {
-
-#ifdef LOCAL_TEST
-class memory_stats_logger {
- public:
-  explicit memory_stats_logger(rmm::mr::device_memory_resource* mr) : existing_mr(mr)
-  {
-    printf("exist mr: %p\n", mr);
-
-    statistics_mr =
-      std::make_unique<rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>>(
-        existing_mr);
-
-    rmm::mr::set_current_device_resource(statistics_mr.get());
-  }
-
-  ~memory_stats_logger() { rmm::mr::set_current_device_resource(existing_mr); }
-
-  [[nodiscard]] size_t peak_memory_usage() const noexcept
-  {
-    return statistics_mr->get_bytes_counter().peak;
-  }
-
- private:
-  rmm::mr::device_memory_resource* existing_mr;
-  static inline std::unique_ptr<
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>>
-    statistics_mr;
-};
-#endif
 
 struct reader_column_meta;
 
@@ -72,6 +42,9 @@ class reader::impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
+   *
+   * This constructor will call the other constructor with `output_size_limit` and `data_read_limit`
+   * set to `0` and `output_row_granularity` set to `DEFAULT_OUTPUT_ROW_GRANULARITY`.
    *
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
@@ -84,7 +57,8 @@ class reader::impl {
                 rmm::mr::device_memory_resource* mr);
 
   /**
-   * @copydoc cudf::io::orc::detail::chunked_reader
+   * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
+   * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
    */
   explicit impl(std::size_t output_size_limit,
                 std::size_t data_read_limit,
@@ -93,6 +67,10 @@ class reader::impl {
                 rmm::cuda_stream_view stream,
                 rmm::mr::device_memory_resource* mr);
 
+  /**
+   * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
+   * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
+   */
   explicit impl(std::size_t output_size_limit,
                 std::size_t data_read_limit,
                 size_type output_row_granularity,
@@ -140,7 +118,7 @@ class reader::impl {
    * data streams of the selected columns in all stripes are generated. If the reader has a data
    * read limit, sizes of these streams are used to split the list of all stripes into multiple
    * subsets, each of which will be read into memory in the `load_data()` step. These subsets are
-   * computed such that memory usage will be capped around a fixed size limit.
+   * computed such that memory usage will be kept to be around a fixed size limit.
    *
    * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
@@ -184,10 +162,6 @@ class reader::impl {
   rmm::cuda_stream_view const _stream;
   rmm::mr::device_memory_resource* const _mr;
 
-#ifdef LOCAL_TEST
-  memory_stats_logger mem_stats_logger;
-#endif
-
   // Reader configs.
   struct {
     data_type timestamp_type;  // override output timestamp resolution
@@ -215,7 +189,7 @@ class reader::impl {
   std::vector<std::vector<cudf::io::detail::column_buffer>> _out_buffers;
 
   // The default value used for subdividing the decoded table for final output.
-  static constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
+  static inline constexpr size_type DEFAULT_OUTPUT_ROW_GRANULARITY = 10'000;
 };
 
 }  // namespace cudf::io::orc::detail
