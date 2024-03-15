@@ -138,7 +138,7 @@ cdef class DeviceScalar:
             pa_array = pa.array([pa.scalar(value, type=pa_type)])
 
         pa_table = pa.Table.from_arrays([pa_array], names=[""])
-        table = pylibcudf.Table.from_arrow(pa_table)
+        table = pylibcudf.interop.from_arrow(pa_table)
 
         column = table.columns()[0]
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
