@@ -1,5 +1,6 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from cython.operator cimport dereference
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -46,7 +47,9 @@ cdef class ColumnMetadata:
         return c_metadata
 
 
-cpdef Table from_arrow(pa.Table pyarrow_table):
+# These functions are pure Python functions in anticipation of when we no
+# longer use pyarrow's Cython and instead just leverage the capsule interface.
+def from_arrow(pyarrow_object):
     """Create a Table from a PyArrow Table.
 
     Parameters
@@ -59,19 +62,21 @@ cpdef Table from_arrow(pa.Table pyarrow_table):
     Table
         The converted Table.
     """
+    cdef shared_ptr[pa.CTable] arrow_table
+    cdef unique_ptr[table] c_table_result
 
-    cdef shared_ptr[pa.CTable] ctable = (
-        pa.pyarrow_unwrap_table(pyarrow_table)
-    )
-    cdef unique_ptr[table] c_result
+    if isinstance(pyarrow_object, pa.Table):
+        arrow_table = pa.pyarrow_unwrap_table(pyarrow_object)
 
-    with nogil:
-        c_result = move(cpp_from_arrow(ctable.get()[0]))
+        with nogil:
+            c_table_result = move(cpp_from_arrow(dereference(arrow_table)))
 
-    return Table.from_libcudf(move(c_result))
+        return Table.from_libcudf(move(c_table_result))
+
+    raise TypeError("from_arrow only accepts pyarrow.Table objects")
 
 
-cpdef pa.Table to_arrow(Table tbl, list metadata):
+def to_arrow(cudf_object, list metadata=None):
     """Convert to a PyArrow Table.
 
     Parameters
@@ -79,13 +84,19 @@ cpdef pa.Table to_arrow(Table tbl, list metadata):
     metadata : list
         The metadata to attach to the columns of the table.
     """
-    cdef shared_ptr[pa.CTable] c_result
+    cdef shared_ptr[pa.CTable] c_table_result
     cdef vector[column_metadata] c_metadata
     cdef ColumnMetadata meta
-    for meta in metadata:
-        c_metadata.push_back(meta.to_libcudf())
 
-    with nogil:
-        c_result = move(cpp_to_arrow(tbl.view(), c_metadata))
+    if isinstance(cudf_object, Table):
+        for meta in metadata:
+            c_metadata.push_back(meta.to_libcudf())
 
-    return pa.pyarrow_wrap_table(c_result)
+        with nogil:
+            c_table_result = move(
+                cpp_to_arrow((<Table> cudf_object).view(), c_metadata)
+            )
+
+        return pa.pyarrow_wrap_table(c_table_result)
+
+    raise TypeError("to_arrow only accepts Table objects")
