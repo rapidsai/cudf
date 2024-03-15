@@ -2076,6 +2076,11 @@ def as_column(
                 # TODO: Raise in these cases instead of downcasting to s?
                 new_type = f"{arbitrary.dtype.type.__name__}[s]"
                 arbitrary = arbitrary.astype(new_type)
+            elif time_unit == "generic":
+                # TODO: This should probably be in cudf.dtype
+                raise TypeError(
+                    f"{arbitrary.dtype.type.__name__} must have a unit specified"
+                )
 
             is_nat = np.isnat(arbitrary)
             mask = None
