@@ -74,7 +74,6 @@ TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_MoreSingle)
   run_test(input, output);
 }
 
-
 TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_DoubleInSingle)
 {
   std::string input  = R"({"A":'TEST"'})";
