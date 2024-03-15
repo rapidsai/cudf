@@ -464,7 +464,6 @@ void reader::impl::global_preprocess(read_mode mode)
     find_splits<cumulative_size>(total_stripe_sizes, num_total_stripes, load_limit);
 }
 
-// Load each chunk from `load_stripe_chunks`.
 void reader::impl::load_data()
 {
   if (_file_itm_data.has_no_data()) { return; }
@@ -475,16 +474,11 @@ void reader::impl::load_data()
   auto const stripe_end   = load_stripe_range.end;
   auto const stripe_count = stripe_end - stripe_start;
 
+  auto& lvl_stripe_data = _file_itm_data.lvl_stripe_data;
   auto const num_levels = _selected_columns.num_levels();
 
-#ifdef LOCAL_TEST
-  printf("\n\nloading data from stripe %d -> %d\n", (int)stripe_start, (int)stripe_end);
-#endif
-
-  auto& lvl_stripe_data = _file_itm_data.lvl_stripe_data;
-
   // Prepare the buffer to read raw data onto.
-  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+  for (std::size_t level = 0; level < num_levels; ++level) {
     auto& stripe_data = lvl_stripe_data[level];
     stripe_data.resize(stripe_count);
 
@@ -499,12 +493,12 @@ void reader::impl::load_data()
   // Load stripe data into memory:
   //
 
-  // After loading data from sources into host buffers, we need to transfer (async) data to device.
-  // Such host buffers need to be kept alive until we sync device.
+  // If we load data from sources into host buffers, we need to transfer (async) data to device
+  // memory. Such host buffers need to be kept alive until we sync the transfers.
   std::vector<std::unique_ptr<cudf::io::datasource::buffer>> host_read_buffers;
 
-  // If we load data directly from sources into device, we also need to the entire read tasks.
-  // Thus, we need to keep all read tasks alive and sync all together.
+  // If we load data directly from sources into device, the loads are also async.
+  // Thus, we need to make sure to sync all them at the end.
   std::vector<std::pair<std::future<std::size_t>, std::size_t>> read_tasks;
 
   auto const [read_begin, read_end] =
@@ -543,7 +537,7 @@ void reader::impl::load_data()
   // Split list of all stripes into subsets that be loaded separately without blowing up memory:
   //
 
-  // A map from stripe source into `CompressedStreamInfo*` pointer.
+  // A map from a stripe sources into `CompressedStreamInfo*` pointers.
   // These pointers are then used to retrieve stripe/level decompressed sizes for later
   // decompression and decoding.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
@@ -551,17 +545,20 @@ void reader::impl::load_data()
   // For estimating the decompressed sizes of the loaded stripes.
   cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
                                                                                _stream);
-  std::size_t num_loaded_stripes{0};
-  for (std::size_t stripe_idx = 0; stripe_idx < stripe_count; ++stripe_idx) {
-    auto const& stripe              = _file_itm_data.selected_stripes[stripe_idx];
-    auto const stripe_info          = stripe.stripe_info;
-    stripe_decomp_sizes[stripe_idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
-    num_loaded_stripes += stripe_info->numberOfRows;
+
+  // Number of rows in the loading stripes.
+  std::size_t num_loading_rows{0};
+
+  for (std::size_t idx = 0; idx < stripe_count; ++idx) {
+    auto const& stripe       = _file_itm_data.selected_stripes[idx + stripe_start];
+    auto const stripe_info   = stripe.stripe_info;
+    stripe_decomp_sizes[idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
+    num_loading_rows += stripe_info->numberOfRows;
   }
 
   auto& compinfo_map = _file_itm_data.compinfo_map;
 
-  for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
+  for (std::size_t level = 0; level < num_levels; ++level) {
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
     auto const num_columns  = _selected_columns.levels[level].size();
 
@@ -661,7 +658,7 @@ void reader::impl::load_data()
   if (_chunk_read_data.data_read_limit == 0 &&
       // In addition to not have any read limit, we also need to check if the the total number of
       // rows in the loaded stripes exceeds column size limit.
-      num_loaded_stripes < static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
+      num_loading_rows < static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
 #ifdef LOCAL_TEST
     printf("0 limit: output decode stripe chunk unchanged\n");
 #endif
