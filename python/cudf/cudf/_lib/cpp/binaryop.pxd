@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int32_t
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 
@@ -74,4 +75,13 @@ cdef extern from "cudf/binaryop.hpp" namespace "cudf" nogil:
         const column_view& rhs,
         const string& op,
         data_type output_type
+    ) except +cudf_exception_handler
+
+
+cdef extern from "cudf/binaryop.hpp" namespace "cudf::binops" nogil:
+    cdef bool is_supported_binaryop(
+        data_type output_type,
+        data_type lhs_type,
+        data_type rhs_type,
+        binary_operator op
     ) except +cudf_exception_handler
