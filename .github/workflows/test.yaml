@@ -125,5 +125,5 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      # pr mode uses the HEAD of the branch, which is also correct for nightlies
+      # main mode uses the HEAD of the branch, which is also correct for nightlies
       script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
