@@ -51,20 +51,6 @@ exclude = [
     "__init__.py",
 ]
 line-length = 79
-[tool.ruff.format]
-exclude = [
-    "thirdparty",
-    ".eggs",
-    ".git",
-    ".hg",
-    ".mypy_cache",
-    ".tox",
-    ".venv",
-    "_build",
-    "buck-out",
-    "build",
-    "dist",
-]
 [tool.ruff.per-file-ignores]
 # Lots of pytest implicitly injected attributes in conftest-patch.py
 "python/cudf/cudf/pandas/scripts/conftest-patch.py" = ["F821"]
