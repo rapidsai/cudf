@@ -223,7 +223,7 @@ class data_profile {
   std::map<cudf::type_id, distribution_params<double>> float_params;
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
   distribution_params<cudf::list_view> list_dist_desc{
-    cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
+    cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 64}, 2};
   distribution_params<cudf::struct_view> struct_dist_desc{
     {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
