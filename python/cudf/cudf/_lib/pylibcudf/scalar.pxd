@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -28,5 +28,3 @@ cdef class Scalar:
 
     @staticmethod
     cdef Scalar from_libcudf(unique_ptr[scalar] libcudf_scalar, dtype=*)
-
-    cpdef pa.Scalar to_arrow(self, ColumnMetadata metadata)

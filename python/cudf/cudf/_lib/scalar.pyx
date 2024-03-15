@@ -161,7 +161,7 @@ cdef class DeviceScalar:
         null_type = NaT if is_datetime or is_timedelta else NA
 
         metadata = gather_metadata({"": self.dtype})[0]
-        ps = self.c_value.to_arrow(metadata)
+        ps = pylibcudf.interop.to_arrow(self.c_value, metadata)
         if not ps.is_valid:
             return null_type
 
