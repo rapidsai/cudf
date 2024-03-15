@@ -1259,7 +1259,7 @@ def test_groupby_unsupported_columns():
     pdg = pdf.groupby("x").sum(numeric_only=True)
     # cudf does not yet support numeric_only, so our default is False (unlike
     # pandas, which defaults to inferring and throws a warning about it).
-    gdg = gdf.groupby("x").sum()
+    gdg = gdf.groupby("x").sum(numeric_only=True)
     assert_groupby_results_equal(pdg, gdg)
 
 
@@ -2158,7 +2158,9 @@ def test_groupby_list_columns_excluded():
     pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
 
     assert_groupby_results_equal(
-        pandas_result, gdf.groupby("a").mean(), check_dtype=False
+        pandas_result,
+        gdf.groupby("a").mean(numeric_only=True),
+        check_dtype=False,
     )
 
     assert_groupby_results_equal(

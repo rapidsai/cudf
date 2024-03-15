@@ -728,14 +728,26 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if numeric_only:
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
         if min_count != 0:
             raise NotImplementedError(
                 "min_count parameter is not implemented yet"
             )
+        if (
+            numeric_only
+            and hasattr(self.obj, "columns")
+            and hasattr(self.obj, "select_dtypes")
+            and hasattr(self, "__getitem__")
+        ):
+            all_columns = self.obj.columns
+            numeric_columns = self.obj.select_dtypes(include="number").columns
+            if set(all_columns) - set(numeric_columns):
+                # Need to drop non-numeric columns
+                columns = [
+                    c
+                    for c in self.obj.columns
+                    if c in numeric_columns and c not in self.grouping.names
+                ]
+                return self[columns].agg(op)
         return self.agg(op)
 
     def _scan(self, op: str, *args, **kwargs):
