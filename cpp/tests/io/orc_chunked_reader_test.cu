@@ -1470,7 +1470,5 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, test_chunk->view());
   }
 
-  printf("done local test\n");
-  fflush(stdout);
 #endif  // LOCAL_TEST
 }
