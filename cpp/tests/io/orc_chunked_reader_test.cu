@@ -1277,8 +1277,12 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
 
 TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
 {
-  int64_t constexpr num_rows    = 100'000'000l;
+  // `num_rows` should not be divisible by `stripe_size_rows`, to test the correctness of row
+  // selections.
+  int64_t constexpr num_rows    = 100'517'687l;
   int constexpr rows_per_stripe = 100'000;
+  static_assert(num_rows % rows_per_stripe != 0,
+                "`num_rows` should not be divisible by `stripe_size_rows`.");
 
   auto const it    = thrust::make_counting_iterator(0);
   auto const col   = int32s_col(it, it + num_rows);
@@ -1294,7 +1298,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
   // Verify metadata.
   auto const metadata = cudf::io::read_orc_metadata(cudf::io::source_info{filepath});
   EXPECT_EQ(metadata.num_rows(), num_rows);
-  EXPECT_EQ(metadata.num_stripes(), num_rows / rows_per_stripe);
+  EXPECT_EQ(metadata.num_stripes(), num_rows / rows_per_stripe + 1);
 
   int constexpr random_val = 123456;
 
