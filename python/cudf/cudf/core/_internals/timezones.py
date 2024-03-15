@@ -85,8 +85,9 @@ def _read_tzfile_as_frame(tzdir, zone_name):
     if not transition_times_and_offsets:
         # this happens for UTC-like zones
         min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
-        transition_times_and_offsets = as_column([min_date]), as_column(
-            [np.timedelta64(0, "s")]
+        transition_times_and_offsets = (
+            as_column([min_date]),
+            as_column([np.timedelta64(0, "s")]),
         )
 
     return DataFrame._from_data(
