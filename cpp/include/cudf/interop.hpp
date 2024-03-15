@@ -38,7 +38,21 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 
 struct DLManagedTensor;
+
+/**
+ * @brief C Struct to package up the Arrow data buffer pointers
+ * 
+ * See https://arrow.apache.org/docs/format/CDeviceDataInterface.html for
+ * full documentation.
+ */
 struct ArrowDeviceArray;
+
+/**
+ * @brief C Struct to represent an Arrow schema
+ * 
+ * See https://arrow.apache.org/docs/format/CDataInterface.html for full
+ * documentation.
+ */
 struct ArrowSchema;
 
 namespace cudf {
