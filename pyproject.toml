@@ -42,6 +42,8 @@ select = ["E", "F", "W"]
 ignore = [
     # whitespace before :
     "E203",
+    # line-too-long (due to Copyright header)
+    "E501",
 ]
 fixable = ["ALL"]
 exclude = [
