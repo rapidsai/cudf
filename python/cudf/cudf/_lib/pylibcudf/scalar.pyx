@@ -2,7 +2,6 @@
 
 from cython cimport no_gc_clear
 from libcpp.memory cimport unique_ptr
-from pyarrow cimport lib as pa
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
@@ -30,12 +29,11 @@ cdef class Scalar:
     def __cinit__(self, *args, **kwargs):
         self.mr = get_current_device_resource()
 
-    def __init__(self, pa.Scalar value=None):
+    def __init__(self, *args, **kwargs):
         # TODO: This case is not something we really want to
         # support, but it here for now to ease the transition of
         # DeviceScalar.
-        if value is not None:
-            raise ValueError("Scalar should be constructed with a factory")
+        raise ValueError("Scalar should be constructed with a factory")
 
     cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()

@@ -2,7 +2,6 @@
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
-from pyarrow cimport lib as pa
 
 from rmm._lib.memory_resource cimport DeviceMemoryResource
 
