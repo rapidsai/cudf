@@ -110,10 +110,10 @@ TEST_F(CountBitmaskTest, NegativeStart)
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
   EXPECT_THROW(
     cudf::detail::segmented_count_set_bits(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::out_of_range);
   EXPECT_THROW(
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::out_of_range);
 }
 
 TEST_F(CountBitmaskTest, StartLargerThanStop)
@@ -127,10 +127,10 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
   EXPECT_THROW(
     cudf::detail::segmented_count_set_bits(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::invalid_argument);
   EXPECT_THROW(
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::invalid_argument);
 }
 
 TEST_F(CountBitmaskTest, EmptyRange)

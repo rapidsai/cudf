@@ -302,7 +302,7 @@ TEST_F(SliceCornerCases, InvalidSetOfIndices)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{11, 12};
 
-  EXPECT_THROW(cudf::slice(col, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(col, indices), std::out_of_range);
 }
 
 TEST_F(SliceCornerCases, ImproperRange)
@@ -316,7 +316,7 @@ TEST_F(SliceCornerCases, ImproperRange)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{5, 4};
 
-  EXPECT_THROW(cudf::slice(col, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(col, indices), std::invalid_argument);
 }
 
 TEST_F(SliceCornerCases, NegativeOffset)
@@ -330,7 +330,7 @@ TEST_F(SliceCornerCases, NegativeOffset)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> indices{-1, 4};
 
-  EXPECT_THROW(cudf::slice(col, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(col, indices), std::out_of_range);
 }
 
 template <typename T>
@@ -437,7 +437,7 @@ TEST_F(SliceTableCornerCases, InvalidSetOfIndices)
 
   std::vector<cudf::size_type> indices{11, 12};
 
-  EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(src_table, indices), std::out_of_range);
 }
 
 TEST_F(SliceTableCornerCases, ImproperRange)
@@ -452,7 +452,7 @@ TEST_F(SliceTableCornerCases, ImproperRange)
 
   std::vector<cudf::size_type> indices{5, 4};
 
-  EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(src_table, indices), std::invalid_argument);
 }
 
 TEST_F(SliceTableCornerCases, NegativeOffset)
@@ -467,7 +467,7 @@ TEST_F(SliceTableCornerCases, NegativeOffset)
 
   std::vector<cudf::size_type> indices{-1, 4};
 
-  EXPECT_THROW(cudf::slice(src_table, indices), cudf::logic_error);
+  EXPECT_THROW(cudf::slice(src_table, indices), std::out_of_range);
 }
 
 TEST_F(SliceTableCornerCases, MiscOffset)

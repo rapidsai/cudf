@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,7 +37,7 @@ TEST_F(ScatterUntypedTests, ScatterMapTooLong)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), std::invalid_argument);
 }
 
 // Throw logic error if scatter map has nulls
@@ -50,7 +50,7 @@ TEST_F(ScatterUntypedTests, ScatterMapNulls)
   auto const source_table = cudf::table_view({source, source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), std::invalid_argument);
 }
 
 // Throw logic error if scatter map has nulls
@@ -65,7 +65,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarMapNulls)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table), std::invalid_argument);
 }
 
 // Throw logic error if source and target have different number of columns
@@ -78,7 +78,7 @@ TEST_F(ScatterUntypedTests, ScatterColumnNumberMismatch)
   auto const source_table = cudf::table_view({source});
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), std::invalid_argument);
 }
 
 // Throw logic error if number of scalars doesn't match number of columns
@@ -93,7 +93,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarColumnNumberMismatch)
 
   auto const target_table = cudf::table_view({target, target});
 
-  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table), std::invalid_argument);
 }
 
 // Throw logic error if source and target have different data types
@@ -106,7 +106,7 @@ TEST_F(ScatterUntypedTests, ScatterDataTypeMismatch)
   auto const source_table = cudf::table_view({source});
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_table, scatter_map, target_table), cudf::data_type_error);
 }
 
 // Throw logic error if source and target have different data types
@@ -121,7 +121,7 @@ TEST_F(ScatterUntypedTests, ScatterScalarDataTypeMismatch)
 
   auto const target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table), cudf::logic_error);
+  EXPECT_THROW(cudf::scatter(source_vector, scatter_map, target_table), cudf::data_type_error);
 }
 
 template <typename T>
@@ -589,7 +589,7 @@ TEST_F(BooleanMaskScatterFails, SourceAndTargetTypeMismatch)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::data_type_error);
 }
 
 TEST_F(BooleanMaskScatterFails, BooleanMaskTypeMismatch)
@@ -601,7 +601,7 @@ TEST_F(BooleanMaskScatterFails, BooleanMaskTypeMismatch)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::data_type_error);
 }
 
 TEST_F(BooleanMaskScatterFails, BooleanMaskTargetSizeMismatch)
@@ -613,7 +613,7 @@ TEST_F(BooleanMaskScatterFails, BooleanMaskTargetSizeMismatch)
   auto source_table = cudf::table_view({source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), std::invalid_argument);
 }
 
 TEST_F(BooleanMaskScatterFails, NumberOfColumnMismatch)
@@ -625,7 +625,7 @@ TEST_F(BooleanMaskScatterFails, NumberOfColumnMismatch)
   auto source_table = cudf::table_view({source, source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), std::invalid_argument);
 }
 
 TEST_F(BooleanMaskScatterFails, MoreTruesInMaskThanSourceSize)
@@ -637,7 +637,7 @@ TEST_F(BooleanMaskScatterFails, MoreTruesInMaskThanSourceSize)
   auto source_table = cudf::table_view({source, source});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(source_table, target_table, mask), std::invalid_argument);
 }
 
 template <typename T>
@@ -768,7 +768,7 @@ TEST_F(BooleanMaskScatterScalarFails, SourceAndTargetTypeMismatch)
     {true, false, false, false, true, true, false, true, true, false});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::data_type_error);
 }
 
 TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTypeMismatch)
@@ -782,7 +782,7 @@ TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTypeMismatch)
     {true, false, false, false, true, true, false, true, true, false});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::data_type_error);
 }
 
 TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTargetSizeMismatch)
@@ -796,7 +796,7 @@ TEST_F(BooleanMaskScatterScalarFails, BooleanMaskTargetSizeMismatch)
     {true, false, false, false, true, true, false, true, true});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), std::invalid_argument);
 }
 
 TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
@@ -811,7 +811,7 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
     {true, false, false, false, true, true, false, true, true});
   auto target_table = cudf::table_view({target});
 
-  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(scalar_vect, target_table, mask), std::invalid_argument);
 }
 
 template <typename T>

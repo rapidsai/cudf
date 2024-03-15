@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -368,7 +368,7 @@ TEST_F(SplitCornerCases, InvalidSetOfIndices)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> splits{11, 12};
 
-  EXPECT_THROW(cudf::split(col, splits), cudf::logic_error);
+  EXPECT_THROW(cudf::split(col, splits), std::out_of_range);
 }
 
 TEST_F(SplitCornerCases, ImproperRange)
@@ -382,7 +382,7 @@ TEST_F(SplitCornerCases, ImproperRange)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> splits{5, 4};
 
-  EXPECT_THROW(cudf::split(col, splits), cudf::logic_error);
+  EXPECT_THROW(cudf::split(col, splits), std::invalid_argument);
 }
 
 TEST_F(SplitCornerCases, NegativeValue)
@@ -396,7 +396,7 @@ TEST_F(SplitCornerCases, NegativeValue)
     create_fixed_columns<int8_t>(start, size, valids);
   std::vector<cudf::size_type> splits{-1, 4};
 
-  EXPECT_THROW(cudf::split(col, splits), cudf::logic_error);
+  EXPECT_THROW(cudf::split(col, splits), std::invalid_argument);
 }
 
 // common functions for testing split/contiguous_split
@@ -491,7 +491,7 @@ void split_invalid_indices(SplitFunc Split)
 
   std::vector<cudf::size_type> splits{11, 12};
 
-  EXPECT_THROW(Split(src_table, splits), cudf::logic_error);
+  EXPECT_THROW(Split(src_table, splits), std::out_of_range);
 }
 
 template <typename SplitFunc>
@@ -507,7 +507,7 @@ void split_improper_range(SplitFunc Split)
 
   std::vector<cudf::size_type> splits{5, 4};
 
-  EXPECT_THROW(Split(src_table, splits), cudf::logic_error);
+  EXPECT_THROW(Split(src_table, splits), std::invalid_argument);
 }
 
 template <typename SplitFunc>
@@ -523,7 +523,7 @@ void split_negative_value(SplitFunc Split)
 
   std::vector<cudf::size_type> splits{-1, 4};
 
-  EXPECT_THROW(Split(src_table, splits), cudf::logic_error);
+  EXPECT_THROW(Split(src_table, splits), std::invalid_argument);
 }
 
 template <typename SplitFunc, typename CompareFunc>
@@ -2296,7 +2296,7 @@ TEST_F(ContiguousSplitTableCornerCases, SplitEmpty)
   }
 
   {
-    EXPECT_THROW(cudf::contiguous_split(sliced[0], {1}), cudf::logic_error);
+    EXPECT_THROW(cudf::contiguous_split(sliced[0], {1}), std::out_of_range);
   }
 }
 
