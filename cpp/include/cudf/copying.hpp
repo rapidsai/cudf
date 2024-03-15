@@ -353,7 +353,7 @@ void copy_range_in_place(column_view const& source,
  * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws cudf::out_of_range for invalid range (if
+ * @throws std::out_of_range for invalid range (if
  * @p source_begin > @p source_end, @p source_begin < 0,
  * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
  * @p target_begin < 0, target_begin >= @p target.size(), or
