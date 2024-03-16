@@ -170,6 +170,7 @@ def to_arrow(cudf_object, metadata=None):
 def _to_arrow_table(cudf_object, metadata=None):
     if metadata is None:
         metadata = [ColumnMetadata() for _ in range(len(cudf_object.columns()))]
+    metadata = [ColumnMetadata(m) if isinstance(m, str) else m for m in metadata]
     cdef vector[column_metadata] c_table_metadata
     cdef shared_ptr[pa.CTable] c_table_result
     for meta in metadata:
@@ -184,8 +185,11 @@ def _to_arrow_table(cudf_object, metadata=None):
 
 @to_arrow.register(Scalar)
 def _to_arrow_scalar(cudf_object, metadata=None):
+    # Note that metadata for scalars is primarily important for preserving
+    # information on nested types since names are otherwise irrelevant.
     if metadata is None:
         metadata = ColumnMetadata()
+    metadata = ColumnMetadata(metadata) if isinstance(metadata, str) else metadata
     cdef column_metadata c_scalar_metadata = _metadata_to_libcudf(metadata)
     cdef shared_ptr[pa.CScalar] c_scalar_result
     with nogil:
@@ -203,4 +207,5 @@ def _to_arrow_array(cudf_object, metadata=None):
     """Create a PyArrow array from a pylibcudf column."""
     if metadata is None:
         metadata = ColumnMetadata()
+    metadata = ColumnMetadata(metadata) if isinstance(metadata, str) else metadata
     return to_arrow(Table([cudf_object]), [metadata])[0]
