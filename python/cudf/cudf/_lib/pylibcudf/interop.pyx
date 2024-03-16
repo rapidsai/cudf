@@ -9,6 +9,8 @@ from pyarrow cimport lib as pa
 from dataclasses import dataclass, field
 from functools import singledispatch
 
+from pyarrow import lib as pa
+
 from cudf._lib.cpp.interop cimport (
     column_metadata,
     from_arrow as cpp_from_arrow,
@@ -23,6 +25,7 @@ from cudf._lib.cpp.wrappers.decimals cimport (
     scale_type,
 )
 
+from .column cimport Column
 from .scalar cimport Scalar
 from .table cimport Table
 from .types cimport DataType, type_id
@@ -60,7 +63,7 @@ def from_arrow(pyarrow_object, *, DataType data_type=None):
 
     Parameters
     ----------
-    pyarrow_object : Union[pyarrow.Table, pyarrow.Scalar]
+    pyarrow_object : Union[pyarrow.Array, pyarrow.Table, pyarrow.Scalar]
         The PyArrow object to convert.
 
     Returns
@@ -136,20 +139,37 @@ def _from_arrow_scalar(pyarrow_object, *, DataType data_type=None):
     return result
 
 
+@from_arrow.register(pa.Array)
+def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
+    if data_type is not None:
+        raise ValueError("data_type may not be passed for arrays")
+    pa_table = pa.table([pyarrow_object], [""])
+    return from_arrow(pa_table).columns()[0]
+
+
 @singledispatch
 def to_arrow(cudf_object, metadata=None):
     """Convert to a PyArrow object.
 
     Parameters
     ----------
+    cudf_object : Union[Column, Table, Scalar]
+        The cudf object to convert.
     metadata : list
         The metadata to attach to the columns of the table.
+
+    Returns
+    -------
+    Union[pyarrow.Array, pyarrow.Table, pyarrow.Scalar]
+        The converted object of type corresponding to the input type in PyArrow.
     """
     raise TypeError("to_arrow only accepts Table and Scalar objects")
 
 
 @to_arrow.register(Table)
 def _to_arrow_table(cudf_object, metadata=None):
+    if metadata is None:
+        metadata = [ColumnMetadata() for _ in range(len(cudf_object.columns()))]
     cdef vector[column_metadata] c_table_metadata
     cdef shared_ptr[pa.CTable] c_table_result
     for meta in metadata:
@@ -164,6 +184,8 @@ def _to_arrow_table(cudf_object, metadata=None):
 
 @to_arrow.register(Scalar)
 def _to_arrow_scalar(cudf_object, metadata=None):
+    if metadata is None:
+        metadata = ColumnMetadata()
     cdef column_metadata c_scalar_metadata = _metadata_to_libcudf(metadata)
     cdef shared_ptr[pa.CScalar] c_scalar_result
     with nogil:
@@ -174,3 +196,11 @@ def _to_arrow_scalar(cudf_object, metadata=None):
         )
 
     return pa.pyarrow_wrap_scalar(c_scalar_result)
+
+
+@to_arrow.register(Column)
+def _to_arrow_array(cudf_object, metadata=None):
+    """Create a PyArrow array from a pylibcudf column."""
+    if metadata is None:
+        metadata = ColumnMetadata()
+    return to_arrow(Table([cudf_object]), [metadata])[0]
