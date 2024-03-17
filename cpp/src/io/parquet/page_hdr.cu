@@ -140,6 +140,21 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+__device__ inline bool is_nested(ColumnChunkDesc const& chunk)
+{
+  return chunk.max_nesting_depth > 1;
+}
+
+__device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
+{
+  return (chunk.data_type & 7) == BYTE_ARRAY;
+}
+
+__device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
+{
+  return (chunk.data_type & 7) == BOOLEAN;
+}
+
 /**
  * @brief Determine which decode kernel to run for the given page.
  *
@@ -151,7 +166,13 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
                                                    ColumnChunkDesc const& chunk)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
-
+  if (!is_string_col(chunk) && !is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+    if (page.encoding == Encoding::PLAIN) {
+      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
+    } else if (page.encoding == Encoding::PLAIN_DICTIONARY) {
+      return decode_kernel_mask::FIXED_WIDTH_DICT;
+    }
+  }
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
     return decode_kernel_mask::DELTA_BINARY;
   } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
@@ -531,6 +552,7 @@ void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
+
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code);
 }

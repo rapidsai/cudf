@@ -106,7 +106,7 @@ CUDF_KERNEL void count_and_set_positions(char const* data,
   // Process the data
   for (long i = 0; i < byteToProcess; i++) {
     if (raw[i] == key) {
-      auto const idx = atomicAdd(count, (cudf::size_type)1);
+      auto const idx = atomicAdd(count, static_cast<cudf::size_type>(1));
       setElement(positions, idx, did + offset + i, key);
     }
   }
