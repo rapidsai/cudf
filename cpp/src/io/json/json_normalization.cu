@@ -124,17 +124,15 @@ struct TransduceToNormalizedQuotes {
     // Case when the read symbol is an escape character - the actual translation for \<s> for some
     // symbol <s> is handled by transitions from SEC. The same logic applies for the transition from
     // DEC. For now, there is no output for this transition
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR) &&
-         state_id == static_cast<StateT>(dfa_states::TT_SQS)) ||
-        (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR) &&
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR) &&
+        (state_id == static_cast<StateT>(dfa_states::TT_SQS) ||
          state_id == static_cast<StateT>(dfa_states::TT_DQS))) {
       return 0;
     }
     // Case when an escaped single quote in an input single-quoted or double-quoted string needs
     // to be replaced by an unescaped single quote
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR) &&
-         state_id == static_cast<StateT>(dfa_states::TT_SEC)) ||
-        (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR) &&
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR) &&
+        (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
          state_id == static_cast<StateT>(dfa_states::TT_DEC))) {
       return '\'';
     }
