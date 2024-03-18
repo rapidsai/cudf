@@ -97,8 +97,7 @@ TEST(DebugAssertDeathTest, cudf_assert_false)
   testing::FLAGS_gtest_death_test_style = "threadsafe";
 
   auto call_kernel = []() {
-    auto const stream = cudf::get_default_stream().value();
-    assert_false_kernel<<<1, 1, 0, stream>>>();
+    assert_false_kernel<<<1, 1>>>();
 
     // Kernel should fail with `cudaErrorAssert`
     // This error invalidates the current device context, so we need to kill
@@ -115,8 +114,7 @@ TEST(DebugAssertDeathTest, cudf_assert_false)
 
 TEST(DebugAssert, cudf_assert_true)
 {
-  auto const stream = cudf::get_default_stream().value();
-  assert_true_kernel<<<1, 1, 0, stream>>>();
+  assert_true_kernel<<<1, 1>>>();
   ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
 }
 
@@ -138,7 +136,6 @@ int main(int argc, char** argv)
     auto adaptor                       = make_stream_checking_resource_adaptor(
       resource, error_on_invalid_stream, check_default_stream);
     rmm::mr::set_current_device_resource(&adaptor);
-    return RUN_ALL_TESTS();
   }
   return RUN_ALL_TESTS();
 }

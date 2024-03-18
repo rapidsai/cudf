@@ -2280,8 +2280,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         warnings.warn(
             "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill "
-            "or groupby bfill for forward or backward filling instead.",
+            "will be removed in a future version. Use groupby ffill or groupby bfill "
+            "for forward or backward filling instead.",
             FutureWarning,
         )
         if inplace:
