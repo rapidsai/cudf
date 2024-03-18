@@ -211,8 +211,8 @@ def _get_label_range_or_mask(index, start, stop, step):
                 return slice(start_loc, stop_loc)
             else:
                 raise KeyError(
-                    "Value based partial slicing on non-monotonic DatetimeIndexes "
-                    "with non-existing keys is not allowed.",
+                    "Value based partial slicing on non-monotonic "
+                    "DatetimeIndexes with non-existing keys is not allowed.",
                 )
         elif start is not None:
             boolean_mask = index >= start
@@ -2449,7 +2449,8 @@ class IndexedFrame(Frame):
         ----------
         axis : {0 or 'index', 1 or 'columns', None}, default None
             A specific axis to squeeze. By default, all length-1 axes are
-            squeezed. For `Series` this parameter is unused and defaults to `None`.
+            squeezed. For `Series` this parameter is unused and defaults
+            to `None`.
 
         Returns
         -------
@@ -5835,9 +5836,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rfloordiv(
-        self, other, axis, level=None, fill_value=None
-    ):  # noqa: D102
+    def rfloordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -5967,9 +5966,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def eq(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def eq(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
@@ -6009,9 +6006,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ne(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def ne(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
@@ -6051,9 +6046,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def lt(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def lt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
@@ -6093,9 +6086,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def le(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def le(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
@@ -6135,9 +6126,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def gt(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def gt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
@@ -6177,9 +6166,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ge(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def ge(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )

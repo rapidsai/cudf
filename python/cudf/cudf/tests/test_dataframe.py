@@ -2351,7 +2351,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
     for kwargs in all_kwargs:
         if expected_exception is not None:
             with pytest.raises(expected_exception):
-                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+                (getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),)
         else:
             expect = getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs)
             with expect_warning_if(
