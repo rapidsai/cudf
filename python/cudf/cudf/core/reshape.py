@@ -102,17 +102,17 @@ def _normalize_series_and_dataframe(objs, axis):
     """Convert any cudf.Series objects in objs to DataFrames in place."""
     # Default to naming series by a numerical id if they are not named.
     sr_name = 0
-    for idx, o in enumerate(objs):
-        if isinstance(o, cudf.Series):
-            if axis == 1:
-                name = o.name
-                if name is None:
+    for idx, obj in enumerate(objs):
+        if isinstance(obj, cudf.Series):
+            name = obj.name
+            if name is None:
+                if axis == 0:
+                    name = 0
+                else:
                     name = sr_name
                     sr_name += 1
-            else:
-                name = sr_name
 
-            objs[idx] = o.to_frame(name=name)
+            objs[idx] = obj.to_frame(name=name)
 
 
 def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
@@ -1120,7 +1120,7 @@ def unstack(df, level, fill_value=None):
                     "Calling unstack() on single index dataframe"
                     " with different column datatype is not supported."
                 )
-        res = df.T.stack(dropna=False)
+        res = df.T.stack(future_stack=False)
         # Result's index is a multiindex
         res.index.names = (
             tuple(df._data.to_pandas_index().names) + df.index.names

@@ -1,10 +1,10 @@
 #!/bin/bash
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 set -eou pipefail
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
-RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./dist
+RAPIDS_PY_WHEEL_NAME="dask_cudf_${RAPIDS_PY_CUDA_SUFFIX}" RAPIDS_PY_WHEEL_PURE="1" rapids-download-wheels-from-s3 ./dist
 
 # Download the cudf built in the previous step
 # Set the manylinux version used for downloading the wheels so that we test the
@@ -26,5 +26,24 @@ python -m pip install --no-deps ./local-cudf-dep/cudf*.whl
 # echo to expand wildcard before adding `[extra]` requires for pip
 python -m pip install $(echo ./dist/dask_cudf*.whl)[test]
 
+RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
+RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
+mkdir -p "${RAPIDS_TESTS_DIR}"
+
 # Run tests in dask_cudf/tests and dask_cudf/io/tests
-python -m pytest -n 8 ./python/dask_cudf/dask_cudf/
+rapids-logger "pytest dask_cudf"
+pushd python/dask_cudf/dask_cudf
+python -m pytest \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf.xml" \
+  --numprocesses=8 \
+  .
+popd
+
+# Run tests in dask_cudf/tests and dask_cudf/io/tests with dask-expr
+rapids-logger "pytest dask_cudf + dask_expr"
+pushd python/dask_cudf/dask_cudf
+DASK_DATAFRAME__QUERY_PLANNING=True python -m pytest \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-dask-cudf-expr.xml" \
+  --numprocesses=8 \
+  .
+popd

@@ -17,10 +17,9 @@
 #pragma once
 
 #include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
 #include "rle_stream.cuh"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <cuda/atomic>
 #include <cuda/std/tuple>
@@ -498,7 +497,7 @@ __device__ void gpuDecodeStream(
       if (!t) {
         uint8_t const* cur = cur_def;
         if (cur < end) { level_run = get_vlq32(cur, end); }
-        if (!(level_run & 1)) {
+        if (is_repeated_run(level_run)) {
           if (cur < end) level_val = cur[0];
           cur++;
           if (level_bits > 8) {
@@ -520,7 +519,7 @@ __device__ void gpuDecodeStream(
     if (s->error != 0) { break; }
 
     batch_len = min(num_input_values - value_count, 32);
-    if (level_run & 1) {
+    if (is_literal_run(level_run)) {
       // Literal run
       int batch_len8;
       batch_len  = min(batch_len, (level_run >> 1) * 8);
@@ -1292,6 +1291,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       s->dict_bits = 0;
       s->dict_base = nullptr;
       s->dict_size = 0;
+      s->dict_val  = 0;
       // NOTE:  if additional encodings are supported in the future, modifications must
       // be made to is_supported_encoding() in reader_impl_preprocess.cu
       switch (s->page.encoding) {

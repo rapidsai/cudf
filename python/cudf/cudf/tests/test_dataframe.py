@@ -4,6 +4,7 @@ import array as arr
 import contextlib
 import datetime
 import decimal
+import functools
 import io
 import operator
 import random
@@ -25,7 +26,7 @@ from packaging import version
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_LT_203
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.column import column
 from cudf.errors import MixedTypeError
@@ -161,12 +162,7 @@ def _dataframe_na_data():
 @pytest.mark.parametrize(
     "rows",
     [
-        pytest.param(
-            0,
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_200, reason=".column returns Index[object]"
-            ),
-        ),
+        0,
         1,
         2,
         100,
@@ -353,7 +349,7 @@ def test_axes(data):
     actual = csr.axes
 
     for e, a in zip(expected, actual):
-        assert_eq(e, a, exact=not PANDAS_GE_200)
+        assert_eq(e, a, exact=False)
 
 
 def test_dataframe_truncate_axis_0():
@@ -1351,11 +1347,7 @@ def test_dataframe_setitem_from_masked_object():
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
     pdf["a"] = []
-    if PANDAS_GE_200:
-        # TODO: Remove this workaround after
-        # the following bug is fixed:
-        # https://github.com/pandas-dev/pandas/issues/56679
-        pdf["a"] = pdf["a"].astype("str")
+    pdf["a"] = pdf["a"].astype("str")
     pdf["b"] = [1, 2, 3]
 
     gdf = cudf.DataFrame()
@@ -1702,24 +1694,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
 
-    # pandas(lower than pandas 2.0 only) warns when trying to
-    # concatenate any empty float columns (or float
-    # columns with all None values) with any non-empty bool columns.
-    def is_invalid_concat(left, right):
-        return (
-            pd.api.types.is_bool_dtype(left.dtype)
-            and pd.api.types.is_float_dtype(right.dtype)
-            and right.count() == 0
-        )
-
-    cond = (not PANDAS_GE_200) and any(
-        is_invalid_concat(pdf1[colname], pdf2[colname])
-        or is_invalid_concat(pdf2[colname], pdf1[colname])
-        for colname in set(pdf1) & set(pdf2)
-    )
-
-    with expect_warning_if(cond):
-        expect = pd.concat([pdf1, pdf2, pdf1], sort=False)
+    expect = pd.concat([pdf1, pdf2, pdf1], sort=False)
 
     # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
     # casts nan to 0 in non-float numerical columns
@@ -2376,7 +2351,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
     for kwargs in all_kwargs:
         if expected_exception is not None:
             with pytest.raises(expected_exception):
-                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+                (getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),)
         else:
             expect = getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs)
             with expect_warning_if(
@@ -3034,43 +3009,31 @@ def test_series_rename():
 @pytest.mark.parametrize("data_type", dtypes)
 @pytest.mark.parametrize("nelem", [0, 100])
 def test_head_tail(nelem, data_type):
-    def check_index_equality(left, right):
-        assert left.index.equals(right.index)
-
-    def check_values_equality(left, right):
-        if len(left) == 0 and len(right) == 0:
-            return None
-
-        np.testing.assert_array_equal(left.to_pandas(), right.to_pandas())
-
-    def check_frame_series_equality(left, right):
-        check_index_equality(left, right)
-        check_values_equality(left, right)
-
-    gdf = cudf.DataFrame(
+    pdf = pd.DataFrame(
         {
             "a": np.random.randint(0, 1000, nelem).astype(data_type),
             "b": np.random.randint(0, 1000, nelem).astype(data_type),
         }
     )
+    gdf = cudf.from_pandas(pdf)
 
-    check_frame_series_equality(gdf.head(), gdf[:5])
-    check_frame_series_equality(gdf.head(3), gdf[:3])
-    check_frame_series_equality(gdf.head(-2), gdf[:-2])
-    check_frame_series_equality(gdf.head(0), gdf[0:0])
+    assert_eq(gdf.head(), pdf.head())
+    assert_eq(gdf.head(3), pdf.head(3))
+    assert_eq(gdf.head(-2), pdf.head(-2))
+    assert_eq(gdf.head(0), pdf.head(0))
 
-    check_frame_series_equality(gdf["a"].head(), gdf["a"][:5])
-    check_frame_series_equality(gdf["a"].head(3), gdf["a"][:3])
-    check_frame_series_equality(gdf["a"].head(-2), gdf["a"][:-2])
+    assert_eq(gdf["a"].head(), pdf["a"].head())
+    assert_eq(gdf["a"].head(3), pdf["a"].head(3))
+    assert_eq(gdf["a"].head(-2), pdf["a"].head(-2))
 
-    check_frame_series_equality(gdf.tail(), gdf[-5:])
-    check_frame_series_equality(gdf.tail(3), gdf[-3:])
-    check_frame_series_equality(gdf.tail(-2), gdf[2:])
-    check_frame_series_equality(gdf.tail(0), gdf[0:0])
+    assert_eq(gdf.tail(), pdf.tail())
+    assert_eq(gdf.tail(3), pdf.tail(3))
+    assert_eq(gdf.tail(-2), pdf.tail(-2))
+    assert_eq(gdf.tail(0), pdf.tail(0))
 
-    check_frame_series_equality(gdf["a"].tail(), gdf["a"][-5:])
-    check_frame_series_equality(gdf["a"].tail(3), gdf["a"][-3:])
-    check_frame_series_equality(gdf["a"].tail(-2), gdf["a"][2:])
+    assert_eq(gdf["a"].tail(), pdf["a"].tail())
+    assert_eq(gdf["a"].tail(3), pdf["a"].tail(3))
+    assert_eq(gdf["a"].tail(-2), pdf["a"].tail(-2))
 
 
 def test_tail_for_string():
@@ -3619,9 +3582,10 @@ def test_dataframe_mulitindex_sort_index(
     request.applymarker(
         pytest.mark.xfail(
             condition=axis in (1, "columns")
-            and ignore_index
-            and not (level is None and not ascending),
-            reason="https://github.com/pandas-dev/pandas/issues/56478",
+            and level is None
+            and not ascending
+            and ignore_index,
+            reason="https://github.com/pandas-dev/pandas/issues/57293",
         )
     )
     pdf = pd.DataFrame(
@@ -4151,10 +4115,8 @@ def test_dataframe_round_dict_decimal_validation():
 def test_all(data):
     # Provide a dtype when data is empty to avoid future pandas changes.
     dtype = None if data else float
-    # Pandas treats `None` in object type columns as True for some reason, so
-    # replacing with `False`
     if np.array(data).ndim <= 1:
-        pdata = pd.Series(data=data, dtype=dtype).replace([None], False)
+        pdata = pd.Series(data=data, dtype=dtype)
         gdata = cudf.Series.from_pandas(pdata)
         got = gdata.all()
         expected = pdata.all()
@@ -4344,6 +4306,17 @@ def test_as_column_types():
 def test_one_row_head():
     gdf = cudf.DataFrame({"name": ["carl"], "score": [100]}, index=[123])
     pdf = gdf.to_pandas()
+
+    head_gdf = gdf.head()
+    head_pdf = pdf.head()
+
+    assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize("index", [None, [123], ["a", "b"]])
+def test_no_cols_head(index):
+    pdf = pd.DataFrame(index=index)
+    gdf = cudf.from_pandas(pdf)
 
     head_gdf = gdf.head()
     head_pdf = pdf.head()
@@ -6607,20 +6580,14 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     [
         ([1, 2, 3, 100, 112, 35464], ["a"]),
         (range(100), None),
-        pytest.param(
+        (
             [],
             None,
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_200, reason=".column returns Index[object]"
-            ),
         ),
         ((-10, 21, 32, 32, 1, 2, 3), ["p"]),
-        pytest.param(
+        (
             (),
             None,
-            marks=pytest.mark.xfail(
-                not PANDAS_GE_200, reason=".column returns Index[object]"
-            ),
         ),
         ([[1, 2, 3], [1, 2, 3]], ["col1", "col2", "col3"]),
         ([range(100), range(100)], ["range" + str(i) for i in range(100)]),
@@ -6639,7 +6606,6 @@ def test_dataframe_init_1d_list(data, columns):
         expect,
         actual,
         check_index_type=len(data) != 0,
-        check_column_type=not PANDAS_GE_200 and len(data) == 0,
     )
 
     expect = pd.DataFrame(data, columns=None)
@@ -6649,7 +6615,6 @@ def test_dataframe_init_1d_list(data, columns):
         expect,
         actual,
         check_index_type=len(data) != 0,
-        check_column_type=not PANDAS_GE_200 and len(data) == 0,
     )
 
 
@@ -6755,7 +6720,8 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
 def test_dataframe_assign_scalar(request, col_data, assign_val):
     request.applymarker(
         pytest.mark.xfail(
-            condition=PANDAS_GE_200 and len(col_data) == 0,
+            condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and len(col_data) == 0,
             reason="https://github.com/pandas-dev/pandas/issues/56679",
         )
     )
@@ -7515,7 +7481,6 @@ def test_dataframe_keys(df):
     assert_eq(
         df.keys(),
         gdf.keys(),
-        exact=not (PANDAS_GE_200 and len(gdf.columns) == 0),
     )
 
 
@@ -7894,7 +7859,7 @@ def test_dataframe_concat_dataframe_lists(df, other, sort, ignore_index):
 def test_dataframe_bfill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    with expect_warning_if(PANDAS_GE_200 and alias == "backfill"):
+    with expect_warning_if(alias == "backfill"):
         actual = getattr(df, alias)()
     with expect_warning_if(alias == "backfill"):
         expected = getattr(gdf, alias)()
@@ -7912,7 +7877,7 @@ def test_dataframe_bfill(df, alias):
 def test_dataframe_ffill(df, alias):
     gdf = cudf.from_pandas(df)
 
-    with expect_warning_if(PANDAS_GE_200 and alias == "pad"):
+    with expect_warning_if(alias == "pad"):
         actual = getattr(df, alias)()
     with expect_warning_if(alias == "pad"):
         expected = getattr(gdf, alias)()
@@ -7989,7 +7954,7 @@ def test_dataframe_concat_lists(df, other, sort, ignore_index):
             expected,
             actual,
             check_index_type=not gdf.empty,
-            check_column_type=PANDAS_GE_200 and len(gdf.columns) != 0,
+            check_column_type=len(gdf.columns) != 0,
         )
 
 
@@ -8266,11 +8231,7 @@ def test_series_empty(ps):
     "columns",
     [["a"], ["another column name"], None, pd.Index(["a"], name="index name")],
 )
-def test_dataframe_init_with_columns(data, columns, request):
-    if data == [] and columns is None and not PANDAS_GE_200:
-        request.node.add_marker(
-            pytest.mark.xfail(reason=".column returns Index[object]")
-        )
+def test_dataframe_init_with_columns(data, columns):
     pdf = pd.DataFrame(data, columns=columns)
     gdf = cudf.DataFrame(data, columns=columns)
 
@@ -8279,7 +8240,7 @@ def test_dataframe_init_with_columns(data, columns, request):
         gdf,
         check_index_type=len(pdf.index) != 0,
         check_dtype=not (pdf.empty and len(pdf.columns)),
-        check_column_type=not PANDAS_GE_200,
+        check_column_type=False,
     )
 
 
@@ -8349,11 +8310,7 @@ def test_dataframe_init_with_columns(data, columns, request):
         pd.Index(["abc"], name="custom_name"),
     ],
 )
-def test_dataframe_init_from_series_list(data, ignore_dtype, columns, request):
-    if columns is None and data[0].empty and not PANDAS_GE_200:
-        request.applymarker(
-            pytest.mark.xfail(reason=".column returns Index[object]")
-        )
+def test_dataframe_init_from_series_list(data, ignore_dtype, columns):
     gd_data = [cudf.from_pandas(obj) for obj in data]
 
     expected = pd.DataFrame(data, columns=columns)
@@ -8377,7 +8334,7 @@ def test_dataframe_init_from_series_list(data, ignore_dtype, columns, request):
             expected,
             actual,
             check_index_type=True,
-            check_column_type=not PANDAS_GE_200,
+            check_column_type=False,
         )
 
 
@@ -8457,12 +8414,7 @@ def test_dataframe_init_from_series_list_with_index(
     ignore_dtype,
     index,
     columns,
-    request,
 ):
-    if columns is None and data[0].empty and not PANDAS_GE_200:
-        request.applymarker(
-            pytest.mark.xfail(reason=".column returns Index[object]")
-        )
     gd_data = [cudf.from_pandas(obj) for obj in data]
 
     expected = pd.DataFrame(data, columns=columns, index=index)
@@ -8477,7 +8429,7 @@ def test_dataframe_init_from_series_list_with_index(
             actual = actual.sort_index(axis=1)
         assert_eq(expected.fillna(-1), actual.fillna(-1), check_dtype=False)
     else:
-        assert_eq(expected, actual, check_column_type=not PANDAS_GE_200)
+        assert_eq(expected, actual, check_column_type=False)
 
 
 @pytest.mark.parametrize(
@@ -8733,18 +8685,8 @@ def test_describe_misc_exclude(df, exclude):
 )
 @pytest.mark.parametrize("numeric_only", [True, False])
 @pytest.mark.parametrize("dropna", [True, False])
-def test_dataframe_mode(request, df, numeric_only, dropna):
+def test_dataframe_mode(df, numeric_only, dropna):
     pdf = df.to_pandas()
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=PANDAS_GE_200
-            and PANDAS_LT_203
-            and numeric_only is False
-            and "b" in df.columns
-            and df["b"].dtype == np.dtype("timedelta64[s]"),
-            reason="https://github.com/pandas-dev/pandas/issues/53497",
-        )
-    )
 
     expected = pdf.mode(numeric_only=numeric_only, dropna=dropna)
     actual = df.mode(numeric_only=numeric_only, dropna=dropna)
@@ -9092,15 +9034,9 @@ def test_dataframe_constructor_columns(df, columns, index, request):
                 expected,
                 actual,
                 check_index_type=check_index_type,
-                check_column_type=not PANDAS_GE_200,
+                check_column_type=False,
             )
 
-    if df.empty and columns is None and not PANDAS_GE_200:
-        request.node.add_marker(
-            pytest.mark.xfail(
-                reason="pandas returns Index[object] instead of RangeIndex"
-            )
-        )
     gdf = cudf.from_pandas(df)
     host_columns = (
         columns.to_pandas() if isinstance(columns, cudf.BaseIndex) else columns
@@ -9234,78 +9170,55 @@ def test_agg_for_dataframe_with_string_columns(aggs):
 
 
 @pytest_unmark_spilling
+@pytest.mark.parametrize("overwrite", [True, False])
 @pytest.mark.parametrize(
-    "join",
-    ["left"],
-)
-@pytest.mark.parametrize(
-    "overwrite",
-    [True, False],
-)
-@pytest.mark.parametrize(
-    "errors",
-    ["ignore"],
-)
-@pytest.mark.parametrize(
-    "data",
+    "left_keys,right_keys",
     [
-        {"a": [1, 2, 3], "b": [3, 4, 5]},
-        {"e": [1.0, 2.0, 3.0], "d": [3.0, 4.0, 5.0]},
-        {"c": [True, False, False], "d": [False, True, True]},
-        {"g": [2.0, np.nan, 4.0], "n": [np.nan, np.nan, np.nan]},
-        {"d": [np.nan, np.nan, np.nan], "e": [np.nan, np.nan, np.nan]},
-        {"a": [1.0, 2, 3], "b": pd.Series([4.0, 8.0, 3.0], index=[1, 2, 3])},
-        {
-            "d": [1.0, 2.0, 3.0],
-            "c": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
-        },
-        {
-            "a": [False, True, False],
-            "b": pd.Series([1.0, 2.0, np.nan], index=[1, 2, 3]),
-        },
-        {
-            "a": [np.nan, np.nan, np.nan],
-            "e": pd.Series([np.nan, np.nan, np.nan], index=[1, 2, 3]),
-        },
+        [("a", "b"), ("a", "b")],
+        [("a", "b"), ("a", "c")],
+        [("a", "b"), ("d", "e")],
     ],
 )
 @pytest.mark.parametrize(
-    "data2",
+    "data_left,data_right",
     [
-        {"b": [3, 5, 6], "e": [8, 2, 1]},
-        {"c": [True, False, True], "d": [3.0, 4.0, 5.0]},
-        {"e": [False, False, True], "g": [True, True, False]},
-        {"g": [np.nan, np.nan, np.nan], "c": [np.nan, np.nan, np.nan]},
-        {"a": [7, 5, 8], "b": pd.Series([2.0, 7.0, 9.0], index=[0, 1, 2])},
-        {
-            "b": [np.nan, 2.0, np.nan],
-            "c": pd.Series([2, np.nan, 5.0], index=[2, 3, 4]),
-        },
-        {
-            "a": pd.Series([True, None, True], dtype=pd.BooleanDtype()),
-            "d": pd.Series(
-                [False, True, None], index=[0, 1, 3], dtype=pd.BooleanDtype()
-            ),
-        },
+        [([1, 2, 3], [3, 4, 5]), ([1, 2, 3], [3, 4, 5])],
+        [
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+        ],
+        [
+            ([True, False, True], [False, False, False]),
+            ([True, False, True], [False, False, False]),
+        ],
+        [
+            ([np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]),
+            ([np.nan, np.nan, np.nan], [np.nan, np.nan, np.nan]),
+        ],
+        [([1, 2, 3], [3, 4, 5]), ([1, 2, 4], [30, 40, 50])],
+        [
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+            ([1.0, 2.0, 4.0], [30.0, 40.0, 50.0]),
+        ],
+        [([1, 2, 3], [3, 4, 5]), ([10, 20, 40], [30, 40, 50])],
+        [
+            ([1.0, 2.0, 3.0], [3.0, 4.0, 5.0]),
+            ([10.0, 20.0, 40.0], [30.0, 40.0, 50.0]),
+        ],
     ],
 )
-def test_update_for_dataframes(request, data, data2, join, overwrite, errors):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=request.node.name
-            in {
-                "test_update_for_dataframes[data21-data2-ignore-True-left]",
-                "test_update_for_dataframes[data24-data7-ignore-True-left]",
-                "test_update_for_dataframes[data25-data2-ignore-True-left]",
-            },
-            reason="mixing of bools & non-bools is not allowed.",
-        )
-    )
-    pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame(data, nan_as_null=False)
+def test_update_for_dataframes(
+    left_keys, right_keys, data_left, data_right, overwrite
+):
+    errors = "ignore"
+    join = "left"
+    left = dict(zip(left_keys, data_left))
+    right = dict(zip(right_keys, data_right))
+    pdf = pd.DataFrame(left)
+    gdf = cudf.DataFrame(left, nan_as_null=False)
 
-    other_pd = pd.DataFrame(data2)
-    other_gd = cudf.DataFrame(data2, nan_as_null=False)
+    other_pd = pd.DataFrame(right)
+    other_gd = cudf.DataFrame(right, nan_as_null=False)
 
     pdf.update(other=other_pd, join=join, overwrite=overwrite, errors=errors)
     gdf.update(other=other_gd, join=join, overwrite=overwrite, errors=errors)
@@ -9416,18 +9329,10 @@ def test_dataframe_setitem_cupy_array():
     assert_eq(pdf, gdf)
 
 
-@pytest.mark.parametrize(
-    "data", [{"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}]
-)
-@pytest.mark.parametrize(
-    "index",
-    [{0: 123, 1: 4, 2: 6}],
-)
-@pytest.mark.parametrize(
-    "level",
-    ["x", 0],
-)
-def test_rename_for_level_MultiIndex_dataframe(data, index, level):
+@pytest.mark.parametrize("level", ["x", 0])
+def test_rename_for_level_MultiIndex_dataframe(level):
+    data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    index = {0: 123, 1: 4, 2: 6}
     pdf = pd.DataFrame(
         data,
         index=pd.MultiIndex.from_tuples([(0, 1, 2), (1, 2, 3), (2, 3, 4)]),
@@ -10062,6 +9967,10 @@ def test_dataframe_rename_duplicate_column():
 
 
 @pytest_unmark_spilling
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -10082,8 +9991,7 @@ def test_dataframe_pct_change(data, periods, fill_method):
     with expect_warning_if(fill_method is not no_default):
         actual = gdf.pct_change(periods=periods, fill_method=fill_method)
     with expect_warning_if(
-        PANDAS_GE_210
-        and (fill_method is not no_default or pdf.isna().any().any())
+        fill_method is not no_default or pdf.isna().any().any()
     ):
         expected = pdf.pct_change(periods=periods, fill_method=fill_method)
 
@@ -10812,6 +10720,9 @@ def test_init_from_2_categoricalindex_series_diff_categories():
     )
     result = cudf.DataFrame([s1, s2])
     expected = pd.DataFrame([s1.to_pandas(), s2.to_pandas()])
+    # TODO: Remove once https://github.com/pandas-dev/pandas/issues/57592
+    # is adressed
+    expected.columns = result.columns
     assert_eq(result, expected, check_dtype=False)
 
 
@@ -10946,3 +10857,102 @@ def test_dataframe_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
+
+
+def test_dataframe_columns_set_none_raises():
+    df = cudf.DataFrame({"a": [0]})
+    with pytest.raises(TypeError):
+        df.columns = None
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [cudf.RangeIndex(1, name="foo"), pd.RangeIndex(1, name="foo"), range(1)],
+)
+def test_dataframe_columns_set_rangeindex(columns):
+    df = cudf.DataFrame([1], columns=["a"])
+    df.columns = columns
+    result = df.columns
+    expected = pd.RangeIndex(1, name=getattr(columns, "name", None))
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize("klass", [cudf.MultiIndex, pd.MultiIndex])
+def test_dataframe_columns_set_multiindex(klass):
+    columns = klass.from_arrays([[10]], names=["foo"])
+    df = cudf.DataFrame([1], columns=["a"])
+    df.columns = columns
+    result = df.columns
+    expected = pd.MultiIndex.from_arrays([[10]], names=["foo"])
+    pd.testing.assert_index_equal(result, expected, exact=True)
+
+
+@pytest.mark.parametrize(
+    "klass",
+    [
+        functools.partial(cudf.Index, name="foo"),
+        functools.partial(cudf.Series, name="foo"),
+        functools.partial(pd.Index, name="foo"),
+        functools.partial(pd.Series, name="foo"),
+        np.array,
+    ],
+)
+def test_dataframe_columns_set_preserve_type(klass):
+    df = cudf.DataFrame([1], columns=["a"])
+    columns = klass([10], dtype="int8")
+    df.columns = columns
+    result = df.columns
+    expected = pd.Index(
+        [10], dtype="int8", name=getattr(columns, "name", None)
+    )
+    pd.testing.assert_index_equal(result, expected)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_dataframe_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    df = cudf.DataFrame({"a": pa_array})
+    with pytest.raises(ValueError):
+        df.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_dataframe_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    df = cudf.DataFrame({"a": pa_array})
+    result = df.to_pandas(arrow_type=True)
+    expected = pd.DataFrame({"a": pd.arrays.ArrowExtensionArray(pa_array)})
+    pd.testing.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("axis", [None, 0, "index", 1, "columns"])
+@pytest.mark.parametrize("data", [[[1, 2], [2, 3]], [1, 2], [1]])
+def test_squeeze(axis, data):
+    df = cudf.DataFrame(data)
+    result = df.squeeze(axis=axis)
+    expected = df.to_pandas().squeeze(axis=axis)
+    assert_eq(result, expected)

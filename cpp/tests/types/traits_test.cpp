@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/utilities/traits.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/utilities/traits.hpp>
 
 #include <gtest/gtest.h>
 

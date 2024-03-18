@@ -27,4 +27,4 @@ def to_hdf(path_or_buf, key, value, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = value.to_pandas()
-    pd_value.to_hdf(path_or_buf, key, *args, **kwargs)
+    pd_value.to_hdf(path_or_buf, key=key, *args, **kwargs)

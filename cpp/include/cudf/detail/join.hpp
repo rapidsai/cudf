@@ -62,7 +62,7 @@ struct hash_join {
                           cudf::size_type,
                           cuda::thread_scope_device,
                           cudf::detail::cuco_allocator,
-                          cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
+                          cuco::legacy::double_hashing<DEFAULT_JOIN_CG_SIZE, Hasher, Hasher>>;
 
   hash_join()                            = delete;
   ~hash_join()                           = default;

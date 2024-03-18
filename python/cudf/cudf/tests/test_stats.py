@@ -9,7 +9,7 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.datasets import randomdata
 from cudf.testing._utils import (
     assert_eq,
@@ -340,6 +340,10 @@ def test_series_median(dtype, num_na):
         np.testing.assert_approx_equal(actual, desired)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -356,23 +360,15 @@ def test_series_median(dtype, num_na):
 @pytest.mark.parametrize(
     "fill_method", ["ffill", "bfill", "pad", "backfill", no_default, None]
 )
-def test_series_pct_change(request, data, periods, fill_method):
+def test_series_pct_change(data, periods, fill_method):
     cs = cudf.Series(data)
     ps = cs.to_pandas()
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(
-                len(cs) == 0 and periods == 0 and fill_method is no_default
-            ),
-            reason="https://github.com/pandas-dev/pandas/issues/57056",
-        )
-    )
+
     if np.abs(periods) <= len(cs):
         with expect_warning_if(fill_method not in (no_default, None)):
             got = cs.pct_change(periods=periods, fill_method=fill_method)
         with expect_warning_if(
-            PANDAS_GE_210
-            and (
+            (
                 fill_method not in (no_default, None)
                 or (fill_method is not None and ps.isna().any())
             )

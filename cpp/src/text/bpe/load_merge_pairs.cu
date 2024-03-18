@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <text/bpe/byte_pair_encoding.cuh>
-
-#include <nvtext/byte_pair_encoding.hpp>
+#include "text/bpe/byte_pair_encoding.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -26,14 +24,16 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/byte_pair_encoding.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <cuda/functional>
 
 #include <fstream>
 #include <iostream>
 #include <vector>
-
-#include <cuda/functional>
 
 namespace nvtext {
 namespace detail {
@@ -48,6 +48,8 @@ std::unique_ptr<detail::merge_pairs_map_type> initialize_merge_pairs_map(
                                            cuco::empty_value{-1},
                                            bpe_equal{input},
                                            bpe_probe_scheme{bpe_hasher{input}},
+                                           cuco::thread_scope_device,
+                                           cuco_storage{},
                                            cudf::detail::cuco_allocator{stream},
                                            stream.value());
 
@@ -69,6 +71,8 @@ std::unique_ptr<detail::mp_table_map_type> initialize_mp_table_map(
                                                           cuco::empty_value{-1},
                                                           mp_equal{input},
                                                           mp_probe_scheme{mp_hasher{input}},
+                                                          cuco::thread_scope_device,
+                                                          cuco_storage{},
                                                           cudf::detail::cuco_allocator{stream},
                                                           stream.value());
 

@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -57,13 +57,20 @@ def test_series_replace_all(gsr, to_replace, value):
     else:
         pd_value = value
 
-    actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
-    if pd_value is None:
-        # TODO: Remove this workaround once cudf
-        # introduces `no_default` values
-        expected = psr.replace(to_replace=pd_to_replace)
-    else:
-        expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
+    expect_warn = (
+        isinstance(gsr.dtype, cudf.CategoricalDtype)
+        and isinstance(gd_to_replace, str)
+        and gd_to_replace == "one"
+    )
+    with expect_warning_if(expect_warn):
+        actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
+    with expect_warning_if(expect_warn):
+        if pd_value is None:
+            # TODO: Remove this workaround once cudf
+            # introduces `no_default` values
+            expected = psr.replace(to_replace=pd_to_replace)
+        else:
+            expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
     assert_eq(
         expected.sort_values().reset_index(drop=True),
@@ -82,16 +89,19 @@ def test_series_replace():
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
-    psr4 = psr3.replace("one", "two")
+    with pytest.warns(FutureWarning):
+        psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
-    sr4 = sr3.replace("one", "two")
+    with pytest.warns(FutureWarning):
+        sr4 = sr3.replace("one", "two")
     assert_eq(
         psr4.sort_values().reset_index(drop=True),
         sr4.sort_values().reset_index(drop=True),
     )
-
-    psr5 = psr3.replace("one", "five")
-    sr5 = sr3.replace("one", "five")
+    with pytest.warns(FutureWarning):
+        psr5 = psr3.replace("one", "five")
+    with pytest.warns(FutureWarning):
+        sr5 = sr3.replace("one", "five")
 
     assert_eq(psr5, sr5)
 
@@ -157,6 +167,10 @@ def test_series_replace_with_nulls():
     assert_eq(a9, sr9.to_numpy())
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning introduced in pandas-2.2.0",
+)
 @pytest.mark.parametrize(
     "df",
     [
@@ -236,11 +250,20 @@ def test_dataframe_replace(df, to_replace, value):
     else:
         gd_to_replace = to_replace
 
-    if pd_value is None:
-        expected = pdf.replace(to_replace=pd_to_replace)
-    else:
-        expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
-    actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
+    can_warn = (
+        isinstance(df["a"].dtype, cudf.CategoricalDtype)
+        and isinstance(to_replace, str)
+        and to_replace == "two"
+        and isinstance(value, str)
+        and value == "three"
+    )
+    with expect_warning_if(can_warn):
+        if pd_value is None:
+            expected = pdf.replace(to_replace=pd_to_replace)
+        else:
+            expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
+    with expect_warning_if(can_warn):
+        actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
     expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
     actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
@@ -314,6 +337,10 @@ def test_series_fillna_numerical(psr, data_dtype, fill_value, inplace):
     assert_eq(expected, actual, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -343,7 +370,7 @@ def test_fillna_method_numerical(data, container, data_dtype, method, inplace):
     # Explicitly using nans_as_nulls=True
     gdata = cudf.from_pandas(pdata, nan_as_null=True)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expected = pdata.fillna(method=method, inplace=inplace)
     with pytest.warns(FutureWarning):
         actual = gdata.fillna(method=method, inplace=inplace)
@@ -488,7 +515,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
             pd.date_range(
                 "2010-01-01",
                 "2020-01-10",
-                freq="1YE" if PANDAS_GE_220 else "1y",
+                freq="1YE",
             )
         ),
         pd.Series(["2010-01-01", None, "2011-10-10"], dtype="datetime64[ns]"),
@@ -535,7 +562,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
             pd.date_range(
                 "2010-01-01",
                 "2020-01-10",
-                freq="1YE" if PANDAS_GE_220 else "1y",
+                freq="1YE",
             )
         )
         + pd.Timedelta("1d"),
@@ -595,6 +622,10 @@ def test_fillna_datetime(psr_data, fill_value, inplace):
     assert_eq(expected, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -674,7 +705,7 @@ def test_fillna_method_fixed_width_non_num(data, container, method, inplace):
     # Explicitly using nans_as_nulls=True
     gdata = cudf.from_pandas(pdata, nan_as_null=True)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expected = pdata.fillna(method=method, inplace=inplace)
     with pytest.warns(FutureWarning):
         actual = gdata.fillna(method=method, inplace=inplace)
@@ -1017,7 +1048,7 @@ def test_numeric_series_replace_dtype(series_dtype, replacement):
             pd.Series(["one", "two", "three"], dtype="category"),
             {"to_replace": "one", "value": "two", "inplace": True},
             marks=pytest.mark.xfail(
-                condition=PANDAS_GE_200,
+                condition=PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION,
                 reason="https://github.com/pandas-dev/pandas/issues/43232"
                 "https://github.com/pandas-dev/pandas/issues/53358",
             ),
@@ -1342,7 +1373,8 @@ def test_series_replace_errors():
     ],
 )
 def test_replace_nulls(gsr, old, new, expected):
-    actual = gsr.replace(old, new)
+    with expect_warning_if(isinstance(gsr.dtype, cudf.CategoricalDtype)):
+        actual = gsr.replace(old, new)
     assert_eq(
         expected.sort_values().reset_index(drop=True),
         actual.sort_values().reset_index(drop=True),

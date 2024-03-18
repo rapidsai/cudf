@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+#include "io/utilities/column_type_histogram.hpp"
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/trie.cuh"
 #include "json_gpu.hpp"
-
-#include <io/utilities/column_type_histogram.hpp>
-#include <io/utilities/parsing_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -27,7 +27,6 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -498,7 +497,7 @@ CUDF_KERNEL void collect_keys_info_kernel(parse_options_view const options,
   for (auto field_range = advance(row_data_range.first);
        field_range.key_begin < row_data_range.second;
        field_range = advance(field_range.value_end)) {
-    auto const idx = atomicAdd(keys_cnt, 1);
+    auto const idx = atomicAdd(keys_cnt, 1ULL);
     if (keys_info.has_value()) {
       auto const len                              = field_range.key_end - field_range.key_begin;
       keys_info->column(0).element<uint64_t>(idx) = field_range.key_begin - data.begin();

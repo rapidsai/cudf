@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
+import datetime
 import decimal
 import hashlib
 import operator
@@ -15,6 +15,7 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -1747,6 +1748,10 @@ def test_fill_new_category():
     gs[0:1] = "d"
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning newly introduced in pandas-2.2.0",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1795,8 +1800,11 @@ def test_isin_datetime(data, values):
     psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
-    got = gsr.isin(values)
-    expected = psr.isin(values)
+    is_len_str = isinstance(next(iter(values), None), str) and len(data)
+    with expect_warning_if(is_len_str):
+        got = gsr.isin(values)
+    with expect_warning_if(is_len_str):
+        expected = psr.isin(values)
     assert_eq(got, expected)
 
 
@@ -2659,6 +2667,22 @@ def test_series_duplicate_index_reindex():
     )
 
 
+def test_list_category_like_maintains_dtype():
+    dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
+    data = [1, 2, 3]
+    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    expected = pd.Series(data, dtype=dtype.to_pandas())
+    assert_eq(result, expected)
+
+
+def test_list_interval_like_maintains_dtype():
+    dtype = cudf.IntervalDtype(subtype=np.int8)
+    data = [pd.Interval(1, 2)]
+    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    expected = pd.Series(data, dtype=dtype.to_pandas())
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "klass", [cudf.Series, cudf.Index, pd.Series, pd.Index]
 )
@@ -2696,3 +2720,67 @@ def test_series_dtype_astypes(data):
     result = cudf.Series(data, dtype="float64")
     expected = cudf.Series([1.0, 2.0, 3.0])
     assert_eq(result, expected)
+
+
+def test_series_from_large_string():
+    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
+    got = cudf.Series(pa_large_string_array)
+    expected = pd.Series(pa_large_string_array)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    with pytest.raises(ValueError, match=".* cannot both be set"):
+        ser.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    result = ser.to_pandas(arrow_type=True)
+    expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
+    pd.testing.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize("axis", [None, 0, "index"])
+@pytest.mark.parametrize("data", [[1, 2], [1]])
+def test_squeeze(axis, data):
+    ser = cudf.Series(data)
+    result = ser.squeeze(axis=axis)
+    expected = ser.to_pandas().squeeze(axis=axis)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_squeeze_invalid_axis(axis):
+    with pytest.raises(ValueError):
+        cudf.Series([1]).squeeze(axis=axis)

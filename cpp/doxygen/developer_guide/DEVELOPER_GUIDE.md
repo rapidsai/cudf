@@ -127,7 +127,7 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
    does use raw synchronization primitives. So we should revisit Parent's third rule and improve
    here.
 
-Additional style guidelines for libcudf code include:
+Additional style guidelines for libcudf code:
 
  * Prefer "east const", placing `const` after the type. This is not
    automatically enforced by `clang-format` because the option
@@ -152,15 +152,20 @@ The following guidelines apply to organizing `#include` lines.
    from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
    includes from dependencies installed with cuDF, and then standard headers (for example
    `<string>`, `<iostream>`).
- * Use `<>` instead of `""` unless the header is in the same directory as the source file.
+ * We use clang-format for grouping and sorting headers automatically. See the
+   `cudf/cpp/.clang-format` file for specifics.
+ * Use `<>` for all includes except for internal headers that are not in the `include`
+   directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
+   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
+   should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+ * `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
+   public headers in `include` that should be included with `<>`.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
-   and brackets wrong.
+   and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
+   the grouping.
  * Always check that includes are only necessary for the file in which they are included.
    Try to avoid excessive including especially in header files. Double check this when you remove
    code.
- * Use quotes `"` to include local headers from the same relative source directory. This should only
-   occur in source files and non-public header files. Otherwise use angle brackets `<>` around
-   included header filenames.
  * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
    (internal) headers from source paths not in the same directory as the including file,
    because source paths are not passed with `-I`.
@@ -659,10 +664,14 @@ defaults.
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. libcudf has a convenience macro `CUDF_FUNC_RANGE()` that
-automatically annotates the lifetime of the enclosing function and uses the function's name as
-the name of the NVTX range. For more information about NVTX, see
-[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
+should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::scoped_range`
+for declaring NVTX ranges in the current scope:
+- Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
+NVTX range
+- Use `cudf::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
+NVTX range
+
+For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
 

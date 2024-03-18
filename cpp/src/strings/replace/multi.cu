@@ -34,6 +34,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/count.h>
@@ -44,8 +45,6 @@
 #include <thrust/optional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace strings {
@@ -303,17 +302,16 @@ std::unique_ptr<column> replace_character_parallel(strings_column_view const& in
     auto string_indices = rmm::device_uvector<size_type>(target_count, stream);
 
     auto const pos_itr = cudf::detail::make_counting_transform_iterator(
-      0, cuda::proclaim_return_type<size_type>([d_positions] __device__(auto idx) -> size_type {
+      0, cuda::proclaim_return_type<int64_t>([d_positions] __device__(auto idx) -> int64_t {
         return d_positions[idx].first;
       }));
     auto pos_count = std::distance(d_positions, copy_end);
 
-    thrust::upper_bound(rmm::exec_policy(stream),
-                        input.offsets_begin(),
-                        input.offsets_end(),
-                        pos_itr,
-                        pos_itr + pos_count,
-                        string_indices.begin());
+    auto begin =
+      cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
+    auto end = begin + input.offsets().size();
+    thrust::upper_bound(
+      rmm::exec_policy(stream), begin, end, pos_itr, pos_itr + pos_count, string_indices.begin());
 
     // compute offsets per string
     auto targets_offsets   = rmm::device_uvector<size_type>(strings_count + 1, stream);
@@ -454,12 +452,12 @@ std::unique_ptr<column> replace_string_parallel(strings_column_view const& input
   auto d_targets      = column_device_view::create(targets.parent(), stream);
   auto d_replacements = column_device_view::create(repls.parent(), stream);
 
-  auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+  auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
     replace_multi_fn{*d_strings, *d_targets, *d_replacements}, input.size(), stream, mr);
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),
-                             std::move(chars_column->release().data.release()[0]),
+                             chars.release(),
                              input.null_count(),
                              cudf::detail::copy_bitmask(input.parent(), stream, mr));
 }

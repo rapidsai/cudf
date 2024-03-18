@@ -1,5 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
+from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport pair
 
@@ -17,7 +18,7 @@ cdef extern from "cudf/reduction.hpp" namespace "cudf" nogil:
         data_type type
     ) except +
 
-    ctypedef enum scan_type:
+    cpdef enum class scan_type(bool):
         INCLUSIVE "cudf::scan_type::INCLUSIVE",
         EXCLUSIVE "cudf::scan_type::EXCLUSIVE",
 

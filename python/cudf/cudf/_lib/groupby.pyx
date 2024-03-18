@@ -18,11 +18,11 @@ from cudf._lib.utils cimport columns_from_pylibcudf_table
 
 from cudf._lib.scalar import as_device_scalar
 
-from cudf._lib.aggregation cimport make_groupby_aggregation
 from cudf._lib.cpp.replace cimport replace_policy
 from cudf._lib.cpp.scalar.scalar cimport scalar
 
 from cudf._lib import pylibcudf
+from cudf._lib.aggregation import make_aggregation
 
 # The sets below define the possible aggregations that can be performed on
 # different dtypes. These strings must be elements of the AggregationKind enum.
@@ -120,23 +120,26 @@ cdef class GroupBy:
 
         Returns
         -------
+        offsets: list of integers
+            Integer offsets such that offsets[i+1] - offsets[i]
+            represents the size of group `i`.
         grouped_keys: list of Columns
             The grouped key columns
         grouped_values: list of Columns
             The grouped value columns
-        offsets: list of integers
-            Integer offsets such that offsets[i+1] - offsets[i]
-            represents the size of group `i`.
         """
-        grouped_keys, grouped_values, offsets = self._groupby.get_groups(
+        offsets, grouped_keys, grouped_values = self._groupby.get_groups(
             pylibcudf.table.Table([c.to_pylibcudf(mode="read") for c in values])
             if values else None
         )
 
         return (
-            columns_from_pylibcudf_table(grouped_keys),
-            columns_from_pylibcudf_table(grouped_values),
             offsets,
+            columns_from_pylibcudf_table(grouped_keys),
+            (
+                columns_from_pylibcudf_table(grouped_values)
+                if grouped_values is not None else []
+            ),
         )
 
     def aggregate(self, values, aggregations):
@@ -164,7 +167,7 @@ cdef class GroupBy:
             included_aggregations_i = []
             col_aggregations = []
             for agg in aggs:
-                agg_obj = make_groupby_aggregation(agg)
+                agg_obj = make_aggregation(agg)
                 if valid_aggregations == "ALL" or agg_obj.kind in valid_aggregations:
                     included_aggregations_i.append((agg, agg_obj.kind))
                     col_aggregations.append(agg_obj.c_obj)
@@ -213,7 +216,7 @@ cdef class GroupBy:
         return columns_from_pylibcudf_table(replaced)
 
 
-_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "rank"}
+_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "cumprod", "rank"}
 
 
 def _is_all_scan_aggregate(all_aggs):

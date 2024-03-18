@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/type_list_utilities.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -21,13 +26,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/type_list_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
+
+#include <thrust/sequence.h>
 
 #include <random>
-#include <thrust/sequence.h>
 
 template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {};

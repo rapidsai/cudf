@@ -15,14 +15,14 @@
  */
 
 #include "delta_binary.cuh"
+#include "io/utilities/block_utils.cuh"
 #include "page_string_utils.cuh"
 #include "parquet_gpu.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::parquet::detail {
@@ -462,6 +462,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
+  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+    // we cannot read decimal encoded with DELTA_BYTE_ARRAY yet
+    if (t == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
+    }
+    return;
+  }
+
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // choose a character parallel string copy when the average string is longer than a warp
@@ -620,6 +628,14 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
     return;
   }
 
+  if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+    // we cannot read decimal encoded with DELTA_LENGTH_BYTE_ARRAY yet
+    if (t == 0) {
+      set_error(static_cast<kernel_error::value_type>(decode_error::INVALID_DATA_TYPE), error_code);
+    }
+    return;
+  }
+
   bool const has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
   // copying logic from gpuDecodePageData.
@@ -745,8 +761,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 /**
  * @copydoc cudf::io::parquet::detail::DecodeDeltaBinary
  */
-void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                       cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaBinary(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                        size_t num_rows,
                        size_t min_row,
                        int level_type_size,
@@ -770,8 +786,8 @@ void DecodeDeltaBinary(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                          cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
+                          cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                           size_t num_rows,
                           size_t min_row,
                           int level_type_size,
@@ -795,8 +811,8 @@ void DecodeDeltaByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::gpu::DecodeDeltaByteArray
  */
-void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void DecodeDeltaLengthByteArray(cudf::detail::hostdevice_span<PageInfo> pages,
+                                cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                 size_t num_rows,
                                 size_t min_row,
                                 int level_type_size,

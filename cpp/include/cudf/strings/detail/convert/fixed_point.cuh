@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,9 @@
 
 #include <cudf/fixed_point/temporary.hpp>
 
+#include <cuda/std/type_traits>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
-
-#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {

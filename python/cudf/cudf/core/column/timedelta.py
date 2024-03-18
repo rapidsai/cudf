@@ -14,7 +14,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._typing import ColumnBinaryOperand, DatetimeLikeScalar, Dtype
 from cudf.api.types import is_scalar, is_timedelta64_dtype
-from cudf.core._compat import PANDAS_GE_200
 from cudf.core.buffer import Buffer, acquire_spill_lock
 from cudf.core.column import ColumnBase, column, string
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -145,31 +144,6 @@ class TimeDeltaColumn(ColumnBase):
             length=len(self),
             buffers=[mask, data],
             null_count=self.null_count,
-        )
-
-    def to_pandas(
-        self, *, index: Optional[pd.Index] = None, nullable: bool = False
-    ) -> pd.Series:
-        # `copy=True` workaround until following issue is fixed:
-        # https://issues.apache.org/jira/browse/ARROW-9772
-
-        if PANDAS_GE_200:
-            host_values = self.to_arrow()
-        else:
-            # Pandas<2.0 supports only `timedelta64[ns]`, hence the cast.
-            host_values = self.astype("timedelta64[ns]").to_arrow()
-
-        # Pandas only supports `timedelta64[ns]` dtype
-        # and conversion to this type is necessary to make
-        # arrow to pandas conversion happen for large values.
-        if nullable:
-            raise NotImplementedError(f"{nullable=} is not implemented.")
-
-        return pd.Series(
-            host_values,
-            copy=True,
-            dtype=self.dtype,
-            index=index,
         )
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
@@ -509,7 +483,7 @@ class TimeDeltaColumn(ColumnBase):
                 break
 
         for name in keys_list:
-            res_col = cudf.core.column.full(len(self), 0, dtype="int64")
+            res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             data[name] = res_col
@@ -598,7 +572,7 @@ class TimeDeltaColumn(ColumnBase):
         # of nanoseconds.
 
         if self._time_unit != "ns":
-            res_col = cudf.core.column.full(len(self), 0, dtype="int64")
+            res_col = column.as_column(0, length=len(self), dtype="int64")
             if self.nullable:
                 res_col = res_col.set_mask(self.mask)
             return cast("cudf.core.column.NumericalColumn", res_col)

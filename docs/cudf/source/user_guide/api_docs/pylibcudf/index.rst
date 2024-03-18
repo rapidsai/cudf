@@ -11,10 +11,21 @@ This page provides API documentation for pylibcudf.
     aggregation
     binaryop
     column
+    concatenate
     copying
+    filling
     gpumemoryview
     groupby
+    join
+    lists
+    merge
+    reduce
+    rolling
     scalar
+    search
+    stream_compaction
+    sorting
+    replace
     table
     types
     unary
