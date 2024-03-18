@@ -3828,3 +3828,27 @@ def test_groupby_shift_series_multiindex():
     result = ser.groupby(level=0).shift(1)
     expected = ser.to_pandas().groupby(level=0).shift(1)
     assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "idxmin", "idxmax"]
+)
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        ("a", {"a": [1, 2, 3]}),
+        (["a", "id"], {"id": [0, 0, 1], "a": [1, 2, 3]}),
+        ("a", {"a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        ("id", {"id": [0, 0, 1], "a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        (["b", "id"], {"id": [0, 0, 1], "b": ["A", "B", "C"]}),
+        ("b", {"b": ["A", "B", "C"]}),
+    ],
+)
+def test_group_by_reduce_numeric_only(by, data, func):
+    # Test that simple groupby reductions support numeric_only=True
+    df = cudf.DataFrame(data)
+    expected = getattr(df.to_pandas().groupby(by, sort=True), func)(
+        numeric_only=True
+    )
+    result = getattr(df.groupby(by, sort=True), func)(numeric_only=True)
+    assert_eq(expected, result)
