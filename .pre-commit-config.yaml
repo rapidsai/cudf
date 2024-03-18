@@ -23,13 +23,6 @@ repos:
         args: ["--config-root=python/", "--resolve-all-configs"]
         files: python/.*
         types_or: [python, cython, pyi]
-  - repo: https://github.com/psf/black
-    rev: 23.12.1
-    hooks:
-      - id: black
-        files: python/.*
-        # Explicitly specify the pyproject.toml at the repo root, not per-project.
-        args: ["--config", "pyproject.toml"]
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.0
     hooks:
@@ -64,9 +57,6 @@ repos:
         # Use the cudf_kafka isort orderings in notebooks so that dask
         # and RAPIDS packages have their own sections.
         args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
-      - id: nbqa-black
-        # Explicitly specify the pyproject.toml at the repo root, not per-project.
-        args: ["--config=pyproject.toml"]
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v16.0.6
     hooks:
@@ -154,6 +144,8 @@ repos:
     rev: v0.1.13
     hooks:
       - id: ruff
+        files: python/.*$
+      - id: ruff-format
         files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
     rev: v0.0.1

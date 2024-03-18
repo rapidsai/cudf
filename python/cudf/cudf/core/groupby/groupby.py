@@ -282,9 +282,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield (name,) if isinstance(self._by, list) and len(
-                self._by
-            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (
+                (name,)
+                if isinstance(self._by, list) and len(self._by) == 1
+                else name,
+                grouped_values[offsets[i] : offsets[i + 1]],
+            )
 
     @property
     def dtypes(self):
@@ -2269,8 +2272,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         warnings.warn(
             "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill or groupby bfill "
-            "for forward or backward filling instead.",
+            "will be removed in a future version. Use groupby ffill "
+            "or groupby bfill for forward or backward filling instead.",
             FutureWarning,
         )
         if inplace:
