@@ -35,6 +35,8 @@
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace detail {
 namespace {

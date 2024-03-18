@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 
 namespace cudf {
 namespace {

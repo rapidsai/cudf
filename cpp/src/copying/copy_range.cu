@@ -38,6 +38,7 @@
 #include <thrust/iterator/constant_iterator.h>
 
 #include <memory>
+#include <stdexcept>
 
 namespace {
 template <typename T>

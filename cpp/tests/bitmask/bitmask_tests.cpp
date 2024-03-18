@@ -33,6 +33,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <stdexcept>
+
 struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {};
 
 TEST_F(BitmaskUtilitiesTest, StateNullCount)

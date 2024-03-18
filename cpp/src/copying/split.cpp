@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {

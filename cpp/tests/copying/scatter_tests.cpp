@@ -25,6 +25,8 @@
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 
+#include <stdexcept>
+
 class ScatterUntypedTests : public cudf::test::BaseFixture {};
 
 // Throw logic error if scatter map is longer than source

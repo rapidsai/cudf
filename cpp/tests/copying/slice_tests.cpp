@@ -29,6 +29,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <stdexcept>
 #include <string>
 #include <vector>
 

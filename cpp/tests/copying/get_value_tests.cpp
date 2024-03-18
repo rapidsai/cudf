@@ -33,6 +33,8 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 using namespace cudf::test::iterators;
 
 template <typename T>

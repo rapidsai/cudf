@@ -44,6 +44,8 @@
 #include <thrust/scatter.h>
 #include <thrust/sequence.h>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace detail {
 namespace {

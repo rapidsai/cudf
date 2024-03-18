@@ -30,6 +30,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace detail {
 

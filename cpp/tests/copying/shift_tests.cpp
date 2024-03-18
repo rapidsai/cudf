@@ -29,6 +29,7 @@
 
 #include <limits>
 #include <memory>
+#include <stdexcept>
 
 using TestTypes = cudf::test::Types<int32_t>;
 

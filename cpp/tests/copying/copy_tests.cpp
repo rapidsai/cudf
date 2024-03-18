@@ -30,6 +30,8 @@
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {};
 

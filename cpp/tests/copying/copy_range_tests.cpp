@@ -30,6 +30,8 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include <stdexcept>
+
 auto all_valid  = [](cudf::size_type row) { return true; };
 auto even_valid = [](cudf::size_type row) { return (row % 2 == 0); };
 

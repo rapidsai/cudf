@@ -29,6 +29,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
