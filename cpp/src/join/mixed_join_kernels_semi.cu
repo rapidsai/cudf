@@ -42,7 +42,7 @@ __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
                        row_hash const hash_probe,
                        row_equality const equality_probe,
                        cudf::detail::semi_map_type::device_view hash_table_view,
-                       bool* raw_flagged,
+                       cudf::device_span<bool> left_table_keep_mask,
                        cudf::ast::detail::expression_device_view device_expression_data)
 {
   // Normally the casting of a shared memory array is used to create multiple
@@ -69,9 +69,8 @@ __attribute__((visibility("hidden"))) __launch_bounds__(block_size) __global__
     auto equality = single_expression_equality<has_nulls>{
       evaluator, thread_intermediate_storage, false, equality_probe};
 
-    if ((hash_table_view.contains(outer_row_index, hash_probe, equality))) {
-      *(raw_flagged + outer_row_index) = true;
-    }
+    left_table_keep_mask[outer_row_index] =
+      hash_table_view.contains(outer_row_index, hash_probe, equality);
   }
 }
 
@@ -83,7 +82,7 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, true>(
   row_hash const hash_probe,
   row_equality const equality_probe,
   cudf::detail::semi_map_type::device_view hash_table_view,
-  bool* raw_flagged,
+  cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data);
 
 template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
@@ -94,7 +93,7 @@ template __global__ void mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>(
   row_hash const hash_probe,
   row_equality const equality_probe,
   cudf::detail::semi_map_type::device_view hash_table_view,
-  bool* raw_flagged,
+  cudf::device_span<bool> left_table_keep_mask,
   cudf::ast::detail::expression_device_view device_expression_data);
 
 }  // namespace detail

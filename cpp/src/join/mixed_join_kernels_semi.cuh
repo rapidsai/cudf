@@ -46,8 +46,8 @@ namespace detail {
  * @param[in] hash_probe The hasher used for the probe table.
  * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] hash_table_view The hash table built from `build`.
- * @param[out] raw_flagged The result of the join operation with "true" element indicating the
- * corresponding index from left table is present in output
+ * @param[out] left_table_keep_mask The result of the join operation with "true" element indicating
+ * the corresponding index from left table is present in output
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  */
@@ -59,7 +59,7 @@ __global__ void mixed_join_semi(table_device_view left_table,
                                 row_hash const hash_probe,
                                 row_equality const equality_probe,
                                 cudf::detail::semi_map_type::device_view hash_table_view,
-                                bool* raw_flagged,
+                                cudf::device_span<bool> left_table_keep_mask,
                                 cudf::ast::detail::expression_device_view device_expression_data);
 
 }  // namespace detail
