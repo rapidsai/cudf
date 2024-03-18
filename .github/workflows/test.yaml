@@ -51,7 +51,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      test_script: "ci/test_python_cudf.sh"
+      script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     secrets: inherit
@@ -61,7 +61,7 @@ jobs:
       branch: ${{ inputs.branch }}
       date: ${{ inputs.date }}
       sha: ${{ inputs.sha }}
-      test_script: "ci/test_python_other.sh"
+      script: "ci/test_python_other.sh"
   conda-java-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.04
