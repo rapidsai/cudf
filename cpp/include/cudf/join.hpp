@@ -485,7 +485,7 @@ class distinct_hash_join {
                      rmm::cuda_stream_view stream = cudf::get_default_stream());
 
   /**
-   * Returns the row indices that can be used to construct the result of performing
+   * @brief Returns the row indices that can be used to construct the result of performing
    * an inner join between two tables. @see cudf::inner_join().
    *
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -499,6 +499,24 @@ class distinct_hash_join {
             std::unique_ptr<rmm::device_uvector<size_type>>>
   inner_join(rmm::cuda_stream_view stream        = cudf::get_default_stream(),
              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
+
+  /**
+   * @brief Returns the build table indices that can be used to construct the result of performing
+   * a left join between two tables.
+   *
+   * @note For a given row index `i` of the probe table, the resulting `build_indices[i]` contains
+   * the row index of the matched row from the build table if there is a match. Otherwise, contains
+   * `JoinNoneValue`.
+   *
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the returned table and columns' device
+   * memory.
+   * @return A `build_indices` column that can be used to construct the result of performing a left
+   * join between two tables with `build` and `probe` as the join keys.
+   */
+  std::unique_ptr<rmm::device_uvector<size_type>> left_join(
+    rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const;
 
  private:
   using impl_type = typename cudf::detail::distinct_hash_join<HasNested>;  ///< Implementation type

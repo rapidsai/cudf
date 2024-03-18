@@ -216,7 +216,7 @@ dependencies:
           - &ninja ninja
           - c-compiler
           - cxx-compiler
-          - dlpack>=0.5,<0.6.0a0
+          - dlpack>=0.8,<1.0
           - zlib>=1.2.13
     specific:
       - output_types: conda
@@ -255,8 +255,8 @@ dependencies:
           - &gbench benchmark==1.8.0
           - &gtest gtest>=1.13.0
           - &gmock gmock>=1.13.0
-          - librmm==24.4.*
-          - libkvikio==24.4.*
+          - librmm==24.6.*
+          - libkvikio==24.6.*
           - librdkafka>=1.9.0,<1.10.0a0
           # Align nvcomp version with rapids-cmake
           - nvcomp==3.0.6
@@ -293,7 +293,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - &rmm_conda rmm==24.4.*
+          - &rmm_conda rmm==24.6.*
           - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
@@ -313,10 +313,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages: &build_python_packages_cu12
-              - &rmm_cu12 rmm-cu12==24.4.*
+              - &rmm_cu12 rmm-cu12==24.6.*
           - matrix: {cuda: "11.*"}
             packages: &build_python_packages_cu11
-              - &rmm_cu11 rmm-cu11==24.4.*
+              - &rmm_cu11 rmm-cu11==24.6.*
           - {matrix: null, packages: null }
       - output_types: pyproject
         matrices:
@@ -474,7 +474,7 @@ dependencies:
       - output_types: [conda]
         packages:
           - breathe>=4.35.0
-          - dask-cuda==24.4.*
+          - dask-cuda==24.6.*
           - *doxygen
           - make
           - myst-nb
@@ -521,7 +521,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - numpy>=1.23
+          - numpy>=1.23,<2.0a0
           - pandas>=2.0,<2.2.2dev0
   run_cudf:
     common:
@@ -566,11 +566,11 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - rmm-cu12==24.4.*
+              - rmm-cu12==24.6.*
               - pynvjitlink-cu12
           - matrix: {cuda: "11.*"}
             packages:
-              - rmm-cu11==24.4.*
+              - rmm-cu11==24.6.*
               - cubinlinker-cu11
               - ptxcompiler-cu11
           - {matrix: null, packages: null}
@@ -581,7 +581,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - rapids-dask-dependency==24.4.*
+          - rapids-dask-dependency==24.6.*
   run_custreamz:
     common:
       - output_types: conda
@@ -670,13 +670,13 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - dask-cuda==24.4.*
+          - dask-cuda==24.6.*
           - *numba
   depends_on_cudf:
     common:
       - output_types: conda
         packages:
-          - &cudf_conda cudf==24.4.*
+          - &cudf_conda cudf==24.6.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -688,16 +688,16 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf-cu12==24.4.*
+              - cudf-cu12==24.6.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf-cu11==24.4.*
+              - cudf-cu11==24.6.*
           - {matrix: null, packages: [*cudf_conda]}
   depends_on_cudf_kafka:
     common:
       - output_types: conda
         packages:
-          - &cudf_kafka_conda cudf_kafka==24.4.*
+          - &cudf_kafka_conda cudf_kafka==24.6.*
       - output_types: requirements
         packages:
           # pip recognizes the index as a global option for the requirements.txt file
@@ -709,10 +709,10 @@ dependencies:
         matrices:
           - matrix: {cuda: "12.*"}
             packages:
-              - cudf_kafka-cu12==24.4.*
+              - cudf_kafka-cu12==24.6.*
           - matrix: {cuda: "11.*"}
             packages:
-              - cudf_kafka-cu11==24.4.*
+              - cudf_kafka-cu11==24.6.*
           - {matrix: null, packages: [*cudf_kafka_conda]}
   depends_on_cupy:
     common:
@@ -737,8 +737,11 @@ dependencies:
         packages:
           # dependencies to run pandas tests
           # https://github.com/pandas-dev/pandas/blob/main/environment.yml
-          # pandas[all] includes all of the required dependencies
-          - pandas[all]
+          # pandas[...] includes all of the required dependencies.
+          # Intentionally excluding `postgresql` because of
+          # installation issues with `psycopg2`.
+          - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          - pytest-reportlog
   test_python_cudf_pandas:
     common:
       - output_types: pyproject

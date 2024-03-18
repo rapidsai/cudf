@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <rmm/cuda_stream_view.hpp>
+#include "io/utilities/hostdevice_vector.hpp"
 
-#include <io/utilities/hostdevice_vector.hpp>
+#include <rmm/cuda_stream_view.hpp>
 
 #include <cstdint>
 #include <sstream>
