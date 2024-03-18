@@ -135,12 +135,11 @@ repos:
             .*test.*|
             ^CHANGELOG.md$
           )
-  # TODO: Add this back once dfg supports the new tables.
-  #- repo: https://github.com/rapidsai/dependency-file-generator
-  #  rev: v1.8.0
-  #  hooks:
-  #    - id: rapids-dependency-file-generator
-  #      args: ["--clean"]
+  - repo: https://github.com/rapidsai/dependency-file-generator
+    rev: v1.10.0
+    hooks:
+      - id: rapids-dependency-file-generator
+        args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.1.13
     hooks:

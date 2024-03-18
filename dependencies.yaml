@@ -81,7 +81,7 @@ files:
     output: pyproject
     pyproject_dir: python/cudf
     extras:
-      table: tool.rapids_builder
+      table: tool.rapids-build-backend
       key: requires
     includes:
       - build_python_common
@@ -158,7 +158,7 @@ files:
     output: pyproject
     pyproject_dir: python/cudf_kafka
     extras:
-      table: tool.rapids_builder
+      table: tool.rapids-build-backend
       key: requires
     includes:
       - build_python_common
@@ -265,12 +265,14 @@ dependencies:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - rapids_builder[scikit-build-core]
+          - rapids-build-backend
+          - scikit-build-core[pyproject]>=0.7.0
   rapids_build_setuptools:
     common:
       - output_types: [requirements, pyproject]
         packages:
-          - rapids_builder[setuptools]
+          - rapids-build-backend
+          - setuptools
   build_python_common:
     common:
       - output_types: [conda, requirements, pyproject]

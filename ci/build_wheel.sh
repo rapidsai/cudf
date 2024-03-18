@@ -24,10 +24,4 @@ fi
 
 cd "${package_dir}"
 
-# For testing, will be removed when the package is released
-git clone https://github.com/vyasr/rapids_builder.git
-pushd rapids_builder
-python -m pip wheel . --no-deps
-popd
-
-PIP_FIND_LINKS="file://${PWD}/rapids_builder/" python -m pip wheel . -w dist -vvv --no-deps --disable-pip-version-check
+python -m pip wheel . -w dist -vvv --no-deps --disable-pip-version-check
