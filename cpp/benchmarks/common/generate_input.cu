@@ -324,10 +324,11 @@ struct random_value_fn<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   distribution_fn<DeviceType> dist;
   std::optional<numeric::scale_type> scale;
 
-  random_value_fn(distribution_params<DeviceType> const& desc)
+  random_value_fn(distribution_params<T> const& desc)
     : lower_bound{desc.lower_bound},
       upper_bound{desc.upper_bound},
-      dist{make_distribution<DeviceType>(desc.id, desc.lower_bound, desc.upper_bound)}
+      dist{make_distribution<DeviceType>(desc.id, lower_bound, upper_bound)},
+      scale{desc.scale}
   {
   }
 
