@@ -353,11 +353,12 @@ void copy_range_in_place(column_view const& source,
  * If @p source and @p target refer to the same elements and the ranges overlap,
  * the behavior is undefined.
  *
- * @throws std::out_of_range for invalid range (if
- * @p source_begin > @p source_end, @p source_begin < 0,
- * @p source_begin >= @p source.size(), @p source_end > @p source.size(),
- * @p target_begin < 0, target_begin >= @p target.size(), or
- * @p target_begin + (@p source_end - @p source_begin) > @p target.size()).
+ * A range is considered invalid if:
+ *   - Either the begin or end indices are out of bounds for the corresponding column
+ *   - Begin is greater than end for source or target
+ *   - The size of the source range would overflow the target column starting at target_begin
+ *
+ * @throws std::out_of_range for any invalid range.
  * @throws cudf::data_type_error if @p target and @p source have different types.
  *
  * @param source The column to copy from inside the range
