@@ -608,8 +608,7 @@ def test_orc_write_statistics(tmpdir, datadir, nrows, stats_freq):
     from pyarrow import orc
 
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Writing bool columns to multiple row groups is disabled
-    # until #6763 is fixed
+    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
     if nrows == 100000:
         supported_stat_types.remove("bool")
 
@@ -684,8 +683,7 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
 
     np.random.seed(0)
     supported_stat_types = supported_numpy_dtypes + ["str"]
-    # Writing bool columns to multiple row groups is disabled
-    # until #6763 is fixed
+    # Writing bool columns to multiple row groups is disabled until #6763 is fixed
     if nrows == 200000:
         supported_stat_types.remove("bool")
 
@@ -699,7 +697,8 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     # Make a dataframe
     gdf = cudf.DataFrame(
         {
-            "col_" + str(dtype): gen_rand_series(
+            "col_"
+            + str(dtype): gen_rand_series(
                 dtype,
                 nrows // 2,
                 has_nulls=True,
@@ -717,7 +716,8 @@ def test_orc_chunked_write_statistics(tmpdir, datadir, nrows, stats_freq):
     # write and no pointers are saved into the original table
     gdf = cudf.DataFrame(
         {
-            "col_" + str(dtype): gen_rand_series(
+            "col_"
+            + str(dtype): gen_rand_series(
                 dtype,
                 nrows // 2,
                 has_nulls=True,
