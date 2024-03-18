@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -88,6 +88,7 @@ enum class binary_operator : int32_t {
                      ///< (null, false) is null, and (valid, valid) == LOGICAL_OR(valid, valid)
   INVALID_BINARY     ///< invalid operation
 };
+
 /**
  * @brief Performs a binary operation between a scalar and a column.
  *
@@ -236,6 +237,17 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& rhs);
 
 namespace binops {
+
+/**
+ * @brief Returns true if the binary operator is supported for the given input types
+ *
+ * @param out  The output data type
+ * @param lhs  The left-hand cudf::data_type
+ * @param rhs  The right-hand cudf::data_type
+ * @param op   The binary operator
+ * @return     true if the binary operator is supported for the given input types
+ */
+bool is_supported_binaryop(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
 /**
  * @brief Computes output valid mask for op between a column and a scalar
