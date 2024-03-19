@@ -30,6 +30,7 @@
 
 #include <list>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -127,6 +128,8 @@ class aggregate_reader_metadata {
   int64_t num_rows;
   size_type num_row_groups;
 
+  std::vector<data_type> _root_level_types;
+  std::vector<std::string> _root_level_names;
   /**
    * @brief Create a metadata object from each element in the source vector
    */
@@ -221,17 +224,23 @@ class aggregate_reader_metadata {
   [[nodiscard]] std::vector<std::string> get_pandas_index_names() const;
 
   /**
+   * @brief Extract root level column data types and names and caches them.
+   *
+   * @param strings_to_categorical Type conversion parameter
+   * @param timestamp_type_id Type conversion parameter
+   */
+  void cache_root_dtypes_names(bool strings_to_categorical, type_id timestamp_type_id);
+
+  /**
    * @brief Filters the row groups based on predicate filter
    *
    * @param row_group_indices Lists of row groups to read, one per source
-   * @param output_dtypes List of output column datatypes
    * @param filter AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return Filtered row group indices, if any is filtered.
    */
   [[nodiscard]] std::optional<std::vector<std::vector<size_type>>> filter_row_groups(
     host_span<std::vector<size_type> const> row_group_indices,
-    host_span<data_type const> output_dtypes,
     std::reference_wrapper<ast::expression const> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -244,7 +253,6 @@ class aggregate_reader_metadata {
    * @param row_group_indices Lists of row groups to read, one per source
    * @param row_start Starting row of the selection
    * @param row_count Total number of rows selected
-   * @param output_dtypes List of output column datatypes
    * @param filter Optional AST expression to filter row groups based on Column chunk statistics
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A tuple of corrected row_start, row_count and list of row group indexes and its
@@ -254,7 +262,6 @@ class aggregate_reader_metadata {
     host_span<std::vector<size_type> const> row_group_indices,
     int64_t row_start,
     std::optional<size_type> const& row_count,
-    host_span<data_type const> output_dtypes,
     std::optional<std::reference_wrapper<ast::expression const>> filter,
     rmm::cuda_stream_view stream) const;
 
@@ -263,6 +270,7 @@ class aggregate_reader_metadata {
    *
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
+   * @param filter_columns_names List of paths of column names that are present only in filter
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
@@ -274,6 +282,7 @@ class aggregate_reader_metadata {
                            std::vector<cudf::io::detail::inline_column_buffer>,
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
+                 std::optional<std::vector<std::string>> const& filter_columns_names,
                  bool include_index,
                  bool strings_to_categorical,
                  type_id timestamp_type_id) const;
@@ -287,23 +296,37 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
  public:
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata)
-    : metadata(metadata)
   {
     if (!expr.has_value()) return;
     // create map for column name.
-    std::transform(
-      thrust::make_zip_iterator(metadata.schema_info.cbegin(),
-                                thrust::counting_iterator<size_t>(0)),
-      thrust::make_zip_iterator(metadata.schema_info.cend(),
-                                thrust::counting_iterator(metadata.schema_info.size())),
-      std::inserter(column_name_to_index, column_name_to_index.end()),
-      [](auto const& name_index) {
-        return std::make_pair(thrust::get<0>(name_index).name, thrust::get<1>(name_index));
-      });
+    auto it_name_id = thrust::make_zip_iterator(metadata.schema_info.cbegin(),
+                                                thrust::counting_iterator<size_t>(0));
+    std::transform(it_name_id,
+                   it_name_id + metadata.schema_info.size(),
+                   std::inserter(column_name_to_index, column_name_to_index.end()),
+                   [](auto const& name_index) {
+                     return std::make_pair(thrust::get<0>(name_index).name,
+                                           thrust::get<1>(name_index));
+                   });
 
     expr.value().get().accept(*this);
   }
 
+  named_to_reference_converter(std::reference_wrapper<ast::expression const> expr,
+                               host_span<std::string const> root_column_names)
+  {
+    // create map for column name.
+    std::transform(
+      thrust::make_zip_iterator(root_column_names.begin(), thrust::counting_iterator<size_t>(0)),
+      thrust::make_zip_iterator(root_column_names.end(),
+                                thrust::counting_iterator(root_column_names.size())),
+      std::inserter(column_name_to_index, column_name_to_index.end()),
+      [](auto const& name_index) {
+        return std::make_pair(thrust::get<0>(name_index), thrust::get<1>(name_index));
+      });
+
+    expr.get().accept(*this);
+  }
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
    */
@@ -337,12 +360,60 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     std::vector<std::reference_wrapper<ast::expression const>> operands);
 
-  table_metadata const& metadata;
   std::unordered_map<std::string, size_type> column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _stats_expr;
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
+};
+
+/**
+ * @brief Converts named columns to index reference columns
+ *
+ */
+class names_from_expression : public ast::detail::expression_transformer {
+ public:
+  names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                        std::vector<std::string> const& skip_names)
+    : _skip_names(skip_names.cbegin(), skip_names.cend())
+  {
+    if (!expr.has_value()) return;
+    expr.value().get().accept(*this);
+  }
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::operation const& expr) override;
+
+  /**
+   * @brief Returns the column names in AST.
+   *
+   * @return AST operation expression
+   */
+  [[nodiscard]] std::vector<std::string> get_column_names() const
+  {
+    return {_column_names.begin(), _column_names.end()};
+  }
+
+ private:
+  void visit_operands(std::vector<std::reference_wrapper<ast::expression const>> operands);
+
+  std::unordered_set<std::string> _column_names;
+  std::unordered_set<std::string> _skip_names;
 };
 
 }  // namespace cudf::io::parquet::detail

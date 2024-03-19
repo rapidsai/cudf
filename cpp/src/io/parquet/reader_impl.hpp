@@ -366,6 +366,9 @@ class reader::impl {
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;
 
+  // number of extra filter columns
+  std::size_t _num_filter_columns{0};
+
   bool _strings_to_categorical = false;
 
   // are there usable page indexes available
