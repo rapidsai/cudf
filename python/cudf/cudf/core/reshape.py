@@ -862,7 +862,6 @@ def _merge_sorted(
             ascending=ascending,
             na_position=na_position,
         ),
-        column_names=objs[0]._column_names,
         index_names=None if ignore_index else objs[0]._index_names,
     )
 

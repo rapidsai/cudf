@@ -1210,7 +1210,6 @@ class GroupBy(Serializable, Reducible, Scannable):
             to_drop = (self.grouping.keys.name,)
         grouped_values = self.obj._from_columns_like_self(
             grouped_value_cols,
-            column_names=self.obj._column_names,
             index_names=self.obj._index_names,
         )
         if not include_groups:

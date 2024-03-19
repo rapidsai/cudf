@@ -1991,7 +1991,6 @@ class BaseIndex(Serializable):
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
-            self._column_names,
         )
 
     def duplicated(self, keep="first"):
@@ -2077,7 +2076,6 @@ class BaseIndex(Serializable):
                 how=how,
                 keys=range(len(data_columns)),
             ),
-            self._column_names,
         )
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
@@ -2100,7 +2098,6 @@ class BaseIndex(Serializable):
 
         return self._from_columns_like_self(
             gather(list(self._columns), gather_map, nullify=nullify),
-            self._column_names,
         )
 
     def take(self, indices, axis=0, allow_fill=True, fill_value=None):
@@ -2149,7 +2146,6 @@ class BaseIndex(Serializable):
 
         return self._from_columns_like_self(
             apply_boolean_mask(list(self._columns), boolean_mask),
-            column_names=self._column_names,
         )
 
     def repeat(self, repeats, axis=None):

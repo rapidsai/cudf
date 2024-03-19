@@ -299,16 +299,9 @@ class IndexedFrame(Frame):
         return out
 
     @_cudf_nvtx_annotate
-    def _from_data_like_self(self, data: MutableMapping):
-        out = self._from_data(data, self._index)
-        out._data._level_names = self._data._level_names
-        return out
-
-    @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
         index_names: Optional[List[str]] = None,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
@@ -322,8 +315,7 @@ class IndexedFrame(Frame):
         used for the dtype of the matching column in preference to the
         dtype of the column in self.
         """
-        if column_names is None:
-            column_names = self._column_names
+        column_names = self._column_names
 
         data_columns = columns
         index = None
@@ -1906,13 +1898,13 @@ class IndexedFrame(Frame):
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        result_data = {}
-        for name, col in self._data.items():
-            try:
-                result_data[name] = col.nans_to_nulls()
-            except AttributeError:
-                result_data[name] = col.copy()
-        return self._from_data_like_self(result_data)
+        result = (
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col.copy()
+            for col in self._data.columns()
+        )
+        return self._from_columns_like_self(result)
 
     def _copy_type_metadata(
         self,
@@ -2919,7 +2911,6 @@ class IndexedFrame(Frame):
                 gather_map.column,
                 nullify=gather_map.nullify,
             ),
-            self._column_names,
             self._index.names if keep_index else None,
         )
 
@@ -3002,7 +2993,6 @@ class IndexedFrame(Frame):
         ]
         result = self._from_columns_like_self(
             libcudf.copying.columns_slice(columns_to_slice, [start, stop])[0],
-            self._column_names,
             None if has_range_index or not keep_index else self._index.names,
         )
         result._data.label_dtype = self._data.label_dtype
@@ -3072,7 +3062,6 @@ class IndexedFrame(Frame):
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
-            self._column_names,
             self._index.names if not ignore_index else None,
         )
 
@@ -3195,11 +3184,8 @@ class IndexedFrame(Frame):
                     *self._columns,
                 ]
             ),
-            self._column_names,
             self._index.names if keep_index else None,
         )
-        result._data.label_dtype = self._data.label_dtype
-        result._data.rangeindex = self._data.rangeindex
         return result
 
     def _split(self, splits, keep_index=True):
@@ -3217,7 +3203,6 @@ class IndexedFrame(Frame):
         return [
             self._from_columns_like_self(
                 columns_split[i],
-                self._column_names,
                 self._index.names if keep_index else None,
             )
             for i in range(len(splits) + 1)
@@ -4268,7 +4253,6 @@ class IndexedFrame(Frame):
                 ),
                 thresh=thresh,
             ),
-            self._column_names,
             self._index.names,
         )
 
@@ -4291,7 +4275,6 @@ class IndexedFrame(Frame):
                 else list(self._columns),
                 boolean_mask.column,
             ),
-            column_names=self._column_names,
             index_names=self._index.names if keep_index else None,
         )
 
@@ -4883,7 +4866,6 @@ class IndexedFrame(Frame):
             Frame._repeat(
                 [*self._index._data.columns, *self._columns], repeats, axis
             ),
-            self._column_names,
             self._index_names,
         )
 
@@ -5255,7 +5237,6 @@ class IndexedFrame(Frame):
         ).element_type
         return self._from_columns_like_self(
             exploded,
-            self._column_names,
             self._index_names if not ignore_index else None,
             override_dtypes=(
                 exploded_dtype if i == column_index else None
@@ -5292,7 +5273,6 @@ class IndexedFrame(Frame):
             libcudf.reshape.tile(
                 [*self._index._columns, *self._columns], count
             ),
-            column_names=self._column_names,
             index_names=self._index_names,
         )
 

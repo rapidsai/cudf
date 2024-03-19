@@ -1068,7 +1068,8 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         binop_result = self._colwise_binop(operands, op)
 
         if isinstance(other, cudf.Series):
-            ret = other._from_data_like_self(binop_result)
+            ret = other._from_data(binop_result, other._index)
+            ret._data._level_names = ret._data._level_names
             other_name = other.name
         else:
             ret = _index_from_data(binop_result)
@@ -1490,7 +1491,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
 
     def repeat(self, repeats, axis=None):
         return self._from_columns_like_self(
-            Frame._repeat([*self._columns], repeats, axis), self._column_names
+            Frame._repeat([*self._columns], repeats, axis),
         )
 
     @_cudf_nvtx_annotate

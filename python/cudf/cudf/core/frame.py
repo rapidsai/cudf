@@ -134,25 +134,17 @@ class Frame(BinaryOperand, Scannable):
         return obj
 
     @_cudf_nvtx_annotate
-    def _from_data_like_self(self, data: MutableMapping) -> Self:
-        return self._from_data(data)
-
-    @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
-        columns: List[ColumnBase],
-        column_names: Optional[abc.Iterable[str]] = None,
+        columns: abc.Iterable[ColumnBase],
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ):
-        """Construct a Frame from a list of columns with metadata from self.
-
-        If `column_names` is None, use column names from self.
         """
-        if column_names is None:
-            column_names = self._column_names
-        data = dict(zip(column_names, columns))
-        frame = self.__class__._from_data(data)
+        Construct a Frame from a list of columns with ColumnAccessor metadata from self.
+        """
+        column_accessor = self._data._from_columns_like_self(columns)
+        frame = type(self)._from_data(column_accessor)
         return frame._copy_type_metadata(self, override_dtypes=override_dtypes)
 
     @_cudf_nvtx_annotate
@@ -822,7 +814,6 @@ class Frame(BinaryOperand, Scannable):
                 column_order,
                 null_precedence,
             ),
-            column_names=self._column_names,
         )
 
     @classmethod
@@ -1120,7 +1111,7 @@ class Frame(BinaryOperand, Scannable):
         array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_columns_like_self(data_columns)
 
     # Alias for isna
     isnull = isna
@@ -1199,7 +1190,7 @@ class Frame(BinaryOperand, Scannable):
         array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_columns_like_self(data_columns)
 
     # Alias for notna
     notnull = notna
@@ -1492,7 +1483,6 @@ class Frame(BinaryOperand, Scannable):
                 libcudf.copying.columns_split([*self._data.columns], splits)[
                     split_idx
                 ],
-                self._column_names,
             )
             for split_idx in range(len(splits) + 1)
         ]
@@ -1506,7 +1496,7 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_columns_like_self(data_columns)
 
     @classmethod
     @_cudf_nvtx_annotate
@@ -1637,13 +1627,13 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def __neg__(self):
         """Negate for integral dtypes, logical NOT for bools."""
-        return self._from_data_like_self(
-            {
-                name: col.unary_operator("not")
-                if is_bool_dtype(col.dtype)
+        return self._from_columns_like_self(
+            (
+                col.unary_operator("not")
+                if col.dtype.kind == "b"
                 else -1 * col
-                for name, col in self._data.items()
-            }
+                for col in self._data.columns()
+            )
         )
 
     @_cudf_nvtx_annotate
@@ -1908,11 +1898,8 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
-        return self._from_data_like_self(
-            {
-                name: _apply_inverse_column(col)
-                for name, col in self._data.items()
-            }
+        return self._from_columns_like_self(
+            (_apply_inverse_column(col) for col in self._data.columns())
         )
 
     @_cudf_nvtx_annotate

@@ -421,7 +421,7 @@ class Merge:
                 stable=True,
             )
             result = result._from_columns_like_self(
-                result_columns, result._column_names, index_names
+                result_columns, index_names
             )
         return result
 

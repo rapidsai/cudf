@@ -2454,7 +2454,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         partitioned = self._from_columns_like_self(
             partitioned_columns,
-            column_names=self._column_names,
             index_names=list(self._index_names) if keep_index else None,
         )
 
@@ -3036,8 +3035,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # First process the condition.
         if isinstance(cond, Series):
-            cond = self._from_data_like_self(
-                {name: cond._column for name in self._column_names},
+            cond = self._from_columns_like_self(
+                itertools.repeat(cond._column, len(self._column_names))
             )
         elif hasattr(cond, "__cuda_array_interface__"):
             cond = DataFrame(
@@ -3078,7 +3077,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 should be equal to number of columns of self"""
             )
 
-        out = {}
+        out = []
         for (name, col), other_col in zip(self._data.items(), other_cols):
             col, other_col = _check_and_cast_columns_with_other(
                 source_col=col,
@@ -3091,16 +3090,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     col, other_col, cond_col
                 )
 
-                out[name] = _make_categorical_like(result, self._data[name])
+                out.append(_make_categorical_like(result, self._data[name]))
             else:
                 out_mask = cudf._lib.null_mask.create_null_mask(
                     len(col),
                     state=cudf._lib.null_mask.MaskState.ALL_NULL,
                 )
-                out[name] = col.set_mask(out_mask)
+                out.append(col.set_mask(out_mask))
 
         return self._mimic_inplace(
-            self._from_data_like_self(out), inplace=inplace
+            self._from_columns_like_self(out), inplace=inplace
         )
 
     @docutils.doc_apply(
@@ -4873,7 +4872,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         outdf = self._from_columns_like_self(
             output_columns,
-            self._column_names,
             self._index_names if keep_index else None,
         )
         # Slice into partitions. Notice, `hash_partition` returns the start
@@ -7491,14 +7489,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
-        column_names: abc.Iterable[str],
         index_names: Optional[List[str]] = None,
         *,
         override_dtypes: Optional[abc.Iterable[Optional[Dtype]]] = None,
     ) -> DataFrame:
         result = super()._from_columns_like_self(
             columns,
-            column_names,
             index_names,
             override_dtypes=override_dtypes,
         )
