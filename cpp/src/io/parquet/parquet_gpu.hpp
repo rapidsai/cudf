@@ -617,8 +617,8 @@ constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
   // return true for non-hashed byte_array and fixed_len_byte_array that isn't representing
   // a decimal.
-  if (chunk.logical_type.has_value()) {
-    if (chunk.logical_type->type == LogicalType::DECIMAL) { return false; }
+  if (chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL) {
+    return false;
   }
 
   auto const non_hashed_byte_array =
