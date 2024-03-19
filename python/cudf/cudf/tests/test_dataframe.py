@@ -2351,7 +2351,7 @@ def test_dataframe_reductions(data, axis, func, skipna):
     for kwargs in all_kwargs:
         if expected_exception is not None:
             with pytest.raises(expected_exception):
-                getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),
+                (getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs),)
         else:
             expect = getattr(pdf, func)(axis=axis, skipna=skipna, **kwargs)
             with expect_warning_if(
@@ -10947,3 +10947,12 @@ def test_dataframe_to_pandas_arrow_type(scalar):
     result = df.to_pandas(arrow_type=True)
     expected = pd.DataFrame({"a": pd.arrays.ArrowExtensionArray(pa_array)})
     pd.testing.assert_frame_equal(result, expected)
+
+
+@pytest.mark.parametrize("axis", [None, 0, "index", 1, "columns"])
+@pytest.mark.parametrize("data", [[[1, 2], [2, 3]], [1, 2], [1]])
+def test_squeeze(axis, data):
+    df = cudf.DataFrame(data)
+    result = df.squeeze(axis=axis)
+    expected = df.to_pandas().squeeze(axis=axis)
+    assert_eq(result, expected)
