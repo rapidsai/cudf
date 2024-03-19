@@ -372,11 +372,11 @@ int64_t find_next_split(int64_t cur_pos,
   Type physical,
   thrust::optional<LogicalType> logical_type)
 {
-  int32_t clock_rate = 0;
-  if (is_chrono(data_type{column_type_id})) { clock_rate = to_clockrate(timestamp_type_id); }
+  int32_t const clock_rate =
+    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
 
   if (logical_type.has_value() and logical_type->type == LogicalType::DECIMAL) {
-    // if decimal but not outputting as float or decimal, then no logical type
+    // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
         not cudf::is_fixed_point(data_type{column_type_id})) {
       return std::make_tuple(clock_rate, thrust::nullopt);

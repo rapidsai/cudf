@@ -25,46 +25,6 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const& logical)
-{
-  if (not logical.has_value()) { return UNKNOWN; }
-  switch (logical->type) {
-    case LogicalType::STRING: return UTF8;
-    case LogicalType::MAP: return MAP;
-    case LogicalType::LIST: return LIST;
-    case LogicalType::ENUM: return ENUM;
-    case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
-    case LogicalType::DATE: return DATE;
-    case LogicalType::TIME:
-      if (logical->is_time_millis()) {
-        return TIME_MILLIS;
-      } else if (logical->is_time_micros()) {
-        return TIME_MICROS;
-      }
-      break;
-    case LogicalType::TIMESTAMP:
-      if (logical->is_timestamp_millis()) {
-        return TIMESTAMP_MILLIS;
-      } else if (logical->is_timestamp_micros()) {
-        return TIMESTAMP_MICROS;
-      }
-      break;
-    case LogicalType::INTEGER:
-      switch (logical->bit_width()) {
-        case 8: return logical->is_signed() ? INT_8 : UINT_8;
-        case 16: return logical->is_signed() ? INT_16 : UINT_16;
-        case 32: return logical->is_signed() ? INT_32 : UINT_32;
-        case 64: return logical->is_signed() ? INT_64 : UINT_64;
-        default: break;
-      }
-    case LogicalType::UNKNOWN: return NA;
-    case LogicalType::JSON: return JSON;
-    case LogicalType::BSON: return BSON;
-    default: break;
-  }
-  return UNKNOWN;
-}
-
 thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
   ConvertedType converted = schema.converted_type.value_or(UNKNOWN);
@@ -103,76 +63,79 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  auto const physical       = schema.type;
-  auto const logical_type   = schema.logical_type;
-  auto converted_type       = schema.converted_type;
-  int32_t decimal_precision = schema.decimal_precision;
+  auto const physical     = schema.type;
+  auto const logical_type = schema.logical_type;
 
-  // FIXME(ets): this should just use logical type to deduce the type_id. then fall back to
-  // converted_type if logical_type isn't set
-  // Logical type used for actual data interpretation; the legacy converted type
-  // is superseded by 'logical' type whenever available.
-  auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
-  if (inferred_converted_type != UNKNOWN) { converted_type = inferred_converted_type; }
-  if (inferred_converted_type == DECIMAL) { decimal_precision = schema.logical_type->precision(); }
+  // logical type should have been populated from converted type for older files by now
+  CUDF_EXPECTS(logical_type.has_value() or not schema.converted_type.has_value(),
+               "Schema has converted type but no logical type");
 
-  switch (converted_type.value_or(UNKNOWN)) {
-    case UINT_8: return type_id::UINT8;
-    case INT_8: return type_id::INT8;
-    case UINT_16: return type_id::UINT16;
-    case INT_16: return type_id::INT16;
-    case UINT_32: return type_id::UINT32;
-    case UINT_64: return type_id::UINT64;
-    case DATE: return type_id::TIMESTAMP_DAYS;
-    case TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
-    case TIME_MICROS: return type_id::DURATION_MICROSECONDS;
-    case TIMESTAMP_MILLIS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MILLISECONDS;
-    case TIMESTAMP_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MICROSECONDS;
-    case DECIMAL:
-      if (physical == INT32) { return type_id::DECIMAL32; }
-      if (physical == INT64) { return type_id::DECIMAL64; }
-      if (physical == FIXED_LEN_BYTE_ARRAY) {
-        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+  if (logical_type.has_value()) {
+    switch (logical_type->type) {
+      case LogicalType::INTEGER: {
+        auto const is_signed = logical_type->is_signed();
+        switch (logical_type->bit_width()) {
+          case 8: return is_signed ? type_id::INT8 : type_id::UINT8;
+          case 16: return is_signed ? type_id::INT16 : type_id::UINT16;
+          case 32: return is_signed ? type_id::INT32 : type_id::UINT32;
+          case 64: return is_signed ? type_id::INT64 : type_id::UINT64;
+          default: CUDF_FAIL("Invalid integer bitwidth");
+        }
+      } break;
+
+      case LogicalType::TIME:
+        if (logical_type->is_time_millis()) {
+          return type_id::DURATION_MILLISECONDS;
+        } else if (logical_type->is_time_micros()) {
+          return type_id::DURATION_MICROSECONDS;
+        } else if (logical_type->is_time_nanos()) {
+          return type_id::DURATION_NANOSECONDS;
+        }
+        break;
+
+      case LogicalType::TIMESTAMP:
+        if (timestamp_type_id != type_id::EMPTY) {
+          return timestamp_type_id;
+        } else if (logical_type->is_timestamp_millis()) {
+          return type_id::TIMESTAMP_MILLISECONDS;
+        } else if (logical_type->is_timestamp_micros()) {
+          return type_id::TIMESTAMP_MICROSECONDS;
+        } else if (logical_type->is_timestamp_nanos()) {
+          return type_id::TIMESTAMP_NANOSECONDS;
+        }
+
+      case LogicalType::DECIMAL: {
+        int32_t const decimal_precision = logical_type->precision();
+        if (physical == INT32) {
           return type_id::DECIMAL32;
-        }
-        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+        } else if (physical == INT64) {
           return type_id::DECIMAL64;
-        }
-        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
-          return type_id::DECIMAL128;
-        }
-      }
-      if (physical == BYTE_ARRAY) {
-        CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
-        if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
-          return type_id::DECIMAL32;
-        } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
-          return type_id::DECIMAL64;
+        } else if (physical == FIXED_LEN_BYTE_ARRAY) {
+          if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+            return type_id::DECIMAL32;
+          } else if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+            return type_id::DECIMAL64;
+          } else if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+            return type_id::DECIMAL128;
+          }
+        } else if (physical == BYTE_ARRAY) {
+          CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
+          if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+            return type_id::DECIMAL32;
+          } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+            return type_id::DECIMAL64;
+          } else {
+            return type_id::DECIMAL128;
+          }
         } else {
-          return type_id::DECIMAL128;
+          CUDF_FAIL("Invalid representation of decimal type");
         }
-      }
-      CUDF_FAIL("Invalid representation of decimal type");
-      break;
+      } break;
 
-    // maps are just List<Struct<>>.
-    case MAP:
-    case LIST: return type_id::LIST;
-    case NA: return type_id::STRING;
-    // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
-    default: break;
-  }
-
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value()) {
-    if (logical_type->is_timestamp_nanos()) {
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_NANOSECONDS;
-    } else if (logical_type->is_time_nanos()) {
-      return type_id::DURATION_NANOSECONDS;
+        // maps are just List<Struct<>>.
+      case LogicalType::MAP:
+      case LogicalType::LIST: return type_id::LIST;
+      default: break;
     }
   }
 
