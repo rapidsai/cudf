@@ -26,6 +26,7 @@ def read_json(
     keep_quotes=False,
     storage_options=None,
     mixed_types_as_string=False,
+    use_dtypes_as_filter=False,
     *args,
     **kwargs,
 ):
@@ -120,6 +121,7 @@ def read_json(
             engine == "cudf_legacy",
             keep_quotes,
             mixed_types_as_string,
+            use_dtypes_as_filter,
         )
     else:
         warnings.warn(

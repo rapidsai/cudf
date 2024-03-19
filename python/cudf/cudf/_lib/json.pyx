@@ -51,7 +51,8 @@ cpdef read_json(object filepaths_or_buffers,
                 object byte_range,
                 bool legacy,
                 bool keep_quotes,
-                bool mixed_types_as_string):
+                bool mixed_types_as_string,
+                bool use_dtypes_as_filter):
     """
     Cython function to call into libcudf API, see `read_json`.
 
@@ -130,6 +131,7 @@ cpdef read_json(object filepaths_or_buffers,
 
     opts.enable_keep_quotes(keep_quotes)
     opts.enable_mixed_types_as_string(mixed_types_as_string)
+    opts.enable_use_dtypes_as_filter(use_dtypes_as_filter)
     # Read JSON
     cdef cudf_io_types.table_with_metadata c_result
 
