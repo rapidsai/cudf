@@ -85,9 +85,7 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-""".format(
-    remote_data_sources=_docstring_remote_sources
-)
+""".format(remote_data_sources=_docstring_remote_sources)
 doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
@@ -1416,9 +1414,7 @@ filepath_or_buffer : str, bytes, BytesIO, list
     list of Filepath strings or in-memory buffers of data.
 compression : str
     Type of compression algorithm for the content
-    """.format(
-    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT
-)
+    """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
 doc_get_reader_filepath_or_buffer = docfmt_partial(

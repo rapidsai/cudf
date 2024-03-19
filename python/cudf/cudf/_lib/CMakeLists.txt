@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -65,7 +65,8 @@ rapids_cython_create_modules(
 
 target_link_libraries(strings_udf PUBLIC cudf_strings_udf)
 
-link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")
+set(targets_using_arrow_headers interop avro csv orc json parquet)
+link_to_pyarrow_headers("${targets_using_arrow_headers}")
 
 add_subdirectory(cpp)
 add_subdirectory(io)
