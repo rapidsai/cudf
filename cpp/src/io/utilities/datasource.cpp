@@ -44,6 +44,11 @@ class file_source : public datasource {
   explicit file_source(char const* filepath) : _file(filepath, O_RDONLY)
   {
     if (detail::cufile_integration::is_kvikio_enabled()) {
+      // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
+      // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is
+      // already initialized
+      cudaFree(0);
+
       _kvikio_file = kvikio::FileHandle(filepath);
       CUDF_LOG_INFO("Reading a file using kvikIO, with compatibility mode {}.",
                     _kvikio_file.is_compat_mode_on() ? "on" : "off");

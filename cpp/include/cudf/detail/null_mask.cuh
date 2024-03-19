@@ -368,13 +368,16 @@ template <typename IndexIterator>
 size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator indices_end)
 {
   auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
-  CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
+  CUDF_EXPECTS(num_indices % 2 == 0,
+               "Array of indices needs to have an even number of elements.",
+               std::invalid_argument);
   size_type const num_segments = num_indices / 2;
   for (size_type i = 0; i < num_segments; i++) {
     auto begin = indices_begin[2 * i];
     auto end   = indices_begin[2 * i + 1];
-    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.", std::out_of_range);
+    CUDF_EXPECTS(
+      end >= begin, "End index cannot be smaller than the starting index.", std::invalid_argument);
   }
   return num_segments;
 }

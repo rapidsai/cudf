@@ -1259,7 +1259,7 @@ def test_groupby_unsupported_columns():
     pdg = pdf.groupby("x").sum(numeric_only=True)
     # cudf does not yet support numeric_only, so our default is False (unlike
     # pandas, which defaults to inferring and throws a warning about it).
-    gdg = gdf.groupby("x").sum()
+    gdg = gdf.groupby("x").sum(numeric_only=True)
     assert_groupby_results_equal(pdg, gdg)
 
 
@@ -2158,7 +2158,9 @@ def test_groupby_list_columns_excluded():
     pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
 
     assert_groupby_results_equal(
-        pandas_result, gdf.groupby("a").mean(), check_dtype=False
+        pandas_result,
+        gdf.groupby("a").mean(numeric_only=True),
+        check_dtype=False,
     )
 
     assert_groupby_results_equal(
@@ -3825,4 +3827,28 @@ def test_groupby_shift_series_multiindex():
     ser = Series(range(4), index=idx)
     result = ser.groupby(level=0).shift(1)
     expected = ser.to_pandas().groupby(level=0).shift(1)
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "idxmin", "idxmax"]
+)
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        ("a", {"a": [1, 2, 3]}),
+        (["a", "id"], {"id": [0, 0, 1], "a": [1, 2, 3]}),
+        ("a", {"a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        ("id", {"id": [0, 0, 1], "a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        (["b", "id"], {"id": [0, 0, 1], "b": ["A", "B", "C"]}),
+        ("b", {"b": ["A", "B", "C"]}),
+    ],
+)
+def test_group_by_reduce_numeric_only(by, data, func):
+    # Test that simple groupby reductions support numeric_only=True
+    df = cudf.DataFrame(data)
+    expected = getattr(df.to_pandas().groupby(by, sort=True), func)(
+        numeric_only=True
+    )
+    result = getattr(df.groupby(by, sort=True), func)(numeric_only=True)
     assert_eq(expected, result)
