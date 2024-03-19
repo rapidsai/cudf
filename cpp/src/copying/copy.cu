@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,8 @@
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -319,7 +321,8 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
-               "Boolean mask column must be of type type_id::BOOL8");
+               "Boolean mask column must be of type type_id::BOOL8",
+               cudf::data_type_error);
 
   if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
@@ -356,9 +359,11 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
-               "Boolean mask column must be the same size as lhs and rhs columns");
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");
-  CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
+               "Boolean mask column must be the same size as lhs and rhs columns",
+               std::invalid_argument);
+  CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size", std::invalid_argument);
+  CUDF_EXPECTS(
+    lhs.type() == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, lhs.has_nulls(), rhs.has_nulls(), boolean_mask, stream, mr);
 }
@@ -370,11 +375,13 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
-               "Boolean mask column must be the same size as rhs column");
+               "Boolean mask column must be the same size as rhs column",
+               std::invalid_argument);
 
   auto rhs_type =
     cudf::is_dictionary(rhs.type()) ? cudf::dictionary_column_view(rhs).keys_type() : rhs.type();
-  CUDF_EXPECTS(lhs.type() == rhs_type, "Both inputs must be of the same type");
+  CUDF_EXPECTS(
+    lhs.type() == rhs_type, "Both inputs must be of the same type", cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);
 }
@@ -386,11 +393,13 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
-               "Boolean mask column must be the same size as lhs column");
+               "Boolean mask column must be the same size as lhs column",
+               std::invalid_argument);
 
   auto lhs_type =
     cudf::is_dictionary(lhs.type()) ? cudf::dictionary_column_view(lhs).keys_type() : lhs.type();
-  CUDF_EXPECTS(lhs_type == rhs.type(), "Both inputs must be of the same type");
+  CUDF_EXPECTS(
+    lhs_type == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
@@ -401,7 +410,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
+  CUDF_EXPECTS(
+    lhs.type() == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
   return copy_if_else(
     lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
