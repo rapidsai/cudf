@@ -719,6 +719,64 @@ TEST_F(ParquetWriterTest, CheckPageRowsTooSmall)
   EXPECT_EQ(ph.data_page_header.num_values, num_rows);
 }
 
+TEST_F(ParquetWriterTest, Decimal32Stats)
+{
+  // check that decimal64 min and max statistics are written properly
+  std::vector<uint8_t> expected_min{0, 0, 0xb2, 0xa1};
+  std::vector<uint8_t> expected_max{0xb2, 0xa1, 0, 0};
+
+  int32_t val0 = 0xa1b2;
+  int32_t val1 = val0 << 16;
+  column_wrapper<numeric::decimal32> col0{{numeric::decimal32(val0, numeric::scale_type{0}),
+                                           numeric::decimal32(val1, numeric::scale_type{0})}};
+
+  auto expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("Decimal32Stats.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+
+  EXPECT_EQ(expected_min, stats.min_value);
+  EXPECT_EQ(expected_max, stats.max_value);
+}
+
+TEST_F(ParquetWriterTest, Decimal64Stats)
+{
+  // check that decimal64 min and max statistics are written properly
+  std::vector<uint8_t> expected_min{0, 0, 0, 0, 0xd4, 0xc3, 0xb2, 0xa1};
+  std::vector<uint8_t> expected_max{0xd4, 0xc3, 0xb2, 0xa1, 0, 0, 0, 0};
+
+  int64_t val0 = 0xa1b2'c3d4UL;
+  int64_t val1 = val0 << 32;
+  column_wrapper<numeric::decimal64> col0{{numeric::decimal64(val0, numeric::scale_type{0}),
+                                           numeric::decimal64(val1, numeric::scale_type{0})}};
+
+  auto expected = table_view{{col0}};
+
+  auto const filepath = temp_env->get_temp_filepath("Decimal64Stats.parquet");
+  const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::detail::FileMetaData fmd;
+
+  read_footer(source, &fmd);
+
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+
+  EXPECT_EQ(expected_min, stats.min_value);
+  EXPECT_EQ(expected_max, stats.max_value);
+}
+
 TEST_F(ParquetWriterTest, Decimal128Stats)
 {
   // check that decimal128 min and max statistics are written in network byte order
