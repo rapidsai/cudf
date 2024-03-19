@@ -26,3 +26,6 @@ cdef class DataType:
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt)
+
+cdef class Id:
+    cdef type_id c_obj

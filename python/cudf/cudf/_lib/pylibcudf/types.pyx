@@ -51,3 +51,7 @@ cdef class DataType:
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
         return ret
+
+cdef class Id:
+    def __cinit__(self, type_id tyid):
+        self.c_obj = tyid

@@ -7,25 +7,20 @@ from cudf._lib.cpp.types cimport (
     bitmask_type,
     mask_state,
     size_type,
-    type_id as TypeId,
 )
 
 from .column cimport Column
-from .types cimport DataType
+from .types cimport DataType, Id as TypeId
 
 ctypedef fused MakeEmptyColumnOperand:
     DataType
     TypeId
 
-ctypedef fused MaskStateOrMask:
+ctypedef fused MaskArg:
     mask_state
-    MaskAndNullCnt
+    tuple
+    object
 
-cpdef Column make_numeric_column(
-    DataType type_,
-    size_type size,
-    MaskStateOrMask state_or_mask
-)
 
 cpdef Column make_empty_column(
     MakeEmptyColumnOperand type_or_id
@@ -34,23 +29,5 @@ cpdef Column make_empty_column(
 cpdef Column make_numeric_column(
     DataType type_,
     size_type size,
-    MaskStateOrMask state_or_mask
-)
-
-cdef Column make_timestamp_column(
-    DataType type_,
-    size_type size,
-    MaskStateOrMask state_or_mask
-)
-
-cdef Column make_duration_column(
-    DataType type_,
-    size_type size,
-    MaskStateOrMask state_or_mask
-)
-
-cdef Column make_fixed_point_column(
-    DataType type_,
-    size_type size,
-    MaskStateOrMask state_or_mask
+    MaskArg mstate,
 )
