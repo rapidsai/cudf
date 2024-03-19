@@ -11,12 +11,14 @@ from cudf._lib.cpp.column.column_factories cimport (
     make_numeric_column as cpp_make_numeric_column,
     make_timestamp_column as cpp_make_timestamp_column,
 )
-from cudf._lib.cpp.types cimport size_type, mask_state
-from cudf._lib.cpp.types import mask_state as MaskState
-from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
-from .gpumemoryview import gpumemoryview
+from cudf._lib.cpp.types cimport mask_state, size_type
 
-from .types cimport DataType, Id as TypeId
+from cudf._lib.cpp.types import mask_state as MaskState
+
+from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
+
+from .types cimport DataType
+
 
 cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
     cdef unique_ptr[column] result
@@ -37,7 +39,6 @@ cpdef Column make_numeric_column(
 
     cdef unique_ptr[column] result
     cdef mask_state state
-
     cdef DeviceBuffer mask_buf
     cdef device_buffer mask
     cdef size_type null_count
@@ -54,11 +55,8 @@ cpdef Column make_numeric_column(
                     )
                 )
     elif MaskArg is tuple:
-        mask_buf = mstate[0]
+        mask_buf, null_count = mstate
         mask = move(mask_buf.c_release())
-        null_count = mstate[1]
-
-
 
         with nogil:
             result = move(
@@ -71,7 +69,169 @@ cpdef Column make_numeric_column(
             )
     else:
         raise TypeError("Invalid mask argument")
- 
 
     return Column.from_libcudf(move(result))
 
+cpdef Column make_fixed_point_column(
+    DataType type_,
+    size_type size,
+    MaskArg mstate
+):
+
+    cdef unique_ptr[column] result
+    cdef mask_state state
+    cdef DeviceBuffer mask_buf
+    cdef device_buffer mask
+    cdef size_type null_count
+
+    if MaskArg is object:
+        if isinstance(mstate, MaskState):
+            state = mstate
+            with nogil:
+                result = move(
+                    cpp_make_fixed_point_column(
+                        type_.c_obj,
+                        size,
+                        state
+                    )
+                )
+    elif MaskArg is tuple:
+        mask_buf, null_count = mstate
+        mask = move(mask_buf.c_release())
+
+        with nogil:
+            result = move(
+                cpp_make_fixed_point_column(
+                    type_.c_obj,
+                    size,
+                    move(mask),
+                    null_count
+                )
+            )
+    else:
+        raise TypeError("Invalid mask argument")
+
+    return Column.from_libcudf(move(result))
+
+cpdef Column make_timestamp_column(
+    DataType type_,
+    size_type size,
+    MaskArg mstate
+):
+
+    cdef unique_ptr[column] result
+    cdef mask_state state
+    cdef DeviceBuffer mask_buf
+    cdef device_buffer mask
+    cdef size_type null_count
+
+    if MaskArg is object:
+        if isinstance(mstate, MaskState):
+            state = mstate
+            with nogil:
+                result = move(
+                    cpp_make_timestamp_column(
+                        type_.c_obj,
+                        size,
+                        state
+                    )
+                )
+    elif MaskArg is tuple:
+        mask_buf, null_count = mstate
+        mask = move(mask_buf.c_release())
+
+        with nogil:
+            result = move(
+                cpp_make_timestamp_column(
+                    type_.c_obj,
+                    size,
+                    move(mask),
+                    null_count
+                )
+            )
+    else:
+        raise TypeError("Invalid mask argument")
+
+    return Column.from_libcudf(move(result))
+
+cpdef Column make_duration_column(
+    DataType type_,
+    size_type size,
+    MaskArg mstate
+):
+
+    cdef unique_ptr[column] result
+    cdef mask_state state
+    cdef DeviceBuffer mask_buf
+    cdef device_buffer mask
+    cdef size_type null_count
+
+    if MaskArg is object:
+        if isinstance(mstate, MaskState):
+            state = mstate
+            with nogil:
+                result = move(
+                    cpp_make_duration_column(
+                        type_.c_obj,
+                        size,
+                        state
+                    )
+                )
+    elif MaskArg is tuple:
+        mask_buf, null_count = mstate
+        mask = move(mask_buf.c_release())
+
+        with nogil:
+            result = move(
+                cpp_make_duration_column(
+                    type_.c_obj,
+                    size,
+                    move(mask),
+                    null_count
+                )
+            )
+    else:
+        raise TypeError("Invalid mask argument")
+
+    return Column.from_libcudf(move(result))
+
+cpdef Column make_fixed_width_column(
+    DataType type_,
+    size_type size,
+    MaskArg mstate
+):
+
+    cdef unique_ptr[column] result
+    cdef mask_state state
+    cdef DeviceBuffer mask_buf
+    cdef device_buffer mask
+    cdef size_type null_count
+
+    if MaskArg is object:
+        if isinstance(mstate, MaskState):
+            state = mstate
+            with nogil:
+                result = move(
+                    cpp_make_fixed_width_column(
+                        type_.c_obj,
+                        size,
+                        state
+                    )
+                )
+    elif MaskArg is tuple:
+        mask_buf, null_count = mstate
+        mask = move(mask_buf.c_release())
+
+        with nogil:
+            result = move(
+                cpp_make_fixed_width_column(
+                    type_.c_obj,
+                    size,
+                    move(mask),
+                    null_count
+                )
+            )
+    else:
+        raise TypeError("Invalid mask argument")
+
+    return Column.from_libcudf(move(result))

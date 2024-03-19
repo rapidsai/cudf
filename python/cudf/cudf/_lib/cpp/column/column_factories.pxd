@@ -2,6 +2,8 @@
 
 from libcpp.memory cimport unique_ptr
 
+from rmm._lib.device_buffer cimport device_buffer
+
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport (
@@ -11,7 +13,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
     type_id,
 )
-from rmm._lib.device_buffer cimport device_buffer
+
 
 cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_numeric_column(data_type type,
@@ -31,7 +33,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_fixed_point_column(
         data_type type,
         size_type size,
-        const bitmask_type* mask,
+        device_buffer mask,
         size_type null_count) except +
 
     cdef unique_ptr[column] make_timestamp_column(
@@ -42,7 +44,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_timestamp_column(
         data_type type,
         size_type size,
-        const bitmask_type* mask,
+        device_buffer mask,
         size_type null_count) except +
 
     cdef unique_ptr[column] make_duration_column(
@@ -53,7 +55,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_duration_column(
         data_type type,
         size_type size,
-        const bitmask_type* mask,
+        device_buffer mask,
         size_type null_count) except +
 
     cdef unique_ptr[column] make_fixed_width_column(
@@ -64,7 +66,7 @@ cdef extern from "cudf/column/column_factories.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] make_fixed_width_column(
         data_type type,
         size_type size,
-        const bitmask_type* mask,
+        device_buffer mask,
         size_type null_count) except +
 
     cdef unique_ptr[column] make_column_from_scalar (const scalar & s,
