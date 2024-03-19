@@ -1400,8 +1400,8 @@ Here are some tools that can help with debugging libcudf (besides printf of cour
    The `print()` utility can be called within a gtest to output the data in a `cudf::column_view`.
    More information is available in the [Testing Guide](TESTING.md#printing-and-accessing-column-data)
 4. GCC Address Sanitizer\
-   The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flags.
+   The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flag.
    There is a compatibility issue with the CUDA runtime that can be worked around by setting
    environment variable `ASAN_OPTIONS=protect_shadow_gap=0` before running the executable.
-   Note also the CUDA compute-sanitizer can also be used with GCC ASAN with the
+   Note also the CUDA `compute-sanitizer` can also be used with GCC ASAN with the
    environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`
