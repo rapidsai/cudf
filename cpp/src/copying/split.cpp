@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,8 +34,7 @@ std::vector<T> split(T const& input,
                      rmm::cuda_stream_view stream)
 {
   if (splits.empty() or column_size == 0) { return std::vector<T>{input}; }
-  CUDF_EXPECTS(
-    splits.back() <= column_size, "splits can't exceed size of input columns", std::out_of_range);
+  CUDF_EXPECTS(splits.back() <= column_size, "splits can't exceed size of input columns");
 
   // If the size is not zero, the split will always start at `0`
   std::vector<size_type> indices{0};

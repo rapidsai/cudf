@@ -202,17 +202,14 @@ void copy_range_in_place(column_view const& source,
                          rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(cudf::is_fixed_width(target.type()),
-               "In-place copy_range does not support variable-sized types.",
-               cudf::data_type_error);
+               "In-place copy_range does not support variable-sized types.");
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
                  (target_begin <= target.size() - (source_end - source_begin)),
-               "Range is out of bounds.",
-               std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+               "Range is out of bounds.");
+  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
   CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
-               "target should be nullable if source has null values.",
-               std::invalid_argument);
+               "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
     cudf::type_dispatcher<dispatch_storage_type>(target.type(),
@@ -235,9 +232,8 @@ std::unique_ptr<column> copy_range(column_view const& source,
   CUDF_EXPECTS((source_begin >= 0) && (source_end <= source.size()) &&
                  (source_begin <= source_end) && (target_begin >= 0) &&
                  (target_begin <= target.size() - (source_end - source_begin)),
-               "Range is out of bounds.",
-               std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+               "Range is out of bounds.");
+  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
   return cudf::type_dispatcher<dispatch_storage_type>(
     target.type(),
