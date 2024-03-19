@@ -363,20 +363,20 @@ TEST_F(ToArrowDeviceTest, DateTimeTable)
 
   auto data_ptr        = input.get_column(0).view().data<int64_t>();
   auto got_arrow_array = cudf::to_arrow_device(std::move(input));
-  ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
-  ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+  EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
 
-  ASSERT_EQ(data.size(), got_arrow_array->array.length);
-  ASSERT_EQ(0, got_arrow_array->array.null_count);
-  ASSERT_EQ(0, got_arrow_array->array.offset);
-  ASSERT_EQ(1, got_arrow_array->array.n_children);
-  ASSERT_EQ(nullptr, got_arrow_array->array.buffers[0]);
+  EXPECT_EQ(data.size(), got_arrow_array->array.length);
+  EXPECT_EQ(0, got_arrow_array->array.null_count);
+  EXPECT_EQ(0, got_arrow_array->array.offset);
+  EXPECT_EQ(1, got_arrow_array->array.n_children);
+  EXPECT_EQ(nullptr, got_arrow_array->array.buffers[0]);
 
-  ASSERT_EQ(data.size(), got_arrow_array->array.children[0]->length);
-  ASSERT_EQ(0, got_arrow_array->array.children[0]->null_count);
-  ASSERT_EQ(0, got_arrow_array->array.children[0]->offset);
-  ASSERT_EQ(nullptr, got_arrow_array->array.children[0]->buffers[0]);
-  ASSERT_EQ(data_ptr, got_arrow_array->array.children[0]->buffers[1]);
+  EXPECT_EQ(data.size(), got_arrow_array->array.children[0]->length);
+  EXPECT_EQ(0, got_arrow_array->array.children[0]->null_count);
+  EXPECT_EQ(0, got_arrow_array->array.children[0]->offset);
+  EXPECT_EQ(nullptr, got_arrow_array->array.children[0]->buffers[0]);
+  EXPECT_EQ(data_ptr, got_arrow_array->array.children[0]->buffers[1]);
 
   ArrowArrayRelease(&got_arrow_array->array);
 }
