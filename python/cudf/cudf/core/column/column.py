@@ -1731,7 +1731,8 @@ def as_column(
         If None (default), treats NaN values in arbitrary as null if there is
         no mask passed along with it. If True, combines the mask and NaNs to
         form a new validity mask. If False, leaves NaN values as is.
-        Only applies when arbitrary is not a cudf object (Index, Series, Column).
+        Only applies when arbitrary is not a cudf object
+        (Index, Series, Column).
     dtype : optional
         Optionally typecast the constructed Column to the given
         dtype.
