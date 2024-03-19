@@ -27,31 +27,33 @@ namespace {
 
 thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
-  ConvertedType converted = schema.converted_type.value_or(UNKNOWN);
-  switch (converted) {
-    case ENUM:  // treat ENUM as UTF8 string
-    case UTF8: return LogicalType{LogicalType::STRING};
-    case MAP: return LogicalType{LogicalType::MAP};
-    case LIST: return LogicalType{LogicalType::LIST};
-    case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
-    case DATE: return LogicalType{LogicalType::DATE};
-    case TIME_MILLIS: return LogicalType{TimeType{true, TimeUnit::MILLIS}};
-    case TIME_MICROS: return LogicalType{TimeType{true, TimeUnit::MICROS}};
-    case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, TimeUnit::MILLIS}};
-    case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, TimeUnit::MICROS}};
-    case UINT_8: return LogicalType{IntType{8, false}};
-    case UINT_16: return LogicalType{IntType{16, false}};
-    case UINT_32: return LogicalType{IntType{32, false}};
-    case UINT_64: return LogicalType{IntType{64, false}};
-    case INT_8: return LogicalType{IntType{8, true}};
-    case INT_16: return LogicalType{IntType{16, true}};
-    case INT_32: return LogicalType{IntType{32, true}};
-    case INT_64: return LogicalType{IntType{64, true}};
-    case JSON: return LogicalType{LogicalType::JSON};
-    case BSON: return LogicalType{LogicalType::BSON};
-    case INTERVAL:  // there is no logical type for INTERVAL yet
-    default: return thrust::nullopt;
+  if (schema.converted_type.has_value()) {
+    switch (schema.converted_type.value()) {
+      case ENUM:  // treat ENUM as UTF8 string
+      case UTF8: return LogicalType{LogicalType::STRING};
+      case MAP: return LogicalType{LogicalType::MAP};
+      case LIST: return LogicalType{LogicalType::LIST};
+      case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
+      case DATE: return LogicalType{LogicalType::DATE};
+      case TIME_MILLIS: return LogicalType{TimeType{true, TimeUnit::MILLIS}};
+      case TIME_MICROS: return LogicalType{TimeType{true, TimeUnit::MICROS}};
+      case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, TimeUnit::MILLIS}};
+      case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, TimeUnit::MICROS}};
+      case UINT_8: return LogicalType{IntType{8, false}};
+      case UINT_16: return LogicalType{IntType{16, false}};
+      case UINT_32: return LogicalType{IntType{32, false}};
+      case UINT_64: return LogicalType{IntType{64, false}};
+      case INT_8: return LogicalType{IntType{8, true}};
+      case INT_16: return LogicalType{IntType{16, true}};
+      case INT_32: return LogicalType{IntType{32, true}};
+      case INT_64: return LogicalType{IntType{64, true}};
+      case JSON: return LogicalType{LogicalType::JSON};
+      case BSON: return LogicalType{LogicalType::BSON};
+      case INTERVAL:  // there is no logical type for INTERVAL yet
+      default: return thrust::optional<LogicalType>{LogicalType{LogicalType::UNDEFINED}};
+    }
   }
+  return thrust::nullopt;
 }
 
 }  // namespace
@@ -63,12 +65,14 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  auto const physical     = schema.type;
-  auto const logical_type = schema.logical_type;
+  auto const physical = schema.type;
+  auto logical_type   = schema.logical_type;
 
-  // logical type should have been populated from converted type for older files by now
-  CUDF_EXPECTS(logical_type.has_value() or not schema.converted_type.has_value(),
-               "Schema has converted type but no logical type");
+  // FIXME: sometimes we don't hit all of the schema elements?
+  // see ParquetReaderTest.RepeatedNoAnnotations
+  if (schema.converted_type.has_value() and not logical_type.has_value()) {
+    logical_type = converted_to_logical_type(schema);
+  }
 
   if (logical_type.has_value()) {
     switch (logical_type->type) {
@@ -82,6 +86,8 @@ type_id to_type_id(SchemaElement const& schema,
           default: CUDF_FAIL("Invalid integer bitwidth");
         }
       } break;
+
+      case LogicalType::DATE: return type_id::TIMESTAMP_DAYS;
 
       case LogicalType::TIME:
         if (logical_type->is_time_millis()) {
