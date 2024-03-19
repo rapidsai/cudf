@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -39,9 +40,9 @@ ColumnView slice(ColumnView const& input,
                  size_type end,
                  rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
-  CUDF_EXPECTS(end >= begin, "Invalid end of range.");
-  CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
+  CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.", std::out_of_range);
+  CUDF_EXPECTS(end >= begin, "Invalid end of range.", std::invalid_argument);
+  CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.", std::out_of_range);
 
   std::vector<ColumnView> children{};
   children.reserve(input.num_children());
@@ -72,7 +73,7 @@ std::vector<column_view> slice(column_view const& input,
                                host_span<size_type const> indices,
                                rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
+  CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even", std::invalid_argument);
 
   if (indices.empty()) return {};
 
@@ -88,9 +89,10 @@ std::vector<column_view> slice(column_view const& input,
   auto op = [&](auto i) {
     auto begin = indices[2 * i];
     auto end   = indices[2 * i + 1];
-    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.", std::out_of_range);
+    CUDF_EXPECTS(
+      end >= begin, "End index cannot be smaller than the starting index.", std::invalid_argument);
+    CUDF_EXPECTS(end <= input.size(), "Slice range out of bounds.", std::out_of_range);
     return column_view{input.type(),
                        end - begin,
                        input.head(),
@@ -107,7 +109,7 @@ std::vector<table_view> slice(table_view const& input,
                               host_span<size_type const> indices,
                               rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
+  CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even", std::invalid_argument);
   if (indices.empty()) { return {}; }
 
   // 2d arrangement of column_views that represent the outgoing table_views sliced_table[i][j]
