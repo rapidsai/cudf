@@ -189,8 +189,6 @@ inline auto make_stream_mode_adaptor(cxxopts::ParseResult const& cmd_opts)
     auto const rmm_mode = cmd_opts["rmm_mode"].as<std::string>();       \
     auto resource       = cudf::test::create_memory_resource(rmm_mode); \
     rmm::mr::set_current_device_resource(resource.get());               \
-                                                                        \
     auto adaptor = make_stream_mode_adaptor(cmd_opts);                  \
-                                                                        \
     return RUN_ALL_TESTS();                                             \
   }
