@@ -13,7 +13,7 @@ from cudf._lib.cpp.column.column_factories cimport (
 )
 from cudf._lib.cpp.types cimport size_type, mask_state
 from cudf._lib.cpp.types import mask_state as MaskState
-from rmm._lib.device_buffer cimport DeviceBuffer
+from rmm._lib.device_buffer cimport device_buffer, DeviceBuffer
 from .gpumemoryview import gpumemoryview
 
 from .types cimport DataType, Id as TypeId
@@ -38,7 +38,8 @@ cpdef Column make_numeric_column(
     cdef unique_ptr[column] result
     cdef mask_state state
 
-    cdef DeviceBuffer mask
+    cdef DeviceBuffer mask_buf
+    cdef device_buffer mask
     cdef size_type null_count
 
     if MaskArg is object:
@@ -53,15 +54,18 @@ cpdef Column make_numeric_column(
                     )
                 )
     elif MaskArg is tuple:
-        mask = mstate[0]
+        mask_buf = mstate[0]
+        mask = move(mask_buf.c_release())
         null_count = mstate[1]
+
+
 
         with nogil:
             result = move(
                 cpp_make_numeric_column(
                     type_.c_obj,
                     size,
-                    move(mask.c_release()),
+                    move(mask),
                     null_count
                 )
             )
