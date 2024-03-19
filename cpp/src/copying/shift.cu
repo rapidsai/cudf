@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 
 namespace cudf {
 namespace {
@@ -71,7 +72,7 @@ struct shift_functor {
                    std::unique_ptr<column>>
   operator()(Args&&...)
   {
-    CUDF_FAIL("shift only supports fixed-width or string types.");
+    CUDF_FAIL("shift only supports fixed-width or string types.", cudf::data_type_error);
   }
 
   template <typename T, typename... Args>
@@ -157,7 +158,8 @@ std::unique_ptr<column> shift(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(input.type() == fill_value.type(),
-               "shift requires each fill value type to match the corresponding column type.");
+               "shift requires each fill value type to match the corresponding column type.",
+               cudf::data_type_error);
 
   if (input.is_empty()) { return empty_like(input); }
 

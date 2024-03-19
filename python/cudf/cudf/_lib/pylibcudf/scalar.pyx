@@ -1,28 +1,13 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython cimport no_gc_clear
-from cython.operator cimport dereference
-from libcpp.memory cimport shared_ptr, unique_ptr
-from libcpp.utility cimport move
-from pyarrow cimport lib as pa
+from libcpp.memory cimport unique_ptr
 
 from rmm._lib.memory_resource cimport get_current_device_resource
 
-from cudf._lib.cpp.interop cimport (
-    column_metadata,
-    from_arrow as cpp_from_arrow,
-    to_arrow as cpp_to_arrow,
-)
-from cudf._lib.cpp.scalar.scalar cimport fixed_point_scalar, scalar
-from cudf._lib.cpp.wrappers.decimals cimport (
-    decimal32,
-    decimal64,
-    decimal128,
-    scale_type,
-)
+from cudf._lib.cpp.scalar.scalar cimport scalar
 
-from .interop cimport ColumnMetadata
-from .types cimport DataType, type_id
+from .types cimport DataType
 
 
 # The DeviceMemoryResource attribute could be released prematurely
@@ -44,89 +29,11 @@ cdef class Scalar:
     def __cinit__(self, *args, **kwargs):
         self.mr = get_current_device_resource()
 
-    def __init__(self, pa.Scalar value=None):
+    def __init__(self, *args, **kwargs):
         # TODO: This case is not something we really want to
         # support, but it here for now to ease the transition of
         # DeviceScalar.
-        if value is not None:
-            raise ValueError("Scalar should be constructed with a factory")
-
-    @staticmethod
-    def from_arrow(pa.Scalar value, DataType data_type=None):
-        """Create a Scalar from a pyarrow Scalar.
-
-        Parameters
-        ----------
-        value : pyarrow.Scalar
-            The pyarrow scalar to construct from
-        data_type : DataType, optional
-            The data type of the scalar. If not passed, the data type will be
-            inferred from the pyarrow scalar.
-        """
-        # Allow passing a dtype, but only for the purpose of decimals for now
-
-        cdef shared_ptr[pa.CScalar] cscalar = (
-            pa.pyarrow_unwrap_scalar(value)
-        )
-        cdef unique_ptr[scalar] c_result
-
-        with nogil:
-            c_result = move(cpp_from_arrow(cscalar.get()[0]))
-
-        cdef Scalar s = Scalar.from_libcudf(move(c_result))
-
-        if s.type().id() != type_id.DECIMAL128:
-            if data_type is not None:
-                raise ValueError(
-                    "dtype may not be passed for non-decimal types"
-                )
-            return s
-
-        if data_type is None:
-            raise ValueError(
-                "Decimal scalars must be constructed with a dtype"
-            )
-
-        cdef type_id tid = data_type.id()
-
-        if tid == type_id.DECIMAL32:
-            s.c_obj.reset(
-                new fixed_point_scalar[decimal32](
-                    (<fixed_point_scalar[decimal128]*> s.c_obj.get()).value(),
-                    scale_type(-value.type.scale),
-                    s.c_obj.get().is_valid()
-                )
-            )
-        elif tid == type_id.DECIMAL64:
-            s.c_obj.reset(
-                new fixed_point_scalar[decimal64](
-                    (<fixed_point_scalar[decimal128]*> s.c_obj.get()).value(),
-                    scale_type(-value.type.scale),
-                    s.c_obj.get().is_valid()
-                )
-            )
-        elif tid != type_id.DECIMAL128:
-            raise ValueError(
-                "Decimal scalars may only be cast to decimals"
-            )
-
-        return s
-
-    cpdef pa.Scalar to_arrow(self, ColumnMetadata metadata):
-        """Convert to a pyarrow scalar.
-
-        Parameters
-        ----------
-        metadata : ColumnMetadata
-            The metadata for the column the scalar is being used in.
-        """
-        cdef shared_ptr[pa.CScalar] c_result
-        cdef column_metadata c_metadata = metadata.to_libcudf()
-
-        with nogil:
-            c_result = move(cpp_to_arrow(dereference(self.c_obj.get()), c_metadata))
-
-        return pa.pyarrow_wrap_scalar(c_result)
+        raise ValueError("Scalar should be constructed with a factory")
 
     cdef const scalar* get(self) noexcept nogil:
         return self.c_obj.get()
