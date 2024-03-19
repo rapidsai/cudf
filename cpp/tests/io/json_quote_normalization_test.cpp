@@ -60,28 +60,28 @@ void run_test(const std::string& host_input, const std::string& expected_host_ou
     preprocessed_host_output, expected_host_output, preprocessed_host_output.size());
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization1)
-{
-  std::string input  = R"({"A":'TEST"'})";
-  std::string output = R"({"A":"TEST\""})";
-  run_test(input, output);
-}
-
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization2)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Single)
 {
   std::string input  = R"({'A':"TEST'"} ['OTHER STUFF'])";
   std::string output = R"({"A":"TEST'"} ["OTHER STUFF"])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization3)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_MoreSingle)
 {
-  std::string input  = R"(['{"A": "B"}',"{'A': 'B'}"])";
-  std::string output = R"(["{\"A\": \"B\"}","{'A': 'B'}"])";
+  std::string input  = R"(['\t','\\t','\\','\\\"\'\\\\','\n','\b','\u0012'])";
+  std::string output = R"(["\t","\\t","\\","\\\"'\\\\","\n","\b","\u0012"])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization4)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_DoubleInSingle)
+{
+  std::string input  = R"({"A":'TEST"'})";
+  std::string output = R"({"A":"TEST\""})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_MoreDoubleInSingle)
 {
   std::string input = R"({"ain't ain't a word and you ain't supposed to say it":'"""""""""""'})";
   std::string output =
@@ -89,77 +89,84 @@ TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization4)
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization5)
-{
-  std::string input  = R"({"\"'\"'\"'\"'":'"\'"\'"\'"\'"'})";
-  std::string output = R"({"\"'\"'\"'\"'":"\"'\"'\"'\"'\""})";
-  run_test(input, output);
-}
-
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization6)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_StillMoreDoubleInSingle)
 {
   std::string input  = R"([{"ABC':'CBA":'XYZ":"ZXY'}])";
   std::string output = R"([{"ABC':'CBA":"XYZ\":\"ZXY"}])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization7)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_DoubleInSingleAndViceVersa)
+{
+  std::string input  = R"(['{"A": "B"}',"{'A': 'B'}"])";
+  std::string output = R"(["{\"A\": \"B\"}","{'A': 'B'}"])";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_DoubleAndSingleInSingle)
+{
+  std::string input  = R"({"\"'\"'\"'\"'":'"\'"\'"\'"\'"'})";
+  std::string output = R"({"\"'\"'\"'\"'":"\"'\"'\"'\"'\""})";
+  run_test(input, output);
+}
+
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_EscapedSingleInDouble)
 {
   std::string input  = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
-  std::string output = R"(["\t","\\t","\\","\\\'\"\\\\","\n","\b"])";
+  std::string output = R"(["\t","\\t","\\","\\'\"\\\\","\n","\b"])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization8)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_EscapedDoubleInSingle)
 {
-  std::string input  = R"(['\t','\\t','\\','\\\"\'\\\\','\n','\b','\u0012'])";
-  std::string output = R"(["\t","\\t","\\","\\\"'\\\\","\n","\b","\u0012"])";
+  std::string input  = R"(["\t","\\t","\\",'\\\'\"\\\\',"\n","\b"])";
+  std::string output = R"(["\t","\\t","\\","\\'\"\\\\","\n","\b"])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid1)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_MismatchedQuotes)
 {
   std::string input  = R"(["THIS IS A TEST'])";
   std::string output = R"(["THIS IS A TEST'])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid2)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_MismatchedQuotesEscapedOutput)
 {
   std::string input  = R"(['THIS IS A TEST"])";
   std::string output = R"(["THIS IS A TEST\"])";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid3)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_MoreMismatchedQuotes)
 {
   std::string input  = R"({"MORE TEST'N":'RESUL})";
   std::string output = R"({"MORE TEST'N":"RESUL})";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid4)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_NoEndQuote)
 {
   std::string input  = R"({"NUMBER":100'0,'STRING':'SOMETHING'})";
   std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid5)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_InvalidJSON)
 {
   std::string input  = R"({'NUMBER':100"0,"STRING":"SOMETHING"})";
   std::string output = R"({"NUMBER":100"0,"STRING":"SOMETHING"})";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid6)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_WrongBackslash)
 {
   std::string input  = R"({'a':'\\''})";
   std::string output = R"({"a":"\\""})";
   run_test(input, output);
 }
 
-TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid7)
+TEST_F(JsonNormalizationTest, GroundTruth_QuoteNormalization_Invalid_WrongBraces)
 {
   std::string input  = R"(}'a': 'b'{)";
   std::string output = R"(}"a": "b"{)";

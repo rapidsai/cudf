@@ -22,7 +22,12 @@ from cudf._lib.sort import segmented_sort_by_key
 from cudf._lib.types import size_type_dtype
 from cudf._typing import AggType, DataFrameOrSeries, MultiColumnAggType
 from cudf.api.extensions import no_default
-from cudf.api.types import is_bool_dtype, is_float_dtype, is_list_like
+from cudf.api.types import (
+    is_bool_dtype,
+    is_float_dtype,
+    is_list_like,
+    is_numeric_dtype,
+)
 from cudf.core._compat import PANDAS_LT_300
 from cudf.core.abc import Serializable
 from cudf.core.column.column import ColumnBase, StructDtype, as_column
@@ -282,9 +287,12 @@ class GroupBy(Serializable, Reducible, Scannable):
         if isinstance(group_names, cudf.BaseIndex):
             group_names = group_names.to_pandas()
         for i, name in enumerate(group_names):
-            yield (name,) if isinstance(self._by, list) and len(
-                self._by
-            ) == 1 else name, grouped_values[offsets[i] : offsets[i + 1]]
+            yield (
+                (name,)
+                if isinstance(self._by, list) and len(self._by) == 1
+                else name,
+                grouped_values[offsets[i] : offsets[i + 1]],
+            )
 
     @property
     def dtypes(self):
@@ -698,6 +706,11 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
+    def _reduce_numeric_only(self, op: str):
+        raise NotImplementedError(
+            f"numeric_only is not implemented for {type(self)}"
+        )
+
     def _reduce(
         self,
         op: str,
@@ -728,14 +741,12 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             The numeric_only, min_count
         """
-        if numeric_only:
-            raise NotImplementedError(
-                "numeric_only parameter is not implemented yet"
-            )
         if min_count != 0:
             raise NotImplementedError(
                 "min_count parameter is not implemented yet"
             )
+        if numeric_only:
+            return self._reduce_numeric_only(op)
         return self.agg(op)
 
     def _scan(self, op: str, *args, **kwargs):
@@ -2269,8 +2280,8 @@ class GroupBy(Serializable, Reducible, Scannable):
         """
         warnings.warn(
             "groupby fillna is deprecated and "
-            "will be removed in a future version. Use groupby ffill or groupby bfill "
-            "for forward or backward filling instead.",
+            "will be removed in a future version. Use groupby ffill "
+            "or groupby bfill for forward or backward filling instead.",
             FutureWarning,
         )
         if inplace:
@@ -2644,6 +2655,17 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
     obj: "cudf.core.dataframe.DataFrame"
 
     _PROTECTED_KEYS = frozenset(("obj",))
+
+    def _reduce_numeric_only(self, op: str):
+        columns = list(
+            name
+            for name in self.obj._data.names
+            if (
+                is_numeric_dtype(self.obj._data[name].dtype)
+                and name not in self.grouping.names
+            )
+        )
+        return self[columns].agg(op)
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
