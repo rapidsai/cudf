@@ -415,7 +415,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
     row_group_size = 5
     pdf.to_parquet(fname, compression="snappy", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names, row_group_metadata = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     assert num_rows == len(pdf.index)
     assert row_groups == num_row_groups(num_rows, row_group_size)
@@ -561,7 +561,7 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names, row_group_metadata = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     gdf = [cudf.read_parquet(fname, row_groups=[i]) for i in range(row_groups)]
     gdf = cudf.concat(gdf)
@@ -586,7 +586,7 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names, row_group_metadata = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
 
     # alternate rows between the two sources
     gdf = cudf.read_parquet(
@@ -2845,7 +2845,7 @@ def test_to_parquet_row_group_size(
         fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
     )
 
-    num_rows, row_groups, col_names, row_group_metadata = cudf.io.read_parquet_metadata(fname)
+    num_rows, row_groups, col_names, _ = cudf.io.read_parquet_metadata(fname)
     # 8 bytes per row, as the column is int64
     expected_num_rows = max(
         math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)
@@ -2868,8 +2868,8 @@ def test_parquet_row_group_metadata(
     assert len(row_group_metadata) == row_groups
     # sum of rows in row groups == total rows
     assert num_rows == sum([
-        row_group_metadata[x].to_dict()['num_rows'] 
-        for x in range(row_groups)
+        row_group.to_dict()['num_rows']
+        for row_group in row_group_metadata
     ])
 
 def test_parquet_reader_decimal_columns():
