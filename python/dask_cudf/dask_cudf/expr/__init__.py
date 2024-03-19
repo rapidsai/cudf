@@ -11,6 +11,7 @@ if QUERY_PLANNING_ON:
     try:
         import dask_cudf.expr._collection
         import dask_cudf.expr._expr
+
     except ImportError as err:
         # Dask *should* raise an error before this.
         # However, we can still raise here to be certain.
