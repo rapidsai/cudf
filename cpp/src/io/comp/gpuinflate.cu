@@ -804,8 +804,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
         uint8_t const* src = out + ((i >= dist) ? (i % dist) : i) - dist;
-        uint8_t b          = (src < outbase) ? 0 : *src;
-        if (out + i < outend) { out[i] = b; }
+        if (out + i < outend and src >= outbase) { out[i] = *src; }
       }
       out += len;
       pos++;
