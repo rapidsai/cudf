@@ -41,7 +41,8 @@ struct DLManagedTensor;
 
 /**
  * @brief C Struct to package up the Arrow data buffer pointers
- *
+ * @ingroup copy_gather
+ * 
  * See https://arrow.apache.org/docs/format/CDeviceDataInterface.html for
  * full documentation.
  */
@@ -49,7 +50,8 @@ struct ArrowDeviceArray;
 
 /**
  * @brief C Struct to represent an Arrow schema
- *
+ * @ingroup copy_gather
+ * 
  * See https://arrow.apache.org/docs/format/CDataInterface.html for full
  * documentation.
  */
