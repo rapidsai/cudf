@@ -61,12 +61,10 @@ void BM_json_read_options(nvbench::state& state, nvbench::type_list<nvbench::enu
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
       try_drop_l3_cache();
-      cudf::size_type num_rows_read = 0;
-      cudf::size_type num_cols_read = 0;
       timer.start();
       auto const result = cudf::io::read_json(read_options);
-      num_rows_read     = result.tbl->num_rows();
-      num_cols_read     = result.tbl->num_columns();
+      auto const num_rows_read     = result.tbl->num_rows();
+      auto const num_cols_read     = result.tbl->num_columns();
       timer.stop();
       CUDF_EXPECTS(num_rows_read == view.num_rows(), "Benchmark did not read the entire table");
       CUDF_EXPECTS(num_cols_read == num_cols, "Unexpected number of columns");
