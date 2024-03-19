@@ -18,6 +18,7 @@ set(cython_sources
     column.pyx
     concatenate.pyx
     copying.pyx
+    filling.pyx
     gpumemoryview.pyx
     groupby.pyx
     interop.pyx
@@ -42,4 +43,4 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
-link_to_pyarrow_headers("${RAPIDS_CYTHON_CREATED_TARGETS}")
+link_to_pyarrow_headers(pylibcudf_interop)

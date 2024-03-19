@@ -331,6 +331,59 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private static final byte[] EMPTY_JSON_DATA_BUFFER = ("{}\n").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadEmptyJson() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "name")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withKeepQuotes(true)
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeSingleQuotes(true)
+        .withNormalizeWhitespace(true)
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column((String)null)
+        .build();
+         Table table = Table.readJSON(schema, opts, EMPTY_JSON_DATA_BUFFER, 0,
+             EMPTY_JSON_DATA_BUFFER.length, 1)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  private static final byte[] EMPTY_ARRAY_JSON_DATA_BUFFER =
+      ("{'a':[]}\n").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadEmptyArrayJson() {
+    Schema.Builder builder = Schema.builder();
+    Schema.Builder listBuilder = builder.addColumn(DType.LIST, "a");
+    // INT8 is selected here because CUDF always returns INT8 for this no matter what we ask for.
+    listBuilder.addColumn(DType.INT8, "child");
+    Schema schema = builder.build();
+    JSONOptions opts = JSONOptions.builder()
+        .withKeepQuotes(true)
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeSingleQuotes(true)
+        .withNormalizeWhitespace(true)
+        .withLines(true)
+        .build();
+    ListType lt = new ListType(true, new BasicType(true, DType.INT8));
+    try (Table expected = new Table.TestBuilder()
+        .column(lt, new ArrayList<Byte>())
+        .build();
+         Table table = Table.readJSON(schema, opts, EMPTY_ARRAY_JSON_DATA_BUFFER, 0,
+             EMPTY_ARRAY_JSON_DATA_BUFFER.length, 1)) {
+      TableDebug.get().debug("OUTPUT", table);
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
   @Test
   void testReadSingleQuotesJSONFile() throws IOException {
     Schema schema = Schema.builder()
@@ -1731,6 +1784,107 @@ public class TableTest extends CudfTestBase {
           map.close();
         }
       }
+    }
+  }
+
+  private void checkLeftDistinctJoin(Table leftKeys, Table rightKeys, ColumnView expected,
+                                     boolean compareNullsEqual) {
+    try (GatherMap map = leftKeys.leftDistinctJoinGatherMap(rightKeys, compareNullsEqual)) {
+      int numRows = (int) expected.getRowCount();
+      assertEquals(numRows, map.getRowCount());
+      try (ColumnView view = map.toColumnView(0, numRows)) {
+        assertColumnsAreEqual(expected, view);
+      }
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8, 6).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         ColumnVector expected = ColumnVector.fromInts(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3, 0)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsWithNested() {
+    final int inv = Integer.MIN_VALUE;
+    StructType structType = new StructType(false,
+        new BasicType(false, DType.STRING),
+        new BasicType(false, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", 2),
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3)
+    };
+    StructData[] rightData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData("abc", -1),
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         ColumnVector expected = ColumnVector.fromInts(0, inv, inv, 2, 0, inv, inv)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsNullsEqual() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, 9, 8, 10, 32)
+             .build();
+         ColumnVector expected = ColumnVector.fromInts(inv, inv, 1, inv, inv, inv, inv, 0, 0, 2)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsWithNestedNullsEqual() {
+    final int inv = Integer.MIN_VALUE;
+    StructType structType = new StructType(true,
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        null,
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", null),
+        null,
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3),
+        new StructData(null, null),
+        new StructData(null, 1)
+    };
+    StructData[] rightData = new StructData[]{
+        null,
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData(null, null),
+        new StructData(null, 2),
+        new StructData(null, 1),
+        new StructData("xyz", null),
+        new StructData("abc", null),
+        new StructData("abc", -1)
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         ColumnVector expected = ColumnVector.fromInts(1, 0, inv, inv, 7, 0, 1, inv, inv, 4, 6)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
     }
   }
 
