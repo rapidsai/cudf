@@ -164,9 +164,9 @@ def to_datetime(
 
     if errors == "ignore":
         warnings.warn(
-            "errors='ignore' is deprecated and will raise in a future version. "
-            "Use to_datetime without passing `errors` and catch exceptions "
-            "explicitly instead",
+            "errors='ignore' is deprecated and will raise in a "
+            "future version. Use to_datetime without passing `errors` "
+            "and catch exceptions explicitly instead",
             FutureWarning,
         )
 

@@ -134,6 +134,7 @@ cdef class Column:
         """
         cdef DataType dtype = DataType.from_libcudf(libcudf_col.get().type())
         cdef size_type size = libcudf_col.get().size()
+
         cdef size_type null_count = libcudf_col.get().null_count()
 
         cdef column_contents contents = move(libcudf_col.get().release())
