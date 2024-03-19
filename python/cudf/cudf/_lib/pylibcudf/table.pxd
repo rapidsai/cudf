@@ -14,11 +14,11 @@ cdef class Table:
 
     cpdef int num_columns(self)
     cpdef int num_rows(self)
-    cpdef list columns(self)
-    cpdef pa.Table to_arrow(self, list metadata)
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
 
     @staticmethod
     cdef Table from_table_view(const table_view& tv, Table owner)
+
+    cpdef list columns(self)
