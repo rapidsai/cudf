@@ -1403,5 +1403,5 @@ Here are some tools that can help with debugging libcudf (besides printf of cour
    The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flag.
    There is a compatibility issue with the CUDA runtime that can be worked around by setting
    environment variable `ASAN_OPTIONS=protect_shadow_gap=0` before running the executable.
-   Note also the CUDA `compute-sanitizer` can also be used with GCC ASAN with the
-   environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`
+   Note that the CUDA `compute-sanitizer` can also be used with GCC ASAN by setting the
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`.
