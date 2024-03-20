@@ -706,7 +706,7 @@ struct set_final_row_count {
     auto& page        = pages[i];
     auto const& chunk = chunks[page.chunk_idx];
     // only do this for the last page in each chunk
-    if (i < pages.size() && (pages[i + 1].chunk_idx == page.chunk_idx)) { return; }
+    if (i < pages.size() - 1 && (pages[i + 1].chunk_idx == page.chunk_idx)) { return; }
     size_t const page_start_row = chunk.start_row + page.chunk_row;
     size_t const chunk_last_row = chunk.start_row + chunk.num_rows;
     page.num_rows               = chunk_last_row - page_start_row;
