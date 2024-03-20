@@ -319,18 +319,8 @@ size_t find_start_index(cudf::host_span<cumulative_page_info const> aggregated_i
 {
   auto start = thrust::make_transform_iterator(
     aggregated_info.begin(), [&](cumulative_page_info const& i) { return i.end_row_index; });
-  auto start_index =
-    thrust::lower_bound(thrust::host, start, start + aggregated_info.size(), start_row) - start;
-
-  // list rows can span page boundaries, so it is not always safe to assume that the row
-  // represented by end_row_index starts on the subsequent page. It is possible that
-  // the values for row end_row_index start within the page itself. so we must
-  // include the page in that case.
-  while (start_index < (static_cast<int64_t>(aggregated_info.size()) - 1) && (start_index < 0)) {
-    start_index++;
-  }
-
-  return start_index;
+  return thrust::lower_bound(thrust::host, start, start + aggregated_info.size(), start_row) -
+         start;
 }
 
 /**
