@@ -110,7 +110,7 @@ int main(int argc, char const** argv)
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
-  std::cout << "Output size " << result->view().child(1).size() << " bytes\n";
+  std::cout << "Output size " << result->view().size() << " bytes\n";
 
   return 0;
 }
