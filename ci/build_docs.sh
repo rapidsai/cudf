@@ -41,6 +41,9 @@ mkdir -p "${RAPIDS_DOCS_DIR}/libcudf/html"
 mv html/* "${RAPIDS_DOCS_DIR}/libcudf/html"
 popd
 
+# TODO: Remove this once dask-expr works in the 10min notebook
+export DASK_DATAFRAME__QUERY_PLANNING=False
+
 rapids-logger "Build Python docs"
 pushd docs/cudf
 make dirhtml
