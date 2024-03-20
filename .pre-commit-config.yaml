@@ -38,18 +38,6 @@ repos:
                "python/cudf_kafka/cudf_kafka",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
-  - repo: https://github.com/PyCQA/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        # https://github.com/PyCQA/pydocstyle/issues/603
-        additional_dependencies: [tomli]
-        args: ["--config=pyproject.toml"]
-        exclude: |
-          (?x)^(
-            ^python/cudf/cudf/pandas/scripts/.*|
-            ^python/cudf/cudf_pandas_tests/.*
-          )
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.7.1
     hooks:
