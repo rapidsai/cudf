@@ -206,34 +206,6 @@ Out[9]:
 ```
 
 
-### `to_datetime` switched to consistent datetime format parsing
-
-
-In the past, `to_datetime()` guessed the format for each element independently. This was appropriate for some cases where elements had mixed date formats - however, it would regularly cause problems when users expected a consistent format but the function would switch formats between elements. As of this version, parsing will use a consistent format, determined by the first non-NA value (unless the user specifies a format, in which case that is used).
-
-
-Old behavior:
-
-```python
-In [7]: ser = cudf.Series(['13-01-2000', '12-01-2000'])
-
-In [8]: cudf.to_datetime(ser)
-Out[8]:
-0   2000-01-13
-1   2000-01-12
-dtype: datetime64[ns]
-```
-
-New behavior:
-```python
-In [8]: cudf.to_datetime(ser)
-Out[8]:
-0   2000-01-13
-1   2000-01-12
-dtype: datetime64[ns]
-```
-
-
 ### Series.rank
 
 
