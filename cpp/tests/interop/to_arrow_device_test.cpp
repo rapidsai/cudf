@@ -218,14 +218,14 @@ get_nanoarrow_tables(cudf::size_type length)
 struct BaseArrowFixture : public cudf::test::BaseFixture {
   void compare_schemas(const ArrowSchema* expected, const ArrowSchema* actual)
   {
-    ASSERT_STREQ(expected->format, actual->format);
-    ASSERT_STREQ(expected->name, actual->name);
-    ASSERT_STREQ(expected->metadata, actual->metadata);
-    ASSERT_EQ(expected->flags, actual->flags);
-    ASSERT_EQ(expected->n_children, actual->n_children);
+    EXPECT_STREQ(expected->format, actual->format);
+    EXPECT_STREQ(expected->name, actual->name);
+    EXPECT_STREQ(expected->metadata, actual->metadata);
+    EXPECT_EQ(expected->flags, actual->flags);
+    EXPECT_EQ(expected->n_children, actual->n_children);
 
     if (expected->n_children == 0) {
-      ASSERT_EQ(nullptr, actual->children);
+      EXPECT_EQ(nullptr, actual->children);
     } else {
       for (int i = 0; i < expected->n_children; ++i) {
         SCOPED_TRACE(expected->children[i]->name);
@@ -234,11 +234,11 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
     }
 
     if (expected->dictionary != nullptr) {
-      ASSERT_NE(nullptr, actual->dictionary);
+      EXPECT_NE(nullptr, actual->dictionary);
       SCOPED_TRACE("dictionary");
       compare_schemas(expected->dictionary, actual->dictionary);
     } else {
-      ASSERT_EQ(nullptr, actual->dictionary);
+      EXPECT_EQ(nullptr, actual->dictionary);
     }
   }
 
@@ -267,14 +267,14 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
     ArrowSchemaView schema_view;
     ArrowSchemaViewInit(&schema_view, schema, nullptr);
 
-    ASSERT_EQ(expected->length, actual->length);
-    ASSERT_EQ(expected->null_count, actual->null_count);
-    ASSERT_EQ(expected->offset, actual->offset);
-    ASSERT_EQ(expected->n_buffers, actual->n_buffers);
-    ASSERT_EQ(expected->n_children, actual->n_children);
+    EXPECT_EQ(expected->length, actual->length);
+    EXPECT_EQ(expected->null_count, actual->null_count);
+    EXPECT_EQ(expected->offset, actual->offset);
+    EXPECT_EQ(expected->n_buffers, actual->n_buffers);
+    EXPECT_EQ(expected->n_children, actual->n_children);
 
     if (expected->length > 0) {
-      ASSERT_EQ(expected->buffers[0], actual->buffers[0]);
+      EXPECT_EQ(expected->buffers[0], actual->buffers[0]);
       if (schema_view.type == NANOARROW_TYPE_BOOL) {
         // couldn't get thrust to like me, so let's just copy the data from device
         // to host and then confirm the bytes are the same for the bool buffer
@@ -285,13 +285,13 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
         compare_device_buffers(nbytes, 1, expected, actual);
       } else {
         for (int i = 1; i < expected->n_buffers; ++i) {
-          ASSERT_EQ(expected->buffers[i], actual->buffers[i]);
+          EXPECT_EQ(expected->buffers[i], actual->buffers[i]);
         }
       }
     }
 
     if (expected->n_children == 0) {
-      ASSERT_EQ(nullptr, actual->children);
+      EXPECT_EQ(nullptr, actual->children);
     } else {
       for (int i = 0; i < expected->n_children; ++i) {
         SCOPED_TRACE(schema->children[i]->name);
@@ -300,11 +300,11 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
     }
 
     if (expected->dictionary != nullptr) {
-      ASSERT_NE(nullptr, actual->dictionary);
+      EXPECT_NE(nullptr, actual->dictionary);
       SCOPED_TRACE("dictionary");
       compare_arrays(schema->dictionary, expected->dictionary, actual->dictionary);
     } else {
-      ASSERT_EQ(nullptr, actual->dictionary);
+      EXPECT_EQ(nullptr, actual->dictionary);
     }
   }
 };
@@ -332,8 +332,8 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
   ArrowSchemaRelease(got_arrow_schema.get());
 
   auto got_arrow_device = cudf::to_arrow_device(std::move(*table));
-  ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
-  ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
+  EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
+  EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
 
   compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
   ArrowArrayRelease(&got_arrow_device->array);
@@ -419,20 +419,20 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
 
   auto data_ptr        = input.get_column(0).view().data<int64_t>();
   auto got_arrow_array = cudf::to_arrow_device(std::move(input));
-  ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
-  ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+  EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
 
-  ASSERT_EQ(data.size(), got_arrow_array->array.length);
-  ASSERT_EQ(0, got_arrow_array->array.null_count);
-  ASSERT_EQ(0, got_arrow_array->array.offset);
-  ASSERT_EQ(1, got_arrow_array->array.n_children);
-  ASSERT_EQ(nullptr, got_arrow_array->array.buffers[0]);
+  EXPECT_EQ(data.size(), got_arrow_array->array.length);
+  EXPECT_EQ(0, got_arrow_array->array.null_count);
+  EXPECT_EQ(0, got_arrow_array->array.offset);
+  EXPECT_EQ(1, got_arrow_array->array.n_children);
+  EXPECT_EQ(nullptr, got_arrow_array->array.buffers[0]);
 
-  ASSERT_EQ(data.size(), got_arrow_array->array.children[0]->length);
-  ASSERT_EQ(0, got_arrow_array->array.children[0]->null_count);
-  ASSERT_EQ(0, got_arrow_array->array.children[0]->offset);
-  ASSERT_EQ(nullptr, got_arrow_array->array.children[0]->buffers[0]);
-  ASSERT_EQ(data_ptr, got_arrow_array->array.children[0]->buffers[1]);
+  EXPECT_EQ(data.size(), got_arrow_array->array.children[0]->length);
+  EXPECT_EQ(0, got_arrow_array->array.children[0]->null_count);
+  EXPECT_EQ(0, got_arrow_array->array.children[0]->offset);
+  EXPECT_EQ(nullptr, got_arrow_array->array.children[0]->buffers[0]);
+  EXPECT_EQ(data_ptr, got_arrow_array->array.children[0]->buffers[1]);
 
   ArrowArrayRelease(&got_arrow_array->array);
 }
@@ -483,8 +483,8 @@ TEST_F(ToArrowDeviceTest, NestedList)
   ArrowArrayFinishBuilding(expected_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
 
   auto got_arrow_array = cudf::to_arrow_device(std::move(input));
-  ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
-  ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+  EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
 
   compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
   ArrowArrayRelease(&got_arrow_array->array);
@@ -617,8 +617,8 @@ TEST_F(ToArrowDeviceTest, StructColumn)
   ArrowArrayFinishBuilding(expected_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
 
   auto got_arrow_array = cudf::to_arrow_device(std::move(input));
-  ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
-  ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+  EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+  EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
 
   compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
   ArrowArrayRelease(&got_arrow_array->array);
@@ -726,8 +726,8 @@ TEST_F(ToArrowDeviceTest, FixedPoint128Table)
     ArrowArrayFinishBuilding(expected_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
 
     auto got_arrow_array = cudf::to_arrow_device(std::move(input));
-    ASSERT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
-    ASSERT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
+    EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_array->device_id);
+    EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_array->device_type);
 
     compare_arrays(expected_schema.get(), expected_array.get(), &got_arrow_array->array);
     ArrowArrayRelease(&got_arrow_array->array);
