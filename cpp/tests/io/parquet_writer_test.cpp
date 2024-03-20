@@ -1531,6 +1531,7 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   using cudf::io::column_encoding;
   using cudf::io::parquet::detail::Encoding;
   constexpr int num_rows = 500;
+  std::mt19937 engine{31337};
 
   auto const ones = thrust::make_constant_iterator(1);
   auto const col =
@@ -1539,6 +1540,9 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   auto const strings = thrust::make_constant_iterator("string");
   auto const string_col =
     cudf::test::strings_column_wrapper(strings, strings + num_rows, no_nulls());
+
+  // throw in a list to make sure encoding selection works there too
+  auto list_col = make_parquet_list_col<int32_t>(engine, num_rows, 5, true);
 
   auto const table = table_view({col,
                                  col,
@@ -1551,7 +1555,8 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
                                  string_col,
                                  string_col,
                                  string_col,
-                                 string_col});
+                                 string_col,
+                                 *list_col});
 
   cudf::io::table_input_metadata table_metadata(table);
 
@@ -1573,9 +1578,16 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   set_meta(10, "string_db", column_encoding::DELTA_BINARY_PACKED);
   table_metadata.column_metadata[11].set_name("string_none");
 
-  for (auto& col_meta : table_metadata.column_metadata) {
-    col_meta.set_nullability(false);
+  for (int i = 0; i < 12; i++) {
+    table_metadata.column_metadata[i].set_nullability(false);
   }
+
+  // handle list column separately
+  table_metadata.column_metadata[12].set_name("int32_list").set_nullability(true);
+  table_metadata.column_metadata[12]
+    .child(1)
+    .set_encoding(column_encoding::DELTA_BINARY_PACKED)
+    .set_nullability(true);
 
   auto const filepath = temp_env->get_temp_filepath("UserRequestedEncodings.parquet");
   cudf::io::parquet_writer_options opts =
@@ -1621,6 +1633,12 @@ TEST_F(ParquetWriterTest, UserRequestedEncodings)
   expect_enc(10, Encoding::PLAIN_DICTIONARY);
   // no request, should use dictionary
   expect_enc(11, Encoding::PLAIN_DICTIONARY);
+  // int list requested delta_binary_packed. it's has level data, so have to search for a match.
+  auto const encodings = fmd.row_groups[0].columns[12].meta_data.encodings;
+  auto const has_delta = std::any_of(encodings.begin(), encodings.end(), [](Encoding enc) {
+    return enc == Encoding::DELTA_BINARY_PACKED;
+  });
+  EXPECT_TRUE(has_delta);
 }
 
 TEST_F(ParquetWriterTest, Decimal128DeltaByteArray)
