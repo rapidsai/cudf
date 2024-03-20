@@ -791,8 +791,11 @@ void reader::impl::decompress_and_decode()
       auto const stripe_info   = stripe.stripe_info;
       auto const stripe_footer = stripe.stripe_footer;
 
+      // Normalize stripe_idx to 0-based.
+      auto const stripe_local_idx = stripe_idx - stripe_start;
+
       // The first parameter (`stripe_order`) must be normalized to 0-based.
-      auto const total_data_size = gather_stream_info_and_column_desc(stripe_idx - stripe_start,
+      auto const total_data_size = gather_stream_info_and_column_desc(stripe_local_idx,
                                                                       level,
                                                                       stripe_info,
                                                                       stripe_footer,
@@ -821,18 +824,16 @@ void reader::impl::decompress_and_decode()
 
       // Update chunks to reference streams pointers.
       for (std::size_t col_idx = 0; col_idx < num_level_columns; col_idx++) {
-        auto& chunk = chunks[stripe_idx - stripe_start][col_idx];
+        auto& chunk = chunks[stripe_local_idx][col_idx];
         // start row, number of rows in a each stripe and total number of rows
         // may change in lower levels of nesting
         chunk.start_row =
-          (level == 0)
-            ? stripe_start_row
-            : col_meta.child_start_row[(stripe_idx - stripe_start) * num_level_columns + col_idx];
+          (level == 0) ? stripe_start_row
+                       : col_meta.child_start_row[stripe_local_idx * num_level_columns + col_idx];
         chunk.num_rows =
           (level == 0)
             ? num_rows_in_stripe
-            : col_meta.num_child_rows_per_stripe[(stripe_idx - stripe_start) * num_level_columns +
-                                                 col_idx];
+            : col_meta.num_child_rows_per_stripe[stripe_local_idx * num_level_columns + col_idx];
         chunk.column_num_rows = (level == 0) ? rows_to_decode : col_meta.num_child_rows[col_idx];
         chunk.parent_validity_info =
           (level == 0) ? column_validity_info{} : col_meta.parent_column_data[col_idx];
