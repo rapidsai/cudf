@@ -416,7 +416,7 @@ class MergeLargeStringsTest : public cudf::test::BaseFixture {};
 
 TEST_F(MergeLargeStringsTest, DISABLED_MergeLargeStrings)
 {
-  // CUDF_TEST_ENABLE_LARGE_STRINGS(); waiting on PR 15195
+  // CUDF_TEST_ENABLE_LARGE_STRINGS(); implemented in PR 15195
   auto itr = thrust::constant_iterator<std::string_view>(
     "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
   auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB

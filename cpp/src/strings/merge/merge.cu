@@ -16,11 +16,8 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/strings/detail/merge.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 
@@ -28,9 +25,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
+#include <thrust/transform.h>
 #include <thrust/tuple.h>
 
 namespace cudf {
@@ -51,43 +47,26 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
   auto const rhs_column = column_device_view::create(rhs.parent(), stream);
   auto const d_rhs      = *rhs_column;
 
-  // caller will set the null mask
-  auto const null_count = lhs.null_count() + rhs.null_count();
-  auto null_mask        = (null_count > 0) ? cudf::detail::create_null_mask(
-                                        strings_count, mask_state::ALL_VALID, stream, mr)
-                                           : rmm::device_buffer{};
+  auto const begin = row_order.begin();
 
-  // build offsets column
-  auto offsets_transformer =
-    cuda::proclaim_return_type<size_type>([d_lhs, d_rhs] __device__(auto index_pair) {
-      auto const [side, index] = index_pair;
-      if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) { return 0; }
-      auto d_str =
-        side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
-      return d_str.size_bytes();
-    });
-  auto const begin             = row_order.begin();
-  auto offsets_transformer_itr = thrust::make_transform_iterator(begin, offsets_transformer);
-  auto [offsets_column, bytes] = cudf::strings::detail::make_offsets_child_column(
-    offsets_transformer_itr, offsets_transformer_itr + strings_count, stream, mr);
-  auto d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets_column->view());
+  // build vector of strings
+  rmm::device_uvector<string_index_pair> indices(strings_count, stream);
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(strings_count),
+                    indices.begin(),
+                    [d_lhs, d_rhs, begin] __device__(size_type idx) {
+                      auto const [side, index] = begin[idx];
+                      if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) {
+                        return string_index_pair{nullptr, 0};
+                      }
+                      auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
+                                                      : d_rhs.element<string_view>(index);
+                      return string_index_pair{d_str.data(), d_str.size_bytes()};
+                    });
 
-  // create the chars column
-  rmm::device_uvector<char> chars(bytes, stream, mr);
-  auto d_chars = chars.data();
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::counting_iterator<size_type>(0),
-                     strings_count,
-                     [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {
-                       auto const [side, index] = begin[idx];
-                       if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return;
-                       auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
-                                                       : d_rhs.element<string_view>(index);
-                       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
-                     });
-
-  return make_strings_column(
-    strings_count, std::move(offsets_column), chars.release(), null_count, std::move(null_mask));
+  // convert vector into strings column
+  return make_strings_column(indices.begin(), indices.end(), stream, mr);
 }
 
 }  // namespace detail
