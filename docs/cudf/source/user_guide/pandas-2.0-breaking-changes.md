@@ -1,6 +1,6 @@
 # Major breaking changes in `cudf-24.04`
 
-Following are list of all the breaking changes in `cudf-24.04`. Starting this release,
+Following are list of all the breaking changes in `cudf-24.04`(i.e., `cudf` & `cudf.pandas`). Starting this release,
 the minimum `pandas` version has changed to `2.0.0`, for which the changelog is [here](
 https://pandas.pydata.org/docs/whatsnew/index.html#version-2-0).
 
