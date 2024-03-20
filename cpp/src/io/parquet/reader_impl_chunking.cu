@@ -48,7 +48,7 @@ struct split_info {
 };
 
 struct cumulative_page_info {
-  size_t end_row_index;  // end row index (exclusive)
+  size_t end_row_index;  // end row index (start_row + num_rows for the corresponding page)
   size_t size_bytes;     // cumulative size in bytes
   int key;               // schema index
 };
@@ -344,10 +344,9 @@ int64_t find_next_split(int64_t cur_pos,
   int64_t split_pos = thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit) - start;
 
   // if we're past the end, or if the returned bucket is > than the chunk_read_limit, move back
-  // one. note that in the case where we can't even fit the current set of rows within the size
-  // limit, this will cause split_pos to go below cur_pos.  but that is handled in the loop below.
+  // one as long as this doesn't put us before our starting point.
   if (static_cast<size_t>(split_pos) >= sizes.size() ||
-      (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit)) {
+      ((split_pos > cur_pos) && (sizes[split_pos].size_bytes - cur_cumulative_size > size_limit))) {
     split_pos--;
   }
 
@@ -355,7 +354,7 @@ int64_t find_next_split(int64_t cur_pos,
   // this guarantees that even if we cannot fit the set of rows represented by our where our cur_pos
   // is, we will still move forward instead of failing.
   while (split_pos < (static_cast<int64_t>(sizes.size()) - 1) &&
-         (split_pos < cur_pos || sizes[split_pos].end_row_index == cur_row_index)) {
+         (sizes[split_pos].end_row_index == cur_row_index)) {
     split_pos++;
   }
 
