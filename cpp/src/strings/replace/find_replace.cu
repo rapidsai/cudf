@@ -67,8 +67,6 @@ std::unique_ptr<cudf::column> find_and_replace_all(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return cudf::make_empty_column(type_id::STRING); }
-
   auto d_input             = cudf::column_device_view::create(input.parent(), stream);
   auto d_values_to_replace = cudf::column_device_view::create(values_to_replace.parent(), stream);
   auto d_replacements      = cudf::column_device_view::create(replacement_values.parent(), stream);
