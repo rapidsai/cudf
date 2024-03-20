@@ -6,12 +6,6 @@ from dask import config
 # For dask>=2024.3.0, a null value will default to True
 QUERY_PLANNING_ON = config.get("dataframe.query-planning", None) is not False
 
-
-# Set shuffle default to "tasks"
-if config.get("dataframe.shuffle.method", None) is None:
-    config.set({"dataframe.shuffle.method", "tasks"})
-
-
 # Register custom expressions and collections
 if QUERY_PLANNING_ON:
     try:
