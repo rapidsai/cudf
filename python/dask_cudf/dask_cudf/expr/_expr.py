@@ -87,6 +87,12 @@ class VarCudf(Reduction):
         m2 = ((x - avg) ** 2).sum(**kwargs)
         return n, avg, m2
 
+    def _layer(self):
+        # Workaround for https://github.com/dask/dask/pull/11013
+        # This is technically an abstract expression - We should
+        # not need to define a `_layer` method.
+        return {}
+
     @classmethod
     def reduction_combine(cls, parts):
         n, avg, m2 = parts[0]
