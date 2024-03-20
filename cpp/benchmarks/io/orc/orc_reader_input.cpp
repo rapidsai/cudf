@@ -31,39 +31,6 @@ namespace {
 constexpr int64_t data_size        = 512 << 20;
 constexpr cudf::size_type num_cols = 64;
 
-template <typename Timer>
-void read_once(cudf::io::orc_reader_options const& options,
-               cudf::size_type num_rows_to_read,
-               Timer& timer)
-{
-  timer.start();
-  auto const result = cudf::io::read_orc(options);
-  timer.stop();
-
-  CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
-  CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
-}
-
-template <typename Timer>
-void chunked_read(cudf::io::orc_reader_options const& options,
-                  cudf::size_type num_rows_to_read,
-                  std::size_t output_limit,
-                  std::size_t read_limit,
-                  Timer& timer)
-{
-  auto reader = cudf::io::chunked_orc_reader(output_limit, read_limit, options);
-  cudf::size_type num_rows{0};
-
-  timer.start();
-  do {
-    auto chunk = reader.read_chunk();
-    num_rows += chunk.tbl->num_rows();
-  } while (reader.has_next());
-  timer.stop();
-
-  CUDF_EXPECTS(num_rows == num_rows_to_read, "Unexpected number of rows");
-}
-
 template <bool is_chunked_read>
 void orc_read_common(cudf::size_type num_rows_to_read,
                      cuio_source_sink_pair& source_sink,
@@ -74,18 +41,39 @@ void orc_read_common(cudf::size_type num_rows_to_read,
 
   auto mem_stats_logger = cudf::memory_stats_logger();  // init stats logger
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
-      try_drop_l3_cache();
 
-      if constexpr (!is_chunked_read) {
-        read_once(read_opts, num_rows_to_read, timer);
-      } else {
+  if constexpr (is_chunked_read) {
+    state.exec(
+      nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
+        try_drop_l3_cache();
         auto const output_limit = static_cast<std::size_t>(state.get_int64("output_limit"));
         auto const read_limit   = static_cast<std::size_t>(state.get_int64("read_limit"));
-        chunked_read(read_opts, num_rows_to_read, output_limit, read_limit, timer);
-      }
-    });
+
+        auto reader = cudf::io::chunked_orc_reader(output_limit, read_limit, read_opts);
+        cudf::size_type num_rows{0};
+
+        timer.start();
+        do {
+          auto chunk = reader.read_chunk();
+          num_rows += chunk.tbl->num_rows();
+        } while (reader.has_next());
+        timer.stop();
+
+        CUDF_EXPECTS(num_rows == num_rows_to_read, "Unexpected number of rows");
+      });
+  } else {  // not is_chunked_read
+    state.exec(
+      nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch&, auto& timer) {
+        try_drop_l3_cache();
+
+        timer.start();
+        auto const result = cudf::io::read_orc(read_opts);
+        timer.stop();
+
+        CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+        CUDF_EXPECTS(result.tbl->num_rows() == num_rows_to_read, "Unexpected number of rows");
+      });
+  }
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
@@ -150,11 +138,7 @@ void orc_read_io_compression(nvbench::state& state)
     return view.num_rows();
   }();
 
-  if constexpr (chunked_read) {
-    orc_read_common<true>(num_rows_written, source_sink, state);
-  } else {
-    orc_read_common<false>(num_rows_written, source_sink, state);
-  }
+  orc_read_common<chunked_read>(num_rows_written, source_sink, state);
 }
 
 template <cudf::io::io_type IOType, cudf::io::compression_type Compression>
