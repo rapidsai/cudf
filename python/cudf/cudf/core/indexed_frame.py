@@ -1902,7 +1902,7 @@ class IndexedFrame(Frame):
             col.nans_to_nulls()
             if isinstance(col, cudf.core.column.NumericalColumn)
             else col.copy()
-            for col in self._data.columns()
+            for col in self._data.columns
         )
         return self._from_columns_like_self(result)
 

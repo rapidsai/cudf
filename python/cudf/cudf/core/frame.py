@@ -1632,7 +1632,7 @@ class Frame(BinaryOperand, Scannable):
                 col.unary_operator("not")
                 if col.dtype.kind == "b"
                 else -1 * col
-                for col in self._data.columns()
+                for col in self._data.columns
             )
         )
 
@@ -1899,7 +1899,7 @@ class Frame(BinaryOperand, Scannable):
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_columns_like_self(
-            (_apply_inverse_column(col) for col in self._data.columns())
+            (_apply_inverse_column(col) for col in self._data.columns)
         )
 
     @_cudf_nvtx_annotate
