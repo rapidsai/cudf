@@ -277,7 +277,7 @@ def read_parquet_metadata(path):
     num_row_groups = pq_file.num_row_groups
     col_names = pq_file.schema.names
     row_group_metadata = [
-        pq_file.metadata.row_group(row_group_number) 
+        pq_file.metadata.row_group(row_group_number)
         for row_group_number in range(num_row_groups)
     ]
 

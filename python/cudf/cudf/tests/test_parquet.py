@@ -2852,25 +2852,27 @@ def test_to_parquet_row_group_size(
     )
     assert expected_num_rows == row_groups
 
+
 @pytest.mark.parametrize("size_rows", [500_000, 100_000, 10_000])
-def test_parquet_row_group_metadata(
-    tmpdir, large_int64_gdf, size_rows
-):
+def test_parquet_row_group_metadata(tmpdir, large_int64_gdf, size_rows):
     fname = tmpdir.join("row_group_size.parquet")
-    large_int64_gdf.to_parquet(
-        fname, row_group_size_rows=size_rows
-    )
+    large_int64_gdf.to_parquet(fname, row_group_size_rows=size_rows)
 
     # read file metadata from parquet
-    num_rows, row_groups, col_names, row_group_metadata = cudf.io.read_parquet_metadata(fname)
+    (
+        num_rows,
+        row_groups,
+        col_names,
+        row_group_metadata,
+    ) = cudf.io.read_parquet_metadata(fname)
 
     # length(RowGroupsMetaData) == number of row groups
     assert len(row_group_metadata) == row_groups
     # sum of rows in row groups == total rows
-    assert num_rows == sum([
-        row_group.to_dict()['num_rows']
-        for row_group in row_group_metadata
-    ])
+    assert num_rows == sum(
+        [row_group.to_dict()["num_rows"] for row_group in row_group_metadata]
+    )
+
 
 def test_parquet_reader_decimal_columns():
     df = cudf.DataFrame(
