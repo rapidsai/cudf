@@ -110,7 +110,8 @@ int main(int argc, char const** argv)
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
-  std::cout << "Output size " << result->view().size() << " bytes\n";
+  auto const scv = cudf::strings_column_view(result->view());
+  std::cout << "Output size " << scv.chars_size(rmm::cuda_stream_default) << " bytes\n";
 
   return 0;
 }
