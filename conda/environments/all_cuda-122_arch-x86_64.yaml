@@ -40,13 +40,13 @@ dependencies:
 - hypothesis
 - identify>=2.5.20
 - ipython
-- libarrow-acero==14.0.2.*
-- libarrow-dataset==14.0.2.*
-- libarrow==14.0.2.*
+- libarrow-acero==15.0.2.*
+- libarrow-dataset==15.0.2.*
+- libarrow==15.0.2.*
 - libcufile-dev
 - libcurand-dev
 - libkvikio==24.6.*
-- libparquet==14.0.2.*
+- libparquet==15.0.2.*
 - librdkafka>=1.9.0,<1.10.0a0
 - librmm==24.6.*
 - make
@@ -66,8 +66,8 @@ dependencies:
 - pandoc
 - pip
 - pre-commit
-- protobuf>=4.21,<5
-- pyarrow==14.0.2.*
+- protobuf
+- pyarrow==15.0.2.*
 - pydata-sphinx-theme!=0.14.2
 - pynvjitlink
 - pytest-benchmark
@@ -77,7 +77,7 @@ dependencies:
 - pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
 - python>=3.9,<3.12
-- pytorch>=2.1.0
+- pytorch
 - rapids-dask-dependency==24.6.*
 - rich
 - rmm==24.6.*
