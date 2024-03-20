@@ -1979,6 +1979,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
 
 TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampsByteStreamSplit)
 {
+  srand(42);
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return ((std::rand() / 10000) * 1000); });
 
