@@ -439,8 +439,8 @@ void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
 /**
  * @copydoc cudf::io::parquet::detail::DecodePageData
  */
-void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo>& pages,
-                                  cudf::detail::hostdevice_span<ColumnChunkDesc> const& chunks,
+void __host__ DecodeSplitPageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                                  cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                   size_t num_rows,
                                   size_t min_row,
                                   int level_type_size,
