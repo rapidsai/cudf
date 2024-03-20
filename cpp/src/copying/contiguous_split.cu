@@ -48,6 +48,7 @@
 
 #include <cstddef>
 #include <numeric>
+#include <stdexcept>
 
 namespace cudf {
 namespace {
@@ -1729,13 +1730,15 @@ bool check_inputs(cudf::table_view const& input, std::vector<size_type> const& s
   if (input.num_columns() == 0) { return true; }
   if (splits.size() > 0) {
     CUDF_EXPECTS(splits.back() <= input.column(0).size(),
-                 "splits can't exceed size of input columns");
+                 "splits can't exceed size of input columns",
+                 std::out_of_range);
   }
   size_type begin = 0;
   for (auto end : splits) {
-    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
-    CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.");
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.", std::out_of_range);
+    CUDF_EXPECTS(
+      end >= begin, "End index cannot be smaller than the starting index.", std::invalid_argument);
+    CUDF_EXPECTS(end <= input.column(0).size(), "Slice range out of bounds.", std::out_of_range);
     begin = end;
   }
   return input.column(0).size() == 0;

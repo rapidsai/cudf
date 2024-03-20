@@ -7,12 +7,12 @@ from dask import config
 QUERY_PLANNING_ON = config.get("dataframe.query-planning", None) is not False
 
 # Register custom expressions and collections
-try:
-    import dask_cudf.expr._collection
-    import dask_cudf.expr._expr
+if QUERY_PLANNING_ON:
+    try:
+        import dask_cudf.expr._collection
+        import dask_cudf.expr._expr
 
-except ImportError as err:
-    if QUERY_PLANNING_ON:
+    except ImportError as err:
         # Dask *should* raise an error before this.
         # However, we can still raise here to be certain.
         raise RuntimeError(
