@@ -1395,8 +1395,8 @@ Here are some tools that can help with debugging libcudf (besides printf of cour
    The [CUDA Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)
    tool can be used to locate many CUDA reported errors by providing a call stack
    close to where the error occurs even with a non-debug build. The sanitizer includes various
-   tools including `memcheck`, `racecheck`, and `initcheck`. The `racecheck` and `initcheck` have been
-   known to produce false positives.
+   tools including `memcheck`, `racecheck`, and `initcheck` as well as others.
+   The `racecheck` and `initcheck` have been known to produce false positives.
 3. `cudf::test::print()`\
    The `print()` utility can be called within a gtest to output the data in a `cudf::column_view`.
    More information is available in the [Testing Guide](TESTING.md#printing-and-accessing-column-data)

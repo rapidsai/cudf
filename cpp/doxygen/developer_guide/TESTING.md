@@ -455,11 +455,11 @@ Column comparison functions in the `cudf::test::detail` namespace should **NOT**
 
 ### Printing and accessing column data
 
-The `<cudf_test/debug_utilities.hpp>` defines various functions and overloads for printing
+The `<cudf_test/debug_utilities.hpp>` header defines various functions and overloads for printing
 columns (`print`), converting column data to string (`to_string`, `to_strings`), and copying data to
 the host (`to_host`). For example, to print a `cudf::column_view` contents or `column_wrapper` instance
 to the console use the `cudf::test::print()`:
-```
+```cpp
   cudf::test::fixed_width_column_wrapper<int32_t> input({1,2,3,4});
   auto splits = cudf::split(input,{2});
   cudf::test::print(input);
