@@ -18,7 +18,6 @@ rapids-logger "pytest pylibcudf"
 pushd python/cudf/cudf/pylibcudf_tests
 python -m pytest \
   --cache-clear \
-  --numprocesses=8 \
   --dist=worksteal \
   .
 popd
