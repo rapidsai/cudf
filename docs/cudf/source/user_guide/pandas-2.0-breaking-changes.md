@@ -1,4 +1,12 @@
-### Removed `DataFrame.append` & `Series.append`, use `cudf.concat` instead.
+# Major breaking changes in `cudf-24.04`
+
+Following are list of all the breaking changes in `cudf-24.04`. Starting this release,
+the minimum `pandas` version has changed to `2.0.0`, for which the changelog is [here](
+https://pandas.pydata.org/docs/whatsnew/index.html#version-2-0).
+
+A link to RAPIDS Support Notice is [here](https://docs.rapids.ai/notices/rsn0036/).
+
+## Removed `DataFrame.append` & `Series.append`, use `cudf.concat` instead.
 
 `DataFrame.append` & `Series.append` deprecations are enforced by removing these two APIs. Instead, please use `cudf.concat`.
 
@@ -34,7 +42,7 @@ dtype: int64
 ```
 
 
-### Removed various numeric `Index` sub-classes, use `cudf.Index`
+## Removed various numeric `Index` sub-classes, use `cudf.Index`
 
 `Float32Index`, `Float64Index`, `GenericIndex`, `Int8Index`, `Int16Index`, `Int32Index`, `Int64Index`, `StringIndex`, `UInt8Index`, `UInt16Index`, `UInt32Index`, `UInt64Index` have all been removed, use `cudf.Index` directly with a `dtype` to construct the index instead.
 
@@ -51,7 +59,7 @@ Out[36]: Index([0, 1, 2], dtype='int8')
 ```
 
 
-### Change in bitwise operation results
+## Change in bitwise operation results
 
 
 Bitwise operations between two objects with different indexes will now not result in boolean results.
@@ -89,7 +97,7 @@ dtype: int64
 ```
 
 
-### ufuncs will perform re-indexing
+## ufuncs will perform re-indexing
 
 Performing a numpy ufunc operation on two objects with mismatching index will result in re-indexing:
 
@@ -127,7 +135,7 @@ Out[6]:
 ```
 
 
-### `DataFrame` vs `Series` comparisons need to have matching index
+## `DataFrame` vs `Series` comparisons need to have matching index
 
 Going forward any comparison between `DataFrame` & `Series` objects will need to have matching axes, i.e., the column names of `DataFrame` should match index of `Series`:
 
@@ -178,7 +186,7 @@ Out[9]:
 ```
 
 
-### Series.rank
+## Series.rank
 
 
 `Series.rank` will now throw an error for non-numeric data when `numeric_only=True` is passed:
@@ -201,7 +209,7 @@ TypeError: Series.rank does not allow numeric_only=True with non-numeric dtype.
 
 
 
-### Value counts sets the results name to `count`/`proportion`
+## Value counts sets the results name to `count`/`proportion`
 
 
 In past versions, when running `Series.value_counts()`, the result would inherit the original object's name, and the result index would be nameless. This would cause confusion when resetting the index, and the column names would not correspond with the column values. Now, the result name will be `'count'` (or `'proportion'` if `normalize=True`).
@@ -228,7 +236,7 @@ Name: count, dtype: int64
 ```
 
 
-### `DataFrame.describe` will include datetime data by default
+## `DataFrame.describe` will include datetime data by default
 
 Previously by default (i.e., `datetime_is_numeric=False`) `describe` would not return datetime data. Now this parameter is inoperative will always include datetime columns.
 
@@ -286,7 +294,7 @@ std         1.0    0.167047            0 days 00:00:00                          
 
 
 
-### Converting a datetime string with `Z` to timezone-naive dtype is not allowed.
+## Converting a datetime string with `Z` to timezone-naive dtype is not allowed.
 
 Previously when a date that had `Z` at the trailing end was allowed to be type-casted to `datetime64` type, now that will raise an error.
 
@@ -333,7 +341,7 @@ In [13]: s.astype('datetime64[ns]')
 ```
 
 
-### `Datetime` & `Timedelta` reduction operations will preserve their time resolutions.
+## `Datetime` & `Timedelta` reduction operations will preserve their time resolutions.
 
 
 Previously reduction operations on `datetime64` & `timedelta64` types used to result in lower-resolution results.
@@ -363,7 +371,7 @@ Out[16]: Timedelta('0 days 00:00:00.000063')
 ```
 
 
-### `get_dummies` default return type is changed from `int8` to `bool`
+## `get_dummies` default return type is changed from `int8` to `bool`
 
 The default return values of `get_dummies` will be `boolean` instead of `int8`
 
@@ -393,7 +401,7 @@ Out[3]:
 4  False  False  False  False
 ```
 
-### `reset_index` will name columns as `None` when `name=None`
+## `reset_index` will name columns as `None` when `name=None`
 
 `reset_index` used to name columns as `0` or `self.name` if `name=None`. Now, passing `name=None` will name the column as `None` exactly.
 
@@ -419,7 +427,7 @@ Out[7]:
 2      2     3
 ```
 
-### Fixed an issue where duration components were being incorrectly calculated
+## Fixed an issue where duration components were being incorrectly calculated
 
 Old behavior:
 
@@ -465,7 +473,7 @@ Out[21]:
 ```
 
 
-### `fillna` on `datetime`/`timedelta` with a lower-resolution scalar will now type-cast the series
+## `fillna` on `datetime`/`timedelta` with a lower-resolution scalar will now type-cast the series
 
 Previously, when `fillna` was performed with a higher-resolution scalar than the series, the resulting resolution would have been cast to the higher resolution. Now the original resolution is preserved.
 
@@ -498,7 +506,7 @@ Out[24]:
 dtype: timedelta64[s]
 ```
 
-### `Groupby.nth` & `Groupby.dtypes` will have the grouped column in result
+## `Groupby.nth` & `Groupby.dtypes` will have the grouped column in result
 
 Previously, `Groupby.nth` & `Groupby.dtypes` would set the grouped columns as `Index` object. Now the new behavior will actually preserve the original objects `Index` and return the grouped columns too as part of the result.
 
