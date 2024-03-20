@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #include <tests/iterator/iterator_tests.cuh>
 
+#include <cuda/std/optional>
 #include <thrust/host_vector.h>
-#include <thrust/optional.h>
 
 template <typename T>
 void nonull_optional_iterator(IteratorTest<T>& testFixture)
@@ -32,9 +32,9 @@ void nonull_optional_iterator(IteratorTest<T>& testFixture)
   auto d_col = cudf::column_device_view::create(w_col);
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::optional<T>> replaced_array(host_values.size());
+  thrust::host_vector<cuda::std::optional<T>> replaced_array(host_values.size());
   std::transform(host_values.begin(), host_values.end(), replaced_array.begin(), [](auto s) {
-    return thrust::optional<T>{s};
+    return cuda::std::optional<T>{s};
   });
 
   // GPU test
@@ -61,19 +61,20 @@ void null_optional_iterator(IteratorTest<T>& testFixture)
   auto d_col = cudf::column_device_view::create(w_col);
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::optional<T>> optional_values(host_values.size());
-  std::transform(host_values.begin(),
-                 host_values.end(),
-                 host_bools.begin(),
-                 optional_values.begin(),
-                 [](auto s, bool b) { return b ? thrust::optional<T>{s} : thrust::optional<T>{}; });
+  thrust::host_vector<cuda::std::optional<T>> optional_values(host_values.size());
+  std::transform(
+    host_values.begin(),
+    host_values.end(),
+    host_bools.begin(),
+    optional_values.begin(),
+    [](auto s, bool b) { return b ? cuda::std::optional<T>{s} : cuda::std::optional<T>{}; });
 
-  thrust::host_vector<thrust::optional<T>> value_all_valid(host_values.size());
+  thrust::host_vector<cuda::std::optional<T>> value_all_valid(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_all_valid.begin(),
-                 [](auto s, bool b) { return thrust::optional<T>{s}; });
+                 [](auto s, bool b) { return cuda::std::optional<T>{s}; });
 
   // GPU test for correct null mapping
   testFixture.iterator_test_thrust(

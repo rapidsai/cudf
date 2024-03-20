@@ -40,12 +40,12 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>

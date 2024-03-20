@@ -32,9 +32,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 
 #include <algorithm>
@@ -614,7 +614,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Return an optional iterator to the first element of the column.
    *
-   * Dereferencing the returned iterator returns a `thrust::optional<T>`.
+   * Dereferencing the returned iterator returns a `cuda::std::optional<T>`.
    *
    * The element of this iterator contextually converts to bool. The conversion returns true
    * if the object contains a value and false if it does not contain a value.
@@ -739,7 +739,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Return an optional iterator to the element following the last element of the column.
    *
-   * The returned iterator represents a `thrust::optional<T>` element.
+   * The returned iterator represents a `cuda::std::optional<T>` element.
    *
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
@@ -1318,13 +1318,13 @@ struct optional_accessor {
    * @return A `thrust::optional` that contains the value of `column[i]` is not null. If that
    * element is null, the resulting optional will not contain a value.
    */
-  __device__ inline thrust::optional<T> operator()(cudf::size_type i) const
+  __device__ inline cuda::std::optional<T> operator()(cudf::size_type i) const
   {
     if (has_nulls) {
-      return (col.is_valid_nocheck(i)) ? thrust::optional<T>{col.element<T>(i)}
-                                       : thrust::optional<T>{thrust::nullopt};
+      return (col.is_valid_nocheck(i)) ? cuda::std::optional<T>{col.element<T>(i)}
+                                       : cuda::std::optional<T>{cuda::std::nullopt};
     }
-    return thrust::optional<T>{col.element<T>(i)};
+    return cuda::std::optional<T>{col.element<T>(i)};
   }
 
   Nullate has_nulls{};  ///< Indicates if the `col` should be checked for nulls.

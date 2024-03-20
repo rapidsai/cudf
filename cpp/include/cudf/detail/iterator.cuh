@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,10 +37,10 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 
+#include <cuda/std/optional>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 
 #include <utility>
@@ -186,7 +186,7 @@ auto make_null_replacement_iterator(column_device_view const& column,
 /**
  * @brief Constructs an optional iterator over a column's values and its validity.
  *
- * Dereferencing the returned iterator returns a `thrust::optional<Element>`.
+ * Dereferencing the returned iterator returns a `cuda::std::optional<Element>`.
  *
  * The element of this iterator contextually converts to bool. The conversion returns true
  * if the object contains a value and false if it does not contain a value.
@@ -418,7 +418,7 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
 template <typename Element, typename Nullate>
 struct scalar_optional_accessor : public scalar_value_accessor<Element> {
   using super_t    = scalar_value_accessor<Element>;
-  using value_type = thrust::optional<Element>;
+  using value_type = cuda::std::optional<Element>;
 
   scalar_optional_accessor(scalar const& scalar_value, Nullate with_nulls)
     : scalar_value_accessor<Element>(scalar_value), has_nulls{with_nulls}
@@ -427,7 +427,7 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
 
   __device__ inline value_type const operator()(size_type) const
   {
-    if (has_nulls && !super_t::dscalar.is_valid()) { return value_type{thrust::nullopt}; }
+    if (has_nulls && !super_t::dscalar.is_valid()) { return value_type{cuda::std::nullopt}; }
 
     if constexpr (cudf::is_fixed_point<Element>()) {
       using namespace numeric;
@@ -519,7 +519,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
 /**
  * @brief Constructs an optional iterator over a scalar's values and its validity.
  *
- * Dereferencing the returned iterator returns a `thrust::optional<Element>`.
+ * Dereferencing the returned iterator returns a `cuda::std::optional<Element>`.
  *
  * The element of this iterator contextually converts to bool. The conversion returns true
  * if the object contains a value and false if it does not contain a value.

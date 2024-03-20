@@ -25,7 +25,7 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const& logical)
+ConvertedType logical_type_to_converted_type(cuda::std::optional<LogicalType> const& logical)
 {
   if (not logical.has_value()) { return UNKNOWN; }
   switch (logical->type) {

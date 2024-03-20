@@ -35,12 +35,12 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
-#include <thrust/optional.h>
 #include <thrust/pair.h>
 #include <thrust/transform.h>
 
@@ -519,7 +519,7 @@ struct check_datetime_format {
    * The checking here is a little more strict than the actual
    * parser used for conversion.
    */
-  __device__ thrust::optional<timestamp_components> check_string(string_view const& d_string)
+  __device__ cuda::std::optional<timestamp_components> check_string(string_view const& d_string)
   {
     timestamp_components dateparts = {1970, 1, 1, 0};  // init to epoch time
 
@@ -529,7 +529,7 @@ struct check_datetime_format {
       // eliminate static character values first
       if (item.item_type == format_char_type::literal) {
         // check static character matches
-        if (*ptr != item.value) return thrust::nullopt;
+        if (*ptr != item.value) return cuda::std::nullopt;
         ptr += item.length;
         length -= item.length;
         continue;
@@ -645,7 +645,7 @@ struct check_datetime_format {
         case 'Z': result = true;  // skip
         default: break;
       }
-      if (!result) return thrust::nullopt;
+      if (!result) return cuda::std::nullopt;
       ptr += bytes_read;
       length -= bytes_read;
     }
@@ -820,7 +820,7 @@ struct datetime_formatter_fn {
     // We only dissect the timestamp into components if needed
     // by a specifier. And then we only do it once and reuse it.
     // This can improve performance when not using uncommon specifiers.
-    thrust::optional<cuda::std::chrono::sys_days> days;
+    cuda::std::optional<cuda::std::chrono::sys_days> days;
 
     auto days_from_timestamp = [tstamp]() {
       auto const count = tstamp.time_since_epoch().count();

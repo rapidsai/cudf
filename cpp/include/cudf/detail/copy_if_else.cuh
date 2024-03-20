@@ -24,8 +24,8 @@
 
 #include <rmm/device_scalar.hpp>
 
+#include <cuda/std/optional>
 #include <thrust/iterator/iterator_traits.h>
-#include <thrust/optional.h>
 
 namespace cudf {
 namespace detail {
@@ -68,7 +68,7 @@ __launch_bounds__(block_size) CUDF_KERNEL
   size_type index    = tid;
   while (warp_cur <= warp_end) {
     auto const opt_value =
-      (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : thrust::nullopt;
+      (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : cuda::std::nullopt;
     if (opt_value) { out.element<T>(index) = static_cast<T>(*opt_value); }
 
     // update validity

@@ -378,7 +378,7 @@ int64_t find_next_split(int64_t cur_pos,
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  thrust::optional<ConvertedType> converted,
+  cuda::std::optional<ConvertedType> converted,
   int32_t length)
 {
   int32_t type_width = (physical == FIXED_LEN_BYTE_ARRAY) ? length : 0;
