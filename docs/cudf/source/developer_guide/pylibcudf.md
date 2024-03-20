@@ -101,14 +101,13 @@ There are a couple of notable points from the snippet above:
 Some guidelines on what should be tested:
 - Tests SHOULD comprehensively cover the API, including all possible combinations of arguments required to ensure good test coverage.
 - pylibcudf SHOULD NOT attempt to stress test large data sizes, and SHOULD instead defer to libcudf tests.
-  - Exception: In special cases where constructing suitable large tests  is difficult in C++ (such as creating suitable input data for I/O testing), tests may be added to pylibcudf instead.
+  - Exception: In special cases where constructing suitable large tests is difficult in C++ (such as creating suitable input data for I/O testing), tests may be added to pylibcudf instead.
 - Nullable data should always be tested.
 - Expected exceptions should be tested. Tests should be written from the user's perspective in mind, and if the API is not currently throwing the appropriate exception it should be updated.
   - Important note: If the exception should be produced by libcudf, the underlying libcudf API should be updated to throw the desired exception in C++. Such changes may require consultation with libcudf devs in nontrivial cases. [This issue](https://github.com/rapidsai/cudf/issues/12885) provides an overview and an indication of acceptable exception types that should cover most use cases. In rare cases a new C++ exception may need to be introduced in [`error.hpp`](https://github.com/rapidsai/cudf/blob/branch-24.04/cpp/include/cudf/utilities/error.hpp). If so, this exception will also need to be mapped to a suitable Python exception in [`exception_handler.pxd`](https://github.com/rapidsai/cudf/blob/branch-24.04/python/cudf/cudf/_lib/exception_handler.pxd).
 
 Some guidelines on how best to use pytests.
-- By default, fixtures producing device data containers should be of module scope and treated as immutable by tests.
-  - Rationale: Allocating data on the GPU is expensive and slows tests. Almost all pylibcudf operations are out of place operations, so module-scoped fixtures should not typically be problematic to work with. Session-scoped fixtures would also work, but they are harder to reason about since they live in a different module, and if they need to change for any reason they could affect an arbitrarily large number of tests. Module scope is a good balance.
+- By default, fixtures producing device data containers should be of module scope and treated as immutable by tests. Allocating data on the GPU is expensive and slows tests. Almost all pylibcudf operations are out of place operations, so module-scoped fixtures should not typically be problematic to work with. Session-scoped fixtures would also work, but they are harder to reason about since they live in a different module, and if they need to change for any reason they could affect an arbitrarily large number of tests. Module scope is a good balance.
 - Where necessary, mutable fixtures should be named as such (e.g. `mutable_col`) and be of function scope. If possible, they can be implemented as simply making a copy of a corresponding module-scope immutable fixture to avoid duplicating the generation logic.
 
 Tests should be organized corresponding to pylibcudf modules, i.e. one test module for each pylibcudf module.

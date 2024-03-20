@@ -107,7 +107,7 @@ cpdef Table scatter(
               number of columns in target.
             - source is a Table and the number of rows in source does not match the
               number of elements in scatter_map.
-            - source is a Scalar and the number of scalars does not match the number of
+            - source is a List[Scalar] and the number of scalars does not match the number of
               columns in target.
     TypeError
         If data types of the source and target columns do not match.
@@ -230,7 +230,7 @@ cpdef Column copy_range_in_place(
     Raises
     ------
     TypeError
-        If the operation is attempted on non-fixed with types since those would require
+        If the operation is attempted on non-fixed width types since those would require
         memory reallocations, or if the input and target columns have different types.
     IndexError
         If the indices accessed by the ranges implied by input_begin, input_end, and
