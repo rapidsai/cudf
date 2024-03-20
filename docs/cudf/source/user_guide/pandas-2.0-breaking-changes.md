@@ -51,34 +51,6 @@ Out[36]: Index([0, 1, 2], dtype='int8')
 ```
 
 
-### Binary operations between datetime & timedelta & scalars
-
-Binary operations between scalars & Series, will result in preservation of the Series dtype.
-
-Old behavior:
-
-```python
-In [3]: s = cudf.Series(["2000-01-01 00:00:00.012345678", "2000-01-31 00:00:00.012345678", "2000-02-29 00:00:00.012345678"], dtype='datetime64[us]')
-   ...: operator.add(s, cudf.DateOffset(**{'nanoseconds': 1}))
-Out[3]:
-0   2000-01-01 00:00:00.012345001
-1   2000-01-31 00:00:00.012345001
-2   2000-02-29 00:00:00.012345001
-dtype: datetime64[ns]
-```
-
-
-New behavior:
-```python
-In [3]: s = cudf.Series(["2000-01-01 00:00:00.012345678", "2000-01-31 00:00:00.012345678", "2000-02-29 00:00:00.012345678"], dtype='datetime64[us]')
-   ...: operator.add(s, cudf.DateOffset(**{'nanoseconds': 1}))
-Out[3]:
-0   2000-01-01 00:00:00.012345
-1   2000-01-31 00:00:00.012345
-2   2000-02-29 00:00:00.012345
-dtype: datetime64[us]
-```
-
 ### Change in bitwise operation results
 
 
