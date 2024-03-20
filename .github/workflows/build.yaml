@@ -72,7 +72,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.06
     with:
       build_type: ${{ inputs.build_type || 'branch' }}
-      build-2_28-wheels: "true"
       branch: ${{ inputs.branch }}
       sha: ${{ inputs.sha }}
       date: ${{ inputs.date }}
