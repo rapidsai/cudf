@@ -19,12 +19,19 @@ file(
 )
 include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-set(CUDF_TAG branch-24.06)
-CPMFindPackage(
-  NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
-  GIT_TAG ${CUDF_TAG}
-  GIT_SHALLOW
-    TRUE
-    SOURCE_SUBDIR
-    cpp
-)
+# try to find an already built libcudf and use it.
+find_package(cudf HINTS ${cudf_ROOT}/latest)
+
+# build it via CPM
+if (NOT cudf_FOUND)
+  set(CUDF_TAG branch-24.06)
+
+  CPMFindPackage(
+    NAME cudf GIT_REPOSITORY https://github.com/rapidsai/cudf
+    GIT_TAG ${CUDF_TAG}
+    GIT_SHALLOW
+      TRUE
+      SOURCE_SUBDIR
+      cpp
+  )
+endif()
