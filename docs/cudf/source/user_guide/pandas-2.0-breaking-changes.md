@@ -82,7 +82,7 @@ dtype: datetime64[us]
 ### Change in bitwise operation results
 
 
-Bitwise operations between two unequally indexed objects will now not result in boolean results.
+Bitwise operations between two objects with different indexes will now not result in boolean results.
 
 
 Old behavior:
@@ -258,7 +258,7 @@ Name: count, dtype: int64
 
 ### `DataFrame.describe` will include datetime data by default
 
-Previously by default(i.e., `datetime_is_numeric=False`) `describe` would not return datetime data, going forward this parameter is inoperative will always include datetime columns.
+Previously by default (i.e., `datetime_is_numeric=False`) `describe` would not return datetime data. Now this parameter is inoperative will always include datetime columns.
 
 Old behavior:
 ```python
@@ -314,7 +314,7 @@ std         1.0    0.167047            0 days 00:00:00                          
 
 
 
-### Converting a datetime to timezone-unaware dtype is not allowed.
+### Converting a datetime string with `Z` to timezone-naive dtype is not allowed.
 
 Previously when a date that had `Z` at the trailing end was allowed to be type-casted to `datetime64` type, now that will raise an error.
 
@@ -364,8 +364,8 @@ In [13]: s.astype('datetime64[ns]')
 ### `Datetime` & `Timedelta` reduction operations will preserve their time resolutions.
 
 
-Previously reduction operations on `datetime64` & `timedelta64` operations used to result in lower-resolution results,
-now the resolution of the actual object is preserved:
+Previously reduction operations on `datetime64` & `timedelta64` types used to result in lower-resolution results.
+Now the original resolution is preserved:
 
 Old behavior:
 ```python
@@ -423,7 +423,7 @@ Out[3]:
 
 ### `reset_index` will name columns as `None` when `name=None`
 
-Until now, `reset_index` used to name columns as `0` or `self.name` if `name=None`. Going forward passing `name=None` will name the column as `None` itself.
+`reset_index` used to name columns as `0` or `self.name` if `name=None`. Now, passing `name=None` will name the column as `None` exactly.
 
 Old behavior:
 ```python
