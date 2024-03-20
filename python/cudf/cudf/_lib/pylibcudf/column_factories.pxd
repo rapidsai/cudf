@@ -10,7 +10,7 @@ from cudf._lib.cpp.types cimport (
 )
 
 from .column cimport Column
-from .types cimport DataType, Id as TypeId
+from .types cimport DataType, TypeId
 
 ctypedef fused MakeEmptyColumnOperand:
     DataType
