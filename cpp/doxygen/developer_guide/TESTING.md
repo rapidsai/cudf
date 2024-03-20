@@ -463,7 +463,7 @@ to the console use the `cudf::test::print()`:
   cudf::test::fixed_width_column_wrapper<int32_t> input({1,2,3,4});
   auto splits = cudf::split(input,{2});
   cudf::test::print(input);
-  cudf::test::print(splits.begin());
+  cudf::test::print(splits.front());
 ```
 Fixed-width and strings columns output as comma-separated entries including null rows.
 Nested columns are also supported and output includes the offsets and data children as well as
