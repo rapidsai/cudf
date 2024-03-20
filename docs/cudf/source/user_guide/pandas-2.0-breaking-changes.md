@@ -495,8 +495,7 @@ Out[21]:
 
 ### `fillna` on `datetime`/`timedelta` with a lower-resolution scalar will now type-cast the series
 
-Previously, when `fillna` is performed with a lower-resolution scalar than the series, the series dtype
-would have been lowered, this type-casting behavior is removed.
+Previously, when `fillna` was performed with a higher-resolution scalar than the series, the resulting resolution would have been cast to the higher resolution. Now the original resolution is preserved.
 
 Old behavior:
 ```python
