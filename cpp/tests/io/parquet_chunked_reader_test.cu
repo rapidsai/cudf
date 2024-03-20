@@ -66,8 +66,6 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::size_t max_page_size_bytes = cudf::io::default_max_page_size_bytes,
                 std::size_t max_page_size_rows  = cudf::io::default_max_page_size_rows)
 {
-  // Just shift nulls of the next column by one position to avoid having all nulls in the same
-  // table rows.
   if (nullable) {
     // Generate deterministic bitmask instead of random bitmask for easy computation of data size.
     auto const valid_iter = cudf::detail::make_counting_transform_iterator(
@@ -83,6 +81,10 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         std::move(col),
         cudf::get_default_stream(),
         rmm::mr::get_current_device_resource());
+
+      // Shift nulls of the next column by one position, to avoid having all nulls
+      // in the same table rows.
+      ++offset;
     }
   }
 
@@ -988,7 +990,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'500'000);
-    EXPECT_EQ(num_chunks, 4);
+    EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
