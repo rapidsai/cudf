@@ -470,9 +470,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     _frame: DataFrame
 
     def __getitem__(self, arg):
-        row_key, (
-            col_is_scalar,
-            column_names,
+        (
+            row_key,
+            (
+                col_is_scalar,
+                column_names,
+            ),
         ) = indexing_utils.destructure_dataframe_iloc_indexer(arg, self._frame)
         row_spec = indexing_utils.parse_row_iloc_indexer(
             row_key, len(self._frame)
@@ -5265,7 +5268,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             the resulting columns will either convert null
             values to ``np.nan`` or ``None`` depending on the dtype.
         arrow_type : bool, Default False
-            Return the Index with a ``pandas.ArrowDtype``
+            Return the columns with a ``pandas.ArrowDtype``
 
         Returns
         -------
@@ -5324,13 +5327,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     bool[pyarrow]
         dtype: object
         """
-        out_data = {}
         out_index = self.index.to_pandas()
-
-        for i, col_key in enumerate(self._data):
-            out_data[i] = self._data[col_key].to_pandas(
+        out_data = {
+            i: col.to_pandas(
                 index=out_index, nullable=nullable, arrow_type=arrow_type
             )
+            for i, col in enumerate(self._data.columns)
+        }
 
         out_df = pd.DataFrame(out_data, index=out_index)
         out_df.columns = self._data.to_pandas_index()
@@ -6901,16 +6904,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if future_stack:
             if dropna is not no_default:
                 raise ValueError(
-                    "dropna must be unspecified with future_stack=True as the new "
-                    "implementation does not introduce rows of NA values. This "
-                    "argument will be removed in a future version of cudf."
+                    "dropna must be unspecified with future_stack=True as "
+                    "the new implementation does not introduce rows of NA "
+                    "values. This argument will be removed in a future "
+                    "version of cudf."
                 )
         else:
             if dropna is not no_default or self._data.nlevels > 1:
                 warnings.warn(
-                    "The previous implementation of stack is deprecated and will be "
-                    "removed in a future version of cudf. Specify future_stack=True "
-                    "to adopt the new implementation and silence this warning.",
+                    "The previous implementation of stack is deprecated and "
+                    "will be removed in a future version of cudf. Specify "
+                    "future_stack=True to adopt the new implementation and "
+                    "silence this warning.",
                     FutureWarning,
                 )
             if dropna is no_default:
@@ -7028,9 +7033,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             unique_named_levels, axis=0, fill_value=-1
                         ).values
                     else:
-                        yield grpdf.reindex(
-                            unique_named_levels, axis=0, fill_value=-1
-                        ).sort_index().values
+                        yield (
+                            grpdf.reindex(
+                                unique_named_levels, axis=0, fill_value=-1
+                            )
+                            .sort_index()
+                            .values
+                        )
             else:
                 if future_stack:
                     yield column_idx_df.values

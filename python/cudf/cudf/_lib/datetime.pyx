@@ -185,7 +185,7 @@ def date_range(DeviceScalar start, size_type n, offset):
         + offset.kwds.get("months", 0)
     )
 
-    cdef const scalar* c_start = start.c_value.get()
+    cdef const scalar* c_start = start.get_raw_ptr()
     with nogil:
         c_result = move(calendrical_month_sequence(
             n,

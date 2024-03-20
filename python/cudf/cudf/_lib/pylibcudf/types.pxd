@@ -7,6 +7,7 @@ from cudf._lib.cpp.types cimport (
     MaskAndNullCnt,
     data_type,
     interpolation,
+    mask_state,
     nan_equality,
     nan_policy,
     null_equality,

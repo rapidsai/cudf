@@ -20,7 +20,11 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -871,6 +875,33 @@ def test_groupby_apply_return_df(func):
     assert_groupby_results_equal(expect, got)
 
 
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_apply_return_reindexed_series(as_index):
+    def gdf_func(df):
+        return cudf.Series([df["a"].sum(), df["b"].min(), df["c"].max()])
+
+    def pdf_func(df):
+        return pd.Series([df["a"].sum(), df["b"].min(), df["c"].max()])
+
+    df = cudf.DataFrame(
+        {
+            "key": [0, 0, 1, 1, 2, 2],
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [7, 8, 9, 10, 11, 12],
+            "c": [13, 14, 15, 16, 17, 18],
+        }
+    )
+    pdf = df.to_pandas()
+
+    kwargs = {}
+    if PANDAS_GE_220:
+        kwargs["include_groups"] = False
+
+    expect = pdf.groupby("key", as_index=as_index).apply(pdf_func, **kwargs)
+    got = df.groupby("key", as_index=as_index).apply(gdf_func, **kwargs)
+    assert_groupby_results_equal(expect, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
@@ -1397,6 +1428,10 @@ def test_groupby_multi_agg_hash_groupby(agg):
     assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="previous verion of pandas throws a warning",
+)
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmax", "idxmin", "sum", "prod", "count", "mean"]
 )
@@ -1436,12 +1471,12 @@ def test_groupby_nulls_basic(agg):
 
     # TODO: fillna() used here since we don't follow
     # Pandas' null semantics. Should we change it?
-    with expect_warning_if(agg in {"idxmax", "idxmin"} and not PANDAS_GE_220):
-        assert_groupby_results_equal(
-            getattr(pdf.groupby("a"), agg)().fillna(0),
-            getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
-            check_dtype=check_dtype,
-        )
+
+    assert_groupby_results_equal(
+        getattr(pdf.groupby("a"), agg)().fillna(0),
+        getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
+        check_dtype=check_dtype,
+    )
 
 
 def test_groupby_nulls_in_index():
@@ -2319,7 +2354,9 @@ def test_groupby_unique(by, data, dtype):
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+@pytest.mark.parametrize(
+    "func", ["cummin", "cummax", "cumcount", "cumsum", "cumprod"]
+)
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
@@ -2821,6 +2858,10 @@ def test_groupby_various_by_fillna(by, data, args):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
 def test_groupby_fillna_method(nelem, method):
@@ -2860,7 +2901,7 @@ def test_groupby_fillna_method(nelem, method):
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expect = pdf.groupby(key_col).fillna(method=method)
     with pytest.warns(FutureWarning):
         got = gdf.groupby(key_col).fillna(method=method)
@@ -3206,6 +3247,10 @@ def test_groupby_transform_maintain_index(by):
     )
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data, gkey",
     [
@@ -3246,8 +3291,7 @@ def test_groupby_pct_change(data, gkey, periods, fill_method):
             periods=periods, fill_method=fill_method
         )
     with expect_warning_if(
-        PANDAS_GE_210
-        and (
+        (
             fill_method not in (no_default, None)
             or (fill_method is not None and pdf.isna().any().any())
         )
@@ -3339,6 +3383,10 @@ def test_groupby_ngroup(by, ascending, df_ngroup):
     assert_eq(expected, actual, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
 )
@@ -3347,7 +3395,7 @@ def test_groupby_dtypes(groups):
         {"a": [1, 2, 3, 3], "b": ["x", "y", "z", "a"], "c": [10, 11, 12, 12]}
     )
     pdf = df.to_pandas()
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expected = pdf.groupby(groups).dtypes
     with pytest.warns(FutureWarning):
         actual = df.groupby(groups).dtypes

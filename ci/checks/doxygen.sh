@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 ###############################
 # cuDF doxygen warnings check #
 ###############################
@@ -20,6 +20,11 @@ if [ ! $(version "$DOXYGEN_VERSION") -eq $(version "1.9.1") ] ; then
   echo -e "Expecting doxygen version 1.9.1"
   exit 0
 fi
+
+# Set variables for doxygen
+# We can't use gha-tools' rapids-version and rapids-version-major-minor here because this script can run outside of CI
+export RAPIDS_VERSION="$(sed -E -e "s/^([0-9]{2})\.([0-9]{2})\.([0-9]{2}).*$/\1.\2.\3/" VERSION)"
+export RAPIDS_VERSION_MAJOR_MINOR="$(sed -E -e "s/^([0-9]{2})\.([0-9]{2})\.([0-9]{2}).*$/\1.\2/" VERSION)"
 
 # Run doxygen, ignore missing tag files error
 TAG_ERROR1="error: Tag file '.*.tag' does not exist or is not a file. Skipping it..."

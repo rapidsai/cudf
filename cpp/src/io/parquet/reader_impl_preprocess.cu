@@ -726,8 +726,8 @@ void reader::impl::build_string_dict_indices()
   thrust::fill(
     rmm::exec_policy_nosync(_stream), str_dict_index_count.begin(), str_dict_index_count.end(), 0);
   thrust::for_each(rmm::exec_policy_nosync(_stream),
-                   pass.pages.begin(),
-                   pass.pages.end(),
+                   pass.pages.d_begin(),
+                   pass.pages.d_end(),
                    set_str_dict_index_count{str_dict_index_count, pass.chunks});
 
   size_t const total_str_dict_indexes = thrust::reduce(
