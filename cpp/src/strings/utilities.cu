@@ -32,6 +32,7 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
+#include <cstdlib>
 #include <string>
 
 namespace cudf {

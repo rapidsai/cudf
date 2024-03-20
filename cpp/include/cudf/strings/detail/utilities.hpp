@@ -30,7 +30,8 @@ namespace detail {
 /**
  * @brief Create an offsets column to be a child of a strings column
  *
- * This will return the properly typed column to be filled in by the caller.
+ * This will return the properly typed column to be filled in by the caller
+ * given the number of bytes to address.
  *
  * @param chars_bytes Number of bytes for the chars in the strings column
  * @param count Number of elements for the offsets column
@@ -69,9 +70,11 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
 int64_t get_offset64_threshold();
 
 /**
- * @brief Return if large strings are supported
+ * @brief Checks if large strings is enabled
  *
  * This checks the setting in the environment variable LIBCUDF_LARGE_STRINGS_ENABLED.
+ *
+ * @return true if large strings are supported
  */
 bool is_large_strings_enabled();
 
