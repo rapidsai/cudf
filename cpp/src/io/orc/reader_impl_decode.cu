@@ -421,7 +421,7 @@ void decode_stream_data(int64_t num_dicts,
   // Allocate global dictionary for deserializing
   rmm::device_uvector<gpu::DictionaryEntry> global_dict(num_dicts, stream);
 
-  chunks.host_to_device_sync(stream);
+  chunks.host_to_device_async(stream);
   gpu::DecodeNullsAndStringDictionaries(
     chunks.base_device_ptr(), global_dict.data(), num_columns, num_stripes, skip_rows, stream);
 
