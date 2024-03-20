@@ -1,10 +1,9 @@
-# Major breaking changes in `cudf-24.04`
+# Breaking changes for pandas 2 in cuDF 24.04+
 
-Following are list of all the breaking changes in `cudf-24.04`(i.e., `cudf` & `cudf.pandas`). Starting this release,
-the minimum `pandas` version has changed to `2.0.0`, for which the changelog is [here](
-https://pandas.pydata.org/docs/whatsnew/index.html#version-2-0).
-
-A link to RAPIDS Support Notice is [here](https://docs.rapids.ai/notices/rsn0036/).
+In release 24.04 and later, cuDF requires pandas 2, following the announcement in [RAPIDS Support Notice 36](https://docs.rapids.ai/notices/rsn0036/).
+Migrating to pandas 2 comes with a number of API and behavior changes, documented below.
+The changes to support pandas 2 affect both `cudf` and `cudf.pandas` (cuDF pandas accelerator mode).
+For more details, refer to the [pandas 2.0 changelog](https://pandas.pydata.org/docs/whatsnew/index.html#version-2-0).
 
 ## Removed `DataFrame.append` & `Series.append`, use `cudf.concat` instead.
 
