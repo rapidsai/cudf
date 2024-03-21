@@ -408,10 +408,10 @@ inline __device__ void gpuOutputGeneric(
  * @param src pointer to first byte of input data in stream 0
  * @param stride number of bytes per input stream (M)
  */
-template <size_t byte_length>
+template <typename T>
 __device__ inline void gpuOutputByteStreamSplit(uint8_t* dst, uint8_t const* src, size_type stride)
 {
-  for (int i = 0; i < byte_length; i++) {
+  for (int i = 0; i < sizeof(T); i++) {
     dst[i] = src[i * stride];
   }
 }
@@ -432,7 +432,7 @@ inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
                                                     size_type stride,
                                                     int32_t ts_scale)
 {
-  gpuOutputByteStreamSplit<sizeof(int64_t)>(reinterpret_cast<uint8_t*>(dst), src, stride);
+  gpuOutputByteStreamSplit<int64_t>(reinterpret_cast<uint8_t*>(dst), src, stride);
   if (ts_scale < 0) {
     // round towards negative infinity
     int sign = (*dst < 0);

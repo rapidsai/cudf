@@ -1607,6 +1607,19 @@ __device__ void finish_page_encode(state_buf* s,
   }
 }
 
+// Encode a fixed-width data type int `dst`. `dst` points to the first byte
+// of the result. `stride` is 1 for PLAIN encoding and num_values for
+// BYTE_STREAM_SPLIT.
+template <typename T>
+__device__ inline void encode_value(uint8_t* dst, T src, size_type stride)
+{
+  T v = src;
+  for (int i = 0; i < sizeof(T); i++) {
+    dst[i * stride] = v;
+    v >>= 8;
+  }
+}
+
 // PLAIN page data encoder
 // blockDim(128, 1, 1)
 template <int block_size, bool is_split_stream>
@@ -1668,6 +1681,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
   __syncthreads();
+
+  auto const stride = is_split_stream ? s->page.num_valid : 1;
 
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
     uint32_t nvals = min(s->page.num_leaf_values - cur_val_idx, block_size);
@@ -1739,21 +1754,11 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             }
           }();
 
-          if constexpr (is_split_stream) {
-            auto const stride     = s->page.num_valid;
-            dst[pos + 0 * stride] = v;
-            dst[pos + 1 * stride] = v >> 8;
-            dst[pos + 2 * stride] = v >> 16;
-            dst[pos + 3 * stride] = v >> 24;
-          } else {
-            dst[pos + 0] = v;
-            dst[pos + 1] = v >> 8;
-            dst[pos + 2] = v >> 16;
-            dst[pos + 3] = v >> 24;
-          }
+          encode_value(dst + pos, v, stride);
         } break;
+        case DOUBLE:
         case INT64: {
-          int64_t v        = s->col.leaf_column->element<int64_t>(val_idx);
+          auto v           = s->col.leaf_column->element<int64_t>(val_idx);
           int32_t ts_scale = s->col.ts_scale;
           if (ts_scale != 0) {
             if (ts_scale < 0) {
@@ -1762,26 +1767,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               v *= ts_scale;
             }
           }
-          if constexpr (is_split_stream) {
-            auto const stride     = s->page.num_valid;
-            dst[pos + 0 * stride] = v;
-            dst[pos + 1 * stride] = v >> 8;
-            dst[pos + 2 * stride] = v >> 16;
-            dst[pos + 3 * stride] = v >> 24;
-            dst[pos + 4 * stride] = v >> 32;
-            dst[pos + 5 * stride] = v >> 40;
-            dst[pos + 6 * stride] = v >> 48;
-            dst[pos + 7 * stride] = v >> 56;
-          } else {
-            dst[pos + 0] = v;
-            dst[pos + 1] = v >> 8;
-            dst[pos + 2] = v >> 16;
-            dst[pos + 3] = v >> 24;
-            dst[pos + 4] = v >> 32;
-            dst[pos + 5] = v >> 40;
-            dst[pos + 6] = v >> 48;
-            dst[pos + 7] = v >> 56;
-          }
+          encode_value(dst + pos, v, stride);
         } break;
         case INT96: {
           // only PLAIN encoding is supported
@@ -1811,39 +1797,12 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
           }();
 
           // the 12 bytes of fixed length data.
-          v             = last_day_nanos.count();
-          dst[pos + 0]  = v;
-          dst[pos + 1]  = v >> 8;
-          dst[pos + 2]  = v >> 16;
-          dst[pos + 3]  = v >> 24;
-          dst[pos + 4]  = v >> 32;
-          dst[pos + 5]  = v >> 40;
-          dst[pos + 6]  = v >> 48;
-          dst[pos + 7]  = v >> 56;
-          uint32_t w    = julian_days.count();
-          dst[pos + 8]  = w;
-          dst[pos + 9]  = w >> 8;
-          dst[pos + 10] = w >> 16;
-          dst[pos + 11] = w >> 24;
+          v = last_day_nanos.count();
+          encode_value(dst + pos, v, 1);
+          uint32_t w = julian_days.count();
+          encode_value(dst + pos + 8, w, 1);
         } break;
 
-        case DOUBLE: {
-          if (is_split_stream) {
-            auto const v          = s->col.leaf_column->element<int64_t>(val_idx);
-            auto const stride     = s->page.num_valid;
-            dst[pos + 0 * stride] = v;
-            dst[pos + 1 * stride] = v >> 8;
-            dst[pos + 2 * stride] = v >> 16;
-            dst[pos + 3 * stride] = v >> 24;
-            dst[pos + 4 * stride] = v >> 32;
-            dst[pos + 5 * stride] = v >> 40;
-            dst[pos + 6 * stride] = v >> 48;
-            dst[pos + 7 * stride] = v >> 56;
-          } else {
-            auto v = s->col.leaf_column->element<double>(val_idx);
-            memcpy(dst + pos, &v, 8);
-          }
-        } break;
         case BYTE_ARRAY: {
           // only PLAIN encoding is supported
           auto const bytes = [](cudf::type_id const type_id,
@@ -1859,11 +1818,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
               default: CUDF_UNREACHABLE("invalid type id for byte array writing!");
             }
           }(type_id, s->col.leaf_column, val_idx);
-          uint32_t v   = len - 4;  // string length
-          dst[pos + 0] = v;
-          dst[pos + 1] = v >> 8;
-          dst[pos + 2] = v >> 16;
-          dst[pos + 3] = v >> 24;
+          uint32_t v = len - 4;  // string length
+          encode_value(dst + pos, v, 1);
           if (v != 0) memcpy(dst + pos + 4, bytes, v);
         } break;
         case FIXED_LEN_BYTE_ARRAY: {

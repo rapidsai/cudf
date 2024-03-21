@@ -267,8 +267,8 @@ __device__ inline void gpuDecodeSplitValues(page_state_s* s,
       // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
       if (s->col.converted_type == DECIMAL) {
         switch (dtype) {
-          case INT32: gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values); break;
-          case INT64: gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values); break;
+          case INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
+          case INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
           case FIXED_LEN_BYTE_ARRAY:
             if (s->dtype_len_in <= sizeof(int32_t)) {
               gpuOutputSplitFixedLenByteArrayAsInt(
@@ -293,7 +293,7 @@ __device__ inline void gpuDecodeSplitValues(page_state_s* s,
           // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
           // TIME_MILLIS is the only duration type stored as int32:
           // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-          gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values);
+          gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
           dst[4] = 0;
           dst[5] = 0;
           dst[6] = 0;
@@ -302,10 +302,10 @@ __device__ inline void gpuDecodeSplitValues(page_state_s* s,
           gpuOutputSplitInt64Timestamp(
             reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
         } else {
-          gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values);
+          gpuOutputByteStreamSplit<int64_t>(dst, src, num_values);
         }
       } else if (dtype_len == 4) {
-        gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values);
+        gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
       } else {
         s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
       }
@@ -735,7 +735,7 @@ void __host__ DecodePageDataFixedDict(cudf::detail::hostdevice_span<PageInfo> pa
   //  dim3 dim_block(decode_block_size, 1); // decode_block_size = 128 threads per block
   // 1 full warp, and 1 warp of 1 thread
   dim3 dim_block(decode_block_size, 1);  // decode_block_size = 128 threads per block
-  dim3 dim_grid(pages.size(), 1);        // 1 thread block per pags => # blocks
+  dim3 dim_grid(pages.size(), 1);        // 1 thread block per page => # blocks
 
   if (level_type_size == 1) {
     gpuDecodePageDataFixedDict<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(
@@ -754,10 +754,8 @@ void __host__ DecodeSplitPageDataFlat(cudf::detail::hostdevice_span<PageInfo> pa
                                       kernel_error::pointer error_code,
                                       rmm::cuda_stream_view stream)
 {
-  //  dim3 dim_block(decode_block_size, 1); // decode_block_size = 128 threads per block
-  // 1 full warp, and 1 warp of 1 thread
   dim3 dim_block(decode_block_size, 1);  // decode_block_size = 128 threads per block
-  dim3 dim_grid(pages.size(), 1);        // 1 thread block per pags => # blocks
+  dim3 dim_grid(pages.size(), 1);        // 1 thread block per page => # blocks
 
   if (level_type_size == 1) {
     gpuDecodeSplitPageDataFlat<uint8_t><<<dim_grid, dim_block, 0, stream.value()>>>(

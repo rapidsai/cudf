@@ -122,7 +122,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // - the row values we get from nz_idx will be
       //   0, 1, 2, 3, 4 ....
       // - by shifting these values by first_row, the sequence becomes
-      //   -1, -2, 0, 1, 2 ...
+      //   -2, -1, 0, 1, 2 ...
       // - so we will end up ignoring the first two input rows, and input rows 2..n will
       //   get written to the output starting at position 0.
       //
@@ -148,8 +148,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
         if (s->col.converted_type == DECIMAL) {
           switch (dtype) {
-            case INT32: gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values); break;
-            case INT64: gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values); break;
+            case INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
+            case INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
             case FIXED_LEN_BYTE_ARRAY:
               if (s->dtype_len_in <= sizeof(int32_t)) {
                 gpuOutputSplitFixedLenByteArrayAsInt(
@@ -174,7 +174,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             // Reading INT32 TIME_MILLIS into 64-bit DURATION_MILLISECONDS
             // TIME_MILLIS is the only duration type stored as int32:
             // https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#deprecated-time-convertedtype
-            gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values);
+            gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
             dst[4] = 0;
             dst[5] = 0;
             dst[6] = 0;
@@ -183,10 +183,10 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
             gpuOutputSplitInt64Timestamp(
               reinterpret_cast<int64_t*>(dst), src, num_values, s->ts_scale);
           } else {
-            gpuOutputByteStreamSplit<sizeof(int64_t)>(dst, src, num_values);
+            gpuOutputByteStreamSplit<int64_t>(dst, src, num_values);
           }
         } else if (dtype_len == 4) {
-          gpuOutputByteStreamSplit<sizeof(int32_t)>(dst, src, num_values);
+          gpuOutputByteStreamSplit<int32_t>(dst, src, num_values);
         } else {
           s->set_error_code(decode_error::UNSUPPORTED_ENCODING);
         }
@@ -316,7 +316,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // - the row values we get from nz_idx will be
       //   0, 1, 2, 3, 4 ....
       // - by shifting these values by first_row, the sequence becomes
-      //   -1, -2, 0, 1, 2 ...
+      //   -2, -1, 0, 1, 2 ...
       // - so we will end up ignoring the first two input rows, and input rows 2..n will
       //   get written to the output starting at position 0.
       //
