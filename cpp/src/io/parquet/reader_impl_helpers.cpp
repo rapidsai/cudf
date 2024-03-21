@@ -142,9 +142,10 @@ type_id to_type_id(SchemaElement const& schema,
       case LogicalType::MAP:
       case LogicalType::LIST: return type_id::LIST;
 
-      // all null column that can't be type deduced
-      // from old code, converted_type NA became string, with a note to enable type_id::EMPTY
-      // when that is enabled
+      // All null column that can't have its type deduced.
+      // Note: originally LogicalType::UNKNOWN was converted to ConvertedType::NA, and
+      // NA then became type_id::STRING, but with the following TODO:
+      // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
       case LogicalType::UNKNOWN: return type_id::STRING;
 
       default: break;
