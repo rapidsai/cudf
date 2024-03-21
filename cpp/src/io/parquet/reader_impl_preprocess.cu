@@ -700,16 +700,16 @@ struct set_list_row_count_estimate {
 struct set_final_row_count {
   device_span<PageInfo> pages;
   device_span<const ColumnChunkDesc> chunks;
-  device_span<const size_type> page_offsets;
-  size_t const max_row;
 
   __device__ void operator()(size_t i)
   {
-    auto const last_page_index      = page_offsets[i + 1] - 1;
-    auto const& page                = pages[last_page_index];
-    auto const& chunk               = chunks[page.chunk_idx];
-    size_t const page_start_row     = chunk.start_row + page.chunk_row;
-    pages[last_page_index].num_rows = max_row - page_start_row;
+    auto& page        = pages[i];
+    auto const& chunk = chunks[page.chunk_idx];
+    // only do this for the last page in each chunk
+    if (i < pages.size() - 1 && (pages[i + 1].chunk_idx == page.chunk_idx)) { return; }
+    size_t const page_start_row = chunk.start_row + page.chunk_row;
+    size_t const chunk_last_row = chunk.start_row + chunk.num_rows;
+    page.num_rows               = chunk_last_row - page_start_row;
   }
 };
 
@@ -1300,17 +1300,15 @@ void reader::impl::generate_list_column_row_count_estimates()
                                   chunk_row_output_iter{pass.pages.device_ptr()});
   }
 
-  // finally, fudge the last page for each column such that it ends on the real known row count
-  // for the pass. this is so that as we march through the subpasses, we will find that every column
-  // cleanly ends up the expected row count at the row group boundary.
-  auto const& last_chunk = pass.chunks[pass.chunks.size() - 1];
-  auto const num_columns = _input_columns.size();
-  size_t const max_row   = last_chunk.start_row + last_chunk.num_rows;
-  auto iter              = thrust::make_counting_iterator(0);
+  // to compensate for the list row size estimates, force the row count on the last page for each
+  // column chunk (each rowgroup) such that it ends on the real known row count. this is so that as
+  // we march through the subpasses, we will find that every column cleanly ends up the expected row
+  // count at the row group boundary and our split computations work correctly.
+  auto iter = thrust::make_counting_iterator(0);
   thrust::for_each(rmm::exec_policy_nosync(_stream),
                    iter,
-                   iter + num_columns,
-                   set_final_row_count{pass.pages, pass.chunks, pass.page_offsets, max_row});
+                   iter + pass.pages.size(),
+                   set_final_row_count{pass.pages, pass.chunks});
 
   pass.chunks.device_to_host_async(_stream);
   pass.pages.device_to_host_async(_stream);
