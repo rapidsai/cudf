@@ -1,5 +1,9 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
+from __future__ import annotations
+
+import functools
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numba import cuda
@@ -16,15 +20,15 @@ from cudf.core.udf.templates import (
 )
 from cudf.core.udf.utils import (
     Row,
-    _all_dtypes_from_frame,
     _construct_signature,
     _get_extensionty_size,
     _get_kernel,
     _get_udf_return_type,
     _mask_get,
-    _supported_cols_from_frame,
-    _supported_dtypes_from_frame,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _get_frame_row_type(dtype):
@@ -89,7 +93,9 @@ def _get_frame_row_type(dtype):
     return Row(fields, offset, _is_aligned_struct)
 
 
-def _row_kernel_string_from_template(frame, row_type, args):
+def _row_kernel_string_from_template(
+    masked_array_column_has_mask: tuple[tuple, ...], row_type, args: tuple
+):
     """
     Function to write numba kernels for `DataFrame.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -105,20 +111,22 @@ def _row_kernel_string_from_template(frame, row_type, args):
     templates.py for the full row kernel template and more details.
     """
     # Create argument list for kernel
-    frame = _supported_cols_from_frame(frame)
-
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(frame))])
-    input_offsets = ", ".join([f"offset_{i}" for i in range(len(frame))])
+    input_columns = ", ".join(
+        [f"input_col_{i}" for i in range(len(masked_array_column_has_mask))]
+    )
+    input_offsets = ", ".join(
+        [f"offset_{i}" for i in range(len(masked_array_column_has_mask))]
+    )
     extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
 
     # Generate the initializers for each device function argument
     initializers = []
     row_initializers = []
-    for i, (colname, col) in enumerate(frame.items()):
+    for i, (colname, has_mask) in enumerate(masked_array_column_has_mask):
         idx = str(i)
         template = (
             masked_input_initializer_template
-            if col.mask is not None
+            if has_mask
             else unmasked_input_initializer_template
         )
         initializers.append(template.format(idx=idx))
@@ -136,19 +144,28 @@ def _row_kernel_string_from_template(frame, row_type, args):
     )
 
 
-def _get_row_kernel(frame, func, args):
-    row_type = _get_frame_row_type(
-        np.dtype(list(_all_dtypes_from_frame(frame).items()))
+@functools.lru_cache(maxsize=8)
+def _get_row_kernel(
+    all_frame_row_type: Row,
+    masked_array_column_types: tuple,
+    supported_row_type: Row,
+    masked_array_column_has_mask: tuple[tuple, ...],
+    func: Callable,
+    args: tuple,
+):
+    scalar_return_type = _get_udf_return_type(all_frame_row_type, func, args)
+    np_return_type = (
+        numpy_support.as_dtype(scalar_return_type)
+        if scalar_return_type.is_internal
+        else scalar_return_type.np_dtype
     )
-    scalar_return_type = _get_udf_return_type(row_type, func, args)
     # this is the signature for the final full kernel compilation
-    sig = _construct_signature(frame, scalar_return_type, args)
+    sig = _construct_signature(
+        masked_array_column_types, scalar_return_type, args
+    )
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    np_field_types = np.dtype(
-        list(_supported_dtypes_from_frame(frame).items())
-    )
-    row_type = _get_frame_row_type(np_field_types)
+    row_type = supported_row_type
 
     # Dict of 'local' variables into which `_kernel` is defined
     global_exec_context = {
@@ -158,7 +175,9 @@ def _get_row_kernel(frame, func, args):
         "pack_return": pack_return,
         "row_type": row_type,
     }
-    kernel_string = _row_kernel_string_from_template(frame, row_type, args)
+    kernel_string = _row_kernel_string_from_template(
+        masked_array_column_has_mask, row_type, args
+    )
     kernel = _get_kernel(kernel_string, global_exec_context, sig, func)
 
-    return kernel, scalar_return_type
+    return kernel, np_return_type

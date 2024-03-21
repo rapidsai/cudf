@@ -1,8 +1,7 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
-
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
+import functools
 from pickle import dumps
 
-import cachetools
 from numba import cuda
 from numba.np import numpy_support
 
@@ -63,7 +62,7 @@ def grouped_window_sizes_from_offset(arr, group_starts, offset):
 # it can hit for distinct functions that are similar. The lru_cache wrapping
 # compile_udf misses for these similar functions, but doesn't need to serialize
 # closure variables to check for a hit.
-_udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
+# _udf_code_cache: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
 def make_cache_key(udf, sig):
@@ -84,6 +83,7 @@ def make_cache_key(udf, sig):
     return names, constants, codebytes, cvarbytes, sig
 
 
+@functools.lru_cache(maxsize=32)
 def compile_udf(udf, type_signature):
     """Compile ``udf`` with `numba`
 
@@ -116,11 +116,10 @@ def compile_udf(udf, type_signature):
     """
     import cudf.core.udf
 
-    key = make_cache_key(udf, type_signature)
-    res = _udf_code_cache.get(key)
-    if res:
-        return res
-
+    # key = make_cache_key(udf, type_signature)
+    # res = _udf_code_cache.get(key)
+    # if res:
+    #     return res
     # We haven't compiled a function like this before, so need to fall back to
     # compilation with Numba
     ptx_code, return_type = cuda.compile_ptx_for_current_device(
@@ -131,8 +130,8 @@ def compile_udf(udf, type_signature):
     else:
         output_type = return_type
 
-    # Populate the cache for this function
+    # # Populate the cache for this function
     res = (ptx_code, output_type)
-    _udf_code_cache[key] = res
+    # _udf_code_cache[key] = res
 
     return res
