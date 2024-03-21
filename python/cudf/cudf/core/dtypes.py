@@ -205,10 +205,6 @@ class CategoricalDtype(_BaseDtype):
         """
         return self._ordered
 
-    @ordered.setter
-    def ordered(self, value) -> None:
-        self._ordered = value
-
     @classmethod
     def from_pandas(cls, dtype: pd.CategoricalDtype) -> "CategoricalDtype":
         """
