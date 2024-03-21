@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -133,10 +133,10 @@ std::unique_ptr<column> rank_generator(column_view const& grouped_values,
 
   auto [group_labels_begin, mutable_rank_begin] = [&]() {
     if constexpr (forward) {
-      return thrust::pair{group_labels.begin(), mutable_ranks.begin<size_type>()};
+      return thrust::make_pair(group_labels.begin(), mutable_ranks.begin<size_type>());
     } else {
-      return thrust::pair{thrust::reverse_iterator(group_labels.end()),
-                          thrust::reverse_iterator(mutable_ranks.end<size_type>())};
+      return thrust::make_pair(thrust::reverse_iterator(group_labels.end()),
+                               thrust::reverse_iterator(mutable_ranks.end<size_type>()));
     }
   }();
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),

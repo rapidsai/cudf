@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -108,7 +108,7 @@ void skip_unsupported_inputs(device_span<size_t> input_sizes,
       input_sizes.begin(),
       status_size_it,
       [] __device__(auto const& status) {
-        return thrust::pair{0, compression_result{0, compression_status::SKIPPED}};
+        return thrust::make_pair(0, compression_result{0, compression_status::SKIPPED});
       },
       [max_size = max_valid_input_size.value()] __device__(size_t input_size) {
         return input_size > max_size;

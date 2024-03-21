@@ -45,7 +45,8 @@ requirements:
     - ninja
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - librmm ={{ minor_version }}
+    # Force librmm to be fetched by CPM
+    #- librmm ={{ minor_version }}
     - libkvikio ={{ minor_version }}
     {% if cuda_major == "11" %}
     - cudatoolkit
