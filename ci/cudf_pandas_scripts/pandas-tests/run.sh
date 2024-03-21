@@ -32,4 +32,8 @@ python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json p
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 mv pandas-testing/${PANDAS_TESTS_BRANCH}-results.json ${RAPIDS_ARTIFACTS_DIR}/
-rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
+if [[ ${PANDAS_TESTS_BRANCH} == "pr" ]]; then
+    aws s3 ls s3://rapids-downloads/nightly/ --recursive | grep "-main.json"
+else
+    rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
+fi
