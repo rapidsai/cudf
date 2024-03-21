@@ -375,6 +375,8 @@ int64_t find_next_split(int64_t cur_pos,
   int32_t const clock_rate =
     is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
 
+  // TODO(ets): this is leftover from the original code, but will we ever output decimal as
+  // anything but fixed point?
   if (logical_type.has_value() and logical_type->type == LogicalType::DECIMAL) {
     // if decimal but not outputting as float or decimal, then convert to no logical type
     if (column_type_id != type_id::FLOAT64 and
