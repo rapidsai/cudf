@@ -16,6 +16,7 @@
 
 #include "reader_impl_helpers.hpp"
 
+#include "io/parquet/parquet.hpp"
 #include "io/utilities/row_selection.hpp"
 
 #include <numeric>
@@ -68,9 +69,9 @@ type_id to_type_id(SchemaElement const& schema,
   auto const physical = schema.type;
   auto logical_type   = schema.logical_type;
 
-  // FIXME: sometimes we don't hit all of the schema elements?
-  // see ParquetReaderTest.RepeatedNoAnnotations
+  // sanity check, but not worth failing over
   if (schema.converted_type.has_value() and not logical_type.has_value()) {
+    CUDF_LOG_WARN("ConvertedType is specified but not LogicalType");
     logical_type = converted_to_logical_type(schema);
   }
 
@@ -213,6 +214,7 @@ void metadata::sanitize_schema()
         // This is a list of structs, so we need to mark this as a list, but also
         // add a struct child and move this element's children to the struct
         schema_elem.converted_type  = LIST;
+        schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = OPTIONAL;
         auto const struct_node_idx  = static_cast<size_type>(schema.size());
 
@@ -221,7 +223,7 @@ void metadata::sanitize_schema()
         struct_elem.repetition_type = REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
         struct_elem.type            = UNDEFINED_TYPE;
-        struct_elem.converted_type  = UNKNOWN;
+        struct_elem.converted_type  = thrust::nullopt;
 
         // swap children
         struct_elem.children_idx = std::move(schema_elem.children_idx);
