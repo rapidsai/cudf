@@ -272,14 +272,30 @@ def test_csv_reader_mixed_data_delimiter_sep(
     gdf1 = read_csv(
         str(fname),
         names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        dtype=[
+            "int64",
+            "datetime64[ns]",
+            "float64",
+            "int64",
+            "category",
+            "str",
+            "bool",
+        ],
         dayfirst=True,
         **cudf_arg,
     )
     gdf2 = read_csv(
         str(fname),
         names=["1", "2", "3", "4", "5", "6", "7"],
-        dtype=["int64", "date", "float64", "int64", "category", "str", "bool"],
+        dtype=[
+            "int64",
+            "datetime64[ns]",
+            "float64",
+            "int64",
+            "category",
+            "str",
+            "bool",
+        ],
         dayfirst=True,
         **pandas_arg,
     )
@@ -368,7 +384,7 @@ def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
     out = read_csv(
         str(fname),
         names=["1", "2", "3"],
-        dtype=["int64", "date", "float64"],
+        dtype=["int64", "datetime64[ns]", "float64"],
         skiprows=1,
         skipfooter=1,
         dayfirst=True,
