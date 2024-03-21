@@ -2357,3 +2357,19 @@ def test_timezone_array_notimplemented():
 def test_to_datetime_errors_ignore_deprecated():
     with pytest.warns(FutureWarning):
         cudf.to_datetime("2001-01-01 00:04:45", errors="ignore")
+
+
+def test_date_range_freq_default():
+    result = pd.date_range("2020-01-01", periods=2, name="foo")
+    expected = cudf.date_range("2020-01-01", periods=2, name="foo")
+    assert_eq(result, expected)
+
+
+def test_date_range_tz():
+    result = pd.date_range("2020-01-01", periods=2, tz="UTC")
+    expected = cudf.date_range("2020-01-01", periods=2, tz="UTC")
+    assert_eq(result, expected)
+
+    result = pd.date_range("2020-01-01", "2020-01-02", periods=2, tz="UTC")
+    expected = cudf.date_range("2020-01-01", "2020-01-02", periods=2, tz="UTC")
+    assert_eq(result, expected)
