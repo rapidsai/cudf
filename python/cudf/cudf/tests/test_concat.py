@@ -1705,7 +1705,7 @@ def test_concat_decimal_numeric_series(s1, s2, s3, expected):
             cudf.Series(
                 np.arange(
                     "2005-02-01T12", "2005-02-01T15", dtype="datetime64[h]"
-                ),
+                ).astype("datetime64[s]"),
                 dtype="datetime64[s]",
             ),
             cudf.Series(
