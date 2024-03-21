@@ -1803,7 +1803,9 @@ def test_parquet_writer_row_group_size(tmpdir, row_group_size_kwargs):
         writer.write_table(gdf)
 
     # Simple check for multiple row-groups
-    nrows, nrow_groups, columns = cudf.io.parquet.read_parquet_metadata(fname)
+    nrows, nrow_groups, columns, _ = cudf.io.parquet.read_parquet_metadata(
+        fname
+    )
     assert nrows == size
     assert nrow_groups > 1
     assert columns == ["a", "b"]
