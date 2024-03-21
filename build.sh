@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 # cuDF build script
 
@@ -257,7 +257,6 @@ if hasArg clean; then
     find ${REPODIR}/python/ | grep -E "(__pycache__|\.pyc|\.pyo|\.so|\_skbuild$)"  | xargs rm -rf
 
 fi
-
 
 ################################################################################
 # Configure, build, and install libcudf

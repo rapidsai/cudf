@@ -62,6 +62,7 @@ requirements:
     - protobuf ==4.24.*
     - python
     - cython >=3.0.3
+    - rapids-build-backend
     - scikit-build-core >=0.7.0
     - setuptools
     - dlpack >=0.8,<1.0
