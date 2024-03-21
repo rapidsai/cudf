@@ -17,11 +17,12 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/offsets_iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/detail/combine.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -48,8 +49,9 @@ struct concat_strings_base {
   table_device_view const d_table;
   string_scalar_device_view const d_narep;
   separator_on_nulls separate_nulls;
-  size_type* d_offsets{};
+  size_type* d_sizes{};
   char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets{};
 
   /**
    * @brief Concatenate each table row to a single output string.
@@ -67,7 +69,7 @@ struct concat_strings_base {
         thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
           return col.is_null(idx);
         })) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) d_sizes[idx] = 0;
       return;
     }
 
@@ -94,7 +96,7 @@ struct concat_strings_base {
         write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
-    if (!d_chars) d_offsets[idx] = bytes;
+    if (!d_chars) d_sizes[idx] = bytes;
   }
 };
 
@@ -142,7 +144,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   // Create device views from the strings columns.
   auto d_table = table_device_view::create(strings_columns, stream);
   concat_strings_fn fn{*d_table, d_separator, d_narep, separate_nulls};
-  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = experimental::make_strings_children(fn, strings_count, stream, mr);
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
@@ -187,7 +189,7 @@ struct multi_separator_concat_fn : concat_strings_base {
   __device__ void operator()(size_type idx)
   {
     if (d_separators.is_null(idx) && !d_separator_narep.is_valid()) {
-      if (!d_chars) d_offsets[idx] = 0;
+      if (!d_chars) d_sizes[idx] = 0;
       return;
     }
 
@@ -234,7 +236,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   multi_separator_concat_fn mscf{
     *d_table, separator_col_view, separator_rep, col_rep, separate_nulls};
-  auto [offsets_column, chars] = make_strings_children(mscf, strings_count, stream, mr);
+  auto [offsets_column, chars] =
+    experimental::make_strings_children(mscf, strings_count, stream, mr);
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
