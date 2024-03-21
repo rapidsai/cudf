@@ -9,6 +9,15 @@ PANDAS_TESTS_BRANCH=${1}
 
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch"
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
+rapids-logger "abc"
+if [[ ${PANDAS_TESTS_BRANCH} == "pr" ]]; then
+    rapids-logger "abc-1"
+    aws s3 ls s3://rapids-downloads/nightly/ --recursive --output text | grep "-results.json"
+    rapids-logger "abc-1-exit"
+else
+    rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
+fi
+rapids-logger "abc-exit"
 
 RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
 RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
@@ -32,12 +41,3 @@ mkdir -p "${RAPIDS_TESTS_DIR}"
 # RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 # mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 # mv pandas-testing/${PANDAS_TESTS_BRANCH}-results.json ${RAPIDS_ARTIFACTS_DIR}/
-rapids-logger "abc"
-if [[ ${PANDAS_TESTS_BRANCH} == "pr" ]]; then
-    rapids-logger "abc-1"
-    aws s3 ls s3://rapids-downloads/nightly/ --recursive | grep "-results.json"
-    rapids-logger "abc-1-exit"
-else
-    rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
-fi
-rapids-logger "abc-exit"
