@@ -1144,11 +1144,11 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
     if (s->page.num_input_values > 0) {
       uint8_t* cur = s->page.page_data;
       uint8_t* end = cur + s->page.uncompressed_page_size;
-
-      uint32_t dtype_len_out = s->col.type_length;
-      s->ts_scale            = 0;
+      s->ts_scale  = 0;
       // Validate data type
       auto const data_type = s->col.physical_type;
+      auto const is_decimal = s->col.logical_type.has_value()
+        and s->col.logical_type->type == LogicalType::DECIMAL;
       switch (data_type) {
         case BOOLEAN:
           s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
@@ -1178,8 +1178,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
         case DOUBLE: s->dtype_len = 8; break;
         case INT96: s->dtype_len = 12; break;
         case BYTE_ARRAY:
-          if (s->col.logical_type.has_value() &&
-              s->col.logical_type->type == LogicalType::DECIMAL) {
+          if (is_decimal) {
             auto const decimal_precision = s->col.logical_type->precision();
             s->dtype_len                 = [decimal_precision]() {
               if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
@@ -1195,14 +1194,14 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           }
           break;
         default:  // FIXED_LEN_BYTE_ARRAY:
-          s->dtype_len = dtype_len_out;
+          s->dtype_len = s->col.type_length;
           if (s->dtype_len <= 0) { s->set_error_code(decode_error::INVALID_DATA_TYPE); }
           break;
       }
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
       if (data_type == FIXED_LEN_BYTE_ARRAY) {
-        if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
+        if (is_decimal) {
           s->dtype_len = [dtype_len = s->dtype_len]() {
             if (dtype_len <= sizeof(int32_t)) {
               return sizeof(int32_t);
