@@ -1147,8 +1147,8 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
       s->ts_scale  = 0;
       // Validate data type
       auto const data_type = s->col.physical_type;
-      auto const is_decimal = s->col.logical_type.has_value()
-        and s->col.logical_type->type == LogicalType::DECIMAL;
+      auto const is_decimal =
+        s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
       switch (data_type) {
         case BOOLEAN:
           s->dtype_len = 1;  // Boolean are stored as 1 byte on the output
