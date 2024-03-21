@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -260,15 +260,18 @@ public final class ColumnVector extends ColumnView {
   public synchronized void close() {
     refCount--;
     offHeap.delRef();
-    if (eventHandler != null) {
-      eventHandler.onClosed(this, refCount);
-    }
-    if (refCount == 0) {
-      super.close();
-      offHeap.clean(false);
-    } else if (refCount < 0) {
-      offHeap.logRefCountDebug("double free " + this);
-      throw new IllegalStateException("Close called too many times " + this);
+    try {
+      if (refCount == 0) {
+        super.close();
+        offHeap.clean(false);
+      } else if (refCount < 0) {
+        offHeap.logRefCountDebug("double free " + this);
+        throw new IllegalStateException("Close called too many times " + this);
+      }
+    } finally {
+      if (eventHandler != null) {
+        eventHandler.onClosed(this, refCount);
+      }
     }
   }
 
