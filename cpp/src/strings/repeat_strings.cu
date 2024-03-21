@@ -20,7 +20,8 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/detail/strings_children.cuh>
+#include <cudf/detail/offsets_iterator.cuh>
+#include <cudf/strings/detail/strings_children_ex.cuh>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/repeat_strings.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -106,12 +107,11 @@ struct compute_size_and_repeat_fn {
   column_device_view const strings_dv;
   size_type const repeat_times;
   bool const has_nulls;
-
-  size_type* d_offsets{nullptr};
-
+  size_type* d_sizes{};
   // If d_chars == nullptr: only compute sizes of the output strings.
   // If d_chars != nullptr: only repeat strings.
-  char* d_chars{nullptr};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets{};
 
   // `idx` will be in the range of [0, repeat_times * strings_count).
   __device__ void operator()(size_type const idx) const noexcept
@@ -121,7 +121,7 @@ struct compute_size_and_repeat_fn {
     auto const is_valid   = !has_nulls || strings_dv.is_valid_nocheck(str_idx);
 
     if (!d_chars && repeat_idx == 0) {
-      d_offsets[str_idx] =
+      d_sizes[str_idx] =
         is_valid ? repeat_times * strings_dv.element<string_view>(str_idx).size_bytes() : 0;
     }
 
@@ -160,8 +160,8 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   auto const strings_dv_ptr = column_device_view::create(input.parent(), stream);
   auto const fn = compute_size_and_repeat_fn{*strings_dv_ptr, repeat_times, input.has_nulls()};
 
-  auto [offsets_column, chars] =
-    make_strings_children(fn, strings_count * repeat_times, strings_count, stream, mr);
+  auto [offsets_column, chars] = experimental::make_strings_children(
+    fn, strings_count * repeat_times, strings_count, stream, mr);
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              chars.release(),
@@ -182,11 +182,11 @@ struct compute_sizes_and_repeat_fn {
   bool const strings_has_nulls;
   bool const rtimes_has_nulls;
 
-  size_type* d_offsets{nullptr};
-
+  size_type* d_sizes{nullptr};
   // If d_chars == nullptr: only compute sizes of the output strings.
   // If d_chars != nullptr: only repeat strings.
-  char* d_chars{nullptr};
+  char* d_chars{};
+  cudf::detail::input_offsetalator d_offsets{};
 
   __device__ void operator()(size_type const idx) const noexcept
   {
@@ -196,7 +196,7 @@ struct compute_sizes_and_repeat_fn {
     // Any null input (either string or repeat_times value) will result in a null output.
     auto const is_valid = string_is_valid && rtimes_is_valid;
     if (!is_valid) {
-      if (!d_chars) { d_offsets[idx] = 0; }
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -205,7 +205,7 @@ struct compute_sizes_and_repeat_fn {
 
     if (!d_chars) {
       // repeat_times could be negative
-      d_offsets[idx] = (repeat_times > 0) ? (repeat_times * d_str.size_bytes()) : 0;
+      d_sizes[idx] = (repeat_times > 0) ? (repeat_times * d_str.size_bytes()) : 0;
     } else {
       auto output_ptr = d_chars + d_offsets[idx];
       while (repeat_times-- > 0) {
@@ -240,7 +240,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                                              input.has_nulls(),
                                                              repeat_times.has_nulls()};
 
-  auto [offsets_column, chars] = make_strings_children(fn, strings_count, stream, mr);
+  auto [offsets_column, chars] = experimental::make_strings_children(fn, strings_count, stream, mr);
 
   // We generate new bitmask by AND of the two input columns' bitmasks.
   // Note that if either of the input columns are nullable, the output column will also be nullable
