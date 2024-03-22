@@ -27,8 +27,6 @@ namespace detail {
 /**
  * @brief Merges two strings columns
  *
- * Caller must set the validity mask in the output column.
- *
  * @param lhs First column
  * @param rhs Second column
  * @param row_order Indexes for each column

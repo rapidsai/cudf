@@ -433,14 +433,8 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr) const
 {
-  auto column = strings::detail::merge(
+  return strings::detail::merge(
     strings_column_view(lcol), strings_column_view(rcol), row_order_, stream, mr);
-  if (lcol.has_nulls() || rcol.has_nulls()) {
-    auto merged_view = column->mutable_view();
-    materialize_bitmask(
-      lcol, rcol, merged_view.null_mask(), merged_view.size(), row_order_.data(), stream);
-  }
-  return column;
 }
 
 // specialization for dictionary

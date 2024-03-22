@@ -56,13 +56,15 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                     thrust::make_counting_iterator<size_type>(strings_count),
                     indices.begin(),
                     [d_lhs, d_rhs, begin] __device__(size_type idx) {
-                      auto const [side, index] = begin[idx];
-                      if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) {
+                      auto const [s, index] = begin[idx];
+                      if (s == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) {
                         return string_index_pair{nullptr, 0};
                       }
-                      auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
-                                                      : d_rhs.element<string_view>(index);
-                      return string_index_pair{d_str.data(), d_str.size_bytes()};
+                      auto d_str = (s == side::LEFT) ? d_lhs.element<string_view>(index)
+                                                     : d_rhs.element<string_view>(index);
+                      return d_str.size_bytes() == 0
+                               ? string_index_pair{"", 0}  // ensures empty != null
+                               : string_index_pair{d_str.data(), d_str.size_bytes()};
                     });
 
   // convert vector into strings column
