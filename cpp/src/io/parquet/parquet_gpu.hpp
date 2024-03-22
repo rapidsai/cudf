@@ -54,7 +54,13 @@ constexpr int LEVEL_DECODE_BUF_SIZE = 2048;
 template <int rolling_size>
 constexpr int rolling_index(int index)
 {
-  return index % rolling_size;
+  // Cannot divide by 0. But `rolling_size` will be 0 for unused arrays, so this case will never
+  // actual be executed.
+  if constexpr (rolling_size == 0) {
+    return index;
+  } else {
+    return index % rolling_size;
+  }
 }
 
 // PARQUET-2261 allows for not writing the level histograms in certain cases.
