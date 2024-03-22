@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -148,5 +149,60 @@ std::unique_ptr<cudf::column> minhash64(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Returns the minhash values for each row of strings per seed
+ *
+ * Hash values are computed from each string in each row and the
+ * minimum hash value is returned for each row for each seed.
+ * Each row of the output list column are seed results for the corresponding
+ * input row. The order of the elements in each row match the order of
+ * the seeds provided in the `seeds` parameter.
+ *
+ * This function uses MurmurHash3_x86_32 for the hash algorithm.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if seeds is empty
+ * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ *
+ * @param input Lists column of strings to compute minhash
+ * @param seeds Seed values used for the hash algorithm
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> minhash(
+  cudf::lists_column_view const& input,
+  cudf::device_span<uint32_t const> seeds,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the minhash values for each row of strings per seed
+ *
+ * Hash values are computed from each string in each row and the
+ * minimum hash value is returned for each row for each seed.
+ * Each row of the output list column are seed results for the corresponding
+ * input row. The order of the elements in each row match the order of
+ * the seeds provided in the `seeds` parameter.
+ *
+ * This function uses MurmurHash3_x64_128 for the hash algorithm.
+ *
+ * Any null row entries result in corresponding null output rows.
+ *
+ * @throw std::invalid_argument if seeds is empty
+ * @throw std::overflow_error if `seeds * input.size()` exceeds the column size limit
+ *
+ * @param input Lists column of strings to compute minhash
+ * @param seeds Seed values used for the hash algorithm
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return List column of minhash values for each string per seed
+ */
+std::unique_ptr<cudf::column> minhash64(
+  cudf::lists_column_view const& input,
+  cudf::device_span<uint64_t const> seeds,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
 }  // namespace nvtext
