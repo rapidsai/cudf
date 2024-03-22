@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -9,7 +9,20 @@
 # Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
 MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py310.main-results.json
 PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py310.pr-results.json
-aws s3 cp $MAIN_ARTIFACT main-results.json
+
+rapids-logger "abc"
+rapids-logger "abc-1"
+aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '.main-results.json')], &LastModified)[::-1].[Key]" --output text > s3_output.txt
+# aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query 'sort_by(Contents, &LastModified)[*].{Key: Key, LastModified: LastModified}' --output text > s3_output.txt
+# aws s3 ls s3://rapids-downloads/nightly/cudf/ --recursive --output text > s3_output.txt
+# grep "-results.json" s3_output.txt
+cat s3_output.txt
+read -r COMPARE_ENV < s3_output.txt
+export COMPARE_ENV
+rapids-logger "Got ENV: ${COMPARE_ENV}"
+rapids-logger "abc-exit"
+
+aws s3 cp "s3://rapids-downloads/${COMPARE_ENV}" main-results.json
 aws s3 cp $PR_ARTIFACT pr-results.json
 
 # Compute the diff and prepare job summary:
