@@ -2218,7 +2218,7 @@ def test_series_constructor_unbounded_sequence():
 
 
 def test_series_constructor_error_mixed_type():
-    with pytest.raises(pa.ArrowTypeError):
+    with pytest.raises(MixedTypeError):
         cudf.Series(["abc", np.nan, "123"], nan_as_null=False)
 
 
@@ -2537,7 +2537,7 @@ def test_nan_as_null_from_arrow_objects(klass, data):
 @pytest.mark.parametrize("reso", ["M", "ps"])
 @pytest.mark.parametrize("typ", ["M", "m"])
 def test_series_invalid_reso_dtype(reso, typ):
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(TypeError):
         cudf.Series([], dtype=f"{typ}8[{reso}]")
 
 
