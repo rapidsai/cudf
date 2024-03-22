@@ -2,7 +2,7 @@
 
 import pyarrow as pa
 import pytest
-from utils import assert_array_eq, assert_table_eq
+from utils import assert_array_eq, assert_table_eq, cudf_raises
 
 from cudf._lib import pylibcudf as plc
 
@@ -50,7 +50,7 @@ def test_gather(target_table, input_column):
 
 def test_gather_map_has_nulls(target_table):
     gather_map = plc.interop.from_arrow(pa.array([0, 1, None]))
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.gather(
             target_table,
             gather_map,
@@ -84,7 +84,7 @@ def test_scatter_table_num_col_mismatch(
     source_table, input_column, target_table
 ):
     # Number of columns in source and target must match.
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.scatter(
             plc.Table(source_table.columns()[:2]),
             input_column,
@@ -94,7 +94,7 @@ def test_scatter_table_num_col_mismatch(
 
 def test_scatter_table_num_row_mismatch(source_table, target_table):
     # Number of rows in source and scatter map must match.
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.scatter(
             source_table,
             plc.interop.from_arrow(
@@ -105,7 +105,7 @@ def test_scatter_table_num_row_mismatch(source_table, target_table):
 
 
 def test_scatter_table_map_has_nulls(source_table, target_table):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.scatter(
             source_table,
             plc.interop.from_arrow(pa.array([None] * source_table.num_rows())),
@@ -114,7 +114,7 @@ def test_scatter_table_map_has_nulls(source_table, target_table):
 
 
 def test_scatter_table_type_mismatch(source_table, input_column, target_table):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         pa_array = pa.array([True] * source_table.num_rows())
         ncol = source_table.num_columns()
         pa_table = pa.table([pa_array] * ncol, [""] * ncol)
@@ -155,7 +155,7 @@ def test_scatter_scalars(source_scalar, input_column, target_table):
 def test_scatter_scalars_num_scalars_mismatch(
     source_scalar, input_column, target_table
 ):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.scatter(
             [source_scalar] * (target_table.num_columns() - 1),
             input_column,
@@ -164,7 +164,7 @@ def test_scatter_scalars_num_scalars_mismatch(
 
 
 def test_scatter_scalars_map_has_nulls(source_scalar, target_table):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.scatter(
             [source_scalar] * target_table.num_columns(),
             plc.interop.from_arrow(pa.array([None, None])),
@@ -173,7 +173,7 @@ def test_scatter_scalars_map_has_nulls(source_scalar, target_table):
 
 
 def test_scatter_scalars_type_mismatch(input_column, target_table):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.scatter(
             [plc.interop.from_arrow(pa.scalar(True))]
             * target_table.num_columns(),
@@ -221,7 +221,7 @@ def test_copy_range_in_place(input_column, mutable_target_column):
 def test_copy_range_in_place_out_of_bounds(
     input_column, mutable_target_column
 ):
-    with pytest.raises(IndexError):
+    with cudf_raises(IndexError):
         plc.copying.copy_range_in_place(
             input_column,
             mutable_target_column,
@@ -234,7 +234,7 @@ def test_copy_range_in_place_out_of_bounds(
 def test_copy_range_in_place_different_types(
     input_column, mutable_target_column
 ):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.copy_range_in_place(
             plc.interop.from_arrow(pa.array([1.0, 2.0, 3.0])),
             mutable_target_column,
@@ -247,7 +247,7 @@ def test_copy_range_in_place_different_types(
 def test_copy_range_in_place_null_mismatch(
     input_column, mutable_target_column
 ):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.copy_range_in_place(
             plc.interop.from_arrow(pa.array([1, 2, None])),
             mutable_target_column,
@@ -270,7 +270,7 @@ def test_copy_range(input_column, target_column):
 
 
 def test_copy_range_out_of_bounds(input_column, target_column):
-    with pytest.raises(IndexError):
+    with cudf_raises(IndexError):
         plc.copying.copy_range(
             input_column,
             target_column,
@@ -281,7 +281,7 @@ def test_copy_range_out_of_bounds(input_column, target_column):
 
 
 def test_copy_range_different_types(input_column, target_column):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.copy_range(
             plc.interop.from_arrow(pa.array([1.0, 2.0, 3.0])),
             target_column,
@@ -299,7 +299,7 @@ def test_shift(target_column, source_scalar):
 
 # TODO: Test error case for non-fixed width types.
 def test_shift_type_mismatch(target_column):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.shift(
             target_column, 2, plc.interop.from_arrow(pa.scalar(1.0))
         )
@@ -316,17 +316,17 @@ def test_slice_column(target_column):
 
 
 def test_slice_column_wrong_length(target_column):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.slice(target_column, list(range(5)))
 
 
 def test_slice_column_decreasing(target_column):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.slice(target_column, list(range(5, -1, -1)))
 
 
 def test_slice_column_out_of_bounds(target_column):
-    with pytest.raises(IndexError):
+    with cudf_raises(IndexError):
         plc.copying.slice(target_column, list(range(2, 8)))
 
 
@@ -350,12 +350,12 @@ def test_split_column(target_column):
 
 
 def test_split_column_decreasing(target_column):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.split(target_column, list(range(5, -1, -1)))
 
 
 def test_split_column_out_of_bounds(target_column):
-    with pytest.raises(IndexError):
+    with cudf_raises(IndexError):
         plc.copying.split(target_column, list(range(5, 8)))
 
 
@@ -391,7 +391,7 @@ def test_copy_if_else_column_column(target_column):
 
 
 def test_copy_if_else_wrong_type(target_column):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.copy_if_else(
             plc.interop.from_arrow(pa.array([1.0] * target_column.size())),
             target_column,
@@ -402,7 +402,7 @@ def test_copy_if_else_wrong_type(target_column):
 
 
 def test_copy_if_else_wrong_type_mask(target_column):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.copy_if_else(
             target_column,
             target_column,
@@ -413,7 +413,7 @@ def test_copy_if_else_wrong_type_mask(target_column):
 
 
 def test_copy_if_else_wrong_size(target_column):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.copy_if_else(
             plc.interop.from_arrow(pa.array([1])),
             target_column,
@@ -424,7 +424,7 @@ def test_copy_if_else_wrong_size(target_column):
 
 
 def test_copy_if_else_wrong_size_mask(target_column):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.copy_if_else(
             target_column,
             target_column,
@@ -491,7 +491,7 @@ def test_boolean_mask_scatter_from_table(source_table, target_table):
 
 
 def test_boolean_mask_scatter_from_wrong_num_cols(source_table, target_table):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.boolean_mask_scatter(
             plc.Table(source_table.columns()[:2]),
             target_table,
@@ -500,7 +500,7 @@ def test_boolean_mask_scatter_from_wrong_num_cols(source_table, target_table):
 
 
 def test_boolean_mask_scatter_from_wrong_mask_size(source_table, target_table):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.boolean_mask_scatter(
             source_table,
             target_table,
@@ -509,7 +509,7 @@ def test_boolean_mask_scatter_from_wrong_mask_size(source_table, target_table):
 
 
 def test_boolean_mask_scatter_from_wrong_num_true(source_table, target_table):
-    with pytest.raises(ValueError):
+    with cudf_raises(ValueError):
         plc.copying.boolean_mask_scatter(
             plc.Table(source_table.columns()[:2]),
             target_table,
@@ -520,7 +520,7 @@ def test_boolean_mask_scatter_from_wrong_num_true(source_table, target_table):
 
 
 def test_boolean_mask_scatter_from_wrong_col_type(target_table):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.boolean_mask_scatter(
             plc.Table([plc.interop.from_arrow(pa.array([1.0, 2.0, 3.0]))] * 3),
             target_table,
@@ -529,7 +529,7 @@ def test_boolean_mask_scatter_from_wrong_col_type(target_table):
 
 
 def test_boolean_mask_scatter_from_wrong_mask_type(source_table, target_table):
-    with pytest.raises(TypeError):
+    with cudf_raises(TypeError):
         plc.copying.boolean_mask_scatter(
             source_table,
             target_table,
@@ -576,5 +576,5 @@ def test_get_element(input_column):
 
 
 def test_get_element_out_of_bounds(input_column):
-    with pytest.raises(IndexError):
+    with cudf_raises(IndexError):
         plc.copying.get_element(input_column, 100)
