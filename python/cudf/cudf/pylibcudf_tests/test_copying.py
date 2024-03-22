@@ -82,6 +82,28 @@ def test_gather_map_has_nulls(target_table):
         )
 
 
+def _pyarrow_index_to_mask(indices, mask_size):
+    # Convert a list of indices to a boolean mask.
+    return pa.compute.is_in(pa.array(range(mask_size)), indices)
+
+
+def _pyarrow_boolean_mask_scatter(source, mask, target_table):
+    # pyarrow equivalent of cudf's boolean_mask_scatter.
+    expected = [
+        # replace_with_mask accepts a column whose size is the number of true values in
+        # the mask, so we can use it for columnar scatters.
+        pa.compute.replace_with_mask(
+            values, mask, replacements.combine_chunks()
+        )
+        if isinstance(source, pa.Table)
+        # if_else requires array lengths to match exactly or the replacement must be a
+        # scalar, so we use this in the scalar case.
+        else pa.compute.if_else(mask, values, replacements)
+        for values, replacements in zip(target_table, source)
+    ]
+    return pa.table(expected, [""] * target_table.num_columns)
+
+
 def test_scatter_table(
     source_table,
     pa_source_table,
@@ -96,15 +118,12 @@ def test_scatter_table(
         target_table,
     )
 
-    # TODO: Is there a cleaner vectorized way to do this in pyarrow?
-    output_rows = []
-    for i in range(target_table.num_rows()):
-        if (source_row := pa.compute.index_in(i, pa_input_column)).is_valid:
-            output_rows.append(pa_source_table.take([source_row]))
-        else:
-            output_rows.append(pa_target_table.take([i]))
+    expected = _pyarrow_boolean_mask_scatter(
+        pa_source_table,
+        _pyarrow_index_to_mask(pa_input_column, pa_target_table.num_rows),
+        pa_target_table,
+    )
 
-    expected = pa.concat_tables(output_rows)
     assert_table_eq(result, expected)
 
 
@@ -166,20 +185,15 @@ def test_scatter_scalars(
         input_column,
         target_table,
     )
-    host_scalar = pa_source_scalar.as_py()
 
-    # TODO: Is there a cleaner vectorized way to do this in pyarrow?
-    arrays = []
-    for i in range(target_table.num_columns()):
-        values = []
-        for j in range(target_table.num_rows()):
-            if pa.compute.is_in(j, pa_input_column).as_py():
-                values.append(host_scalar)
-            else:
-                values.append(pa_target_table.column(i)[j].as_py())
-        arrays.append(pa.array(values))
+    expected = _pyarrow_boolean_mask_scatter(
+        [pa_source_scalar] * target_table.num_columns(),
+        pa.compute.invert(
+            _pyarrow_index_to_mask(pa_input_column, pa_target_table.num_rows)
+        ),
+        pa_target_table,
+    )
 
-    expected = pa.table(arrays, [""] * target_table.num_columns())
     assert_table_eq(result, expected)
 
 
@@ -505,17 +519,10 @@ def test_boolean_mask_scatter_from_table(
         mask,
     )
 
-    # TODO: Is there a cleaner vectorized way to do this in pyarrow?
-    output_rows = []
-    source_index = 0
-    for target_index, mask_val in enumerate(pa_mask.to_pylist()):
-        if mask_val:
-            output_rows.append(pa_source_table.take([source_index]))
-            source_index += 1
-        else:
-            output_rows.append(pa_target_table.take([target_index]))
+    expected = _pyarrow_boolean_mask_scatter(
+        pa_source_table, pa_mask, pa_target_table
+    )
 
-    expected = pa.concat_tables(output_rows)
     assert_table_eq(result, expected)
 
 
@@ -580,19 +587,12 @@ def test_boolean_mask_scatter_from_scalars(
         mask,
     )
 
-    # TODO: Is there a cleaner vectorized way to do this in pyarrow?
-    host_scalar = pa_source_scalar.as_py()
-    arrays = []
-    for i in range(target_table.num_columns()):
-        values = []
-        for target_index, mask_val in enumerate(pa_mask.to_pylist()):
-            if mask_val:
-                values.append(host_scalar)
-            else:
-                values.append(pa_target_table.column(i)[target_index].as_py())
-        arrays.append(pa.array(values))
+    expected = _pyarrow_boolean_mask_scatter(
+        [pa_source_scalar] * target_table.num_columns(),
+        pa.compute.invert(pa_mask),
+        pa_target_table,
+    )
 
-    expected = pa.table(arrays, [""] * target_table.num_columns())
     assert_table_eq(result, expected)
 
 
