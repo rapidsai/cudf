@@ -58,6 +58,16 @@ def pa_source_scalar():
 
 
 @pytest.fixture(scope="module")
+def pa_mask(pa_target_column):
+    return pa.array([True, False] * (len(pa_target_column) // 2))
+
+
+@pytest.fixture(scope="module")
+def mask(pa_mask):
+    return plc.interop.from_arrow(pa_mask)
+
+
+@pytest.fixture(scope="module")
 def source_scalar(pa_source_scalar):
     return plc.interop.from_arrow(pa_source_scalar)
 
@@ -437,12 +447,12 @@ def test_split_table(target_table, pa_target_table):
         assert_table_eq(split, pa_target_table[lb:ub])
 
 
-def test_copy_if_else_column_column(target_column, pa_target_column):
+def test_copy_if_else_column_column(
+    target_column, pa_target_column, mask, pa_mask
+):
     pa_other_column = pa.compute.add(pa_target_column, 4)
     other_column = plc.interop.from_arrow(pa_other_column)
 
-    pa_mask = pa.array([True, False] * (target_column.size() // 2))
-    mask = plc.interop.from_arrow(pa_mask)
     result = plc.copying.copy_if_else(
         target_column,
         other_column,
@@ -506,9 +516,9 @@ def test_copy_if_else_column_scalar(
     source_scalar,
     pa_source_scalar,
     array_left,
+    mask,
+    pa_mask,
 ):
-    pa_mask = pa.array([True, False] * (target_column.size() // 2))
-    mask = plc.interop.from_arrow(pa_mask)
     args = (
         (target_column, source_scalar)
         if array_left
@@ -532,13 +542,13 @@ def test_copy_if_else_column_scalar(
 
 
 def test_boolean_mask_scatter_from_table(
-    source_table, pa_source_table, target_table, pa_target_table
+    source_table,
+    pa_source_table,
+    target_table,
+    pa_target_table,
+    mask,
+    pa_mask,
 ):
-    py_mask = [False] * target_table.num_rows()
-    py_mask[2:5] = [True, True, True]
-    pa_mask = pa.array(py_mask)
-
-    mask = plc.interop.from_arrow(pa_mask)
     result = plc.copying.boolean_mask_scatter(
         source_table,
         target_table,
@@ -600,13 +610,13 @@ def test_boolean_mask_scatter_from_wrong_mask_type(source_table, target_table):
 
 
 def test_boolean_mask_scatter_from_scalars(
-    source_scalar, pa_source_scalar, target_table, pa_target_table
+    source_scalar,
+    pa_source_scalar,
+    target_table,
+    pa_target_table,
+    mask,
+    pa_mask,
 ):
-    py_mask = [False] * target_table.num_rows()
-    py_mask[2:5] = [True, True, True]
-    pa_mask = pa.array(py_mask)
-
-    mask = plc.interop.from_arrow(pa_mask)
     result = plc.copying.boolean_mask_scatter(
         [source_scalar] * 3,
         target_table,
