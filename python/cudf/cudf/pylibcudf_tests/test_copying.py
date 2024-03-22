@@ -84,24 +84,32 @@ def test_gather_map_has_nulls(target_table):
 
 def _pyarrow_index_to_mask(indices, mask_size):
     # Convert a list of indices to a boolean mask.
-    return pa.compute.is_in(pa.array(range(mask_size)), indices)
+    return pa.compute.is_in(pa.array(range(mask_size)), pa.array(indices))
 
 
-def _pyarrow_boolean_mask_scatter(source, mask, target_table):
-    # pyarrow equivalent of cudf's boolean_mask_scatter.
-    expected = [
-        # replace_with_mask accepts a column whose size is the number of true values in
-        # the mask, so we can use it for columnar scatters.
-        pa.compute.replace_with_mask(
-            values, mask, replacements.combine_chunks()
-        )
-        if isinstance(source, pa.Table)
+def _pyarrow_boolean_mask_scatter_column(source, mask, target):
+    if isinstance(source, pa.Scalar):
         # if_else requires array lengths to match exactly or the replacement must be a
         # scalar, so we use this in the scalar case.
-        else pa.compute.if_else(mask, values, replacements)
-        for values, replacements in zip(target_table, source)
-    ]
-    return pa.table(expected, [""] * target_table.num_columns)
+        return pa.compute.if_else(mask, target, source)
+
+    if isinstance(source, pa.ChunkedArray):
+        source = source.combine_chunks()
+
+    # replace_with_mask accepts a column whose size is the number of true values in
+    # the mask, so we can use it for columnar scatters.
+    return pa.compute.replace_with_mask(target, mask, source)
+
+
+def _pyarrow_boolean_mask_scatter_table(source, mask, target_table):
+    # pyarrow equivalent of cudf's boolean_mask_scatter.
+    return pa.table(
+        [
+            _pyarrow_boolean_mask_scatter_column(r, mask, v)
+            for v, r in zip(target_table, source)
+        ],
+        [""] * target_table.num_columns,
+    )
 
 
 def test_scatter_table(
@@ -118,7 +126,7 @@ def test_scatter_table(
         target_table,
     )
 
-    expected = _pyarrow_boolean_mask_scatter(
+    expected = _pyarrow_boolean_mask_scatter_table(
         pa_source_table,
         _pyarrow_index_to_mask(pa_input_column, pa_target_table.num_rows),
         pa_target_table,
@@ -186,7 +194,7 @@ def test_scatter_scalars(
         target_table,
     )
 
-    expected = _pyarrow_boolean_mask_scatter(
+    expected = _pyarrow_boolean_mask_scatter_table(
         [pa_source_scalar] * target_table.num_columns(),
         pa.compute.invert(
             _pyarrow_index_to_mask(pa_input_column, pa_target_table.num_rows)
@@ -248,7 +256,9 @@ def test_allocate_like(input_column, size):
     assert result.size() == (input_column.size() if size is None else size)
 
 
-def test_copy_range_in_place(input_column, mutable_target_column):
+def test_copy_range_in_place(
+    input_column, pa_input_column, mutable_target_column, pa_target_column
+):
     plc.copying.copy_range_in_place(
         input_column,
         mutable_target_column,
@@ -256,8 +266,13 @@ def test_copy_range_in_place(input_column, mutable_target_column):
         input_column.size(),
         0,
     )
-    # TODO: Try to generate this with pyarrow
-    expected = pa.array([1, 2, 3, 7, 8, 9])
+    expected = _pyarrow_boolean_mask_scatter_column(
+        pa_input_column,
+        _pyarrow_index_to_mask(
+            range(len(pa_input_column)), len(pa_target_column)
+        ),
+        pa_target_column,
+    )
     assert_array_eq(mutable_target_column, expected)
 
 
@@ -302,7 +317,9 @@ def test_copy_range_in_place_null_mismatch(
         )
 
 
-def test_copy_range(input_column, target_column):
+def test_copy_range(
+    input_column, pa_input_column, target_column, pa_target_column
+):
     result = plc.copying.copy_range(
         input_column,
         target_column,
@@ -310,7 +327,13 @@ def test_copy_range(input_column, target_column):
         input_column.size(),
         0,
     )
-    expected = pa.array([1, 2, 3, 7, 8, 9])
+    expected = _pyarrow_boolean_mask_scatter_column(
+        pa_input_column,
+        _pyarrow_index_to_mask(
+            range(len(pa_input_column)), len(pa_target_column)
+        ),
+        pa_target_column,
+    )
     assert_array_eq(result, expected)
 
 
@@ -336,10 +359,14 @@ def test_copy_range_different_types(input_column, target_column):
         )
 
 
-def test_shift(target_column, source_scalar):
-    result = plc.copying.shift(target_column, 2, source_scalar)
-    # TODO: Try to generate this with pyarrow.
-    expected = pa.array([1, 1, 4, 5, 6, 7])
+def test_shift(
+    target_column, pa_target_column, source_scalar, pa_source_scalar
+):
+    shift = 2
+    result = plc.copying.shift(target_column, shift, source_scalar)
+    expected = pa.concat_arrays(
+        [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
+    )
     assert_array_eq(result, expected)
 
 
@@ -422,7 +449,6 @@ def test_copy_if_else_column_column(target_column, pa_target_column):
         mask,
     )
 
-    pa_target_column = plc.interop.to_arrow(target_column)
     expected = pa.compute.if_else(
         pa_mask,
         pa_target_column,
@@ -519,7 +545,7 @@ def test_boolean_mask_scatter_from_table(
         mask,
     )
 
-    expected = _pyarrow_boolean_mask_scatter(
+    expected = _pyarrow_boolean_mask_scatter_table(
         pa_source_table, pa_mask, pa_target_table
     )
 
@@ -587,7 +613,7 @@ def test_boolean_mask_scatter_from_scalars(
         mask,
     )
 
-    expected = _pyarrow_boolean_mask_scatter(
+    expected = _pyarrow_boolean_mask_scatter_table(
         [pa_source_scalar] * target_table.num_columns(),
         pa.compute.invert(pa_mask),
         pa_target_table,
