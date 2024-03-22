@@ -15,6 +15,7 @@
  */
 
 #include "delta_enc.cuh"
+#include "io/parquet/parquet_gpu.hpp"
 #include "io/utilities/block_utils.cuh"
 #include "page_string_utils.cuh"
 #include "parquet_gpu.cuh"
@@ -1622,13 +1623,14 @@ __device__ inline void encode_value(uint8_t* dst, T src, size_type stride)
 
 // PLAIN page data encoder
 // blockDim(128, 1, 1)
-template <int block_size, bool is_split_stream>
+template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size, 8)
   gpuEncodePages(device_span<EncPage> pages,
                  device_span<device_span<uint8_t const>> comp_in,
                  device_span<device_span<uint8_t>> comp_out,
                  device_span<compression_result> comp_results,
-                 bool write_v2_headers)
+                 bool write_v2_headers,
+                 bool is_split_stream)
 {
   __shared__ __align__(8) page_enc_state_s<0> state_g;
   using block_scan = cub::BlockScan<uint32_t, block_size>;
@@ -1648,11 +1650,9 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
   }
   __syncthreads();
 
-  if constexpr (is_split_stream) {
-    if (BitAnd(s->page.kernel_mask, encode_kernel_mask::BYTE_STREAM_SPLIT) == 0) { return; }
-  } else {
-    if (BitAnd(s->page.kernel_mask, encode_kernel_mask::PLAIN) == 0) { return; }
-  }
+  auto const allowed_mask =
+    is_split_stream ? encode_kernel_mask::BYTE_STREAM_SPLIT : encode_kernel_mask::PLAIN;
+  if (BitAnd(s->page.kernel_mask, allowed_mask) == 0) { return; }
 
   // Encode data values
   __syncthreads();
@@ -1671,12 +1671,10 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     s->rle_pos     = 0;
     s->rle_numvals = 0;
     s->rle_out     = dst;
-    if constexpr (is_split_stream) {
-      s->page.encoding = Encoding::BYTE_STREAM_SPLIT;
-    } else {
-      s->page.encoding = determine_encoding(
-        s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
-    }
+    s->page.encoding =
+      is_split_stream ? Encoding::BYTE_STREAM_SPLIT
+                      : determine_encoding(
+                          s->page.page_type, physical_type, s->ck.use_dictionary, write_v2_headers);
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
@@ -1732,7 +1730,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
     __syncthreads();
 
     // if BYTE_STREAM_SPLIT, then translate byte positions to indexes
-    if constexpr (is_split_stream) {
+    if (is_split_stream) {
       pos /= dtype_len_out;
       total_len /= dtype_len_out;
     }
@@ -1827,8 +1825,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
             // When using FIXED_LEN_BYTE_ARRAY for decimals, the rep is encoded in big-endian
             auto const v = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
             auto const v_char_ptr = reinterpret_cast<char const*>(&v);
-            if constexpr (is_split_stream) {
-              auto const stride = s->page.num_valid;
+            if (is_split_stream) {
               for (int i = dtype_len_out - 1; i >= 0; i--, pos += stride) {
                 dst[pos] = v_char_ptr[i];
               }
@@ -1847,9 +1844,8 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
 
   // for BYTE_STREAM_SPLIT, s->cur now points to the end of the first stream.
   // need it to point to the end of the Nth stream.
-  if constexpr (is_split_stream) {
-    if (t == 0) { s->cur += (dtype_len_out - 1) * s->page.num_valid; }
-  }
+  if (is_split_stream and t == 0) { s->cur += (dtype_len_out - 1) * s->page.num_valid;
+ }
   finish_page_encode<block_size>(
     s, s->cur, pages, comp_in, comp_out, comp_results, write_v2_headers);
 }
@@ -3431,15 +3427,15 @@ void EncodePages(device_span<EncPage> pages,
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::PLAIN);
-    gpuEncodePages<encode_block_size, false><<<num_pages, encode_block_size, 0, strm.value()>>>(
-      pages, comp_in, comp_out, comp_results, write_v2_headers);
+    gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, comp_in, comp_out, comp_results, write_v2_headers, false);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::BYTE_STREAM_SPLIT) != 0) {
     auto const strm = streams[s_idx++];
     gpuEncodePageLevels<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
       pages, write_v2_headers, encode_kernel_mask::BYTE_STREAM_SPLIT);
-    gpuEncodePages<encode_block_size, true><<<num_pages, encode_block_size, 0, strm.value()>>>(
-      pages, comp_in, comp_out, comp_results, write_v2_headers);
+    gpuEncodePages<encode_block_size><<<num_pages, encode_block_size, 0, strm.value()>>>(
+      pages, comp_in, comp_out, comp_results, write_v2_headers, true);
   }
   if (BitAnd(kernel_mask, encode_kernel_mask::DELTA_BINARY) != 0) {
     auto const strm = streams[s_idx++];
