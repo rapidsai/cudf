@@ -29,7 +29,7 @@ jobs:
       - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
-      #- pandas-tests-diff
+      - pandas-tests-diff
       #- pandas-tests-diff-comment
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.06
