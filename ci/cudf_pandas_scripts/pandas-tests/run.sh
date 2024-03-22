@@ -12,11 +12,11 @@ rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 rapids-logger "abc"
 if [[ ${PANDAS_TESTS_BRANCH} == "pr" ]]; then
     rapids-logger "abc-1"
-    aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '.main-result.json')], &LastModified)[::-1].[Key, LastModified]" --output text > s3_output.txt
+    aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '.main-results.json')], &LastModified)[::-1].[Key, LastModified]" --output text > s3_output.txt
     # aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query 'sort_by(Contents, &LastModified)[*].{Key: Key, LastModified: LastModified}' --output text > s3_output.txt
     # aws s3 ls s3://rapids-downloads/nightly/cudf/ --recursive --output text > s3_output.txt
     grep "-results.json" s3_output.txt
-    # cat s3_output.txt
+    cat s3_output.txt
 else
     rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
 fi
