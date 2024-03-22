@@ -17,7 +17,7 @@ if [[ ${PANDAS_TESTS_BRANCH} == "pr" ]]; then
     # aws s3 ls s3://rapids-downloads/nightly/cudf/ --recursive --output text > s3_output.txt
     # grep "-results.json" s3_output.txt
     cat s3_output.txt
-    read -r COMPARE_ENV < /path/to/yourfile.txt
+    read -r COMPARE_ENV < s3_output.txt
     export COMPARE_ENV
     rapids-logger "Got ENV: ${COMPARE_ENV}"
 
