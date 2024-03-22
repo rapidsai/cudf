@@ -315,7 +315,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jobje
         cudf::jni::native_jpointerArray<cudf::column_view>{env, column_handles}.get_dereferenced();
     // return release_as_jlong(cudf::hash(cudf::table_view{column_views},
     //                                    static_cast<cudf::hash_id>(hash_function_id), seed));
-    return release_as_jlong(cudf::murmurhash3_x86_32(cudf::table_view{column_views}, seed));
+    return release_as_jlong(
+        cudf::hashing::murmurhash3_x86_32(cudf::table_view{column_views}, seed));
   }
   CATCH_STD(env, 0);
 }
