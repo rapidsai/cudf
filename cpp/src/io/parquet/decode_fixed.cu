@@ -366,8 +366,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
-                                                0,                 // unused in this kernel
-                                                0>                 // unused in this kernel
+                                                1,                 // unused in this kernel
+                                                1>                 // unused in this kernel
     state_buffers;
 
   page_state_s* const s = &state_g;
@@ -482,7 +482,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
                                                 rolling_buf_size,  // dictionary
-                                                0>                 // unused in this kernel
+                                                1>                 // unused in this kernel
     state_buffers;
 
   page_state_s* const s = &state_g;
@@ -609,8 +609,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
 {
   __shared__ __align__(16) page_state_s state_g;
   __shared__ __align__(16) page_state_buffers_s<rolling_buf_size,  // size of nz_idx buffer
-                                                0,                 // unused in this kernel
-                                                0>                 // unused in this kernel
+                                                1,                 // unused in this kernel
+                                                1>                 // unused in this kernel
     state_buffers;
 
   page_state_s* const s = &state_g;
