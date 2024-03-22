@@ -127,12 +127,9 @@ def _register_cupy():
 
 @get_collection_type.register_lazy("cupyx")
 def _register_cupyx():
-    try:
-        # Needed for cuml
-        from cupyx.scipy.sparse import spmatrix
+    # Needed for cuml
+    from cupyx.scipy.sparse import spmatrix
 
-        @get_collection_type.register(spmatrix)
-        def get_collection_type_csr_matrix(_):
-            return create_array_collection
-    except ImportError:
-        pass
+    @get_collection_type.register(spmatrix)
+    def get_collection_type_csr_matrix(_):
+        return create_array_collection
