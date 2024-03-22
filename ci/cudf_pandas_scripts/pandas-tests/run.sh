@@ -12,7 +12,7 @@ rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 rapids-logger "abc"
 if [[ ${PANDAS_TESTS_BRANCH} == "pr" ]]; then
     rapids-logger "abc-1"
-    aws s3 ls "s3://${RAPIDS_DOWNLOADS_BUCKET}/nightly/" --recursive --output text > s3_output.txt
+    aws s3 ls s3://rapids-downloads/nightly/cudf/ --recursive --output text > s3_output.txt
     grep "-results.json" s3_output.txt
 else
     rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
