@@ -27,3 +27,30 @@ def cudf_raises(expected_exception, *args, **kwargs):
     if match is None:
         kwargs["match"] = "CUDF failure at"
     return pytest.raises(expected_exception, *args, **kwargs)
+
+
+# TODO: Consider moving these type utilities into pylibcudf.types itself.
+def is_signed_integer(plc_dtype):
+    return (
+        plc.TypeId.INT8.value <= plc_dtype.id().value <= plc.TypeId.INT64.value
+    )
+
+
+def is_unsigned_integer(plc_dtype):
+    return (
+        plc.TypeId.UINT8.value
+        <= plc_dtype.id().value
+        <= plc.TypeId.UINT64.value
+    )
+
+
+def is_integer(plc_dtype):
+    return is_signed_integer(plc_dtype) or is_unsigned_integer(plc_dtype)
+
+
+def is_floating(plc_dtype):
+    return (
+        plc.TypeId.FLOAT32.value
+        <= plc_dtype.id().value
+        <= plc.TypeId.FLOAT64.value
+    )
