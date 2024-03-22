@@ -8,13 +8,23 @@ from cudf._lib import pylibcudf as plc
 
 
 @pytest.fixture(scope="module")
-def input_column():
-    return plc.interop.from_arrow(pa.array([1, 2, 3]))
+def pa_input_column():
+    return pa.array([1, 2, 3])
 
 
 @pytest.fixture(scope="module")
-def target_column():
-    return plc.interop.from_arrow(pa.array([4, 5, 6, 7, 8, 9]))
+def input_column(pa_input_column):
+    return plc.interop.from_arrow(pa_input_column)
+
+
+@pytest.fixture(scope="module")
+def pa_target_column():
+    return pa.array([4, 5, 6, 7, 8, 9])
+
+
+@pytest.fixture(scope="module")
+def target_column(pa_target_column):
+    return plc.interop.from_arrow(pa_target_column)
 
 
 @pytest.fixture
@@ -23,28 +33,42 @@ def mutable_target_column(target_column):
 
 
 @pytest.fixture(scope="module")
-def source_table(input_column):
-    return plc.Table([input_column] * 3)
+def pa_source_table(pa_input_column):
+    return pa.table([pa_input_column] * 3, [""] * 3)
 
 
 @pytest.fixture(scope="module")
-def target_table(target_column):
-    return plc.Table([target_column] * 3)
+def source_table(pa_source_table):
+    return plc.interop.from_arrow(pa_source_table)
 
 
 @pytest.fixture(scope="module")
-def source_scalar():
-    return plc.interop.from_arrow(pa.scalar(1))
+def pa_target_table(pa_target_column):
+    return pa.table([pa_target_column] * 3, [""] * 3)
 
 
-def test_gather(target_table, input_column):
+@pytest.fixture(scope="module")
+def target_table(pa_target_table):
+    return plc.interop.from_arrow(pa_target_table)
+
+
+@pytest.fixture(scope="module")
+def pa_source_scalar():
+    return pa.scalar(1)
+
+
+@pytest.fixture(scope="module")
+def source_scalar(pa_source_scalar):
+    return plc.interop.from_arrow(pa_source_scalar)
+
+
+def test_gather(target_table, pa_target_table, input_column):
     result = plc.copying.gather(
         target_table,
         input_column,
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     )
-    pa_table = plc.interop.to_arrow(target_table)
-    expected = pa_table.take(plc.interop.to_arrow(input_column))
+    expected = pa_target_table.take(plc.interop.to_arrow(input_column))
     assert_table_eq(result, expected)
 
 
@@ -58,15 +82,19 @@ def test_gather_map_has_nulls(target_table):
         )
 
 
-def test_scatter_table(source_table, input_column, target_table):
+def test_scatter_table(
+    source_table,
+    pa_source_table,
+    input_column,
+    pa_input_column,
+    target_table,
+    pa_target_table,
+):
     result = plc.copying.scatter(
         source_table,
         input_column,
         target_table,
     )
-    pa_source_table = plc.interop.to_arrow(source_table)
-    pa_input_column = plc.interop.to_arrow(input_column)
-    pa_target_table = plc.interop.to_arrow(target_table)
 
     # TODO: Is there a cleaner vectorized way to do this in pyarrow?
     output_rows = []
@@ -125,17 +153,20 @@ def test_scatter_table_type_mismatch(source_table, input_column, target_table):
         )
 
 
-def test_scatter_scalars(source_scalar, input_column, target_table):
+def test_scatter_scalars(
+    source_scalar,
+    pa_source_scalar,
+    input_column,
+    pa_input_column,
+    target_table,
+    pa_target_table,
+):
     result = plc.copying.scatter(
         [source_scalar] * target_table.num_columns(),
         input_column,
         target_table,
     )
-    # TODO: There's no reason to require column metadata in this API. We can construct a
-    # placeholder internally and discard it after the conversion if necessary.
-    host_scalar = plc.interop.to_arrow(source_scalar).as_py()
-    pa_input_column = plc.interop.to_arrow(input_column)
-    pa_target_table = plc.interop.to_arrow(target_table)
+    host_scalar = pa_source_scalar.as_py()
 
     # TODO: Is there a cleaner vectorized way to do this in pyarrow?
     arrays = []
@@ -194,7 +225,6 @@ def test_empty_like_table(source_table):
         assert rcol.type() == icol.type()
 
 
-# TODO: Check the size parameter.
 @pytest.mark.parametrize("size", [None, 10])
 def test_allocate_like(input_column, size):
     result = plc.copying.allocate_like(
@@ -212,6 +242,7 @@ def test_copy_range_in_place(input_column, mutable_target_column):
         input_column.size(),
         0,
     )
+    # TODO: Try to generate this with pyarrow
     expected = pa.array([1, 2, 3, 7, 8, 9])
     assert_array_eq(mutable_target_column, expected)
 
@@ -293,6 +324,7 @@ def test_copy_range_different_types(input_column, target_column):
 
 def test_shift(target_column, source_scalar):
     result = plc.copying.shift(target_column, 2, source_scalar)
+    # TODO: Try to generate this with pyarrow.
     expected = pa.array([1, 1, 4, 5, 6, 7])
     assert_array_eq(result, expected)
 
@@ -305,12 +337,11 @@ def test_shift_type_mismatch(target_column):
         )
 
 
-def test_slice_column(target_column):
+def test_slice_column(target_column, pa_target_column):
     bounds = list(range(6))
     upper_bounds = bounds[1::2]
     lower_bounds = bounds[::2]
     result = plc.copying.slice(target_column, bounds)
-    pa_target_column = plc.interop.to_arrow(target_column)
     for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
         assert_array_eq(slice_, pa_target_column[lb:ub])
 
@@ -330,21 +361,19 @@ def test_slice_column_out_of_bounds(target_column):
         plc.copying.slice(target_column, list(range(2, 8)))
 
 
-def test_slice_table(target_table):
+def test_slice_table(target_table, pa_target_table):
     bounds = list(range(6))
     upper_bounds = bounds[1::2]
     lower_bounds = bounds[::2]
     result = plc.copying.slice(target_table, bounds)
-    pa_target_table = plc.interop.to_arrow(target_table)
     for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
         assert_table_eq(slice_, pa_target_table[lb:ub])
 
 
-def test_split_column(target_column):
+def test_split_column(target_column, pa_target_column):
     upper_bounds = [1, 3, 5]
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(target_column, upper_bounds)
-    pa_target_column = plc.interop.to_arrow(target_column)
     for lb, ub, split in zip(lower_bounds, upper_bounds, result):
         assert_array_eq(split, pa_target_column[lb:ub])
 
@@ -359,18 +388,16 @@ def test_split_column_out_of_bounds(target_column):
         plc.copying.split(target_column, list(range(5, 8)))
 
 
-def test_split_table(target_table):
+def test_split_table(target_table, pa_target_table):
     upper_bounds = [1, 3, 5]
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(target_table, upper_bounds)
-    pa_target_table = plc.interop.to_arrow(target_table)
     for lb, ub, split in zip(lower_bounds, upper_bounds, result):
         assert_table_eq(split, pa_target_table[lb:ub])
 
 
-def test_copy_if_else_column_column(target_column):
-    pa_other_column = plc.interop.to_arrow(target_column)
-    pa_other_column = pa.compute.add(pa_other_column, 4)
+def test_copy_if_else_column_column(target_column, pa_target_column):
+    pa_other_column = pa.compute.add(pa_target_column, 4)
     other_column = plc.interop.from_arrow(pa_other_column)
 
     pa_mask = pa.array([True, False] * (target_column.size() // 2))
@@ -433,7 +460,13 @@ def test_copy_if_else_wrong_size_mask(target_column):
 
 
 @pytest.mark.parametrize("array_left", [True, False])
-def test_copy_if_else_column_scalar(target_column, source_scalar, array_left):
+def test_copy_if_else_column_scalar(
+    target_column,
+    pa_target_column,
+    source_scalar,
+    pa_source_scalar,
+    array_left,
+):
     pa_mask = pa.array([True, False] * (target_column.size() // 2))
     mask = plc.interop.from_arrow(pa_mask)
     args = (
@@ -446,14 +479,10 @@ def test_copy_if_else_column_scalar(target_column, source_scalar, array_left):
         mask,
     )
 
-    pa_scalar = plc.interop.to_arrow(
-        source_scalar, plc.interop.ColumnMetadata("")
-    )
-    pa_target_column = plc.interop.to_arrow(target_column)
     pa_args = (
-        (pa_target_column, pa_scalar)
+        (pa_target_column, pa_source_scalar)
         if array_left
-        else (pa_scalar, pa_target_column)
+        else (pa_source_scalar, pa_target_column)
     )
     expected = pa.compute.if_else(
         pa_mask,
@@ -462,7 +491,9 @@ def test_copy_if_else_column_scalar(target_column, source_scalar, array_left):
     assert_array_eq(result, expected)
 
 
-def test_boolean_mask_scatter_from_table(source_table, target_table):
+def test_boolean_mask_scatter_from_table(
+    source_table, pa_source_table, target_table, pa_target_table
+):
     py_mask = [False] * target_table.num_rows()
     py_mask[2:5] = [True, True, True]
     pa_mask = pa.array(py_mask)
@@ -475,8 +506,6 @@ def test_boolean_mask_scatter_from_table(source_table, target_table):
     )
 
     # TODO: Is there a cleaner vectorized way to do this in pyarrow?
-    pa_source_table = plc.interop.to_arrow(source_table)
-    pa_target_table = plc.interop.to_arrow(target_table)
     output_rows = []
     source_index = 0
     for target_index, mask_val in enumerate(pa_mask.to_pylist()):
@@ -537,7 +566,9 @@ def test_boolean_mask_scatter_from_wrong_mask_type(source_table, target_table):
         )
 
 
-def test_boolean_mask_scatter_from_scalars(source_scalar, target_table):
+def test_boolean_mask_scatter_from_scalars(
+    source_scalar, pa_source_scalar, target_table, pa_target_table
+):
     py_mask = [False] * target_table.num_rows()
     py_mask[2:5] = [True, True, True]
     pa_mask = pa.array(py_mask)
@@ -550,8 +581,7 @@ def test_boolean_mask_scatter_from_scalars(source_scalar, target_table):
     )
 
     # TODO: Is there a cleaner vectorized way to do this in pyarrow?
-    host_scalar = plc.interop.to_arrow(source_scalar).as_py()
-    pa_target_table = plc.interop.to_arrow(target_table)
+    host_scalar = pa_source_scalar.as_py()
     arrays = []
     for i in range(target_table.num_columns()):
         values = []
@@ -566,10 +596,9 @@ def test_boolean_mask_scatter_from_scalars(source_scalar, target_table):
     assert_table_eq(result, expected)
 
 
-def test_get_element(input_column):
+def test_get_element(input_column, pa_input_column):
     index = 1
     result = plc.copying.get_element(input_column, index)
-    pa_input_column = plc.interop.to_arrow(input_column)
     assert (
         plc.interop.to_arrow(result).as_py() == pa_input_column[index].as_py()
     )
