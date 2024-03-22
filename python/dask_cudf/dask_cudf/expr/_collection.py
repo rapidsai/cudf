@@ -9,7 +9,6 @@ from dask_expr import (
     Series as DXSeries,
     get_collection_type,
 )
-from dask_expr._backends import create_array_collection
 from dask_expr._collection import new_collection
 from dask_expr._util import _raise_if_object_series
 
@@ -116,20 +115,27 @@ get_collection_type.register(cudf.BaseIndex, lambda _: Index)
 ##
 
 
-@get_collection_type.register_lazy("cupy")
-def _register_cupy():
-    import cupy
+try:
+    from dask_expr._backends import create_array_collection
 
-    @get_collection_type.register(cupy.ndarray)
-    def get_collection_type_cupy_array(_):
-        return create_array_collection
+    @get_collection_type.register_lazy("cupy")
+    def _register_cupy():
+        import cupy
 
+        @get_collection_type.register(cupy.ndarray)
+        def get_collection_type_cupy_array(_):
+            return create_array_collection
 
-@get_collection_type.register_lazy("cupyx")
-def _register_cupyx():
-    # Needed for cuml
-    from cupyx.scipy.sparse import spmatrix
+    @get_collection_type.register_lazy("cupyx")
+    def _register_cupyx():
+        # Needed for cuml
+        from cupyx.scipy.sparse import spmatrix
 
-    @get_collection_type.register(spmatrix)
-    def get_collection_type_csr_matrix(_):
-        return create_array_collection
+        @get_collection_type.register(spmatrix)
+        def get_collection_type_csr_matrix(_):
+            return create_array_collection
+
+except ImportError:
+    # Older version of dask-expr.
+    # Implicit conversion to array wont work.
+    pass
