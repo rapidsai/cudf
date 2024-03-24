@@ -11,20 +11,20 @@ class GPT2Tokenizer:
     Encodes words to token ids using vocabulary from a pretrained
     tokenizer.
 
+    TODO : In future this could accept merge file and a vocab file, and maybe allow a from_pretrained method
     Parameters
     ----------
-    vocab : Dict[str, int]
-        A dictionary mapping tokens to their ids.
+    vocab : cudf.Series
+        List of words in vocabulary ordered by token id
     bpe_merges : cudf.Series
         Series containing the Byte Pair merges
-        If using `https://huggingface.co/gpt2/raw/main/merges.txt` from, read from line 1
-
+        Default `https://huggingface.co/gpt2/raw/main/merges.txt`
     Returns
     -------
     GPT2Tokenizer
     """
 
-    def __init__(self, vocab: Dict[str, int], bpe_merges: cudf.Series):
+    def __init__(self, vocab: cudf.Series, bpe_merges: cudf.Series):
         self.encode_to_token_ids = TokenizeVocabulary(vocab)
         self.bpe = BytePairEncoder(bpe_merges)
 
@@ -33,7 +33,7 @@ class GPT2Tokenizer:
         # There are two broad issues here:
         # 1. Unicode pattern matching of \p{L} and \p{N}, replaced here with \w and \d
         # 2. Per github.com/rapidsai/cudf/issues/3100 negative lookahead are not supported raises question
-        # how we can support `\s+(?!\S)`, for the POC have removed it
+        #       how we can support `\s+(?!\S)`, for the POC have removed it
         self.pat =  r"""'(?:[sdmt]|ll|ve|re)| ?\w+| ?\d+| ?[^\s\w\d]+|\s+"""
 
         self.byte_encoder = self._bytes_to_unicode()
@@ -111,11 +111,16 @@ class GPT2Tokenizer:
         flattened_token = tokens.list.leaves
 
         # ["This", " is", " a", " test"] -> [b"This", b" is", b" a", b" test"]
+        # TODO This fails on strings with non-ascii characters, and rather produces incorrect results
+        # We need a way to encode the string in utf-8, so that our translate can be provided with only bytes
+        # Currently the translate expects unicode points
+        # Eg if we encode `ಠ` to utf-8, we get b'\xe0\xb2\xa0'
+        # We want our translate to work on b'\xe0\xb2\xa0' and not on `ಠ`
         flattened_tokens_in_encoded_bytes = flattened_token.str.translate(self.byte_encoder)
 
         # Series(str) -> Series(str)
         # Run BPE on the encoded tokens
-        bpe_tokens = self.bpe.encode(flattened_tokens_in_encoded_bytes)
+        bpe_tokens = self.bpe(flattened_tokens_in_encoded_bytes)
 
         # Series(str) -> Series(List[List[int]])
         # For each of the BPE Tokens, convert them to token_ids now
@@ -139,7 +144,7 @@ class GPT2Tokenizer:
     ) -> cudf.Series:
         """ Tokenize a cudf.Series of strings to a cudf.Series of token ids
 
-        TODO : Add functionality similar to pad and truncate
+        TODO : Add functionality similar to pad / truncate
         TODO : Make output match HuggingFace output i.e {'input_ids': cudf.Series, 'attention_mask': cudf.Series}
         TODO : Allow option to return pytorch / tensorflow tensors instead of cudf.Series
         """
