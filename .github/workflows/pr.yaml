@@ -194,10 +194,10 @@ jobs:
            }
            const summary_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
            const prNumber = branch.split("/")[1];
-           const summary_comment = `${{ needs.pandas-tests-diff.outputs.job_output }}`;
+           const summary_content = `${{ needs.pandas-tests-diff.outputs.summary_content }}`;
            github.rest.issues.createComment({
              issue_number: prNumber,
              owner: context.repo.owner,
              repo: context.repo.repo,
-             body: `${summary_comment}\n\nHere is [a link to the full test summary](${summary_url}).\n`
+             body: summary_content
            })
