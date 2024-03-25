@@ -195,6 +195,8 @@ jobs:
            const summary_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
            const prNumber = branch.split("/")[1];
            const job_output = `${{ needs.pandas-tests-diff.outputs.output_variable }}`;
+           const job_output1 = `${{ needs.pandas-tests-diff.node_type }}`;
+           const job_output2 = `${{ needs.pandas-tests-diff }}`;
            github.rest.issues.createComment({
              issue_number: prNumber,
              owner: context.repo.owner,
