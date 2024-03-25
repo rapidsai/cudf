@@ -194,20 +194,32 @@ def test_scatter_table(
     target_table,
     pa_target_table,
 ):
-    if pa.types.is_list(pa_target_table[0].type):
-        pytest.skip("pyarrow does not support scattering with list data")
-
     result = plc.copying.scatter(
         source_table,
         index_column,
         target_table,
     )
 
-    expected = _pyarrow_boolean_mask_scatter_table(
-        pa_source_table,
-        _pyarrow_index_to_mask(pa_index_column, pa_target_table.num_rows),
-        pa_target_table,
-    )
+    if pa.types.is_list(pa_target_table[0].type):
+        # pyarrow does not support scattering with list data. If and when they do,
+        # replace this hardcoding with their implementation.
+        with pytest.raises(pa.ArrowNotImplementedError):
+            _pyarrow_boolean_mask_scatter_table(
+                pa_source_table,
+                _pyarrow_index_to_mask(
+                    pa_index_column, pa_target_table.num_rows
+                ),
+                pa_target_table,
+            )
+        expected = pa.table(
+            [pa.array([[4], [1], [2], [3], [8], [9]])] * 3, [""] * 3
+        )
+    else:
+        expected = _pyarrow_boolean_mask_scatter_table(
+            pa_source_table,
+            _pyarrow_index_to_mask(pa_index_column, pa_target_table.num_rows),
+            pa_target_table,
+        )
 
     assert_table_eq(result, expected)
 
@@ -679,18 +691,26 @@ def test_boolean_mask_scatter_from_table(
     mask,
     pa_mask,
 ):
-    if pa.types.is_list(pa_target_table[0].type):
-        pytest.skip("pyarrow does not support scattering with list data")
-
     result = plc.copying.boolean_mask_scatter(
         source_table,
         target_table,
         mask,
     )
 
-    expected = _pyarrow_boolean_mask_scatter_table(
-        pa_source_table, pa_mask, pa_target_table
-    )
+    if pa.types.is_list(pa_target_table[0].type):
+        # pyarrow does not support scattering with list data. If and when they do,
+        # replace this hardcoding with their implementation.
+        with pytest.raises(pa.ArrowNotImplementedError):
+            _pyarrow_boolean_mask_scatter_table(
+                pa_source_table, pa_mask, pa_target_table
+            )
+        expected = pa.table(
+            [pa.array([[1], [5], [2], [7], [3], [9]])] * 3, [""] * 3
+        )
+    else:
+        expected = _pyarrow_boolean_mask_scatter_table(
+            pa_source_table, pa_mask, pa_target_table
+        )
 
     assert_table_eq(result, expected)
 
