@@ -31,10 +31,10 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
-#include <cudf/utilities/span.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -189,7 +189,7 @@ std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
 /**
  * @brief Create `ArrowDeviceArray` from cudf table and metadata
  *
- * Populates the C struct ArrowDeviceArray without performing if possible.
+ * Populates the C struct ArrowDeviceArray without performing copies if possible.
  * This maintains the data on the GPU device and gives ownership of the table
  * and its buffers to the ArrowDeviceArray struct.
  *
@@ -208,10 +208,39 @@ std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
  * @param table input table, ownership of the data will be given to the result
  * @param stream the cuda stream to use for any operations and allocations
  * @param mr the memory resource to utilize for any allocations during conversion
- * @return ArrowDeviceArray which will have ownership of the GPU data
+ * @return ArrowDeviceArray which will have ownership of the GPU data, consumer must call release
  */
 std::unique_ptr<ArrowDeviceArray> to_arrow_device(
   cudf::table&& table,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create `ArrowDeviceArray` from cudf column and metadata
+ *
+ * Populates the C struct ArrowDeviceArray without performing copies if possible.
+ * This maintains the data on the GPU device and gives ownership of the table
+ * and its buffers to the ArrowDeviceArray struct.
+ *
+ * After calling this function, the release callback on the returned ArrowDeviceArray
+ * must be called to clean up the memory.
+ *
+ * @note for decimals, since the precision is not stored for them in libcudf
+ * it will be converted to an Arrow decimal128 with the widest-precision the cudf decimal type
+ * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
+ * 9 which is the maximum precision for 32-bit types. Similar, numeric::decimal128 will be
+ * converted to Arrow decimal128 of the precision 38.
+ *
+ * @note Copies will be performed in the cases where cudf differs from Arrow such as
+ * in the representation of bools (Arrow uses a bitmap, cudf uses 1 byte per value).
+ *
+ * @param col input column, owernship of the data will be given to the resulting ArrowDeviceArray
+ * @param stream the cuda stream to use for any operations and allocations
+ * @param mr the memory resource to utilize for any allocations during conversion
+ * @return ArrowDeviceArray which will have ownership of the GPU data, consumer must call release
+ */
+std::unique_ptr<ArrowDeviceArray> to_arrow_device(
+  cudf::column&& col,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
