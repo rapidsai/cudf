@@ -124,7 +124,7 @@ class Profiler:
             _MethodProxy,
             type[_FinalProxy],
             type[_IntermediateProxy],
-        ]
+        ],
     ):
         if isinstance(func_obj, _MethodProxy):
             return func_obj._fsproxy_slow.__qualname__
@@ -172,17 +172,15 @@ class Profiler:
             if self._currkey is not None and arg is not None:
                 if arg[1]:  # fast
                     run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey][
-                        "gpu_time"
-                    ] = run_time + self._results[self._currkey].get(
-                        "gpu_time", 0
+                    self._results[self._currkey]["gpu_time"] = (
+                        run_time
+                        + self._results[self._currkey].get("gpu_time", 0)
                     )
                 else:
                     run_time = time.perf_counter() - self._timer[self._currkey]
-                    self._results[self._currkey][
-                        "cpu_time"
-                    ] = run_time + self._results[self._currkey].get(
-                        "cpu_time", 0
+                    self._results[self._currkey]["cpu_time"] = (
+                        run_time
+                        + self._results[self._currkey].get("cpu_time", 0)
                     )
 
             frame_locals = inspect.getargvalues(frame).locals

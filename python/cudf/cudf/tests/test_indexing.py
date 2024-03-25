@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -132,6 +132,10 @@ def test_series_indexing(i1, i2, i3):
             assert series[i] == a1[i]
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "arg",
     [
@@ -153,9 +157,10 @@ def test_series_get_item_iloc_defer(arg):
     ps = pd.Series([1, 2, 3], index=pd.Index(["a", "b", "c"]))
     gs = cudf.from_pandas(ps)
 
-    with expect_warning_if(PANDAS_GE_210 and not isinstance(arg, str)):
+    arg_not_str = not isinstance(arg, str)
+    with expect_warning_if(arg_not_str):
         expect = ps[arg]
-    with expect_warning_if(not isinstance(arg, str)):
+    with expect_warning_if(arg_not_str):
         got = gs[arg]
 
     assert_eq(expect, got)
@@ -907,6 +912,10 @@ def test_dataframe_boolean_mask(mask_fn):
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "key, value",
     [
@@ -931,10 +940,7 @@ def test_series_setitem_basics(key, value, nulls):
         psr[:] = None
     gsr = cudf.from_pandas(psr)
     with expect_warning_if(
-        PANDAS_GE_210
-        and isinstance(value, list)
-        and len(value) == 0
-        and nulls == "none"
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
     ):
         psr[key] = value
     with expect_warning_if(
@@ -960,6 +966,10 @@ def test_series_setitem_null():
     assert_eq(expect, got)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "key, value",
     [
@@ -984,10 +994,7 @@ def test_series_setitem_iloc(key, value, nulls):
         psr[:] = None
     gsr = cudf.from_pandas(psr)
     with expect_warning_if(
-        PANDAS_GE_210
-        and isinstance(value, list)
-        and len(value) == 0
-        and nulls == "none"
+        isinstance(value, list) and len(value) == 0 and nulls == "none"
     ):
         psr.iloc[key] = value
     with expect_warning_if(

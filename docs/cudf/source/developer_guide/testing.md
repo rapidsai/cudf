@@ -249,3 +249,22 @@ In particular:
 - `testing._utils.assert_eq` is the biggest hammer to reach for. It can be used to compare any pair of objects.
 - For comparing specific objects, use `testing.testing.assert_[frame|series|index]_equal`.
 - For verifying that the expected assertions are raised, use `testing._utils.assert_exceptions_equal`.
+
+
+### Version testing
+
+It is recommended to have `cudf` pytests only work on the latest supported pandas version i.e., `PANDAS_CURRENT_SUPPORTED_VERSION`. Any anticipated failures should be either `skipped` or `xfailed`.
+
+For example:
+
+```python
+@pytest.mark.skipif(PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION, reason="bug in older version of pandas")
+def test_bug_from_older_pandas_versions(...):
+    ...
+
+@pytest.mark.xfail(PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION, reason="bug in latest version of pandas")
+def test_bug_in_current_and_maybe_future_versions(...):
+    ...
+```
+
+If pandas makes a bugfix release and fixes this, then we'll see it in CI immediately, patch it, and bump `PANDAS_CURRENT_SUPPORTED_VERSION` which also usually happens during pandas upgrades.

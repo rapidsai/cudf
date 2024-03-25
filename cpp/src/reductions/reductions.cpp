@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,15 +177,14 @@ std::unique_ptr<scalar> reduce(column_view const& col,
         std::move(*reduction::detail::make_empty_histogram_like(col.child(0))), true, stream, mr);
     }
 
-    if (output_dtype.id() == type_id::LIST) {
-      if (col.type() == output_dtype) { return make_empty_scalar_like(col, stream, mr); }
-      // Under some circumstance, the output type will become the List of input type,
-      // such as: collect_list or collect_set. So, we have to handcraft the default scalar.
+    if (agg.kind == aggregation::COLLECT_LIST || agg.kind == aggregation::COLLECT_SET) {
       auto scalar = make_list_scalar(empty_like(col)->view(), stream, mr);
       scalar->set_valid_async(false, stream);
       return scalar;
     }
-    if (output_dtype.id() == type_id::STRUCT) { return make_empty_scalar_like(col, stream, mr); }
+
+    // `make_default_constructed_scalar` does not support nested type.
+    if (cudf::is_nested(output_dtype)) { return make_empty_scalar_like(col, stream, mr); }
 
     auto result = make_default_constructed_scalar(output_dtype, stream, mr);
     if (agg.kind == aggregation::ANY || agg.kind == aggregation::ALL) {

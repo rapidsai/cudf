@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -106,9 +106,9 @@ struct packed_table {
  * @endcode
  *
  *
- * @throws cudf::logic_error if `splits` has end index > size of `input`.
- * @throws cudf::logic_error When the value in `splits` is not in the range [0, input.size()).
- * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
+ * @throws std::out_of_range if `splits` has end index > size of `input`.
+ * @throws std::out_of_range When the value in `splits` is not in the range [0, input.size()).
+ * @throws std::invalid_argument When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
  * @param splits A vector of indices where the view will be split
