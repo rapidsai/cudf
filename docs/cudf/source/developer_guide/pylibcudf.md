@@ -98,6 +98,51 @@ There are a couple of notable points from the snippet above:
 
 ## Testing
 
+When writing pylibcudf tests, it is important to remember that all the APIs should be tested in the C++ layer in libcudf already.
+The primary purpose of pylibcudf tests is to ensure the correctness of the _bindings_; the correctness of the underlying implementation should generally be validated in libcudf.
+If pylibcudf tests uncover a libcudf bug, a suitable libcudf test should be added to cover this case rather than relying solely on pylibcudf testing.
+
+pylibcudf's ``conftest.py`` contains some standard parametrized dtype fixture lists that may in turn be used to parametrize other fixtures.
+Fixtures allocating data should leverage these dtype lists wherever possible to simplify testing across the matrix of important types.
+Where appropriate, new fixture lists may be added.
+
+To run tests as efficiently as possible, the test suite should make generous use of fixtures.
+The simplest general structure to follow is for pyarrow array/table/scalar fixtures to be parametrized by one of the dtype list.
+Then, a corresponding pylibcudf fixture may be created using a simple `from_arrow` call.
+This approach ensures consistent global coverage across types for various tests.
+
+In general, pylibcudf tests should prefer validating against a corresponding pyarrow implementation rather than hardcoding data.
+This approach is more resilient to changes to input data, particularly given the fixture strategy outlined above.
+Standard tools for comparing between pylibcudf and pyarrow types are provided in the utils module.
+
+Here is an example demonstrating the above points:
+
+```python
+import pyarrow as pa
+import pyarrow.compute as pc
+import pytest
+from cudf._lib import pylibcudf as plc
+from utils import assert_column_eq
+
+# The pa_dtype fixture is defined in conftest.py.
+@pytest.fixture(scope="module")
+def pa_column(pa_dtype):
+    pa.array([1, 2, 3])
+
+
+@pytest.fixture(scope="module")
+def column(pa_column):
+    return plc.interop.from_arrow(pa_column)
+
+
+def test_foo(pa_column, column):
+    index = 1
+    result = plc.foo(column)
+    expected = pa.foo(pa_column)
+
+    assert_column_eq(result, expected)
+```
+
 Some guidelines on what should be tested:
 - Tests SHOULD comprehensively cover the API, including all possible combinations of arguments required to ensure good test coverage.
 - pylibcudf SHOULD NOT attempt to stress test large data sizes, and SHOULD instead defer to libcudf tests.
