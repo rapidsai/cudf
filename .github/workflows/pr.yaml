@@ -1,6 +1,11 @@
 name: pr
 
 on:
+  workflow_call:
+    outputs:
+      job_output:
+        description: "abc"
+        value: "empty"
   push:
     branches:
       - "pull-request/[0-9]+"
