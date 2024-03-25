@@ -36,6 +36,6 @@ rapids-logger "comment: ${COMMENT}"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
 echo "output_variable=${COMMENT}" >> $GITHUB_OUTPUT
-
+RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mv summary.txt ${RAPIDS_ARTIFACTS_DIR}/
 rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/summary.txt "${RAPIDS_ARTIFACTS_DIR}"
