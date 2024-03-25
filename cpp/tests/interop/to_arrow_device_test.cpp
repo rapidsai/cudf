@@ -276,8 +276,6 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
     if (expected->length > 0) {
       EXPECT_EQ(expected->buffers[0], actual->buffers[0]);
       if (schema_view.type == NANOARROW_TYPE_BOOL) {
-        // couldn't get thrust to like me, so let's just copy the data from device
-        // to host and then confirm the bytes are the same for the bool buffer
         const size_t nbytes = (expected->length + 7) >> 3;
         compare_device_buffers(nbytes, 1, expected, actual);
       } else if (schema_view.type == NANOARROW_TYPE_DECIMAL128) {

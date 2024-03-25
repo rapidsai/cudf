@@ -41,8 +41,6 @@
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
 
-#include <iostream>
-
 namespace cudf {
 namespace detail {
 namespace {
@@ -112,6 +110,9 @@ struct dispatch_to_arrow_type {
 template <typename DeviceType>
 int decimals_to_arrow(column_view input, ArrowSchema* out)
 {
+  // Arrow doesn't support decimal32/decimal64 currently. decimal128
+  // is the smallest that arrow supports besides float32/float64 so we
+  // upcast to decimal128.
   return ArrowSchemaSetTypeDecimal(out,
                                    NANOARROW_TYPE_DECIMAL128,
                                    cudf::detail::max_precision<DeviceType>(),
@@ -153,6 +154,8 @@ int dispatch_to_arrow_type::operator()<cudf::string_view>(column_view input,
   return ArrowSchemaSetType(out, NANOARROW_TYPE_STRING);
 }
 
+// these forward declarations are needed due to the recursive calls to them
+// inside their definitions and in struct_vew for handling children
 template <>
 int dispatch_to_arrow_type::operator()<cudf::list_view>(column_view input,
                                                         column_metadata const& metadata,
@@ -275,7 +278,7 @@ int set_buffer(std::unique_ptr<T> device_buf, int64_t i, ArrowArray* out)
   return NANOARROW_OK;
 }
 
-int initialize_array(ArrowArray* arr, ArrowType storage_type, const cudf::column& column)
+int initialize_array(ArrowArray* arr, ArrowType storage_type, cudf::column const& column)
 {
   NANOARROW_RETURN_NOT_OK(ArrowArrayInitFromType(arr, storage_type));
   arr->length     = column.size();
@@ -668,7 +671,6 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
   ArrowArrayMove(tmp.get(), &private_data->parent);
   auto result       = std::make_unique<ArrowDeviceArray>();
   result->device_id = rmm::get_current_cuda_device().value();
-  // can/should we check whether the memory is managed/cuda_host memory?
   result->device_type        = ARROW_DEVICE_CUDA;
   result->sync_event         = &private_data->sync_event;
   result->array              = private_data->parent;
