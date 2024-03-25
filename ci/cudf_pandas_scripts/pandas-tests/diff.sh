@@ -32,6 +32,7 @@ python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-r
 COMMENT=$(head -1 summary.txt)
 
 echo "$COMMENT"
+rapids-logger "comment: ${COMMENT}"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
 echo "job_output=${COMMENT}" >> "${GITHUB_OUTPUT}"
