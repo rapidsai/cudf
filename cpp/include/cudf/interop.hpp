@@ -31,6 +31,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/transform.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -183,7 +184,7 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  * @return ArrowSchema generated from `input`
  */
 std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
-                                             std::vector<column_metadata> const& metadata);
+                                             cudf::host_span<column_metadata const> metadata);
 
 /**
  * @brief Create `ArrowDeviceArray` from cudf table and metadata

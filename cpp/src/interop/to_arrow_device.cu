@@ -334,44 +334,51 @@ struct dispatch_to_arrow_device {
 };
 
 template <typename DeviceType>
-int unsupported_decimals_to_arrow(cudf::column&& input,
-                                  int32_t precision,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr,
-                                  ArrowArray* out)
+int decimals_to_arrow(cudf::column&& input,
+                      int32_t precision,
+                      rmm::cuda_stream_view stream,
+                      rmm::mr::device_memory_resource* mr,
+                      ArrowArray* out)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, input));
 
-  constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
-  auto buf =
-    std::make_unique<rmm::device_uvector<DeviceType>>(input.size() * BIT_WIDTH_RATIO, stream, mr);
+  if constexpr (!std::is_same_v<DeviceType, __int128_t>) {
+    constexpr size_type BIT_WIDTH_RATIO = sizeof(__int128_t) / sizeof(DeviceType);
+    auto buf =
+      std::make_unique<rmm::device_uvector<DeviceType>>(input.size() * BIT_WIDTH_RATIO, stream, mr);
 
-  auto count = thrust::make_counting_iterator(0);
+    auto count = thrust::make_counting_iterator(0);
 
-  thrust::for_each(rmm::exec_policy(stream, mr),
-                   count,
-                   count + input.size(),
-                   [in  = input.view().begin<DeviceType>(),
-                    out = buf->data(),
-                    BIT_WIDTH_RATIO] __device__(auto in_idx) {
-                     auto const out_idx = in_idx * BIT_WIDTH_RATIO;
-                     // the lowest order bits are the value, the remainder
-                     // simply matches the sign bit to satisfy the two's
-                     // complement integer representation of negative numbers.
-                     out[out_idx] = in[in_idx];
+    thrust::for_each(rmm::exec_policy(stream, mr),
+                     count,
+                     count + input.size(),
+                     [in  = input.view().begin<DeviceType>(),
+                      out = buf->data(),
+                      BIT_WIDTH_RATIO] __device__(auto in_idx) {
+                       auto const out_idx = in_idx * BIT_WIDTH_RATIO;
+                       // the lowest order bits are the value, the remainder
+                       // simply matches the sign bit to satisfy the two's
+                       // complement integer representation of negative numbers.
+                       out[out_idx] = in[in_idx];
 #pragma unroll BIT_WIDTH_RATIO - 1
-                     for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
-                       out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
-                     }
-                   });
+                       for (auto i = 1; i < BIT_WIDTH_RATIO; ++i) {
+                         out[out_idx + i] = in[in_idx] < 0 ? -1 : 0;
+                       }
+                     });
+    NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
+  }
 
   auto contents = input.release();
   if (contents.null_mask) {
     NANOARROW_RETURN_NOT_OK(
       set_buffer(std::move(contents.null_mask), validity_buffer_idx, tmp.get()));
   }
-  NANOARROW_RETURN_NOT_OK(set_buffer(std::move(buf), fixed_width_data_buffer_idx, tmp.get()));
+
+  if constexpr (std::is_same_v<DeviceType, __int128_t>) {
+    NANOARROW_RETURN_NOT_OK(
+      set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, tmp.get()));
+  }
 
   ArrowArrayMove(tmp.get(), out);
   return NANOARROW_OK;
@@ -384,7 +391,7 @@ int dispatch_to_arrow_device::operator()<numeric::decimal32>(cudf::column&& colu
                                                              ArrowArray* out)
 {
   using DeviceType = int32_t;
-  return unsupported_decimals_to_arrow<DeviceType>(
+  return decimals_to_arrow<DeviceType>(
     std::move(column), cudf::detail::max_precision<DeviceType>(), stream, mr, out);
 }
 
@@ -395,7 +402,7 @@ int dispatch_to_arrow_device::operator()<numeric::decimal64>(cudf::column&& colu
                                                              ArrowArray* out)
 {
   using DeviceType = int64_t;
-  return unsupported_decimals_to_arrow<DeviceType>(
+  return decimals_to_arrow<DeviceType>(
     std::move(column), cudf::detail::max_precision<DeviceType>(), stream, mr, out);
 }
 
@@ -405,19 +412,9 @@ int dispatch_to_arrow_device::operator()<numeric::decimal128>(cudf::column&& col
                                                               rmm::mr::device_memory_resource* mr,
                                                               ArrowArray* out)
 {
-  nanoarrow::UniqueArray tmp;
-  NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_DECIMAL128, column));
-
-  auto contents = column.release();
-  if (contents.null_mask) {
-    NANOARROW_RETURN_NOT_OK(
-      set_buffer(std::move(contents.null_mask), validity_buffer_idx, tmp.get()));
-  }
-
-  NANOARROW_RETURN_NOT_OK(
-    set_buffer(std::move(contents.data), fixed_width_data_buffer_idx, tmp.get()));
-  ArrowArrayMove(tmp.get(), out);
-  return NANOARROW_OK;
+  using DeviceType = __int128_t;
+  return decimals_to_arrow<DeviceType>(
+    std::move(column), cudf::detail::max_precision<DeviceType>(), stream, mr, out);
 }
 
 template <>
@@ -602,7 +599,7 @@ void ArrowDeviceArrayRelease(ArrowArray* array)
 }  // namespace detail
 
 std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
-                                             std::vector<column_metadata> const& metadata)
+                                             cudf::host_span<column_metadata const> metadata)
 {
   CUDF_EXPECTS((metadata.size() == static_cast<std::size_t>(input.num_columns())),
                "columns' metadata should be equal to the number of columns in table");
@@ -669,8 +666,8 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
   if (status != cudaSuccess) { CUDF_FAIL("could not create event to sync on"); }
 
   ArrowArrayMove(tmp.get(), &private_data->parent);
-  auto result       = std::make_unique<ArrowDeviceArray>();
-  result->device_id = rmm::get_current_cuda_device().value();
+  auto result                = std::make_unique<ArrowDeviceArray>();
+  result->device_id          = rmm::get_current_cuda_device().value();
   result->device_type        = ARROW_DEVICE_CUDA;
   result->sync_event         = &private_data->sync_event;
   result->array              = private_data->parent;
