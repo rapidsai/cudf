@@ -1,11 +1,6 @@
 name: pr
 
 on:
-  workflow_call:
-    outputs:
-      job_output:
-        description: "abc"
-        value: "empty"
   push:
     branches:
       - "pull-request/[0-9]+"
@@ -184,8 +179,6 @@ jobs:
       node_type: cpu4
       build_type: pull-request
       run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
-    outputs:
-      job_output: ${{ env.output_variable }}
   pandas-tests-diff-comment:
    # Post comment of pass/fail rate on PR
    runs-on: ubuntu-latest
@@ -201,7 +194,7 @@ jobs:
            }
            const summary_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
            const prNumber = branch.split("/")[1];
-           const job_output = `${{ needs.pandas-tests-diff.outputs.job_output }}`;
+           const job_output = `${{ needs.pandas-tests-diff.outputs.output_variable }}`;
            github.rest.issues.createComment({
              issue_number: prNumber,
              owner: context.repo.owner,
