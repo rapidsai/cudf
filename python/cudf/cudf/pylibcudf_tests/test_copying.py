@@ -10,7 +10,9 @@ from utils import (
     is_fixed_width,
     is_floating,
     is_integer,
+    is_list,
     is_string,
+    is_struct,
 )
 
 from cudf._lib import pylibcudf as plc
@@ -25,6 +27,9 @@ from cudf._lib import pylibcudf as plc
         pa.string(),
         pa.bool_(),
         pa.list_(pa.int64()),
+        # Need to explicitly specify this type via a field to ensure we don't include
+        # nullability accidentally.
+        pa.struct([pa.field("v", pa.int64(), nullable=False)]),
     ],
 )
 def pa_type(request):
@@ -42,6 +47,8 @@ def pa_input_column(pa_type):
     elif pa.types.is_list(pa_type):
         # TODO: Add heterogenous sizes
         return pa.array([[1], [2], [3]], type=pa_type)
+    elif pa.types.is_struct(pa_type):
+        return pa.array([{"v": 1}, {"v": 2}, {"v": 3}], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -72,6 +79,11 @@ def pa_target_column(pa_type):
     elif pa.types.is_list(pa_type):
         # TODO: Add heterogenous sizes
         return pa.array([[4], [5], [6], [7], [8], [9]], type=pa_type)
+    elif pa.types.is_struct(pa_type):
+        return pa.array(
+            [{"v": 4}, {"v": 5}, {"v": 6}, {"v": 7}, {"v": 8}, {"v": 9}],
+            type=pa_type,
+        )
     raise ValueError("Unsupported type")
 
 
@@ -116,6 +128,8 @@ def pa_source_scalar(pa_type):
     elif pa.types.is_list(pa_type):
         # TODO: Longer list?
         return pa.scalar([1], type=pa_type)
+    elif pa.types.is_struct(pa_type):
+        return pa.scalar({"v": 1}, type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -200,7 +214,9 @@ def test_scatter_table(
         target_table,
     )
 
-    if pa.types.is_list(pa_target_table[0].type):
+    if pa.types.is_list(
+        dtype := pa_target_table[0].type
+    ) or pa.types.is_struct(dtype):
         # pyarrow does not support scattering with list data. If and when they do,
         # replace this hardcoding with their implementation.
         with pytest.raises(pa.ArrowNotImplementedError):
@@ -211,9 +227,31 @@ def test_scatter_table(
                 ),
                 pa_target_table,
             )
-        expected = pa.table(
-            [pa.array([[4], [1], [2], [3], [8], [9]])] * 3, [""] * 3
-        )
+
+        if pa.types.is_list(dtype := pa_target_table[0].type):
+            expected = pa.table(
+                [pa.array([[4], [1], [2], [3], [8], [9]])] * 3, [""] * 3
+            )
+        elif pa.types.is_struct(dtype):
+            expected = pa.table(
+                [
+                    pa.array(
+                        [
+                            {"v": 4},
+                            {"v": 1},
+                            {"v": 2},
+                            {"v": 3},
+                            {"v": 8},
+                            {"v": 9},
+                        ],
+                        type=pa.struct(
+                            [pa.field("v", pa.int64(), nullable=False)]
+                        ),
+                    )
+                ]
+                * 3,
+                [""] * 3,
+            )
     else:
         expected = _pyarrow_boolean_mask_scatter_table(
             pa_source_table,
@@ -697,16 +735,40 @@ def test_boolean_mask_scatter_from_table(
         mask,
     )
 
-    if pa.types.is_list(pa_target_table[0].type):
+    if pa.types.is_list(
+        dtype := pa_target_table[0].type
+    ) or pa.types.is_struct(dtype):
         # pyarrow does not support scattering with list data. If and when they do,
         # replace this hardcoding with their implementation.
         with pytest.raises(pa.ArrowNotImplementedError):
             _pyarrow_boolean_mask_scatter_table(
                 pa_source_table, pa_mask, pa_target_table
             )
-        expected = pa.table(
-            [pa.array([[1], [5], [2], [7], [3], [9]])] * 3, [""] * 3
-        )
+
+        if pa.types.is_list(dtype := pa_target_table[0].type):
+            expected = pa.table(
+                [pa.array([[1], [5], [2], [7], [3], [9]])] * 3, [""] * 3
+            )
+        elif pa.types.is_struct(dtype):
+            expected = pa.table(
+                [
+                    pa.array(
+                        [
+                            {"v": 1},
+                            {"v": 5},
+                            {"v": 2},
+                            {"v": 7},
+                            {"v": 3},
+                            {"v": 9},
+                        ],
+                        type=pa.struct(
+                            [pa.field("v", pa.int64(), nullable=False)]
+                        ),
+                    )
+                ]
+                * 3,
+                [""] * 3,
+            )
     else:
         expected = _pyarrow_boolean_mask_scatter_table(
             pa_source_table, pa_mask, pa_target_table
@@ -793,8 +855,20 @@ def test_boolean_mask_scatter_from_scalars(
 def test_get_element(input_column, pa_input_column):
     index = 1
     result = plc.copying.get_element(input_column, index)
+    metadata = None
+    if is_list(dtype := input_column.type()) or is_struct(dtype):
+        metadata = plc.interop.ColumnMetadata(
+            "",
+            # libcudf does not store field names, so just match pyarrow's.
+            [
+                plc.interop.ColumnMetadata(pa_input_column.type.field(i).name)
+                for i in range(pa_input_column.type.num_fields)
+            ],
+        )
+
     assert (
-        plc.interop.to_arrow(result).as_py() == pa_input_column[index].as_py()
+        plc.interop.to_arrow(result, metadata).as_py()
+        == pa_input_column[index].as_py()
     )
 
 

@@ -8,7 +8,18 @@ from cudf._lib import pylibcudf as plc
 
 def assert_array_eq(plc_column, pa_array):
     """Verify that the pylibcudf array and PyArrow array are equal."""
-    plc_pa = plc.interop.to_arrow(plc_column)
+    # Nested types require children metadata to be passed to the conversion function.
+    metadata = None
+    if is_list(dtype := plc_column.type()) or is_struct(dtype):
+        metadata = plc.interop.ColumnMetadata(
+            "",
+            # libcudf does not store field names, so just match pyarrow's.
+            [
+                plc.interop.ColumnMetadata(pa_array.type.field(i).name)
+                for i in range(pa_array.type.num_fields)
+            ],
+        )
+    plc_pa = plc.interop.to_arrow(plc_column, metadata)
 
     if isinstance(plc_pa, pa.ChunkedArray):
         plc_pa = plc_pa.combine_chunks()
@@ -72,6 +83,10 @@ def is_string(plc_dtype):
 
 def is_list(plc_dtype):
     return plc_dtype.id() == plc.TypeId.LIST
+
+
+def is_struct(plc_dtype):
+    return plc_dtype.id() == plc.TypeId.STRUCT
 
 
 def is_fixed_width(plc_dtype):

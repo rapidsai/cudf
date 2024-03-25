@@ -258,6 +258,10 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
+    CUDF_EXPECTS(source.get().type() == target.type(),
+                 "scalar and column types must match",
+                 cudf::data_type_error);
+
     // For each field of `source`, copy construct a scalar from the field
     // and dispatch to the corresponding scalar scatterer
 
