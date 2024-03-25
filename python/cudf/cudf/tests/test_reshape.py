@@ -302,7 +302,9 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
     else:
         got = gdf.interleave_columns()
 
-        expect = pdf.T.melt()["value"].astype(dtype)
+        expect = pd.Series(np.vstack(pdf.to_numpy()).reshape((-1,))).astype(
+            dtype
+        )
 
         assert_eq(expect, got)
 

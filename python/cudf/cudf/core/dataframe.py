@@ -7544,7 +7544,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         .. pandas-compat::
             This method does not exist in pandas but it can be run
-            as `df.T.melt()["value"]`.
+            as `pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))`.
         """
         if ("category" == self.dtypes).any():
             raise ValueError(
