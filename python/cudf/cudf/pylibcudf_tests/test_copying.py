@@ -14,7 +14,9 @@ from utils import (
 from cudf._lib import pylibcudf as plc
 
 
-@pytest.fixture(scope="module", params=[pa.int64(), pa.float64(), pa.string()])
+@pytest.fixture(
+    scope="module", params=[pa.int64(), pa.float64(), pa.string(), pa.bool_()]
+)
 def pa_type(request):
     return request.param
 
@@ -25,6 +27,8 @@ def pa_input_column(pa_type):
         return pa.array([1, 2, 3], type=pa_type)
     elif pa.types.is_string(pa_type):
         return pa.array(["a", "b", "c"], type=pa_type)
+    elif pa.types.is_boolean(pa_type):
+        return pa.array([True, True, False], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -50,6 +54,8 @@ def pa_target_column(pa_type):
         return pa.array([4, 5, 6, 7, 8, 9], type=pa_type)
     elif pa.types.is_string(pa_type):
         return pa.array(["d", "e", "f", "g", "h", "i"], type=pa_type)
+    elif pa.types.is_boolean(pa_type):
+        return pa.array([False, True, True, False, True, False], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -89,6 +95,8 @@ def pa_source_scalar(pa_type):
         return pa.scalar(1, type=pa_type)
     elif pa.types.is_string(pa_type):
         return pa.scalar("a", type=pa_type)
+    elif pa.types.is_boolean(pa_type):
+        return pa.scalar(False, type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -140,6 +148,8 @@ def _pyarrow_boolean_mask_scatter_column(source, mask, target):
 
     if isinstance(source, pa.ChunkedArray):
         source = source.combine_chunks()
+    if isinstance(target, pa.ChunkedArray):
+        target = target.combine_chunks()
 
     # replace_with_mask accepts a column whose size is the number of true values in
     # the mask, so we can use it for columnar scatters.
@@ -215,7 +225,12 @@ def test_scatter_table_map_has_nulls(source_table, target_table):
 
 def test_scatter_table_type_mismatch(source_table, index_column, target_table):
     with cudf_raises(TypeError):
-        pa_array = pa.array([True] * source_table.num_rows())
+        if is_integer(
+            dtype := target_table.columns()[0].type()
+        ) or is_floating(dtype):
+            pa_array = pa.array([True] * source_table.num_rows())
+        else:
+            pa_array = pa.array([1] * source_table.num_rows())
         ncol = source_table.num_columns()
         pa_table = pa.table([pa_array] * ncol, [""] * ncol)
         plc.copying.scatter(
@@ -272,9 +287,14 @@ def test_scatter_scalars_map_has_nulls(source_scalar, target_table):
 
 def test_scatter_scalars_type_mismatch(index_column, target_table):
     with cudf_raises(TypeError):
+        if is_integer(
+            dtype := target_table.columns()[0].type()
+        ) or is_floating(dtype):
+            source_scalar = [plc.interop.from_arrow(pa.scalar(True))]
+        else:
+            source_scalar = [plc.interop.from_arrow(pa.scalar(1))]
         plc.copying.scatter(
-            [plc.interop.from_arrow(pa.scalar(True))]
-            * target_table.num_columns(),
+            source_scalar * target_table.num_columns(),
             index_column,
             target_table,
         )

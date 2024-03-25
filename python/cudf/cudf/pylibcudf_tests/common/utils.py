@@ -56,5 +56,13 @@ def is_floating(plc_dtype):
     )
 
 
+def is_boolean(plc_dtype):
+    return plc_dtype.id() == plc.TypeId.BOOL8
+
+
 def is_fixed_width(plc_dtype):
-    return is_integer(plc_dtype) or is_floating(plc_dtype)
+    return (
+        is_integer(plc_dtype)
+        or is_floating(plc_dtype)
+        or is_boolean(plc_dtype)
+    )
