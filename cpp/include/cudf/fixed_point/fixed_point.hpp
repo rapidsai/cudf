@@ -85,6 +85,55 @@ constexpr inline auto is_supported_construction_value_type()
 namespace detail {
 
 /**
+ * @brief Helper struct containing common constants for setting and extracting
+ * the components of a floating point value.
+ */
+template <typename FloatingType,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+struct FloatingComponentConstants {
+  // This struct assumes we're working with IEEE 754 floating point values.
+  // Details on the IEEE-754 floating point format:
+  // Format: https://learn.microsoft.com/en-us/cpp/build/ieee-floating-point-representation
+  // Float Visualizer: https://www.h-schmidt.net/FloatConverter/IEEE754.html
+  static_assert(cuda::std::numeric_limits<FloatingType>::is_iec559, "Assumes IEEE 754");
+
+  static constexpr bool is_float = cuda::std::is_same_v<FloatingType, float>;  ///< Is-float or not
+  using IntegralType =
+    cuda::std::conditional_t<is_float, uint32_t, uint64_t>;  ///< Unsigned int type with same size
+                                                             ///< as floating type
+
+  // The high bit is the sign bit (0 for positive #"s, 1 for negative #'s).
+  static constexpr int num_floating_bits =
+    sizeof(FloatingType) * CHAR_BIT;  ///< How many bits in the floating type
+  static constexpr int sign_bit_index = num_floating_bits - 1;  ///< The index of the sign bit
+  static constexpr IntegralType sign_mask =
+    (IntegralType(1) << sign_bit_index);  ///< The mask to select the sign bit
+
+  // The low 23 / 52 bits (for float / double) are the mantissa.
+  // There is an additional bit of value 1 that isn't stored in the mantissa.
+  // Instead it is "understood" that the value of the mantissa is between 0.5 and 1.
+  static constexpr int num_mantissa_bits =
+    cuda::std::numeric_limits<FloatingType>::digits - 1;  ///< -1 for understood bit
+  static constexpr IntegralType understood_bit_mask =
+    (IntegralType(1) << num_mantissa_bits);  ///< The mask for the understood bit
+  static constexpr IntegralType mantissa_mask =
+    understood_bit_mask - 1;  ///< The mask to select the mantissa
+
+  // And in between are the bits used to store the biased power-of-2 exponent.
+  static constexpr int num_exponent_bits =
+    num_floating_bits - num_mantissa_bits - 1;  ///< -1: sign bit
+  static constexpr IntegralType unshifted_exponent_mask =
+    (IntegralType(1) << num_exponent_bits) - 1;  ///< The mask for the exponents, unshifted
+  static constexpr IntegralType exponent_mask =
+    unshifted_exponent_mask << num_mantissa_bits;  ///< The mask to select the exponents
+
+  // To store positive and negative exponents as unsigned values, the stored value for
+  // the power-of-2 is exponent + bias. The bias is 126 for floats and 1022 for doubles.
+  static constexpr IntegralType exponent_bias =
+    cuda::std::numeric_limits<FloatingType>::max_exponent - 2;  ///< 126 / 1022 for float / double
+};
+
+/**
  * @brief A function for integer exponentiation by squaring.
  *
  * @tparam Rep Representation type for return type
@@ -171,6 +220,172 @@ CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
   if (scale == 0) { return val; }
   if (scale > 0) { return right_shift<Rep, Rad>(val, scale); }
   return left_shift<Rep, Rad>(val, scale);
+}
+
+/** @brief Extracts the sign, exponent, and integral significand of a floating point number.
+ *
+ * @note This returns all zero's for +/-0 and denormals, and zero's with an exponent of
+ * INT_MIN for the unrepresentable values +/-inf and NaN's.
+ *
+ * @tparam FloatingType Type of input floating point value
+ * @param floating The floating value to extract the components from
+ * @return A tuple containing the sign (bool), exponent (power-of-2), and integral significand.
+ */
+template <typename FloatingType,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline auto extract_components(FloatingType floating)
+{
+  // This function is implemented using integer and bit operations, which is much
+  // faster than using the FPU functions for each component individually. This is especially
+  // true for doubles, as bottlenecking on the FP64 GPU pipeline can cut performance in half.
+
+  // See comments in FloatingComponentConstants about the floating point format.
+  using Constants    = FloatingComponentConstants<FloatingType>;
+  using IntegralType = typename Constants::IntegralType;
+
+  // Interpret our floating point number as an integer to extract the stored bits.
+  // Although using a union for type-punning is undefined behavior in the C++ language, its behavior
+  // IS defined by both gcc and clang (the compilers we support), even with strict aliasing.
+  // Regardless, we should switch to the standard-supported std::bit_cast() for this in C++20
+  // when it is available.
+  // TODO: Use std::bit_cast in C++20
+  // GCC: https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-fstrict-aliasing
+  union UseBitCastInCpp20 {
+    IntegralType integer;
+    FloatingType floating;
+  };
+
+  // Convert floating to integer
+  UseBitCastInCpp20 conversion_union;
+  conversion_union.floating      = floating;
+  IntegralType const integer_rep = conversion_union.integer;
+
+  // First extract the exponent bits and handle its special values
+  auto const exponent_bits = integer_rep & Constants::exponent_mask;
+  if (exponent_bits == 0) {
+    // Because of the understood set-bit not stored in the mantissa, it is not possible
+    // to store the value zero directly. Instead both +/-0 and denormals are represented with
+    // the exponent bits set to zero.
+    // Thus it's fastest to just floor (generally unwanted) denormals to zero.
+    return cuda::std::tuple{false, 0, IntegralType(0)};
+  } else if (exponent_bits == Constants::exponent_mask) {
+    //+/-inf and NaN values are stored with all of the exponent bits set.
+    // As none of these are representable by integers, we'll return the same value for all cases.
+    return cuda::std::tuple{false, INT_MIN, IntegralType(0)};
+  }
+
+  // Extract the exponent value: shift the bits down and subtract the bias.
+  using SignedIntegralType                       = cuda::std::make_signed_t<IntegralType>;
+  SignedIntegralType const shifted_exponent_bits = exponent_bits >> Constants::num_mantissa_bits;
+  int const exp2 =
+    shifted_exponent_bits - static_cast<SignedIntegralType>(Constants::exponent_bias);
+
+  // Extract the sign bit:
+  bool const is_positive = ((Constants::sign_mask & integer_rep) == 0);
+
+  // Extract the significand, setting the high bit for the understood 1/2
+  IntegralType const significand =
+    (integer_rep & Constants::mantissa_mask) | Constants::understood_bit_mask;
+
+  // Return the tuple of values
+  return cuda::std::tuple{is_positive, exp2, significand};
+}
+
+/** @brief Sets the sign and adds to the exponent of a floating point number.
+ *
+ * @tparam FloatingType Type of input floating point value.
+ * @param floating The floating value to set the components of.
+ * @param is_negative The sign bit to set for the floating point number.
+ * @param exp2 The power-of-2 to add to the floating point number.
+ * @return A floating point value with the mantissa of the original, but the added sign and
+ * exponent.
+ */
+template <typename FloatingType,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<FloatingType>>* = nullptr>
+CUDF_HOST_DEVICE inline FloatingType add_sign_and_exp2(FloatingType floating,
+                                                       bool is_negative,
+                                                       int exp2)
+{
+  // Because IEEE-754 mandates rounding when casting an integer to floating point,
+  // the fastest way to set the mantissa is to cast, even though it uses the FPU.
+  // However, the fastest way to set the sign and exponent is still to do so manually,
+  // especially for doubles as bottlenecking on the FP64 pipeline is very painful.
+
+  // See comments in FloatingComponentConstants about the floating point format.
+  using Constants    = FloatingComponentConstants<FloatingType>;
+  using IntegralType = typename Constants::IntegralType;
+
+  // See comments in extract_components() about type-punning with a union.
+  // TODO: Use std::bit_cast in C++20
+  union UseBitCastInCpp20 {
+    IntegralType integer;
+    FloatingType floating;
+  };
+
+  // Convert floating point to integer
+  // We'll edit the integer in-place as we have to convert back to floating point at the end.
+  // Note that we do NOT use a reference or pointer to the union integer, as that IS undefined
+  // behavior in gcc.
+  UseBitCastInCpp20 conversion_union;
+  conversion_union.floating = floating;
+
+  // Set the sign bit
+  conversion_union.integer |= (IntegralType(is_negative) << Constants::sign_bit_index);
+
+  // Extract the currently stored (biased) exponent
+  auto exponent_bits = conversion_union.integer & Constants::exponent_mask;
+  auto stored_exp2   = exponent_bits >> Constants::num_mantissa_bits;
+
+  // Add the additional power-of-2
+  stored_exp2 += exp2;
+  exponent_bits = stored_exp2 << Constants::num_mantissa_bits;
+
+  // Clear existing exponent bits and set new ones
+  conversion_union.integer &= (~Constants::exponent_mask);
+  conversion_union.integer |= exponent_bits;
+
+  // Convert back to float
+  return conversion_union.floating;
+}
+
+/** @brief Determine the number of significant bits in an integer
+ *
+ * @tparam T Type of input integer value.
+ * @param value The integer whose bits are being counted
+ * @return The number of significant bits: the # of bits - # of leading zeroes
+ */
+template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_unsigned_v<T>)>* = nullptr>
+CUDF_HOST_DEVICE inline int count_significant_bits(T value)
+{
+#ifdef __CUDA_ARCH__
+  if constexpr (std::is_same_v<T, uint64_t>) {
+    return 64 - __clzll(static_cast<int64_t>(value));
+  } else if constexpr (sizeof(T) <= sizeof(uint32_t)) {
+    return 32 - __clz(static_cast<int32_t>(value));
+  } else {
+    // 128 bit type, must break u[ into high and low components
+    auto const high_bits = static_cast<int64_t>(value >> 64);
+    auto const low_bits  = static_cast<int64_t>(value);
+    return 128 - (__clzll(high_bits) + int(high_bits == 0) * __clzll(low_bits));
+  }
+#else
+  // Undefined behavior to call __builtin_clzll() with zero in gcc and clang
+  if (value == 0) { return 0; }
+
+  if constexpr (std::is_same_v<T, uint64_t>) {
+    return 64 - __builtin_clzll(value);
+  } else if constexpr (sizeof(T) <= sizeof(uint32_t)) {
+    return 32 - __builtin_clz(value);
+  } else {
+    // 128 bit type, must break u[ into high and low components
+    auto const high_bits = static_cast<uint64_t>(value >> 64);
+    if (high_bits == 0) {
+      return 64 - __builtin_clzll(static_cast<uint64_t>(value));
+    } else {
+      return 128 - __builtin_clzll(high_bits);
+    }
+  }
+#endif
 }
 
 }  // namespace detail
