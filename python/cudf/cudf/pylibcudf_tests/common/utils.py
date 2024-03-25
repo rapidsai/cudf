@@ -6,11 +6,9 @@ import pytest
 from cudf._lib import pylibcudf as plc
 
 
-def assert_array_eq(plc_column, pa_array):
-    """Verify that the pylibcudf array and PyArrow array are equal."""
-    # Nested types require children metadata to be passed to the conversion function.
+def metadata_from_arrow_array(pa_array):
     metadata = None
-    if is_list(dtype := plc_column.type()) or is_struct(dtype):
+    if pa.types.is_list(dtype := pa_array.type) or pa.types.is_struct(dtype):
         metadata = plc.interop.ColumnMetadata(
             "",
             # libcudf does not store field names, so just match pyarrow's.
@@ -19,7 +17,15 @@ def assert_array_eq(plc_column, pa_array):
                 for i in range(pa_array.type.num_fields)
             ],
         )
-    plc_pa = plc.interop.to_arrow(plc_column, metadata)
+    return metadata
+
+
+def assert_array_eq(plc_column, pa_array):
+    """Verify that the pylibcudf array and PyArrow array are equal."""
+    # Nested types require children metadata to be passed to the conversion function.
+    plc_pa = plc.interop.to_arrow(
+        plc_column, metadata=metadata_from_arrow_array(pa_array)
+    )
 
     if isinstance(plc_pa, pa.ChunkedArray):
         plc_pa = plc_pa.combine_chunks()
@@ -81,17 +87,15 @@ def is_string(plc_dtype):
     return plc_dtype.id() == plc.TypeId.STRING
 
 
-def is_list(plc_dtype):
-    return plc_dtype.id() == plc.TypeId.LIST
-
-
-def is_struct(plc_dtype):
-    return plc_dtype.id() == plc.TypeId.STRUCT
-
-
 def is_fixed_width(plc_dtype):
     return (
         is_integer(plc_dtype)
         or is_floating(plc_dtype)
         or is_boolean(plc_dtype)
     )
+
+
+def default_struct_testing_type(nullable=False):
+    # We must explicitly specify this type via a field to ensure we don't include
+    # nullability accidentally.
+    return pa.struct([pa.field("v", pa.int64(), nullable=nullable)])

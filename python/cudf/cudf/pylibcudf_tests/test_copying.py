@@ -7,37 +7,15 @@ from utils import (
     assert_array_eq,
     assert_table_eq,
     cudf_raises,
+    default_struct_testing_type,
     is_fixed_width,
     is_floating,
     is_integer,
-    is_list,
     is_string,
-    is_struct,
+    metadata_from_arrow_array,
 )
 
 from cudf._lib import pylibcudf as plc
-
-
-def default_struct_testing_type(nullable=False):
-    # We must explicitly specify this type via a field to ensure we don't include
-    # nullability accidentally.
-    return pa.struct([pa.field("v", pa.int64(), nullable=nullable)])
-
-
-# TODO: Move this fixture to conftest. All dtype fixtures should be usable everywhere.
-@pytest.fixture(
-    scope="module",
-    params=[
-        pa.int64(),
-        pa.float64(),
-        pa.string(),
-        pa.bool_(),
-        pa.list_(pa.int64()),
-        default_struct_testing_type(),
-    ],
-)
-def pa_type(request):
-    return request.param
 
 
 @pytest.fixture(scope="module")
@@ -855,19 +833,11 @@ def test_boolean_mask_scatter_from_scalars(
 def test_get_element(input_column, pa_input_column):
     index = 1
     result = plc.copying.get_element(input_column, index)
-    metadata = None
-    if is_list(dtype := input_column.type()) or is_struct(dtype):
-        metadata = plc.interop.ColumnMetadata(
-            "",
-            # libcudf does not store field names, so just match pyarrow's.
-            [
-                plc.interop.ColumnMetadata(pa_input_column.type.field(i).name)
-                for i in range(pa_input_column.type.num_fields)
-            ],
-        )
 
     assert (
-        plc.interop.to_arrow(result, metadata).as_py()
+        plc.interop.to_arrow(
+            result, metadata_from_arrow_array(pa_input_column)
+        ).as_py()
         == pa_input_column[index].as_py()
     )
 
