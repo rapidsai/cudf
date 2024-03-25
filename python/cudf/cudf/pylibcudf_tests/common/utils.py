@@ -54,3 +54,7 @@ def is_floating(plc_dtype):
         <= plc_dtype.id().value
         <= plc.TypeId.FLOAT64.value
     )
+
+
+def is_fixed_width(plc_dtype):
+    return is_integer(plc_dtype) or is_floating(plc_dtype)

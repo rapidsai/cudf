@@ -6,6 +6,7 @@ from utils import (
     assert_array_eq,
     assert_table_eq,
     cudf_raises,
+    is_fixed_width,
     is_floating,
     is_integer,
 )
@@ -13,7 +14,7 @@ from utils import (
 from cudf._lib import pylibcudf as plc
 
 
-@pytest.fixture(scope="module", params=[pa.int64(), pa.float64()])
+@pytest.fixture(scope="module", params=[pa.int64(), pa.float64(), pa.string()])
 def pa_type(request):
     return request.param
 
@@ -22,6 +23,8 @@ def pa_type(request):
 def pa_input_column(pa_type):
     if pa.types.is_integer(pa_type) or pa.types.is_floating(pa_type):
         return pa.array([1, 2, 3], type=pa_type)
+    elif pa.types.is_string(pa_type):
+        return pa.array(["a", "b", "c"], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -45,6 +48,8 @@ def index_column(pa_index_column):
 def pa_target_column(pa_type):
     if pa.types.is_integer(pa_type) or pa.types.is_floating(pa_type):
         return pa.array([4, 5, 6, 7, 8, 9], type=pa_type)
+    elif pa.types.is_string(pa_type):
+        return pa.array(["d", "e", "f", "g", "h", "i"], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -82,6 +87,8 @@ def target_table(pa_target_table):
 def pa_source_scalar(pa_type):
     if pa.types.is_integer(pa_type) or pa.types.is_floating(pa_type):
         return pa.scalar(1, type=pa_type)
+    elif pa.types.is_string(pa_type):
+        return pa.scalar("a", type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -287,46 +294,63 @@ def test_empty_like_table(source_table):
 
 @pytest.mark.parametrize("size", [None, 10])
 def test_allocate_like(input_column, size):
-    result = plc.copying.allocate_like(
-        input_column, plc.copying.MaskAllocationPolicy.RETAIN, size=size
-    )
-    assert result.type() == input_column.type()
-    assert result.size() == (input_column.size() if size is None else size)
+    if is_fixed_width(input_column.type()):
+        result = plc.copying.allocate_like(
+            input_column, plc.copying.MaskAllocationPolicy.RETAIN, size=size
+        )
+        assert result.type() == input_column.type()
+        assert result.size() == (input_column.size() if size is None else size)
+    else:
+        with pytest.raises(TypeError):
+            plc.copying.allocate_like(
+                input_column,
+                plc.copying.MaskAllocationPolicy.RETAIN,
+                size=size,
+            )
 
 
 def test_copy_range_in_place(
     input_column, pa_input_column, mutable_target_column, pa_target_column
 ):
-    plc.copying.copy_range_in_place(
-        input_column,
-        mutable_target_column,
-        0,
-        input_column.size(),
-        0,
-    )
-    expected = _pyarrow_boolean_mask_scatter_column(
-        pa_input_column,
-        _pyarrow_index_to_mask(
-            range(len(pa_input_column)), len(pa_target_column)
-        ),
-        pa_target_column,
-    )
-    assert_array_eq(mutable_target_column, expected)
-
-
-# TODO: Test error case with non-fixed width types (currently this module only tests
-# everything on ints, so holding off there for now).
-def test_copy_range_in_place_out_of_bounds(
-    input_column, mutable_target_column
-):
-    with cudf_raises(IndexError):
+    if not is_fixed_width(mutable_target_column.type()):
+        with pytest.raises(TypeError):
+            plc.copying.copy_range_in_place(
+                input_column,
+                mutable_target_column,
+                0,
+                input_column.size(),
+                0,
+            )
+    else:
         plc.copying.copy_range_in_place(
             input_column,
             mutable_target_column,
-            5,
-            5 + input_column.size(),
+            0,
+            input_column.size(),
             0,
         )
+        expected = _pyarrow_boolean_mask_scatter_column(
+            pa_input_column,
+            _pyarrow_index_to_mask(
+                range(len(pa_input_column)), len(pa_target_column)
+            ),
+            pa_target_column,
+        )
+        assert_array_eq(mutable_target_column, expected)
+
+
+def test_copy_range_in_place_out_of_bounds(
+    input_column, mutable_target_column
+):
+    if is_fixed_width(mutable_target_column.type()):
+        with cudf_raises(IndexError):
+            plc.copying.copy_range_in_place(
+                input_column,
+                mutable_target_column,
+                5,
+                5 + input_column.size(),
+                0,
+            )
 
 
 def test_copy_range_in_place_different_types(mutable_target_column):
@@ -348,21 +372,21 @@ def test_copy_range_in_place_different_types(mutable_target_column):
 def test_copy_range_in_place_null_mismatch(
     pa_input_column, mutable_target_column
 ):
-    # TODO: Can this be done with pylibcudf instead of pyarrow
-    pa_input_column = pa.compute.if_else(
-        _pyarrow_index_to_mask([0], len(pa_input_column)),
-        pa_input_column,
-        pa.scalar(None, type=pa_input_column.type),
-    )
-    input_column = plc.interop.from_arrow(pa_input_column)
-    with cudf_raises(ValueError):
-        plc.copying.copy_range_in_place(
-            input_column,
-            mutable_target_column,
-            0,
-            input_column.size(),
-            0,
+    if is_fixed_width(mutable_target_column.type()):
+        pa_input_column = pa.compute.if_else(
+            _pyarrow_index_to_mask([0], len(pa_input_column)),
+            pa_input_column,
+            pa.scalar(None, type=pa_input_column.type),
         )
+        input_column = plc.interop.from_arrow(pa_input_column)
+        with cudf_raises(ValueError):
+            plc.copying.copy_range_in_place(
+                input_column,
+                mutable_target_column,
+                0,
+                input_column.size(),
+                0,
+            )
 
 
 def test_copy_range(
@@ -423,7 +447,6 @@ def test_shift(
     assert_array_eq(result, expected)
 
 
-# TODO: Test error case for non-fixed width types.
 def test_shift_type_mismatch(target_column):
     if is_integer(dtype := target_column.type()) or is_floating(dtype):
         fill_value = plc.interop.from_arrow(pa.scalar("a"))
@@ -494,9 +517,11 @@ def test_split_table(target_table, pa_target_table):
 
 
 def test_copy_if_else_column_column(
-    target_column, pa_target_column, mask, pa_mask
+    target_column, pa_target_column, pa_source_scalar, mask, pa_mask
 ):
-    pa_other_column = pa.compute.add(pa_target_column, 4)
+    pa_other_column = pa.concat_arrays(
+        [pa.array([pa_source_scalar] * 2), pa_target_column[:-2]]
+    )
     other_column = plc.interop.from_arrow(pa_other_column)
 
     result = plc.copying.copy_if_else(

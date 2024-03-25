@@ -253,6 +253,8 @@ std::unique_ptr<column> empty_like(scalar const& input);
  * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
  * and the validity bits and the null count should be set by the caller.
  *
+ * @throws cudf::data_type_error if input type is not of fixed width.
+ *
  * @param input Immutable view of input column to emulate
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param mr Device memory resource used to allocate the returned column's device memory
