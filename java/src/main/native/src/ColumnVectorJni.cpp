@@ -28,7 +28,6 @@
 #include <cudf/lists/detail/concatenate.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/partitioning.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/combine.hpp>
