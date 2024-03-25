@@ -178,7 +178,12 @@ jobs:
     with:
       node_type: cpu4
       build_type: pull-request
-      run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
+      run: |
+          output=$(./ci/cudf_pandas_scripts/pandas-tests/diff.sh)
+          echo "### Job A Output" >> $GITHUB_STEP_SUMMARY
+          echo "$output" >> $GITHUB_STEP_SUMMARY
+          echo "::set-output name=job_output::$output"
+      # run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
   pandas-tests-diff-comment:
    # Post comment of pass/fail rate on PR
    runs-on: ubuntu-latest
@@ -192,12 +197,10 @@ jobs:
            if (!branch.match(prBranchPattern)) {
              throw new Error(`${branch} does not match PR branch pattern.`);
            }
-           const summary_url = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-           const prNumber = branch.split("/")[1];
-           const summary_content = `${{ needs.pandas-tests-diff.outputs.summary_content }}`;
+           const outputFromJobA = `${{ needs.pandas-tests-diff.outputs.job_output }}`;
            github.rest.issues.createComment({
-             issue_number: prNumber,
+             issue_number: context.issue.number,
              owner: context.repo.owner,
              repo: context.repo.repo,
-             body: summary_content
-           })
+             body: outputFromJobA
+            });
