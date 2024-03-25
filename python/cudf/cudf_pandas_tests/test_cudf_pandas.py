@@ -1228,3 +1228,15 @@ def test_pickle_groupby(dataframe):
 def test_isinstance_base_offset():
     offset = xpd.tseries.frequencies.to_offset("1s")
     assert isinstance(offset, xpd.tseries.offsets.BaseOffset)
+
+
+def test_super_attribute_lookup():
+    # test that we can use super() to access attributes
+    # of the base class when subclassing proxy types
+
+    class Foo(xpd.Series):
+        def max_times_two(self):
+            return super().max() * 2
+
+    s = Foo([1, 2, 3])
+    assert s.max_times_two() == 6
