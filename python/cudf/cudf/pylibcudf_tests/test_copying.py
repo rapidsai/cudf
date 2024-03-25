@@ -4,7 +4,7 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from utils import (
-    assert_array_eq,
+    assert_column_eq,
     assert_table_eq,
     cudf_raises,
     default_struct_testing_type,
@@ -409,7 +409,7 @@ def test_copy_range_in_place(
             ),
             pa_target_column,
         )
-        assert_array_eq(mutable_target_column, expected)
+        assert_column_eq(mutable_target_column, expected)
 
 
 def test_copy_range_in_place_out_of_bounds(
@@ -480,7 +480,7 @@ def test_copy_range(
             ),
             pa_target_column,
         )
-        assert_array_eq(result, expected)
+        assert_column_eq(result, expected)
     else:
         with pytest.raises(TypeError):
             plc.copying.copy_range(
@@ -528,7 +528,7 @@ def test_shift(
         expected = pa.concat_arrays(
             [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
         )
-        assert_array_eq(result, expected)
+        assert_column_eq(result, expected)
     else:
         with pytest.raises(TypeError):
             plc.copying.shift(target_column, shift, source_scalar)
@@ -550,7 +550,7 @@ def test_slice_column(target_column, pa_target_column):
     lower_bounds = bounds[::2]
     result = plc.copying.slice(target_column, bounds)
     for lb, ub, slice_ in zip(lower_bounds, upper_bounds, result):
-        assert_array_eq(slice_, pa_target_column[lb:ub])
+        assert_column_eq(slice_, pa_target_column[lb:ub])
 
 
 def test_slice_column_wrong_length(target_column):
@@ -582,7 +582,7 @@ def test_split_column(target_column, pa_target_column):
     lower_bounds = [0] + upper_bounds[:-1]
     result = plc.copying.split(target_column, upper_bounds)
     for lb, ub, split in zip(lower_bounds, upper_bounds, result):
-        assert_array_eq(split, pa_target_column[lb:ub])
+        assert_column_eq(split, pa_target_column[lb:ub])
 
 
 def test_split_column_decreasing(target_column):
@@ -622,7 +622,7 @@ def test_copy_if_else_column_column(
         pa_target_column,
         pa_other_column,
     )
-    assert_array_eq(result, expected)
+    assert_column_eq(result, expected)
 
 
 def test_copy_if_else_wrong_type(target_column, mask):
@@ -699,7 +699,7 @@ def test_copy_if_else_column_scalar(
         pa_mask,
         *pa_args,
     )
-    assert_array_eq(result, expected)
+    assert_column_eq(result, expected)
 
 
 def test_boolean_mask_scatter_from_table(
