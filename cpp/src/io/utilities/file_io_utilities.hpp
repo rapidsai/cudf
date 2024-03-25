@@ -37,7 +37,7 @@ namespace detail {
 
 [[noreturn]] void throw_on_file_open_failure(std::string const& filepath, bool is_create);
 
-// Call before any cuFile API calls to ensure the CUDA context is initialized
+// Call before any cuFile API calls to ensure the CUDA context is initialized.
 void force_init_cuda_context();
 
 /**

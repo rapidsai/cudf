@@ -38,7 +38,7 @@ void force_init_cuda_context()
 {
   // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
   // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
-  // initialized
+  // initialized.
   cudaFree(0);
 }
 
