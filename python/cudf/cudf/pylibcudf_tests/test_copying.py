@@ -18,6 +18,7 @@ from utils import (
 from cudf._lib import pylibcudf as plc
 
 
+# TODO: Test nullable data
 @pytest.fixture(scope="module")
 def pa_input_column(pa_type):
     if pa.types.is_integer(pa_type) or pa.types.is_floating(pa_type):
