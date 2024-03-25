@@ -29,9 +29,9 @@ aws s3 cp $PR_ARTIFACT pr-results.json
 python -m pip install pandas tabulate
 python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
 
-COMMENT=$(cat summary.txt)
+COMMENT=$(head -n 10 summary.txt)
 
-echo "$COMMENT"
+# echo "$COMMENT"
 # rapids-logger "comment: ${COMMENT}"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
