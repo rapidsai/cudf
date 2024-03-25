@@ -18,6 +18,12 @@ from utils import (
 from cudf._lib import pylibcudf as plc
 
 
+def default_struct_testing_type(nullable=False):
+    # We must explicitly specify this type via a field to ensure we don't include
+    # nullability accidentally.
+    return pa.struct([pa.field("v", pa.int64(), nullable=nullable)])
+
+
 # TODO: Move this fixture to conftest. All dtype fixtures should be usable everywhere.
 @pytest.fixture(
     scope="module",
@@ -27,9 +33,7 @@ from cudf._lib import pylibcudf as plc
         pa.string(),
         pa.bool_(),
         pa.list_(pa.int64()),
-        # Need to explicitly specify this type via a field to ensure we don't include
-        # nullability accidentally.
-        pa.struct([pa.field("v", pa.int64(), nullable=False)]),
+        default_struct_testing_type(),
     ],
 )
 def pa_type(request):
@@ -244,9 +248,7 @@ def test_scatter_table(
                             {"v": 8},
                             {"v": 9},
                         ],
-                        type=pa.struct(
-                            [pa.field("v", pa.int64(), nullable=False)]
-                        ),
+                        type=default_struct_testing_type(),
                     )
                 ]
                 * 3,
@@ -761,9 +763,7 @@ def test_boolean_mask_scatter_from_table(
                             {"v": 3},
                             {"v": 9},
                         ],
-                        type=pa.struct(
-                            [pa.field("v", pa.int64(), nullable=False)]
-                        ),
+                        type=default_struct_testing_type(),
                     )
                 ]
                 * 3,
