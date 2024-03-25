@@ -362,6 +362,7 @@ void copy_range_in_place(column_view const& source,
  *
  * @throws std::out_of_range for any invalid range.
  * @throws cudf::data_type_error if @p target and @p source have different types.
+ * @throws cudf::data_type_error if the data type is not fixed width, string, or dictionary
  *
  * @param source The column to copy from inside the range
  * @param target The column to copy from outside the range

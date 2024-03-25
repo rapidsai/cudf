@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import pyarrow as pa
+import pyarrow.compute as pc
 import pytest
 from utils import (
     assert_array_eq,
@@ -9,13 +10,22 @@ from utils import (
     is_fixed_width,
     is_floating,
     is_integer,
+    is_string,
 )
 
 from cudf._lib import pylibcudf as plc
 
 
+# TODO: Move this fixture to conftest. All dtype fixtures should be usable everywhere.
 @pytest.fixture(
-    scope="module", params=[pa.int64(), pa.float64(), pa.string(), pa.bool_()]
+    scope="module",
+    params=[
+        pa.int64(),
+        pa.float64(),
+        pa.string(),
+        pa.bool_(),
+        pa.list_(pa.int64()),
+    ],
 )
 def pa_type(request):
     return request.param
@@ -29,6 +39,9 @@ def pa_input_column(pa_type):
         return pa.array(["a", "b", "c"], type=pa_type)
     elif pa.types.is_boolean(pa_type):
         return pa.array([True, True, False], type=pa_type)
+    elif pa.types.is_list(pa_type):
+        # TODO: Add heterogenous sizes
+        return pa.array([[1], [2], [3]], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -56,6 +69,9 @@ def pa_target_column(pa_type):
         return pa.array(["d", "e", "f", "g", "h", "i"], type=pa_type)
     elif pa.types.is_boolean(pa_type):
         return pa.array([False, True, True, False, True, False], type=pa_type)
+    elif pa.types.is_list(pa_type):
+        # TODO: Add heterogenous sizes
+        return pa.array([[4], [5], [6], [7], [8], [9]], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -97,6 +113,9 @@ def pa_source_scalar(pa_type):
         return pa.scalar("a", type=pa_type)
     elif pa.types.is_boolean(pa_type):
         return pa.scalar(False, type=pa_type)
+    elif pa.types.is_list(pa_type):
+        # TODO: Longer list?
+        return pa.scalar([1], type=pa_type)
     raise ValueError("Unsupported type")
 
 
@@ -137,14 +156,14 @@ def test_gather_map_has_nulls(target_table):
 
 def _pyarrow_index_to_mask(indices, mask_size):
     # Convert a list of indices to a boolean mask.
-    return pa.compute.is_in(pa.array(range(mask_size)), pa.array(indices))
+    return pc.is_in(pa.array(range(mask_size)), pa.array(indices))
 
 
 def _pyarrow_boolean_mask_scatter_column(source, mask, target):
     if isinstance(source, pa.Scalar):
         # if_else requires array lengths to match exactly or the replacement must be a
         # scalar, so we use this in the scalar case.
-        return pa.compute.if_else(mask, target, source)
+        return pc.if_else(mask, target, source)
 
     if isinstance(source, pa.ChunkedArray):
         source = source.combine_chunks()
@@ -153,7 +172,7 @@ def _pyarrow_boolean_mask_scatter_column(source, mask, target):
 
     # replace_with_mask accepts a column whose size is the number of true values in
     # the mask, so we can use it for columnar scatters.
-    return pa.compute.replace_with_mask(target, mask, source)
+    return pc.replace_with_mask(target, mask, source)
 
 
 def _pyarrow_boolean_mask_scatter_table(source, mask, target_table):
@@ -175,6 +194,9 @@ def test_scatter_table(
     target_table,
     pa_target_table,
 ):
+    if pa.types.is_list(pa_target_table[0].type):
+        pytest.skip("pyarrow does not support scattering with list data")
+
     result = plc.copying.scatter(
         source_table,
         index_column,
@@ -256,7 +278,7 @@ def test_scatter_scalars(
 
     expected = _pyarrow_boolean_mask_scatter_table(
         [pa_source_scalar] * target_table.num_columns(),
-        pa.compute.invert(
+        pc.invert(
             _pyarrow_index_to_mask(pa_index_column, pa_target_table.num_rows)
         ),
         pa_target_table,
@@ -393,7 +415,7 @@ def test_copy_range_in_place_null_mismatch(
     pa_input_column, mutable_target_column
 ):
     if is_fixed_width(mutable_target_column.type()):
-        pa_input_column = pa.compute.if_else(
+        pa_input_column = pc.if_else(
             _pyarrow_index_to_mask([0], len(pa_input_column)),
             pa_input_column,
             pa.scalar(None, type=pa_input_column.type),
@@ -412,21 +434,31 @@ def test_copy_range_in_place_null_mismatch(
 def test_copy_range(
     input_column, pa_input_column, target_column, pa_target_column
 ):
-    result = plc.copying.copy_range(
-        input_column,
-        target_column,
-        0,
-        input_column.size(),
-        0,
-    )
-    expected = _pyarrow_boolean_mask_scatter_column(
-        pa_input_column,
-        _pyarrow_index_to_mask(
-            range(len(pa_input_column)), len(pa_target_column)
-        ),
-        pa_target_column,
-    )
-    assert_array_eq(result, expected)
+    if is_fixed_width(dtype := target_column.type()) or is_string(dtype):
+        result = plc.copying.copy_range(
+            input_column,
+            target_column,
+            0,
+            input_column.size(),
+            0,
+        )
+        expected = _pyarrow_boolean_mask_scatter_column(
+            pa_input_column,
+            _pyarrow_index_to_mask(
+                range(len(pa_input_column)), len(pa_target_column)
+            ),
+            pa_target_column,
+        )
+        assert_array_eq(result, expected)
+    else:
+        with pytest.raises(TypeError):
+            plc.copying.copy_range(
+                input_column,
+                target_column,
+                0,
+                input_column.size(),
+                0,
+            )
 
 
 def test_copy_range_out_of_bounds(input_column, target_column):
@@ -460,11 +492,15 @@ def test_shift(
     target_column, pa_target_column, source_scalar, pa_source_scalar
 ):
     shift = 2
-    result = plc.copying.shift(target_column, shift, source_scalar)
-    expected = pa.concat_arrays(
-        [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
-    )
-    assert_array_eq(result, expected)
+    if is_fixed_width(dtype := target_column.type()) or is_string(dtype):
+        result = plc.copying.shift(target_column, shift, source_scalar)
+        expected = pa.concat_arrays(
+            [pa.array([pa_source_scalar] * shift), pa_target_column[:-shift]]
+        )
+        assert_array_eq(result, expected)
+    else:
+        with pytest.raises(TypeError):
+            plc.copying.shift(target_column, shift, source_scalar)
 
 
 def test_shift_type_mismatch(target_column):
@@ -550,7 +586,7 @@ def test_copy_if_else_column_column(
         mask,
     )
 
-    expected = pa.compute.if_else(
+    expected = pc.if_else(
         pa_mask,
         pa_target_column,
         pa_other_column,
@@ -628,7 +664,7 @@ def test_copy_if_else_column_scalar(
         if array_left
         else (pa_source_scalar, pa_target_column)
     )
-    expected = pa.compute.if_else(
+    expected = pc.if_else(
         pa_mask,
         *pa_args,
     )
@@ -643,6 +679,9 @@ def test_boolean_mask_scatter_from_table(
     mask,
     pa_mask,
 ):
+    if pa.types.is_list(pa_target_table[0].type):
+        pytest.skip("pyarrow does not support scattering with list data")
+
     result = plc.copying.boolean_mask_scatter(
         source_table,
         target_table,
@@ -724,7 +763,7 @@ def test_boolean_mask_scatter_from_scalars(
 
     expected = _pyarrow_boolean_mask_scatter_table(
         [pa_source_scalar] * target_table.num_columns(),
-        pa.compute.invert(pa_mask),
+        pc.invert(pa_mask),
         pa_target_table,
     )
 

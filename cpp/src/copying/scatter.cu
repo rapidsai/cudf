@@ -168,6 +168,9 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
+    CUDF_EXPECTS(source.get().type() == target.type(),
+                 "scalar and column types must match",
+                 cudf::data_type_error);
     auto result =
       lists::detail::scatter(source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
 
@@ -185,6 +188,10 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
+    CUDF_EXPECTS(source.get().type() == target.type(),
+                 "scalar and column types must match",
+                 cudf::data_type_error);
+
     auto dict_target =
       dictionary::detail::add_keys(dictionary_column_view(target),
                                    make_column_from_scalar(source.get(), 1, stream)->view(),

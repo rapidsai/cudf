@@ -8,8 +8,14 @@ from cudf._lib import pylibcudf as plc
 
 def assert_array_eq(plc_column, pa_array):
     """Verify that the pylibcudf array and PyArrow array are equal."""
-    pa_equal = pa.compute.equal(plc.interop.to_arrow(plc_column), pa_array)
-    assert pa.compute.all(pa_equal).as_py()
+    plc_pa = plc.interop.to_arrow(plc_column)
+
+    if isinstance(plc_pa, pa.ChunkedArray):
+        plc_pa = plc_pa.combine_chunks()
+    if isinstance(pa_array, pa.ChunkedArray):
+        pa_array = pa_array.combine_chunks()
+
+    assert plc_pa.equals(pa_array)
 
 
 def assert_table_eq(plc_table, pa_table):
@@ -58,6 +64,14 @@ def is_floating(plc_dtype):
 
 def is_boolean(plc_dtype):
     return plc_dtype.id() == plc.TypeId.BOOL8
+
+
+def is_string(plc_dtype):
+    return plc_dtype.id() == plc.TypeId.STRING
+
+
+def is_list(plc_dtype):
+    return plc_dtype.id() == plc.TypeId.LIST
 
 
 def is_fixed_width(plc_dtype):
