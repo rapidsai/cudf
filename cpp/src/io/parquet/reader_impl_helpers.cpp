@@ -51,7 +51,7 @@ thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& sch
       case JSON: return LogicalType{LogicalType::JSON};
       case BSON: return LogicalType{LogicalType::BSON};
       case INTERVAL:  // there is no logical type for INTERVAL yet
-      default: return thrust::optional<LogicalType>{LogicalType{LogicalType::UNDEFINED}};
+      default: return LogicalType{LogicalType::UNDEFINED};
     }
   }
   return thrust::nullopt;
