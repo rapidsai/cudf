@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,21 +62,19 @@ std::unique_ptr<cudf::column> generate_ngrams(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Generates ngrams of characters within each string.
+ * @brief Generates ngrams of characters within each string
  *
- * Each character of a string used to build ngrams.
+ * Each character of a string is used to build ngrams for the output row.
  * Ngrams are not created across strings.
  *
  * ```
- * ["ab", "cde", "fgh"] would generate bigrams as ["ab", "cd", "de", "fg", "gh"]
+ * ["ab", "cde", "fgh"] would generate bigrams as
+ * [["ab"], ["cd", "de"], ["fg", "gh"]]
  * ```
  *
- * The size of the output column will be the total number of ngrams generated from
- * the input strings column.
+ * All null row entries are ignored and the corresponding output row will be empty.
  *
- * All null row entries are ignored and the output contains all valid rows.
- *
- * @throw cudf::logic_error if `ngrams < 2`
+ * @throw std::invalid_argument if `ngrams < 2`
  * @throw cudf::logic_error if there are not enough characters to generate any ngrams
  *
  * @param input Strings column to produce ngrams from
@@ -84,7 +82,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
  *               Default is 2 = bigram.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return New strings columns of tokens
+ * @return Lists column of strings
  */
 std::unique_ptr<cudf::column> generate_character_ngrams(
   cudf::strings_column_view const& input,
