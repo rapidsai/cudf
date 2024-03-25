@@ -85,6 +85,373 @@ constexpr inline auto is_supported_construction_value_type()
 namespace detail {
 
 /**
+ * @brief Helper struct containing large compile-time-computed powers of 10
+ */
+struct PowersOf10 {
+  // Largest power-of-10 that fits within uint64_t
+  static constexpr auto power19 = 10000000000000000000ULL;  ///< 10^19
+
+  // Can't write literaels of type __uint128_t, so we pre-compute
+  // large powers of 10 here for reusability.
+  static constexpr auto power20 = __uint128_t(power19) * 10;                      ///< 10^20
+  static constexpr auto power21 = __uint128_t(power19) * 100;                     ///< 10^21
+  static constexpr auto power22 = __uint128_t(power19) * 1000;                    ///< 10^22
+  static constexpr auto power23 = __uint128_t(power19) * 10000;                   ///< 10^23
+  static constexpr auto power24 = __uint128_t(power19) * 100000;                  ///< 10^24
+  static constexpr auto power25 = __uint128_t(power19) * 1000000;                 ///< 10^25
+  static constexpr auto power26 = __uint128_t(power19) * 10000000;                ///< 10^26
+  static constexpr auto power27 = __uint128_t(power19) * 100000000;               ///< 10^27
+  static constexpr auto power28 = __uint128_t(power19) * 1000000000ULL;           ///< 10^28
+  static constexpr auto power29 = __uint128_t(power19) * 10000000000ULL;          ///< 10^29
+  static constexpr auto power30 = __uint128_t(power19) * 100000000000ULL;         ///< 10^30
+  static constexpr auto power31 = __uint128_t(power19) * 1000000000000ULL;        ///< 10^31
+  static constexpr auto power32 = __uint128_t(power19) * 10000000000000ULL;       ///< 10^32
+  static constexpr auto power33 = __uint128_t(power19) * 100000000000000ULL;      ///< 10^33
+  static constexpr auto power34 = __uint128_t(power19) * 1000000000000000ULL;     ///< 10^34
+  static constexpr auto power35 = __uint128_t(power19) * 10000000000000000ULL;    ///< 10^35
+  static constexpr auto power36 = __uint128_t(power19) * 100000000000000000ULL;   ///< 10^36
+  static constexpr auto power37 = __uint128_t(power19) * 1000000000000000000ULL;  ///< 10^37
+  static constexpr auto power38 = __uint128_t(power19) * power19;                 ///< 10^38
+};
+
+/**
+ * @brief Divide by a power of 10 that fits within a 32bit integer.
+ *
+ * @tparam T Type of value to be divided-from.
+ * @param value The number to be divided-from.
+ * @param exp10 The power-of-10 of the denominator, from 0 to 9 inclusive.
+ * @return Returns value / 10^exp10
+ */
+template <typename T>
+CUDF_HOST_DEVICE inline T divide_power10_32bit(T value, int exp10)
+{
+  // Computing division this way is much faster than the alternatives.
+  // Division is not implemented in GPU hardware, and the compiler will often implement it as a
+  // multiplication of the reciprocal of the denominator, requiring a conversion to floating point.
+  // Ths is especially slow for larger divides that have to use the FP64 pipeline, where threads
+  // bottleneck.
+
+  // Instead, if the compiler can see exactly what number it is dividing by, it can
+  // produce much more optimal assembly, doing bit shifting, multiplies by a constant, etc.
+  // For the compiler to see the value though, array lookup (with exp10 as the index)
+  // is not sufficient: We have to use a switch statement. Although this introduces a branch,
+  // it is still much faster than doing the divide any other way.
+  // Perhaps an array can be used in C++23 with the assume attribute?
+
+  // Since we're optimizing division this way, we have to do this for multiplication as well.
+  // That's because doing them in different ways (switch, array, runtime-computation, etc.)
+  // increases the register pressure on all kernels that use fixed_point types, specifically slowing
+  // down some of the PYMOD and join benchmarks.
+
+  // This is split up into separate functions for 32-, 64-, and 128-bit denominators.
+  // That way we limit the templated, inlined code generation to the exponents that are
+  // capable of being represented. Combining them together into a single function again
+  // introduces too much pressure on the kernels that use this code, slowing down their benchmarks.
+
+  // Also note that these divisors are hardcoded here in place, rather than in the PowersOf10
+  // struct. This is because the NotEqual benchmark is slower when doing that; I guess the compiler
+  // is getting confused by all of the templating and inlining and can't optimize it as well?
+
+  switch (exp10) {
+    case 0: return value;
+    case 1: return value / 10;
+    case 2: return value / 100;
+    case 3: return value / 1000;
+    case 4: return value / 10000;
+    case 5: return value / 100000;
+    case 6: return value / 1000000;
+    case 7: return value / 10000000;
+    case 8: return value / 100000000;
+    case 9: return value / 1000000000;
+    default: return 0;
+  }
+}
+
+/**
+ * @brief Divide by a power of 10 that fits within a 64bit integer.
+ *
+ * @tparam T Type of value to be divided-from.
+ * @param value The number to be divided-from.
+ * @param exp10 The power-of-10 of the denominator, from 0 to 19 inclusive.
+ * @return Returns value / 10^exp10
+ */
+template <typename T>
+CUDF_HOST_DEVICE inline T divide_power10_64bit(T value, int exp10)
+{
+  // See comments in divide_power10_32bit() for discussion.
+  // clang-format off
+  switch (exp10) {
+    case 0 : return value;
+    case 1 : return value / 10;
+    case 2 : return value / 100;
+    case 3 : return value / 1000;
+    case 4 : return value / 10000;
+    case 5 : return value / 100000;
+    case 6 : return value / 1000000;
+    case 7 : return value / 10000000;
+    case 8 : return value / 100000000;
+    case 9 : return value / 1000000000;
+    case 10: return value / 10000000000ULL;
+    case 11: return value / 100000000000ULL;
+    case 12: return value / 1000000000000ULL;
+    case 13: return value / 10000000000000ULL;
+    case 14: return value / 100000000000000ULL;
+    case 15: return value / 1000000000000000ULL;
+    case 16: return value / 10000000000000000ULL;
+    case 17: return value / 100000000000000000ULL;
+    case 18: return value / 1000000000000000000ULL;
+    case 19: return value / 10000000000000000000ULL;
+    default: return 0;
+  }
+  // clang-format on
+}
+
+/**
+ * @brief Divide by a power of 10 that fits within a 128bit integer.
+ *
+ * @tparam T Type of value to be divided-from.
+ * @param value The number to be divided-from.
+ * @param exp10 The power-of-10 of the denominator, from 0 to 38 inclusive.
+ * @return Returns value / 10^exp10.
+ */
+template <typename T>
+// clang-format off
+//! @cond Suppress doxygen for noinline attribute as it doesn't know how to handle it
+__attribute__((noinline))
+//! @endcond
+CUDF_HOST_DEVICE constexpr T divide_power10_128bit(T value, int exp10)
+// clang-format on
+{
+  // See comments in operate_power10_32bit() for an introduction.
+
+  // However, the code generated by this function is so large that it cannot be inlined.
+  // If inlined it slows down the join benchmarks, perhaps because the code itself becomes too
+  // large?
+
+  // clang-format off
+  switch (exp10) {
+    case 0 : return value;
+    case 1 : return value / 10;
+    case 2 : return value / 100;
+    case 3 : return value / 1000;
+    case 4 : return value / 10000;
+    case 5 : return value / 100000;
+    case 6 : return value / 1000000;
+    case 7 : return value / 10000000;
+    case 8 : return value / 100000000;
+    case 9 : return value / 1000000000;
+    case 10: return value / 10000000000ULL;
+    case 11: return value / 100000000000ULL;
+    case 12: return value / 1000000000000ULL;
+    case 13: return value / 10000000000000ULL;
+    case 14: return value / 100000000000000ULL;
+    case 15: return value / 1000000000000000ULL;
+    case 16: return value / 10000000000000000ULL;
+    case 17: return value / 100000000000000000ULL;
+    case 18: return value / 1000000000000000000ULL;
+    case 19: return value / 10000000000000000000ULL;
+    case 20: return value / PowersOf10::power20;
+    case 21: return value / PowersOf10::power21;
+    case 22: return value / PowersOf10::power22;
+    case 23: return value / PowersOf10::power23;
+    case 24: return value / PowersOf10::power24;
+    case 25: return value / PowersOf10::power25;
+    case 26: return value / PowersOf10::power26;
+    case 27: return value / PowersOf10::power27;
+    case 28: return value / PowersOf10::power28;
+    case 29: return value / PowersOf10::power29;
+    case 30: return value / PowersOf10::power30;
+    case 31: return value / PowersOf10::power31;
+    case 32: return value / PowersOf10::power32;
+    case 33: return value / PowersOf10::power33;
+    case 34: return value / PowersOf10::power34;
+    case 35: return value / PowersOf10::power35;
+    case 36: return value / PowersOf10::power36;
+    case 37: return value / PowersOf10::power37;
+    case 38: return value / PowersOf10::power38;
+    default: return 0;
+  }
+  // clang-format on
+}
+
+/**
+ * @brief Multiply by a power of 10 that fits within a 32bit integer.
+ *
+ * @tparam T Type of value to be multiplied.
+ * @param value The number to be multiplied.
+ * @param exp10 The power-of-10 of the multiplier, from 0 to 9 inclusive.
+ * @return Returns value * 10^exp10
+ */
+template <typename T>
+CUDF_HOST_DEVICE inline constexpr T multiply_power10_32bit(T value, int exp10)
+{
+  // See comments in divide_power10_32bit() for discussion.
+  switch (exp10) {
+    case 0: return value;
+    case 1: return value * 10;
+    case 2: return value * 100;
+    case 3: return value * 1000;
+    case 4: return value * 10000;
+    case 5: return value * 100000;
+    case 6: return value * 1000000;
+    case 7: return value * 10000000;
+    case 8: return value * 100000000;
+    case 9: return value * 1000000000;
+    default: return 0;
+  }
+}
+
+/**
+ * @brief Multiply by a power of 10 that fits within a 64bit integer.
+ *
+ * @tparam T Type of value to be multiplied.
+ * @param value The number to be multiplied.
+ * @param exp10 The power-of-10 of the multiplier, from 0 to 19 inclusive.
+ * @return Returns value * 10^exp10
+ */
+template <typename T>
+CUDF_HOST_DEVICE inline constexpr T multiply_power10_64bit(T value, int exp10)
+{
+  // See comments in divide_power10_32bit() for discussion.
+  // clang-format off
+  switch (exp10) {
+    case 0 : return value;
+    case 1 : return value * 10;
+    case 2 : return value * 100;
+    case 3 : return value * 1000;
+    case 4 : return value * 10000;
+    case 5 : return value * 100000;
+    case 6 : return value * 1000000;
+    case 7 : return value * 10000000;
+    case 8 : return value * 100000000;
+    case 9 : return value * 1000000000;
+    case 10: return value * 10000000000ULL;
+    case 11: return value * 100000000000ULL;
+    case 12: return value * 1000000000000ULL;
+    case 13: return value * 10000000000000ULL;
+    case 14: return value * 100000000000000ULL;
+    case 15: return value * 1000000000000000ULL;
+    case 16: return value * 10000000000000000ULL;
+    case 17: return value * 100000000000000000ULL;
+    case 18: return value * 1000000000000000000ULL;
+    case 19: return value * 10000000000000000000ULL;
+    default: return 0;
+  }
+  // clang-format on
+}
+
+/**
+ * @brief Multiply by a power of 10 that fits within a 128bit integer.
+ *
+ * @tparam T Type of value to be multiplied.
+ * @param value The number to be multiplied.
+ * @param exp10 The power-of-10 of the multiplier, from 0 to 38 inclusive.
+ * @return Returns value * 10^exp10.
+ */
+template <typename T>
+// clang-format off
+//! @cond Suppress doxygen for noinline attribute as it doesn't know how to handle it
+__attribute__((noinline))
+//! @endcond
+CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
+// clang-format on
+{
+  // See comments in divide_power10_128bit() for discussion.
+  // clang-format off
+  switch (exp10) {
+    case 0 : return value;
+    case 1 : return value * 10;
+    case 2 : return value * 100;
+    case 3 : return value * 1000;
+    case 4 : return value * 10000;
+    case 5 : return value * 100000;
+    case 6 : return value * 1000000;
+    case 7 : return value * 10000000;
+    case 8 : return value * 100000000;
+    case 9 : return value * 1000000000;
+    case 10: return value * 10000000000ULL;
+    case 11: return value * 100000000000ULL;
+    case 12: return value * 1000000000000ULL;
+    case 13: return value * 10000000000000ULL;
+    case 14: return value * 100000000000000ULL;
+    case 15: return value * 1000000000000000ULL;
+    case 16: return value * 10000000000000000ULL;
+    case 17: return value * 100000000000000000ULL;
+    case 18: return value * 1000000000000000000ULL;
+    case 19: return value * 10000000000000000000ULL;
+    case 20: return value * PowersOf10::power20;
+    case 21: return value * PowersOf10::power21;
+    case 22: return value * PowersOf10::power22;
+    case 23: return value * PowersOf10::power23;
+    case 24: return value * PowersOf10::power24;
+    case 25: return value * PowersOf10::power25;
+    case 26: return value * PowersOf10::power26;
+    case 27: return value * PowersOf10::power27;
+    case 28: return value * PowersOf10::power28;
+    case 29: return value * PowersOf10::power29;
+    case 30: return value * PowersOf10::power30;
+    case 31: return value * PowersOf10::power31;
+    case 32: return value * PowersOf10::power32;
+    case 33: return value * PowersOf10::power33;
+    case 34: return value * PowersOf10::power34;
+    case 35: return value * PowersOf10::power35;
+    case 36: return value * PowersOf10::power36;
+    case 37: return value * PowersOf10::power37;
+    case 38: return value * PowersOf10::power38;
+    default: return 0;
+  }
+  // clang-format on
+}
+
+/**
+ * @brief Multiply an integer by a power of 10.
+ *
+ * @note Use this function if you have no a-priori knowledge of what exp10 might be.
+ * If you do, prefer calling the bit-size-specific versions
+ *
+ * @tparam T Integral type of value to be multiplied.
+ * @param value The number to be multiplied.
+ * @param exp10 The power-of-10 of the multiplier.
+ * @return Returns value * 10^exp10
+ */
+template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
+CUDF_HOST_DEVICE inline constexpr T multiply_power10(T value, int exp10)
+{
+  // Use this function if you have no knowledge of what exp10 might be
+  // If you do, prefer calling the bit-size-specific versions
+  if constexpr (sizeof(T) <= 4) {
+    return multiply_power10_32bit(value, exp10);
+  } else if constexpr (sizeof(T) == 8) {
+    return multiply_power10_64bit(value, exp10);
+  } else {
+    return multiply_power10_128bit(value, exp10);
+  }
+}
+
+/**
+ * @brief Divide an integer by a power of 10.
+ *
+ * @note Use this function if you have no a-priori knowledge of what exp10 might be.
+ * If you do, prefer calling the bit-size-specific versions
+ *
+ * @tparam T Integral type of value to be divided-from.
+ * @param value The number to be divided-from.
+ * @param exp10 The power-of-10 of the denominator.
+ * @return Returns value / 10^exp10
+ */
+template <typename T, typename cuda::std::enable_if_t<(cuda::std::is_integral_v<T>)>* = nullptr>
+CUDF_HOST_DEVICE inline constexpr T divide_power10(T value, int exp10)
+{
+  if constexpr (sizeof(T) <= 4) {
+    return divide_power10_32bit(value, exp10);
+  } else if constexpr (sizeof(T) == 8) {
+    return divide_power10_64bit(value, exp10);
+  } else {
+    return divide_power10_128bit(value, exp10);
+  }
+}
+
+/**
  * @brief A function for integer exponentiation by squaring.
  *
  * @tparam Rep Representation type for return type
@@ -132,7 +499,18 @@ CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 template <typename Rep, Radix Rad, typename T>
 CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& scale)
 {
-  return val / ipow<Rep, Rad>(static_cast<int32_t>(scale));
+  auto int_scale = static_cast<int32_t>(scale);
+  if constexpr (!cuda::std::is_integral_v<T>) {
+    // Note: diverting to the base-10 bit-size-specific functions based on size-of rep
+    // slows down the NOT_EQUAL binary-op benchmark.
+    return val / ipow<Rep, Rad>(int_scale);
+  } else if constexpr (Rad == Radix::BASE_10) {
+    return divide_power10(val, int_scale);
+  } else if constexpr (Rad == Radix::BASE_2) {
+    return val >> int_scale;
+  } else {
+    return val / ipow<Rep, Rad>(int_scale);
+  }
 }
 
 /** @brief Function that performs a `left shift` scale "times" on the `val`
@@ -149,7 +527,18 @@ CUDF_HOST_DEVICE inline constexpr T right_shift(T const& val, scale_type const& 
 template <typename Rep, Radix Rad, typename T>
 CUDF_HOST_DEVICE inline constexpr T left_shift(T const& val, scale_type const& scale)
 {
-  return val * ipow<Rep, Rad>(static_cast<int32_t>(-scale));
+  auto int_scale = -static_cast<int32_t>(scale);
+  if constexpr (!cuda::std::is_integral_v<T>) {
+    // Note: diverting to the base-10 bit-size-specific functions based on size-of rep
+    // slows down the NOT_EQUAL binary-op benchmark.
+    return val * ipow<Rep, Rad>(int_scale);
+  } else if constexpr (Rad == Radix::BASE_10) {
+    return multiply_power10(val, int_scale);
+  } else if constexpr (Rad == Radix::BASE_2) {
+    return val << int_scale;
+  } else {
+    return val * ipow<Rep, Rad>(int_scale);
+  }
 }
 
 /** @brief Function that performs a `right` or `left shift`
