@@ -35,7 +35,8 @@ COMMENT=$(head -n 10 summary.txt)
 # rapids-logger "comment: ${COMMENT}"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
-echo "job_output=${COMMENT}" >> $GITHUB_OUTPUT
+echo "job_output=${COMMENT}<<EOF" >> $GITHUB_OUTPUT
+echo "EOF" >> $GITHUB_ENV
 # RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 # mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
 # mv summary.txt ${RAPIDS_ARTIFACTS_DIR}/
