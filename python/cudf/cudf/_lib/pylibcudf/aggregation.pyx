@@ -31,6 +31,7 @@ from cudf._lib.cpp.aggregation cimport (
     make_std_aggregation,
     make_sum_aggregation,
     make_sum_of_squares_aggregation,
+    make_top_k_aggregation,
     make_udf_aggregation,
     make_variance_aggregation,
     rank_method,
@@ -456,6 +457,34 @@ cpdef Aggregation collect_set(
             )
         )
     )
+
+
+cpdef Aggregation top_k(
+    size_type k,
+    order column_order = order.DESCENDING
+):
+    """Create a top_k aggregation.
+
+    Parameters
+    ----------
+    k : size_type
+        Number of values to return.
+    column_order : order, default DESCENDING
+        Sort order within the groups.
+
+    Returns
+    -------
+    Aggregation
+        The top_k aggregation.
+    """
+    return Aggregation.from_libcudf(
+        move(
+            make_top_k_aggregation[aggregation](
+                k, column_order
+            )
+        )
+    )
+
 
 cpdef Aggregation udf(str operation, DataType output_type):
     """Create a udf aggregation.

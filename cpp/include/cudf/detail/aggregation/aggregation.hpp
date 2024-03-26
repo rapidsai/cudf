@@ -82,6 +82,8 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class collect_set_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class top_k_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class lead_lag_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class udf_aggregation const& agg);
@@ -130,6 +132,7 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
+  virtual void visit(class top_k_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
   virtual void visit(class udf_aggregation const& agg);
   virtual void visit(class merge_lists_aggregation const& agg);
@@ -821,6 +824,46 @@ class collect_set_aggregation final : public rolling_aggregation,
 };
 
 /**
+ * @brief Derived aggregation class for specifying TOP_K aggregation
+ */
+class top_k_aggregation final : public groupby_aggregation {
+ public:
+  explicit top_k_aggregation(size_type k, order order = order::DESCENDING)
+    : aggregation{TOP_K}, _k{k}, _order{order}
+  {
+  }
+
+  size_type _k;  ///< number of entries
+  order _order;  ///< ordering of entries in each group
+
+  [[nodiscard]] bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<top_k_aggregation const&>(_other);
+    return (_k == other._k && _order == other._order);
+  }
+
+  [[nodiscard]] size_t do_hash() const override
+  {
+    return this->aggregation::do_hash() ^ hash_impl();
+  }
+
+  [[nodiscard]] std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<top_k_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ protected:
+  size_t hash_impl() const { return std::hash<int>{}((_k) ^ static_cast<int>(_order)); }
+};
+
+/**
  * @brief Derived aggregation class for specifying LEAD/LAG window aggregations
  */
 class lead_lag_aggregation final : public rolling_aggregation {
@@ -1347,6 +1390,12 @@ struct target_type_impl<Source, aggregation::COLLECT_SET> {
   using type = list_view;
 };
 
+// Always use list for TOP_K
+template <typename Source>
+struct target_type_impl<Source, aggregation::TOP_K> {
+  using type = list_view;
+};
+
 // Always use Source for LEAD
 template <typename Source>
 struct target_type_impl<Source, aggregation::LEAD> {
@@ -1509,6 +1558,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_SET:
       return f.template operator()<aggregation::COLLECT_SET>(std::forward<Ts>(args)...);
+    case aggregation::TOP_K:
+      return f.template operator()<aggregation::TOP_K>(std::forward<Ts>(args)...);
     case aggregation::LEAD:
       return f.template operator()<aggregation::LEAD>(std::forward<Ts>(args)...);
     case aggregation::LAG:

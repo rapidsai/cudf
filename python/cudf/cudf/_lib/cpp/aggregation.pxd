@@ -43,6 +43,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         RANK
         COLLECT_LIST
         COLLECT_SET
+        TOP_K
         PTX
         CUDA
         CORRELATION
@@ -133,6 +134,10 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_collect_set_aggregation[T](
         null_policy null_handling, null_equality nulls_equal, nan_equality nans_equal
+    ) except +
+
+    cdef unique_ptr[T] make_top_k_aggregation[T](
+        size_type k, order order
     ) except +
 
     cdef unique_ptr[T] make_udf_aggregation[T](
