@@ -24,6 +24,7 @@
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
@@ -164,42 +165,73 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                 json_reader_options const& reader_opts,
                                 rmm::cuda_stream_view stream)
 {
-  auto buffer = ingest_raw_input(sources,
-                                 reader_opts.get_compression(),
-                                 reader_opts.get_byte_range_offset(),
-                                 reader_opts.get_byte_range_size(),
-                                 stream);
-  if (should_load_whole_source(reader_opts, sources[0]->size())) return buffer;
-  auto first_delim_pos =
-    reader_opts.get_byte_range_offset() == 0 ? 0 : find_first_delimiter(buffer, '\n', stream);
+  size_t const total_source_size = sources_size(sources, 0, 0);
+  rmm::device_uvector<char> merged(0, stream);
+
+  rmm::device_uvector<char> cur_chunk_buf = ingest_raw_input(sources,
+                                                             reader_opts.get_compression(),
+                                                             reader_opts.get_byte_range_offset(),
+                                                             reader_opts.get_byte_range_size(),
+                                                             stream);
+  auto first_delim_pos                    = reader_opts.get_byte_range_offset() == 0
+                                              ? 0
+                                              : find_first_delimiter(cur_chunk_buf, '\n', stream);
   if (first_delim_pos == -1) {
     return rmm::device_uvector<char>{0, stream};
-  } else {
-    first_delim_pos = first_delim_pos + reader_opts.get_byte_range_offset();
+  } else if (!should_load_whole_source(reader_opts, sources[0]->size()) &&
+             cur_chunk_buf.back_element(stream) != '\n' &&
+             reader_opts.get_byte_range_offset() + reader_opts.get_byte_range_size() <
+               total_source_size) {
     // Find next delimiter
-    decltype(first_delim_pos) next_delim_pos = -1;
-    auto const total_source_size             = sources_size(sources, 0, 0);
-    auto current_offset = reader_opts.get_byte_range_offset() + reader_opts.get_byte_range_size();
-    while (current_offset < total_source_size and next_delim_pos == -1) {
-      buffer         = ingest_raw_input(sources,
-                                reader_opts.get_compression(),
-                                current_offset,
-                                reader_opts.get_byte_range_size(),
-                                stream);
-      next_delim_pos = find_first_delimiter(buffer, '\n', stream);
-      if (next_delim_pos == -1) { current_offset += reader_opts.get_byte_range_size(); }
+    /*
+     * TODO: is there a good heuristic to set the subchunk size? Setting number of subchunks per
+     * byte_range_size could be bad if the range size is large.
+     */
+    std::int64_t next_delim_pos = -1;
+    constexpr int num_subchunks = 10;  // per byte_range_size
+    size_t size_per_subchunk    = reader_opts.get_byte_range_size() / num_subchunks;
+    size_t next_subchunk_start =
+      reader_opts.get_byte_range_offset() + reader_opts.get_byte_range_size();
+    std::vector<rmm::device_uvector<char>> subchunk_buffers;
+
+    while (next_subchunk_start < total_source_size && next_delim_pos == -1) {
+      subchunk_buffers.emplace_back(ingest_raw_input(
+        sources, reader_opts.get_compression(), next_subchunk_start, size_per_subchunk, stream));
+      next_delim_pos = find_first_delimiter(subchunk_buffers.back(), '\n', stream);
+      if (next_delim_pos == -1) { next_subchunk_start += size_per_subchunk; }
     }
-    if (next_delim_pos == -1) {
-      next_delim_pos = total_source_size;
-    } else {
-      next_delim_pos = next_delim_pos + current_offset;
+    if (next_delim_pos == -1)
+      next_delim_pos = total_source_size - (next_subchunk_start - size_per_subchunk);
+
+    merged.resize(
+      cur_chunk_buf.size() + ((subchunk_buffers.size() - 1) * size_per_subchunk) + next_delim_pos,
+      stream);
+    size_t offset = cur_chunk_buf.size();
+    // TODO: Can do this with a stream pool?
+    for (size_t i = 0; i < subchunk_buffers.size() - 1; i++) {
+      CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
+                                    subchunk_buffers[i].data(),
+                                    size_per_subchunk,
+                                    cudaMemcpyDeviceToDevice,
+                                    stream));
+      offset += size_per_subchunk;
     }
-    return ingest_raw_input(sources,
-                            reader_opts.get_compression(),
-                            first_delim_pos,
-                            next_delim_pos - first_delim_pos,
-                            stream);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
+                                  subchunk_buffers.back().data(),
+                                  next_delim_pos,
+                                  cudaMemcpyDeviceToDevice,
+                                  stream));
+  } else {
+    merged.resize(cur_chunk_buf.size() - first_delim_pos, stream);
   }
+
+  CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data(),
+                                cur_chunk_buf.data() + first_delim_pos,
+                                cur_chunk_buf.size() - first_delim_pos,
+                                cudaMemcpyDeviceToDevice,
+                                stream));
+  stream.synchronize();
+  return merged;
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
