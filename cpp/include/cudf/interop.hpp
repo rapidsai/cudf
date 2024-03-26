@@ -168,6 +168,9 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         rmm::cuda_stream_view stream = cudf::get_default_stream(),
                                         arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 
+using unique_schema_t       = std::unique_ptr<ArrowSchema, void (*)(ArrowSchema*)>;
+using unique_device_array_t = std::unique_ptr<ArrowDeviceArray, void (*)(ArrowDeviceArray*)>;
+
 /**
  * @brief Create ArrowSchema from cudf table and metadata
  *
@@ -183,8 +186,8 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
  * @param metadata Contains the hierarchy of names of columns and children
  * @return ArrowSchema generated from `input`
  */
-std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
-                                             cudf::host_span<column_metadata const> metadata);
+unique_schema_t to_arrow_schema(cudf::table_view const& input,
+                                cudf::host_span<column_metadata const> metadata);
 
 /**
  * @brief Create `ArrowDeviceArray` from cudf table and metadata
@@ -210,7 +213,7 @@ std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
  * @param mr the memory resource to utilize for any allocations during conversion
  * @return ArrowDeviceArray which will have ownership of the GPU data, consumer must call release
  */
-std::unique_ptr<ArrowDeviceArray> to_arrow_device(
+unique_device_array_t to_arrow_device(
   cudf::table&& table,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -239,7 +242,7 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(
  * @param mr the memory resource to utilize for any allocations during conversion
  * @return ArrowDeviceArray which will have ownership of the GPU data, consumer must call release
  */
-std::unique_ptr<ArrowDeviceArray> to_arrow_device(
+unique_device_array_t to_arrow_device(
   cudf::column&& col,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

@@ -598,8 +598,8 @@ void ArrowDeviceArrayRelease(ArrowArray* array)
 }  // namespace
 }  // namespace detail
 
-std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
-                                             cudf::host_span<column_metadata const> metadata)
+unique_schema_t to_arrow_schema(cudf::table_view const& input,
+                                cudf::host_span<column_metadata const> metadata)
 {
   CUDF_EXPECTS((metadata.size() == static_cast<std::size_t>(input.num_columns())),
                "columns' metadata should be equal to the number of columns in table");
@@ -624,14 +624,17 @@ std::unique_ptr<ArrowSchema> to_arrow_schema(cudf::table_view const& input,
       cudf::type_dispatcher(col.type(), detail::dispatch_to_arrow_type{}, col, metadata[i], child));
   }
 
-  auto out = std::make_unique<ArrowSchema>();
+  unique_schema_t out(new ArrowSchema, [](ArrowSchema* schema) {
+    ArrowSchemaRelease(schema);
+    delete schema;
+  });
   result.move(out.get());
   return out;
 }
 
-std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+unique_device_array_t to_arrow_device(cudf::table&& table,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   nanoarrow::UniqueArray tmp;
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromType(tmp.get(), NANOARROW_TYPE_STRUCT));
@@ -666,7 +669,10 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
   if (status != cudaSuccess) { CUDF_FAIL("could not create event to sync on"); }
 
   ArrowArrayMove(tmp.get(), &private_data->parent);
-  auto result                = std::make_unique<ArrowDeviceArray>();
+  unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {
+    ArrowArrayRelease(&arr->array);
+    delete arr;
+  });
   result->device_id          = rmm::get_current_cuda_device().value();
   result->device_type        = ARROW_DEVICE_CUDA;
   result->sync_event         = &private_data->sync_event;
@@ -676,9 +682,9 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::table&& table,
   return result;
 }
 
-std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::column&& col,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+unique_device_array_t to_arrow_device(cudf::column&& col,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   nanoarrow::UniqueArray tmp;
   if (col.type().id() == cudf::type_id::EMPTY) {
@@ -700,7 +706,10 @@ std::unique_ptr<ArrowDeviceArray> to_arrow_device(cudf::column&& col,
   if (status != cudaSuccess) { CUDF_FAIL("could not create event to sync on"); }
 
   ArrowArrayMove(tmp.get(), &private_data->parent);
-  auto result                = std::make_unique<ArrowDeviceArray>();
+  unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {
+    ArrowArrayRelease(&arr->array);
+    delete arr;
+  });
   result->device_id          = rmm::get_current_cuda_device().value();
   result->device_type        = ARROW_DEVICE_CUDA;
   result->sync_event         = &private_data->sync_event;
