@@ -24,6 +24,7 @@
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -119,9 +120,9 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   if (!input.has_nulls() || !replacement.is_valid(stream)) {
     return std::make_unique<cudf::column>(input.parent(), stream, mr);
   }
-  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-  // ensure nested types are handled correctly.
-  CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
+  CUDF_EXPECTS(cudf::column_scalar_types_equal(input.parent(), replacement),
+               "keys must match scalar type",
+               cudf::data_type_error);
 
   // first add the replacement to the keys so only the indices need to be processed
   auto input_matched = dictionary::detail::add_keys(

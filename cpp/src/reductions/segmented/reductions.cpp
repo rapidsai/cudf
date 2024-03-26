@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -111,10 +112,10 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-  // ensure nested types are handled correctly.
-  CUDF_EXPECTS(!init.has_value() || segmented_values.type() == init.value().get().type(),
-               "column and initial value must be the same type");
+  CUDF_EXPECTS(
+    !init.has_value() || cudf::column_scalar_types_equal(segmented_values, init.value().get()),
+    "column and initial value must be the same type",
+    cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
                             agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {

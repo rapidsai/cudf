@@ -24,6 +24,8 @@
 #include <cudf/table/experimental/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -62,9 +64,9 @@ struct contains_scalar_dispatch {
                                                            scalar const& needle,
                                                            rmm::cuda_stream_view stream) const
   {
-    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-    // ensure nested types are handled correctly.
-    CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
+    CUDF_EXPECTS(cudf::column_scalar_types_equal(haystack, needle),
+                 "Scalar and column types must match",
+                 cudf::data_type_error);
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
 
@@ -89,9 +91,9 @@ struct contains_scalar_dispatch {
                                                           scalar const& needle,
                                                           rmm::cuda_stream_view stream) const
   {
-    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-    // ensure nested types are handled correctly.
-    CUDF_EXPECTS(haystack.type() == needle.type(), "Scalar and column types must match");
+    CUDF_EXPECTS(cudf::column_scalar_types_equal(haystack, needle),
+                 "Scalar and column types must match",
+                 cudf::data_type_error);
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
     // before dispatching to this function.
     // In addition, haystack and needle structure compatibility will be checked later on by

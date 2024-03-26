@@ -32,6 +32,8 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -111,9 +113,7 @@ struct column_scalar_scatterer_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-    // ensure nested types are handled correctly.
-    CUDF_EXPECTS(source.get().type() == target.type(),
+    CUDF_EXPECTS(cudf::column_scalar_types_equal(target, source.get()),
                  "scalar and column types must match",
                  cudf::data_type_error);
 
@@ -146,9 +146,9 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-    // ensure nested types are handled correctly.
-    CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
+    CUDF_EXPECTS(cudf::column_scalar_types_equal(target, source.get()),
+                 "scalar and column types must match",
+                 cudf::data_type_error);
 
     auto const scalar_impl = static_cast<string_scalar const*>(&source.get());
     auto const source_view = string_view(scalar_impl->data(), scalar_impl->size());
@@ -480,16 +480,14 @@ std::unique_ptr<table> boolean_mask_scatter(
                cudf::data_type_error);
 
   // Count valid pair of input and columns as per type at each column/scalar index i
-  CUDF_EXPECTS(
-    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-    // ensure nested types are handled correctly.
-    std::all_of(thrust::counting_iterator<size_type>(0),
-                thrust::counting_iterator<size_type>(target.num_columns()),
-                [&input, &target](auto index) {
-                  return (input[index].get().type().id() == target.column(index).type().id());
-                }),
-    "Type mismatch in input scalar and target column",
-    cudf::data_type_error);
+  CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
+                           thrust::counting_iterator<size_type>(target.num_columns()),
+                           [&input, &target](auto index) {
+                             return cudf::column_scalar_types_equal(target.column(index),
+                                                                    input[index].get());
+                           }),
+               "Type mismatch in input scalar and target column",
+               cudf::data_type_error);
 
   if (target.num_rows() != 0) {
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());

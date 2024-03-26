@@ -380,13 +380,9 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column",
                std::invalid_argument);
-
-  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-  // ensure nested types are handled correctly.
-  auto const rhs_type =
-    cudf::is_dictionary(rhs.type()) ? cudf::dictionary_column_view(rhs).keys_type() : rhs.type();
-  CUDF_EXPECTS(
-    lhs.type() == rhs_type, "Both inputs must be of the same type", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::column_scalar_types_equal(rhs, lhs),
+               "Both inputs must be of the same type",
+               cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);
 }
@@ -400,13 +396,9 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column",
                std::invalid_argument);
-
-  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-  // ensure nested types are handled correctly.
-  auto lhs_type =
-    cudf::is_dictionary(lhs.type()) ? cudf::dictionary_column_view(lhs).keys_type() : lhs.type();
-  CUDF_EXPECTS(
-    lhs_type == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::column_scalar_types_equal(lhs, rhs),
+               "Both inputs must be of the same type",
+               cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
