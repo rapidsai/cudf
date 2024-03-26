@@ -168,7 +168,16 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
                                         rmm::cuda_stream_view stream = cudf::get_default_stream(),
                                         arrow::MemoryPool* ar_mr = arrow::default_memory_pool());
 
-using unique_schema_t       = std::unique_ptr<ArrowSchema, void (*)(ArrowSchema*)>;
+/**
+ * @brief typedef for a unique_ptr to an ArrowSchema with custom deleter
+ *
+ */
+using unique_schema_t = std::unique_ptr<ArrowSchema, void (*)(ArrowSchema*)>;
+
+/**
+ * @brief typedef for a unique_ptr to an ArrowDeviceArray with a custom deleter
+ *
+ */
 using unique_device_array_t = std::unique_ptr<ArrowDeviceArray, void (*)(ArrowDeviceArray*)>;
 
 /**

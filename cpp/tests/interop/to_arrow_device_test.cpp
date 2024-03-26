@@ -323,8 +323,8 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
 
   cudf::dictionary_column_view dview{table->view().column(2)};
 
-  auto got_arrow_schema =
-    cudf::to_arrow_schema(table->view(), {{"a"}, {"b"}, {"c"}, {"d"}, {"e"}, struct_meta});
+  std::vector<cudf::column_metadata> meta{{"a"}, {"b"}, {"c"}, {"d"}, {"e"}, struct_meta};
+  auto got_arrow_schema = cudf::to_arrow_schema(table->view(), meta);
 
   compare_schemas(schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
@@ -346,7 +346,8 @@ TEST_F(ToArrowDeviceTest, DateTimeTable)
   cols.emplace_back(col.release());
   cudf::table input(std::move(cols));
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), {{"a"}});
+  auto got_arrow_schema =
+    cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
   nanoarrow::UniqueSchema expected_schema;
   ArrowSchemaInit(expected_schema.get());
   ArrowSchemaSetTypeStruct(expected_schema.get(), 1);
@@ -411,7 +412,7 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
   ArrowSchemaSetName(expected_schema->children[0], "a");
   expected_schema->children[0]->flags = 0;
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), {{"a"}});
+  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
   BaseArrowFixture::compare_schemas(expected_schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -463,7 +464,7 @@ TEST_F(ToArrowDeviceTest, NestedList)
   ArrowSchemaSetName(expected_schema->children[0]->children[0]->children[0], "element");
   expected_schema->children[0]->children[0]->children[0]->flags = ARROW_FLAG_NULLABLE;
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), {{"a"}});
+  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
   compare_schemas(expected_schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -573,7 +574,7 @@ TEST_F(ToArrowDeviceTest, StructColumn)
   ArrowSchemaInitFromType(child->children[4]->children[1], NANOARROW_TYPE_INT32);
   ArrowSchemaSetName(child->children[4]->children[1], "integral2");
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), {metadata});
+  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{metadata});
   compare_schemas(expected_schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -647,7 +648,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
     ArrowSchemaSetName(expected_schema->children[0], "a");
     expected_schema->children[0]->flags = 0;
 
-    auto got_arrow_schema = cudf::to_arrow_schema(input.view(), {{"a"}});
+    auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
     compare_schemas(expected_schema.get(), got_arrow_schema.get());
     ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -712,7 +713,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint128Table)
     ArrowSchemaSetName(expected_schema->children[0], "a");
     expected_schema->children[0]->flags = 0;
 
-    auto got_arrow_schema = cudf::to_arrow_schema(input.view(), {{"a"}});
+    auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
     compare_schemas(expected_schema.get(), got_arrow_schema.get());
     ArrowSchemaRelease(got_arrow_schema.get());
 
