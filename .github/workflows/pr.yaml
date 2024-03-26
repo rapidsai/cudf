@@ -249,4 +249,4 @@ jobs:
 
           # Use GitHub CLI to comment on the PR
           echo "Posting a comment to PR #${PR_NUMBER}"
-          gh pr comment "${PR_NUMBER}" --body "Thank you for your contribution!" --repo ${{ github.repository }} -t $GH_TOKEN
+          gh pr comment "15369" --body "Thank you for your contribution!" --repo ${{ github.repository }} -t $GH_TOKEN
