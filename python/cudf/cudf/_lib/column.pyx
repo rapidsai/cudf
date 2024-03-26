@@ -39,9 +39,14 @@ from cudf._lib.types cimport (
 from cudf._lib.null_mask import bitmask_allocation_size_bytes
 from cudf._lib.types import dtype_from_pylibcudf_column
 
+# TODO: We currently need this for "casting" empty pylibcudf columns in
+# from_pylibcudf by instead creating an empty numeric column. We will be able
+# to remove this once column factories are exposed to pylibcudf.
+
 cimport cudf._lib.cpp.copying as cpp_copying
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary
+from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.column.column cimport column, column_contents
 from cudf._lib.cpp.column.column_factories cimport (
     make_column_from_scalar as cpp_make_column_from_scalar,
@@ -618,6 +623,24 @@ cdef class Column:
         pylibcudf.Column
             A new pylibcudf.Column referencing the same data.
         """
+        cdef libcudf_types.data_type new_dtype
+        if col.type().id() == pylibcudf.TypeId.TIMESTAMP_DAYS:
+            col = pylibcudf.unary.cast(
+                col, pylibcudf.DataType(pylibcudf.TypeId.TIMESTAMP_SECONDS)
+            )
+        elif col.type().id() == pylibcudf.TypeId.EMPTY:
+            new_dtype = libcudf_types.data_type(libcudf_types.type_id.INT8)
+            # TODO: This function call is what requires cimporting pylibcudf.
+            # We can remove the cimport once we can directly do
+            # pylibcudf.column_factories.make_numeric_column or equivalent.
+            col = pylibcudf.Column.from_libcudf(
+                move(
+                    make_numeric_column(
+                        new_dtype, col.size(), libcudf_types.mask_state.ALL_NULL
+                        )
+                    )
+            )
+
         dtype = dtype_from_pylibcudf_column(col)
 
         return cudf.core.column.build_column(

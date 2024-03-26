@@ -1087,8 +1087,9 @@ def struct_gen(gen, skip_rows, num_rows, include_validity=False):
 
     def R(first_val, num_fields):
         return {
-            "col"
-            + str(f): (gen[f](first_val, first_val) if f % 4 != 0 else None)
+            "col" + str(f): (
+                gen[f](first_val, first_val) if f % 4 != 0 else None
+            )
             if include_validity
             else (gen[f](first_val, first_val))
             for f in range(len(gen))
@@ -2441,9 +2442,17 @@ def test_parquet_index(pdf, index):
     run_parquet_index(pdf, index)
 
 
-@pytest.mark.parametrize("index", [None, True])
-@pytest.mark.xfail(
-    reason="https://github.com/rapidsai/cudf/issues/12243",
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/40743"
+            ),
+        ),
+        True,
+    ],
 )
 def test_parquet_index_empty(index):
     pdf = pd.DataFrame(index=pd.RangeIndex(0, 10, 1))

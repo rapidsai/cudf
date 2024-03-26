@@ -415,6 +415,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -589,6 +590,7 @@ add_library(
   src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
+  src/strings/replace/find_replace.cu
   src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu

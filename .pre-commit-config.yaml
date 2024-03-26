@@ -23,13 +23,6 @@ repos:
         args: ["--config-root=python/", "--resolve-all-configs"]
         files: python/.*
         types_or: [python, cython, pyi]
-  - repo: https://github.com/psf/black
-    rev: 23.12.1
-    hooks:
-      - id: black
-        files: python/.*
-        # Explicitly specify the pyproject.toml at the repo root, not per-project.
-        args: ["--config", "pyproject.toml"]
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.16.0
     hooks:
@@ -45,18 +38,6 @@ repos:
                "python/cudf_kafka/cudf_kafka",
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
-  - repo: https://github.com/PyCQA/pydocstyle
-    rev: 6.3.0
-    hooks:
-      - id: pydocstyle
-        # https://github.com/PyCQA/pydocstyle/issues/603
-        additional_dependencies: [tomli]
-        args: ["--config=pyproject.toml"]
-        exclude: |
-          (?x)^(
-            ^python/cudf/cudf/pandas/scripts/.*|
-            ^python/cudf/cudf_pandas_tests/.*
-          )
   - repo: https://github.com/nbQA-dev/nbQA
     rev: 1.7.1
     hooks:
@@ -64,9 +45,6 @@ repos:
         # Use the cudf_kafka isort orderings in notebooks so that dask
         # and RAPIDS packages have their own sections.
         args: ["--settings-file=python/cudf_kafka/pyproject.toml"]
-      - id: nbqa-black
-        # Explicitly specify the pyproject.toml at the repo root, not per-project.
-        args: ["--config=pyproject.toml"]
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v16.0.6
     hooks:
@@ -155,8 +133,10 @@ repos:
     hooks:
       - id: ruff
         files: python/.*$
+      - id: ruff-format
+        files: python/.*$
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v0.0.1
+    rev: v0.0.3
     hooks:
       - id: verify-copyright
         exclude: |

@@ -36,6 +36,8 @@
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
 
+#include <stdexcept>
+
 namespace cudf {
 namespace detail {
 namespace {
@@ -320,7 +322,8 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.type() == data_type(type_id::BOOL8),
-               "Boolean mask column must be of type type_id::BOOL8");
+               "Boolean mask column must be of type type_id::BOOL8",
+               cudf::data_type_error);
 
   if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
@@ -357,9 +360,13 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
-               "Boolean mask column must be the same size as lhs and rhs columns");
-  CUDF_EXPECTS(lhs.size() == rhs.size(), "Both columns must be of the size");
-  CUDF_EXPECTS(cudf::column_types_equal(lhs, rhs), "Both inputs must be of the same type");
+               "Boolean mask column must be the same size as lhs and rhs columns",
+               std::invalid_argument);
+  CUDF_EXPECTS(
+    lhs.size() == rhs.size(), "Both columns must be of the same size", std::invalid_argument);
+  CUDF_EXPECTS(cudf::column_types_equal(lhs, rhs),
+               "Both inputs must be of the same type",
+               cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, lhs.has_nulls(), rhs.has_nulls(), boolean_mask, stream, mr);
 }
@@ -371,13 +378,15 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
-               "Boolean mask column must be the same size as rhs column");
+               "Boolean mask column must be the same size as rhs column",
+               std::invalid_argument);
 
   // TODO: Need some utility like cudf::column_types_equivalent for scalars to
   // ensure nested types are handled correctly.
   auto const rhs_type =
     cudf::is_dictionary(rhs.type()) ? cudf::dictionary_column_view(rhs).keys_type() : rhs.type();
-  CUDF_EXPECTS(lhs.type() == rhs_type, "Both inputs must be of the same type");
+  CUDF_EXPECTS(
+    lhs.type() == rhs_type, "Both inputs must be of the same type", cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);
 }
@@ -389,13 +398,15 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
                                      rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
-               "Boolean mask column must be the same size as lhs column");
+               "Boolean mask column must be the same size as lhs column",
+               std::invalid_argument);
 
   // TODO: Need some utility like cudf::column_types_equivalent for scalars to
   // ensure nested types are handled correctly.
   auto lhs_type =
     cudf::is_dictionary(lhs.type()) ? cudf::dictionary_column_view(lhs).keys_type() : lhs.type();
-  CUDF_EXPECTS(lhs_type == rhs.type(), "Both inputs must be of the same type");
+  CUDF_EXPECTS(
+    lhs_type == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
 
   return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
@@ -408,7 +419,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 {
   // TODO: Need some utility like cudf::column_types_equivalent for scalars to
   // ensure nested types are handled correctly.
-  CUDF_EXPECTS(lhs.type() == rhs.type(), "Both inputs must be of the same type");
+  CUDF_EXPECTS(
+    lhs.type() == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
   return copy_if_else(
     lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }

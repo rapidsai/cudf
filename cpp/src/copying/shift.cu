@@ -38,6 +38,7 @@
 #include <algorithm>
 #include <iterator>
 #include <memory>
+#include <stdexcept>
 
 namespace cudf {
 namespace {
@@ -71,7 +72,7 @@ struct shift_functor {
                    std::unique_ptr<column>>
   operator()(Args&&...)
   {
-    CUDF_FAIL("shift only supports fixed-width or string types.");
+    CUDF_FAIL("shift only supports fixed-width or string types.", cudf::data_type_error);
   }
 
   template <typename T, typename... Args>
@@ -159,7 +160,8 @@ std::unique_ptr<column> shift(column_view const& input,
   // TODO: Need some utility like cudf::column_types_equivalent for scalars to
   // ensure nested types are handled correctly.
   CUDF_EXPECTS(input.type() == fill_value.type(),
-               "shift requires each fill value type to match the corresponding column type.");
+               "shift requires each fill value type to match the corresponding column type.",
+               cudf::data_type_error);
 
   if (input.is_empty()) { return empty_like(input); }
 

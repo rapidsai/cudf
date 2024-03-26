@@ -2896,9 +2896,9 @@ __device__ std::pair<void const*, uint32_t> get_extremum(statistics_val const* s
       return {scratch, sizeof(float)};
     }
     case dtype_int64:
+    case dtype_decimal64:
     case dtype_timestamp64:
     case dtype_float64: return {stats_val, sizeof(int64_t)};
-    case dtype_decimal64:
     case dtype_decimal128:
       byte_reverse128(stats_val->d128_val, scratch);
       return {scratch, sizeof(__int128_t)};

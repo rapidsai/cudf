@@ -470,9 +470,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     _frame: DataFrame
 
     def __getitem__(self, arg):
-        row_key, (
-            col_is_scalar,
-            column_names,
+        (
+            row_key,
+            (
+                col_is_scalar,
+                column_names,
+            ),
         ) = indexing_utils.destructure_dataframe_iloc_indexer(arg, self._frame)
         row_spec = indexing_utils.parse_row_iloc_indexer(
             row_key, len(self._frame)
@@ -4795,7 +4798,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-
         For ``tpb > 1``, ``func`` is executed by ``tpb`` number of threads
         concurrently.  To access the thread id and count,
         use ``numba.cuda.threadIdx.x`` and ``numba.cuda.blockDim.x``,
@@ -4821,7 +4823,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...          z = in3[i]
         ...          out1[i] = x * y + z
 
-        See also
+        See Also
         --------
         DataFrame.apply_rows
         """
@@ -5483,14 +5485,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @_cudf_nvtx_annotate
-    def to_arrow(self, preserve_index=True):
+    def to_arrow(self, preserve_index=None):
         """
         Convert to a PyArrow Table.
 
         Parameters
         ----------
-        preserve_index : bool, default True
-            whether index column and its meta data needs to be saved or not
+        preserve_index : bool, optional
+            whether index column and its meta data needs to be saved
+            or not. The default of None will store the index as a
+            column, except for a RangeIndex which is stored as
+            metadata only. Setting preserve_index to True will force
+            a RangeIndex to be materialized.
 
         Returns
         -------
@@ -5521,34 +5527,35 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         data = self.copy(deep=False)
         index_descr = []
-        if preserve_index:
-            if isinstance(self.index, cudf.RangeIndex):
+        write_index = preserve_index is not False
+        keep_range_index = write_index and preserve_index is None
+        index = self.index
+        if write_index:
+            if isinstance(index, cudf.RangeIndex) and keep_range_index:
                 descr = {
                     "kind": "range",
-                    "name": self.index.name,
-                    "start": self.index._start,
-                    "stop": self.index._stop,
+                    "name": index.name,
+                    "start": index._start,
+                    "stop": index._stop,
                     "step": 1,
                 }
             else:
-                if isinstance(self.index, MultiIndex):
+                if isinstance(index, cudf.RangeIndex):
+                    index = index._as_int_index()
+                    index.name = "__index_level_0__"
+                if isinstance(index, MultiIndex):
                     gen_names = tuple(
-                        f"level_{i}"
-                        for i, _ in enumerate(self.index._data.names)
+                        f"level_{i}" for i, _ in enumerate(index._data.names)
                     )
                 else:
                     gen_names = (
-                        self.index.names
-                        if self.index.name is not None
-                        else ("index",)
+                        index.names if index.name is not None else ("index",)
                     )
-                for gen_name, col_name in zip(
-                    gen_names, self.index._data.names
-                ):
+                for gen_name, col_name in zip(gen_names, index._data.names):
                     data._insert(
                         data.shape[1],
                         gen_name,
-                        self.index._data[col_name],
+                        index._data[col_name],
                     )
                 descr = gen_names[0]
             index_descr.append(descr)
@@ -5558,7 +5565,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             columns_to_convert=[self[col] for col in self._data.names],
             df=self,
             column_names=out.schema.names,
-            index_levels=[self.index],
+            index_levels=[index],
             index_descriptors=index_descr,
             preserve_index=preserve_index,
             types=out.schema.types,
@@ -6901,16 +6908,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if future_stack:
             if dropna is not no_default:
                 raise ValueError(
-                    "dropna must be unspecified with future_stack=True as the new "
-                    "implementation does not introduce rows of NA values. This "
-                    "argument will be removed in a future version of cudf."
+                    "dropna must be unspecified with future_stack=True as "
+                    "the new implementation does not introduce rows of NA "
+                    "values. This argument will be removed in a future "
+                    "version of cudf."
                 )
         else:
             if dropna is not no_default or self._data.nlevels > 1:
                 warnings.warn(
-                    "The previous implementation of stack is deprecated and will be "
-                    "removed in a future version of cudf. Specify future_stack=True "
-                    "to adopt the new implementation and silence this warning.",
+                    "The previous implementation of stack is deprecated and "
+                    "will be removed in a future version of cudf. Specify "
+                    "future_stack=True to adopt the new implementation and "
+                    "silence this warning.",
                     FutureWarning,
                 )
             if dropna is no_default:
@@ -7028,9 +7037,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                             unique_named_levels, axis=0, fill_value=-1
                         ).values
                     else:
-                        yield grpdf.reindex(
-                            unique_named_levels, axis=0, fill_value=-1
-                        ).sort_index().values
+                        yield (
+                            grpdf.reindex(
+                                unique_named_levels, axis=0, fill_value=-1
+                            )
+                            .sort_index()
+                            .values
+                        )
             else:
                 if future_stack:
                     yield column_idx_df.values
