@@ -34,7 +34,9 @@ read -r COMMENT < summary.txt
 export COMMENT
 
 # echo "$COMMENT"
-# rapids-logger "comment: ${COMMENT}"
+rapids-logger "comment: ${COMMENT}"
+cat summary.txt
+rapids-logger "EOF"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
 echo "job_output=${COMMENT}" >> $GITHUB_OUTPUT
