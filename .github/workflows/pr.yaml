@@ -31,6 +31,7 @@ jobs:
       - pandas-tests
       - pandas-tests-diff
       - pandas-tests-diff-comment
+      - pandas-tests-diff-comment1
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.06
   checks:
@@ -229,3 +230,23 @@ jobs:
               repo: context.repo.repo,
               body: comment
             });
+  pandas-tests-diff-comment1:
+    # Post comment of pass/fail rate on PR
+    runs-on: ubuntu-latest
+    #  needs: pandas-tests-diff
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Comment on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          #!/bin/bash
+
+          # Your custom logic or commands here
+
+          # Use GitHub CLI to comment on the PR
+          echo "Posting a comment to PR #${PR_NUMBER}"
+          gh pr comment "${PR_NUMBER}" --body "Thank you for your contribution!" --repo ${{ github.repository }} -t $GH_TOKEN
