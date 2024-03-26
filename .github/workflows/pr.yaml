@@ -184,6 +184,17 @@ jobs:
    runs-on: ubuntu-latest
   #  needs: pandas-tests-diff
    steps:
+     - name: Download file from URL
+       run: |
+         aws s3 cp "s3://rapids-downloads/ci/cudf/pull-request/15369/6f62013//__w/cudf/cudf/artifacts/summary.txt" summary.txt
+     - name: Prepare comment content
+       id: prepare_comment
+       run: |
+         content=$(cat summary.txt)
+         content="${content//'%'/'%25'}"
+         content="${content//$'\n'/'%0A'}"
+         content="${content//$'\r'/'%0D'}"
+         echo "::set-output name=comment::$content"
      - uses: actions/github-script@v6
        with:
          github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -203,42 +214,12 @@ jobs:
         #      body: job_output
         #    })
          script: |
-            const https = require('https');
-
-            // Define the URL of the file
-            const fileUrl = 'https://downloads.rapids.ai/ci/cudf/pull-request/15369/6f62013//__w/cudf/cudf/artifacts/summary.txt';
             const branch = process.env.GITHUB_REF_NAME;
             const prNumber = branch.split("/")[1];
-
-            // Function to download content and post as a GitHub comment
-            function downloadAndComment(url) {
-              return new Promise((resolve, reject) => {
-                let data = '';
-
-                https.get(url, (res) => {
-                  res.on('data', (chunk) => {
-                    data += chunk;
-                  });
-
-                  res.on('end', () => {
-                    resolve(data);
-                  });
-                }).on('error', (e) => {
-                  reject(e);
-                });
-              });
-            }
-
-            // Use the function and post the result as a comment
-            downloadAndComment(fileUrl)
-              .then((fileContent) => {
-                github.rest.issues.createComment({
-                  issue_number: prNumber,
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  body: fileContent
-                });
-              })
-              .catch((error) => {
-                console.error(`Error downloading file: ${error.message}`);
-              });
+            const comment = `${{ steps.prepare_comment.outputs.comment }}`;
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
