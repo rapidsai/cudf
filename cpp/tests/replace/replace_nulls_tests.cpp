@@ -68,7 +68,7 @@ TEST_F(ReplaceErrorTest, TypeMismatchScalar)
                                                                {0, 0, 1, 1, 1, 1, 1, 1}};
   cudf::numeric_scalar<float> replacement(1);
 
-  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input_column, replacement), cudf::data_type_error);
 }
 
 struct ReplaceNullsStringsTest : public cudf::test::BaseFixture {};
@@ -660,7 +660,7 @@ TEST_F(ReplaceDictionaryTest, ReplaceNullsError)
   auto replacement = cudf::dictionary::encode(replacement_w);
 
   EXPECT_THROW(cudf::replace_nulls(input->view(), replacement->view()), cudf::logic_error);
-  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::logic_error);
+  EXPECT_THROW(cudf::replace_nulls(input->view(), cudf::string_scalar("x")), cudf::data_type_error);
 
   cudf::test::fixed_width_column_wrapper<int64_t> input_one_w({1}, {0});
   auto input_one  = cudf::dictionary::encode(input_one_w);

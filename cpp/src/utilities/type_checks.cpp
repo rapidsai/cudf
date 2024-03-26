@@ -17,6 +17,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -29,15 +30,16 @@ namespace {
 
 struct columns_equal_fn {
   template <typename T>
-  bool operator()(column_view const&, column_view const&)
+  bool operator()(column_view const& lhs, column_view const& rhs)
   {
-    return true;
+    return lhs.type() == rhs.type();
   }
 };
 
 template <>
 bool columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_view const& rhs)
 {
+  if (not cudf::is_dictionary(rhs.type())) { return false; }
   auto const kidx = dictionary_column_view::keys_column_index;
   return lhs.num_children() > 0 and rhs.num_children() > 0
            ? lhs.child(kidx).type() == rhs.child(kidx).type()
@@ -47,6 +49,7 @@ bool columns_equal_fn::operator()<dictionary32>(column_view const& lhs, column_v
 template <>
 bool columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view const& rhs)
 {
+  if (rhs.type().id() != type_id::LIST) { return false; }
   auto const& ci = lists_column_view::child_column_index;
   return column_types_equal(lhs.child(ci), rhs.child(ci));
 }
@@ -54,6 +57,7 @@ bool columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view
 template <>
 bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_view const& rhs)
 {
+  if (rhs.type().id() != type_id::STRUCT) { return false; }
   return lhs.num_children() == rhs.num_children() and
          std::all_of(thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(lhs.num_children()),
@@ -62,9 +66,9 @@ bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_vi
 
 struct column_scalar_equal_fn {
   template <typename T>
-  bool operator()(column_view const&, scalar const&)
+  bool operator()(column_view const& col, scalar const& slr)
   {
-    return true;
+    return col.type() == slr.type();
   }
 };
 
@@ -104,20 +108,23 @@ bool column_scalar_equal_fn::operator()<struct_view>(column_view const& col, sca
 // as it increases code paths to NxN for N types.
 bool column_types_equal(column_view const& lhs, column_view const& rhs)
 {
-  if (lhs.type() != rhs.type()) { return false; }
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
 }
 
 bool column_scalar_types_equal(column_view const& col, scalar const& slr)
 {
-  if (col.type() != slr.type()) { return false; }
   return type_dispatcher(col.type(), column_scalar_equal_fn{}, col, slr);
 }
 
 bool column_types_equivalent(column_view const& lhs, column_view const& rhs)
 {
-  if (lhs.type().id() != rhs.type().id()) { return false; }
-  return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
+  // Check if the columns have fixed point types. This is the only case where
+  // type equality and equivalence differ.
+  if (lhs.type().id() == type_id::DECIMAL32 || lhs.type().id() == type_id::DECIMAL64 ||
+      lhs.type().id() == type_id::DECIMAL128) {
+    return lhs.type().id() == rhs.type().id();
+  }
+  return column_types_equal(lhs, rhs);
 }
 
 }  // namespace cudf
