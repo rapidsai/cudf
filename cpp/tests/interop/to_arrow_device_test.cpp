@@ -412,7 +412,8 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
   ArrowSchemaSetName(expected_schema->children[0], "a");
   expected_schema->children[0]->flags = 0;
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
+  auto got_arrow_schema =
+    cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
   BaseArrowFixture::compare_schemas(expected_schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -464,7 +465,8 @@ TEST_F(ToArrowDeviceTest, NestedList)
   ArrowSchemaSetName(expected_schema->children[0]->children[0]->children[0], "element");
   expected_schema->children[0]->children[0]->children[0]->flags = ARROW_FLAG_NULLABLE;
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
+  auto got_arrow_schema =
+    cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
   compare_schemas(expected_schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -574,7 +576,8 @@ TEST_F(ToArrowDeviceTest, StructColumn)
   ArrowSchemaInitFromType(child->children[4]->children[1], NANOARROW_TYPE_INT32);
   ArrowSchemaSetName(child->children[4]->children[1], "integral2");
 
-  auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{metadata});
+  auto got_arrow_schema =
+    cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{metadata});
   compare_schemas(expected_schema.get(), got_arrow_schema.get());
   ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -648,7 +651,8 @@ TEST_F(ToArrowDeviceTest, FixedPoint64Table)
     ArrowSchemaSetName(expected_schema->children[0], "a");
     expected_schema->children[0]->flags = 0;
 
-    auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
+    auto got_arrow_schema =
+      cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
     compare_schemas(expected_schema.get(), got_arrow_schema.get());
     ArrowSchemaRelease(got_arrow_schema.get());
 
@@ -713,7 +717,8 @@ TEST_F(ToArrowDeviceTest, FixedPoint128Table)
     ArrowSchemaSetName(expected_schema->children[0], "a");
     expected_schema->children[0]->flags = 0;
 
-    auto got_arrow_schema = cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
+    auto got_arrow_schema =
+      cudf::to_arrow_schema(input.view(), std::vector<cudf::column_metadata>{{"a"}});
     compare_schemas(expected_schema.get(), got_arrow_schema.get());
     ArrowSchemaRelease(got_arrow_schema.get());
 
