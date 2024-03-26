@@ -142,6 +142,8 @@ def clean_all_xml_files(path):
                 tree.write(fn)
 
 
+
+
 # Breathe Configuration
 breathe_projects = {"libcudf": "../../../cpp/doxygen/xml"}
 for project_path in breathe_projects.values():
@@ -344,7 +346,9 @@ def resolve_aliases(app, doctree):
             real_ref, text_to_render = _reftarget_aliases[alias]
             node["reftarget"] = real_ref
 
-            text_node = next(iter(node.traverse(lambda n: n.tagname == "#text")))
+            text_node = next(
+                iter(node.traverse(lambda n: n.tagname == "#text"))
+            )
             text_node.parent.replace(text_node, Text(text_to_render, ""))
 
 
@@ -375,7 +379,7 @@ _names_to_skip_in_pylibcudf = {
     "type_id",
     # Unknown base types
     "int32_t",
-    "void",
+    "void"
 }
 
 
@@ -433,7 +437,9 @@ def _cached_intersphinx_lookup(env, node, contnode):
     if key in _intersphinx_cache:
         return _intersphinx_cache[key]
     if (
-        ref := intersphinx.resolve_reference_detect_inventory(env, node, contnode)
+        ref := intersphinx.resolve_reference_detect_inventory(
+            env, node, contnode
+        )
     ) is not None:
         _intersphinx_cache[key] = ref
     return ref
@@ -441,7 +447,9 @@ def _cached_intersphinx_lookup(env, node, contnode):
 
 def on_missing_reference(app, env, node, contnode):
     # These variables are defined outside the function to speed up the build.
-    global _all_namespaces, _names_to_skip_in_cpp, _names_to_skip_in_pylibcudf, _intersphinx_extra_prefixes, _domain_objects, _prefixed_domain_objects, _intersphinx_cache
+    global _all_namespaces, _names_to_skip_in_cpp, \
+        _names_to_skip_in_pylibcudf, _intersphinx_extra_prefixes, \
+        _domain_objects, _prefixed_domain_objects, _intersphinx_cache
 
     # Precompute and cache domains for faster lookups
     if _domain_objects is None:
@@ -507,7 +515,9 @@ def on_missing_reference(app, env, node, contnode):
         # to fail.
         if reftarget != node["reftarget"]:
             node["reftarget"] = reftarget
-            if (ref := _cached_intersphinx_lookup(env, node, contnode)) is not None:
+            if (
+                ref := _cached_intersphinx_lookup(env, node, contnode)
+            ) is not None:
                 return ref
 
         # If the template wasn't the (only) issue, we check the various
@@ -515,11 +525,15 @@ def on_missing_reference(app, env, node, contnode):
         for prefix in _intersphinx_extra_prefixes:
             if prefix not in reftarget:
                 node["reftarget"] = f"{prefix}::{reftarget}"
-                if (ref := _cached_intersphinx_lookup(env, node, contnode)) is not None:
+                if (
+                    ref := _cached_intersphinx_lookup(env, node, contnode)
+                ) is not None:
                     return ref
             else:
                 node["reftarget"] = reftarget.replace(f"{prefix}::", "")
-                if (ref := _cached_intersphinx_lookup(env, node, contnode)) is not None:
+                if (
+                    ref := _cached_intersphinx_lookup(env, node, contnode)
+                ) is not None:
                     return ref
 
     return None
