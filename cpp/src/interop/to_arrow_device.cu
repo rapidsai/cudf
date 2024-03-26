@@ -625,7 +625,7 @@ unique_schema_t to_arrow_schema(cudf::table_view const& input,
   }
 
   unique_schema_t out(new ArrowSchema, [](ArrowSchema* schema) {
-    ArrowSchemaRelease(schema);
+    if (schema->release != nullptr) { ArrowSchemaRelease(schema); }
     delete schema;
   });
   result.move(out.get());
@@ -670,7 +670,7 @@ unique_device_array_t to_arrow_device(cudf::table&& table,
 
   ArrowArrayMove(tmp.get(), &private_data->parent);
   unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {
-    ArrowArrayRelease(&arr->array);
+    if (arr->array.release != nullptr) { ArrowArrayRelease(&arr->array); }
     delete arr;
   });
   result->device_id          = rmm::get_current_cuda_device().value();
@@ -707,7 +707,7 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
 
   ArrowArrayMove(tmp.get(), &private_data->parent);
   unique_device_array_t result(new ArrowDeviceArray, [](ArrowDeviceArray* arr) {
-    ArrowArrayRelease(&arr->array);
+    if (arr->array.release != nullptr) { ArrowArrayRelease(&arr->array); }
     delete arr;
   });
   result->device_id          = rmm::get_current_cuda_device().value();
