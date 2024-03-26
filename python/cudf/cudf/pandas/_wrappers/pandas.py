@@ -93,14 +93,16 @@ class _AccessorAttr:
     """
 
     def __init__(self, typ):
-        self.__typ = typ
+        self._typ = typ
+
+    def __set_name__(self, owner, name):
+        self._name = name
 
     def __get__(self, obj, cls=None):
         if obj is None:
-            return self.__typ
+            return self._typ
         else:
-            # allow __getattr__ to handle this
-            raise AttributeError()
+            return _FastSlowAttribute(self._name).__get__(obj, type(obj))
 
 
 DatetimeProperties = make_intermediate_proxy_type(
@@ -157,6 +159,7 @@ DataFrame = make_final_proxy_type(
         "__dir__": _DataFrame__dir__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_sliced": _FastSlowAttribute("_constructor_sliced"),
+        "_accessors": set(),
     },
 )
 
@@ -179,6 +182,7 @@ Series = make_final_proxy_type(
         "cat": _AccessorAttr(_CategoricalAccessor),
         "_constructor": _FastSlowAttribute("_constructor"),
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
+        "_accessors": set(),
     },
 )
 
@@ -216,6 +220,7 @@ Index = make_final_proxy_type(
         "__new__": Index__new__,
         "_constructor": _FastSlowAttribute("_constructor"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "_accessors": set(),
     },
 )
 
@@ -744,7 +749,7 @@ def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
     return local_dict, global_dict
 
 
-@register_proxy_func(pd.eval)
+@register_proxy_func(pd.core.computation.eval.eval)
 @nvtx.annotate(
     "CUDF_PANDAS_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -774,6 +779,24 @@ def _eval(
     )
 
 
+_orig_df_eval_method = DataFrame.eval
+
+
+@register_proxy_func(pd.core.accessor.register_dataframe_accessor)
+def _register_dataframe_accessor(name):
+    return pd.core.accessor._register_accessor(name, DataFrame)
+
+
+@register_proxy_func(pd.core.accessor.register_series_accessor)
+def _register_series_accessor(name):
+    return pd.core.accessor._register_accessor(name, Series)
+
+
+@register_proxy_func(pd.core.accessor.register_index_accessor)
+def _register_index_accessor(name):
+    return pd.core.accessor._register_accessor(name, Index)
+
+
 @nvtx.annotate(
     "CUDF_PANDAS_DATAFRAME_EVAL",
     color=_CUDF_PANDAS_NVTX_COLORS["EXECUTE_SLOW"],
@@ -784,9 +807,12 @@ def _df_eval_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("eval")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_df_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
+
+
+_orig_query_eval_method = DataFrame.query
 
 
 @nvtx.annotate(
@@ -801,8 +827,8 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     local_dict, global_dict = _get_eval_locals_and_globals(
         level, local_dict, global_dict
     )
-    return super(type(self), self).__getattr__("query")(
-        *args, local_dict=local_dict, global_dict=global_dict, **kwargs
+    return _orig_query_eval_method(
+        self, *args, local_dict=local_dict, global_dict=global_dict, **kwargs
     )
 
 
