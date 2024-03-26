@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,7 +74,7 @@ std::unique_ptr<table> from_dlpack(
  * columns may be nullable, but the null count must be zero. If the input table
  * is empty or has zero rows, the result will be nullptr.
  *
- * @note The `deleter` method of the returned `DLManagedTensor` must be used to
+ * @note The `deleter` method of the returned DLManagedTensor must be used to
  * free the memory allocated for the tensor.
  *
  * @throw cudf::logic_error if the data types are not equal or not numeric,
