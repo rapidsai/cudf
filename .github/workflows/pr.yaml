@@ -182,6 +182,7 @@ jobs:
   pandas-tests-diff-comment:
    # Post comment of pass/fail rate on PR
    runs-on: ubuntu-latest
+   secrets: inherit
   #  needs: pandas-tests-diff
    steps:
      - name: Download file from URL
