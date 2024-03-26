@@ -388,6 +388,7 @@ _names_to_skip_in_cpp = {
     "thrust",
     "cuda",
     "arrow",
+    "DLManagedTensor",
     # Unknown types
     "int8_t",
     "int16_t",
