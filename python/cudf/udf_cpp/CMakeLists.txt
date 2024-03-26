@@ -26,8 +26,8 @@ rapids_find_package(
   INSTALL_EXPORT_SET udf-exports
 )
 
-include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
-rapids_cpm_libcudacxx(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
+include(${rapids-cmake-dir}/cpm/cccl.cmake)
+rapids_cpm_cccl(BUILD_EXPORT_SET udf-exports INSTALL_EXPORT_SET udf-exports)
 
 add_library(cudf_strings_udf SHARED strings/src/strings/udf/udf_apis.cu)
 target_include_directories(
