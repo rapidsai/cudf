@@ -30,18 +30,21 @@ python -m pip install pandas tabulate
 python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
 
 # COMMENT=$(head -n 10 summary.txt)
-read -r COMMENT < summary.txt
-export COMMENT
+# COMMENT=$(cat summary.txt)
+# read -r COMMENT < summary.txt
+# export COMMENT
 
 # echo "$COMMENT"
-rapids-logger "comment: ${COMMENT}"
+# rapids-logger "comment: ${COMMENT}"
 cat summary.txt
-rapids-logger "EOF"
+# rapids-logger "EOF"
 
 # Magic name that the custom-job.yaml workflow reads and re-exports
-echo "job_output=${COMMENT}" >> $GITHUB_OUTPUT
+# echo "job_output=${COMMENT}" >> $GITHUB_OUTPUT
 # echo "EOF" >> $GITHUB_ENV
-# RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
-# mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
-# mv summary.txt ${RAPIDS_ARTIFACTS_DIR}/
-# rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/summary.txt "${RAPIDS_ARTIFACTS_DIR}"
+RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
+mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
+mv summary.txt ${RAPIDS_ARTIFACTS_DIR}/
+rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/summary.txt "${RAPIDS_ARTIFACTS_DIR}"
+ART_URL="$(rapids-s3-path)${RAPIDS_ARTIFACTS_DIR}/summary.txt"
+echo "job_output=${ART_URL}" >> $GITHUB_OUTPUT
