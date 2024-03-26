@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "common"))
 
-from utils import default_struct_testing_type
+from utils import DEFAULT_STRUCT_TESTING_TYPE
 
 
 # This fixture defines the standard set of types that all tests should default to
@@ -24,7 +24,7 @@ from utils import default_struct_testing_type
         pa.string(),
         pa.bool_(),
         pa.list_(pa.int64()),
-        default_struct_testing_type(),
+        DEFAULT_STRUCT_TESTING_TYPE,
     ],
 )
 def pa_type(request):

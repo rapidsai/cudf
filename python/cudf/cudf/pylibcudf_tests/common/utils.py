@@ -64,22 +64,27 @@ def is_signed_integer(plc_dtype: plc.DataType):
 
 
 def is_unsigned_integer(plc_dtype: plc.DataType):
-    return (
-        plc.TypeId.UINT8.value
-        <= plc_dtype.id().value
-        <= plc.TypeId.UINT64.value
+    return plc_dtype.id() in (
+        plc.TypeId.UINT8,
+        plc.TypeId.UINT16,
+        plc.TypeId.UINT32,
+        plc.TypeId.UINT64,
     )
 
 
 def is_integer(plc_dtype: plc.DataType):
-    return is_signed_integer(plc_dtype) or is_unsigned_integer(plc_dtype)
+    return plc_dtype.id() in (
+        plc.TypeId.INT8,
+        plc.TypeId.INT16,
+        plc.TypeId.INT32,
+        plc.TypeId.INT64,
+    )
 
 
 def is_floating(plc_dtype: plc.DataType):
-    return (
-        plc.TypeId.FLOAT32.value
-        <= plc_dtype.id().value
-        <= plc.TypeId.FLOAT64.value
+    return plc_dtype.id() in (
+        plc.TypeId.FLOAT32,
+        plc.TypeId.FLOAT64,
     )
 
 
@@ -99,7 +104,8 @@ def is_fixed_width(plc_dtype: plc.DataType):
     )
 
 
-def default_struct_testing_type(nullable: bool = False):
-    # We must explicitly specify this type via a field to ensure we don't include
-    # nullability accidentally.
-    return pa.struct([pa.field("v", pa.int64(), nullable=nullable)])
+# We must explicitly specify this type via a field to ensure we don't include
+# nullability accidentally.
+DEFAULT_STRUCT_TESTING_TYPE = pa.struct(
+    [pa.field("v", pa.int64(), nullable=False)]
+)

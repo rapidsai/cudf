@@ -4,10 +4,10 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pytest
 from utils import (
+    DEFAULT_STRUCT_TESTING_TYPE,
     assert_column_eq,
     assert_table_eq,
     cudf_raises,
-    default_struct_testing_type,
     is_fixed_width,
     is_floating,
     is_integer,
@@ -227,7 +227,7 @@ def test_scatter_table(
                             {"v": 8},
                             {"v": 9},
                         ],
-                        type=default_struct_testing_type(),
+                        type=DEFAULT_STRUCT_TESTING_TYPE,
                     )
                 ]
                 * 3,
@@ -742,7 +742,7 @@ def test_boolean_mask_scatter_from_table(
                             {"v": 3},
                             {"v": 9},
                         ],
-                        type=default_struct_testing_type(),
+                        type=DEFAULT_STRUCT_TESTING_TYPE,
                     )
                 ]
                 * 3,
