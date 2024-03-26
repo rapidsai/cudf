@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -59,6 +60,44 @@ bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_vi
                      [&](auto i) { return column_types_equal(lhs.child(i), rhs.child(i)); });
 }
 
+struct column_scalar_equal_fn {
+  template <typename T>
+  bool operator()(column_view const&, scalar const&)
+  {
+    return true;
+  }
+};
+
+template <>
+bool column_scalar_equal_fn::operator()<dictionary32>(column_view const& col, scalar const& slr)
+{
+  // It is not possible to have a scalar dictionary, so compare the dictionary
+  // column keys type to the scalar type.
+  auto col_keys = cudf::dictionary_column_view(col).keys();
+  return column_scalar_types_equal(col_keys, slr);
+}
+
+template <>
+bool column_scalar_equal_fn::operator()<list_view>(column_view const& col, scalar const& slr)
+{
+  if (slr.type().id() != type_id::LIST) { return false; }
+  auto const& ci      = lists_column_view::child_column_index;
+  auto const list_slr = static_cast<list_scalar const*>(&slr);
+  return column_types_equal(col.child(ci), list_slr->view());
+}
+
+template <>
+bool column_scalar_equal_fn::operator()<struct_view>(column_view const& col, scalar const& slr)
+{
+  if (slr.type().id() != type_id::STRUCT) { return false; }
+  auto const struct_slr = static_cast<struct_scalar const*>(&slr);
+  auto const slr_tbl    = struct_slr->view();
+  return col.num_children() == slr_tbl.num_columns() and
+         std::all_of(thrust::make_counting_iterator(0),
+                     thrust::make_counting_iterator(col.num_children()),
+                     [&](auto i) { return column_types_equal(col.child(i), slr_tbl.column(i)); });
+}
+
 };  // namespace
 
 // Implementation note: avoid using double dispatch for this function
@@ -67,6 +106,12 @@ bool column_types_equal(column_view const& lhs, column_view const& rhs)
 {
   if (lhs.type() != rhs.type()) { return false; }
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
+}
+
+bool column_scalar_types_equal(column_view const& col, scalar const& slr)
+{
+  if (col.type() != slr.type()) { return false; }
+  return type_dispatcher(col.type(), column_scalar_equal_fn{}, col, slr);
 }
 
 bool column_types_equivalent(column_view const& lhs, column_view const& rhs)

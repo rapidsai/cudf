@@ -33,6 +33,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -197,9 +199,9 @@ struct dispatch_clamp {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-    // ensure nested types are handled correctly.
-    CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
+    CUDF_EXPECTS(column_scalar_types_equal(input, lo),
+                 "mismatching types of scalar and input",
+                 cudf::data_type_error);
 
     auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
     auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 
 #include <algorithm>
 
@@ -37,6 +38,23 @@ namespace cudf {
  * @return true if column types match
  */
 bool column_types_equal(column_view const& lhs, column_view const& rhs);
+
+/**
+ * @brief Compares the type of a `column_view` and a `scalar`
+ *
+ * This function returns true if the type of `lhs` equals that of `rhs`.
+ * - For fixed point types, the scale is compared.
+ * - For dictionary types, the type of the keys are compared if both are
+ *   non-empty columns.
+ * - For lists types, the type of child columns are compared recursively.
+ * - For struct types, the type of each field are compared in order.
+ * - For all other types, the `id` of `data_type` is compared.
+ *
+ * @param col The `column_view` to compare
+ * @param slr The `scalar` to compare
+ * @return true if column/scalar types match
+ */
+bool column_scalar_types_equal(column_view const& col, scalar const& slr);
 
 /**
  * @brief Compare the type IDs of two `column_view`s
