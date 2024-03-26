@@ -17,7 +17,7 @@ python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas-tests]
 RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
-
+gh pr comment "15369" --body "Thank you for your contribution!" --repo "rapidsai/cudf"
 bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   -n 10 \
   --tb=no \

@@ -48,3 +48,8 @@ mv summary.txt ${RAPIDS_ARTIFACTS_DIR}/
 rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/summary.txt "${RAPIDS_ARTIFACTS_DIR}"
 ART_URL="$(rapids-s3-path)${RAPIDS_ARTIFACTS_DIR}/summary.txt"
 echo "job_output=${ART_URL}" >> $GITHUB_OUTPUT
+
+
+# https://downloads.rapids.ai/ci/cudf/pull-request/15369/6f62013//__w/cudf/cudf/artifacts/summary.txt
+
+# s3://rapids-downloads/ci/cudf/pull-request/15369/6f62013//__w/cudf/cudf/artifacts/summary.txt
