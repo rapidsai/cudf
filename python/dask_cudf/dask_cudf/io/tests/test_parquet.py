@@ -535,7 +535,7 @@ def test_check_file_size(tmpdir):
         dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
 
 
-@xfail_dask_expr("HivePartitioning cannot be hashed")
+@xfail_dask_expr("HivePartitioning cannot be hashed", lt_version="1.0")
 def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning
