@@ -129,12 +129,14 @@ repos:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.13
+    rev: v0.3.4
     hooks:
       - id: ruff
         files: python/.*$
+        args: [--exit-non-zero-on-fix]
       - id: ruff-format
         files: python/.*$
+        args: [--exit-non-zero-on-fix]
   - repo: https://github.com/rapidsai/pre-commit-hooks
     rev: v0.0.3
     hooks:
