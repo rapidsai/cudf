@@ -409,10 +409,9 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-  // ensure nested types are handled correctly.
-  CUDF_EXPECTS(
-    lhs.type() == rhs.type(), "Both inputs must be of the same type", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::scalar_types_equal(lhs, rhs),
+               "Both inputs must be of the same type",
+               cudf::data_type_error);
   return copy_if_else(
     lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }

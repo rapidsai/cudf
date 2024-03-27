@@ -42,10 +42,10 @@ bool column_types_equal(column_view const& lhs, column_view const& rhs);
 /**
  * @brief Compares the type of a `column_view` and a `scalar`
  *
- * This function returns true if the type of `lhs` equals that of `rhs`.
+ * This function returns true if the type of `col` equals that of `slr`.
  * - For fixed point types, the scale is compared.
- * - For dictionary types, the type of the keys are compared if both are
- *   non-empty columns.
+ * - For dictionary column types, the type of the keys are compared to the
+ *   scalar type.
  * - For lists types, the type of child columns are compared recursively.
  * - For struct types, the type of each field are compared in order.
  * - For all other types, the `id` of `data_type` is compared.
@@ -55,6 +55,21 @@ bool column_types_equal(column_view const& lhs, column_view const& rhs);
  * @return true if column/scalar types match
  */
 bool column_scalar_types_equal(column_view const& col, scalar const& slr);
+
+/**
+ * @brief Compares the type of two `scalar`s
+ *
+ * This function returns true if the type of `lhs` equals that of `rhs`.
+ * - For fixed point types, the scale is compared.
+ * - For lists types, the type of child columns are compared recursively.
+ * - For struct types, the type of each field are compared in order.
+ * - For all other types, the `id` of `data_type` is compared.
+ *
+ * @param lhs The first `scalar to compare
+ * @param rhs The second `scalar to compare
+ * @return true if scalar types match
+ */
+bool scalar_types_equal(scalar const& lhs, scalar const& rhs);
 
 /**
  * @brief Compare the type IDs of two `column_view`s

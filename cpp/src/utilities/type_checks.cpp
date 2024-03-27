@@ -102,6 +102,36 @@ bool column_scalar_equal_fn::operator()<struct_view>(column_view const& col, sca
                      [&](auto i) { return column_types_equal(col.child(i), slr_tbl.column(i)); });
 }
 
+struct scalars_equal_fn {
+  template <typename T>
+  bool operator()(scalar const& lhs, scalar const& rhs)
+  {
+    return lhs.type() == rhs.type();
+  }
+};
+
+template <>
+bool scalars_equal_fn::operator()<list_view>(scalar const& lhs, scalar const& rhs)
+{
+  if (rhs.type().id() != type_id::LIST) { return false; }
+  auto const list_lhs = static_cast<list_scalar const*>(&lhs);
+  auto const list_rhs = static_cast<list_scalar const*>(&rhs);
+  return column_types_equal(list_lhs->view(), list_rhs->view());
+}
+
+template <>
+bool scalars_equal_fn::operator()<struct_view>(scalar const& lhs, scalar const& rhs)
+{
+  if (rhs.type().id() != type_id::STRUCT) { return false; }
+  auto const tbl_lhs = static_cast<struct_scalar const*>(&lhs)->view();
+  auto const tbl_rhs = static_cast<struct_scalar const*>(&rhs)->view();
+  return tbl_lhs.num_columns() == tbl_rhs.num_columns() and
+         std::all_of(
+           thrust::make_counting_iterator(0),
+           thrust::make_counting_iterator(tbl_lhs.num_columns()),
+           [&](auto i) { return column_types_equal(tbl_lhs.column(i), tbl_rhs.column(i)); });
+}
+
 };  // namespace
 
 // Implementation note: avoid using double dispatch for this function
@@ -114,6 +144,11 @@ bool column_types_equal(column_view const& lhs, column_view const& rhs)
 bool column_scalar_types_equal(column_view const& col, scalar const& slr)
 {
   return type_dispatcher(col.type(), column_scalar_equal_fn{}, col, slr);
+}
+
+bool scalar_types_equal(scalar const& lhs, scalar const& rhs)
+{
+  return type_dispatcher(lhs.type(), scalars_equal_fn{}, lhs, rhs);
 }
 
 bool column_types_equivalent(column_view const& lhs, column_view const& rhs)

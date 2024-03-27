@@ -325,11 +325,14 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  // TODO: Need some utility like cudf::column_types_equivalent for scalars to
-  // ensure nested types are handled correctly.
-  CUDF_EXPECTS(lo.type() == hi.type(), "mismatching types of limit scalars");
-  CUDF_EXPECTS(lo_replace.type() == hi_replace.type(), "mismatching types of replace scalars");
-  CUDF_EXPECTS(lo.type() == lo_replace.type(), "mismatching types of limit and replace scalars");
+  CUDF_EXPECTS(
+    cudf::scalar_types_equal(lo, hi), "mismatching types of limit scalars", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::scalar_types_equal(lo_replace, hi_replace),
+               "mismatching types of replace scalars",
+               cudf::data_type_error);
+  CUDF_EXPECTS(cudf::scalar_types_equal(lo, lo_replace),
+               "mismatching types of limit and replace scalars",
+               cudf::data_type_error);
 
   if ((not lo.is_valid(stream) and not hi.is_valid(stream)) or (input.is_empty())) {
     // There will be no change
