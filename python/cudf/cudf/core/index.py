@@ -1068,7 +1068,7 @@ class Index(SingleColumnFrame, BaseIndex, metaclass=IndexMeta):
         binop_result = self._colwise_binop(operands, op)
 
         if isinstance(other, cudf.Series):
-            ret = other._from_data_like_self(binop_result)
+            ret = other._from_data(binop_result)
             other_name = other.name
         else:
             ret = _index_from_data(binop_result)
