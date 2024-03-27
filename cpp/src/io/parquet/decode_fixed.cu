@@ -238,7 +238,7 @@ __device__ inline void gpuDecodeSplitValues(page_state_s* s,
   auto const t = threadIdx.x;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
-  int const dtype                          = s->col.data_type & 7;
+  int const dtype                          = s->col.physical_type;
   auto const data_len                      = thrust::distance(s->data_start, s->data_end);
   auto const num_values                    = data_len / s->dtype_len_in;
 
@@ -263,9 +263,11 @@ __device__ inline void gpuDecodeSplitValues(page_state_s* s,
       uint8_t const* src = s->data_start + src_pos;
       uint8_t* dst =
         nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+      auto const is_decimal =
+        s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
 
       // Note: non-decimal FIXED_LEN_BYTE_ARRAY will be handled in the string reader
-      if (s->col.converted_type == DECIMAL) {
+      if (is_decimal) {
         switch (dtype) {
           case INT32: gpuOutputByteStreamSplit<int32_t>(dst, src, num_values); break;
           case INT64: gpuOutputByteStreamSplit<int64_t>(dst, src, num_values); break;
