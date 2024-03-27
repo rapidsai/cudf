@@ -32,6 +32,7 @@ jobs:
       - pandas-tests-diff
       - pandas-tests-diff-comment
       - pandas-tests-diff-comment1
+      - pandas-tests-diff-comment2
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/pr-builder.yaml@branch-24.06
   checks:
@@ -250,3 +251,41 @@ jobs:
           # Use GitHub CLI to comment on the PR
           echo "Posting a comment to PR #${PR_NUMBER}"
           gh pr comment "15369" --body "Thank you for your contribution!" --repo ${{ github.repository }}
+  pandas-tests-diff-comment2:
+    # Post comment of pass/fail rate on PR
+    runs-on: ubuntu-latest
+    #  needs: pandas-tests-diff
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Generate text file
+        run: |
+          echo "Hello, World!" > hello.txt
+
+      - name: Upload file to GitHub Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: hello-artifact
+          path: hello.txt
+
+      # - name: Checkout repository
+      #   uses: actions/checkout@v2
+
+      # - name: Comment on PR
+      #   env:
+      #     GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     PR_NUMBER: ${{ github.event.pull_request.number }}
+      #   run: |
+      #     #!/bin/bash
+
+      #     # Your custom logic or commands here
+
+      #     # Use GitHub CLI to comment on the PR
+      #     echo "Posting a comment to PR #${PR_NUMBER}"
+      #     gh pr comment "15369" --body "Thank you for your contribution!" --repo ${{ github.repository }}
