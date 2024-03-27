@@ -352,7 +352,12 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
     num_rows = c_result.num_rows()
     num_rowgroups = c_result.num_rowgroups()
     names = [info.name().decode() for info in c_result.schema().root().children()]
-    row_group_metadata = c_result.rowgroup_metadata()
+
+    # extract row group metadata and sanitize keys
+    row_group_metadata=[]
+    row_group_metadata_unsanitized = c_result.rowgroup_metadata()
+    for meta in row_group_metadata_unsanitized:
+        row_group_metadata.append({k.decode(): v for k, v in meta})
 
     return num_rows, num_rowgroups, names, num_columns, row_group_metadata
 

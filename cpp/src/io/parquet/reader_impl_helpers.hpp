@@ -172,9 +172,9 @@ class aggregate_reader_metadata {
   /**
    * @brief Extracts high-level metadata for all row groups
    *
-   * @return List of pairs of number of rows and total byte size for each row group
+   * @return List of maps containing metadata information for each row group
    */
-  [[nodiscard]] std::vector<std::pair<int64_t, int64_t>> get_rowgroup_metadata() const;
+  [[nodiscard]] std::vector<std::unordered_map<std::string, int64_t>> get_rowgroup_metadata() const;
 
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 

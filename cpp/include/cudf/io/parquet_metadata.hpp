@@ -179,8 +179,8 @@ class parquet_metadata {
  public:
   /// Key-value metadata in the file footer.
   using key_value_metadata = std::unordered_map<std::string, std::string>;
-  /// row group metadata from RowGroup element.
-  using row_group_metadata = std::pair<int64_t, int64_t>;
+  /// row group metadata from each RowGroup element.
+  using row_group_metadata = std::unordered_map<std::string, int64_t>;
 
   /**
    * @brief Default constructor.
@@ -197,7 +197,7 @@ class parquet_metadata {
    * @param num_rowgroups number of row groups
    * @param num_columns number of columns
    * @param file_metadata key-value metadata in the file footer
-   * @param rg_metadata vector of pairs of number of rows and total byte size for each row group
+   * @param rg_metadata vector of maps containing metadata for each row group
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
@@ -254,7 +254,7 @@ class parquet_metadata {
   /**
    * @brief Returns the row group metadata in the file footer.
    *
-   * @return pairs of number of rows and total byte size for each row group as a vector
+   * @return vector of row group metadata as maps
    */
   [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
 

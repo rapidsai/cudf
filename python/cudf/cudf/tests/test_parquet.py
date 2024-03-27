@@ -2894,7 +2894,9 @@ def test_parquet_row_group_metadata(tmpdir, large_int64_gdf, size_rows):
     # length(RowGroupsMetaData) == number of row groups
     assert len(row_group_metadata) == row_groups
     # sum of rows in row groups == total rows
-    assert num_rows == sum([row_group[0] for row_group in row_group_metadata])
+    assert num_rows == sum(
+        [row_group["num_rows"] for row_group in row_group_metadata]
+    )
 
 
 def test_parquet_reader_decimal_columns():

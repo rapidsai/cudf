@@ -1,7 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport int64_t
-from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.unordered_map cimport unordered_map
 from libcpp.vector cimport vector
@@ -29,6 +28,6 @@ cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
         size_type num_rowgroups() except+
         size_type num_columns() except+
         unordered_map[string, string] metadata() except+
-        vector[pair[int64_t, int64_t]] rowgroup_metadata() except+
+        vector[unordered_map[string, int64_t]] rowgroup_metadata() except+
 
     cdef parquet_metadata read_parquet_metadata(cudf_io_types.source_info src) except+

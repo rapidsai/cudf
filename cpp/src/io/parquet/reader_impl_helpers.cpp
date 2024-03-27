@@ -566,17 +566,22 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   return col->meta_data;
 }
 
-std::vector<std::pair<int64_t, int64_t>> aggregate_reader_metadata::get_rowgroup_metadata() const
+std::vector<std::unordered_map<std::string, int64_t>>
+aggregate_reader_metadata::get_rowgroup_metadata() const
 {
-  std::vector<std::pair<int64_t, int64_t>> rg_metadata;
+  std::vector<std::unordered_map<std::string, int64_t>> rg_metadata;
 
-  std::for_each(
-    per_file_metadata.cbegin(), per_file_metadata.cend(), [&rg_metadata](auto const& pfm) {
-      std::transform(
-        pfm.row_groups.cbegin(),
-        pfm.row_groups.cend(),
-        std::back_inserter(rg_metadata),
-        [](auto const& rg) { return std::make_pair(rg.num_rows, rg.total_byte_size); });
+  std::transform(
+    per_file_metadata.cbegin(),
+    per_file_metadata.cend(),
+    std::back_inserter(rg_metadata),
+    [](auto const& pfm) {
+      std::unordered_map<std::string, int64_t> rg_meta_map;
+      std::for_each(pfm.row_groups.cbegin(), pfm.row_groups.cend(), [&rg_meta_map](auto const& rg) {
+        rg_meta_map["num_rows"]        = rg.num_rows;
+        rg_meta_map["total_byte_size"] = rg.total_byte_size;
+      });
+      return rg_meta_map;
     });
   return rg_metadata;
 }
