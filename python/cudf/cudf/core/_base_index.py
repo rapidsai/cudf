@@ -1984,14 +1984,15 @@ class BaseIndex(Serializable):
 
         # This utilizes the fact that all `Index` is also a `Frame`.
         # Except RangeIndex.
-        return self._from_columns_like_self(
-            drop_duplicates(
-                list(self._columns),
-                keys=range(len(self._data)),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
-            self._column_names,
+        return self._from_data(
+            self._data._from_columns_like_self(
+                drop_duplicates(
+                    list(self._columns),
+                    keys=range(len(self._data)),
+                    keep=keep,
+                    nulls_are_equal=nulls_are_equal,
+                ),
+            )
         )
 
     def duplicated(self, keep="first"):
@@ -2071,13 +2072,14 @@ class BaseIndex(Serializable):
             for col in self._columns
         ]
 
-        return self._from_columns_like_self(
-            drop_nulls(
-                data_columns,
-                how=how,
-                keys=range(len(data_columns)),
-            ),
-            self._column_names,
+        return self._from_data(
+            self._data._from_columns_like_self(
+                drop_nulls(
+                    data_columns,
+                    how=how,
+                    keys=range(len(data_columns)),
+                ),
+            )
         )
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
@@ -2098,9 +2100,10 @@ class BaseIndex(Serializable):
         ):
             raise IndexError("Gather map index is out of bounds.")
 
-        return self._from_columns_like_self(
-            gather(list(self._columns), gather_map, nullify=nullify),
-            self._column_names,
+        return self._from_data(
+            self._data._from_columns_like_self(
+                gather(list(self._columns), gather_map, nullify=nullify),
+            )
         )
 
     def take(self, indices, axis=0, allow_fill=True, fill_value=None):
@@ -2147,9 +2150,10 @@ class BaseIndex(Serializable):
         if not is_bool_dtype(boolean_mask.dtype):
             raise ValueError("boolean_mask is not boolean type.")
 
-        return self._from_columns_like_self(
-            apply_boolean_mask(list(self._columns), boolean_mask),
-            column_names=self._column_names,
+        return self._from_data(
+            self._data._from_columns_like_self(
+                apply_boolean_mask(list(self._columns), boolean_mask),
+            )
         )
 
     def repeat(self, repeats, axis=None):

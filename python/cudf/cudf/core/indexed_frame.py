@@ -299,12 +299,6 @@ class IndexedFrame(Frame):
         return out
 
     @_cudf_nvtx_annotate
-    def _from_data_like_self(self, data: MutableMapping):
-        out = self._from_data(data, self._index)
-        out._data._level_names = self._data._level_names
-        return out
-
-    @_cudf_nvtx_annotate
     def _from_columns_like_self(
         self,
         columns: List[ColumnBase],
@@ -1906,13 +1900,13 @@ class IndexedFrame(Frame):
         1  <NA>  3.14
         2  <NA>  <NA>
         """
-        result_data = {}
-        for name, col in self._data.items():
-            try:
-                result_data[name] = col.nans_to_nulls()
-            except AttributeError:
-                result_data[name] = col.copy()
-        return self._from_data_like_self(result_data)
+        result = (
+            col.nans_to_nulls()
+            if isinstance(col, cudf.core.column.NumericalColumn)
+            else col.copy()
+            for col in self._data.columns
+        )
+        return self._from_data(self._data._from_columns_like_self(result))
 
     def _copy_type_metadata(
         self,
