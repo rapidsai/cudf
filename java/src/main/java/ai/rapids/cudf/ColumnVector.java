@@ -772,7 +772,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), 0));
+    return new ColumnVector(md5(columnViews));
   }
 
   /**
@@ -879,15 +879,12 @@ public final class ColumnVector extends ColumnView {
                                                        boolean separate_nulls);
 
   /**
-   * Native method to hash each row of the given table. Hashing function dispatched on the
-   * native side using the hashId.
+   * Native method to MD5 hash each row of the given table
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
-   * @param hashId integer native ID of the hashing function identifier HashType.
-   * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId, int seed) throws CudfException;
+  private static native long md5(long[] viewHandles) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
