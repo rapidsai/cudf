@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -127,7 +128,9 @@ std::unique_ptr<column> sequence(size_type size,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(init.type() == step.type(), "init and step must be of the same type.");
+  CUDF_EXPECTS(cudf::scalar_types_equal(init, step),
+               "init and step must be of the same type.",
+               cudf::data_type_error);
   CUDF_EXPECTS(size >= 0, "size must be >= 0");
   CUDF_EXPECTS(is_numeric(init.type()), "Input scalar types must be numeric");
 

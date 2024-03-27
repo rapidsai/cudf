@@ -21,6 +21,7 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -82,7 +83,7 @@ TEST_F(DictionarySetKeysTest, Errors)
   auto dictionary = cudf::dictionary::encode(input);
 
   cudf::test::fixed_width_column_wrapper<float> new_keys{1.0, 2.0, 3.0};
-  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::data_type_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), cudf::logic_error);
 }

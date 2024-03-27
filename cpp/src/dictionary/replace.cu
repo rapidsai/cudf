@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,8 @@
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/utilities/error.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -83,7 +85,9 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
-  CUDF_EXPECTS(input.keys().type() == replacement.keys().type(), "keys must match");
+  CUDF_EXPECTS(cudf::column_types_equal(input.keys(), replacement.keys()),
+               "keys must match",
+               cudf::data_type_error);
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
   // first combine the keys so both input dictionaries have the same set
@@ -118,7 +122,9 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   if (!input.has_nulls() || !replacement.is_valid(stream)) {
     return std::make_unique<cudf::column>(input.parent(), stream, mr);
   }
-  CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");
+  CUDF_EXPECTS(cudf::column_scalar_types_equal(input.parent(), replacement),
+               "keys must match scalar type",
+               cudf::data_type_error);
 
   // first add the replacement to the keys so only the indices need to be processed
   auto input_matched = dictionary::detail::add_keys(

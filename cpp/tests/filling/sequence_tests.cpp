@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,15 +102,15 @@ TEST_F(SequenceTestFixture, MismatchedInputs)
 {
   cudf::numeric_scalar<int> init(0);
   cudf::numeric_scalar<float> step(-5);
-  EXPECT_THROW(cudf::sequence(10, init, step), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, init, step), cudf::data_type_error);
 
   cudf::numeric_scalar<int> init2(0);
   cudf::numeric_scalar<int8_t> step2(-5);
-  EXPECT_THROW(cudf::sequence(10, init2, step2), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, init2, step2), cudf::data_type_error);
 
   cudf::numeric_scalar<float> init3(0);
   cudf::numeric_scalar<double> step3(-5);
-  EXPECT_THROW(cudf::sequence(10, init3, step3), cudf::logic_error);
+  EXPECT_THROW(cudf::sequence(10, init3, step3), cudf::data_type_error);
 }
 
 TYPED_TEST(SequenceTypedTestFixture, DefaultStep)

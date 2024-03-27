@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <limits>
 
@@ -198,7 +199,7 @@ TEST_F(OneHotEncodingTest, MismatchTypes)
   auto input    = cudf::test::strings_column_wrapper{"xx", "yy", "xx"};
   auto category = cudf::test::fixed_width_column_wrapper<int64_t>{1};
 
-  EXPECT_THROW(cudf::one_hot_encode(input, category), cudf::logic_error);
+  EXPECT_THROW(cudf::one_hot_encode(input, category), cudf::data_type_error);
 }
 
 TEST_F(OneHotEncodingTest, List)

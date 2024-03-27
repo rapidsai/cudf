@@ -30,6 +30,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/replace.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -63,7 +64,7 @@ TEST_F(ReplaceErrorTest, TypeMismatch)
 
   EXPECT_THROW(
     cudf::find_and_replace_all(input_column, values_to_replace_column, replacement_values_column),
-    cudf::logic_error);
+    cudf::data_type_error);
 }
 
 // Error: nulls in old-values

@@ -32,6 +32,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -146,8 +147,9 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   // check the keys in the source and target
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
-  CUDF_EXPECTS(dict_source.keys().type() == dict_target.keys().type(),
-               "dictionary keys must be the same type");
+  CUDF_EXPECTS(cudf::column_types_equal(dict_source.keys(), dict_target.keys()),
+               "dictionary keys must be the same type",
+               cudf::data_type_error);
 
   // combine keys so both dictionaries have the same set
   auto target_matched =
@@ -210,7 +212,8 @@ void copy_range_in_place(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(
+    cudf::column_types_equal(target, source), "Data type mismatch.", cudf::data_type_error);
   CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.",
                std::invalid_argument);
@@ -238,7 +241,8 @@ std::unique_ptr<column> copy_range(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(
+    cudf::column_types_equal(target, source), "Data type mismatch.", cudf::data_type_error);
 
   return cudf::type_dispatcher<dispatch_storage_type>(
     target.type(),

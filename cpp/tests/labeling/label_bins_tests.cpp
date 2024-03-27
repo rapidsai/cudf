@@ -25,6 +25,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/labeling/label_bins.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <algorithm>
 #include <limits>
@@ -64,7 +65,7 @@ TEST(BinColumnErrorTests, TestInvalidLeft)
 
   EXPECT_THROW(
     cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-    cudf::logic_error);
+    cudf::data_type_error);
 };
 
 // Right edges type check.
@@ -76,7 +77,7 @@ TEST(BinColumnErrorTests, TestInvalidRight)
 
   EXPECT_THROW(
     cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-    cudf::logic_error);
+    cudf::data_type_error);
 };
 
 // Input type check.
@@ -88,7 +89,7 @@ TEST(BinColumnErrorTests, TestInvalidInput)
 
   EXPECT_THROW(
     cudf::label_bins(input, left_edges, cudf::inclusive::YES, right_edges, cudf::inclusive::NO),
-    cudf::logic_error);
+    cudf::data_type_error);
 };
 
 // Number of left and right edges must match.

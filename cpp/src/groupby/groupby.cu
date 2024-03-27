@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
@@ -311,11 +312,14 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
                "Mismatch number of fill_values and columns.");
-  CUDF_EXPECTS(
-    std::all_of(thrust::make_counting_iterator(0),
-                thrust::make_counting_iterator(values.num_columns()),
-                [&](auto i) { return values.column(i).type() == fill_values[i].get().type(); }),
-    "values and fill_value should have the same type.");
+  CUDF_EXPECTS(std::all_of(thrust::make_counting_iterator(0),
+                           thrust::make_counting_iterator(values.num_columns()),
+                           [&](auto i) {
+                             return cudf::column_scalar_types_equal(values.column(i),
+                                                                    fill_values[i].get());
+                           }),
+               "values and fill_value should have the same type.",
+               cudf::data_type_error);
 
   auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;
