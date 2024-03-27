@@ -259,7 +259,7 @@ dependencies:
           - *ninja
           # Hard pin the patch version used during the build. This must be kept
           # in sync with the version pinned in get_arrow.cmake.
-          - pyarrow==14.0.2.*
+          - pyarrow==15.0.2.*
       - output_types: conda
         packages:
           - scikit-build-core>=0.7.0
@@ -276,7 +276,7 @@ dependencies:
       - output_types: conda
         packages:
           - &rmm_conda rmm==24.6.*
-          - &protobuf protobuf>=4.21,<5
+          - &protobuf protobuf
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -309,27 +309,27 @@ dependencies:
         packages:
           # Hard pin the Arrow patch version used during the build. This must
           # be kept in sync with the version pinned in get_arrow.cmake.
-          - libarrow-acero==14.0.2.*
-          - libarrow-dataset==14.0.2.*
-          - libarrow==14.0.2.*
-          - libparquet==14.0.2.*
+          - libarrow-acero==15.0.2.*
+          - libarrow-dataset==15.0.2.*
+          - libarrow==15.0.2.*
+          - libparquet==15.0.2.*
   libarrow_run:
     common:
       - output_types: conda
         packages:
           # Allow runtime version to float up to minor version
-          # Disallow libarrow 14.0.0 due to a CVE
-          - libarrow-acero>=14.0.1,<15.0.0a0
-          - libarrow-dataset>=14.0.1,<15.0.0a0
-          - libarrow>=14.0.1,<15.0.0a0
-          - libparquet>=14.0.1,<15.0.0a0
+          # Disallow libarrow 15.0.0 & 15.0.1 due to a compilation issue
+          - libarrow-acero>=15.0.2,<16.0.0a0
+          - libarrow-dataset>=15.0.2,<16.0.0a0
+          - libarrow>=15.0.2,<16.0.0a0
+          - libparquet>=15.0.2,<16.0.0a0
   pyarrow_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           # Allow runtime version to float up to minor version
           # Disallow pyarrow 14.0.0 due to a CVE
-          - pyarrow>=14.0.1,<15.0.0a0
+          - pyarrow>=15.0.2,<16.0.0a0
   cuda_version:
     specific:
       - output_types: conda
@@ -641,7 +641,7 @@ dependencies:
               arch: x86_64
             packages:
               # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
-              - pytorch>=2.1.0
+              - pytorch
               # We only install these on x86_64 to avoid pulling pytorch as a
               # dependency of transformers.
               - *tokenizers
