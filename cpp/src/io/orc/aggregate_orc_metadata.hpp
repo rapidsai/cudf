@@ -45,8 +45,6 @@ struct column_hierarchy {
  * to aggregate that metadata from all the files.
  */
 class aggregate_orc_metadata {
-  using OrcStripeInfo = std::pair<StripeInformation const*, StripeFooter const*>;
-
   /**
    * @brief Sums up the number of rows of each source
    */
@@ -115,11 +113,11 @@ class aggregate_orc_metadata {
    *
    * Stripes are potentially selected from multiple files.
    */
-  [[nodiscard]] std::tuple<int64_t, size_type, std::vector<metadata::stripe_source_mapping>>
-  select_stripes(std::vector<std::vector<size_type>> const& user_specified_stripes,
-                 int64_t skip_rows,
-                 std::optional<size_type> const& num_rows,
-                 rmm::cuda_stream_view stream);
+  [[nodiscard]] std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>> select_stripes(
+    std::vector<std::vector<size_type>> const& user_specified_stripes,
+    int64_t skip_rows,
+    std::optional<size_type> const& num_rows,
+    rmm::cuda_stream_view stream);
 
   /**
    * @brief Filters ORC file to a selection of columns, based on their paths in the file.

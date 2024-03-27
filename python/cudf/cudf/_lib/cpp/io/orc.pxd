@@ -1,6 +1,6 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
-from libc.stdint cimport uint8_t
+from libc.stdint cimport int64_t, uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -21,8 +21,8 @@ cdef extern from "cudf/io/orc.hpp" \
 
         cudf_io_types.source_info get_source() except +
         vector[vector[size_type]] get_stripes() except +
-        size_type get_skip_rows() except +
-        size_type get_num_rows() except +
+        int64_t get_skip_rows() except +
+        optional[int64_t] get_num_rows() except +
         bool is_enabled_use_index() except +
         bool is_enabled_use_np_dtypes() except +
         data_type get_timestamp_type() except +
@@ -31,8 +31,8 @@ cdef extern from "cudf/io/orc.hpp" \
 
         void set_columns(vector[string] col_names) except +
         void set_stripes(vector[vector[size_type]] strps) except +
-        void set_skip_rows(size_type rows) except +
-        void set_num_rows(size_type nrows) except +
+        void set_skip_rows(int64_t rows) except +
+        void set_num_rows(int64_t nrows) except +
         void enable_use_index(bool val) except +
         void enable_use_np_dtypes(bool val) except +
         void set_timestamp_type(data_type type) except +
@@ -49,8 +49,8 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& columns(vector[string] col_names) except +
         orc_reader_options_builder& \
             stripes(vector[vector[size_type]] strps) except +
-        orc_reader_options_builder& skip_rows(size_type rows) except +
-        orc_reader_options_builder& num_rows(size_type nrows) except +
+        orc_reader_options_builder& skip_rows(int64_t rows) except +
+        orc_reader_options_builder& num_rows(int64_t nrows) except +
         orc_reader_options_builder& use_index(bool val) except +
         orc_reader_options_builder& use_np_dtypes(bool val) except +
         orc_reader_options_builder& timestamp_type(data_type type) except +
