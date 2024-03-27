@@ -2,7 +2,7 @@ name: Echo on PR
 
 on:
   pull_request:
-    types: [opened]
+    types: [opened, reopened]
 
 jobs:
   echo_job:
