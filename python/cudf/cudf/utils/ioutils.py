@@ -1845,6 +1845,7 @@ def stringify_pathlike(pathlike):
     """
     Convert any object that implements the fspath protocol
     to a string. Leaves other objects unchanged
+
     Parameters
     ----------
     pathlike
