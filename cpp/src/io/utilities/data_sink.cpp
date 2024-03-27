@@ -36,6 +36,7 @@ class file_sink : public data_sink {
  public:
   explicit file_sink(std::string const& filepath)
   {
+    detail::force_init_cuda_context();
     _output_stream.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
     if (!_output_stream.is_open()) { detail::throw_on_file_open_failure(filepath, true); }
 
