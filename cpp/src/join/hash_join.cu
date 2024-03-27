@@ -21,6 +21,7 @@
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -569,7 +570,9 @@ hash_join<Hasher>::compute_hash_join(cudf::table_view const& probe,
                      std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  CUDF_EXPECTS(cudf::have_same_types(_build, probe), "Mismatch in joining column data types");
+  CUDF_EXPECTS(cudf::have_same_types(_build, probe),
+               "Mismatch in joining column data types",
+               cudf::data_type_error);
 
   return probe_join_indices(probe, join, output_size, stream, mr);
 }

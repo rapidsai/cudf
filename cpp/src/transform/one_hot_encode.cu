@@ -62,7 +62,8 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(cudf::column_types_equal(input, categories),
-               "Mismatch type between input and categories.");
+               "Mismatch type between input and categories.",
+               cudf::data_type_error);
 
   if (categories.is_empty()) { return {make_empty_column(type_id::BOOL8), table_view{}}; }
 

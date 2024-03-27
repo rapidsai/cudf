@@ -210,7 +210,8 @@ std::unique_ptr<column> label_bins(column_view const& input,
   CUDF_FUNC_RANGE()
   CUDF_EXPECTS(
     cudf::column_types_equal(input, left_edges) && cudf::column_types_equal(input, right_edges),
-    "The input and edge columns must have the same types.");
+    "The input and edge columns must have the same types.",
+    cudf::data_type_error);
   CUDF_EXPECTS(left_edges.size() == right_edges.size(),
                "The left and right edge columns must be of the same length.");
   CUDF_EXPECTS(!left_edges.has_nulls() && !right_edges.has_nulls(),

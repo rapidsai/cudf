@@ -148,7 +148,8 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
   CUDF_EXPECTS(cudf::column_types_equal(dict_source.keys(), dict_target.keys()),
-               "dictionary keys must be the same type");
+               "dictionary keys must be the same type",
+               cudf::data_type_error);
 
   // combine keys so both dictionaries have the same set
   auto target_matched =

@@ -23,6 +23,7 @@
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -139,7 +140,9 @@ std::unique_ptr<column> sequences(column_view const& starts,
                "starts and sizes input columns must not have nulls.");
   CUDF_EXPECTS(starts.size() == sizes.size(),
                "starts and sizes input columns must have the same number of rows.");
-  CUDF_EXPECTS(cudf::is_index_type(sizes.type()), "Input sizes column must be of integer types.");
+  CUDF_EXPECTS(cudf::is_index_type(sizes.type()),
+               "Input sizes column must be of integer types.",
+               cudf::data_type_error);
 
   if (steps) {
     auto const& steps_cv = steps.value();
@@ -147,7 +150,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
     CUDF_EXPECTS(starts.size() == steps_cv.size(),
                  "starts and steps input columns must have the same number of rows.");
     CUDF_EXPECTS(cudf::column_types_equal(starts, steps_cv),
-                 "starts and steps input columns must have the same type.");
+                 "starts and steps input columns must have the same type.",
+                 cudf::data_type_error);
   }
 
   auto const n_lists = starts.size();

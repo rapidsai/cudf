@@ -413,7 +413,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::column_types_equal(input, replacement), "Data type mismatch");
+  CUDF_EXPECTS(
+    cudf::column_types_equal(input, replacement), "Data type mismatch", cudf::data_type_error);
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
   if (input.is_empty()) { return cudf::empty_like(input); }

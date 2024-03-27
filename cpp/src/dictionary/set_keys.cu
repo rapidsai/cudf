@@ -29,6 +29,7 @@
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_checks.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -123,7 +124,8 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");
   auto keys = dictionary_column.keys();
-  CUDF_EXPECTS(cudf::column_types_equal(keys, new_keys), "keys types must match");
+  CUDF_EXPECTS(
+    cudf::column_types_equal(keys, new_keys), "keys types must match", cudf::data_type_error);
 
   // copy the keys -- use cudf::distinct to make sure there are no duplicates,
   // then sort the results.
