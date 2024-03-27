@@ -1,0 +1,12 @@
+name: Echo on PR
+
+on:
+  pull_request:
+    types: [opened]
+
+jobs:
+  echo_job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Echo abc
+        run: echo 'abc'
