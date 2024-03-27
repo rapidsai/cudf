@@ -4,6 +4,8 @@
 
 # libcudf examples build script
 
+set -euo pipefail
+
 # Parallelism control
 PARALLEL_LEVEL=${PARALLEL_LEVEL:-4}
 

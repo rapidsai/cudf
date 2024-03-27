@@ -92,6 +92,9 @@ int main(int argc, char** argv)
   // memory resource.
   rmm::mr::set_current_device_resource(&mr);
 
+  // for testing the CI.
+  i_am_a_dummy_compile_time_error;
+
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");
 
