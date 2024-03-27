@@ -147,12 +147,12 @@ __device__ inline bool is_nested(ColumnChunkDesc const& chunk)
 
 __device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
 {
-  return (chunk.data_type & 7) == BYTE_ARRAY;
+  return chunk.physical_type == BYTE_ARRAY;
 }
 
 __device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
 {
-  return (chunk.data_type & 7) == BOOLEAN;
+  return chunk.physical_type == BOOLEAN;
 }
 
 /**

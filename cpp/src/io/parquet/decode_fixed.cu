@@ -165,7 +165,7 @@ __device__ inline void gpuDecodeValues(
   constexpr int max_batch_size = num_warps * cudf::detail::warp_size;
 
   PageNestingDecodeInfo* nesting_info_base = s->nesting_info;
-  int const dtype                          = s->col.data_type & 7;
+  int const dtype                          = s->col.physical_type;
 
   // decode values
   int pos = start;
@@ -187,7 +187,7 @@ __device__ inline void gpuDecodeValues(
       uint32_t dtype_len = s->dtype_len;
       void* dst =
         nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
-      if (s->col.converted_type == DECIMAL) {
+      if (s->col.logical_type.has_value() && s->col.logical_type->type == LogicalType::DECIMAL) {
         switch (dtype) {
           case INT32: gpuOutputFast(s, sb, src_pos, static_cast<uint32_t*>(dst)); break;
           case INT64: gpuOutputFast(s, sb, src_pos, static_cast<uint2*>(dst)); break;

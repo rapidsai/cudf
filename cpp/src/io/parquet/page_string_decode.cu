@@ -689,7 +689,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
   auto const start_value = pp->start_val;
 
   // if data size is known, can short circuit here
-  if ((chunks[pp->chunk_idx].data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+  if (chunks[pp->chunk_idx].physical_type == FIXED_LEN_BYTE_ARRAY) {
     if (t == 0) {
       pp->str_bytes = pp->num_valids * s->dtype_len_in;
 
@@ -881,7 +881,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
   auto const& col  = s->col;
   size_t str_bytes = 0;
   // short circuit for FIXED_LEN_BYTE_ARRAY
-  if ((col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+  if (col.physical_type == FIXED_LEN_BYTE_ARRAY) {
     str_bytes = pp->num_valids * s->dtype_len_in;
   } else {
     // now process string info in the range [start_value, end_value)

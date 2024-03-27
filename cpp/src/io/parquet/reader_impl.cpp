@@ -28,6 +28,19 @@
 
 namespace cudf::io::parquet::detail {
 
+namespace {
+// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
+// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
+// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
+// for now would also be treated as a string).
+inline bool is_treat_fixed_length_as_string(thrust::optional<LogicalType> const& logical_type)
+{
+  if (!logical_type.has_value()) { return true; }
+  return logical_type->type != LogicalType::DECIMAL;
+}
+
+}  // namespace
+
 void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_rows, size_t num_rows)
 {
   auto& pass    = *_pass_itm_data;
@@ -66,7 +79,8 @@ void reader::impl::decode_page_data(bool uses_custom_row_bounds, size_t skip_row
     // TODO: we could probably dummy up size stats for FLBA data since we know the width
     auto const has_flba =
       std::any_of(pass.chunks.begin(), pass.chunks.end(), [](auto const& chunk) {
-        return (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY && chunk.converted_type != DECIMAL;
+        return chunk.physical_type == FIXED_LEN_BYTE_ARRAY and
+               is_treat_fixed_length_as_string(chunk.logical_type);
       });
 
     if (!_has_page_index || uses_custom_row_bounds || has_flba) {
