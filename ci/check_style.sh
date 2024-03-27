@@ -13,7 +13,7 @@ rapids-dependency-file-generator \
   --file_key checks \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n checks
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n checks
 conda activate checks
 
 RAPIDS_VERSION_MAJOR_MINOR="$(rapids-version-major-minor)"
