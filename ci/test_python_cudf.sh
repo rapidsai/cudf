@@ -5,7 +5,7 @@
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../;
 
 # Common setup steps shared by Python test jobs
-source ./ci/test_python_common.sh
+source ./ci/test_python_common.sh ${1}
 
 rapids-logger "Check GPU usage"
 nvidia-smi
