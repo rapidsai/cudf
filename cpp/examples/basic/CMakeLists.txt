@@ -1,6 +1,8 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 cmake_minimum_required(VERSION 3.26.4)
+
+include(../set_cuda_architecture.cmake)
 
 project(
   basic_example

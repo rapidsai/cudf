@@ -31,7 +31,7 @@ rapids-print-env
 
 rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
-  libcudf libcudf_kafka libcudf-tests
+  libcudf libcudf_kafka libcudf-tests libcudf-example
 
 rapids-logger "Check GPU usage"
 nvidia-smi
