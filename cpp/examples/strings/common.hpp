@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
