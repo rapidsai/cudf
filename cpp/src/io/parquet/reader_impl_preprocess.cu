@@ -643,7 +643,7 @@ struct set_str_dict_index_count {
   __device__ void operator()(PageInfo const& page)
   {
     auto const& chunk = chunks[page.chunk_idx];
-    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) && (chunk.data_type & 0x7) == BYTE_ARRAY &&
+    if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) && chunk.physical_type == BYTE_ARRAY &&
         (chunk.num_dict_pages > 0)) {
       // there is only ever one dictionary page per chunk, so this is safe to do in parallel.
       str_dict_index_count[page.chunk_idx] = page.num_input_values;
@@ -659,7 +659,7 @@ struct set_str_dict_index_ptr {
   __device__ void operator()(size_t i)
   {
     auto& chunk = chunks[i];
-    if ((chunk.data_type & 0x7) == BYTE_ARRAY && (chunk.num_dict_pages > 0)) {
+    if (chunk.physical_type == BYTE_ARRAY && (chunk.num_dict_pages > 0)) {
       chunk.str_dict_index = base + str_dict_index_offsets[i];
     }
   }

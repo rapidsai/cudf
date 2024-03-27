@@ -370,8 +370,8 @@ struct ColumnChunkDesc {
   explicit ColumnChunkDesc(size_t compressed_size_,
                            uint8_t* compressed_data_,
                            size_t num_values_,
-                           uint16_t datatype_,
-                           uint16_t datatype_length_,
+                           Type datatype_,
+                           int32_t datatype_length_,
                            size_t start_row_,
                            uint32_t num_rows_,
                            int16_t max_definition_level_,
@@ -379,15 +379,14 @@ struct ColumnChunkDesc {
                            int16_t max_nesting_depth_,
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
-                           int8_t codec_,
-                           int8_t converted_type_,
+                           Compression codec_,
                            thrust::optional<LogicalType> logical_type_,
-                           int8_t decimal_precision_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
                            column_chunk_info const* chunk_info_,
-                           float list_bytes_per_row_est_)
+                           float list_bytes_per_row_est_,
+                           bool strings_to_categorical_)
     : compressed_data(compressed_data_),
       compressed_size(compressed_size_),
       num_values(num_values_),
@@ -395,7 +394,8 @@ struct ColumnChunkDesc {
       num_rows(num_rows_),
       max_level{max_definition_level_, max_repetition_level_},
       max_nesting_depth{max_nesting_depth_},
-      data_type(datatype_ | (datatype_length_ << 3)),
+      type_length(datatype_length_),
+      physical_type(datatype_),
       level_bits{def_level_bits_, rep_level_bits_},
       num_data_pages(0),
       num_dict_pages(0),
@@ -405,14 +405,13 @@ struct ColumnChunkDesc {
       column_data_base{nullptr},
       column_string_base{nullptr},
       codec(codec_),
-      converted_type(converted_type_),
       logical_type(logical_type_),
-      decimal_precision(decimal_precision_),
       ts_clock_rate(ts_clock_rate_),
       src_col_index(src_col_index_),
       src_col_schema(src_col_schema_),
       h_chunk_info(chunk_info_),
-      list_bytes_per_row_est(list_bytes_per_row_est_)
+      list_bytes_per_row_est(list_bytes_per_row_est_),
+      is_strings_to_cat(strings_to_categorical_)
   {
   }
 
@@ -423,7 +422,8 @@ struct ColumnChunkDesc {
   uint32_t num_rows{};               // number of rows in this chunk
   int16_t max_level[level_type::NUM_LEVEL_TYPES]{};  // max definition/repetition level
   int16_t max_nesting_depth{};                       // max nesting depth of the output
-  uint16_t data_type{};  // basic column data type, ((type_length << 3) | // parquet::Type)
+  int32_t type_length{};                             // type length from schema (for FLBA only)
+  Type physical_type{};                              // parquet physical data type
   uint8_t
     level_bits[level_type::NUM_LEVEL_TYPES]{};  // bits to encode max definition/repetition levels
   int32_t num_data_pages{};                     // number of data pages
@@ -433,10 +433,8 @@ struct ColumnChunkDesc {
   bitmask_type** valid_map_base{};               // base pointers of valid bit map for this column
   void** column_data_base{};                     // base pointers of column data
   void** column_string_base{};                   // base pointers of column string data
-  int8_t codec{};                                // compressed codec enum
-  int8_t converted_type{};                       // converted type enum
+  Compression codec{};                           // compressed codec enum
   thrust::optional<LogicalType> logical_type{};  // logical type
-  int8_t decimal_precision{};                    // Decimal precision
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
@@ -446,6 +444,8 @@ struct ColumnChunkDesc {
   column_chunk_info const* h_chunk_info{};
 
   float list_bytes_per_row_est{};  // for LIST columns, an estimate on number of bytes per row
+
+  bool is_strings_to_cat{};  // convert strings to hashes
 };
 
 /**
@@ -615,11 +615,16 @@ struct EncPage {
  */
 constexpr bool is_string_col(ColumnChunkDesc const& chunk)
 {
-  auto const not_converted_to_decimal = chunk.converted_type != DECIMAL;
+  // return true for non-hashed byte_array and fixed_len_byte_array that isn't representing
+  // a decimal.
+  if (chunk.logical_type.has_value() and chunk.logical_type->type == LogicalType::DECIMAL) {
+    return false;
+  }
+
   auto const non_hashed_byte_array =
-    (chunk.data_type & 7) == BYTE_ARRAY and (chunk.data_type >> 3) != 4;
-  auto const fixed_len_byte_array = (chunk.data_type & 7) == FIXED_LEN_BYTE_ARRAY;
-  return not_converted_to_decimal and (non_hashed_byte_array or fixed_len_byte_array);
+    chunk.physical_type == BYTE_ARRAY and not chunk.is_strings_to_cat;
+  auto const fixed_len_byte_array = chunk.physical_type == FIXED_LEN_BYTE_ARRAY;
+  return non_hashed_byte_array or fixed_len_byte_array;
 }
 
 /**
