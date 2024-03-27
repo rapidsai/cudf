@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -164,7 +164,7 @@ bool is_relationally_comparable(TableView const& lhs, TableView const& rhs)
   return std::all_of(thrust::counting_iterator<size_type>(0),
                      thrust::counting_iterator<size_type>(lhs.num_columns()),
                      [lhs, rhs](auto const i) {
-                       return lhs.column(i).type() == rhs.column(i).type() and
+                       return cudf::column_types_equal(lhs.column(i), rhs.column(i)) and
                               cudf::is_relationally_comparable(lhs.column(i).type());
                      });
 }
