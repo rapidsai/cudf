@@ -65,8 +65,8 @@ bool column_scalar_types_equal(column_view const& col, scalar const& slr);
  * - For struct types, the type of each field are compared in order.
  * - For all other types, the `id` of `data_type` is compared.
  *
- * @param lhs The first `scalar to compare
- * @param rhs The second `scalar to compare
+ * @param lhs The first `scalar` to compare
+ * @param rhs The second `scalar` to compare
  * @return true if scalar types match
  */
 bool scalar_types_equal(scalar const& lhs, scalar const& rhs);
