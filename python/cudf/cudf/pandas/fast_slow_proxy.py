@@ -114,6 +114,7 @@ def make_final_proxy_type(
     additional_attributes: Mapping[str, Any] | None = None,
     postprocess: Callable[[_FinalProxy, Any, Any], Any] | None = None,
     bases: Tuple = (),
+    metaclasses: Tuple = (),
 ) -> Type[_FinalProxy]:
     """
     Defines a fast-slow proxy type for a pair of "final" fast and slow
@@ -144,6 +145,8 @@ def make_final_proxy_type(
         construct said unwrapped object. See also `_maybe_wrap_result`.
     bases
         Optional tuple of base classes to insert into the mro.
+    metaclasses
+        Optional tuple of metaclasses to unify with the base proxy metaclass.
 
     Notes
     -----
@@ -217,10 +220,17 @@ def make_final_proxy_type(
         elif v is not _DELETE:
             cls_dict[k] = v
 
+    metaclass = _FastSlowProxyMeta
+    if metaclasses:
+        metaclass = types.new_class(  # type: ignore
+            f"{name}_Meta",
+            metaclasses + (_FastSlowProxyMeta,),
+            {},
+        )
     cls = types.new_class(
         name,
         (*bases, _FinalProxy),
-        {"metaclass": _FastSlowProxyMeta},
+        {"metaclass": metaclass},
         lambda ns: ns.update(cls_dict),
     )
     functools.update_wrapper(
