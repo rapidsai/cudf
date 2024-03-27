@@ -367,6 +367,11 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
     });
 }
 
+size_type aggregate_reader_metadata::calc_num_columns() const
+{
+  return per_file_metadata[0].row_groups[0].columns.size();
+}
+
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
                                                           size_type chunk_start_row) const
@@ -508,7 +513,8 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
     num_rows(calc_num_rows()),
-    num_row_groups(calc_num_row_groups())
+    num_row_groups(calc_num_row_groups()),
+    num_columns(calc_num_columns())
 {
   if (per_file_metadata.size() > 0) {
     auto const& first_meta = per_file_metadata.front();
@@ -546,6 +552,21 @@ ColumnChunkMetaData const& aggregate_reader_metadata::get_column_metadata(size_t
   CUDF_EXPECTS(col != std::end(per_file_metadata[src_idx].row_groups[row_group_index].columns),
                "Found no metadata for schema index");
   return col->meta_data;
+}
+
+std::vector<std::pair<int64_t, int64_t>> aggregate_reader_metadata::get_rowgroup_metadata() const
+{
+  std::vector<std::pair<int64_t, int64_t>> rg_metadata;
+
+  std::for_each(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), [&rg_metadata](auto const& pfm) {
+      std::transform(
+        pfm.row_groups.cbegin(),
+        pfm.row_groups.cend(),
+        std::back_inserter(rg_metadata),
+        [](auto const& rg) { return std::make_pair(rg.num_rows, rg.total_byte_size); });
+    });
+  return rg_metadata;
 }
 
 std::string aggregate_reader_metadata::get_pandas_index() const

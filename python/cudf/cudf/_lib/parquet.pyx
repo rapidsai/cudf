@@ -46,6 +46,10 @@ from cudf._lib.cpp.io.parquet cimport (
     read_parquet as parquet_reader,
     write_parquet as parquet_writer,
 )
+from cudf._lib.cpp.io.parquet_metadata cimport (
+    parquet_metadata,
+    read_parquet_metadata as parquet_metadata_reader,
+)
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -315,6 +319,42 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     if len(df._data.names) == 0 and column_index_type is not None:
         df._data.label_dtype = cudf.dtype(column_index_type)
     return df
+
+cpdef read_parquet_metadata(filepaths_or_buffers):
+    """
+    Cython function to call into libcudf API, see `read_parquet_metadata`.
+
+    filters, if not None, should be an Expression that evaluates to a
+    boolean predicate as a function of columns being read.
+
+    See Also
+    --------
+    cudf.io.parquet.read_parquet
+    cudf.io.parquet.to_parquet
+    """
+    # Convert NativeFile buffers to NativeFileDatasource,
+    for i, datasource in enumerate(filepaths_or_buffers):
+        if isinstance(datasource, NativeFile):
+            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
+
+    cdef cudf_io_types.source_info source = make_source_info(filepaths_or_buffers)
+
+    args = move(source)
+
+    cdef parquet_metadata c_result
+
+    # Read Parquet metadata
+    with nogil:
+        c_result = move(parquet_metadata_reader(args))
+
+    # access and return results
+    num_columns = c_result.num_columns()
+    num_rows = c_result.num_rows()
+    num_rowgroups = c_result.num_rowgroups()
+    names = [info.name().decode() for info in c_result.schema().root().children()]
+    row_group_metadata = c_result.rowgroup_metadata()
+
+    return num_rows, num_rowgroups, names, num_columns, row_group_metadata
 
 
 @acquire_spill_lock()

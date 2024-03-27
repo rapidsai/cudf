@@ -126,6 +126,7 @@ class aggregate_reader_metadata {
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   int64_t num_rows;
   size_type num_row_groups;
+  size_type num_columns;
 
   /**
    * @brief Create a metadata object from each element in the source vector
@@ -149,6 +150,8 @@ class aggregate_reader_metadata {
    */
   [[nodiscard]] size_type calc_num_row_groups() const;
 
+  [[nodiscard]] size_type calc_num_columns() const;
+
   /**
    * @brief Calculate column index info for the given `row_group_info`
    *
@@ -166,9 +169,18 @@ class aggregate_reader_metadata {
                                                                size_type src_idx,
                                                                int schema_idx) const;
 
+  /**
+   * @brief Extracts high-level metadata for all row groups
+   *
+   * @return List of pairs of number of rows and total byte size for each row group
+   */
+  [[nodiscard]] std::vector<std::pair<int64_t, int64_t>> get_rowgroup_metadata() const;
+
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
+
+  [[nodiscard]] auto get_num_columns() const { return num_columns; }
 
   [[nodiscard]] auto const& get_schema(int schema_idx) const
   {
@@ -178,6 +190,7 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto const& get_key_value_metadata() const& { return keyval_maps; }
 
   [[nodiscard]] auto&& get_key_value_metadata() && { return std::move(keyval_maps); }
+
   /**
    * @brief Gets the concrete nesting depth of output cudf columns
    *

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,13 @@ enum class TypeKind : int8_t {
  */
 struct parquet_column_schema {
  public:
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit parquet_column_schema() = default;
+
   /**
    * @brief constructor
    *
@@ -135,6 +142,13 @@ struct parquet_column_schema {
 struct parquet_schema {
  public:
   /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit parquet_schema() = default;
+
+  /**
    * @brief constructor
    *
    * @param root_column_schema root column
@@ -165,6 +179,15 @@ class parquet_metadata {
  public:
   /// Key-value metadata in the file footer.
   using key_value_metadata = std::unordered_map<std::string, std::string>;
+  /// row group metadata from RowGroup element.
+  using row_group_metadata = std::pair<int64_t, int64_t>;
+
+  /**
+   * @brief Default constructor.
+   *
+   * This has been added since Cython requires a default constructor to create objects on stack.
+   */
+  explicit parquet_metadata() = default;
 
   /**
    * @brief constructor
@@ -172,16 +195,22 @@ class parquet_metadata {
    * @param schema parquet schema
    * @param num_rows number of rows
    * @param num_rowgroups number of row groups
+   * @param num_columns number of columns
    * @param file_metadata key-value metadata in the file footer
+   * @param rg_metadata vector of pairs of number of rows and total byte size for each row group
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
                    size_type num_rowgroups,
-                   key_value_metadata file_metadata)
+                   size_type num_columns,
+                   key_value_metadata file_metadata,
+                   std::vector<row_group_metadata> rg_metadata)
     : _schema{std::move(schema)},
       _num_rows{num_rows},
       _num_rowgroups{num_rowgroups},
-      _file_metadata{std::move(file_metadata)}
+      _num_columns{num_columns},
+      _file_metadata{std::move(file_metadata)},
+      _rowgroup_metadata{std::move(rg_metadata)}
   {
   }
 
@@ -207,6 +236,14 @@ class parquet_metadata {
    * @return Number of row groups
    */
   [[nodiscard]] auto num_rowgroups() const { return _num_rowgroups; }
+
+  /**
+   * @brief Returns the number of columns in the file.
+   *
+   * @return Number of row groups
+   */
+  [[nodiscard]] auto num_columns() const { return _num_columns; }
+
   /**
    * @brief Returns the Key value metadata in the file footer.
    *
@@ -214,11 +251,20 @@ class parquet_metadata {
    */
   [[nodiscard]] auto const& metadata() const { return _file_metadata; }
 
+  /**
+   * @brief Returns the row group metadata in the file footer.
+   *
+   * @return pairs of number of rows and total byte size for each row group as a vector
+   */
+  [[nodiscard]] auto const& rowgroup_metadata() const { return _rowgroup_metadata; }
+
  private:
   parquet_schema _schema;
   int64_t _num_rows;
   size_type _num_rowgroups;
+  size_type _num_columns;
   key_value_metadata _file_metadata;
+  std::vector<row_group_metadata> _rowgroup_metadata;
 };
 
 /**
