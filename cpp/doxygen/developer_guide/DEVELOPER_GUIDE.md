@@ -1027,6 +1027,16 @@ types such as numeric types and timestamps/durations, adding support for nested 
 Enabling an algorithm differently for different types uses either template specialization or SFINAE,
 as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dispatched-code-paths).
 
+## Comparing Data Types
+
+When comparing the data types of two columns or scalars, do not directly compare
+`a.type() == b.type()`. Nested types such as lists of structs of integers will not be handled
+properly if only the top level type is compared. Instead, use one of the following helpers:
+
+ * `cudf::column_types_equal` for comparing the types of two columns
+ * `cudf::column_scalar_types_equal` for comparing the types of a column and a scalar
+ * `cudf::scalar_types_equal` for comparing the types of two scalars
+
 # Type Dispatcher
 
 libcudf stores data (for columns and scalars) "type erased" in `void*` device memory. This
