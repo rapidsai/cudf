@@ -20,6 +20,7 @@
 #include "read_json.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
@@ -184,12 +185,14 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
                total_source_size) {
     // Find next delimiter
     /*
-     * TODO: is there a good heuristic to set the subchunk size? Setting number of subchunks per
-     * byte_range_size could be bad if the range size is large.
+     * NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
+     * 10kb) and the byte range size
      */
     std::int64_t next_delim_pos = -1;
     constexpr int num_subchunks = 10;  // per byte_range_size
-    size_t size_per_subchunk    = reader_opts.get_byte_range_size() / num_subchunks;
+    auto geometric_mean         = [](double a, double b) { return std::pow(a * b, 0.5); };
+    size_t size_per_subchunk =
+      geometric_mean(reader_opts.get_byte_range_size() / num_subchunks, 10000);
     size_t next_subchunk_start =
       reader_opts.get_byte_range_offset() + reader_opts.get_byte_range_size();
     std::vector<rmm::device_uvector<char>> subchunk_buffers;
@@ -206,11 +209,22 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
     merged.resize(
       cur_chunk_buf.size() + ((subchunk_buffers.size() - 1) * size_per_subchunk) + next_delim_pos,
       stream);
-    size_t offset = cur_chunk_buf.size();
-    // TODO: Can do this with a stream pool?
-    for (size_t i = 0; i < subchunk_buffers.size() - 1; i++) {
+    size_t offset = cur_chunk_buf.size() - first_delim_pos;
+    if (subchunk_buffers.size() >= 3) {
+      std::vector<rmm::cuda_stream_view> copy_streams =
+        cudf::detail::fork_streams(stream, subchunk_buffers.size() - 1);
+      for (size_t i = 0; i < subchunk_buffers.size() - 1; i++) {
+        CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
+                                      subchunk_buffers[i].data(),
+                                      size_per_subchunk,
+                                      cudaMemcpyDeviceToDevice,
+                                      copy_streams[i]));
+        offset += size_per_subchunk;
+      }
+      cudf::detail::join_streams(copy_streams, stream);
+    } else if (subchunk_buffers.size() == 2) {
       CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
-                                    subchunk_buffers[i].data(),
+                                    subchunk_buffers[0].data(),
                                     size_per_subchunk,
                                     cudaMemcpyDeviceToDevice,
                                     stream));
