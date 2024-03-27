@@ -315,7 +315,7 @@ CUDF_KERNEL void __launch_bounds__(96)
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
@@ -440,7 +440,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_byte_array_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
 
   page_state_s* const s = &state_g;
   auto* const sb        = &state_buffers;
@@ -605,7 +605,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   using cudf::detail::warp_size;
   __shared__ __align__(16) delta_binary_decoder db_state;
   __shared__ __align__(16) page_state_s state_g;
-  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 0, 0> state_buffers;
+  __shared__ __align__(16) page_state_buffers_s<delta_rolling_buf_size, 1, 1> state_buffers;
   __shared__ __align__(8) uint8_t const* page_string_data;
   __shared__ size_t string_offset;
 

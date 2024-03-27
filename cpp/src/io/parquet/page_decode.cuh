@@ -1316,6 +1316,7 @@ inline __device__ bool setupLocalPageInfo(page_state_s* const s,
           }
           break;
         case Encoding::PLAIN:
+        case Encoding::BYTE_STREAM_SPLIT:
           s->dict_size = static_cast<int32_t>(end - cur);
           s->dict_val  = 0;
           if (s->col.physical_type == BOOLEAN) { s->dict_run = s->dict_size * 2 + 1; }

@@ -203,6 +203,7 @@ template std::vector<int8_t> random_values<int8_t>(size_t size);
 template std::vector<int16_t> random_values<int16_t>(size_t size);
 template std::vector<int32_t> random_values<int32_t>(size_t size);
 template std::vector<int64_t> random_values<int64_t>(size_t size);
+template std::vector<__int128_t> random_values<__int128_t>(size_t size);
 template std::vector<uint8_t> random_values<uint8_t>(size_t size);
 template std::vector<uint16_t> random_values<uint16_t>(size_t size);
 template std::vector<uint32_t> random_values<uint32_t>(size_t size);
