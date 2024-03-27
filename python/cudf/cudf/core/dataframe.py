@@ -4320,7 +4320,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Query with a boolean expression using Numba to compile a GPU kernel.
 
-        See pandas.DataFrame.query.
+        See :func:`pandas.DataFrame.query`.
 
         Parameters
         ----------
@@ -4379,7 +4379,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1 2018-10-08
 
         .. pandas-compat::
-            **DataFrame.query**
+            :func:`pandas.DataFrame.query`
 
             One difference from pandas is that ``query`` currently only
             supports numeric, datetime, timedelta, or bool dtypes.
@@ -7541,6 +7541,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Returns
         -------
         The interleaved columns as a single column
+
+        .. pandas-compat::
+            This method does not exist in pandas but it can be run
+            as `pd.Series(np.vstack(df.to_numpy()).reshape((-1,)))`.
         """
         if ("category" == self.dtypes).any():
             raise ValueError(
