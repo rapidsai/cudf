@@ -18,6 +18,14 @@ if [[ "$(arch)" == "aarch64" && ${RAPIDS_BUILD_TYPE} == "pull-request" ]]; then
     rapids-logger "Run smoke tests for cudf"
     python ./ci/wheel_smoke_test_cudf.py
 else
+    rapids-logger "pytest pylibcudf"
+    pushd python/cudf/cudf/pylibcudf_tests
+    python -m pytest \
+      --cache-clear \
+      --dist=worksteal \
+      .
+    popd
+
     rapids-logger "pytest cudf"
     pushd python/cudf/cudf/tests
     python -m pytest \

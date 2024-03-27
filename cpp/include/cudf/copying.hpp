@@ -253,6 +253,8 @@ std::unique_ptr<column> empty_like(scalar const& input);
  * If the `mask_alloc` allocates a validity mask that mask is also uninitialized
  * and the validity bits and the null count should be set by the caller.
  *
+ * @throws cudf::data_type_error if input type is not of fixed width.
+ *
  * @param input Immutable view of input column to emulate
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -360,6 +362,7 @@ void copy_range_in_place(column_view const& source,
  *
  * @throws std::out_of_range for any invalid range.
  * @throws cudf::data_type_error if @p target and @p source have different types.
+ * @throws cudf::data_type_error if the data type is not fixed width, string, or dictionary
  *
  * @param source The column to copy from inside the range
  * @param target The column to copy from outside the range

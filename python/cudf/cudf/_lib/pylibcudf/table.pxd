@@ -12,6 +12,9 @@ cdef class Table:
 
     cdef table_view view(self) nogil
 
+    cpdef int num_columns(self)
+    cpdef int num_rows(self)
+
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
 

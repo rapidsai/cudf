@@ -39,6 +39,11 @@ cdef class DataType:
         """Get the scale associated with this data type."""
         return self.c_obj.scale()
 
+    def __eq__(self, other):
+        if not isinstance(other, DataType):
+            return False
+        return self.id() == other.id() and self.scale() == other.scale()
+
     @staticmethod
     cdef DataType from_libcudf(data_type dt):
         """Create a DataType from a libcudf data_type.

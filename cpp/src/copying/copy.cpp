@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,7 +122,8 @@ std::unique_ptr<column> allocate_like(column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
+  CUDF_EXPECTS(
+    is_fixed_width(input.type()), "Expects only fixed-width type column", cudf::data_type_error);
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
   return std::make_unique<column>(input.type(),
