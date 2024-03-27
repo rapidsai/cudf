@@ -1489,8 +1489,10 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
       // if we haven't already processed this column because it is part of a struct hierarchy
       else if (out_buf.size == 0) {
         // add 1 for the offset if this is a list column
-        out_buf.create(
+        // we're going to start null mask as all valid and then turn bits off if necessary
+        out_buf.create_with_mask(
           out_buf.type.id() == type_id::LIST && l_idx < max_depth ? num_rows + 1 : num_rows,
+          cudf::mask_state::ALL_VALID,
           _stream,
           _mr);
       }
@@ -1568,7 +1570,8 @@ void reader::impl::allocate_columns(size_t skip_rows, size_t num_rows, bool uses
           if (out_buf.type.id() == type_id::LIST && l_idx < max_depth) { size++; }
 
           // allocate
-          out_buf.create(size, _stream, _mr);
+          // we're going to start null mask as all valid and then turn bits off if necessary
+          out_buf.create_with_mask(size, cudf::mask_state::ALL_VALID, _stream, _mr);
         }
       }
     }
