@@ -23,7 +23,7 @@ package ai.rapids.cudf;
  */
 public enum HashType {
   IDENTITY(0),
-  MURMUR3(1),
+  MURMUR3(1);
 
   private static final HashType[] HASH_TYPES = HashType.values();
   final int nativeId;
