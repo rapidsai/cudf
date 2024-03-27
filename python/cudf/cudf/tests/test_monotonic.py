@@ -4,6 +4,7 @@
 Tests related to is_unique, is_monotonic_increasing &
 is_monotonic_decreasing attributes
 """
+
 import numpy as np
 import pandas as pd
 import pytest

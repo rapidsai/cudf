@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,7 +110,7 @@ class chunked_reader : private reader {
    * The chunk_read_limit parameter controls the size of the output chunks produces.  If the user
    * specifies 100 MB of data, the reader will attempt to return chunks containing tables that have
    * a total bytes size (over all columns) of 100 MB or less.  This is a soft limit and the code
-   * will not fail if it cannot satisfy the limit.  It will make a best-effort atttempt only.
+   * will not fail if it cannot satisfy the limit.  It will make a best-effort attempt only.
    *
    * The pass_read_limit parameter controls how much temporary memory is used in the process of
    * decoding the file.  The primary contributor to this memory usage is the uncompressed size of

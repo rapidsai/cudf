@@ -587,7 +587,7 @@ def find_common_type(dtypes):
 def _dtype_pandas_compatible(dtype):
     """
     A utility function, that returns `str` instead of `object`
-    dtype when pandas comptibility mode is enabled.
+    dtype when pandas compatibility mode is enabled.
     """
     if cudf.get_option("mode.pandas_compatible") and dtype == cudf.dtype("O"):
         return "str"

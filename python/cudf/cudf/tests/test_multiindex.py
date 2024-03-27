@@ -3,6 +3,7 @@
 """
 Test related to MultiIndex
 """
+
 import datetime
 import itertools
 import operator
