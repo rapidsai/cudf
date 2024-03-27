@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,14 @@ namespace cudf {
  * @file
  * @brief Column partitioning APIs
  */
+
+/**
+ * @brief Identifies the hash function to be used in hash partitioning
+ */
+enum class hash_id {
+  HASH_IDENTITY = 0,  ///< Identity hash function that simply returns the key to be hashed
+  HASH_MURMUR3        ///< Murmur3 hash function
+};
 
 /**
  * @brief Partitions rows of `t` according to the mapping specified by
