@@ -24,7 +24,7 @@ rapids_test_init()
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
-  set(one_value GPUS PERCENT STREAM_MODE)
+  set(one_value GPUS PERCENT STREAM_MODE EXTRA_LIB)
   set(multi_value)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -56,7 +56,7 @@ function(ConfigureTest CMAKE_TEST_NAME)
 
   target_link_libraries(
     ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main nvtx3-cpp
-                               $<TARGET_NAME_IF_EXISTS:conda_env>
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
   )
   rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
@@ -267,7 +267,8 @@ ConfigureTest(
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_test.cpp interop/from_arrow_test.cpp interop/dlpack_test.cpp
+  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
+  interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
 )
 
 # ##################################################################################################
