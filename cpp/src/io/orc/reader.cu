@@ -58,7 +58,7 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                         stream,
                                         mr)}
 {
-  // Although we internally accept non-positve value for `output_row_granularity` because we
+  // Although we internally accept non-positive value for `output_row_granularity` because we
   // implicitly change such value into `DEFAULT_OUTPUT_ROW_GRANULARITY`.
   // The user are not allowed to do so but instead required to specify an explicit positive number.
   CUDF_EXPECTS(output_row_granularity > 0,
