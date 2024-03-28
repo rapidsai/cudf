@@ -259,6 +259,10 @@ struct Statistics {
   thrust::optional<std::vector<uint8_t>> max_value;
   // min value for column determined by ColumnOrder
   thrust::optional<std::vector<uint8_t>> min_value;
+  // If true, max_value is the actual maximum value for a column
+  thrust::optional<bool> is_max_value_exact;
+  // If true, min_value is the actual minimum value for a column
+  thrust::optional<bool> is_min_value_exact;
 };
 
 /**
