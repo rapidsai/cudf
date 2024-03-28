@@ -2496,6 +2496,7 @@ CUDF_KERNEL void __launch_bounds__(decide_compression_block_size)
     if (auto comp_res = curr_page.comp_res; comp_res != nullptr) {
       auto const lvl_bytes = curr_page.is_v2() ? curr_page.level_bytes() : 0;
       compressed_data_size += comp_res->bytes_written + lvl_bytes;
+      // TODO: would this be better as a ballot?
       if (comp_res->status != compression_status::SUCCESS) {
         atomicOr(&compression_error[warp_id], 1);
       }
