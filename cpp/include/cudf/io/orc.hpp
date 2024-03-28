@@ -199,6 +199,7 @@ class orc_reader_options {
    */
   void set_skip_rows(int64_t rows)
   {
+    CUDF_EXPECTS(rows >= 0, "skip_rows cannot be negative");
     CUDF_EXPECTS(rows == 0 or _stripes.empty(), "Can't set both skip_rows along with stripes");
     _skip_rows = rows;
   }
