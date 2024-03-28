@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
@@ -15,6 +15,25 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
         void(*deleter)(DLManagedTensor*) except +
+
+
+# These aren't really in interop.hpp, we're just faking it
+cdef extern from *:
+    cdef struct ArrowSchema:
+        void (*release)(ArrowSchema*) noexcept nogil
+
+    cdef struct ArrowArray:
+        void (*release)(ArrowArray*) noexcept nogil
+
+    cdef struct ArrowArrayStream:
+        void (*release)(ArrowArrayStream*) noexcept nogil
+
+    # We need this much available to be able to release it, so it can't be
+    # completely opaque to Cython.
+    cdef struct ArrowDeviceArray:
+        ArrowArray array
+        void* sync_event
+
 
 cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:
@@ -42,3 +61,9 @@ cdef extern from "cudf/interop.hpp" namespace "cudf" \
         const scalar& input,
         column_metadata metadata,
     ) except +
+
+    cdef unique_ptr[ArrowSchema] to_arrow_schema(
+        const table_view& tbl,
+        const vector[column_metadata]& metadata,
+    ) except +
+    cdef unique_ptr[ArrowDeviceArray] to_arrow_device(table tbl) except +
