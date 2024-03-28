@@ -1431,7 +1431,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
                              .build();
     auto reader = cudf::io::chunked_orc_reader(
       static_cast<std::size_t>(rows_per_stripe * 5.7) *
-        sizeof(data_type) /* output limit, equal to 5.2M rows */,
+        sizeof(data_type) /* output limit, equal to 5.7M rows */,
       0UL /* no input limit */,
       rows_per_stripe / 2 /* output granularity, or minimum number of rows for the output chunk */,
       read_opts);
