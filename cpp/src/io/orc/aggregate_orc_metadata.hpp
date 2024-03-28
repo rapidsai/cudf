@@ -112,6 +112,16 @@ class aggregate_orc_metadata {
    * @brief Selects the stripes to read, based on the row/stripe selection parameters.
    *
    * Stripes are potentially selected from multiple files.
+   *
+   * Upon parsing stripes' information, the number of skip rows and reading rows are also updated
+   * to be matched with the actual numbers for reading stripes from data sources.
+   *
+   * @param user_specified_stripes The specified stripe indices to read
+   * @param skip_rows Number of rows to skip from reading
+   * @param num_rows Number of rows to read
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @return A tuple of the corrected skip_rows and num_rows values along with a vector of
+   *         stripes' metadata such as footer, data information, and source index
    */
   [[nodiscard]] std::tuple<int64_t, int64_t, std::vector<metadata::orc_stripe_info>> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
