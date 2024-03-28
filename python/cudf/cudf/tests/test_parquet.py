@@ -420,8 +420,7 @@ def test_parquet_read_metadata(tmpdir, pdf):
         row_groups,
         col_names,
         num_columns,
-        _,
-        _,
+        _,  # rowgroup_metadata
     ) = cudf.io.read_parquet_metadata(fname)
 
     assert num_columns == len(pdf.columns)
@@ -2887,7 +2886,7 @@ def test_parquet_row_group_metadata(tmpdir, large_int64_gdf, size_rows):
         num_rows,
         row_groups,
         _,  # col_names
-        _,  # rowgroup_metadata
+        _,  # num_columns
         row_group_metadata,
     ) = cudf.io.read_parquet_metadata(fname)
 
