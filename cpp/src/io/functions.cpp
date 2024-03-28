@@ -436,16 +436,7 @@ void write_orc(orc_writer_options const& options, rmm::cuda_stream_view stream)
 
   auto writer = std::make_unique<orc::detail::writer>(
     std::move(sinks[0]), options, io_detail::single_write_mode::YES, stream);
-  try {
-    writer->write(options.get_table());
-  } catch (...) {
-    // If an exception is thrown, the output is incomplete/corrupted.
-    // Make sure the writer will not close with such corrupted data.
-    // In addition, the writer may throw an exception while trying to close, which would terminate
-    // the process.
-    writer->skip_close();
-    throw;
-  }
+  writer->write(options.get_table());
 }
 
 /**
