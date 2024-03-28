@@ -140,6 +140,10 @@ size_t CompactProtocolWriter::write(RowGroup const& r)
   c.field_struct_list(1, r.columns);
   c.field_int(2, r.total_byte_size);
   c.field_int(3, r.num_rows);
+  // TODO: field 4 is sorting_columns
+  if (r.file_offset.has_value()) { c.field_int(5, r.file_offset.value()); }
+  if (r.total_compressed_size.has_value()) { c.field_int(6, r.total_compressed_size.value()); }
+  if (r.ordinal.has_value()) { c.field_int16(7, r.ordinal.value()); }
   return c.value();
 }
 
@@ -289,6 +293,13 @@ inline void CompactProtocolFieldWriter::field_int8(int field, int8_t val)
 {
   put_field_header(field, current_field_value, FieldType::I8);
   put_byte(val);
+  current_field_value = field;
+}
+
+inline void CompactProtocolFieldWriter::field_int16(int field, int16_t val)
+{
+  put_field_header(field, current_field_value, FieldType::I16);
+  put_int(val);
   current_field_value = field;
 }
 

@@ -2179,6 +2179,9 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         }
 
         row_group.total_byte_size += ck.bfr_size;
+        row_group.total_compressed_size =
+          row_group.total_compressed_size.value_or(0) + ck.compressed_size;
+        row_group.ordinal                         = global_r;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2460,6 +2463,9 @@ void writer::impl::write_parquet_data_to_sink(
         column_chunk_meta.dictionary_page_offset =
           (ck.use_dictionary) ? _current_chunk_offset[p] : 0;
         _current_chunk_offset[p] += ck.compressed_size;
+
+        // write location of first page in row group
+        if (i == 0) { row_group.file_offset = _current_chunk_offset[p]; }
       }
     }
     for (auto const& task : write_tasks) {

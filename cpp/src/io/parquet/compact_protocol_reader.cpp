@@ -171,6 +171,7 @@ class parquet_field_int : public parquet_field {
 };
 
 using parquet_field_int8  = parquet_field_int<int8_t, FieldType::I8>;
+using parquet_field_int16 = parquet_field_int<int16_t, FieldType::I16>;
 using parquet_field_int32 = parquet_field_int<int32_t, FieldType::I32>;
 using parquet_field_int64 = parquet_field_int<int64_t, FieldType::I64>;
 
@@ -618,9 +619,15 @@ void CompactProtocolReader::read(IntType* i)
 
 void CompactProtocolReader::read(RowGroup* r)
 {
+  using optional_i16 = parquet_field_optional<int16_t, parquet_field_int16>;
+  using optional_i64 = parquet_field_optional<int64_t, parquet_field_int64>;
+
   auto op = std::make_tuple(parquet_field_struct_list(1, r->columns),
                             parquet_field_int64(2, r->total_byte_size),
-                            parquet_field_int64(3, r->num_rows));
+                            parquet_field_int64(3, r->num_rows),
+                            optional_i64(5, r->file_offset),
+                            optional_i64(6, r->total_compressed_size),
+                            optional_i16(7, r->ordinal));
   function_builder(this, op);
 }
 
