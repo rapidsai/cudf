@@ -133,8 +133,10 @@ class reader_impl {
    * smaller subsets, each of which to be decompressed and decoded in the next step
    * `decompress_and_decode()`. This is to ensure that loading data from data sources together with
    * decompression and decoding will be capped around the given data read limit.
+   *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void load_data();
+  void load_data(read_mode mode);
 
   /**
    * @brief Decompress and decode stripe data in the internal buffers, and store the result into

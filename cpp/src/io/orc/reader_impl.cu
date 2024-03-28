@@ -38,7 +38,7 @@ void reader_impl::prepare_data(read_mode mode)
       //  - There is more stripe to load, and
       //  - All loaded stripes were decoded, and
       //  - All the decoded results were output.
-      load_data();
+      load_data(mode);
     }
     if (_chunk_read_data.more_stripe_to_decode()) {
       // Only decompress/decode the loaded stripes if:

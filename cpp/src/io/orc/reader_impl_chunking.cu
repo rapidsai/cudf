@@ -425,7 +425,7 @@ void reader_impl::global_preprocess(read_mode mode)
   _chunk_read_data.curr_load_stripe_range = 0;
 
   // Load all stripes if there is no read limit.
-  // In addition, if we are not in chunked read mode, we also load all stripe.
+  // In addition, if we are not in CHUNKED_READ mode, we also load all stripes.
   if (mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) {
     _chunk_read_data.load_stripe_ranges = {range{0UL, num_total_stripes}};
     return;
@@ -451,7 +451,7 @@ void reader_impl::global_preprocess(read_mode mode)
     find_splits<cumulative_size>(total_stripe_sizes, num_total_stripes, load_limit);
 }
 
-void reader_impl::load_data()
+void reader_impl::load_data(read_mode mode)
 {
   if (_file_itm_data.has_no_data()) { return; }
 
@@ -524,6 +524,82 @@ void reader_impl::load_data()
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
   }
 
+  // Compute number of rows in the loading stripes.
+  auto const num_loading_rows = [&] {
+    std::size_t count{0};
+    for (std::size_t idx = 0; idx < stripe_count; ++idx) {
+      count += _file_itm_data.selected_stripes[idx + stripe_start].stripe_info->numberOfRows;
+    }
+    return count;
+  }();
+
+  // Decoding range is reset to start from the first position in `decode_stripe_ranges`.
+  _chunk_read_data.curr_decode_stripe_range = 0;
+
+  // Decode all loaded stripes if there is no read limit, or if we are not in chunked_read  mode.
+  // In theory, we should just decode enough stripes for output one table chunk, instead of
+  // decoding all stripes like this, for better load-balancing and reduce memory usage.
+  // However, we do not know how many stripes are 'enough' because there is not any simple and
+  // cheap way to compute the exact decoded sizes of stripes without actually decoding them.
+  if ((mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) &&
+      // In addition to read limit, we also need to check if the the total number of
+      // rows in the loaded stripes exceeds column size limit.
+      // If that is the case, we cannot read all stripes at once.
+      num_loading_rows < static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
+    _chunk_read_data.decode_stripe_ranges = {load_stripe_range};
+    return;
+  }
+
+  // For estimating the decompressed sizes of the loaded stripes.
+  // Only valid in CHUNKED_READ mode.
+  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(
+    mode == read_mode::CHUNKED_READ ? stripe_count : std::size_t{0}, _stream);
+
+  // For mapping stripe to the number of rows in it.
+  // Only valid in READ_ALL mode.
+  // This is similar to store exactly the same data as for `stripe_decomp_size` but
+  // does not allocate device memory.
+  std::vector<cumulative_size_and_row> stripe_rows(mode == read_mode::READ_ALL ? stripe_count
+                                                                               : std::size_t{0});
+
+  // Fill up the `cumulative_size_and_row` array.
+  auto const stripe_sizes_rows_ptr =
+    mode == read_mode::CHUNKED_READ ? stripe_decomp_sizes.begin() : stripe_rows.data();
+  for (std::size_t idx = 0; idx < stripe_count; ++idx) {
+    auto const& stripe     = _file_itm_data.selected_stripes[idx + stripe_start];
+    auto const stripe_info = stripe.stripe_info;
+    stripe_sizes_rows_ptr[idx] =
+      cumulative_size_and_row{1UL /*count*/, 0UL /*size_bytes*/, stripe_info->numberOfRows};
+  }
+
+  // This is the post-processing step after we've done with splitting `load_stripe_range` into
+  // `decode_stripe_ranges`.
+  auto const add_range_offset = [stripe_start](std::vector<range>& new_ranges) {
+    // The split ranges always start from zero.
+    // We need to change these ranges to start from `stripe_start` which are the correct subranges
+    // of the current loaded stripe range.
+    for (auto& range : new_ranges) {
+      range.begin += stripe_start;
+      range.end += stripe_start;
+    }
+  };
+
+  //
+  // Optimized code path when we do not have any read limit but the number of rows in the
+  // loaded stripes exceeds column size limit.
+  //
+  if ((mode == read_mode::READ_ALL || _chunk_read_data.data_read_limit == 0) &&
+      num_loading_rows >= static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
+    // Here we will split based on number of rows, not data size.
+    // Thus, we use a maximum possible value for size_limit.
+    _chunk_read_data.decode_stripe_ranges = find_splits<cumulative_size_and_row>(
+      cudf::host_span<cumulative_size_and_row>(stripe_sizes_rows_ptr, stripe_count),
+      stripe_count,
+      std::numeric_limits<std::size_t>::max());
+    add_range_offset(_chunk_read_data.decode_stripe_ranges);
+    return;
+  }
+
   //
   // Split range of loaded stripes into subranges that can be decoded separately without blowing up
   // memory:
@@ -533,20 +609,6 @@ void reader_impl::load_data()
   // These pointers are then used to retrieve stripe/level decompressed sizes for later
   // decompression and decoding.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
-
-  // For estimating the decompressed sizes of the loaded stripes.
-  cudf::detail::hostdevice_vector<cumulative_size_and_row> stripe_decomp_sizes(stripe_count,
-                                                                               _stream);
-
-  // Number of rows in the loading stripes.
-  std::size_t num_loading_rows{0};
-
-  for (std::size_t idx = 0; idx < stripe_count; ++idx) {
-    auto const& stripe       = _file_itm_data.selected_stripes[idx + stripe_start];
-    auto const stripe_info   = stripe.stripe_info;
-    stripe_decomp_sizes[idx] = cumulative_size_and_row{1, 0, stripe_info->numberOfRows};
-    num_loading_rows += stripe_info->numberOfRows;
-  }
 
   auto& compinfo_map = _file_itm_data.compinfo_map;
 
@@ -608,23 +670,6 @@ void reader_impl::load_data()
     }
   }  // end loop level
 
-  // Decoding range is reset to start from the first position in `decode_stripe_ranges`.
-  _chunk_read_data.curr_decode_stripe_range = 0;
-
-  // Decode all loaded stripes if there is no read limit.
-  // In theory, we should just decode enough stripes for output one table chunk, instead of
-  // decoding all stripes like this, for better load-balancing and reduce memory usage.
-  // However, we do not know how many stripes are 'enough' because there is not any simple and
-  // cheap way to compute the exact decoded sizes of stripes without actually decoding them.
-  if (_chunk_read_data.data_read_limit == 0 &&
-      // In addition to read limit, we also need to check if the the total number of
-      // rows in the loaded stripes exceeds column size limit.
-      // If that is the case, we cannot read all stripes at once.
-      num_loading_rows < static_cast<std::size_t>(std::numeric_limits<size_type>::max())) {
-    _chunk_read_data.decode_stripe_ranges = {load_stripe_range};
-    return;
-  }
-
   // Compute the prefix sum of stripe data sizes and rows.
   stripe_decomp_sizes.host_to_device_async(_stream);
   thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
@@ -635,26 +680,16 @@ void reader_impl::load_data()
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
   auto const decode_limit = [&] {
-    // In this case, we have no read limit but have to split due to having number of rows in loaded
-    // stripes exceeds column size limit. So we will split based on row number, not data size.
-    if (_chunk_read_data.data_read_limit == 0) { return std::numeric_limits<std::size_t>::max(); }
-
-    // If `data_read_limit` is too small, make sure not to pass 0 byte limit to `find_splits`.
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.data_read_limit *
                                               chunk_read_data::decode_limit_ratio);
+    // Make sure not to pass 0 byte limit to `find_splits`.
     return tmp > 0UL ? tmp : 1UL;
   }();
 
   _chunk_read_data.decode_stripe_ranges =
     find_splits<cumulative_size_and_row>(stripe_decomp_sizes, stripe_count, decode_limit);
 
-  // The split ranges always start from zero.
-  // We need to change these ranges to start from `stripe_start` which are the correct subranges of
-  // the current loaded stripe range.
-  for (auto& range : _chunk_read_data.decode_stripe_ranges) {
-    range.begin += stripe_start;
-    range.end += stripe_start;
-  }
+  add_range_offset(_chunk_read_data.decode_stripe_ranges);
 }
 
 }  // namespace cudf::io::orc::detail
