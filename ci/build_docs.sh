@@ -17,7 +17,7 @@ rapids-dependency-file-generator \
   --file_key docs \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n docs
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n docs
 conda activate docs
 
 rapids-print-env
