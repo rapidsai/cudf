@@ -1593,8 +1593,8 @@ __device__ void finish_page_encode(state_buf* s,
     if (not comp_results.empty()) {
       auto const status =
         s->col.skip_compression ? compression_status::SKIPPED : compression_status::FAILURE;
-      comp_results[blockIdx.x] = {0, status};
-      pages[blockIdx.x].comp_res = &comp_results[blockIdx.x]; 
+      comp_results[blockIdx.x]   = {0, status};
+      pages[blockIdx.x].comp_res = &comp_results[blockIdx.x];
     }
   }
 

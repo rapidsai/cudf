@@ -699,7 +699,7 @@ std::vector<schema_tree_node> construct_schema_tree(
         set_field_id(col_schema, col_meta);
         set_encoding(col_schema, col_meta);
         col_schema.output_as_byte_array = col_meta.is_enabled_output_as_binary();
-        col_schema.skip_compression = col_meta.is_enabled_skip_compression();
+        col_schema.skip_compression     = col_meta.is_enabled_skip_compression();
         schema.push_back(col_schema);
       } else if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
