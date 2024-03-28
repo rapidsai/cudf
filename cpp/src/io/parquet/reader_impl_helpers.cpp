@@ -381,7 +381,9 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
 
 size_type aggregate_reader_metadata::calc_num_columns() const
 {
-  return per_file_metadata[0].row_groups[0].columns.size();
+  return per_file_metadata.size()
+           ? (per_file_metadata[0].schema.size() ? per_file_metadata[0].schema[0].num_children : 0)
+           : 0;
 }
 
 // Copies info from the column and offset indexes into the passed in row_group_info.
@@ -571,17 +573,17 @@ aggregate_reader_metadata::get_rowgroup_metadata() const
 {
   std::vector<std::unordered_map<std::string, int64_t>> rg_metadata;
 
-  std::transform(
-    per_file_metadata.cbegin(),
-    per_file_metadata.cend(),
-    std::back_inserter(rg_metadata),
-    [](auto const& pfm) {
-      std::unordered_map<std::string, int64_t> rg_meta_map;
-      std::for_each(pfm.row_groups.cbegin(), pfm.row_groups.cend(), [&rg_meta_map](auto const& rg) {
-        rg_meta_map["num_rows"]        = rg.num_rows;
-        rg_meta_map["total_byte_size"] = rg.total_byte_size;
-      });
-      return rg_meta_map;
+  std::for_each(
+    per_file_metadata.cbegin(), per_file_metadata.cend(), [&rg_metadata](auto const& pfm) {
+      std::transform(pfm.row_groups.cbegin(),
+                     pfm.row_groups.cend(),
+                     std::back_inserter(rg_metadata),
+                     [&rg_metadata](auto const& rg) {
+                       std::unordered_map<std::string, int64_t> rg_meta_map;
+                       rg_meta_map["num_rows"]        = rg.num_rows;
+                       rg_meta_map["total_byte_size"] = rg.total_byte_size;
+                       return rg_meta_map;
+                     });
     });
   return rg_metadata;
 }
