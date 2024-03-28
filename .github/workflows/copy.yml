@@ -3,6 +3,7 @@ name: Echo on PR
 on:
   pull_request:
     types: [opened]
+  push:
 
 jobs:
   echo_job:
@@ -10,3 +11,19 @@ jobs:
     steps:
       - name: Echo abc
         run: echo 'abc'
+      - name: Checkout repository
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Generate text file
+        run: |
+          echo "Hello, World!" > hello.txt
+      - name: Upload file to GitHub Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: hello-artifact
+          path: hello.txt
+
+# abc
