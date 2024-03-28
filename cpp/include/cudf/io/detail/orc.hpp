@@ -37,18 +37,15 @@ class chunked_orc_writer_options;
 
 namespace orc::detail {
 
+// Forward declaration of the internal reader class
+class reader_impl;
+
 /**
  * @brief Class to read ORC dataset data into columns.
  */
 class reader {
  protected:
-  class impl;
-  std::unique_ptr<impl> _impl;
-
-  /**
-   * @brief Default constructor, needed for subclassing.
-   */
-  reader();
+  std::unique_ptr<reader_impl> _impl;
 
  public:
   /**
@@ -79,11 +76,10 @@ class reader {
 
 /**
  * @brief The reader class that supports iterative reading from an array of data sources.
- *
- * This class intentionally subclasses the `reader` class with private inheritance to hide the
- * base class `reader::read()` API. As such, only chunked reading APIs are supported through it.
  */
-class chunked_reader : private reader {
+class chunked_reader {
+  std::unique_ptr<reader_impl> _impl;
+
  public:
   /**
    * @copydoc cudf::io::chunked_orc_reader::chunked_orc_reader(std::size_t, std::size_t, size_type,

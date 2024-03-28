@@ -38,7 +38,7 @@ struct reader_column_meta;
 /**
  * @brief Implementation for ORC reader.
  */
-class reader::impl {
+class reader_impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
@@ -51,33 +51,33 @@ class reader::impl {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                orc_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       orc_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr);
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
    * orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
    */
-  explicit impl(std::size_t output_size_limit,
-                std::size_t data_read_limit,
-                std::vector<std::unique_ptr<datasource>>&& sources,
-                orc_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(std::size_t output_size_limit,
+                       std::size_t data_read_limit,
+                       std::vector<std::unique_ptr<datasource>>&& sources,
+                       orc_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr);
 
   /**
    * @copydoc cudf::io::orc::detail::chunked_reader::chunked_reader(std::size_t, std::size_t,
    * size_type, orc_reader_options const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
    */
-  explicit impl(std::size_t output_size_limit,
-                std::size_t data_read_limit,
-                size_type output_row_granularity,
-                std::vector<std::unique_ptr<datasource>>&& sources,
-                orc_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+  explicit reader_impl(std::size_t output_size_limit,
+                       std::size_t data_read_limit,
+                       size_type output_row_granularity,
+                       std::vector<std::unique_ptr<datasource>>&& sources,
+                       orc_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::mr::device_memory_resource* mr);
 
   /**
    * @copydoc cudf::io::orc::detail::reader::read

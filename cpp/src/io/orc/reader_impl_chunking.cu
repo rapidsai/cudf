@@ -229,7 +229,7 @@ range get_range(std::vector<range> const& input_ranges, range const& selected_ra
   return {first_range.begin, last_range.end};
 }
 
-void reader::impl::global_preprocess(read_mode mode)
+void reader_impl::global_preprocess(read_mode mode)
 {
   if (_file_itm_data.global_preprocessed) { return; }
   _file_itm_data.global_preprocessed = true;
@@ -447,7 +447,7 @@ void reader::impl::global_preprocess(read_mode mode)
     find_splits<cumulative_size>(total_stripe_sizes, num_total_stripes, load_limit);
 }
 
-void reader::impl::load_data()
+void reader_impl::load_data()
 {
   if (_file_itm_data.has_no_data()) { return; }
 

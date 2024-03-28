@@ -24,7 +24,7 @@
 
 namespace cudf::io::orc::detail {
 
-void reader::impl::prepare_data(read_mode mode)
+void reader_impl::prepare_data(read_mode mode)
 {
   // There are no columns in the table.
   if (_selected_columns.num_levels() == 0) { return; }
@@ -49,7 +49,7 @@ void reader::impl::prepare_data(read_mode mode)
   }
 }
 
-table_with_metadata reader::impl::make_output_chunk()
+table_with_metadata reader_impl::make_output_chunk()
 {
   // There is no columns in the table.
   if (_selected_columns.num_levels() == 0) { return {std::make_unique<table>(), table_metadata{}}; }
@@ -104,7 +104,7 @@ table_with_metadata reader::impl::make_output_chunk()
   return {make_output_table(), table_metadata{_out_metadata} /*copy cached metadata*/};
 }
 
-table_metadata reader::impl::get_meta_with_user_data()
+table_metadata reader_impl::get_meta_with_user_data()
 {
   if (_meta_with_user_data) { return table_metadata{*_meta_with_user_data}; }
 
@@ -133,37 +133,37 @@ table_metadata reader::impl::get_meta_with_user_data()
   return out_metadata;
 }
 
-reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                   orc_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : reader::impl::impl(0UL, 0UL, std::move(sources), options, stream, mr)
+reader_impl::reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                         orc_reader_options const& options,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
+  : reader_impl::reader_impl(0UL, 0UL, std::move(sources), options, stream, mr)
 {
 }
 
-reader::impl::impl(std::size_t output_size_limit,
-                   std::size_t data_read_limit,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   orc_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
-  : reader::impl::impl(output_size_limit,
-                       data_read_limit,
-                       DEFAULT_OUTPUT_ROW_GRANULARITY,
-                       std::move(sources),
-                       options,
-                       stream,
-                       mr)
+reader_impl::reader_impl(std::size_t output_size_limit,
+                         std::size_t data_read_limit,
+                         std::vector<std::unique_ptr<datasource>>&& sources,
+                         orc_reader_options const& options,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
+  : reader_impl::reader_impl(output_size_limit,
+                             data_read_limit,
+                             DEFAULT_OUTPUT_ROW_GRANULARITY,
+                             std::move(sources),
+                             options,
+                             stream,
+                             mr)
 {
 }
 
-reader::impl::impl(std::size_t output_size_limit,
-                   std::size_t data_read_limit,
-                   size_type output_row_granularity,
-                   std::vector<std::unique_ptr<datasource>>&& sources,
-                   orc_reader_options const& options,
-                   rmm::cuda_stream_view stream,
-                   rmm::mr::device_memory_resource* mr)
+reader_impl::reader_impl(std::size_t output_size_limit,
+                         std::size_t data_read_limit,
+                         size_type output_row_granularity,
+                         std::vector<std::unique_ptr<datasource>>&& sources,
+                         orc_reader_options const& options,
+                         rmm::cuda_stream_view stream,
+                         rmm::mr::device_memory_resource* mr)
   : _stream(stream),
     _mr(mr),
     _config{options.get_timestamp_type(),
@@ -188,19 +188,19 @@ reader::impl::impl(std::size_t output_size_limit,
                "skip_rows is not supported by nested column");
 }
 
-table_with_metadata reader::impl::read()
+table_with_metadata reader_impl::read()
 {
   prepare_data(read_mode::READ_ALL);
   return make_output_chunk();
 }
 
-bool reader::impl::has_next()
+bool reader_impl::has_next()
 {
   prepare_data(read_mode::CHUNKED_READ);
   return _chunk_read_data.has_next();
 }
 
-table_with_metadata reader::impl::read_chunk()
+table_with_metadata reader_impl::read_chunk()
 {
   prepare_data(read_mode::CHUNKED_READ);
   return make_output_chunk();

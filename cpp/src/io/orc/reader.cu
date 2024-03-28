@@ -19,15 +19,14 @@
 
 namespace cudf::io::orc::detail {
 
-// Constructor and destructor are defined within this translation unit.
-reader::reader()  = default;
+// Destructor are defined within this translation unit.
 reader::~reader() = default;
 
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                orc_reader_options const& options,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
-  : _impl{std::make_unique<impl>(std::move(sources), options, stream, mr)}
+  : _impl{std::make_unique<reader_impl>(std::move(sources), options, stream, mr)}
 {
 }
 
@@ -39,10 +38,9 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
-  : reader()
+  : _impl{std::make_unique<reader_impl>(
+      output_size_limit, data_read_limit, std::move(sources), options, stream, mr)}
 {
-  _impl = std::make_unique<impl>(
-    output_size_limit, data_read_limit, std::move(sources), options, stream, mr);
 }
 
 chunked_reader::chunked_reader(std::size_t output_size_limit,
@@ -52,17 +50,19 @@ chunked_reader::chunked_reader(std::size_t output_size_limit,
                                orc_reader_options const& options,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
-  : reader()
+  : _impl{std::make_unique<reader_impl>(output_size_limit,
+                                        data_read_limit,
+                                        output_row_granularity,
+                                        std::move(sources),
+                                        options,
+                                        stream,
+                                        mr)}
 {
+  // Although we internally accept non-positve value for `output_row_granularity` because we
+  // implicitly change such value into `DEFAULT_OUTPUT_ROW_GRANULARITY`.
+  // The user are not allowed to do so but instead required to specify an explicit positive number.
   CUDF_EXPECTS(output_row_granularity > 0,
                "The value of `output_row_granularity` must be positive.");
-  _impl = std::make_unique<impl>(output_size_limit,
-                                 data_read_limit,
-                                 output_row_granularity,
-                                 std::move(sources),
-                                 options,
-                                 stream,
-                                 mr);
 }
 
 chunked_reader::~chunked_reader() = default;
