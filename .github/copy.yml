@@ -21,7 +21,7 @@ jobs:
 
       - name: Generate text file
         run: |
-          echo "Hello, World!" > hello.txt
+          echo "Hello, Worlad!" > hello.txt
       - name: Upload file to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
