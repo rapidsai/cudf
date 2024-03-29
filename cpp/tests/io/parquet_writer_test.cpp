@@ -1482,6 +1482,18 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   ASSERT_GT(fmd.row_groups.size(), 0);
   EXPECT_GE(fmd.row_groups[0].total_byte_size,
             static_cast<int64_t>(num_rows * sizeof(column_type)));
+
+  // row group file offset should be first page location
+  EXPECT_EQ(fmd.row_groups[0].file_offset, fmd.row_groups[0].columns[0].meta_data.data_page_offset);
+
+  // ordinal should be set to 0
+  ASSERT_TRUE(fmd.row_groups[0].ordinal.has_value());
+  EXPECT_EQ(fmd.row_groups[0].ordinal.value(), 0);
+
+  // only one column, so total_compressed_size should equal compressed size of first chunk
+  ASSERT_TRUE(fmd.row_groups[0].total_compressed_size.has_value());
+  EXPECT_EQ(fmd.row_groups[0].total_compressed_size.value(),
+            fmd.row_groups[0].columns[0].meta_data.total_compressed_size);
 }
 
 TEST_F(ParquetWriterTest, UserRequestedDictFallback)
