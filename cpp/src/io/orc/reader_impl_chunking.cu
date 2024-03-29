@@ -612,18 +612,22 @@ void reader_impl::load_data(read_mode mode)
   auto& compinfo_map = _file_itm_data.compinfo_map;
   compinfo_map.clear();  // clear cache of the last load
 
-  // Find the maximum number of streams in all levels of the loaded stripes.
-  auto const max_num_streams = [&] {
-    std::size_t max_count{0};
-    for (std::size_t level = 0; level < num_levels; ++level) {
-      auto const stream_range =
-        get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
-      auto const num_streams = stream_range.end - stream_range.begin;
-      max_count              = std::max(max_count, num_streams);
+  // For parsing decompression data.
+  // We create an array that is large enough to use for all levels, thus only need to allocate
+  // memory once.
+  auto hd_compinfo = [&] {
+    std::size_t max_num_streams{0};
+    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      // Find the maximum number of streams in all levels of the loaded stripes.
+      for (std::size_t level = 0; level < num_levels; ++level) {
+        auto const stream_range =
+          get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
+        auto const num_streams = stream_range.end - stream_range.begin;
+        max_num_streams        = std::max(max_num_streams, num_streams);
+      }
     }
-    return max_count;
+    return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>(max_num_streams, _stream);
   }();
-  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> hd_compinfo(max_num_streams, _stream);
 
   for (std::size_t level = 0; level < num_levels; ++level) {
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];

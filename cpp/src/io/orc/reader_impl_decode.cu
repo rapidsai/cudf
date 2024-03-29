@@ -20,6 +20,7 @@
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
 #include "io/utilities/config_utils.hpp"
+#include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/transform.hpp>
@@ -74,6 +75,7 @@ rmm::device_buffer decompress_stripe_data(
   range const& loaded_stripe_range,
   range const& stream_range,
   std::size_t num_decode_stripes,
+  cudf::detail::hostdevice_span<gpu::CompressedStreamInfo> compinfo,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
   host_span<rmm::device_buffer const> stripe_data,
@@ -92,21 +94,18 @@ rmm::device_buffer decompress_stripe_data(
   std::size_t num_uncompressed_blocks = 0;
   std::size_t total_decomp_size       = 0;
 
-  auto const num_streams = stream_range.end - stream_range.begin;
-  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, stream);
-
   for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
     auto const& info = stream_info[stream_idx];
 
-    compinfo.push_back(gpu::CompressedStreamInfo(
+    auto& stream_comp_info = compinfo[stream_idx - stream_range.begin];
+    stream_comp_info       = gpu::CompressedStreamInfo(
       static_cast<uint8_t const*>(
         stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
         info.dst_pos,
-      info.length));
+      info.length);
 
     if (compinfo_ready) {
       auto const& cached_comp_info             = compinfo_map.at(info.source);
-      auto& stream_comp_info                   = compinfo.back();
       stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
       stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
       stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
@@ -759,15 +758,35 @@ void reader_impl::decompress_and_decode(read_mode mode)
 
   // Column descriptors ('chunks').
   // Each 'chunk' of data here corresponds to an orc column, in a stripe, at a nested level.
+  // Unfortunately we cannot create one hostdevice_vector to use for all levels because
+  // currently we do not have hostdevice_2dspan exists.
   std::vector<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>> lvl_chunks(num_levels);
 
   // For computing null count.
   std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums(num_levels);
 
+  // For parsing decompression data.
+  // We create one hostdevice_vector that is large enough to use for all levels,
+  // thus only need to allocate memory once.
+  auto hd_compinfo = [&] {
+    std::size_t max_num_streams{0};
+    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      // Find the maximum number of streams in all levels of the decoding stripes.
+      for (std::size_t level = 0; level < num_levels; ++level) {
+        auto const stream_range =
+          get_range(_file_itm_data.lvl_stripe_stream_ranges[level], stripe_range);
+        auto const num_streams = stream_range.end - stream_range.begin;
+        max_num_streams        = std::max(max_num_streams, num_streams);
+      }
+    }
+    return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>{max_num_streams, _stream};
+  }();
+
   auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
     auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
+    auto const num_streams           = stream_range.end - stream_range.begin;
 
     auto const& columns_level = _selected_columns.levels[level];
     auto const& stream_info   = _file_itm_data.lvl_stream_info[level];
@@ -922,9 +941,12 @@ void reader_impl::decompress_and_decode(read_mode mode)
 
     // Setup row group descriptors if using indexes.
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
+        hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
                                                 stripe_count,
+                                                compinfo,
                                                 _file_itm_data.compinfo_map,
                                                 *_metadata.per_file_metadata[0].decompressor,
                                                 stripe_data,
