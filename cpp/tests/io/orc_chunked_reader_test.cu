@@ -1266,13 +1266,6 @@ TEST_F(OrcChunkedReaderInputLimitTest, MixedColumnsHavingList)
                           input_limit{128 * 1024 * 1024UL},
                           expected);
   }
-
-  // TODO: remove
-  {
-    int constexpr expected[] = {1, 1, 1};
-    input_limit_test_read(
-      __LINE__, test_files, input, output_limit{0UL}, input_limit{0UL}, expected);
-  }
 }
 
 TEST_F(OrcChunkedReaderInputLimitTest, ReadWithRowSelection)
