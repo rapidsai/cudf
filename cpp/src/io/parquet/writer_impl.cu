@@ -2181,7 +2181,6 @@ auto convert_table_to_parquet_data(table_input_metadata& table_meta,
         row_group.total_byte_size += ck.bfr_size;
         row_group.total_compressed_size =
           row_group.total_compressed_size.value_or(0) + ck.compressed_size;
-        row_group.ordinal                         = global_r;
         column_chunk_meta.total_uncompressed_size = ck.bfr_size;
         column_chunk_meta.total_compressed_size   = ck.compressed_size;
       }
@@ -2457,15 +2456,15 @@ void writer::impl::write_parquet_data_to_sink(
           _out_sink[p]->host_write(bounce_buffer.data(), ck.compressed_size);
         }
 
+        auto const chunk_offset = _current_chunk_offset[p];
         auto& column_chunk_meta = row_group.columns[i].meta_data;
         column_chunk_meta.data_page_offset =
-          _current_chunk_offset[p] + ((ck.use_dictionary) ? ck.dictionary_size : 0);
-        column_chunk_meta.dictionary_page_offset =
-          (ck.use_dictionary) ? _current_chunk_offset[p] : 0;
+          chunk_offset + ((ck.use_dictionary) ? ck.dictionary_size : 0);
+        column_chunk_meta.dictionary_page_offset = (ck.use_dictionary) ? chunk_offset : 0;
         _current_chunk_offset[p] += ck.compressed_size;
 
-        // write location of first page in row group
-        if (i == 0) { row_group.file_offset = _current_chunk_offset[p]; }
+        // save location of first page in row group
+        if (i == 0) { row_group.file_offset = chunk_offset; }
       }
     }
     for (auto const& task : write_tasks) {
@@ -2541,10 +2540,9 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
     file_ender_s fendr;
+    auto& fmd = _agg_meta->file(p);
 
     if (_stats_granularity == statistics_freq::STATISTICS_COLUMN) {
-      auto& fmd = _agg_meta->file(p);
-
       // write column indices, updating column metadata along the way
       int chunkidx = 0;
       for (auto& r : fmd.row_groups) {
@@ -2569,6 +2567,12 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
         }
       }
     }
+
+    // set row group ordinals
+    auto iter        = thrust::make_counting_iterator(0);
+    auto& row_groups = fmd.row_groups;
+    std::for_each(
+      iter, iter + row_groups.size(), [&row_groups](auto idx) { row_groups[idx].ordinal = idx; });
 
     buffer.resize(0);
     fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p)));
