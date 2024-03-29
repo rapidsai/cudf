@@ -690,7 +690,7 @@ std::vector<range> find_table_splits(table_view const& input,
 
 }  // namespace
 
-void reader_impl::decompress_and_decode()
+void reader_impl::decompress_and_decode(read_mode mode)
 {
   if (_file_itm_data.has_no_data()) { return; }
 

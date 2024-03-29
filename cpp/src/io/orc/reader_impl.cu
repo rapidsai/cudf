@@ -44,7 +44,7 @@ void reader_impl::prepare_data(read_mode mode)
       // Only decompress/decode the loaded stripes if:
       //  - There are loaded stripes that were not decoded yet, and
       //  - All the decoded results were output.
-      decompress_and_decode();
+      decompress_and_decode(mode);
     }
   }
 }

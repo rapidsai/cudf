@@ -144,8 +144,10 @@ class reader_impl {
    *
    * This function expects that the other preprocessing steps (`global preprocess()` and
    * `load_data()`) have already been done.
+   *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void decompress_and_decode();
+  void decompress_and_decode(read_mode mode);
 
   /**
    * @brief Create the output table from the intermediate table and return it along with metadata.
