@@ -33,6 +33,7 @@ namespace cudf::io::orc::detail {
  */
 struct stream_source_info {
   std::size_t stripe_idx;  // global stripe id throughout all data sources
+  std::size_t level;       // level of the nested column
   uint32_t orc_col_idx;    // orc column id
   StreamKind kind;         // stream kind
 
@@ -40,15 +41,16 @@ struct stream_source_info {
     std::size_t operator()(stream_source_info const& id) const
     {
       auto const hasher = std::hash<size_t>{};
-      return hasher(id.stripe_idx) ^ hasher(static_cast<std::size_t>(id.orc_col_idx)) ^
+      return hasher(id.stripe_idx) ^ hasher(id.level) ^
+             hasher(static_cast<std::size_t>(id.orc_col_idx)) ^
              hasher(static_cast<std::size_t>(id.kind));
     }
   };
   struct equal_to {
     bool operator()(stream_source_info const& lhs, stream_source_info const& rhs) const
     {
-      return lhs.stripe_idx == rhs.stripe_idx && lhs.orc_col_idx == rhs.orc_col_idx &&
-             lhs.kind == rhs.kind;
+      return lhs.stripe_idx == rhs.stripe_idx && lhs.level == rhs.level &&
+             lhs.orc_col_idx == rhs.orc_col_idx && lhs.kind == rhs.kind;
     }
   };
 };
@@ -142,7 +144,7 @@ struct file_intermediate_data {
   std::vector<range> stripe_data_read_ranges;
 
   // Store the compression information for each data stream.
-  std::vector<stream_source_map<stripe_level_comp_info>> lvl_compinfo_map;
+  stream_source_map<stripe_level_comp_info> compinfo_map;
 
   // Store info for each ORC stream at each nested level.
   std::vector<std::vector<orc_stream_info>> lvl_stream_info;

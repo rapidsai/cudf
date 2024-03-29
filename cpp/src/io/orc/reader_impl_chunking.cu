@@ -121,10 +121,11 @@ std::size_t gather_stream_info_and_column_desc(
 
         (*local_stream_order)++;
       } else {  // not chunks.has_value()
-        stream_info.value()->emplace_back(stripeinfo->offset + src_offset,
-                                          dst_offset,
-                                          stream.length,
-                                          stream_source_info{stripe_order, column_id, stream.kind});
+        stream_info.value()->emplace_back(
+          stripeinfo->offset + src_offset,
+          dst_offset,
+          stream.length,
+          stream_source_info{stripe_order, level, column_id, stream.kind});
       }
 
       dst_offset += stream.length;
@@ -274,7 +275,6 @@ void reader_impl::global_preprocess(read_mode mode)
 
   auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_sizes         = _file_itm_data.lvl_stripe_sizes;
-  auto& lvl_compinfo_map         = _file_itm_data.lvl_compinfo_map;
   auto& lvl_stream_info          = _file_itm_data.lvl_stream_info;
   auto& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
   auto& lvl_column_types         = _file_itm_data.lvl_column_types;
@@ -282,7 +282,6 @@ void reader_impl::global_preprocess(read_mode mode)
 
   lvl_stripe_data.resize(num_levels);
   lvl_stripe_sizes.resize(num_levels);
-  lvl_compinfo_map.resize(num_levels);
   lvl_stream_info.resize(num_levels);
   lvl_stripe_stream_ranges.resize(num_levels);
   lvl_column_types.resize(num_levels);
@@ -614,6 +613,8 @@ void reader_impl::load_data(read_mode mode)
   // decompression and decoding.
   stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
 
+  auto& compinfo_map = _file_itm_data.compinfo_map;
+
   for (std::size_t level = 0; level < num_levels; ++level) {
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
     auto const num_columns  = _selected_columns.levels[level].size();
@@ -640,7 +641,8 @@ void reader_impl::load_data(read_mode mode)
 
         compinfo.push_back(gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length));
         stream_compinfo_map[stream_source_info{
-          info.source.stripe_idx, info.source.orc_col_idx, info.source.kind}] = &compinfo.back();
+          info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind}] =
+          &compinfo.back();
       }
 
       compinfo.host_to_device_async(_stream);
@@ -651,8 +653,6 @@ void reader_impl::load_data(read_mode mode)
                                      _stream);
       compinfo.device_to_host_sync(_stream);
 
-      auto& compinfo_map = _file_itm_data.lvl_compinfo_map[level];
-      compinfo_map.clear();  // clear cache of the last load
       for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
         // Cache these parsed numbers so they can be reused in the decompression/decoding step.
         compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,

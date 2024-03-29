@@ -925,7 +925,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
       auto decomp_data = decompress_stripe_data(load_stripe_range,
                                                 stream_range,
                                                 stripe_count,
-                                                _file_itm_data.lvl_compinfo_map[level],
+                                                _file_itm_data.compinfo_map,
                                                 *_metadata.per_file_metadata[0].decompressor,
                                                 stripe_data,
                                                 stream_info,
