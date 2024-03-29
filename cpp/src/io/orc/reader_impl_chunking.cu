@@ -608,12 +608,8 @@ void reader_impl::load_data(read_mode mode)
   // memory:
   //
 
-  // A map from a stripe sources into `CompressedStreamInfo*` pointers.
-  // These pointers are then used to retrieve stripe/level decompressed sizes for later
-  // decompression and decoding.
-  stream_source_map<gpu::CompressedStreamInfo*> stream_compinfo_map;
-
   auto& compinfo_map = _file_itm_data.compinfo_map;
+  compinfo_map.clear();  // clear cache of the last load
 
   for (std::size_t level = 0; level < num_levels; ++level) {
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
@@ -630,19 +626,15 @@ void reader_impl::load_data(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      // Cannot be cached as-is, since this is for streams in the current loaded stripe range,
-      // while the decompression/decoding step would probably use just a subrange of it.
       cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, _stream);
-
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
-
         compinfo.push_back(gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length));
-        stream_compinfo_map[info.source] = &compinfo.back();
       }
 
+      // Estimate the uncompressed data.
       compinfo.host_to_device_async(_stream);
       gpu::ParseCompressedStripeData(compinfo.device_ptr(),
                                      compinfo.size(),
@@ -651,17 +643,18 @@ void reader_impl::load_data(read_mode mode)
                                      _stream);
       compinfo.device_to_host_sync(_stream);
 
-      for (auto& [stream_id, stream_compinfo] : stream_compinfo_map) {
+      for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
+        auto const& info           = stream_info[stream_idx];
+        auto const stream_compinfo = compinfo[stream_idx - stream_range.begin];
+
         // Cache these parsed numbers so they can be reused in the decompression/decoding step.
-        compinfo_map[stream_id] = {stream_compinfo->num_compressed_blocks,
-                                   stream_compinfo->num_uncompressed_blocks,
-                                   stream_compinfo->max_uncompressed_size};
-        stripe_decomp_sizes[stream_id.stripe_idx - stripe_start].size_bytes +=
-          stream_compinfo->max_uncompressed_size;
+        compinfo_map[info.source] = {stream_compinfo.num_compressed_blocks,
+                                     stream_compinfo.num_uncompressed_blocks,
+                                     stream_compinfo.max_uncompressed_size};
+        stripe_decomp_sizes[info.source.stripe_idx - stripe_start].size_bytes +=
+          stream_compinfo.max_uncompressed_size;
       }
 
-      // Important: must clear this map to reuse the (empty) map for processing the next level.
-      stream_compinfo_map.clear();
     } else {  // no decompression
       // Set decompression sizes equal to the input sizes.
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
