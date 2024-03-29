@@ -143,6 +143,13 @@ struct file_intermediate_data {
   // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
   std::vector<range> stripe_data_read_ranges;
 
+  // The buffers to store raw data read from disk, initialized each time calling to `load_data()`.
+  // After decoding, such buffers can be released.
+  rmm::device_buffer stripe_data;
+
+  // Offsets into the buffer `stripe_data` for each loaded stripe.
+  std::vector<std::size_t> stripe_data_offsets;
+
   // Store the compression information for each data stream.
   stream_source_map<stripe_level_comp_info> compinfo_map;
 
@@ -152,11 +159,6 @@ struct file_intermediate_data {
   // At each nested level, the streams for each stripe are stored consecutively in lvl_stream_info.
   // This is used to identify the range of streams for each stripe from that vector.
   std::vector<std::vector<range>> lvl_stripe_stream_ranges;
-
-  // The buffers to store raw data read from disk, initialized for each reading stripe chunks.
-  // After decoding, such buffers can be released.
-  // This can only be implemented after chunked output is ready.
-  std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data;
 
   // Store the size of each stripe at each nested level.
   // This is used to initialize the stripe_data buffers.
