@@ -40,10 +40,10 @@ struct stream_source_info {
   struct hash {
     std::size_t operator()(stream_source_info const& id) const
     {
+      auto const col_kind =
+        static_cast<std::size_t>(id.orc_col_idx) | (static_cast<std::size_t>(id.kind) << 32);
       auto const hasher = std::hash<size_t>{};
-      return hasher(id.stripe_idx) ^ hasher(id.level) ^
-             hasher(static_cast<std::size_t>(id.orc_col_idx)) ^
-             hasher(static_cast<std::size_t>(id.kind));
+      return hasher(id.stripe_idx) ^ hasher(id.level) ^ hasher(col_kind);
     }
   };
   struct equal_to {
