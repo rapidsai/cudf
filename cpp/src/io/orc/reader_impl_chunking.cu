@@ -18,6 +18,7 @@
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
+#include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -611,6 +612,19 @@ void reader_impl::load_data(read_mode mode)
   auto& compinfo_map = _file_itm_data.compinfo_map;
   compinfo_map.clear();  // clear cache of the last load
 
+  // Find the maximum number of streams in all levels of the loaded stripes.
+  auto const max_num_streams = [&] {
+    std::size_t max_count{0};
+    for (std::size_t level = 0; level < num_levels; ++level) {
+      auto const stream_range =
+        get_range(_file_itm_data.lvl_stripe_stream_ranges[level], load_stripe_range);
+      auto const num_streams = stream_range.end - stream_range.begin;
+      max_count              = std::max(max_count, num_streams);
+    }
+    return max_count;
+  }();
+  cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> hd_compinfo(max_num_streams, _stream);
+
   for (std::size_t level = 0; level < num_levels; ++level) {
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
     auto const num_columns  = _selected_columns.levels[level].size();
@@ -626,12 +640,14 @@ void reader_impl::load_data(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto const& decompressor = *_metadata.per_file_metadata[0].decompressor;
 
-      cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo> compinfo(0, num_streams, _stream);
+      auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
+        hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
         auto const dst_base =
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
-        compinfo.push_back(gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length));
+        compinfo[stream_idx - stream_range.begin] =
+          gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length);
       }
 
       // Estimate the uncompressed data.
