@@ -640,9 +640,7 @@ void reader_impl::load_data(read_mode mode)
           static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
 
         compinfo.push_back(gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length));
-        stream_compinfo_map[stream_source_info{
-          info.source.stripe_idx, info.source.level, info.source.orc_col_idx, info.source.kind}] =
-          &compinfo.back();
+        stream_compinfo_map[info.source] = &compinfo.back();
       }
 
       compinfo.host_to_device_async(_stream);
