@@ -58,7 +58,7 @@ namespace {
  *
  * @param loaded_stripe_range Range of stripes that are already loaded in memory
  * @param stream_range Range of streams to be decoded
- * @param num_decoded_stripes Number of stripes that the decoding streams belong to
+ * @param num_decode_stripes Number of stripes that the decoding streams belong to
  * @param compinfo_map A map to lookup compression info of streams
  * @param decompressor Block decompressor
  * @param stripe_data List of source stripe column data
@@ -84,6 +84,9 @@ rmm::device_buffer decompress_stripe_data(
   bool use_base_stride,
   rmm::cuda_stream_view stream)
 {
+  // Whether we have the comppression info precomputed.
+  auto const compinfo_ready = compinfo_map.size() > 0;
+
   // Count the exact number of compressed blocks
   std::size_t num_compressed_blocks   = 0;
   std::size_t num_uncompressed_blocks = 0;
@@ -101,15 +104,33 @@ rmm::device_buffer decompress_stripe_data(
         info.dst_pos,
       info.length));
 
-    auto const& cached_comp_info             = compinfo_map.at(info.source);
-    auto& stream_comp_info                   = compinfo.back();
-    stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
-    stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
-    stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
+    if (compinfo_ready) {
+      auto const& cached_comp_info             = compinfo_map.at(info.source);
+      auto& stream_comp_info                   = compinfo.back();
+      stream_comp_info.num_compressed_blocks   = cached_comp_info.num_compressed_blocks;
+      stream_comp_info.num_uncompressed_blocks = cached_comp_info.num_uncompressed_blocks;
+      stream_comp_info.max_uncompressed_size   = cached_comp_info.total_decomp_size;
 
-    num_compressed_blocks += cached_comp_info.num_compressed_blocks;
-    num_uncompressed_blocks += cached_comp_info.num_uncompressed_blocks;
-    total_decomp_size += cached_comp_info.total_decomp_size;
+      num_compressed_blocks += cached_comp_info.num_compressed_blocks;
+      num_uncompressed_blocks += cached_comp_info.num_uncompressed_blocks;
+      total_decomp_size += cached_comp_info.total_decomp_size;
+    }
+  }
+
+  if (!compinfo_ready) {
+    compinfo.host_to_device_async(stream);
+    gpu::ParseCompressedStripeData(compinfo.device_ptr(),
+                                   compinfo.size(),
+                                   decompressor.GetBlockSize(),
+                                   decompressor.GetLog2MaxCompressionRatio(),
+                                   stream);
+    compinfo.device_to_host_sync(stream);
+
+    for (std::size_t i = 0; i < compinfo.size(); ++i) {
+      num_compressed_blocks += compinfo[i].num_compressed_blocks;
+      num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
+      total_decomp_size += compinfo[i].max_uncompressed_size;
+    }
   }
 
   CUDF_EXPECTS(
