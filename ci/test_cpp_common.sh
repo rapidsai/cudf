@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ rapids-dependency-file-generator \
   --file_key test_cpp \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
-rapids-mamba-retry env create --force -f "${ENV_YAML_DIR}/env.yaml" -n test
+rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test
 
 # Temporarily allow unbound variables for conda activation.
 set +u
