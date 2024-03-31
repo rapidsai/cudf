@@ -62,7 +62,7 @@ namespace {
  * @param num_decode_stripes Number of stripes that the decoding streams belong to
  * @param compinfo_map A map to lookup compression info of streams
  * @param decompressor Block decompressor
- * @param stripe_data Stripe column data
+ * @param stripe_data List of source stripe column data
  * @param stream_info List of stream to column mappings
  * @param chunks Vector of list of column chunk descriptors
  * @param row_groups Vector of list of row index descriptors
@@ -70,8 +70,6 @@ namespace {
  * @param use_base_stride Whether to use base stride obtained from meta or use the computed value
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Device buffer to decompressed data
- *
- * //  TODO: add missing params
  */
 rmm::device_buffer decompress_stripe_data(
   range const& loaded_stripe_range,
@@ -80,9 +78,7 @@ rmm::device_buffer decompress_stripe_data(
   cudf::detail::hostdevice_span<gpu::CompressedStreamInfo> compinfo,
   stream_source_map<stripe_level_comp_info> const& compinfo_map,
   OrcDecompressor const& decompressor,
-  device_span<uint8_t const> stripe_data,
-  host_span<std::size_t const> stripe_data_offsets,
-  std::size_t offset_idx_start,
+  host_span<rmm::device_buffer const> stripe_data,
   host_span<orc_stream_info const> stream_info,
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   cudf::detail::hostdevice_2dvector<gpu::RowGroup>& row_groups,
@@ -102,11 +98,11 @@ rmm::device_buffer decompress_stripe_data(
     auto const& info = stream_info[stream_idx];
 
     auto& stream_comp_info = compinfo[stream_idx - stream_range.begin];
-
-    auto const offset_idx = offset_idx_start + info.source.stripe_idx - loaded_stripe_range.begin;
-    auto const stripe_offset = stripe_data_offsets[offset_idx];
-    auto const dst_base      = &stripe_data.data()[stripe_offset];
-    stream_comp_info         = gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length);
+    stream_comp_info       = gpu::CompressedStreamInfo(
+      static_cast<uint8_t const*>(
+        stripe_data[info.source.stripe_idx - loaded_stripe_range.begin].data()) +
+        info.dst_pos,
+      info.length);
 
     if (compinfo_ready) {
       auto const& cached_comp_info             = compinfo_map.at(info.source);
@@ -729,7 +725,6 @@ void reader_impl::decompress_and_decode(read_mode mode)
   // The start index of loaded stripes. They are different from decoding stripes.
   auto const load_stripe_range =
     _chunk_read_data.load_stripe_ranges[_chunk_read_data.curr_load_stripe_range - 1];
-  auto const load_stripe_count = load_stripe_range.end - load_stripe_range.begin;
   auto const load_stripe_start = load_stripe_range.begin;
 
   auto const rows_to_skip      = _file_itm_data.rows_to_skip;
@@ -787,13 +782,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
     return cudf::detail::hostdevice_vector<gpu::CompressedStreamInfo>{max_num_streams, _stream};
   }();
 
-  auto const& stripe_data_offsets = _file_itm_data.stripe_data_offsets;
-  auto const& stripe_data         = _file_itm_data.stripe_data;
-  auto& col_meta                  = *_col_meta;
-
-  // To store the output decompressed buffers, which need to be kept alive until we decode them.
-  std::vector<rmm::device_buffer> decompressed_buffers;
-
+  auto& col_meta = *_col_meta;
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     auto const& stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges[level];
     auto const stream_range          = get_range(stripe_stream_ranges, stripe_range);
@@ -804,7 +793,8 @@ void reader_impl::decompress_and_decode(read_mode mode)
     auto const& column_types  = _file_itm_data.lvl_column_types[level];
     auto const& nested_cols   = _file_itm_data.lvl_nested_cols[level];
 
-    auto& chunks = lvl_chunks[level];
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    auto& chunks      = lvl_chunks[level];
 
     auto const num_level_columns = columns_level.size();
     chunks =
@@ -862,10 +852,8 @@ void reader_impl::decompress_and_decode(read_mode mode)
       CUDF_EXPECTS(not is_stripe_data_empty or stripe_info->indexLength == 0,
                    "Invalid index rowgroup stream data");
 
-      // `offset_idx` is the flattened index of the stripe offset in `stripe_data_offsets`.
-      auto const offset_idx    = level * load_stripe_count + stripe_idx - load_stripe_start;
-      auto const stripe_offset = stripe_data_offsets[offset_idx];
-      auto const dst_base      = static_cast<uint8_t const*>(stripe_data.data()) + stripe_offset;
+      auto const dst_base =
+        static_cast<uint8_t*>(stripe_data[stripe_idx - load_stripe_start].data());
       auto const num_rows_in_stripe = static_cast<int64_t>(stripe_info->numberOfRows);
 
       uint32_t const rowgroup_id = num_rowgroups;
@@ -929,9 +917,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
       num_rowgroups += stripe_num_rowgroups;
     }
 
-    auto const level_data_size =
-      stripe_data_offsets[(level + 1) * stripe_count] - stripe_data_offsets[level * stripe_count];
-    if (level_data_size == 0) { continue; }
+    if (stripe_data.empty()) { continue; }
 
     // Process dataset chunks into output columns.
     auto row_groups =
@@ -957,26 +943,26 @@ void reader_impl::decompress_and_decode(read_mode mode)
     if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
       auto compinfo = cudf::detail::hostdevice_span<gpu::CompressedStreamInfo>(
         hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
-      auto decomp_data = decompress_stripe_data(
-        load_stripe_range,
-        stream_range,
-        stripe_count,
-        compinfo,
-        _file_itm_data.compinfo_map,
-        *_metadata.per_file_metadata[0].decompressor,
-        device_span<uint8_t const>{static_cast<uint8_t const*>(stripe_data.data()),
-                                   stripe_data.size()},
-        stripe_data_offsets,
-        level * load_stripe_count,
-        stream_info,
-        chunks,
-        row_groups,
-        _metadata.get_row_index_stride(),
-        level == 0,
-        _stream);
+      auto decomp_data = decompress_stripe_data(load_stripe_range,
+                                                stream_range,
+                                                stripe_count,
+                                                compinfo,
+                                                _file_itm_data.compinfo_map,
+                                                *_metadata.per_file_metadata[0].decompressor,
+                                                stripe_data,
+                                                stream_info,
+                                                chunks,
+                                                row_groups,
+                                                _metadata.get_row_index_stride(),
+                                                level == 0,
+                                                _stream);
 
       // Just save the decompressed data and clear out the raw data to free up memory.
-      decompressed_buffers.emplace_back(std::move(decomp_data));
+      stripe_data[stripe_start - load_stripe_start] = std::move(decomp_data);
+      for (std::size_t i = 1; i < stripe_count; ++i) {
+        stripe_data[i + stripe_start - load_stripe_start] = {};
+      }
+
     } else {
       if (row_groups.size().first) {
         chunks.host_to_device_async(_stream);
@@ -1063,6 +1049,15 @@ void reader_impl::decompress_and_decode(read_mode mode)
   // Free up temp memory used for decoding.
   for (std::size_t level = 0; level < _selected_columns.num_levels(); ++level) {
     _out_buffers[level].resize(0);
+
+    auto& stripe_data = _file_itm_data.lvl_stripe_data[level];
+    if (_metadata.per_file_metadata[0].ps.compression != orc::NONE) {
+      stripe_data[stripe_start - load_stripe_start] = {};
+    } else {
+      for (std::size_t i = 0; i < stripe_count; ++i) {
+        stripe_data[i + stripe_start - load_stripe_start] = {};
+      }
+    }
   }
 
   // Output table range is reset to start from the first position.

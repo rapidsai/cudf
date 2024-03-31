@@ -274,12 +274,14 @@ void reader_impl::global_preprocess(read_mode mode)
   auto& stripe_data_read_ranges = _file_itm_data.stripe_data_read_ranges;
   stripe_data_read_ranges.resize(num_total_stripes);
 
+  auto& lvl_stripe_data          = _file_itm_data.lvl_stripe_data;
   auto& lvl_stripe_sizes         = _file_itm_data.lvl_stripe_sizes;
   auto& lvl_stream_info          = _file_itm_data.lvl_stream_info;
   auto& lvl_stripe_stream_ranges = _file_itm_data.lvl_stripe_stream_ranges;
   auto& lvl_column_types         = _file_itm_data.lvl_column_types;
   auto& lvl_nested_cols          = _file_itm_data.lvl_nested_cols;
 
+  lvl_stripe_data.resize(num_levels);
   lvl_stripe_sizes.resize(num_levels);
   lvl_stream_info.resize(num_levels);
   lvl_stripe_stream_ranges.resize(num_levels);
@@ -460,27 +462,21 @@ void reader_impl::load_data(read_mode mode)
   auto const stripe_start = load_stripe_range.begin;
   auto const stripe_end   = load_stripe_range.end;
   auto const stripe_count = stripe_end - stripe_start;
-  auto const num_levels   = _selected_columns.num_levels();
 
-  auto& stripe_data_offsets = _file_itm_data.stripe_data_offsets;
-  stripe_data_offsets.resize(0);
-  stripe_data_offsets.reserve(num_levels * stripe_count);
-  stripe_data_offsets.push_back(0);
-  std::size_t offset{0};
+  auto& lvl_stripe_data = _file_itm_data.lvl_stripe_data;
+  auto const num_levels = _selected_columns.num_levels();
 
-  // Compute the offsets for the memory segments storing data of each stripe.
+  // Prepare the buffer to read raw data onto.
   for (std::size_t level = 0; level < num_levels; ++level) {
+    auto& stripe_data = lvl_stripe_data[level];
+    stripe_data.resize(stripe_count);
+
     for (std::size_t idx = 0; idx < stripe_count; ++idx) {
-      auto const stripe_size      = _file_itm_data.lvl_stripe_sizes[level][idx + stripe_start];
-      auto const stripe_data_size = cudf::util::round_up_safe(stripe_size, BUFFER_PADDING_MULTIPLE);
-      offset += stripe_data_size;
-      stripe_data_offsets.push_back(offset);
+      auto const stripe_size = _file_itm_data.lvl_stripe_sizes[level][idx + stripe_start];
+      stripe_data[idx]       = rmm::device_buffer(
+        cudf::util::round_up_safe(stripe_size, BUFFER_PADDING_MULTIPLE), _stream);
     }
   }
-
-  // Now we have the total data size of all stripes. Just create one buffer to load all data into.
-  auto& stripe_data = _file_itm_data.stripe_data;
-  stripe_data       = rmm::device_buffer(stripe_data_offsets.back(), _stream);
 
   //
   // Load stripe data into memory:
@@ -501,11 +497,8 @@ void reader_impl::load_data(read_mode mode)
   for (auto read_idx = read_begin; read_idx < read_end; ++read_idx) {
     auto const& read_info = _file_itm_data.data_read_info[read_idx];
     auto const source_ptr = _metadata.per_file_metadata[read_info.source_idx].source;
-
-    // `offset_idx` is the flattened index of the stripe offset in `stripe_data_offsets`.
-    auto const offset_idx    = read_info.level * stripe_count + read_info.stripe_idx - stripe_start;
-    auto const stripe_offset = stripe_data_offsets[offset_idx];
-    auto const dst_base      = static_cast<uint8_t*>(stripe_data.data()) + stripe_offset;
+    auto const dst_base   = static_cast<uint8_t*>(
+      lvl_stripe_data[read_info.level][read_info.stripe_idx - stripe_start].data());
 
     if (source_ptr->is_device_read_preferred(read_info.length)) {
       read_tasks.push_back(
@@ -640,9 +633,8 @@ void reader_impl::load_data(read_mode mode)
     auto const& stream_info = _file_itm_data.lvl_stream_info[level];
     auto const num_columns  = _selected_columns.levels[level].size();
 
-    auto const level_data_size =
-      stripe_data_offsets[(level + 1) * stripe_count] - stripe_data_offsets[level * stripe_count];
-    if (level_data_size == 0) { continue; }
+    auto& stripe_data = lvl_stripe_data[level];
+    if (stripe_data.empty()) { continue; }
 
     // Range of all streams in the loaded stripes.
     auto const stream_range =
@@ -656,11 +648,8 @@ void reader_impl::load_data(read_mode mode)
         hd_compinfo.begin(), hd_compinfo.d_begin(), num_streams);
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info = stream_info[stream_idx];
-
-        // `offset_idx` is the flattened index of the stripe offset in `stripe_data_offsets`.
-        auto const offset_idx    = level * stripe_count + info.source.stripe_idx - stripe_start;
-        auto const stripe_offset = stripe_data_offsets[offset_idx];
-        auto const dst_base      = static_cast<uint8_t*>(stripe_data.data()) + stripe_offset;
+        auto const dst_base =
+          static_cast<uint8_t const*>(stripe_data[info.source.stripe_idx - stripe_start].data());
         compinfo[stream_idx - stream_range.begin] =
           gpu::CompressedStreamInfo(dst_base + info.dst_pos, info.length);
       }
