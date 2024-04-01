@@ -142,7 +142,6 @@ size_t CompactProtocolWriter::write(RowGroup const& r)
   c.field_struct_list(1, r.columns);
   c.field_int(2, r.total_byte_size);
   c.field_int(3, r.num_rows);
-  // TODO: field 4 is sorting_columns
   if (r.sorting_columns.has_value()) { c.field_struct_list(4, r.sorting_columns.value()); }
   if (r.file_offset.has_value()) { c.field_int(5, r.file_offset.value()); }
   if (r.total_compressed_size.has_value()) { c.field_int(6, r.total_compressed_size.value()); }
