@@ -20,8 +20,6 @@ from libc.stdint cimport uint32_t, uint64_t
 from .table cimport Table
 from .column cimport Column
 
-#cpdef Column hash(Tabl)
-
 cpdef Column murmurhash3_x86_32(
     Table input, 
     uint32_t seed
