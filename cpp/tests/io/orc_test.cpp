@@ -2101,8 +2101,7 @@ TEST_F(OrcWriterTest, BounceBufferBug)
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
 
   constexpr auto num_rows = 150000;
-  column_wrapper<int8_t, typename decltype(sequence)::value_type> col(sequence,
-                                                                      sequence + num_rows);
+  column_wrapper<int8_t> col(sequence, sequence + num_rows);
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("BounceBufferBug.orc");
@@ -2121,8 +2120,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 127; });
-  column_wrapper<int8_t, typename decltype(sequence)::value_type> col(sequence,
-                                                                      sequence + num_rows);
+  column_wrapper<int8_t> col(sequence, sequence + num_rows);
   table_view chunk_table({col});
 
   std::vector<char> out_buffer;
@@ -2192,7 +2190,7 @@ TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
   };
 
   auto sequence = thrust::make_counting_iterator(0);
-  column_wrapper<int8_t, typename decltype(sequence)::value_type> col(sequence, sequence + 10);
+  column_wrapper<int8_t> col(sequence, sequence + 10);
   table_view table({col});
 
   throw_sink sink;
