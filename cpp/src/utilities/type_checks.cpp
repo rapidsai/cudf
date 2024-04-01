@@ -155,8 +155,7 @@ bool column_types_equivalent(column_view const& lhs, column_view const& rhs)
 {
   // Check if the columns have fixed point types. This is the only case where
   // type equality and equivalence differ.
-  if (lhs.type().id() == type_id::DECIMAL32 || lhs.type().id() == type_id::DECIMAL64 ||
-      lhs.type().id() == type_id::DECIMAL128) {
+  if (cudf::is_fixed_point(lhs.type()) {
     return lhs.type().id() == rhs.type().id();
   }
   return column_types_equal(lhs, rhs);
