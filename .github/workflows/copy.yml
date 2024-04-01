@@ -19,7 +19,7 @@ jobs:
           python-version: '3.x'
       - name: Generate text file
         run: |
-          echo "Hello, Worlaaad!" > gh-comment.txt
+          echo "This is another test comment!" > gh-comment.txt
       - name: Upload file to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
