@@ -449,6 +449,11 @@ int dispatch_to_arrow_device::operator()<cudf::string_view>(cudf::column&& colum
   NANOARROW_RETURN_NOT_OK(initialize_array(tmp.get(), NANOARROW_TYPE_STRING, column));
 
   if (column.size() == 0) {
+    // the scalar zero here is necessary because the spec for string arrays states
+    // that the offsets buffer should contain "length + 1" signed integers. So in
+    // the case of a 0 length string array, there should be exactly 1 value, zero,
+    // in the offsets buffer. While some arrow implementations may accept a zero-sized
+    // offsets buffer, best practices would be to allocate the buffer with the single value.
     auto zero = std::make_unique<rmm::device_scalar<int32_t>>(0, stream, mr);
     NANOARROW_RETURN_NOT_OK(set_buffer(std::move(zero), fixed_width_data_buffer_idx, tmp.get()));
     ArrowArrayMove(tmp.get(), out);
