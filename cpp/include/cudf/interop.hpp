@@ -237,7 +237,7 @@ unique_device_array_t to_arrow_device(
  * After calling this function, the release callback on the returned ArrowDeviceArray
  * must be called to clean up the memory.
  *
- * @note for decimals, since the precision is not stored for them in libcudf
+ * @note For decimals, since the precision is not stored for them in libcudf
  * it will be converted to an Arrow decimal128 with the widest-precision the cudf decimal type
  * supports. For example, numeric::decimal32 will be converted to Arrow decimal128 of the precision
  * 9 which is the maximum precision for 32-bit types. Similar, numeric::decimal128 will be
