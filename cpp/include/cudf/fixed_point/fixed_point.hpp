@@ -24,6 +24,8 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
+#include <string.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -243,22 +245,12 @@ CUDF_HOST_DEVICE inline auto extract_components(FloatingType floating)
   using Constants    = FloatingComponentConstants<FloatingType>;
   using IntegralType = typename Constants::IntegralType;
 
-  // Interpret our floating point number as an integer to extract the stored bits.
-  // Although using a union for type-punning is undefined behavior in the C++ language, its behavior
-  // IS defined by both gcc and clang (the compilers we support), even with strict aliasing.
-  // Regardless, we should switch to the standard-supported std::bit_cast() for this in C++20
-  // when it is available.
-  // TODO: Use std::bit_cast in C++20
-  // GCC: https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-fstrict-aliasing
-  union UseBitCastInCpp20 {
-    IntegralType integer;
-    FloatingType floating;
-  };
-
   // Convert floating to integer
-  UseBitCastInCpp20 conversion_union;
-  conversion_union.floating      = floating;
-  IntegralType const integer_rep = conversion_union.integer;
+  auto const integer_rep = [&]() {
+    IntegralType integer;
+    memcpy(&integer, &floating, sizeof(floating));
+    return integer;
+  }();
 
   // First extract the exponent bits and handle its special values
   auto const exponent_bits = integer_rep & Constants::exponent_mask;
@@ -315,25 +307,15 @@ CUDF_HOST_DEVICE inline FloatingType add_sign_and_exp2(FloatingType floating,
   using Constants    = FloatingComponentConstants<FloatingType>;
   using IntegralType = typename Constants::IntegralType;
 
-  // See comments in extract_components() about type-punning with a union.
-  // TODO: Use std::bit_cast in C++20
-  union UseBitCastInCpp20 {
-    IntegralType integer;
-    FloatingType floating;
-  };
-
-  // Convert floating point to integer
-  // We'll edit the integer in-place as we have to convert back to floating point at the end.
-  // Note that we do NOT use a reference or pointer to the union integer, as that IS undefined
-  // behavior in gcc.
-  UseBitCastInCpp20 conversion_union;
-  conversion_union.floating = floating;
+  // Convert floating to integer
+  IntegralType integer_rep;
+  memcpy(&integer_rep, &floating, sizeof(floating));
 
   // Set the sign bit
-  conversion_union.integer |= (IntegralType(is_negative) << Constants::sign_bit_index);
+  integer_rep |= (IntegralType(is_negative) << Constants::sign_bit_index);
 
   // Extract the currently stored (biased) exponent
-  auto exponent_bits = conversion_union.integer & Constants::exponent_mask;
+  auto exponent_bits = integer_rep & Constants::exponent_mask;
   auto stored_exp2   = exponent_bits >> Constants::num_mantissa_bits;
 
   // Add the additional power-of-2
@@ -341,11 +323,12 @@ CUDF_HOST_DEVICE inline FloatingType add_sign_and_exp2(FloatingType floating,
   exponent_bits = stored_exp2 << Constants::num_mantissa_bits;
 
   // Clear existing exponent bits and set new ones
-  conversion_union.integer &= (~Constants::exponent_mask);
-  conversion_union.integer |= exponent_bits;
+  integer_rep &= (~Constants::exponent_mask);
+  integer_rep |= exponent_bits;
 
   // Convert back to float
-  return conversion_union.floating;
+  memcpy(&floating, &integer_rep, sizeof(floating));
+  return floating;
 }
 
 /** @brief Determine the number of significant bits in an integer
