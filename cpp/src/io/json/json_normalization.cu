@@ -103,8 +103,11 @@ struct TransduceToNormalizedQuotes {
     // SQS   | {'}             -> {"}
     // SQS   | {"}             -> {\"}
     // SQS   | {\}             -> <nop>
+    // DQS   | {\}             -> <nop>
     // SEC   | {'}             -> {'}
     // SEC   | Sigma\{'}       -> {\*}
+    // DEC   | {'}             -> {'}
+    // DEC   | Sigma\{'}       -> {\*}
 
     // Whether this transition translates to the escape sequence: \"
     bool const outputs_escape_sequence =
@@ -119,20 +122,23 @@ struct TransduceToNormalizedQuotes {
       return '"';
     }
     // Case when the read symbol is an escape character - the actual translation for \<s> for some
-    // symbol <s> is handled by transitions from SEC. For now, there is no output for this
-    // transition
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR)) &&
-        ((state_id == static_cast<StateT>(dfa_states::TT_SQS)))) {
+    // symbol <s> is handled by transitions from SEC. The same logic applies for the transition from
+    // DEC. For now, there is no output for this transition
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR) &&
+        (state_id == static_cast<StateT>(dfa_states::TT_SQS) ||
+         state_id == static_cast<StateT>(dfa_states::TT_DQS))) {
       return 0;
     }
-    // Case when an escaped single quote in an input single-quoted string needs to be replaced by an
-    // unescaped single quote
-    if ((match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR)) &&
-        ((state_id == static_cast<StateT>(dfa_states::TT_SEC)))) {
+    // Case when an escaped single quote in an input single-quoted or double-quoted string needs
+    // to be replaced by an unescaped single quote
+    if (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR) &&
+        (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
+         state_id == static_cast<StateT>(dfa_states::TT_DEC))) {
       return '\'';
     }
     // Case when an escaped symbol <s> that is not a single-quote needs to be replaced with \<s>
-    if (state_id == static_cast<StateT>(dfa_states::TT_SEC)) {
+    if (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
+        state_id == static_cast<StateT>(dfa_states::TT_DEC)) {
       return (relative_offset == 0) ? '\\' : read_symbol;
     }
     // In all other cases we simply output the input symbol
@@ -156,18 +162,23 @@ struct TransduceToNormalizedQuotes {
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::DOUBLE_QUOTE_CHAR));
     // Number of characters to output on this transition
     if (sqs_outputs_escape_sequence) { return 2; }
+
     // Whether this transition translates to the escape sequence \<s> or unescaped '
-    bool const sec_outputs_escape_sequence =
-      (state_id == static_cast<StateT>(dfa_states::TT_SEC)) &&
+    bool const sec_dec_outputs_escape_sequence =
+      (state_id == static_cast<StateT>(dfa_states::TT_SEC) ||
+       state_id == static_cast<StateT>(dfa_states::TT_DEC)) &&
       (match_id != static_cast<SymbolGroupT>(dfa_symbol_group_id::SINGLE_QUOTE_CHAR));
     // Number of characters to output on this transition
-    if (sec_outputs_escape_sequence) { return 2; }
+    if (sec_dec_outputs_escape_sequence) { return 2; }
+
     // Whether this transition translates to no output <nop>
-    bool const sqs_outputs_nop =
-      (state_id == static_cast<StateT>(dfa_states::TT_SQS)) &&
+    bool const sqs_dqs_outputs_nop =
+      (state_id == static_cast<StateT>(dfa_states::TT_SQS) ||
+       state_id == static_cast<StateT>(dfa_states::TT_DQS)) &&
       (match_id == static_cast<SymbolGroupT>(dfa_symbol_group_id::ESCAPE_CHAR));
     // Number of characters to output on this transition
-    if (sqs_outputs_nop) { return 0; }
+    if (sqs_dqs_outputs_nop) { return 0; }
+
     return 1;
   }
 };
