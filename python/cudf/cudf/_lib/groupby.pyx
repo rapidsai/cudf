@@ -216,7 +216,7 @@ cdef class GroupBy:
         return columns_from_pylibcudf_table(replaced)
 
 
-_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "rank"}
+_GROUPBY_SCANS = {"cumcount", "cumsum", "cummin", "cummax", "cumprod", "rank"}
 
 
 def _is_all_scan_aggregate(all_aggs):

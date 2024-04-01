@@ -15,6 +15,7 @@ from dask.utils import natural_sort_key
 import cudf
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
@@ -71,7 +72,7 @@ def test_roundtrip_from_dask(tmpdir, divisions, write_metadata_file):
     ddf2 = dask_cudf.read_parquet(
         files, columns="y", calculate_divisions=divisions
     )
-    dd.assert_eq(ddf[["y"]], ddf2, check_divisions=divisions)
+    dd.assert_eq(ddf["y"], ddf2, check_divisions=divisions)
 
     # Now include metadata
     ddf2 = dask_cudf.read_parquet(tmpdir, calculate_divisions=divisions)
@@ -87,7 +88,7 @@ def test_roundtrip_from_dask(tmpdir, divisions, write_metadata_file):
     ddf2 = dask_cudf.read_parquet(
         tmpdir, columns="y", calculate_divisions=divisions
     )
-    dd.assert_eq(ddf[["y"]], ddf2, check_divisions=divisions)
+    dd.assert_eq(ddf["y"], ddf2, check_divisions=divisions)
 
 
 def test_roundtrip_from_dask_index_false(tmpdir):
@@ -184,6 +185,7 @@ def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     )
 
 
+@xfail_dask_expr("Categorical column support")
 @pytest.mark.parametrize("index", [False, None])
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
@@ -292,7 +294,11 @@ def test_filters_at_row_group_level(tmpdir):
     assert a.npartitions == 1
     assert (a.shape[0] == 1).compute()
 
-    ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
+    # Overwrite=True can be removed for dask-expr>=0.4.1
+    # See: https://github.com/dask-contrib/dask-expr/issues/800
+    ddf.to_parquet(
+        tmp_path, engine="pyarrow", row_group_size=1, overwrite=True
+    )
 
     b = dask_cudf.read_parquet(
         tmp_path, filters=[("x", "==", 1)], split_row_groups=True
@@ -436,6 +442,7 @@ def test_create_metadata_file(tmpdir, partition_on):
     dd.assert_eq(ddf1, ddf2)
 
 
+@xfail_dask_expr("dtypes are inconsistent")
 @need_create_meta
 def test_create_metadata_file_inconsistent_schema(tmpdir):
     # NOTE: This test demonstrates that the CudfEngine
@@ -516,15 +523,19 @@ def test_cudf_list_struct_write(tmpdir):
     dd.assert_eq(df, new_ddf)
 
 
+@skip_dask_expr("Not necessary in dask-expr")
 def test_check_file_size(tmpdir):
     # Test simple file-size check to help warn users
     # of upstream change to `split_row_groups` default
     fn = str(tmpdir.join("test.parquet"))
     cudf.DataFrame({"a": np.arange(1000)}).to_parquet(fn)
     with pytest.warns(match="large parquet file"):
-        dask_cudf.read_parquet(fn, check_file_size=1).compute()
+        # Need to use `dask_cudf.io` path
+        # TODO: Remove outdated `check_file_size` functionality
+        dask_cudf.io.read_parquet(fn, check_file_size=1).compute()
 
 
+@xfail_dask_expr("HivePartitioning cannot be hashed")
 def test_null_partition(tmpdir):
     import pyarrow as pa
     from pyarrow.dataset import HivePartitioning
@@ -554,11 +565,10 @@ def test_nullable_schema_mismatch(tmpdir):
     path1 = str(tmpdir.join("test.1.parquet"))
     cudf.DataFrame.from_dict({"a": [1, 2, 3]}).to_parquet(path0)
     cudf.DataFrame.from_dict({"a": [4, 5, None]}).to_parquet(path1)
-    with dask.config.set({"dataframe.backend": "cudf"}):
-        ddf = dd.read_parquet(
-            [path0, path1], split_row_groups=2, aggregate_files=True
-        )
-        expect = pd.read_parquet([path0, path1])
+    ddf = dask_cudf.read_parquet(
+        [path0, path1], split_row_groups=2, aggregate_files=True
+    )
+    expect = pd.read_parquet([path0, path1])
     dd.assert_eq(ddf, expect, check_index=False)
 
 

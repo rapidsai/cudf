@@ -170,6 +170,7 @@ class sum_aggregation final : public rolling_aggregation,
  * @brief Derived class for specifying a product aggregation
  */
 class product_aggregation final : public groupby_aggregation,
+                                  public groupby_scan_aggregation,
                                   public reduce_aggregation,
                                   public scan_aggregation,
                                   public segmented_reduce_aggregation {

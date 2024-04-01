@@ -15,6 +15,7 @@ from dask.utils import M
 import cudf
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_dask_expr, xfail_dask_expr
 
 
 def test_from_dict_backend_dispatch():
@@ -83,7 +84,7 @@ def test_to_backend_kwargs():
             gser_null.to_backend("pandas", bad_arg=True)
 
 
-def test_from_cudf():
+def test_from_pandas():
     np.random.seed(0)
 
     df = pd.DataFrame(
@@ -95,16 +96,16 @@ def test_from_cudf():
 
     gdf = cudf.DataFrame.from_pandas(df)
 
-    # Test simple around to/from dask
+    # Test simple around to/from cudf
     ingested = dd.from_pandas(gdf, npartitions=2)
     dd.assert_eq(ingested, df)
 
-    # Test conversion to dask.dataframe
-    ddf = ingested.to_dask_dataframe()
+    # Test conversion back to pandas
+    ddf = ingested.to_backend("pandas")
     dd.assert_eq(ddf, df)
 
 
-def test_from_cudf_multiindex_raises():
+def test_from_pandas_multiindex_raises():
     df = cudf.DataFrame({"x": list("abc"), "y": [1, 2, 3], "z": [1, 2, 3]})
 
     with pytest.raises(NotImplementedError):
@@ -112,7 +113,7 @@ def test_from_cudf_multiindex_raises():
         dask_cudf.from_cudf(df.set_index(["x", "y"]))
 
 
-def test_from_cudf_with_generic_idx():
+def test_from_pandas_with_generic_idx():
     cdf = cudf.DataFrame(
         {
             "a": list(range(20)),
@@ -187,22 +188,8 @@ def test_head():
     dd.assert_eq(dgf.head(), df.head())
 
 
-def test_from_dask_dataframe():
-    np.random.seed(0)
-    df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
-    )
-    ddf = dd.from_pandas(df, npartitions=2)
-    dgdf = ddf.map_partitions(cudf.from_pandas)
-    got = dgdf.compute().to_pandas()
-    expect = df
-
-    dd.assert_eq(got, expect)
-
-
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
-@pytest.mark.parametrize("divisions", [None, "quantile"])
-def test_set_index(nelem, divisions):
+def test_set_index(nelem):
     with dask.config.set(scheduler="single-threaded"):
         np.random.seed(0)
         # Use unique index range as the sort may not be stable-ordering
@@ -212,14 +199,15 @@ def test_set_index(nelem, divisions):
             {"x": x, "y": np.random.randint(0, nelem, size=nelem)}
         )
         ddf = dd.from_pandas(df, npartitions=2)
-        dgdf = ddf.map_partitions(cudf.from_pandas)
+        ddf2 = ddf.to_backend("cudf")
 
         expect = ddf.set_index("x")
-        got = dgdf.set_index("x", divisions=divisions)
+        got = ddf2.set_index("x")
 
         dd.assert_eq(expect, got, check_index=False, check_divisions=False)
 
 
+@xfail_dask_expr("missing support for divisions='quantile'")
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
@@ -269,7 +257,6 @@ def test_set_index_2(nelem):
         assert_frame_equal_by_index_group(expect, got)
 
 
-@pytest.mark.xfail(reason="dask's index name '__dask_cudf.index' is correct")
 def test_set_index_w_series():
     with dask.config.set(scheduler="single-threaded"):
         nelem = 20
@@ -349,7 +336,8 @@ def test_assign():
     newcol = dd.from_pandas(cudf.Series(pdcol), npartitions=dgf.npartitions)
     got = dgf.assign(z=newcol)
 
-    dd.assert_eq(got.loc[:, ["x", "y"]], df)
+    # Using `loc[:, ["x", "y"]]` was broken for dask-expr 0.4.0
+    dd.assert_eq(got[["x", "y"]], df)
     np.testing.assert_array_equal(got["z"].compute().values_host, pdcol)
 
 
@@ -400,6 +388,7 @@ def test_setitem_scalar_datetime():
     np.testing.assert_array_equal(got["z"], df["z"])
 
 
+@skip_dask_expr("Not relevant for dask-expr")
 @pytest.mark.parametrize(
     "func",
     [
@@ -756,13 +745,13 @@ def test_dataframe_assign_col():
     ddf = dask_cudf.from_cudf(df, npartitions=4)
     ddf["fold"] = 0
     ddf["fold"] = ddf["fold"].map_partitions(
-        lambda cudf_df: cp.random.randint(0, 4, len(cudf_df))
+        lambda cudf_df: cudf.Series(cp.random.randint(0, 4, len(cudf_df)))
     )
 
     pddf = dd.from_pandas(pdf, npartitions=4)
     pddf["fold"] = 0
     pddf["fold"] = pddf["fold"].map_partitions(
-        lambda p_df: np.random.randint(0, 4, len(p_df))
+        lambda p_df: pd.Series(np.random.randint(0, 4, len(p_df)))
     )
 
     dd.assert_eq(ddf[0], pddf[0])
@@ -787,6 +776,7 @@ def test_dataframe_set_index():
         assert_eq(ddf.compute(), pddf.compute())
 
 
+@xfail_dask_expr("Insufficient describe support in dask-expr")
 def test_series_describe():
     random.seed(0)
     sr = cudf.datasets.randomdata(20)["x"]
@@ -802,6 +792,7 @@ def test_series_describe():
     )
 
 
+@xfail_dask_expr("Insufficient describe support in dask-expr")
 def test_dataframe_describe():
     random.seed(0)
     df = cudf.datasets.randomdata(20)
@@ -815,6 +806,7 @@ def test_dataframe_describe():
     )
 
 
+@xfail_dask_expr("Insufficient describe support in dask-expr")
 def test_zero_std_describe():
     num = 84886781
     df = cudf.DataFrame(
@@ -858,15 +850,6 @@ def test_index_map_partitions():
 
 
 def test_merging_categorical_columns():
-    try:
-        from dask.dataframe.dispatch import (  # noqa: F401
-            union_categoricals_dispatch,
-        )
-    except ImportError:
-        pytest.skip(
-            "need a version of dask that has union_categoricals_dispatch"
-        )
-
     df_1 = cudf.DataFrame(
         {"id_1": [0, 1, 2, 3], "cat_col": ["a", "b", "f", "f"]}
     )
@@ -882,6 +865,7 @@ def test_merging_categorical_columns():
     ddf_2 = dask_cudf.from_cudf(df_2, npartitions=2)
 
     ddf_2 = dd.categorical.categorize(ddf_2, columns=["cat_col"])
+
     expected = cudf.DataFrame(
         {
             "id_1": [2, 3],
@@ -894,15 +878,11 @@ def test_merging_categorical_columns():
             "id_2": [113, 113],
         }
     )
-    dd.assert_eq(ddf_1.merge(ddf_2), expected)
+    with pytest.warns(UserWarning, match="mismatch"):
+        dd.assert_eq(ddf_1.merge(ddf_2), expected)
 
 
 def test_correct_meta():
-    try:
-        from dask.dataframe.dispatch import make_meta_obj  # noqa: F401
-    except ImportError:
-        pytest.skip("need make_meta_obj to be preset")
-
     # Need these local imports in this specific order.
     # For context: https://github.com/rapidsai/cudf/issues/7946
     import pandas as pd

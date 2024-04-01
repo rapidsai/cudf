@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -366,4 +366,53 @@ TEST_F(CollectTest, CollectEmptys)
 
   ret = collect_set(all_nulls, cudf::make_collect_set_aggregation<cudf::reduce_aggregation>());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(int_col{}, dynamic_cast<cudf::list_scalar*>(ret.get())->view());
+}
+
+TEST_F(CollectTest, CollectAllNulls)
+{
+  using int_col = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using namespace cudf::test::iterators;
+
+  auto const input    = int_col{{0, 0, 0, 0, 0, 0}, all_nulls()};
+  auto const expected = int_col{};
+
+  {
+    auto const agg =
+      cudf::make_collect_list_aggregation<cudf::reduce_aggregation>(cudf::null_policy::EXCLUDE);
+    auto const result = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::LIST});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected,
+                                   dynamic_cast<cudf::list_scalar*>(result.get())->view());
+  }
+  {
+    auto const agg = cudf::make_collect_set_aggregation<cudf::reduce_aggregation>(
+      cudf::null_policy::EXCLUDE, cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL);
+    auto const result = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::LIST});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected,
+                                   dynamic_cast<cudf::list_scalar*>(result.get())->view());
+  }
+}
+
+TEST_F(CollectTest, CollectAllNullsWithLists)
+{
+  using LCW = cudf::test::lists_column_wrapper<int32_t>;
+  using namespace cudf::test::iterators;
+
+  // list<list<int>>
+  auto const input    = LCW{{LCW{LCW{1, 2, 3}, LCW{4, 5, 6}}, LCW{{1, 2, 3}}}, all_nulls()};
+  auto const expected = cudf::empty_like(input);
+
+  {
+    auto const agg =
+      cudf::make_collect_list_aggregation<cudf::reduce_aggregation>(cudf::null_policy::EXCLUDE);
+    auto const result = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::LIST});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(),
+                                   dynamic_cast<cudf::list_scalar*>(result.get())->view());
+  }
+  {
+    auto const agg = cudf::make_collect_set_aggregation<cudf::reduce_aggregation>(
+      cudf::null_policy::EXCLUDE, cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL);
+    auto const result = cudf::reduce(input, *agg, cudf::data_type{cudf::type_id::LIST});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(),
+                                   dynamic_cast<cudf::list_scalar*>(result.get())->view());
+  }
 }
