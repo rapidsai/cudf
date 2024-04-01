@@ -16,6 +16,11 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
         const uint32_t seed
     ) except +
 
+    cdef unique_ptr[table] murmurhash3_x64_128 "cudf::hashing::murmurhash3_x64_128" (
+        const table_view& input,
+        const uint64_t seed
+    )
+
     cdef unique_ptr[column] md5 "cudf::hashing::md5" (
         const table_view& input
     ) except +
@@ -44,3 +49,9 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
         const table_view& input,
         const uint64_t seed
     ) except +
+
+    cpdef enum class hash_id(int):
+        HASH_IDENTITY
+        HASH_MURMUR3
+        HASH_SPARK_MURMUR3
+        HASH_MD5
