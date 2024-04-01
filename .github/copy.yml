@@ -23,7 +23,7 @@ jobs:
       - name: Upload file to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: hello-artifact
+          name: gh-comment
           path: hello.txt
 
 # abc
