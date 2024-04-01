@@ -2064,8 +2064,7 @@ TEST_F(JsonReaderTest, JSONLinesRecoveringSync)
                     size_t{128} * 1024 * 1024};
 
   // Set new resource
-  auto last_mr = cudf::io::get_host_memory_resource();
-  cudf::io::set_host_memory_resource(mr);
+  auto last_mr = cudf::io::set_host_memory_resource(mr);
 
   /**
    * @brief Spark has the specific need to ignore extra characters that come after the first record
