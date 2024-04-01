@@ -22,7 +22,3 @@ endif()
 include(${CMAKE_CURRENT_BINARY_DIR}/basic_example_RAPIDS.cmake)
 
 include(rapids-cuda)
-
-# initialize cuda architectures
-rapids_cuda_init_architectures(basic_examples)
-rapids_cuda_set_architectures(RAPIDS)

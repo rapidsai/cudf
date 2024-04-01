@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 3.26.4)
 
 include(../set_cuda_architecture.cmake)
 
+# initialize cuda architecture
+rapids_cuda_init_architectures(nested_types)
+rapids_cuda_set_architectures(RAPIDS)
+
 project(
   nested_types
   VERSION 0.0.1
