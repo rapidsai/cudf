@@ -51,6 +51,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iterator>
 #include <numeric>
 #include <utility>
 
@@ -2581,9 +2582,10 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
       auto const& sorting_cols = _sorting_columns.value();
       std::for_each(iter, iter + row_groups.size(), [&row_groups, &sorting_cols](auto idx) {
         std::vector<SortingColumn> scols;
-        for (auto const& sc : sorting_cols) {
-          scols.push_back({sc.column_idx, sc.is_descending, sc.is_nulls_first});
-        }
+        std::transform(
+          sorting_cols.begin(), sorting_cols.end(), std::back_inserter(scols), [](auto const& sc) {
+            return SortingColumn{sc.column_idx, sc.is_descending, sc.is_nulls_first};
+          });
         row_groups[idx].sorting_columns = std::move(scols);
       });
     }
