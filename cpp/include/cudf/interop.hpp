@@ -246,10 +246,10 @@ unique_device_array_t to_arrow_device(
  * @note Copies will be performed in the cases where cudf differs from Arrow such as
  * in the representation of bools (Arrow uses a bitmap, cudf uses 1 byte per value).
  *
- * @param col input column, owernship of the data will be given to the resulting ArrowDeviceArray
- * @param stream the cuda stream to use for any operations and allocations
- * @param mr the memory resource to utilize for any allocations during conversion
- * @return ArrowDeviceArray which will have ownership of the GPU data, consumer must call release
+ * @param col Input column, ownership of the data will be moved to the result
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used for any allocations during conversion
+ * @return ArrowDeviceArray which will have ownership of the GPU data
  */
 unique_device_array_t to_arrow_device(
   cudf::column&& col,
