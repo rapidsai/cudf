@@ -16,6 +16,8 @@
 
 #include "compact_protocol_writer.hpp"
 
+#include "parquet.hpp"
+
 #include <cudf/utilities/error.hpp>
 
 namespace cudf::io::parquet::detail {
@@ -141,6 +143,7 @@ size_t CompactProtocolWriter::write(RowGroup const& r)
   c.field_int(2, r.total_byte_size);
   c.field_int(3, r.num_rows);
   // TODO: field 4 is sorting_columns
+  if (r.sorting_columns.has_value()) { c.field_struct_list(4, r.sorting_columns.value()); }
   if (r.file_offset.has_value()) { c.field_int(5, r.file_offset.value()); }
   if (r.total_compressed_size.has_value()) { c.field_int(6, r.total_compressed_size.value()); }
   if (r.ordinal.has_value()) { c.field_int16(7, r.ordinal.value()); }
@@ -243,6 +246,15 @@ size_t CompactProtocolWriter::write(ColumnOrder const& co)
     case ColumnOrder::TYPE_ORDER: c.field_empty_struct(co.type); break;
     default: CUDF_FAIL("Trying to write an invalid ColumnOrder " + std::to_string(co.type));
   }
+  return c.value();
+}
+
+size_t CompactProtocolWriter::write(SortingColumn const& sc)
+{
+  CompactProtocolFieldWriter c(*this);
+  c.field_int(1, sc.column_idx);
+  c.field_bool(2, sc.descending);
+  c.field_bool(3, sc.nulls_first);
   return c.value();
 }
 
