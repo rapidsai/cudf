@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "io/parquet/parquet.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -1471,6 +1472,7 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   cudf::io::parquet_writer_options opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table)
       .dictionary_policy(cudf::io::dictionary_policy::NEVER)
+      .sorting_columns({{0, false, false}})
       .compression(cudf::io::compression_type::ZSTD);
   cudf::io::write_parquet(opts);
 
@@ -1494,6 +1496,12 @@ TEST_F(ParquetWriterTest, RowGroupMetadata)
   ASSERT_TRUE(fmd.row_groups[0].total_compressed_size.has_value());
   EXPECT_EQ(fmd.row_groups[0].total_compressed_size.value(),
             fmd.row_groups[0].columns[0].meta_data.total_compressed_size);
+
+  // test that sorting order was written correctly
+  ASSERT_TRUE(fmd.row_groups[0].sorting_columns.has_value());
+  EXPECT_EQ(fmd.row_groups[0].sorting_columns.value()[0].column_idx, 0);
+  EXPECT_FALSE(fmd.row_groups[0].sorting_columns.value()[0].descending);
+  EXPECT_FALSE(fmd.row_groups[0].sorting_columns.value()[0].nulls_first);
 }
 
 TEST_F(ParquetWriterTest, UserRequestedDictFallback)

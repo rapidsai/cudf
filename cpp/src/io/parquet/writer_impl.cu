@@ -2281,6 +2281,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2310,6 +2311,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     _int96_timestamps(options.is_enabled_int96_timestamps()),
     _utc_timestamps(options.is_enabled_utc_timestamps()),
     _write_v2_headers(options.is_enabled_write_v2_headers()),
+    _sorting_columns(options.get_sorting_columns()),
     _column_index_truncate_length(options.get_column_index_truncate_length()),
     _kv_meta(options.get_key_value_metadata()),
     _single_write_mode(mode),
@@ -2574,6 +2576,17 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     std::for_each(
       iter, iter + row_groups.size(), [&row_groups](auto idx) { row_groups[idx].ordinal = idx; });
 
+    // set sorting_columns on row groups
+    if (_sorting_columns.has_value()) {
+      auto const& sorting_cols = _sorting_columns.value();
+      std::for_each(iter, iter + row_groups.size(), [&row_groups, &sorting_cols](auto idx) {
+        std::vector<SortingColumn> scols;
+        for (auto const& sc : sorting_cols) {
+          scols.push_back({sc.column_idx, sc.is_descending, sc.is_nulls_first});
+        }
+        row_groups[idx].sorting_columns = std::move(scols);
+      });
+    }
     buffer.resize(0);
     fendr.footer_len = static_cast<uint32_t>(cpw.write(_agg_meta->get_metadata(p)));
     fendr.magic      = parquet_magic;
