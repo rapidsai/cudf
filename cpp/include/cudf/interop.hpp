@@ -191,7 +191,7 @@ using unique_device_array_t = std::unique_ptr<ArrowDeviceArray, void (*)(ArrowDe
  * with the precision of 9 which is the maximum precision for 32-bit types. Similarly,
  * `numeric::decimal128` will be converted to Arrow decimal128 with the precision of 38.
  *
- * @param input table_view to create a schema from
+ * @param input Table to create a schema from
  * @param metadata Contains the hierarchy of names of columns and children
  * @return ArrowSchema generated from `input`
  */
