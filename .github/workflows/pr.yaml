@@ -173,7 +173,7 @@ jobs:
   pandas-tests-diff:
     # diff the results of running the Pandas unit tests and publish a job summary
     needs: pandas-tests
-    runs-on: ubuntu-latest # Specify the runner environment
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
     steps:
       - name: Checkout code
         uses: actions/checkout@v3 # Checkout your repository content into the runner
