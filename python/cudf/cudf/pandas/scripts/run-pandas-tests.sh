@@ -23,11 +23,7 @@ set -euo pipefail
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
-<<<<<<< Updated upstream
 --ignore=tests/interchange/test_impl.py \
---ignore=tests/window/test_dtypes.py \
-=======
->>>>>>> Stashed changes
 --ignore=tests/strings/test_api.py \
 --ignore=tests/io/pytables \
 --ignore=tests/plotting \
