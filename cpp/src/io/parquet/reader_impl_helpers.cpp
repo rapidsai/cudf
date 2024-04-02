@@ -570,7 +570,7 @@ aggregate_reader_metadata::get_rowgroup_metadata() const
       std::transform(pfm.row_groups.cbegin(),
                      pfm.row_groups.cend(),
                      std::back_inserter(rg_metadata),
-                     [&rg_metadata](auto const& rg) {
+                     [](auto const& rg) {
                        std::unordered_map<std::string, int64_t> rg_meta_map;
                        rg_meta_map["num_rows"]        = rg.num_rows;
                        rg_meta_map["total_byte_size"] = rg.total_byte_size;
