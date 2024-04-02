@@ -14,7 +14,7 @@ REQUIREMENTS_FILE="${ENV_YAML_DIR}/requirements.txt"
 
 rapids-dependency-file-generator \
   --output requirements \
-  --file_key build_base \
+  --file_key test_static_build \
   --matrix "" | tee "${ENV_YAML_DIR}/env.yaml"
 
 python -m pip install -r "${REQUIREMENTS_FILE}"

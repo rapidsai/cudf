@@ -28,6 +28,10 @@ files:
       - test_python_cudf
       - test_python_dask_cudf
       - depends_on_cupy
+  test_static_build:
+    output: none
+    includes:
+      - build_base
   test_cpp:
     output: none
     includes:
