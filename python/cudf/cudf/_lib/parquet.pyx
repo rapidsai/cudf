@@ -387,7 +387,7 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
     # num_columns = length of list(col_names)
     num_columns = len(col_names)
 
-        # return the metadata
+    # return the metadata
     return num_rows, num_rowgroups, col_names, num_columns, row_group_metadata
 
 
