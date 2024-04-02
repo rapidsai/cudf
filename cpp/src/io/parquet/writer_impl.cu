@@ -2579,14 +2579,16 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 
     // set sorting_columns on row groups
     if (_sorting_columns.has_value()) {
+      // convert `sorting_column` to `SortingColumn`
       auto const& sorting_cols = _sorting_columns.value();
-      std::for_each(iter, iter + row_groups.size(), [&row_groups, &sorting_cols](auto idx) {
-        std::vector<SortingColumn> scols;
-        std::transform(
-          sorting_cols.begin(), sorting_cols.end(), std::back_inserter(scols), [](auto const& sc) {
-            return SortingColumn{sc.column_idx, sc.is_descending, sc.is_nulls_first};
-          });
-        row_groups[idx].sorting_columns = std::move(scols);
+      std::vector<SortingColumn> scols;
+      std::transform(
+        sorting_cols.begin(), sorting_cols.end(), std::back_inserter(scols), [](auto const& sc) {
+          return SortingColumn{sc.column_idx, sc.is_descending, sc.is_nulls_first};
+        });
+      // and copy to each row group
+      std::for_each(iter, iter + row_groups.size(), [&row_groups, &scols](auto idx) {
+        row_groups[idx].sorting_columns = scols;
       });
     }
     buffer.resize(0);
