@@ -19,7 +19,7 @@ jobs:
           python-version: '3.x'
       - name: Generate text file
         run: |
-          echo '{"coontext":"Pandas tests", "description":"Test : This is another test comment!!!"}' > gh-status.json
+          echo '{"context":"Pandas tests", "description":"Test : This is another test comment!!!"}' > gh-status.json
           echo "### Hello world1! :rocket:" >> $GITHUB_STEP_SUMMARY
       - name: Upload file to GitHub Artifact1
         uses: actions/upload-artifact@v3
