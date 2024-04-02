@@ -26,4 +26,4 @@ python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-r
 
 COMMENT=$(head -1 summary.txt)
 echo "$COMMENT"
-echo "$COMMENT" > gh-status.json
+echo "{\"context\":\"Pandas tests\", \"description\":\"$COMMENT\", \"state\":\"success\"}" > gh-status.json
