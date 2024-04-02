@@ -36,6 +36,7 @@ function(find_and_configure_nanoarrow)
     )
   endif()
 
+  message("The patch script is ${patch_script}")
   rapids_cpm_find(
     nanoarrow ${PKG_VERSION}
     GLOBAL_TARGETS nanoarrow
@@ -45,7 +46,7 @@ function(find_and_configure_nanoarrow)
     # TODO: Commit hashes are not supported with shallow clones. Can switch this if and when we pin
     # to an actual tag.
     GIT_SHALLOW FALSE
-    PATCH_COMMAND ${GIT_EXECUTABLE} apply --whitespace=fix ${patch_script}
+    PATCH_COMMAND ${CMAKE_COMMAND} -P ${patch_script}
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
