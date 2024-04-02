@@ -174,20 +174,7 @@ jobs:
     # diff the results of running the Pandas unit tests and publish a job summary
     needs: pandas-tests
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3 # Checkout your repository content into the runner
-
-      - name: Run shared workflow as a step
-        uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
-        with:
-          node_type: cpu4
-          build_type: pull-request
-          run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
-        secrets: inherit
-
-      - name: Upload file to GitHub Artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: hello-artifact
-          path: hello.txt
+    with:
+        node_type: cpu4
+        build_type: pull-request
+        run_script: ci/cudf_pandas_scripts/pandas-tests/diff.sh
