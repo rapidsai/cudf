@@ -3103,7 +3103,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out.append(col.set_mask(out_mask))
 
         return self._mimic_inplace(
-            self._from_data(self._data._from_columns_like_self(out)),
+            self._from_data_like_self(self._data._from_columns_like_self(out)),
             inplace=inplace,
         )
 
