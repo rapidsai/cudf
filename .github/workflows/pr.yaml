@@ -90,7 +90,7 @@ jobs:
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
   static-configure:
-    #needs: checks
+    needs: checks
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
     with:
