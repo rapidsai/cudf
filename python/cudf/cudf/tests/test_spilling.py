@@ -121,17 +121,17 @@ def test_spillable_buffer(manager: SpillManager):
     assert isinstance(buf, SpillableBuffer)
     assert buf.spillable
     buf.owner.mark_exposed()
-    assert buf.exposed
+    assert buf.owner.exposed
     assert not buf.spillable
     buf = as_buffer(data=rmm.DeviceBuffer(size=10), exposed=False)
     # Notice, accessing `__cuda_array_interface__` itself doesn't
     # expose the pointer, only accessing the "data" field exposes
     # the pointer.
     iface = buf.__cuda_array_interface__
-    assert not buf.exposed
+    assert not buf.owner.exposed
     assert buf.spillable
     iface["data"][0]  # Expose pointer
-    assert buf.exposed
+    assert buf.owner.exposed
     assert not buf.spillable
 
 
@@ -141,7 +141,6 @@ def test_spillable_buffer(manager: SpillManager):
         "get_ptr",
         "memoryview",
         "is_spilled",
-        "exposed",
         "spillable",
         "spill_lock",
         "spill",
@@ -562,9 +561,9 @@ def test_df_transpose(manager: SpillManager):
     df1 = cudf.DataFrame({"a": [1, 2]})
     df2 = df1.transpose()
     # For now, all buffers are marked as exposed
-    assert df1._data._data["a"].data.exposed
-    assert df2._data._data[0].data.exposed
-    assert df2._data._data[1].data.exposed
+    assert df1._data._data["a"].data.owner.exposed
+    assert df2._data._data[0].data.owner.exposed
+    assert df2._data._data[1].data.owner.exposed
 
 
 def test_as_buffer_of_spillable_buffer(manager: SpillManager):

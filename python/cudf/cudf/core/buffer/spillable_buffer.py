@@ -394,10 +394,6 @@ class SpillableBuffer(Buffer):
         return self._owner.is_spilled
 
     @property
-    def exposed(self) -> bool:
-        return self._owner.exposed
-
-    @property
     def spillable(self) -> bool:
         return self._owner.spillable
 
