@@ -113,7 +113,7 @@ repos:
         pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.2.2
+    rev: v2.2.6
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
@@ -129,7 +129,7 @@ repos:
       - id: rapids-dependency-file-generator
         args: ["--clean"]
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.1.13
+    rev: v0.3.4
     hooks:
       - id: ruff
         files: python/.*$
