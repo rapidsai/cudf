@@ -188,6 +188,8 @@ NVBENCH_BENCH_TYPES(BM_orc_read_io_compression, NVBENCH_TYPE_AXES(io_list, compr
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32});
 
+std::size_t constexpr MB_bytes{1024 * 1024};
+
 // Should have the same parameters as `BM_orc_read_io_compression` for comparison.
 NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression,
                     NVBENCH_TYPE_AXES(io_list, compression_list))
@@ -196,5 +198,6 @@ NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression,
   .set_min_samples(4)
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
-  .add_int64_axis("output_limit", {0, 500'000})
-  .add_int64_axis("read_limit", {0, 500'000});
+  // The input has approximately 520MB and 127K rows.
+  .add_int64_axis("output_limit", {100 * MB_bytes, 500 * MB_bytes})
+  .add_int64_axis("read_limit", {100 * MB_bytes, 500 * MB_bytes});
