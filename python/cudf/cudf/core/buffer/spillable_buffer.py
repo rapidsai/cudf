@@ -20,6 +20,7 @@ from cudf.core.buffer.buffer import (
     cuda_array_interface_wrapper,
     host_memory_allocation,
 )
+from cudf.core.buffer.exposure_tracked_buffer import ExposureTrackedBuffer
 from cudf.utils.nvtx_annotation import _get_color_for_nvtx, annotate
 from cudf.utils.string import format_bytes
 
@@ -368,7 +369,7 @@ class SpillableBufferOwner(BufferOwner):
         )
 
 
-class SpillableBuffer(Buffer):
+class SpillableBuffer(ExposureTrackedBuffer):
     """A slice of a spillable buffer
 
     This buffer applies the slicing and then delegates all
