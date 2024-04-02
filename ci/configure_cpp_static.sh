@@ -7,8 +7,6 @@ rapids-configure-conda-channels
 
 source rapids-date-string
 
-rapids-print-env
-
 rapids-logger "Configure static cpp build"
 
 cmake -S cpp -B build_static -GNinja -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC=OFF
