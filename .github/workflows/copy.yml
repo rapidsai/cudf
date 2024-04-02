@@ -19,7 +19,8 @@ jobs:
           python-version: '3.x'
       - name: Generate text file
         run: |
-          echo "This is another test comment!!!" > gh-comment.txt
+          echo "Test : This is another test comment!!!" > gh-comment.txt
+          echo "### Hello world! :rocket:" >> $GITHUB_STEP_SUMMARY
       - name: Upload file to GitHub Artifact
         uses: actions/upload-artifact@v3
         with:
