@@ -124,6 +124,19 @@ class BufferOwner(Serializable):
         owner: object,
         exposed: bool,
     ):
+        """Create a new buffer owner.
+
+        Do not use this directly, instead use `_from_device_memory` or
+        `_from_host_memory`.
+
+        Raises
+        ------
+        ValueError
+            If size is negative
+        """
+        if size < 0:
+            raise ValueError("size cannot be negative")
+
         self._ptr = ptr
         self._size = size
         self._owner = owner
@@ -163,8 +176,6 @@ class BufferOwner(Serializable):
             size = data.size
         else:
             ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        if size < 0:
-            raise ValueError("size cannot be negative")
         return cls(ptr, size, owner=data, exposed=exposed)
 
     @classmethod

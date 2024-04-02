@@ -170,11 +170,7 @@ class SpillableBufferOwner(BufferOwner):
         data = data.cast("B")  # Make sure itemsize==1
 
         # Create an already spilled buffer
-        ret = cls.__new__(cls)
-        ret._owner = None
-        ret._ptr = 0
-        ret._size = data.nbytes
-        ret._exposed = False
+        ret = cls(ptr=0, size=data.nbytes, owner=None, exposed=False)
         ret._finalize_init(ptr_desc={"type": "cpu", "memoryview": data})
         return ret
 
