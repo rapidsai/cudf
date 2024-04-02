@@ -44,7 +44,7 @@ class reader_impl;
  * @brief Class to read ORC dataset data into columns.
  */
 class reader {
- protected:
+ private:
   std::unique_ptr<reader_impl> _impl;
 
  public:
@@ -64,7 +64,7 @@ class reader {
   /**
    * @brief Destructor explicitly declared to avoid inlining in header
    */
-  virtual ~reader();
+  ~reader();
 
   /**
    * @brief Reads the entire dataset.
@@ -78,6 +78,7 @@ class reader {
  * @brief The reader class that supports iterative reading from an array of data sources.
  */
 class chunked_reader {
+ private:
   std::unique_ptr<reader_impl> _impl;
 
  public:
