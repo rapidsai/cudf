@@ -199,5 +199,5 @@ NVBENCH_BENCH_TYPES(BM_orc_chunked_read_io_compression,
   .add_int64_axis("cardinality", {0, 1000})
   .add_int64_axis("run_length", {1, 32})
   // The input has approximately 520MB and 127K rows.
-  .add_int64_axis("output_limit", {100 * MB_bytes, 500 * MB_bytes})
-  .add_int64_axis("read_limit", {100 * MB_bytes, 500 * MB_bytes});
+  .add_int64_axis("output_limit", {100 * Mbytes, 500 * Mbytes})
+  .add_int64_axis("read_limit", {100 * Mbytes, 500 * Mbytes});
