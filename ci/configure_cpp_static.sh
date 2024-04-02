@@ -15,7 +15,7 @@ REQUIREMENTS_FILE="${ENV_YAML_DIR}/requirements.txt"
 rapids-dependency-file-generator \
   --output requirements \
   --file_key test_static_build \
-  --matrix "" | tee "${REQUIREMENTS_FILE}"
+  --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${REQUIREMENTS_FILE}"
 
 python -m pip install -r "${REQUIREMENTS_FILE}"
 pyenv rehash
