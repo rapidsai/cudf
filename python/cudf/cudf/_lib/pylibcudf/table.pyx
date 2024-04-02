@@ -77,6 +77,14 @@ cdef class Table:
             for i in range(tv.num_columns())
         ])
 
+    cpdef int num_columns(self):
+        """The number of columns in this table."""
+        return len(self._columns)
+
+    cpdef int num_rows(self):
+        """The number of rows in this table."""
+        return self._columns[0].size()
+
     cpdef list columns(self):
         """The columns in this table."""
         return self._columns
