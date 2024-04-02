@@ -19,12 +19,19 @@ jobs:
           python-version: '3.x'
       - name: Generate text file
         run: |
-          echo "Test : This is another test comment!!!" > gh-comment.txt
+          echo "Test : This is another test comment!!!" > gh-status.txt
+          echo "www.google.com" > gh-status-target-url.txt
           echo "### Hello world1! :rocket:" >> $GITHUB_STEP_SUMMARY
-      - name: Upload file to GitHub Artifact
+          echo "CUSTOM_VAR=my_custom_value" >> $GITHUB_ENV
+      - name: Upload file to GitHub Artifact1
         uses: actions/upload-artifact@v3
         with:
-          name: gh-comment
-          path: gh-comment.txt
+          name: gh-status
+          path: gh-status.txt
+      - name: Upload file to GitHub Artifact2
+        uses: actions/upload-artifact@v3
+        with:
+          name: gh-status-target-url
+          path: gh-status-target-url.txt
 
 # abc
