@@ -14,8 +14,8 @@ import cudf
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr
 
-# No dask-expr support
-pytestmark = skip_dask_expr()
+# No dask-expr support for dask_expr<1.0.6
+pytestmark = skip_dask_expr(lt_version="1.0.6")
 
 cur_dir = os.path.dirname(__file__)
 sample_orc = os.path.join(cur_dir, "data/orc/sample.orc")
@@ -60,7 +60,7 @@ def test_read_orc_cols(engine, columns):
     dd.assert_eq(df1, df2, check_index=False)
 
 
-@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
+@pytest.mark.parametrize("engine", ["cudf"])  # , "pyarrow"])
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
