@@ -111,7 +111,7 @@ get_collection_type.register(cudf.BaseIndex, lambda _: Index)
 
 
 ##
-## Support conversion to GPU-backed Arrays
+## Support conversion to GPU-backed Array collections
 ##
 
 
