@@ -126,7 +126,6 @@ class aggregate_reader_metadata {
   std::vector<std::unordered_map<std::string, std::string>> keyval_maps;
   int64_t num_rows;
   size_type num_row_groups;
-  size_type num_columns;
 
   /**
    * @brief Create a metadata object from each element in the source vector
@@ -149,8 +148,6 @@ class aggregate_reader_metadata {
    * @brief Sums up the number of row groups of each source
    */
   [[nodiscard]] size_type calc_num_row_groups() const;
-
-  [[nodiscard]] size_type calc_num_columns() const;
 
   /**
    * @brief Calculate column index info for the given `row_group_info`
@@ -179,8 +176,6 @@ class aggregate_reader_metadata {
   [[nodiscard]] auto get_num_rows() const { return num_rows; }
 
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
-
-  [[nodiscard]] auto get_num_columns() const { return num_columns; }
 
   [[nodiscard]] auto const& get_schema(int schema_idx) const
   {

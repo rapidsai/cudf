@@ -348,18 +348,45 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
         c_result = move(parquet_metadata_reader(args))
 
     # access and return results
-    num_columns = c_result.num_columns()
     num_rows = c_result.num_rows()
     num_rowgroups = c_result.num_rowgroups()
-    names = [info.name().decode() for info in c_result.schema().root().children()]
 
     # extract row group metadata and sanitize keys
     row_group_metadata=[]
     row_group_metadata_unsanitized = c_result.rowgroup_metadata()
-    for meta in row_group_metadata_unsanitized:
-        row_group_metadata.append({k.decode(): v for k, v in meta})
+    for metadata in row_group_metadata_unsanitized:
+        row_group_metadata.append({k.decode(): v for k, v in metadata})
 
-    return num_rows, num_rowgroups, names, num_columns, row_group_metadata
+    # read all column names including index column, if any
+    col_names = [info.name().decode() for info in c_result.schema().root().children()]
+
+    # access the Parquet file_footer to find the index
+    index_col = None
+    cdef unordered_map[string, string] file_footer = c_result.metadata()
+
+    # get index column name(s)
+    index_col_names = None
+    json_str = file_footer[b'pandas'].decode('utf-8')
+    meta = None
+    if json_str != "":
+        meta = json.loads(json_str)
+        file_is_range_index, index_col, _ = _parse_metadata(meta)
+        if not file_is_range_index and index_col is not None \
+                and index_col_names is None:
+            index_col_names = {}
+            for idx_col in index_col:
+                for c in meta['columns']:
+                    if c['field_name'] == idx_col:
+                        index_col_names[idx_col] = c['name']
+
+    # remove the index column from the list of column names
+    col_names = [name for name in col_names if name not in index_col_names]
+
+    # num_columns = length of list(col_names)
+    num_columns = len(col_names)
+
+    # return the metadata
+    return num_rows, num_rowgroups, col_names, num_columns, row_group_metadata
 
 
 @acquire_spill_lock()

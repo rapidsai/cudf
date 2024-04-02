@@ -195,20 +195,17 @@ class parquet_metadata {
    * @param schema parquet schema
    * @param num_rows number of rows
    * @param num_rowgroups number of row groups
-   * @param num_columns number of columns
    * @param file_metadata key-value metadata in the file footer
    * @param rg_metadata vector of maps containing metadata for each row group
    */
   parquet_metadata(parquet_schema schema,
                    int64_t num_rows,
                    size_type num_rowgroups,
-                   size_type num_columns,
                    key_value_metadata file_metadata,
                    std::vector<row_group_metadata> rg_metadata)
     : _schema{std::move(schema)},
       _num_rows{num_rows},
       _num_rowgroups{num_rowgroups},
-      _num_columns{num_columns},
       _file_metadata{std::move(file_metadata)},
       _rowgroup_metadata{std::move(rg_metadata)}
   {
@@ -238,13 +235,6 @@ class parquet_metadata {
   [[nodiscard]] auto num_rowgroups() const { return _num_rowgroups; }
 
   /**
-   * @brief Returns the number of columns in the file.
-   *
-   * @return Number of row groups
-   */
-  [[nodiscard]] auto num_columns() const { return _num_columns; }
-
-  /**
    * @brief Returns the Key value metadata in the file footer.
    *
    * @return Key value metadata as a map
@@ -262,7 +252,6 @@ class parquet_metadata {
   parquet_schema _schema;
   int64_t _num_rows;
   size_type _num_rowgroups;
-  size_type _num_columns;
   key_value_metadata _file_metadata;
   std::vector<row_group_metadata> _rowgroup_metadata;
 };

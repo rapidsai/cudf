@@ -379,13 +379,6 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
     });
 }
 
-size_type aggregate_reader_metadata::calc_num_columns() const
-{
-  return per_file_metadata.size()
-           ? (per_file_metadata[0].schema.size() ? per_file_metadata[0].schema[0].num_children : 0)
-           : 0;
-}
-
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
                                                           size_type chunk_start_row) const
@@ -527,8 +520,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(
   : per_file_metadata(metadatas_from_sources(sources)),
     keyval_maps(collect_keyval_metadata()),
     num_rows(calc_num_rows()),
-    num_row_groups(calc_num_row_groups()),
-    num_columns(calc_num_columns())
+    num_row_groups(calc_num_row_groups())
 {
   if (per_file_metadata.size() > 0) {
     auto const& first_meta = per_file_metadata.front();
