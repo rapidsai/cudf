@@ -32,9 +32,4 @@ if (( ${SUITEERROR} == 0 )); then
 fi
 
 rapids-logger "Test script exiting with value: $EXITCODE"
-
-if [ "${EXITCODE}" -ne 0 ]; then
-  sleep 10h
-fi
-
 exit ${EXITCODE}
