@@ -20,7 +20,7 @@ jobs:
       - name: Generate text file
         run: |
           echo "Test : This is another test comment!!!" > gh-status.txt
-          echo "www.google.com" > gh-status-target-url.txt
+          echo "https://www.google.com" > gh-status-target-url.txt
           echo "### Hello world1! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "CUSTOM_VAR=my_custom_value" >> $GITHUB_ENV
       - name: Upload file to GitHub Artifact1
