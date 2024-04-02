@@ -26,7 +26,6 @@ cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
         parquet_schema schema() except+
         int64_t num_rows() except+
         size_type num_rowgroups() except+
-        size_type num_columns() except+
         unordered_map[string, string] metadata() except+
         vector[unordered_map[string, int64_t]] rowgroup_metadata() except+
 

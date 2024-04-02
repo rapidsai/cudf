@@ -207,7 +207,7 @@ class parquet_metadata {
       _num_rows{num_rows},
       _num_rowgroups{num_rowgroups},
       _file_metadata{std::move(file_metadata)},
-      _rowgroup_metadata{std::move(rg_metadata)}
+      _rowgroup_metadata{rg_metadata}
   {
   }
 
