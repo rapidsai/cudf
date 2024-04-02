@@ -210,12 +210,14 @@ include(cmake/thirdparty/get_kvikio.cmake)
 include(cmake/thirdparty/get_fmt.cmake)
 # find spdlog
 include(cmake/thirdparty/get_spdlog.cmake)
+# find nanoarrow
+include(cmake/thirdparty/get_nanoarrow.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow)
   if(TARGET cufile::cuFile_interface)
     list(APPEND dependencies cuFile)
   endif()
@@ -358,6 +360,7 @@ add_library(
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
   src/interop/to_arrow.cu
+  src/interop/to_arrow_device.cu
   src/interop/detail/arrow_allocator.cpp
   src/io/avro/avro.cpp
   src/io/avro/avro_gpu.cu
@@ -735,6 +738,7 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -783,7 +787,7 @@ target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
   PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
-          $<TARGET_NAME_IF_EXISTS:cuFile_interface>
+          $<TARGET_NAME_IF_EXISTS:cuFile_interface> nanoarrow
 )
 
 # Add Conda library, and include paths if specified
