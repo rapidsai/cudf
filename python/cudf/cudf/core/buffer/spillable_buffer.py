@@ -408,9 +408,6 @@ class SpillableBuffer(Buffer):
         (ptr, _, device_type) = self._owner.memory_info()
         return (ptr + self._offset, self.nbytes, device_type)
 
-    def mark_exposed(self) -> None:
-        self._owner.mark_exposed()
-
     def serialize(self) -> Tuple[dict, list]:
         """Serialize the Buffer
 
