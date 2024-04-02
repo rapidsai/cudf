@@ -36,7 +36,6 @@ function(find_and_configure_nanoarrow)
     )
   endif()
 
-  message("The patch script is ${patch_script}")
   rapids_cpm_find(
     nanoarrow ${PKG_VERSION}
     GLOBAL_TARGETS nanoarrow
