@@ -380,12 +380,14 @@ cpdef read_parquet_metadata(filepaths_or_buffers):
                         index_col_names[idx_col] = c['name']
 
     # remove the index column from the list of column names
-    col_names = [name for name in col_names if name not in index_col_names]
+    # only if index_col_names is not None
+    if index_col_names is not None:
+        col_names = [name for name in col_names if name not in index_col_names]
 
     # num_columns = length of list(col_names)
     num_columns = len(col_names)
 
-    # return the metadata
+        # return the metadata
     return num_rows, num_rowgroups, col_names, num_columns, row_group_metadata
 
 
