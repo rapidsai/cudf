@@ -17,8 +17,24 @@ function(find_and_configure_nanoarrow)
   set(oneValueArgs VERSION FORK PINNED_TAG)
   cmake_parse_arguments(PKG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-  find_package(Git REQUIRED)
-  set(patch_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/nanoarrow_cmake.diff")
+  # Only run if PKG_VERSION is < 0.5.0
+  if(PKG_VERSION VERSION_LESS 0.5.0)
+    set(patch_files_to_run "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/nanoarrow_cmake.diff")
+    set(patch_issues_to_ref
+        "Fix issues with nanoarrow CMake [https://github.com/apache/arrow-nanoarrow/pull/406]"
+    )
+    set(patch_script "${CMAKE_BINARY_DIR}/rapids-cmake/patches/nanoarrow/patch.cmake")
+    set(log_file "${CMAKE_BINARY_DIR}/rapids-cmake/patches/nanoarrow/log")
+    string(TIMESTAMP current_year "%Y" UTC)
+    configure_file(
+      ${rapids-cmake-dir}/cpm/patches/command_template.cmake.in "${patch_script}" @ONLY
+    )
+  else()
+    message(
+      FATAL_ERROR
+        "Nanoarrow version ${PKG_VERSION} already contains the necessary patch. Please remove this patch from cudf."
+    )
+  endif()
 
   rapids_cpm_find(
     nanoarrow ${PKG_VERSION}
