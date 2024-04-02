@@ -17,6 +17,9 @@ function(find_and_configure_nanoarrow)
   set(oneValueArgs VERSION FORK PINNED_TAG)
   cmake_parse_arguments(PKG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+  find_package(Git REQUIRED)
+  set(patch_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/patches/nanoarrow_cmake.diff")
+
   rapids_cpm_find(
     nanoarrow ${PKG_VERSION}
     GLOBAL_TARGETS nanoarrow
@@ -26,6 +29,7 @@ function(find_and_configure_nanoarrow)
     # TODO: Commit hashes are not supported with shallow clones. Can switch this if and when we pin
     # to an actual tag.
     GIT_SHALLOW FALSE
+    PATCH_COMMAND ${GIT_EXECUTABLE} apply --whitespace=fix ${patch_script}
     OPTIONS "BUILD_SHARED_LIBS OFF" "NANOARROW_NAMESPACE cudf"
   )
   set_target_properties(nanoarrow PROPERTIES POSITION_INDEPENDENT_CODE ON)
