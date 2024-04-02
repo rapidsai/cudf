@@ -117,11 +117,18 @@ class BufferOwner(Serializable):
     # The set of buffers that point to this owner.
     _slices: weakref.WeakSet[Buffer]
 
-    def __init__(self):
-        raise ValueError(
-            f"do not create a {self.__class__} directly, please "
-            "use the factory function `cudf.core.buffer.as_buffer`"
-        )
+    def __init__(
+        self,
+        ptr: int,
+        size: int,
+        owner: object,
+        exposed: bool,
+    ):
+        self._ptr = ptr
+        self._size = size
+        self._owner = owner
+        self._exposed = exposed
+        self._slices = weakref.WeakSet()
 
     @classmethod
     def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
@@ -151,21 +158,14 @@ class BufferOwner(Serializable):
             If the resulting buffer has negative size
         """
 
-        # Bypass `__init__` and initialize attributes manually
-        ret = cls.__new__(cls)
-        ret._owner = data
-        ret._exposed = exposed
-        ret._slices = weakref.WeakSet()
         if isinstance(data, rmm.DeviceBuffer):  # Common case shortcut
-            ret._ptr = data.ptr
-            ret._size = data.size
+            ptr = data.ptr
+            size = data.size
         else:
-            ret._ptr, ret._size = get_ptr_and_size(
-                data.__cuda_array_interface__
-            )
-        if ret.size < 0:
+            ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
+        if size < 0:
             raise ValueError("size cannot be negative")
-        return ret
+        return cls(ptr, size, owner=data, exposed=exposed)
 
     @classmethod
     def _from_host_memory(cls, data: Any) -> Self:
