@@ -60,7 +60,7 @@ def test_read_orc_cols(engine, columns):
     dd.assert_eq(df1, df2, check_index=False)
 
 
-@pytest.mark.parametrize("engine", ["cudf"])  # , "pyarrow"])
+@pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize(
     "predicate,expected_len",
     [
