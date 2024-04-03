@@ -41,7 +41,7 @@ public class ORCChunkedReader implements AutoCloseable {
    */
   public ORCChunkedReader(long chunkSizeByteLimit, long passReadLimit,
       ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
-    handle = create(chunkSizeByteLimit, passReadLimit,
+    handle = createReader(chunkSizeByteLimit, passReadLimit,
         opts.getIncludeColumnNames(), null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns());
@@ -60,7 +60,7 @@ public class ORCChunkedReader implements AutoCloseable {
    */
   public ORCChunkedReader(long chunkSizeByteLimit, long passReadLimit, long outputRowGranularity,
       ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
-    handle = create(chunkSizeByteLimit, passReadLimit, outputRowGranularity,
+    handle = createReaderWithOutputGranularity(chunkSizeByteLimit, passReadLimit, outputRowGranularity,
         opts.getIncludeColumnNames(), null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns());
@@ -140,19 +140,20 @@ public class ORCChunkedReader implements AutoCloseable {
    * @param timeUnit           return type of TimeStamp in units
    * @param decimal128Columns  name of the columns which are read as Decimal128 rather than Decimal64
    */
-  private static native long create(long chunkSizeByteLimit, long passReadLimit,
+  private static native long createReader(long chunkSizeByteLimit, long passReadLimit,
       String[] filterColumnNames, String filePath, long bufferAddrs, long length,
       boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
 
   /**
    * Create a native chunked ORC reader object, similar to
-   * {@link ORCChunkedReader#create(long, long, String[], String, long, long, boolean, int, String[])},
+   * {@link ORCChunkedReader#createReader(long, long, String[], String, long, long, boolean, int, String[])},
    * with an additional parameter to control the granularity of the output table.
    *
    * @param outputRowGranularity The change step in number of rows in the output table.
-   * @see ORCChunkedReader#create(long, long, String[], String, long, long, boolean, int, String[])
+   * @see ORCChunkedReader#createReader(long, long, String[], String, long, long, boolean, int, String[])
    */
-  private static native long create(long chunkSizeByteLimit, long passReadLimit, long outputRowGranularity,
+  private static native long createReaderWithOutputGranularity(
+      long chunkSizeByteLimit, long passReadLimit, long outputRowGranularity,
       String[] filterColumnNames, String filePath, long bufferAddrs, long length,
       boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
 

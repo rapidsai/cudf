@@ -218,7 +218,7 @@ jlong create_chunked_orc_reader(JNIEnv *env, jlong chunk_read_limit, jlong pass_
 
 // This function should take all the parameters that `Table.readORC` takes,
 // plus two more parameters: `chunk_read_limit` and `pass_read_limit`.
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_createReader(
     JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit,
     jobjectArray filter_col_names, jstring inp_file_path, jlong buffer, jlong buffer_length,
     jboolean using_numpy_Types, jint unit, jobjectArray dec128_col_names) {
@@ -229,7 +229,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
 
 // This function should take all the parameters that `Table.readORC` takes,
 // plus three more parameters: `chunk_read_limit`, `pass_read_limit`, `output_granularity`.
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_createReaderWithOutputGranularity(
     JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit, jlong output_granularity,
     jobjectArray filter_col_names, jstring inp_file_path, jlong buffer, jlong buffer_length,
     jboolean using_numpy_Types, jint unit, jobjectArray dec128_col_names) {
