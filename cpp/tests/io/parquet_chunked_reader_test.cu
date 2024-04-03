@@ -66,8 +66,6 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
                 std::size_t max_page_size_bytes = cudf::io::default_max_page_size_bytes,
                 std::size_t max_page_size_rows  = cudf::io::default_max_page_size_rows)
 {
-  // Just shift nulls of the next column by one position to avoid having all nulls in the same
-  // table rows.
   if (nullable) {
     // Generate deterministic bitmask instead of random bitmask for easy computation of data size.
     auto const valid_iter = cudf::detail::make_counting_transform_iterator(
@@ -83,6 +81,10 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
         std::move(col),
         cudf::get_default_stream(),
         rmm::mr::get_current_device_resource());
+
+      // Shift nulls of the next column by one position, to avoid having all nulls
+      // in the same table rows.
+      ++offset;
     }
   }
 
@@ -109,12 +111,12 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
   return std::pair{std::move(input_table), std::move(filepath)};
 }
 
-auto chunked_read(std::string const& filepath,
+auto chunked_read(std::vector<std::string> const& filepaths,
                   std::size_t output_limit,
                   std::size_t input_limit = 0)
 {
   auto const read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepaths}).build();
   auto reader = cudf::io::chunked_parquet_reader(output_limit, input_limit, read_opts);
 
   auto num_chunks = 0;
@@ -137,6 +139,14 @@ auto chunked_read(std::string const& filepath,
   }
 
   return std::pair(cudf::concatenate(out_tviews), num_chunks);
+}
+
+auto chunked_read(std::string const& filepath,
+                  std::size_t output_limit,
+                  std::size_t input_limit = 0)
+{
+  std::vector<std::string> vpath{filepath};
+  return chunked_read(vpath, output_limit, input_limit);
 }
 
 }  // namespace
@@ -988,7 +998,7 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadWithListsOfStructs)
 
   {
     auto const [result, num_chunks] = chunked_read(filepath_with_nulls, 1'500'000);
-    EXPECT_EQ(num_chunks, 4);
+    EXPECT_EQ(num_chunks, 5);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*expected_with_nulls, *result);
   }
 
@@ -1111,7 +1121,7 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, SingleFixedWidthColumn)
   input_limit_test_write(test_filenames, tbl);
 
   // semi-reasonable limit
-  constexpr int expected_a[] = {1, 17, 4, 1};
+  constexpr int expected_a[] = {1, 25, 5, 1};
   input_limit_test_read(test_filenames, tbl, 0, 2 * 1024 * 1024, expected_a);
   // an unreasonable limit
   constexpr int expected_b[] = {1, 50, 50, 1};
@@ -1143,7 +1153,7 @@ TEST_F(ParquetChunkedReaderInputLimitConstrainedTest, MixedColumns)
 
   input_limit_test_write(test_filenames, tbl);
 
-  constexpr int expected_a[] = {1, 50, 10, 7};
+  constexpr int expected_a[] = {1, 50, 13, 7};
   input_limit_test_read(test_filenames, tbl, 0, 2 * 1024 * 1024, expected_a);
   constexpr int expected_b[] = {1, 50, 50, 50};
   input_limit_test_read(test_filenames, tbl, 0, 1, expected_b);
@@ -1223,6 +1233,76 @@ TEST_F(ParquetChunkedReaderInputLimitTest, List)
   // include output chunking as well
   constexpr int expected_c[] = {11, 11, 9, 8};
   input_limit_test_read(test_filenames, tbl, 128 * 1024 * 1024, 512 * 1024 * 1024, expected_c);
+}
+
+void tiny_list_rowgroup_test(bool just_list_col)
+{
+  auto iter = thrust::make_counting_iterator(0);
+
+  // test a specific edge case:  a list column composed of multiple row groups, where each row
+  // group contains a single, relatively small row.
+  std::vector<int> row_sizes{12, 7, 16, 20, 10, 3, 15};
+  std::vector<std::unique_ptr<cudf::table>> row_groups;
+  for (size_t idx = 0; idx < row_sizes.size(); idx++) {
+    std::vector<std::unique_ptr<cudf::column>> cols;
+
+    // add a column before the list
+    if (!just_list_col) {
+      cudf::test::fixed_width_column_wrapper<int> int_col({idx});
+      cols.push_back(int_col.release());
+    }
+
+    // write out the single-row list column as it's own file
+    cudf::test::fixed_width_column_wrapper<int> values(iter, iter + row_sizes[idx]);
+    cudf::test::fixed_width_column_wrapper<int> offsets({0, row_sizes[idx]});
+    cols.push_back(cudf::make_lists_column(1, offsets.release(), values.release(), 0, {}));
+
+    // add a column after the list
+    if (!just_list_col) {
+      cudf::test::fixed_width_column_wrapper<float> float_col({idx});
+      cols.push_back(float_col.release());
+    }
+
+    auto tbl = std::make_unique<cudf::table>(std::move(cols));
+
+    auto filepath = temp_env->get_temp_filepath("Tlrg" + std::to_string(idx));
+    auto const write_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *tbl).build();
+    cudf::io::write_parquet(write_opts);
+
+    // store off the table
+    row_groups.push_back(std::move(tbl));
+  }
+
+  // build expected
+  std::vector<cudf::table_view> views;
+  std::transform(row_groups.begin(),
+                 row_groups.end(),
+                 std::back_inserter(views),
+                 [](std::unique_ptr<cudf::table> const& tbl) { return tbl->view(); });
+  auto expected = cudf::concatenate(views);
+
+  // load the individual files all at once
+  std::vector<std::string> source_files;
+  std::transform(iter, iter + row_groups.size(), std::back_inserter(source_files), [](int i) {
+    return temp_env->get_temp_filepath("Tlrg" + std::to_string(i));
+  });
+  auto result =
+    chunked_read(source_files, size_t{2} * 1024 * 1024 * 1024, size_t{2} * 1024 * 1024 * 1024);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*expected, *(result.first));
+}
+
+TEST_F(ParquetChunkedReaderInputLimitTest, TinyListRowGroupsSingle)
+{
+  // test with just a single list column
+  tiny_list_rowgroup_test(true);
+}
+
+TEST_F(ParquetChunkedReaderInputLimitTest, TinyListRowGroupsMixed)
+{
+  // test with other columns mixed in
+  tiny_list_rowgroup_test(false);
 }
 
 struct char_values {

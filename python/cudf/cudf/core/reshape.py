@@ -23,7 +23,8 @@ _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
 def _align_objs(objs, how="outer", sort=None):
-    """Align a set of Series or Dataframe objects.
+    """
+    Align a set of Series or Dataframe objects.
 
     Parameters
     ----------
@@ -31,6 +32,7 @@ def _align_objs(objs, how="outer", sort=None):
     how : How to handle indexes on other axis (or axes),
     similar to join in concat
     sort : Whether to sort the resulting Index
+
     Returns
     -------
     A list of reindexed and aligned objects
