@@ -29,6 +29,34 @@
 namespace cudf::io::orc::detail {
 
 /**
+ * @brief Struct representing a range of data.
+ */
+struct range {
+  std::size_t begin{0};
+  std::size_t end{0};
+};
+
+// Store information to identify where to read a chunk of data from source.
+// Each read corresponds to one or more consecutive streams combined.
+struct stream_data_read_info {
+  uint64_t offset;         // offset in data source
+  std::size_t dst_pos;     // offset to store data in memory relative to start of raw stripe data
+  std::size_t length;      // data length to read
+  std::size_t source_idx;  // the data source id
+  std::size_t stripe_idx;  // global stripe index
+  std::size_t level;       // nested level
+};
+
+/**
+ * @brief Compression information for a stripe at a specific nested level.
+ */
+struct stripe_level_comp_info {
+  std::size_t num_compressed_blocks{0};
+  std::size_t num_uncompressed_blocks{0};
+  std::size_t total_decomp_size{0};
+};
+
+/**
  * @brief Struct that store source information of an ORC streams.
  */
 struct stream_source_info {
@@ -66,13 +94,6 @@ using stream_source_map =
  * @brief Struct that store information of an ORC stream.
  */
 struct orc_stream_info {
-  explicit orc_stream_info(uint64_t offset_,
-                           std::size_t dst_pos_,
-                           uint32_t length_,
-                           stream_source_info const& source_)
-    : offset(offset_), dst_pos(dst_pos_), length(length_), source(source_)
-  {
-  }
   // Data info:
   uint64_t offset;      // offset in data source
   std::size_t dst_pos;  // offset to store data in memory relative to start of raw stripe data
@@ -80,23 +101,6 @@ struct orc_stream_info {
 
   // Store source of the stream in the stripe, so we can look up where this stream comes from.
   stream_source_info source;
-};
-
-/**
- * @brief Compression information for a stripe at a specific nested level.
- */
-struct stripe_level_comp_info {
-  std::size_t num_compressed_blocks{0};
-  std::size_t num_uncompressed_blocks{0};
-  std::size_t total_decomp_size{0};
-};
-
-/**
- * @brief Struct representing a range of data.
- */
-struct range {
-  std::size_t begin;
-  std::size_t end;
 };
 
 /**
@@ -110,38 +114,12 @@ struct file_intermediate_data {
   // Return true if no rows or stripes to read.
   bool has_no_data() const { return rows_to_read == 0 || selected_stripes.empty(); }
 
-  // Store information to identify where to read a chunk of data from source.
-  // Each read corresponds to one or more consecutive streams combined.
-  struct stream_data_read_info {
-    stream_data_read_info(uint64_t offset_,
-                          std::size_t dst_pos_,
-                          std::size_t length_,
-                          std::size_t source_idx_,
-                          std::size_t stripe_idx_,
-                          std::size_t level_)
-      : offset(offset_),
-        dst_pos(dst_pos_),
-        length(length_),
-        source_idx(source_idx_),
-        stripe_idx(stripe_idx_),
-        level(level_)
-    {
-    }
-
-    uint64_t offset;         // offset in data source
-    std::size_t dst_pos;     // offset to store data in memory relative to start of raw stripe data
-    std::size_t length;      // data length to read
-    std::size_t source_idx;  // the data source id
-    std::size_t stripe_idx;  // global stripe index
-    std::size_t level;       // nested level
-  };
-
-  // Identify what data to read from source.
-  std::vector<stream_data_read_info> data_read_info;
-
   // For each stripe, we perform a number of read for its streams.
   // Those reads are identified by a chunk of consecutive read info, stored in data_read_info.
   std::vector<range> stripe_data_read_ranges;
+
+  // Identify what data to read from source.
+  std::vector<stream_data_read_info> data_read_info;
 
   // Store the compression information for each data stream.
   stream_source_map<stripe_level_comp_info> compinfo_map;

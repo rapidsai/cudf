@@ -122,10 +122,11 @@ std::size_t gather_stream_info_and_column_desc(
 
         (*local_stream_order)++;
       } else {  // chunks == nullptr
-        stream_info->emplace_back(stripeinfo->offset + src_offset,
-                                  dst_offset,
-                                  stream.length,
-                                  stream_source_info{stripe_order, level, column_id, stream.kind});
+        stream_info->emplace_back(
+          orc_stream_info{stripeinfo->offset + src_offset,
+                          dst_offset,
+                          stream.length,
+                          stream_source_info{stripe_order, level, column_id, stream.kind}});
       }
 
       dst_offset += stream.length;
@@ -406,7 +407,12 @@ void reader_impl::global_preprocess(read_mode mode)
           len += stream_info[stream_level_count].length;
           stream_level_count++;
         }
-        read_info.emplace_back(offset, d_dst, len, stripe.source_idx, stripe_global_idx, level);
+        read_info.emplace_back(stream_data_read_info{offset,
+                                                     d_dst,
+                                                     len,
+                                                     static_cast<std::size_t>(stripe.source_idx),
+                                                     stripe_global_idx,
+                                                     level});
       }
     }  // end loop level
 
