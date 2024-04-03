@@ -37,7 +37,7 @@ CumulativeBlockwise._kwargs = PatchCumulativeBlockwise._kwargs
 
 
 class VarCudf(Reduction):
-    # Uses the parallel version of Welford's online algorithm (Chan 79')
+    # Uses the parallel version of Welford's online algorithm (Chan '79)
     # (http://i.stanford.edu/pub/cstr/reports/cs/tr/79/773/CS-TR-79-773.pdf)
     _parameters = ["frame", "skipna", "ddof", "numeric_only", "split_every"]
     _defaults = {
