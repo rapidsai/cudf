@@ -477,7 +477,7 @@ class chunked_orc_reader {
    * @brief Construct the reader from input/output size limits along with other ORC reader options.
    *
    * This constructor implicitly call the other constructor with `output_row_granularity` set to
-   * 10'000 rows.
+   * `DEFAULT_OUTPUT_ROW_GRANULARITY` rows.
    *
    * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit

@@ -44,9 +44,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <fstream>
-#include <type_traits>
-
 namespace {
 enum class output_limit : std::size_t {};
 enum class input_limit : std::size_t {};
@@ -1413,6 +1410,7 @@ TEST_F(OrcChunkedReaderInputLimitTest, SizeTypeRowsOverflow)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, read_result->view());
   }
 
+  // The test below requires a huge amount of memory, thus it is disabled by default.
 #ifdef LOCAL_TEST
   // Read with only output limit -- there is no limit on the memory usage.
   // However, the reader should be able to detect and load only enough stripes each time
