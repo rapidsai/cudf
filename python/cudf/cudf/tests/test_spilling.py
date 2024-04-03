@@ -236,7 +236,7 @@ def _get_manager_in_env(monkeypatch, var_vals):
 def test_environment_variables_spill_off(monkeypatch):
     with _get_manager_in_env(
         monkeypatch,
-        [("CUDF_SPILL", "off"), ("CUDF_SPILL_ON_DEMAND", "off")],
+        [("CUDF_SPILL", "off")],
     ) as manager:
         assert manager is None
 
@@ -244,10 +244,9 @@ def test_environment_variables_spill_off(monkeypatch):
 def test_environment_variables_spill_on(monkeypatch):
     with _get_manager_in_env(
         monkeypatch,
-        [("CUDF_SPILL", "on")],
+        [("CUDF_SPILL", "on"), ("CUDF_SPILL_ON_DEMAND", "off")],
     ) as manager:
         assert isinstance(manager, SpillManager)
-        assert manager._spill_on_demand is True
         assert manager._device_memory_limit is None
         assert manager.statistics.level == 0
 
@@ -255,7 +254,11 @@ def test_environment_variables_spill_on(monkeypatch):
 def test_environment_variables_device_limit(monkeypatch):
     with _get_manager_in_env(
         monkeypatch,
-        [("CUDF_SPILL", "on"), ("CUDF_SPILL_DEVICE_LIMIT", "1000")],
+        [
+            ("CUDF_SPILL", "on"),
+            ("CUDF_SPILL_ON_DEMAND", "off"),
+            ("CUDF_SPILL_DEVICE_LIMIT", "1000"),
+        ],
     ) as manager:
         assert isinstance(manager, SpillManager)
         assert manager._device_memory_limit == 1000
@@ -268,6 +271,7 @@ def test_environment_variables_spill_stats(monkeypatch, level):
         monkeypatch,
         [
             ("CUDF_SPILL", "on"),
+            ("CUDF_SPILL_ON_DEMAND", "off"),
             ("CUDF_SPILL_DEVICE_LIMIT", "1000"),
             ("CUDF_SPILL_STATS", f"{level}"),
         ],
