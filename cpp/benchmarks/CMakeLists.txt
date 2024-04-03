@@ -340,7 +340,7 @@ target_link_libraries(MULTIBYTE_SPLIT_NVBENCH PRIVATE ZLIB::ZLIB)
 
 # ##################################################################################################
 # * decimal benchmark
-#   ---------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------
 ConfigureNVBench(DECIMAL_NVBENCH decimal/convert_floating.cpp)
 
 add_custom_target(
