@@ -119,6 +119,7 @@ def all_types_input_table():
 def all_types_output_table(input, method):
     def _applyfunc(x):
         hasher = getattr(hashlib, method)
+        # TODO: not how libcudf computes row hash
         return hasher(str(x).encode()).hexdigest()
 
     result = pa.Table.from_pandas(input.to_pandas().map(_applyfunc))
