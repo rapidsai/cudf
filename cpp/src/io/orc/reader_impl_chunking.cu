@@ -220,7 +220,7 @@ template std::vector<range> find_splits<cumulative_size>(host_span<cumulative_si
 template std::vector<range> find_splits<cumulative_size_and_row>(
   host_span<cumulative_size_and_row const> sizes, std::size_t total_count, std::size_t size_limit);
 
-range get_range(std::vector<range> const& input_ranges, range const& selected_ranges)
+range get_range(host_span<range const> input_ranges, range const& selected_ranges)
 {
   // The first and last range.
   auto const& first_range = input_ranges[selected_ranges.begin];

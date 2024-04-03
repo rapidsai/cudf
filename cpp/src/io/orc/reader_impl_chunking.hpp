@@ -268,7 +268,7 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
  * @param selected_ranges A range of ranges from `input_ranges`
  * @return The range of data span by the selected range of ranges
  */
-range get_range(std::vector<range> const& input_ranges, range const& selected_ranges);
+range get_range(host_span<range const> input_ranges, range const& selected_ranges);
 
 /**
  * @brief Function that populates descriptors for either individual streams or chunks of column
