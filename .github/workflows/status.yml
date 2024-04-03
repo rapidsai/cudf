@@ -1,8 +1,8 @@
-name: Process Workflow Artifacts and Update Status
+name: Process Workflow Artifacts and Update Status After Echo Job
 
 on:
   workflow_run:
-    workflows: ["Echo abc"]
+    workflows: ["Echo on PR"]
     types:
       - completed
 
@@ -11,6 +11,9 @@ jobs:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
