@@ -364,33 +364,28 @@ int64_t find_next_split(int64_t cur_pos,
 /**
  * @brief Converts cuDF units to Parquet units.
  *
- * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ * @return A tuple of Parquet clock rate and Parquet decimal type.
  */
-[[nodiscard]] std::tuple<int32_t, int32_t, int8_t> conversion_info(
+[[nodiscard]] std::tuple<int32_t, thrust::optional<LogicalType>> conversion_info(
   type_id column_type_id,
   type_id timestamp_type_id,
   Type physical,
-  thrust::optional<ConvertedType> converted,
-  int32_t length)
+  thrust::optional<LogicalType> logical_type)
 {
-  int32_t type_width = (physical == FIXED_LEN_BYTE_ARRAY) ? length : 0;
-  int32_t clock_rate = 0;
-  if (column_type_id == type_id::INT8 or column_type_id == type_id::UINT8) {
-    type_width = 1;  // I32 -> I8
-  } else if (column_type_id == type_id::INT16 or column_type_id == type_id::UINT16) {
-    type_width = 2;  // I32 -> I16
-  } else if (column_type_id == type_id::INT32) {
-    type_width = 4;  // str -> hash32
-  } else if (is_chrono(data_type{column_type_id})) {
-    clock_rate = to_clockrate(timestamp_type_id);
+  int32_t const clock_rate =
+    is_chrono(data_type{column_type_id}) ? to_clockrate(timestamp_type_id) : 0;
+
+  // TODO(ets): this is leftover from the original code, but will we ever output decimal as
+  // anything but fixed point?
+  if (logical_type.has_value() and logical_type->type == LogicalType::DECIMAL) {
+    // if decimal but not outputting as float or decimal, then convert to no logical type
+    if (column_type_id != type_id::FLOAT64 and
+        not cudf::is_fixed_point(data_type{column_type_id})) {
+      return std::make_tuple(clock_rate, thrust::nullopt);
+    }
   }
 
-  int8_t converted_type = converted.value_or(UNKNOWN);
-  if (converted_type == DECIMAL && column_type_id != type_id::FLOAT64 &&
-      not cudf::is_fixed_point(data_type{column_type_id})) {
-    converted_type = UNKNOWN;  // Not converting to float64 or decimal
-  }
-  return std::make_tuple(type_width, clock_rate, converted_type);
+  return std::make_tuple(clock_rate, std::move(logical_type));
 }
 
 /**
@@ -1515,12 +1510,11 @@ void reader::impl::create_global_chunk_info()
       auto& col_meta = _metadata->get_column_metadata(rg.index, rg.source_index, col.schema_idx);
       auto& schema   = _metadata->get_schema(col.schema_idx);
 
-      auto [type_width, clock_rate, converted_type] =
+      auto [clock_rate, logical_type] =
         conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
                         _timestamp_type.id(),
                         schema.type,
-                        schema.converted_type,
-                        schema.type_length);
+                        schema.logical_type);
 
       // for lists, estimate the number of bytes per row. this is used by the subpass reader to
       // determine where to split the decompression boundaries
@@ -1538,7 +1532,7 @@ void reader::impl::create_global_chunk_info()
                                        nullptr,
                                        col_meta.num_values,
                                        schema.type,
-                                       type_width,
+                                       schema.type_length,
                                        row_group_start,
                                        row_group_rows,
                                        schema.max_definition_level,
@@ -1547,14 +1541,13 @@ void reader::impl::create_global_chunk_info()
                                        required_bits(schema.max_definition_level),
                                        required_bits(schema.max_repetition_level),
                                        col_meta.codec,
-                                       converted_type,
-                                       schema.logical_type,
-                                       schema.decimal_precision,
+                                       logical_type,
                                        clock_rate,
                                        i,
                                        col.schema_idx,
                                        chunk_info,
-                                       list_bytes_per_row_est));
+                                       list_bytes_per_row_est,
+                                       schema.type == BYTE_ARRAY and _strings_to_categorical));
     }
 
     remaining_rows -= row_group_rows;

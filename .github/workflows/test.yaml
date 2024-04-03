@@ -43,6 +43,16 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_cpp_memcheck.sh"
+  static-configure:
+    needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
+    with:
+      build_type: pull-request
+      # Use the wheel container so we can skip conda solves and since our
+      # primary static consumers (Spark) are not in conda anyway.
+      container_image: "rapidsai/ci-wheel:latest"
+      run_script: "ci/configure_cpp_static.sh"
   conda-python-cudf-tests:
     secrets: inherit
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.06
