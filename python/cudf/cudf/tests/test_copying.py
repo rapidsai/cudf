@@ -9,6 +9,8 @@ import cudf
 from cudf import Series
 from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
+pytestmark = pytest.mark.spilling
+
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + OTHER_TYPES)
 def test_repeat(dtype):
