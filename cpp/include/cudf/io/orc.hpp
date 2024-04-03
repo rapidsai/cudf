@@ -464,6 +464,8 @@ class chunked_orc_reader {
    * @param options Settings for controlling reading behaviors
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
+   *
+   * @throw cudf::logic_error if `output_row_granularity` is non-positive
    */
   explicit chunked_orc_reader(
     std::size_t output_size_limit,
@@ -498,7 +500,7 @@ class chunked_orc_reader {
    * @brief Construct the reader from output size limits along with other ORC reader options.
    *
    * This constructor implicitly call the other constructor with `data_read_limit` set to `0` and
-   * `output_row_granularity` set to 10'000 rows.
+   * `output_row_granularity` set to `DEFAULT_OUTPUT_ROW_GRANULARITY` rows.
    *
    * @param output_size_limit Limit on total number of bytes to be returned per `read_chunk()` call,
    *        or `0` if there is no limit

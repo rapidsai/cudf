@@ -185,6 +185,8 @@ struct chunk_read_data {
       data_read_limit{data_read_limit_},
       output_row_granularity{output_row_granularity_}
   {
+    CUDF_EXPECTS(output_row_granularity > 0,
+                 "The value of `output_row_granularity` must be positive.");
   }
 
   std::size_t const
