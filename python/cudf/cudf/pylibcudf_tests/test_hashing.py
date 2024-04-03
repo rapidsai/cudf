@@ -14,6 +14,92 @@ SEED = 0
 METHODS = ["md5", "sha1", "sha224", "sha256", "sha384", "sha512"]
 
 
+@pytest.fixture(scope="module")
+def xxhash_64_int_tbl():
+    arrow_tbl = pa.Table.from_arrays(
+        [
+            pa.array(
+                [
+                    -127,
+                    -70000,
+                    0,
+                    200000,
+                    128,
+                    np.iinfo("int32").max,
+                    np.iinfo("int32").min,
+                    np.iinfo("int32").min,
+                ],
+                type=pa.int32(),
+            )
+        ],
+        names=["data"],
+    )
+    return plc.interop.from_arrow(arrow_tbl)
+
+
+@pytest.fixture(scope="module")
+def xxhash_64_double_tbl():
+    arrow_tbl = pa.Table.from_arrays(
+        [
+            pa.array(
+                [
+                    -127.0,
+                    -70000.125,
+                    128.5,
+                    -0.0,
+                    np.inf,
+                    np.nan,
+                    np.finfo("float64").max,
+                    np.finfo("float64").min,
+                    np.finfo("float64").min,
+                ],
+                type=pa.float32(),
+            )
+        ],
+        names=["data"],
+    )
+    return plc.interop.from_arrow(arrow_tbl)
+
+
+@pytest.fixture(scope="module")
+def xxhash_64_string_tbl():
+    arrow_tbl = pa.Table.from_arrays(
+        [
+            pa.array(
+                [
+                    "The",
+                    "quick",
+                    "brown fox",
+                    "jumps over the lazy dog.",
+                    "I am Jack's complete lack of null value",
+                    "A very long (greater than 128 bytes/characters) to test a very long string. "
+                    "2nd half of the very long string to verify the long string hashing happening.",
+                    "Some multi-byte characters here: ééé",
+                    "ééé",
+                    "ééé ééé",
+                    "ééé ééé ééé ééé",
+                    "",
+                    "!@#$%^&*(())",
+                    "0123456789",
+                    "{}|:<>?,./;[]=-",
+                ],
+                type=pa.string(),
+            )
+        ],
+        names=["data"],
+    )
+    return plc.interop.from_arrow(arrow_tbl)
+
+
+@pytest.fixture(scope="module")
+def xxhash_64_decimal_tbl():
+    arrow_tbl = pa.Table.from_arrays(
+        [pa.array([0, 100, -100, 999999999, -999999999], type=pa.decimal(-3))],
+        names=["data"],
+    )
+    return plc.interop.from_arrow(arrow_tbl)
+
+
 # Full table hash
 @pytest.fixture(scope="module")
 def all_types_input_table():
@@ -62,30 +148,16 @@ def test_hash_column(pa_input_column, method):
 )
 @pytest.mark.parametrize("dtype", ["list", "struct"])
 def test_sha_list_struct_err(all_types_input_table, dtype, method):
-    err_types = all_types_input_table[[dtype]]
+    err_types = all_types_input_table.select([dtype])
     plc_tbl = plc.interop.from_arrow(err_types)
     plc_hasher = getattr(plc.hashing, method)
 
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         plc_hasher(plc_tbl)
 
 
-def test_xxhash_64_int():
-    input_data = plc.interop.from_arrow(
-        pa.array.from_pylist(
-            [
-                -127,
-                -70000,
-                0,
-                200000,
-                128,
-                np.iinfo("int32").max(),
-                np.iinfo("int32").min(),
-                np.iinfo("int32").min(),
-            ]
-        )
-    )
-    expected = pa.array.from_pylist(
+def test_xxhash_64_int(xxhash_64_int_tbl):
+    expected = pa.array(
         [
             4827426872506142937,
             13867166853951622683,
@@ -95,30 +167,16 @@ def test_xxhash_64_int():
             2971168436322821236,
             9380524276503839603,
             9380524276503839603,
-        ]
+        ],
+        type=pa.uint64(),
     )
-    got = plc.hashing.xxhash_64(input_data)
+    got = plc.hashing.xxhash_64(xxhash_64_int_tbl, 0)
     assert_column_eq(got, expected)
 
 
-def test_xxhash_64_double():
+def test_xxhash_64_double(xxhash_64_double_tbl):
     # see xxhash_64_test.cpp for details
-    input_data = plc.interop.from_arrow(
-        pa.array.from_pylist(
-            [
-                -127.0,
-                -70000.125,
-                128.5,
-                -0.0,
-                np.inf,
-                np.nan,
-                np.iinfo("float64").max(),
-                np.iinfo("float64").min(),
-                np.iinfo("float64").min(),
-            ]
-        )
-    )
-    expected = pa.array.from_pylist(
+    expected = pa.array(
         [
             16892115221677838993,
             1686446903308179321,
@@ -131,46 +189,24 @@ def test_xxhash_64_double():
             3127544388062992779,
             1692401401506680154,
             13770442912356326755,
-        ]
+        ],
+        type=pa.uint64(),
     )
-    got = plc.hashing.xxhash_64(input_data)
+    got = plc.hashing.xxhash_64(xxhash_64_double_tbl, 0)
     assert_column_eq(got, expected)
 
 
-def test_xxhash_64_string():
-    input_data = plc.interop.from_arrow(
-        [
-            "The",
-            "quick",
-            "brown fox",
-            "jumps over the lazy dog.",
-            "I am Jack's complete lack of null value",
-            "A very long (greater than 128 bytes/characters) to test a very long string. "
-            "2nd half of the very long string to verify the long string hashing happening.",
-            "Some multi-byte characters here: ééé",
-            "ééé",
-            "ééé ééé",
-            "ééé ééé ééé ééé",
-            "",
-            "!@#$%^&*(())",
-            "0123456789",
-            "{}|:<>?,./;[]=-",
-        ]
-    )
-
+def test_xxhash_64_string(xxhash_64_string_tbl):
     def hasher(x):
         return xxhash.xxh64(bytes(x, "utf-8")).intdigest()
 
-    expected = pa.from_pandas(input_data.to_pandas().apply(hasher))
-    got = plc.hashing.xxhash_64(input)
+    expected = pa.from_pandas(xxhash_64_string_tbl.to_pandas().apply(hasher))
+    got = plc.hashing.xxhash_64(xxhash_64_string_tbl, 0)
 
     assert_column_eq(got, expected)
 
 
-def test_xxhash64_decimal():
-    input_data = plc.interop.from_arrow(
-        pa.array([0, 100, -100, 999999999, -999999999], type=pa.decimal(-3))
-    )
+def test_xxhash64_decimal(xxhash_64_decimal_tbl):
     expected = pa.array(
         [
             4246796580750024372,
@@ -178,7 +214,8 @@ def test_xxhash64_decimal():
             4122185689695768261,
             3249245648192442585,
             8009575895491381648,
-        ]
+        ],
+        type=pa.uint64(),
     )
-    got = plc.hashing.xxhash_64(input_data)
+    got = plc.hashing.xxhash_64(xxhash_64_decimal_tbl, 0)
     assert_column_eq(got, expected)
