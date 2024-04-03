@@ -325,7 +325,7 @@ std::size_t gather_stream_info_and_column_desc(
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
-  std::optional<std::vector<orc_stream_info>*> const& stream_info,
-  std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks);
+  std::vector<orc_stream_info>* stream_info,
+  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>* chunks);
 
 }  // namespace cudf::io::orc::detail

@@ -844,7 +844,7 @@ void reader_impl::decompress_and_decode(read_mode mode)
                                                                       level == 0,
                                                                       &num_dict_entries,
                                                                       &local_stream_order,
-                                                                      std::nullopt,  // stream_info
+                                                                      nullptr,  // stream_info
                                                                       &chunks);
 
       auto const is_stripe_data_empty = total_data_size == 0;

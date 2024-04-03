@@ -47,10 +47,10 @@ std::size_t gather_stream_info_and_column_desc(
   bool apply_struct_map,
   int64_t* num_dictionary_entries,
   std::size_t* local_stream_order,
-  std::optional<std::vector<orc_stream_info>*> const& stream_info,
-  std::optional<cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>*> const& chunks)
+  std::vector<orc_stream_info>* stream_info,
+  cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>* chunks)
 {
-  CUDF_EXPECTS(stream_info.has_value() ^ chunks.has_value(),
+  CUDF_EXPECTS((stream_info == nullptr) ^ (chunks == nullptr),
                "Either stream_info or chunks must be provided, but not both.");
 
   std::size_t src_offset = 0;
@@ -92,8 +92,8 @@ std::size_t gather_stream_info_and_column_desc(
           auto const child_idx = (idx < orc2gdf.size()) ? orc2gdf[idx] : -1;
           if (child_idx >= 0) {
             col = child_idx;
-            if (chunks.has_value()) {
-              auto& chunk                     = (*chunks.value())[stripe_order][col];
+            if (chunks) {
+              auto& chunk                     = (*chunks)[stripe_order][col];
               chunk.strm_id[gpu::CI_PRESENT]  = *local_stream_order;
               chunk.strm_len[gpu::CI_PRESENT] = stream.length;
             }
@@ -101,11 +101,11 @@ std::size_t gather_stream_info_and_column_desc(
         }
       }
     } else if (col != -1) {
-      if (chunks.has_value()) {
+      if (chunks) {
         if (src_offset >= stripeinfo->indexLength || use_index) {
           auto const index_type = get_stream_index_type(stream.kind);
           if (index_type < gpu::CI_NUM_STREAMS) {
-            auto& chunk                = (*chunks.value())[stripe_order][col];
+            auto& chunk                = (*chunks)[stripe_order][col];
             chunk.strm_id[index_type]  = *local_stream_order;
             chunk.strm_len[index_type] = stream.length;
             // NOTE: skip_count field is temporarily used to track the presence of index streams
@@ -121,12 +121,11 @@ std::size_t gather_stream_info_and_column_desc(
         }
 
         (*local_stream_order)++;
-      } else {  // not chunks.has_value()
-        stream_info.value()->emplace_back(
-          stripeinfo->offset + src_offset,
-          dst_offset,
-          stream.length,
-          stream_source_info{stripe_order, level, column_id, stream.kind});
+      } else {  // chunks == nullptr
+        stream_info->emplace_back(stripeinfo->offset + src_offset,
+                                  dst_offset,
+                                  stream.length,
+                                  stream_source_info{stripe_order, level, column_id, stream.kind});
       }
 
       dst_offset += stream.length;
@@ -381,7 +380,7 @@ void reader_impl::global_preprocess(read_mode mode)
                                            nullptr,  // num_dictionary_entries
                                            nullptr,  // local_stream_order
                                            &stream_info,
-                                           std::nullopt  // chunks
+                                           nullptr  // chunks
         );
 
       auto const is_stripe_data_empty = stripe_level_size == 0;
