@@ -32,6 +32,7 @@ from cudf.core.buffer.spill_manager import (
     get_global_manager,
     get_rmm_memory_resource_stack,
     set_global_manager,
+    spill_on_demand_globally,
 )
 from cudf.core.buffer.spillable_buffer import (
     SpillableBuffer,
@@ -45,6 +46,22 @@ if get_global_manager() is not None:
         "cannot test spilling when enabled globally, set `CUDF_SPILL=off`",
         allow_module_level=True,
     )
+
+
+@contextlib.contextmanager
+def set_rmm_memory_pool(nbytes: int):
+    mr = rmm.mr.get_current_device_resource()
+    rmm.mr.set_current_device_resource(
+        rmm.mr.PoolMemoryResource(
+            rmm.mr.get_current_device_resource(),
+            initial_pool_size=nbytes,
+            maximum_pool_size=nbytes,
+        )
+    )
+    try:
+        yield
+    finally:
+        rmm.mr.set_current_device_resource(mr)
 
 
 def single_column_df(target="gpu") -> cudf.DataFrame:
@@ -691,3 +708,21 @@ def test_statistics_expose(manager: SpillManager):
     assert stat.count == 10
     assert stat.total_nbytes == buffers[0].nbytes * 10
     assert stat.spilled_nbytes == buffers[0].nbytes * 10
+
+
+def test_spill_on_demand(manager: SpillManager):
+    with set_rmm_memory_pool(1024):
+        a = as_buffer(data=rmm.DeviceBuffer(size=1024))
+        assert isinstance(a, SpillableBuffer)
+        assert not a.is_spilled
+
+        with pytest.raises(MemoryError, match="Maximum pool size exceeded"):
+            as_buffer(data=rmm.DeviceBuffer(size=1024))
+
+        with spill_on_demand_globally():
+            b = as_buffer(data=rmm.DeviceBuffer(size=1024))
+            assert a.is_spilled
+            assert not b.is_spilled
+
+        with pytest.raises(MemoryError, match="Maximum pool size exceeded"):
+            as_buffer(data=rmm.DeviceBuffer(size=1024))

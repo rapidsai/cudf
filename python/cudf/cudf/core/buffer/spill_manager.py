@@ -10,6 +10,7 @@ import traceback
 import warnings
 import weakref
 from collections import defaultdict
+from contextlib import contextmanager
 from dataclasses import dataclass
 from functools import partial
 from typing import Dict, List, Optional, Tuple
@@ -466,3 +467,36 @@ def set_spill_on_demand_globally() -> None:
             mr, manager._out_of_memory_handle
         )
     )
+
+
+@contextmanager
+def spill_on_demand_globally():
+    """Context to enable spill on demand temporary.
+
+    Warning, this modify the current RMM memory resource. A memory resource
+    to handle out-of-memory errors are pushed on the RMM memory resource stack
+    when entering the context and popped again when exiting.
+
+    Raises
+    ------
+    ValueError
+        If no global spill manager exist (spilling is disable).
+    ValueError
+        If a failure callback resource is already in the resource stack.
+    ValueError
+        If the RMM memory source stack was changed while in the context.
+    """
+    set_spill_on_demand_globally()
+    # Save the new memory resource stack for later cleanup
+    mr_stack = get_rmm_memory_resource_stack(
+        rmm.mr.get_current_device_resource()
+    )
+    try:
+        yield
+    finally:
+        mr = rmm.mr.get_current_device_resource()
+        if mr_stack != get_rmm_memory_resource_stack(mr):
+            raise ValueError(
+                "RMM memory source stack was changed while in the context"
+            )
+        rmm.mr.set_current_device_resource(mr_stack[1])
