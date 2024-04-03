@@ -215,6 +215,21 @@ get_nanoarrow_tables(cudf::size_type length)
     std::make_unique<cudf::table>(std::move(columns)), std::move(schema), std::move(arrow));
 }
 
+// populate an ArrowArray list array from device buffers using a no-op
+// allocator so that the ArrowArray doesn't have ownership of the buffers
+void populate_list_from_col(ArrowArray* arr, cudf::lists_column_view view)
+{
+  arr->length     = view.size();
+  arr->null_count = view.null_count();
+
+  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  ArrowArrayValidityBitmap(arr)->buffer.data =
+    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
+
+  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  ArrowArrayBuffer(arr, 1)->data = const_cast<uint8_t*>(view.offsets().data<uint8_t>());
+}
+
 struct BaseArrowFixture : public cudf::test::BaseFixture {
   void compare_schemas(const ArrowSchema* expected, const ArrowSchema* actual)
   {
