@@ -36,7 +36,7 @@ index 8714c70..6a9e505 100644
    target_include_directories(nanoarrow
                               PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 -                                    $<INSTALL_INTERFACE:include>)
-+                                    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR>)
++                                    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
    target_include_directories(nanoarrow
                               PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
    )
