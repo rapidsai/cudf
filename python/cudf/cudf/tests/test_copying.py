@@ -307,11 +307,8 @@ def test_series_zero_copy_cow_on():
 def test_series_zero_copy_cow_off():
     if get_global_manager() is not None:
         pytest.skip(
-            (
-                "cannot test zero-copy and no-copy-on-write when "
-                "spilling is enabled globally, set `CUDF_SPILL=off`"
-            ),
-            allow_module_level=True,
+            "cannot test zero-copy and no-copy-on-write when "
+            "spilling is enabled globally, set `CUDF_SPILL=off`"
         )
     with cudf.option_context("copy_on_write", False):
         s = cudf.Series([1, 2, 3, 4, 5])
