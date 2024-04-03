@@ -33,7 +33,7 @@ index 8714c70..1feec13 100644
 
 -  install(TARGETS nanoarrow DESTINATION lib)
 +  install(TARGETS nanoarrow
-+          DESTINATION lib
++          DESTINATION "${CMAKE_INSTALL_LIBDIR}"
 +          EXPORT nanoarrow-exports)
    install(DIRECTORY src/
            DESTINATION include
