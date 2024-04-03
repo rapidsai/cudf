@@ -165,7 +165,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_close(JNIEnv *en
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
     JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit, jlong output_granularity,
     jobjectArray filter_col_names, jstring inp_file_path, jlong buffer, jlong buffer_length,
-    jboolean usingNumPyTypes, jint unit, jobjectArray dec128_col_names) {
+    jboolean using_numpy_Types, jint unit, jobjectArray dec128_col_names) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", 0);
@@ -197,14 +197,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
       opts_builder = opts_builder.columns(n_filter_col_names.as_cpp_vector());
     }
     auto const read_opts = opts_builder.use_index(false)
-                               .use_np_dtypes(static_cast<bool>(usingNumPyTypes))
+                               .use_np_dtypes(static_cast<bool>(using_numpy_Types))
                                .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(unit)))
                                .decimal128_columns(n_dec128_col_names.as_cpp_vector())
                                .build();
 
-    return reinterpret_cast<jlong>(
-        new cudf::io::chunked_orc_reader(static_cast<std::size_t>(chunk_read_limit),
-                                         static_cast<std::size_t>(pass_read_limit), read_opts));
+    return reinterpret_cast<jlong>(new cudf::io::chunked_orc_reader(
+        static_cast<std::size_t>(chunk_read_limit), static_cast<std::size_t>(pass_read_limit),
+        static_cast<std::size_t>(output_granularity), read_opts));
   }
   CATCH_STD(env, 0);
 }
