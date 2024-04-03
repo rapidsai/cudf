@@ -7,6 +7,7 @@ import pytest
 
 import cudf
 from cudf import Series
+from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 pytestmark = pytest.mark.spilling
@@ -304,6 +305,14 @@ def test_series_zero_copy_cow_on():
 
 
 def test_series_zero_copy_cow_off():
+    if get_global_manager() is not None:
+        pytest.skip(
+            (
+                "cannot test zero-copy and no-copy-on-write when "
+                "spilling is enabled globally, set `CUDF_SPILL=off`"
+            ),
+            allow_module_level=True,
+        )
     with cudf.option_context("copy_on_write", False):
         s = cudf.Series([1, 2, 3, 4, 5])
         s1 = s.copy(deep=False)
