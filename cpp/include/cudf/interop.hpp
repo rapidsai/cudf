@@ -284,5 +284,68 @@ std::unique_ptr<cudf::scalar> from_arrow(
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief typedef for a vector of owning columns, used for conversion from ArrowDeviceArray
+ * 
+ */
+using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
+
+/**
+ * @brief functor for a custom deleter to a unique_ptr of table_view
+ * 
+ * When converting from an ArrowDeviceArray, there are cases where data can't
+ * be zero-copy (i.e. bools or non-UINT32 dictionary indices). This custom deleter
+ * is used to maintain ownership over the data allocated since a `cudf::table_view`
+ * doesn't hold ownership.
+ */
+struct custom_view_deleter {
+  explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
+  void operator()(table_view* ptr) const { delete ptr; }
+  owned_columns_t owned_mem_;
+};
+
+/**
+ * @brief typedef for a unique_ptr to a `cudf::table_view` with custom deleter
+ * 
+ */
+using unique_table_view_t = std::unique_ptr<cudf::table_view, custom_view_deleter>;
+
+/**
+ * @brief Create `cudf::table_view` from given `ArrowDeviceArray` and `ArrowSchema`
+ *
+ * Constructs a non-owning `cudf::table_view` using `ArrowDeviceArray` and `ArrowSchema`,
+ * throwing an exception if the `device_type` of the `ArrowDeviceArray` is not ARROW_DEVICE_CUDA,
+ * ARROW_DEVICE_CUDA_HOST or ARROW_DEVICE_CUDA_MANAGED, i.e. it must be accessible to CUDA.
+ * Because the resulting `cudf::table_view` will not own the data, the `ArrowDeviceArray`
+ * must be kept alive for the lifetime of the result. It is the responsibility of callers
+ * to ensure they call the release callback on the `ArrowDeviceArray` after it is no longer
+ * needed, and that the `cudf::table_view` is not accessed after this happens.
+ *
+ * If the type of the `ArrowSchema` / `ArrowDeviceArray` is a struct, then each of the
+ * children will be the columns of the resulting table_view. For all other types, a
+ * `cudf::table_view` will be returned with a single column representing the input.
+ *
+ * @note The custom deleter used for the unique_ptr to the table_view maintains ownership
+ * over any memory which is allocated, such as converting boolean columns from the bitmap
+ * used by Arrow to the 1-byte per value for cudf or casting dictionary indicies if they
+ * aren't already uint32 (which libcudf uses).
+ * 
+ * @note If the input `ArrowDeviceArray` contained a non-null sync_event it is assumed
+ * to be a `cudaEvent_t*` and the passed in stream will have `cudaStreamWaitEvent` called
+ * on it with the event. This function, however, will not explicitly synchronize on the
+ * stream.
+ * 
+ * @param schema `ArrowSchema` pointer to object describing the type of the device array
+ * @param input `ArrowDeviceArray` pointer to object owning the Arrow data
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to perform any allocations
+ * @return `cudf::table_view` generated from given Arrow data
+ */
+unique_table_view_t from_arrow_device(
+  const ArrowSchema* schema,
+  const ArrowDeviceArray* input,
+  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf
