@@ -701,7 +701,7 @@ std::vector<range> find_table_splits(table_view const& input,
                          segmented_sizes.d_begin(),
                          segmented_sizes.d_end(),
                          segmented_sizes.d_begin(),
-                         cumulative_size_sum{});
+                         cumulative_size_plus{});
   segmented_sizes.device_to_host_sync(stream);
 
   return find_splits<cumulative_size>(segmented_sizes, input.num_rows(), size_limit);

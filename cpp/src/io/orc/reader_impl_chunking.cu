@@ -444,7 +444,7 @@ void reader_impl::global_preprocess(read_mode mode)
                          total_stripe_sizes.d_begin(),
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
-                         cumulative_size_sum{});
+                         cumulative_size_plus{});
   total_stripe_sizes.device_to_host_sync(_stream);
 
   auto const load_limit = [&] {
@@ -695,7 +695,7 @@ void reader_impl::load_data(read_mode mode)
                          stripe_decomp_sizes.d_begin(),
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),
-                         cumulative_size_sum{});
+                         cumulative_size_plus{});
   stripe_decomp_sizes.device_to_host_sync(_stream);
 
   auto const decode_limit = [&] {

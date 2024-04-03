@@ -231,7 +231,7 @@ struct cumulative_size_and_row {
 /**
  * @brief Functor to sum up cumulative data.
  */
-struct cumulative_size_sum {
+struct cumulative_size_plus {
   __device__ cumulative_size operator()(cumulative_size const& a, cumulative_size const& b) const
   {
     return cumulative_size{a.count + b.count, a.size_bytes + b.size_bytes};
