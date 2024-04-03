@@ -439,13 +439,19 @@ class SpillableBuffer(ExposureTrackedBuffer):
             return header, frames
 
     def copy(self, deep: bool = True) -> Self:
-        if deep and self.is_spilled:
+        from cudf.core.buffer.utils import acquire_spill_lock
+
+        if not deep:
+            return super().copy(deep=False)
+
+        if self.is_spilled:
             # In this case, we copy the host data directly instead of moving
             # to device memory first
             owner = self._owner._from_host_memory(bytearray(self.memoryview()))
             return self.__class__(owner=owner, offset=0, size=owner.size)
         else:
-            return super().copy(deep=deep)
+            with acquire_spill_lock():
+                return super().copy(deep=deep)
 
     @property
     def __cuda_array_interface__(self) -> dict:

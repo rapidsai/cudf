@@ -726,3 +726,35 @@ def test_spill_on_demand(manager: SpillManager):
 
         with pytest.raises(MemoryError, match="Maximum pool size exceeded"):
             as_buffer(data=rmm.DeviceBuffer(size=1024))
+
+
+def test_spilling_and_copy_on_write(manager: SpillManager):
+    with cudf.option_context("copy_on_write", True):
+        a: SpillableBuffer = as_buffer(data=rmm.DeviceBuffer(size=10))
+
+        b = a.copy(deep=False)
+        assert a.owner == b.owner
+        a.spill(target="cpu")
+        assert a.is_spilled
+        assert b.is_spilled
+
+        # Write access trigger copy of `a` into `b` but since `a` is spilled
+        # the copy is done in host memory and `a` remains spilled.
+        b.get_ptr(mode="write")
+        assert a.is_spilled
+        assert not b.is_spilled
+
+        # Deep copy of the spilled buffer `a`
+        b = a.copy(deep=True)
+        assert a.owner != b.owner
+        assert a.is_spilled
+        assert b.is_spilled
+        a.spill(target="gpu")
+        assert not a.is_spilled
+        assert b.is_spilled
+
+        # Deep copy of the unspilled buffer `a`
+        b = a.copy(deep=True)
+        assert a.spillable
+        assert not a.is_spilled
+        assert not b.is_spilled
