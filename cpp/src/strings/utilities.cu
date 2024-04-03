@@ -69,6 +69,9 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
   return strings_vector;
 }
 
+/**
+ * @copydoc cudf::strings::detail::create_offsets_child_column
+ */
 std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
                                                     size_type count,
                                                     rmm::cuda_stream_view stream,

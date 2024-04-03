@@ -203,25 +203,21 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
   auto itr = thrust::constant_iterator<std::string_view>(
     "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
   auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
+  auto view  = cudf::column_view(input);
   std::vector<cudf::column_view> input_cols;
-  for (int i = 0; i < 10; ++i) {  // 2500MB > 2GB
-    input_cols.push_back(input);
+  std::vector<cudf::size_type> splits;
+  int const multiplier = 10;
+  for (int i = 0; i < multiplier; ++i) {  // 2500MB > 2GB
+    input_cols.push_back(view);
+    splits.push_back(view.size() * (i + 1));
   }
+  splits.pop_back();  // remove last entry
   auto result = cudf::concatenate(input_cols);
   auto sv     = cudf::strings_column_view(result->view());
-  EXPECT_EQ(sv.size(), 50'000'000);
+  EXPECT_EQ(sv.size(), view.size() * multiplier);
   EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
 
   // verify results in sections
-  auto splits = std::vector<cudf::size_type>({5'000'000,
-                                              10'000'000,
-                                              15'000'000,
-                                              20'000'000,
-                                              25'000'000,
-                                              30'000'000,
-                                              35'000'000,
-                                              40'000'000,
-                                              45'000'000});
   auto sliced = cudf::split(result->view(), splits);
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
@@ -234,9 +230,9 @@ TEST_F(StringColumnTest, ConcatenateLargeStrings)
     input_cols.push_back(result->view());  // large column
     result = cudf::concatenate(input_cols);
     sv     = cudf::strings_column_view(result->view());
-    EXPECT_EQ(sv.size(), 55'000'000);
+    EXPECT_EQ(sv.size(), view.size() * (multiplier + 1));
     EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
-    splits.push_back(50'000'000);
+    splits.push_back(view.size() * multiplier);
     sliced = cudf::split(result->view(), splits);
     for (auto c : sliced) {
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);

@@ -34,7 +34,8 @@ namespace detail {
  * given the number of bytes to address.
  *
  * @param chars_bytes Number of bytes for the chars in the strings column
- * @param count Number of elements for the offsets column
+ * @param count Number of elements for the offsets column.
+ *              This is the number of rows in the parent strings column +1.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return The offsets child column for a strings column
