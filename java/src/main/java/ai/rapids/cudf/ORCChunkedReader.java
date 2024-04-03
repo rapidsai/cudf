@@ -30,15 +30,33 @@ public class ORCChunkedReader implements AutoCloseable {
    * Construct the reader instance from read limits, output row granularity,
    * and a file already loaded in a memory buffer.
    *
-   * @param chunkSizeByteLimit   Limit on total number of bytes to be returned per read,
-   *                             or 0 if there is no limit.
-   * @param passReadLimit        Limit on the amount of memory used for reading and decompressing data,
-   *                             or 0 if there is no limit.
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
+   * @param passReadLimit      Limit on the amount of memory used for reading and decompressing data,
+   *                           or 0 if there is no limit.
+   * @param opts               The options for ORC reading.
+   * @param buffer             Raw ORC file content.
+   * @param offset             The starting offset into buffer.
+   * @param len                The number of bytes to parse the given buffer.
+   */
+  public ORCChunkedReader(long chunkSizeByteLimit, long passReadLimit,
+      ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
+    handle = create(chunkSizeByteLimit, passReadLimit,
+        opts.getIncludeColumnNames(), null, buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns());
+    if (handle == 0) {
+      throw new IllegalStateException("Cannot create native chunked ORC reader object.");
+    }
+  }
+
+  /**
+   * Construct a chunked ORC reader instance, similar to
+   * {@link ORCChunkedReader#ORCChunkedReader(long, long, ORCOptions, HostMemoryBuffer, long, long)},
+   * with an additional parameter to control the granularity of the output table.
+   *
    * @param outputRowGranularity The change step in number of rows in the output table.
-   * @param opts                 The options for ORC reading.
-   * @param buffer               Raw ORC file content.
-   * @param offset               The starting offset into buffer.
-   * @param len                  The number of bytes to parse the given buffer.
+   * @see ORCChunkedReader#ORCChunkedReader(long, long, ORCOptions, HostMemoryBuffer, long, long)
    */
   public ORCChunkedReader(long chunkSizeByteLimit, long passReadLimit, long outputRowGranularity,
       ORCOptions opts, HostMemoryBuffer buffer, long offset, long len) {
@@ -46,7 +64,6 @@ public class ORCChunkedReader implements AutoCloseable {
         opts.getIncludeColumnNames(), null, buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
         opts.getDecimal128Columns());
-
     if (handle == 0) {
       throw new IllegalStateException("Cannot create native chunked ORC reader object.");
     }
@@ -110,19 +127,30 @@ public class ORCChunkedReader implements AutoCloseable {
   /**
    * Create a native chunked ORC reader object on heap and return its memory address.
    *
-   * @param chunkSizeByteLimit   Limit on total number of bytes to be returned per read,
-   *                             or 0 if there is no limit.
-   * @param passReadLimit        Limit on the amount of memory used for reading and decompressing
-   *                             data or 0 if there is no limit.
+   * @param chunkSizeByteLimit Limit on total number of bytes to be returned per read,
+   *                           or 0 if there is no limit.
+   * @param passReadLimit      Limit on the amount of memory used for reading and decompressing
+   *                           data or 0 if there is no limit.
+   * @param filterColumnNames  Name of the columns to read, or an empty array if we want to read all.
+   * @param filePath           the path of the file to read, or null if no path should be read.
+   * @param bufferAddrs        The address of a buffer to read from, or 0 if we are not using that buffer.
+   * @param length             The length of the buffer to read from.
+   * @param usingNumPyTypes    Whether the parser should implicitly promote TIMESTAMP
+   *                           columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
+   * @param timeUnit           return type of TimeStamp in units
+   * @param decimal128Columns  name of the columns which are read as Decimal128 rather than Decimal64
+   */
+  private static native long create(long chunkSizeByteLimit, long passReadLimit,
+      String[] filterColumnNames, String filePath, long bufferAddrs, long length,
+      boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
+
+  /**
+   * Create a native chunked ORC reader object, similar to
+   * {@link ORCChunkedReader#create(long, long, String[], String, long, long, boolean, int, String[])},
+   * with an additional parameter to control the granularity of the output table.
+   *
    * @param outputRowGranularity The change step in number of rows in the output table.
-   * @param filterColumnNames    Name of the columns to read, or an empty array if we want to read all.
-   * @param filePath             the path of the file to read, or null if no path should be read.
-   * @param bufferAddrs          The address of a buffer to read from, or 0 if we are not using that buffer.
-   * @param length               The length of the buffer to read from.
-   * @param usingNumPyTypes      Whether the parser should implicitly promote TIMESTAMP
-   *                             columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
-   * @param timeUnit             return type of TimeStamp in units
-   * @param decimal128Columns    name of the columns which are read as Decimal128 rather than Decimal64
+   * @see ORCChunkedReader#create(long, long, String[], String, long, long, boolean, int, String[])
    */
   private static native long create(long chunkSizeByteLimit, long passReadLimit, long outputRowGranularity,
       String[] filterColumnNames, String filePath, long bufferAddrs, long length,

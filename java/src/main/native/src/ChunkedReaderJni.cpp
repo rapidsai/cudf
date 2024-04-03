@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
  */
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <cudf/column/column.hpp>
@@ -160,12 +161,12 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ParquetChunkedReader_close(JNIEnv *en
 // Chunked ORC reader JNI
 //
 
-// This function should take all the parameters that `Table.readORC` takes,
-// plus three more parameters: `chunk_read_limit`, `pass_read_limit`, `output_granularity`.
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
-    JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit, jlong output_granularity,
-    jobjectArray filter_col_names, jstring inp_file_path, jlong buffer, jlong buffer_length,
-    jboolean using_numpy_Types, jint unit, jobjectArray dec128_col_names) {
+namespace {
+jlong create_chunked_orc_reader(JNIEnv *env, jlong chunk_read_limit, jlong pass_read_limit,
+                                std::optional<jlong> output_granularity,
+                                jobjectArray filter_col_names, jstring inp_file_path, jlong buffer,
+                                jlong buffer_length, jboolean using_numpy_Types, jint unit,
+                                jobjectArray dec128_col_names) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inp_file_path, "Input file or buffer must be supplied", 0);
@@ -202,11 +203,39 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
                                .decimal128_columns(n_dec128_col_names.as_cpp_vector())
                                .build();
 
-    return reinterpret_cast<jlong>(new cudf::io::chunked_orc_reader(
-        static_cast<std::size_t>(chunk_read_limit), static_cast<std::size_t>(pass_read_limit),
-        static_cast<std::size_t>(output_granularity), read_opts));
+    if (output_granularity) {
+      return reinterpret_cast<jlong>(new cudf::io::chunked_orc_reader(
+          static_cast<std::size_t>(chunk_read_limit), static_cast<std::size_t>(pass_read_limit),
+          static_cast<std::size_t>(output_granularity.value()), read_opts));
+    }
+    return reinterpret_cast<jlong>(
+        new cudf::io::chunked_orc_reader(static_cast<std::size_t>(chunk_read_limit),
+                                         static_cast<std::size_t>(pass_read_limit), read_opts));
   }
   CATCH_STD(env, 0);
+}
+} // namespace
+
+// This function should take all the parameters that `Table.readORC` takes,
+// plus two more parameters: `chunk_read_limit` and `pass_read_limit`.
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
+    JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit,
+    jobjectArray filter_col_names, jstring inp_file_path, jlong buffer, jlong buffer_length,
+    jboolean using_numpy_Types, jint unit, jobjectArray dec128_col_names) {
+  return create_chunked_orc_reader(env, chunk_read_limit, pass_read_limit, std::nullopt,
+                                   filter_col_names, inp_file_path, buffer, buffer_length,
+                                   using_numpy_Types, unit, dec128_col_names);
+}
+
+// This function should take all the parameters that `Table.readORC` takes,
+// plus three more parameters: `chunk_read_limit`, `pass_read_limit`, `output_granularity`.
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ORCChunkedReader_create(
+    JNIEnv *env, jclass, jlong chunk_read_limit, jlong pass_read_limit, jlong output_granularity,
+    jobjectArray filter_col_names, jstring inp_file_path, jlong buffer, jlong buffer_length,
+    jboolean using_numpy_Types, jint unit, jobjectArray dec128_col_names) {
+  return create_chunked_orc_reader(env, chunk_read_limit, pass_read_limit, output_granularity,
+                                   filter_col_names, inp_file_path, buffer, buffer_length,
+                                   using_numpy_Types, unit, dec128_col_names);
 }
 
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_ORCChunkedReader_hasNext(JNIEnv *env, jclass,
