@@ -220,6 +220,7 @@ void update_chunk_encodings(std::vector<Encoding>& encodings, uint32_t enc_mask)
  *
  * @param chunk_meta The `ColumnChunkMetaData` struct for the column chunk
  * @param ck The column chunk to summarize stats for
+ * @param is_v2 True if V2 page headers are used
  */
 void update_chunk_encoding_stats(ColumnChunkMetaData& chunk_meta,
                                  EncColumnChunk const& ck,
