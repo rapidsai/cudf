@@ -370,20 +370,7 @@ class SpillableBufferOwner(BufferOwner):
 
 
 class SpillableBuffer(ExposureTrackedBuffer):
-    """A slice of a spillable buffer
-
-    This buffer applies the slicing and then delegates all
-    operations to its owning buffer.
-
-    Parameters
-    ----------
-    owner : SpillableBufferOwner
-        The owner of the view
-    offset : int
-        Memory offset into the owning buffer
-    size : int
-        Size of the view (in bytes)
-    """
+    """A slice of a spillable buffer"""
 
     _owner: SpillableBufferOwner
 
