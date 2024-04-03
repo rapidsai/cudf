@@ -37,8 +37,6 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-#include <iostream>
-
 struct FromArrowDeviceTest : public cudf::test::BaseFixture {};
 
 template <typename T>
