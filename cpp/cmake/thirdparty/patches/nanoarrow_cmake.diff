@@ -4,16 +4,16 @@ index 8714c70..6a9e505 100644
 +++ b/CMakeLists.txt
 @@ -49,7 +49,6 @@ else()
  endif()
- 
+
  option(NANOARROW_CODE_COVERAGE "Enable coverage reporting" OFF)
 -add_library(coverage_config INTERFACE)
- 
+
  # Avoids a warning about timestamps on downloaded files (prefer new policy
  # if available))
 @@ -59,6 +58,7 @@ endif()
- 
+
  configure_file(src/nanoarrow/nanoarrow_config.h.in generated/nanoarrow_config.h)
- 
+
 +include(GNUInstallDirs)
  if(NANOARROW_BUNDLE)
    # Combine all headers into amalgamation/nanoarrow.h in the build directory
@@ -26,13 +26,13 @@ index 8714c70..6a9e505 100644
 +
      target_compile_definitions(nanoarrow PUBLIC "$<$<CONFIG:Debug>:NANOARROW_DEBUG>")
    endif()
- 
+
 @@ -120,10 +122,11 @@ if(NANOARROW_BUNDLE)
  else()
    add_library(nanoarrow src/nanoarrow/array.c src/nanoarrow/schema.c
                          src/nanoarrow/array_stream.c src/nanoarrow/utils.c)
 +  add_library(nanoarrow::nanoarrow ALIAS nanoarrow)
- 
+
    target_include_directories(nanoarrow
                               PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
 -                                    $<INSTALL_INTERFACE:include>)
@@ -43,7 +43,7 @@ index 8714c70..6a9e505 100644
 @@ -154,13 +157,49 @@ else()
      endif()
    endif()
- 
+
 -  install(TARGETS nanoarrow DESTINATION lib)
 +  install(TARGETS nanoarrow
 +          DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -92,7 +92,7 @@ index 8714c70..6a9e505 100644
 +    endif()
 +  endforeach()
  endif()
- 
+
  # Always build integration test if building tests
 @@ -171,7 +210,7 @@ if(NANOARROW_BUILD_TESTS OR NANOARROW_BUILD_INTEGRATION_TESTS)
                src/nanoarrow/integration/c_data_integration.cc)
@@ -102,10 +102,10 @@ index 8714c70..6a9e505 100644
 +                                    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
    target_link_libraries(nanoarrow_c_data_integration PRIVATE nanoarrow nlohmann_json)
  endif()
- 
+
 @@ -215,34 +254,18 @@ if(NANOARROW_BUILD_TESTS)
                   src/nanoarrow/integration/c_data_integration_test.cc)
- 
+
    if(NANOARROW_CODE_COVERAGE)
 -    target_compile_options(coverage_config INTERFACE -O0 -g --coverage)
 -    target_link_options(coverage_config INTERFACE --coverage)
@@ -113,7 +113,7 @@ index 8714c70..6a9e505 100644
 +    target_compile_options(nanoarrow PUBLIC -O0 -g --coverage)
 +    target_link_options(nanoarrow PUBLIC --coverage)
    endif()
- 
+
 -  target_link_libraries(utils_test
 -                        nanoarrow
 -                        gtest_main
@@ -147,7 +147,7 @@ index 8714c70..6a9e505 100644
 +                        nlohmann_json::nlohmann_json)
    target_link_libraries(c_data_integration_test nanoarrow nanoarrow_c_data_integration
                          gtest_main)
- 
+
 diff --git a/cmake/config.cmake.in b/cmake/config.cmake.in
 new file mode 100644
 index 0000000..021dc31
