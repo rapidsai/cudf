@@ -10,10 +10,6 @@ import pyarrow.fs as pa_fs
 import pytest
 
 import dask_cudf
-from dask_cudf.tests.utils import skip_dask_expr
-
-# No dask-expr support
-pytestmark = skip_dask_expr()
 
 moto = pytest.importorskip("moto", minversion="3.1.6")
 boto3 = pytest.importorskip("boto3")
@@ -111,7 +107,7 @@ def test_read_csv(s3_base, s3so):
         s3_base=s3_base, bucket="daskcsv", files={"a.csv": b"a,b\n1,2\n3,4\n"}
     ):
         df = dask_cudf.read_csv(
-            "s3://daskcsv/*.csv", chunksize="50 B", storage_options=s3so
+            "s3://daskcsv/*.csv", blocksize="50 B", storage_options=s3so
         )
         assert df.a.sum().compute() == 4
 

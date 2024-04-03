@@ -257,14 +257,12 @@ class StringMethods(ColumnMethods):
     @overload
     def cat(
         self, sep: Optional[str] = None, na_rep: Optional[str] = None
-    ) -> str:
-        ...
+    ) -> str: ...
 
     @overload
     def cat(
         self, others, sep: Optional[str] = None, na_rep: Optional[str] = None
-    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]:
-        ...
+    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]: ...
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
