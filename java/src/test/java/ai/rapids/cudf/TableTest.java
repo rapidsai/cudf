@@ -1707,7 +1707,7 @@ public class TableTest extends CudfTestBase {
 
     try (HostMemoryBuffer hostBuf = hostMemoryAllocator.allocate(len)) {
       hostBuf.setBytes(0, buffer, 0, len);
-      try (ORCChunkedReader reader = new ORCChunkedReader(240000, 0, 100000,
+      try (ORCChunkedReader reader = new ORCChunkedReader(0, 2 * 1024 * 1024, 10000,
           ORCOptions.DEFAULT, hostBuf, 0, len)) {
         int numChunks = 0;
         long totalRows = 0;
