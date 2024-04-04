@@ -450,9 +450,9 @@ class SpillableBuffer(ExposureTrackedBuffer):
             # modified.
             owner = self._owner._from_host_memory(self.memoryview())
             return self.__class__(owner=owner, offset=0, size=owner.size)
-        else:
-            with acquire_spill_lock():
-                return super().copy(deep=deep)
+
+        with acquire_spill_lock():
+            return super().copy(deep=deep)
 
     @property
     def __cuda_array_interface__(self) -> dict:

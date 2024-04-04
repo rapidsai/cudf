@@ -437,13 +437,13 @@ def get_global_manager() -> Optional[SpillManager]:
 def set_spill_on_demand_globally() -> None:
     """Enable spill on demand in the current global spill manager.
 
-    Warning, this modify the current RMM memory resource. A memory resource
-    to handle out-of-memory errors are pushed on the RMM memory resource stack.
+    Warning: this modifies the current RMM memory resource. A memory resource
+    to handle out-of-memory errors is pushed onto the RMM memory resource stack.
 
     Raises
     ------
     ValueError
-        If no global spill manager exist (spilling is disable).
+        If no global spill manager exists (spilling is disabled).
     ValueError
         If a failure callback resource is already in the resource stack.
     """
@@ -473,14 +473,14 @@ def set_spill_on_demand_globally() -> None:
 def spill_on_demand_globally():
     """Context to enable spill on demand temporary.
 
-    Warning, this modify the current RMM memory resource. A memory resource
-    to handle out-of-memory errors are pushed on the RMM memory resource stack
+    Warning: this modifies the current RMM memory resource. A memory resource
+    to handle out-of-memory errors is pushed onto the RMM memory resource stack
     when entering the context and popped again when exiting.
 
     Raises
     ------
     ValueError
-        If no global spill manager exist (spilling is disable).
+        If no global spill manager exists (spilling is disabled).
     ValueError
         If a failure callback resource is already in the resource stack.
     ValueError
