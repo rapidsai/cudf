@@ -1220,9 +1220,9 @@ class ParquetDatasetWriter:
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.dir_: Optional[
-                tempfile.TemporaryDirectory
-            ] = tempfile.TemporaryDirectory()
+            self.dir_: Optional[tempfile.TemporaryDirectory] = (
+                tempfile.TemporaryDirectory()
+            )
             self.path = self.dir_.name
         else:
             self.fs_meta = {}
