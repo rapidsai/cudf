@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "io/parquet/parquet.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -26,6 +25,8 @@
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/unary.hpp>
+
+#include <src/io/parquet/parquet.hpp>
 
 #include <fstream>
 
