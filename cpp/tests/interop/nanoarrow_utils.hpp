@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/interop/detail/arrow.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -24,6 +25,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <nanoarrow/nanoarrow.hpp>
 
 // no-op allocator/deallocator to set into ArrowArray buffers that we don't
 // want to own their buffers.
@@ -66,10 +69,13 @@ std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> p
   arr->length     = view.size();
   arr->null_count = view.null_count();
   ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
+    cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
   ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
-  ArrowArrayBuffer(arr, 1)->data = const_cast<uint8_t*>(view.data<uint8_t>());
+  ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(T) * view.size();
+  ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(view.data<uint8_t>());
 }
 
 // populate an ArrowArray with boolean data by generating the appropriate
@@ -110,6 +116,8 @@ std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(ArrowArray* ar
   arr->length     = view.size();
   arr->null_count = view.null_count();
   ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
+    cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
 
@@ -123,7 +131,8 @@ std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(ArrowArray* ar
         delete buf;
       },
       new std::unique_ptr<rmm::device_buffer>(std::move(bitmask.first))));
-  ArrowArrayBuffer(arr, 1)->data = ptr;
+  ArrowArrayBuffer(arr, 1)->size_bytes = cudf::bitmask_allocation_size_bytes(view.size());
+  ArrowArrayBuffer(arr, 1)->data       = ptr;
 }
 
 // populate an ArrowArray by copying the string data and constructing the offsets
@@ -161,14 +170,24 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
   arr->length     = view.size();
   arr->null_count = view.null_count();
   ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
+    cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
 
   cudf::strings_column_view sview{view};
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
-  ArrowArrayBuffer(arr, 1)->data = const_cast<uint8_t*>(sview.offsets().data<uint8_t>());
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 2), noop_alloc);
-  ArrowArrayBuffer(arr, 2)->data = const_cast<uint8_t*>(view.data<uint8_t>());
+  if (view.size() > 0) {
+    ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+    ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(int32_t) * sview.offsets().size();
+    ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(sview.offsets().data<uint8_t>());
+    ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 2), noop_alloc);
+    ArrowArrayBuffer(arr, 2)->size_bytes = sview.chars_size(cudf::get_default_stream());
+    ArrowArrayBuffer(arr, 2)->data       = const_cast<uint8_t*>(view.data<uint8_t>());
+  } else {
+    auto zero          = rmm::device_scalar<int32_t>(0, cudf::get_default_stream());
+    const uint8_t* ptr = reinterpret_cast<uint8_t*>(zero.data());
+    nanoarrow::BufferInitWrapped(ArrowArrayBuffer(arr, 1), std::move(zero), ptr, 4);
+  }
 }
 
 // populate a dictionary ArrowArray by delegating the copying of the indices
@@ -181,6 +200,24 @@ void get_nanoarrow_dict_array(ArrowArray* arr,
 {
   get_nanoarrow_array<KEY_TYPE>(arr->dictionary, keys);
   get_nanoarrow_array<IND_TYPE>(arr, ind, validity);
+}
+
+template <typename KEY_TYPE, typename IND_TYPE>
+void populate_dict_from_col(ArrowArray* arr, cudf::dictionary_column_view dview)
+{
+  arr->length     = dview.size();
+  arr->null_count = dview.null_count();
+  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
+    cudf::bitmask_allocation_size_bytes(dview.size());
+  ArrowArrayValidityBitmap(arr)->buffer.data =
+    const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(dview.null_mask()));
+
+  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(IND_TYPE) * dview.indices().size();
+  ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(dview.indices().data<uint8_t>());
+
+  populate_from_col<KEY_TYPE>(arr->dictionary, dview.keys());
 }
 
 // populate a list ArrowArray by copying the offsets and data buffers

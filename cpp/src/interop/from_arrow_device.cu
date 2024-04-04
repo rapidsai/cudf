@@ -15,6 +15,8 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/interop.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -104,17 +106,12 @@ struct dispatch_to_cudf_column {
   {
     size_type const num_rows = input->length;
     size_type const offset   = input->offset;
-    auto const has_nulls     = skip_mask ? false : input->null_count > 0;
     bitmask_type const* null_mask =
-      has_nulls ? reinterpret_cast<bitmask_type const*>(input->buffers[0]) : nullptr;
+      skip_mask ? nullptr : reinterpret_cast<bitmask_type const*>(input->buffers[0]);
     auto data_buffer = input->buffers[1];
-    return std::make_tuple<column_view, owned_columns_t>({type,
-                                                          num_rows,
-                                                          data_buffer,
-                                                          null_mask,
-                                                          static_cast<size_type>(input->null_count),
-                                                          static_cast<size_type>(offset)},
-                                                         {});
+    return std::make_tuple<column_view, owned_columns_t>(
+      {type, num_rows, data_buffer, null_mask, static_cast<size_type>(input->null_count), offset},
+      {});
   }
 };
 
@@ -140,14 +137,20 @@ std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<boo
   rmm::mr::device_memory_resource* mr)
 {
   if (input->length == 0) {
-    return std::make_tuple<column_view, owned_columns_t>({type, 0, nullptr, nullptr, 0}, {});
+    return std::make_tuple<column_view, owned_columns_t>(
+      {type,
+       0,
+       nullptr,
+       skip_mask ? nullptr : reinterpret_cast<bitmask_type const*>(input->buffers[0]),
+       0},
+      {});
   }
   auto out_col         = mask_to_bools(reinterpret_cast<bitmask_type const*>(input->buffers[1]),
                                input->offset,
                                input->offset + input->length,
                                stream,
                                mr);
-  auto const has_nulls = skip_mask ? false : input->null_count > 0;
+  auto const has_nulls = skip_mask ? false : input->buffers[0] != nullptr;
   if (has_nulls) {
     auto out_mask =
       cudf::detail::copy_bitmask(reinterpret_cast<bitmask_type const*>(input->buffers[0]),
@@ -174,21 +177,26 @@ std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<cud
   rmm::mr::device_memory_resource* mr)
 {
   if (input->length == 0) {
-    return std::make_tuple<column_view, owned_columns_t>({type, 0, nullptr, nullptr, 0}, {});
+    return std::make_tuple<column_view, owned_columns_t>(
+      {type,
+       0,
+       nullptr,
+       skip_mask ? nullptr : reinterpret_cast<bitmask_type const*>(input->buffers[0]),
+       0},
+      {});
   }
 
   auto offsets_view = column_view{data_type(type_id::INT32),
-                                  static_cast<size_type>(input->length) + 1,
+                                  static_cast<size_type>(input->offset + input->length) + 1,
                                   input->buffers[1],
                                   nullptr,
                                   0,
-                                  static_cast<size_type>(input->offset)};
+                                  0};
   return std::make_tuple<column_view, owned_columns_t>(
     {type,
      static_cast<size_type>(input->length),
      input->buffers[2],
-     skip_mask || input->null_count <= 0 ? nullptr
-                                         : reinterpret_cast<bitmask_type const*>(input->buffers[0]),
+     skip_mask ? nullptr : reinterpret_cast<bitmask_type const*>(input->buffers[0]),
      static_cast<size_type>(input->null_count),
      static_cast<size_type>(input->offset),
      {offsets_view}},
@@ -227,11 +235,12 @@ std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<cud
   }();
 
   column_view indices_view = column_view{dict_indices_type,
-                                         static_cast<size_type>(input->length),
+                                         static_cast<size_type>(input->offset + input->length),
                                          input->buffers[1],
                                          nullptr,
                                          0,
-                                         static_cast<size_type>(input->offset)};
+                                         0};
+
   // need to cast the indices to uint32 instead of just using them as-is
   if (dict_indices_type != data_type{type_id::UINT32}) {
     // there should not be any nulls with indices, so we can just be very simple here
@@ -303,11 +312,11 @@ std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<cud
   rmm::mr::device_memory_resource* mr)
 {
   auto offsets_view = column_view{data_type(type_id::INT32),
-                                  static_cast<size_type>(input->length) + 1,
+                                  static_cast<size_type>(input->offset + input->length + 1),
                                   input->buffers[1],
                                   nullptr,
                                   0,
-                                  static_cast<size_type>(input->offset)};
+                                  0};
 
   ArrowSchemaView child_schema_view;
   NANOARROW_THROW_NOT_OK(
@@ -316,10 +325,16 @@ std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<cud
   auto [child_view, owned] =
     get_column(&child_schema_view, input->children[0], child_type, false, stream, mr);
 
+  // in the scenario where we were sliced and there are more elements in the child_view
+  // than can be referenced by the sliced offsets, we need to slice the child_view
+  // so that when `get_sliced_child` is called, we still produce the right result
+  auto max_child_offset = cudf::detail::get_value<int32_t>(offsets_view, input->offset + input->length, stream);
+  child_view            = cudf::slice(child_view, {0, max_child_offset}, stream).front();
+
   return std::make_tuple<column_view, owned_columns_t>(
     {type,
      static_cast<size_type>(input->length),
-     nullptr,
+     rmm::device_buffer{0, stream, mr}.data(),
      reinterpret_cast<bitmask_type const*>(input->buffers[0]),
      static_cast<size_type>(input->null_count),
      static_cast<size_type>(input->offset),
@@ -369,7 +384,7 @@ unique_table_view_t from_arrow_device(ArrowSchemaView* schema,
       [&owned_mem, &stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
         ArrowSchemaView view;
         NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
-        auto type              = arrow_to_cudf_type(&view);
+        auto type = arrow_to_cudf_type(&view);
         auto [out_view, owned] = get_column(&view, child, type, false, stream, mr);
         if (owned_mem.empty()) {
           owned_mem = std::move(owned);
