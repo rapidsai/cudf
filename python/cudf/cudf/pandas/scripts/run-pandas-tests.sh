@@ -34,8 +34,7 @@ PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
 --ignore=tests/scalar \
 --ignore=tests/series/test_arithmetic.py \
 --ignore=tests/tslibs/test_parsing.py \
---ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py"
+--ignore=tests/io/parser/common/test_read_errors.py"
 
 mkdir -p pandas-testing
 cd pandas-testing

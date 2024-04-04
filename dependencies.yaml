@@ -733,6 +733,7 @@ dependencies:
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
           - pytest-reportlog
           # Clipboard tests
+          - qt
           - pytest-qt
           - pyside2
   test_python_cudf_pandas:
