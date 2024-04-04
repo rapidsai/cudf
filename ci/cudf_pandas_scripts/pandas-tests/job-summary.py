@@ -37,9 +37,10 @@ pass_rate_change = abs(pr_passed - main_passed) / main_passed * 100
 rate_change_type = "a decrease" if pr_passed < main_passed else "an increase"
 
 comment = (
+    "Merging this PR would result in "
     f"{pr_passed}/{pr_total} ({passing_percentage:.2f}%) "
     "Pandas tests passing, "
-    f"{rate_change_type} in the test pass rate by "
+    f"{rate_change_type} by "
     f"{pass_rate_change:.2f}%. "
     f"Trunk stats: {main_passed}/{main_total}."
 )

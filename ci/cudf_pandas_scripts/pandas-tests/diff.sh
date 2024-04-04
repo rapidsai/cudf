@@ -24,6 +24,6 @@ aws s3 cp $PR_ARTIFACT pr-results.json
 python -m pip install pandas tabulate
 python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-results.json | tee summary.txt >> "$GITHUB_STEP_SUMMARY"
 
-COMMENT=$(head -1 summary.txt)
+COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by|an increase by) \d+\.\d+%')
 echo "$COMMENT"
 echo "{\"context\":\"Pandas tests\", \"description\":\"$COMMENT\", \"state\":\"success\"}" > gh-status.json
