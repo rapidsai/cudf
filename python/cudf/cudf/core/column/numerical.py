@@ -104,7 +104,10 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _clear_cache(self):
         super()._clear_cache()
-        del self.nan_count
+        try:
+            del self.nan_count
+        except AttributeError:
+            pass
 
     def __contains__(self, item: ScalarLike) -> bool:
         """
