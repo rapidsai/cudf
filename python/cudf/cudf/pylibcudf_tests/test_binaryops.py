@@ -134,6 +134,25 @@ def make_test(binop_lhs_ty, binop_rhs_ty, binop_out_ty, binary_operator):
     return (binop_lhs_ty, binop_rhs_ty, binop_out_ty, fail)
 
 
+def _test_binaryop_inner(test, columns, pyop, cuop):
+    binop_lhs_ty, binop_rhs_ty, binop_out_ty, fail = test
+    lhs = columns[binop_lhs_ty]
+    rhs = columns[binop_rhs_ty]
+    pylibcudf_outty = dtype_to_pylibcudf_type(binop_out_ty)
+
+    if not fail:
+        expect_data = pyop(
+            plc.interop.to_arrow(lhs).to_numpy(),
+            plc.interop.to_arrow(rhs).to_numpy(),
+        ).astype(binop_out_ty)
+        expect = pa.array(expect_data)
+        got = plc.binaryop.binary_operation(lhs, rhs, cuop, pylibcudf_outty)
+        assert_column_eq(got, expect)
+    else:
+        with pytest.raises(TypeError):
+            plc.binaryop.binary_operation(lhs, rhs, cuop, pylibcudf_outty)
+
+
 @pytest.fixture(scope="module")
 def add_tests(binop_lhs_ty, binop_rhs_ty, binop_out_ty):
     return make_test(
@@ -454,25 +473,6 @@ def invalid_binary_tests(binop_lhs_ty, binop_rhs_ty, binop_out_ty):
         binop_out_ty,
         plc.binaryop.BinaryOperator.INVALID_BINARY,
     )
-
-
-def _test_binaryop_inner(test, columns, pyop, cuop):
-    binop_lhs_ty, binop_rhs_ty, binop_out_ty, fail = test
-    lhs = columns[binop_lhs_ty]
-    rhs = columns[binop_rhs_ty]
-    pylibcudf_outty = dtype_to_pylibcudf_type(binop_out_ty)
-
-    if not fail:
-        expect_data = pyop(
-            plc.interop.to_arrow(lhs).to_numpy(),
-            plc.interop.to_arrow(rhs).to_numpy(),
-        ).astype(binop_out_ty)
-        expect = pa.array(expect_data)
-        got = plc.binaryop.binary_operation(lhs, rhs, cuop, pylibcudf_outty)
-        assert_column_eq(got, expect)
-    else:
-        with pytest.raises(TypeError):
-            plc.binaryop.binary_operation(lhs, rhs, cuop, pylibcudf_outty)
 
 
 def test_add(add_tests, columns):
