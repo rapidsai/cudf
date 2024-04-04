@@ -214,7 +214,7 @@ jobs:
           REPO_NAME: ${{ github.repository }}
           ATTEMPTS: ${{ github.run_attempt }}
         run: |
-          JOB_ID=$(gh api repos/$REPO_NAME/actions/runs/$WORKFLOW_RUN_ID/jobs --jq '.jobs[] | select(.name == "echo_job") | .id')
+          JOB_ID=$(gh api repos/$REPO_NAME/actions/runs/$WORKFLOW_RUN_ID/jobs --jq '.jobs[] | select(.name == "pandas-tests-diff") | .id')
           CONTENT_JSON=$(echo $ARTIFACT_CONTENT | jq .)
           CUSTOM_CONTEXT=$(echo $CONTENT_JSON | jq -r .context)
           CUSTOM_DESCRIPTION=$(echo $CONTENT_JSON | jq -r .description)
