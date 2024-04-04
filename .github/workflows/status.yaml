@@ -1,0 +1,66 @@
+name: Custom GH Status from Workflow Artifacts
+
+on:
+  workflow_run:
+    workflows: ["pr"]
+    types:
+      - completed
+
+jobs:
+  process_artifacts:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gh-status
+          path: downloaded_artifacts/
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Read artifact JSON
+        id: read_artifact
+        run: |
+          CONTENT=$(cat downloaded_artifacts/gh-status.json)
+          echo "content=$CONTENT" >> $GITHUB_OUTPUT
+      - name: Create status
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_CONTENT: ${{ steps.read_artifact.outputs.content }}
+          COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
+          WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
+          REPO_NAME: ${{ github.repository }}
+          ATTEMPTS: ${{ github.event.workflow_run.run_attempt }}
+        run: |
+          JOB_ID=$(gh api repos/$REPO_NAME/actions/runs/$WORKFLOW_RUN_ID/jobs --paginate --jq '.jobs[] | select(.name == "pandas-tests-diff / build") | .id')
+          CONTENT_JSON=$(echo $ARTIFACT_CONTENT | jq .)
+          CUSTOM_CONTEXT=$(echo $CONTENT_JSON | jq -r .context)
+          CUSTOM_DESCRIPTION=$(echo $CONTENT_JSON | jq -r .description)
+          CUSTOM_TARGET_URL=$(echo $CONTENT_JSON | jq -r .target_url)
+          CUSTOM_STATE=$(echo $CONTENT_JSON | jq -r .state)
+
+          # Use default values if any field is missing
+          if [ -z "$CUSTOM_CONTEXT" ] || [ "$CUSTOM_CONTEXT" = "null" ]; then CUSTOM_CONTEXT="Custom CI Status Check"; fi
+          if [ -z "$CUSTOM_DESCRIPTION" ] || [ "$CUSTOM_DESCRIPTION" = "null" ]; then CUSTOM_DESCRIPTION="Custom CI Status description"; fi
+          # Default to Github action summary url page if not defined.
+          if [ -z "$CUSTOM_TARGET_URL" ] || [ "$CUSTOM_TARGET_URL" = "null" ]; then CUSTOM_TARGET_URL="https://github.com/$REPO_NAME/actions/runs/$WORKFLOW_RUN_ID/attempts/$ATTEMPTS#summary-$JOB_ID"; fi
+          if [ -z "$CUSTOM_STATE" ] || [ "$CUSTOM_STATE" = "null" ]; then CUSTOM_STATE="success"; fi
+
+
+          # Fetch the first job ID from the workflow run
+
+          echo "Job ID: $JOB_ID"
+          echo $CUSTOM_CONTEXT
+          echo $CUSTOM_DESCRIPTION
+          echo $CUSTOM_TARGET_URL
+          echo $CUSTOM_STATE
+          echo $ATTEMPTS
+          echo $JOB_ID
+
+          # Create status
+          curl -X POST -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/$REPO_NAME/statuses/$COMMIT_SHA" \
+            -d "{\"state\":\"$CUSTOM_STATE\",\"target_url\":\"$CUSTOM_TARGET_URL\",\"description\":\"$CUSTOM_DESCRIPTION\",\"context\":\"$CUSTOM_CONTEXT\"}"
+
+#abc1234
