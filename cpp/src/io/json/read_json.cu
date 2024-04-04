@@ -150,6 +150,99 @@ bool should_load_whole_source(json_reader_options const& opts, size_t source_siz
 }
 
 /**
+ * @brief Read from array of data sources into RMM buffer
+ *
+ * @param sources Array of data sources
+ * @param compression Compression format of source
+ * @param range_offset Number of bytes to skip from source start
+ * @param range_size Number of bytes to read from source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+void ingest_raw_input(std::unique_ptr<rmm::device_uvector<char>> &bufptr,
+                      host_span<std::unique_ptr<datasource>> sources,
+                                           compression_type compression,
+                                           size_t range_offset,
+                                           size_t range_size,
+                                           size_t &bufptr_offset,
+                                           rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  // We append a line delimiter between two files to make sure the last line of file i and the first
+  // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
+  // delimiter.
+  auto constexpr num_delimiter_chars = 1;
+  auto const num_extra_delimiters    = num_delimiter_chars * (sources.size() - 1);
+
+  if (compression == compression_type::NONE) {
+    std::vector<size_type> delimiter_map{};
+    std::vector<size_t> prefsum_source_sizes(sources.size());
+    std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
+    delimiter_map.reserve(sources.size());
+    size_t bytes_read = 0;
+    std::transform(sources.begin(), sources.end(), prefsum_source_sizes.begin(), [](const std::unique_ptr<datasource> &s) { return s->size(); });
+    std::inclusive_scan(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), prefsum_source_sizes.begin());
+    auto upper = std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
+    size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
+
+    range_size = !range_size || range_size > prefsum_source_sizes.back() ? prefsum_source_sizes.back() - range_offset : range_size;
+    range_offset = start_source ? range_offset - prefsum_source_sizes[start_source - 1] : range_offset;
+    for(size_t i = start_source; i < sources.size() && range_size; i++) {
+      if(sources[i]->is_empty()) continue;
+      auto data_size = std::min(sources[i]->size() - range_offset, range_size);
+      auto destination = reinterpret_cast<uint8_t*>(bufptr->data()) + bufptr_offset + bytes_read;
+      if (sources[i]->is_device_read_preferred(data_size)) {
+        bytes_read += sources[i]->device_read(range_offset, data_size, destination, stream);
+      } else {
+        h_buffers.emplace_back(sources[i]->host_read(range_offset, data_size));
+        auto const& h_buffer = h_buffers.back();
+        CUDF_CUDA_TRY(cudaMemcpyAsync(
+          destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
+        bytes_read += h_buffer->size();
+      }
+      range_offset = 0;
+      range_size -= bytes_read;
+      delimiter_map.push_back(bytes_read);
+      bytes_read += num_delimiter_chars;
+    }
+
+    // If this is a multi-file source, we scatter the JSON line delimiters between files
+    if (sources.size() > 1) {
+      static_assert(num_delimiter_chars == 1,
+                    "Currently only single-character delimiters are supported");
+      auto const delimiter_source = thrust::make_constant_iterator('\n');
+      auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
+        host_span<size_type const>{delimiter_map.data(), delimiter_map.size() - 1},
+        stream,
+        rmm::mr::get_current_device_resource());
+      thrust::scatter(rmm::exec_policy_nosync(stream),
+                      delimiter_source,
+                      delimiter_source + d_delimiter_map.size(),
+                      d_delimiter_map.data(),
+                      bufptr->data() + bufptr_offset);
+    }
+    bufptr_offset += bytes_read;
+  } 
+  else {
+    // Iterate through the user defined sources and read the contents into the local buffer
+    auto const total_source_size =
+      sources_size(sources, range_offset, range_size) + num_extra_delimiters;
+    auto buffer = std::vector<uint8_t>(total_source_size);
+    // Single read because only a single compressed source is supported
+    // Reading to host because decompression of a single block is much faster on the CPU
+    sources[0]->host_read(range_offset, total_source_size, buffer.data());
+    auto uncomp_data = decompress(compression, buffer);
+    CUDF_CUDA_TRY(cudaMemcpyAsync(bufptr->data() + bufptr_offset,
+                                  reinterpret_cast<char*>(uncomp_data.data()),
+                                  uncomp_data.size() * sizeof(char),
+                                  cudaMemcpyDefault,
+                                  stream.value()));
+    bufptr_offset += uncomp_data.size() * sizeof(char);
+  }
+  stream.synchronize();
+}
+
+
+/**
  * @brief Get the byte range between record starts and ends starting from the given range.
  *
  * if get_byte_range_offset == 0, then we can skip the first delimiter search
@@ -162,90 +255,62 @@ bool should_load_whole_source(json_reader_options const& opts, size_t source_siz
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return Byte range for parsing
  */
-auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
+datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(std::unique_ptr<rmm::device_uvector<char>> &&bufptr,
+                                host_span<std::unique_ptr<datasource>> sources,
                                 json_reader_options const& reader_opts,
                                 rmm::cuda_stream_view stream)
 {
+  auto geometric_mean         = [](double a, double b) { return std::pow(a * b, 0.5); };
+  auto find_first_delimiter = [&bufptr, &stream](size_t const start, size_t const end, char const delimiter) {
+    auto const first_delimiter_position = thrust::find(rmm::exec_policy(stream), bufptr->data() + start, bufptr->data() + end, delimiter);
+    return first_delimiter_position != bufptr->begin() + end ? first_delimiter_position - bufptr->begin() : -1;
+  };
+
   size_t const total_source_size = sources_size(sources, 0, 0);
-  rmm::device_uvector<char> merged(0, stream);
+  size_t chunk_size = reader_opts.get_byte_range_size();
+  size_t chunk_offset = reader_opts.get_byte_range_offset();
+  compression_type const reader_compression = reader_opts.get_compression();
+  constexpr int num_subchunks = 10;  // per chunk_size
+  /*
+   * NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
+   * 10kb) and the byte range size
+   */
+  size_t size_per_subchunk =
+    geometric_mean(reader_opts.get_byte_range_size() / num_subchunks, 10000);
 
-  rmm::device_uvector<char> cur_chunk_buf = ingest_raw_input(sources,
-                                                             reader_opts.get_compression(),
-                                                             reader_opts.get_byte_range_offset(),
-                                                             reader_opts.get_byte_range_size(),
-                                                             stream);
-  auto first_delim_pos                    = reader_opts.get_byte_range_offset() == 0
-                                              ? 0
-                                              : find_first_delimiter(cur_chunk_buf, '\n', stream);
+  if(!chunk_size || chunk_size > total_source_size - chunk_offset) chunk_size = total_source_size - chunk_offset;
+  bufptr = std::make_unique<rmm::device_uvector<char>>(chunk_size + 3 * size_per_subchunk , stream);
+  size_t bufptr_offset = 0;
+
+  ingest_raw_input(bufptr, sources,
+                               reader_compression,
+                               chunk_offset,
+                               chunk_size,
+                               bufptr_offset,
+                               stream);
+  auto first_delim_pos = chunk_offset == 0 ? 0 : find_first_delimiter(0, bufptr_offset, '\n');
   if (first_delim_pos == -1) {
-    return rmm::device_uvector<char>{0, stream};
-  } else if (!should_load_whole_source(reader_opts, sources[0]->size()) &&
-             cur_chunk_buf.back_element(stream) != '\n' &&
-             reader_opts.get_byte_range_offset() + reader_opts.get_byte_range_size() <
-               total_source_size) {
+    //return empty owning datasource buffer
+    auto empty_buf = rmm::device_uvector<char>(0, stream);
+    return datasource::owning_buffer<rmm::device_uvector<char>>(std::move(empty_buf), reinterpret_cast<uint8_t*>(empty_buf.data()), 0);
+  } 
+  else if(reader_opts.get_byte_range_size() > 0 && reader_opts.get_byte_range_size() < total_source_size - chunk_offset) {
     // Find next delimiter
-    /*
-     * NOTE: heuristic for choosing subchunk size: geometric mean of minimum subchunk size (set to
-     * 10kb) and the byte range size
-     */
     std::int64_t next_delim_pos = -1;
-    constexpr int num_subchunks = 10;  // per byte_range_size
-    auto geometric_mean         = [](double a, double b) { return std::pow(a * b, 0.5); };
-    size_t size_per_subchunk =
-      geometric_mean(reader_opts.get_byte_range_size() / num_subchunks, 10000);
-    size_t next_subchunk_start =
-      reader_opts.get_byte_range_offset() + reader_opts.get_byte_range_size();
-    std::vector<rmm::device_uvector<char>> subchunk_buffers;
-
+    size_t next_subchunk_start = chunk_offset + chunk_size;
     while (next_subchunk_start < total_source_size && next_delim_pos == -1) {
-      subchunk_buffers.emplace_back(ingest_raw_input(
-        sources, reader_opts.get_compression(), next_subchunk_start, size_per_subchunk, stream));
-      next_delim_pos = find_first_delimiter(subchunk_buffers.back(), '\n', stream);
+      ingest_raw_input(bufptr, sources, reader_compression, next_subchunk_start, size_per_subchunk, bufptr_offset, stream);
+      next_delim_pos = find_first_delimiter(bufptr_offset - size_per_subchunk, bufptr_offset, '\n');
       if (next_delim_pos == -1) { next_subchunk_start += size_per_subchunk; }
     }
     if (next_delim_pos == -1)
       next_delim_pos = total_source_size - (next_subchunk_start - size_per_subchunk);
 
-    merged.resize(
-      cur_chunk_buf.size() + ((subchunk_buffers.size() - 1) * size_per_subchunk) + next_delim_pos,
-      stream);
-    size_t offset = cur_chunk_buf.size() - first_delim_pos;
-    if (subchunk_buffers.size() >= 3) {
-      std::vector<rmm::cuda_stream_view> copy_streams =
-        cudf::detail::fork_streams(stream, subchunk_buffers.size() - 1);
-      for (size_t i = 0; i < subchunk_buffers.size() - 1; i++) {
-        CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
-                                      subchunk_buffers[i].data(),
-                                      size_per_subchunk,
-                                      cudaMemcpyDeviceToDevice,
-                                      copy_streams[i]));
-        offset += size_per_subchunk;
-      }
-      cudf::detail::join_streams(copy_streams, stream);
-    } else if (subchunk_buffers.size() == 2) {
-      CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
-                                    subchunk_buffers[0].data(),
-                                    size_per_subchunk,
-                                    cudaMemcpyDeviceToDevice,
-                                    stream));
-      offset += size_per_subchunk;
-    }
-    CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data() + offset,
-                                  subchunk_buffers.back().data(),
-                                  next_delim_pos,
-                                  cudaMemcpyDeviceToDevice,
-                                  stream));
-  } else {
-    merged.resize(cur_chunk_buf.size() - first_delim_pos, stream);
+    auto *released_bufptr = bufptr.release();
+    return datasource::owning_buffer<rmm::device_uvector<char>>(std::move(*released_bufptr), reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos, released_bufptr->size() - first_delim_pos - next_delim_pos);
   }
-
-  CUDF_CUDA_TRY(cudaMemcpyAsync(merged.data(),
-                                cur_chunk_buf.data() + first_delim_pos,
-                                cur_chunk_buf.size() - first_delim_pos,
-                                cudaMemcpyDeviceToDevice,
-                                stream));
-  stream.synchronize();
-  return merged;
+  auto *released_bufptr = bufptr.release();
+  return datasource::owning_buffer<rmm::device_uvector<char>>(std::move(*released_bufptr), reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos, released_bufptr->size() - first_delim_pos);
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
@@ -273,22 +338,25 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  auto buffer = get_record_range_raw_input(sources, reader_opts, stream);
+  std::unique_ptr<rmm::device_uvector<char>> bufptr{};
+  datasource::owning_buffer<rmm::device_uvector<char>> bufview = get_record_range_raw_input(std::move(bufptr), sources, reader_opts, stream);
 
   // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
   // invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_single_quotes()) {
-    buffer =
-      normalize_single_quotes(std::move(buffer), stream, rmm::mr::get_current_device_resource());
+    normalize_single_quotes(bufview, stream, rmm::mr::get_current_device_resource());
   }
 
   // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
   // enabled, invoke pre-processing FST
   if (reader_opts.is_enabled_normalize_whitespace()) {
-    buffer =
-      normalize_whitespace(std::move(buffer), stream, rmm::mr::get_current_device_resource());
+    normalize_whitespace(bufview, stream, rmm::mr::get_current_device_resource());
   }
 
+  //TODO: not good - add implicit conversion from datasource to device_span
+  rmm::device_uvector<char> buffer(bufview.size(), stream);
+  CUDF_CUDA_TRY(cudaMemcpyAsync(buffer.data(), bufview.data(), bufview.size(), cudaMemcpyDeviceToDevice, stream.value()));
+  stream.synchronize();
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
   // For debug purposes, use host_parse_nested_json()
 }

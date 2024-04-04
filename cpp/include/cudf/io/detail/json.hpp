@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/io/json.hpp>
+#include <cudf/io/datasource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -59,7 +60,7 @@ void write_json(data_sink* sink,
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& inbuf,
+void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>>& inbuf,
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr);
 
@@ -70,7 +71,7 @@ rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& in
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to use for device memory allocation
  */
-rmm::device_uvector<char> normalize_whitespace(rmm::device_uvector<char>&& inbuf,
+void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& inbuf,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr);
 }  // namespace cudf::io::json::detail
