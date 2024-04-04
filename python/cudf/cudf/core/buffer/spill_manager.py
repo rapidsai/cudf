@@ -471,7 +471,7 @@ def set_spill_on_demand_globally() -> None:
 
 @contextmanager
 def spill_on_demand_globally():
-    """Context to enable spill on demand temporary.
+    """Context to enable spill on demand temporarily.
 
     Warning: this modifies the current RMM memory resource. A memory resource
     to handle out-of-memory errors is pushed onto the RMM memory resource stack
