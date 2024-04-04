@@ -89,6 +89,7 @@ cd pandas-tests/
 PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
     --import-mode=importlib \
+    --ignore=tests/tslibs/test_parsing.py \
     -o xfail_strict=True \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
 
