@@ -119,6 +119,7 @@ class BufferOwner(Serializable):
 
     def __init__(
         self,
+        *,
         ptr: int,
         size: int,
         owner: object,
@@ -176,7 +177,7 @@ class BufferOwner(Serializable):
             size = data.size
         else:
             ptr, size = get_ptr_and_size(data.__cuda_array_interface__)
-        return cls(ptr, size, owner=data, exposed=exposed)
+        return cls(ptr=ptr, size=size, owner=data, exposed=exposed)
 
     @classmethod
     def _from_host_memory(cls, data: Any) -> Self:
