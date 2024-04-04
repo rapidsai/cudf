@@ -22,6 +22,7 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
+# tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
 PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
 --ignore=tests/interchange/test_impl.py \
 --ignore=tests/window/test_dtypes.py \
@@ -33,7 +34,8 @@ PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
 --ignore=tests/scalar \
 --ignore=tests/series/test_arithmetic.py \
 --ignore=tests/tslibs/test_parsing.py \
---ignore=tests/io/parser/common/test_read_errors.py "
+--ignore=tests/io/parser/common/test_read_errors.py \
+--ignore=tests/io/test_clipboard.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -194,7 +196,7 @@ and not test_numpy_ufuncs_basic[nullable_float-deg2rad] \
 and not test_numpy_ufuncs_basic[nullable_float-rad2deg]"
 
 PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
-    -v -m "not single_cpu and not db and not clipboard" \
+    -v -m "not single_cpu and not db" \
     -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
     --import-mode=importlib \
     -o xfail_strict=True \
