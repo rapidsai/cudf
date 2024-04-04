@@ -330,11 +330,11 @@ TEST_F(ToArrowDeviceTest, EmptyTable)
   ArrowSchemaRelease(got_arrow_schema.get());
 
   auto got_arrow_device = cudf::to_arrow_device(std::move(*table));
-  // EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
-  //   EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
+  EXPECT_EQ(rmm::get_current_cuda_device().value(), got_arrow_device->device_id);
+  EXPECT_EQ(ARROW_DEVICE_CUDA, got_arrow_device->device_type);
 
-  // compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
-  // ArrowArrayRelease(&got_arrow_device->array);
+  compare_arrays(schema.get(), arr.get(), &got_arrow_device->array);
+  ArrowArrayRelease(&got_arrow_device->array);
 }
 
 TEST_F(ToArrowDeviceTest, DateTimeTable)
