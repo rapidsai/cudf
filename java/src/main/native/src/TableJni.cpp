@@ -2838,20 +2838,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftSemiJoinGa
       });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftSemiJoinSize(
-    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jlong j_left_condition,
-    jlong j_right_condition, jlong j_condition, jboolean j_nulls_equal) {
-  return cudf::jni::mixed_join_size(
-      env, j_left_keys, j_right_keys, j_left_condition, j_right_condition, j_condition,
-      j_nulls_equal,
-      [](cudf::table_view const &left_keys, cudf::table_view const &right_keys,
-         cudf::table_view const &left_condition, cudf::table_view const &right_condition,
-         cudf::ast::expression const &condition, cudf::null_equality nulls_equal) {
-        return cudf::mixed_left_semi_join_size(left_keys, right_keys, left_condition,
-                                               right_condition, condition, nulls_equal);
-      });
-}
-
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftSemiJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jlong j_left_condition,
     jlong j_right_condition, jlong j_condition, jboolean j_nulls_equal) {
@@ -2863,22 +2849,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftSemiJoinGatherMa
          cudf::ast::expression const &condition, cudf::null_equality nulls_equal) {
         return cudf::mixed_left_semi_join(left_keys, right_keys, left_condition, right_condition,
                                           condition, nulls_equal);
-      });
-}
-
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftSemiJoinGatherMapWithSize(
-    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jlong j_left_condition,
-    jlong j_right_condition, jlong j_condition, jboolean j_nulls_equal, jlong j_output_row_count,
-    jlong j_matches_view) {
-  auto size_info = cudf::jni::get_mixed_size_info(env, j_output_row_count, j_matches_view);
-  return cudf::jni::mixed_join_gather_single_map(
-      env, j_left_keys, j_right_keys, j_left_condition, j_right_condition, j_condition,
-      j_nulls_equal,
-      [&size_info](cudf::table_view const &left_keys, cudf::table_view const &right_keys,
-                   cudf::table_view const &left_condition, cudf::table_view const &right_condition,
-                   cudf::ast::expression const &condition, cudf::null_equality nulls_equal) {
-        return cudf::mixed_left_semi_join(left_keys, right_keys, left_condition, right_condition,
-                                          condition, nulls_equal, size_info);
       });
 }
 
@@ -2930,20 +2900,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_conditionalLeftAntiJoinGa
       });
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftAntiJoinSize(
-    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jlong j_left_condition,
-    jlong j_right_condition, jlong j_condition, jboolean j_nulls_equal) {
-  return cudf::jni::mixed_join_size(
-      env, j_left_keys, j_right_keys, j_left_condition, j_right_condition, j_condition,
-      j_nulls_equal,
-      [](cudf::table_view const &left_keys, cudf::table_view const &right_keys,
-         cudf::table_view const &left_condition, cudf::table_view const &right_condition,
-         cudf::ast::expression const &condition, cudf::null_equality nulls_equal) {
-        return cudf::mixed_left_anti_join_size(left_keys, right_keys, left_condition,
-                                               right_condition, condition, nulls_equal);
-      });
-}
-
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftAntiJoinGatherMap(
     JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jlong j_left_condition,
     jlong j_right_condition, jlong j_condition, jboolean j_nulls_equal) {
@@ -2955,22 +2911,6 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftAntiJoinGatherMa
          cudf::ast::expression const &condition, cudf::null_equality nulls_equal) {
         return cudf::mixed_left_anti_join(left_keys, right_keys, left_condition, right_condition,
                                           condition, nulls_equal);
-      });
-}
-
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_mixedLeftAntiJoinGatherMapWithSize(
-    JNIEnv *env, jclass, jlong j_left_keys, jlong j_right_keys, jlong j_left_condition,
-    jlong j_right_condition, jlong j_condition, jboolean j_nulls_equal, jlong j_output_row_count,
-    jlong j_matches_view) {
-  auto size_info = cudf::jni::get_mixed_size_info(env, j_output_row_count, j_matches_view);
-  return cudf::jni::mixed_join_gather_single_map(
-      env, j_left_keys, j_right_keys, j_left_condition, j_right_condition, j_condition,
-      j_nulls_equal,
-      [&size_info](cudf::table_view const &left_keys, cudf::table_view const &right_keys,
-                   cudf::table_view const &left_condition, cudf::table_view const &right_condition,
-                   cudf::ast::expression const &condition, cudf::null_equality nulls_equal) {
-        return cudf::mixed_left_anti_join(left_keys, right_keys, left_condition, right_condition,
-                                          condition, nulls_equal, size_info);
       });
 }
 

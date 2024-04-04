@@ -119,7 +119,7 @@ struct out_of_place_copy_range_dispatch {
   std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
   operator()(Args...)
   {
-    CUDF_FAIL("Unsupported type for out of place copy.");
+    CUDF_FAIL("Unsupported type for out of place copy.", cudf::data_type_error);
   }
 };
 

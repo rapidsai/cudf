@@ -193,7 +193,7 @@ class BufferOwner(Serializable):
         Parameters
         ----------
         data : Any
-            An object that represens host memory.
+            An object that represents host memory.
 
         Returns
         -------

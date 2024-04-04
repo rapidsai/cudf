@@ -81,6 +81,24 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
+/**
+ * @brief Return a copy of `input` replacing any `values_to_replace[i]`
+ * found with `replacement_values[i]`
+ *
+ * @param input The column to find and replace values
+ * @param values_to_replace The values to find
+ * @param replacement_values The corresponding replacement values
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Copy of `input` with specified values replaced
+ */
+std::unique_ptr<cudf::column> find_and_replace_all(
+  cudf::strings_column_view const& input,
+  cudf::strings_column_view const& values_to_replace,
+  cudf::strings_column_view const& replacement_values,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace strings
 }  // namespace cudf
