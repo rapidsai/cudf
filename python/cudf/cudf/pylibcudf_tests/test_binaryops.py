@@ -1,6 +1,8 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 
+import warnings
+
 import numpy as np
 import pyarrow as pa
 import pytest
@@ -225,8 +227,12 @@ def mod_tests(binop_lhs_ty, binop_rhs_ty, binop_out_ty):
 
 @pytest.fixture(scope="module")
 def pmod_tests(binop_lhs_ty, binop_rhs_ty, binop_out_ty):
-    # TODO
-    pass
+    return make_test(
+        binop_lhs_ty,
+        binop_rhs_ty,
+        binop_out_ty,
+        plc.binaryop.BinaryOperator.PMOD,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -509,12 +515,14 @@ def test_true_div(true_div_tests, columns):
 
 
 def test_floor_div(floor_div_tests, columns):
-    _test_binaryop_inner(
-        floor_div_tests,
-        columns,
-        np.floor_divide,
-        plc.binaryop.BinaryOperator.FLOOR_DIV,
-    )
+    with warnings.catch_warnings(record=True):
+        warnings.filterwarnings("ignore", message="divide by zero")
+        _test_binaryop_inner(
+            floor_div_tests,
+            columns,
+            np.floor_divide,
+            plc.binaryop.BinaryOperator.FLOOR_DIV,
+        )
 
 
 def test_mod(mod_tests, columns):
@@ -523,10 +531,40 @@ def test_mod(mod_tests, columns):
     )
 
 
+def test_pmod(pmod_tests, columns):
+    with warnings.catch_warnings(record=True):
+        warnings.filterwarnings("ignore", message="divide by zero")
+        warnings.filterwarnings("ignore", message="invalid value")
+        _test_binaryop_inner(
+            pmod_tests,
+            columns,
+            lambda x, y: (x % y + y) % x,
+            plc.binaryop.BinaryOperator.PMOD,
+        )
+
+
 def test_pow(pow_tests, columns):
     _test_binaryop_inner(
         pow_tests, columns, np.power, plc.binaryop.BinaryOperator.POW
     )
+
+
+def test_int_pow(int_pow_tests, columns):
+    _test_binaryop_inner(
+        int_pow_tests, columns, np.power, plc.binaryop.BinaryOperator.INT_POW
+    )
+
+
+def test_log_base(log_base_tests, columns):
+    with warnings.catch_warnings(record=True):
+        warnings.filterwarnings("ignore", message="divide by zero")
+        warnings.filterwarnings("ignore", message="invalid value")
+        _test_binaryop_inner(
+            log_base_tests,
+            columns,
+            lambda x, y: np.log(y) / np.log(x),
+            plc.binaryop.BinaryOperator.LOG_BASE,
+        )
 
 
 def test_shift_left(shift_left_tests, columns):
@@ -544,6 +582,17 @@ def test_shift_right(shift_right_tests, columns):
         columns,
         np.right_shift,
         plc.binaryop.BinaryOperator.SHIFT_RIGHT,
+    )
+
+
+def test_shift_right_unsigned(shift_right_unsigned_tests, columns):
+    _test_binaryop_inner(
+        shift_right_unsigned_tests,
+        columns,
+        lambda x, y: np.right_shift(
+            x.astype(np.int64), y.astype(np.int64)
+        ).astype(x.dtype),
+        plc.binaryop.BinaryOperator.SHIFT_RIGHT_UNSIGNED,
     )
 
 
