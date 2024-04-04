@@ -20,6 +20,7 @@ jobs:
       - conda-python-cudf-tests
       - conda-python-other-tests
       - conda-java-tests
+      - static-configure
       - conda-notebook-tests
       - docs-build
       - wheel-build-cudf
@@ -69,7 +70,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.06
     with:
       build_type: pull-request
-      test_script: "ci/test_python_cudf.sh"
+      script: "ci/test_python_cudf.sh"
   conda-python-other-tests:
     # Tests for dask_cudf, custreamz, cudf_kafka are separated for CI parallelism
     needs: conda-python-build
@@ -77,7 +78,7 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/conda-python-tests.yaml@branch-24.06
     with:
       build_type: pull-request
-      test_script: "ci/test_python_other.sh"
+      script: "ci/test_python_other.sh"
   conda-java-tests:
     needs: conda-cpp-build
     secrets: inherit
@@ -88,6 +89,16 @@ jobs:
       arch: "amd64"
       container_image: "rapidsai/ci-conda:latest"
       run_script: "ci/test_java.sh"
+  static-configure:
+    needs: checks
+    secrets: inherit
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@branch-24.06
+    with:
+      build_type: pull-request
+      # Use the wheel container so we can skip conda solves and since our
+      # primary static consumers (Spark) are not in conda anyway.
+      container_image: "rapidsai/ci-wheel:latest"
+      run_script: "ci/configure_cpp_static.sh"
   conda-notebook-tests:
     needs: conda-python-build
     secrets: inherit
@@ -114,7 +125,6 @@ jobs:
     uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@branch-24.06
     with:
       build_type: pull-request
-      build-2_28-wheels: "true"
       script: "ci/build_wheel_cudf.sh"
   wheel-tests-cudf:
     needs: wheel-build-cudf

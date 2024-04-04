@@ -2344,10 +2344,12 @@ def serialize_columns(columns) -> Tuple[List[dict], List]:
     """
     Return the headers and frames resulting
     from serializing a list of Column
+
     Parameters
     ----------
     columns : list
         list of Columns to serialize
+
     Returns
     -------
     headers : list
