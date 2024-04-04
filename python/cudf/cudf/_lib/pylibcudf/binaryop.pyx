@@ -84,3 +84,17 @@ cpdef Column binary_operation(
         raise ValueError(f"Invalid arguments {lhs} and {rhs}")
 
     return Column.from_libcudf(move(result))
+
+
+def _is_supported_binaryop(
+    DataType out,
+    DataType lhs,
+    DataType rhs,
+    binary_operator op
+):
+    return cpp_binaryop.is_supported_binaryop(
+        out.c_obj,
+        lhs.c_obj,
+        rhs.c_obj,
+        op
+    )
