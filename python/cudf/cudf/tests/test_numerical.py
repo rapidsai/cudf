@@ -5,8 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq, expect_warning_if
 from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes
 
 
@@ -267,12 +266,7 @@ def test_to_numeric_downcast_large_float_pd_bug(data, downcast):
     expected = pd.to_numeric(ps, downcast=downcast)
     got = cudf.to_numeric(gs, downcast=downcast)
 
-    if PANDAS_GE_150:
-        assert_eq(expected, got)
-    else:
-        # Pandas bug: https://github.com/pandas-dev/pandas/issues/19729
-        with pytest.raises(AssertionError, match="Series are different"):
-            assert_eq(expected, got)
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize(
@@ -350,12 +344,7 @@ def test_to_numeric_downcast_string_large_float(data, downcast):
         expected = pd.to_numeric(ps, downcast=downcast)
         got = cudf.to_numeric(gs, downcast=downcast)
 
-        if PANDAS_GE_150:
-            assert_eq(expected, got)
-        else:
-            # Pandas bug: https://github.com/pandas-dev/pandas/issues/19729
-            with pytest.raises(AssertionError, match="Series are different"):
-                assert_eq(expected, got)
+        assert_eq(expected, got)
     else:
         expected = pd.Series([np.inf, -np.inf])
         with pytest.warns(
@@ -383,8 +372,10 @@ def test_to_numeric_error(data, errors):
         ):
             cudf.to_numeric(data, errors=errors)
     else:
-        expect = pd.to_numeric(data, errors=errors)
-        got = cudf.to_numeric(data, errors=errors)
+        with expect_warning_if(errors == "ignore"):
+            expect = pd.to_numeric(data, errors=errors)
+        with expect_warning_if(errors == "ignore"):
+            got = cudf.to_numeric(data, errors=errors)
 
         assert_eq(expect, got)
 

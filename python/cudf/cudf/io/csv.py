@@ -1,5 +1,6 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+import warnings
 from collections import abc
 from io import BytesIO, StringIO
 
@@ -54,6 +55,13 @@ def read_csv(
     bytes_per_thread=None,
 ):
     """{docstring}"""
+
+    if delim_whitespace is not False:
+        warnings.warn(
+            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
+            "will be removed in a future version. Use ``sep='\\s+'`` instead",
+            FutureWarning,
+        )
 
     if use_python_file_object and bytes_per_thread is not None:
         raise ValueError(

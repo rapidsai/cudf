@@ -5,3 +5,4 @@ auto_merger: true
 branch_checker: true
 label_checker: true
 release_drafter: true
+forward_merger: true

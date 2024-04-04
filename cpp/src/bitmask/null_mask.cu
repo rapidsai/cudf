@@ -34,12 +34,11 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/extrema.h>
-
-#include <cub/cub.cuh>
 
 #include <algorithm>
 #include <numeric>

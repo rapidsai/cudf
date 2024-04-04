@@ -18,6 +18,12 @@ from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.missing import NA, NaT
 
 cimport cudf._lib.cpp.types as libcudf_types
+# We currently need this cimport because some of the implementations here
+# access the c_obj of the scalar, and because we need to be able to call
+# pylibcudf.Scalar.from_libcudf. Both of those are temporarily acceptable until
+# DeviceScalar is phased out entirely from cuDF Cython (at which point
+# cudf.Scalar will be directly backed by pylibcudf.Scalar).
+from cudf._lib cimport pylibcudf
 from cudf._lib.cpp.scalar.scalar cimport (
     duration_scalar,
     list_scalar,
@@ -92,7 +98,7 @@ cdef class DeviceScalar:
     # that from_unique_ptr is implemented is probably dereferencing this in an
     # invalid state. See what the best way to fix that is.
     def __cinit__(self, *args, **kwargs):
-        self.c_value = pylibcudf.Scalar()
+        self.c_value = pylibcudf.Scalar.__new__(pylibcudf.Scalar)
 
     def __init__(self, value, dtype):
         """
@@ -129,18 +135,29 @@ cdef class DeviceScalar:
         else:
             pa_type = pa.from_numpy_dtype(dtype)
 
-        pa_scalar = pa.scalar(value, type=pa_type)
+        if isinstance(pa_type, pa.ListType) and value is None:
+            # pyarrow doesn't correctly handle None values for list types, so
+            # we have to create this one manually.
+            # https://github.com/apache/arrow/issues/40319
+            pa_array = pa.array([None], type=pa_type)
+        else:
+            pa_array = pa.array([pa.scalar(value, type=pa_type)])
 
-        data_type = None
+        pa_table = pa.Table.from_arrays([pa_array], names=[""])
+        table = pylibcudf.interop.from_arrow(pa_table)
+
+        column = table.columns()[0]
         if isinstance(dtype, cudf.core.dtypes.DecimalDtype):
-            tid = pylibcudf.TypeId.DECIMAL128
             if isinstance(dtype, cudf.core.dtypes.Decimal32Dtype):
-                tid = pylibcudf.TypeId.DECIMAL32
+                column = pylibcudf.unary.cast(
+                    column, pylibcudf.DataType(pylibcudf.TypeId.DECIMAL32, -dtype.scale)
+                )
             elif isinstance(dtype, cudf.core.dtypes.Decimal64Dtype):
-                tid = pylibcudf.TypeId.DECIMAL64
-            data_type = pylibcudf.DataType(tid, -dtype.scale)
+                column = pylibcudf.unary.cast(
+                    column, pylibcudf.DataType(pylibcudf.TypeId.DECIMAL64, -dtype.scale)
+                )
 
-        self.c_value = pylibcudf.Scalar.from_arrow(pa_scalar, data_type)
+        self.c_value = pylibcudf.copying.get_element(column, 0)
         self._dtype = dtype
 
     def _to_host_scalar(self):
@@ -150,7 +167,7 @@ cdef class DeviceScalar:
         null_type = NaT if is_datetime or is_timedelta else NA
 
         metadata = gather_metadata({"": self.dtype})[0]
-        ps = self.c_value.to_arrow(metadata)
+        ps = pylibcudf.interop.to_arrow(self.c_value, metadata)
         if not ps.is_valid:
             return null_type
 
@@ -189,7 +206,7 @@ cdef class DeviceScalar:
         return self._to_host_scalar()
 
     cdef const scalar* get_raw_ptr(self) except *:
-        return self.c_value.c_obj.get()
+        return (<pylibcudf.Scalar> self.c_value).c_obj.get()
 
     cpdef bool is_valid(self):
         """
@@ -212,12 +229,13 @@ cdef class DeviceScalar:
         Construct a Scalar object from a unique_ptr<cudf::scalar>.
         """
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
+        # Note: This line requires pylibcudf to be cimported
         s.c_value = pylibcudf.Scalar.from_libcudf(move(ptr))
         s._set_dtype(dtype)
         return s
 
     @staticmethod
-    cdef DeviceScalar from_pylibcudf(pylibcudf.Scalar pscalar, dtype=None):
+    cdef DeviceScalar from_pylibcudf(pscalar, dtype=None):
         cdef DeviceScalar s = DeviceScalar.__new__(DeviceScalar)
         s.c_value = pscalar
         s._set_dtype(dtype)
@@ -349,9 +367,13 @@ def _create_proxy_nat_scalar(dtype):
     if dtype.char in 'mM':
         nat = dtype.type('NaT').astype(dtype)
         if dtype.type == np.datetime64:
-            _set_datetime64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
+            _set_datetime64_from_np_scalar(
+                (<pylibcudf.Scalar> result.c_value).c_obj, nat, dtype, True
+            )
         elif dtype.type == np.timedelta64:
-            _set_timedelta64_from_np_scalar(result.c_value.c_obj, nat, dtype, True)
+            _set_timedelta64_from_np_scalar(
+                (<pylibcudf.Scalar> result.c_value).c_obj, nat, dtype, True
+            )
         return result
     else:
         raise TypeError('NAT only valid for datetime and timedelta')

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 
+#include "io/fst/logical_stack.cuh"
+#include "io/fst/lookup_tables.cuh"
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
-
-#include <io/fst/logical_stack.cuh>
-#include <io/fst/lookup_tables.cuh>
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -1584,6 +1583,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                         thrust::make_discard_iterator(),
                                         fix_stack_of_excess_chars::start_state,
                                         stream);
+
+    // Make sure memory of the FST's lookup tables isn't freed before the FST completes
+    stream.synchronize();
   }
 
   constexpr auto max_translation_table_size =
@@ -2043,7 +2045,8 @@ void make_json_column(json_column& root_column,
  * options
  * @param stream The CUDA stream to which kernels are dispatched
  */
-auto parsing_options(cudf::io::json_reader_options const& options, rmm::cuda_stream_view stream)
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 

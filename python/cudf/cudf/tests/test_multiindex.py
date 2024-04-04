@@ -3,6 +3,8 @@
 """
 Test related to MultiIndex
 """
+
+import datetime
 import itertools
 import operator
 import pickle
@@ -13,11 +15,11 @@ from io import BytesIO
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_200
 from cudf.core.column import as_column
 from cudf.core.index import as_index
 from cudf.testing._utils import (
@@ -726,15 +728,8 @@ def test_multiindex_equals():
         }
     ],
 )
-@pytest.mark.parametrize(
-    "levels",
-    [[["2000-01-01", "2000-01-02", "2000-01-03"], ["A", "B", "C"]], None],
-)
-@pytest.mark.parametrize(
-    "codes", [[[0, 0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0, 0]], None]
-)
 @pytest.mark.parametrize("names", [["X", "Y"]])
-def test_multiindex_copy_sem(data, levels, codes, names):
+def test_multiindex_copy_sem(data, names):
     """Test semantic equality for MultiIndex.copy"""
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
@@ -743,12 +738,10 @@ def test_multiindex_copy_sem(data, levels, codes, names):
     pdf = pdf.groupby(["Date", "Symbol"], sort=True).mean()
 
     gmi = gdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        gmi_copy = gmi.copy(levels=levels, codes=codes, names=names)
+    gmi_copy = gmi.copy(names=names)
 
     pmi = pdf.index
-    with expect_warning_if(levels is not None or codes is not None):
-        pmi_copy = pmi.copy(levels=levels, codes=codes, names=names)
+    pmi_copy = pmi.copy(names=names)
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
@@ -1863,10 +1856,7 @@ def test_pickle_roundtrip_multiindex(names):
 def test_multiindex_type_methods(pidx, func):
     gidx = cudf.from_pandas(pidx)
 
-    if PANDAS_GE_200:
-        with pytest.warns(FutureWarning):
-            expected = getattr(pidx, func)()
-    else:
+    with pytest.warns(FutureWarning):
         expected = getattr(pidx, func)()
 
     with pytest.warns(FutureWarning):
@@ -1962,13 +1952,13 @@ def test_multiindex_to_frame_allow_duplicates(
 ):
     gidx = cudf.from_pandas(pidx)
 
-    if (
+    if name is None or (
         (
             len(pidx.names) != len(set(pidx.names))
             and not all(x is None for x in pidx.names)
         )
         and not allow_duplicates
-        and (name is None or name is no_default)
+        and name is no_default
     ):
         assert_exceptions_equal(
             pidx.to_frame,
@@ -1998,22 +1988,19 @@ def test_multiindex_to_frame_allow_duplicates(
         ) or (isinstance(name, list) and len(name) != len(set(name))):
             # cudf doesn't have the ability to construct dataframes
             # with duplicate column names
-            with expect_warning_if(name is None):
-                with pytest.raises(ValueError):
-                    gidx.to_frame(
-                        index=index,
-                        name=name,
-                        allow_duplicates=allow_duplicates,
-                    )
+            with pytest.raises(ValueError):
+                gidx.to_frame(
+                    index=index,
+                    name=name,
+                    allow_duplicates=allow_duplicates,
+                )
         else:
-            with expect_warning_if(name is None):
-                expected = pidx.to_frame(
-                    index=index, name=name, allow_duplicates=allow_duplicates
-                )
-            with expect_warning_if(name is None):
-                actual = gidx.to_frame(
-                    index=index, name=name, allow_duplicates=allow_duplicates
-                )
+            expected = pidx.to_frame(
+                index=index, name=name, allow_duplicates=allow_duplicates
+            )
+            actual = gidx.to_frame(
+                index=index, name=name, allow_duplicates=allow_duplicates
+            )
 
             assert_eq(expected, actual)
 
@@ -2134,3 +2121,35 @@ def test_multiindex_from_arrays(array):
 def test_multiindex_from_arrays_wrong_arg(arg):
     with pytest.raises(TypeError):
         cudf.MultiIndex.from_arrays(arg)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+    ],
+)
+def test_index_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    midx = cudf.MultiIndex(levels=[pa_array], codes=[[0]])
+    with pytest.raises(ValueError):
+        midx.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [1, 1.0, "a", datetime.datetime(2020, 1, 1), datetime.timedelta(1)],
+)
+def test_index_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    midx = cudf.MultiIndex(levels=[pa_array], codes=[[0]])
+    result = midx.to_pandas(arrow_type=True)
+    expected = pd.MultiIndex(
+        levels=[pd.arrays.ArrowExtensionArray(pa_array)], codes=[[0]]
+    )
+    pd.testing.assert_index_equal(result, expected)

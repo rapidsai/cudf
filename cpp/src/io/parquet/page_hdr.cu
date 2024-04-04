@@ -15,14 +15,14 @@
  */
 
 #include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 
-#include <thrust/tuple.h>
-
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/tuple.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -140,6 +140,21 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
   } while (rep_cnt || struct_depth);
 }
 
+__device__ inline bool is_nested(ColumnChunkDesc const& chunk)
+{
+  return chunk.max_nesting_depth > 1;
+}
+
+__device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
+{
+  return chunk.physical_type == BYTE_ARRAY;
+}
+
+__device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
+{
+  return chunk.physical_type == BOOLEAN;
+}
+
 /**
  * @brief Determine which decode kernel to run for the given page.
  *
@@ -151,7 +166,13 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
                                                    ColumnChunkDesc const& chunk)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
-
+  if (!is_string_col(chunk) && !is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+    if (page.encoding == Encoding::PLAIN) {
+      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
+    } else if (page.encoding == Encoding::PLAIN_DICTIONARY) {
+      return decode_kernel_mask::FIXED_WIDTH_DICT;
+    }
+  }
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
     return decode_kernel_mask::DELTA_BINARY;
   } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
@@ -385,18 +406,23 @@ void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
-      bs->page.chunk_row           = 0;
-      bs->page.num_rows            = 0;
-      bs->page.skipped_values      = -1;
-      bs->page.skipped_leaf_values = 0;
-      bs->page.str_bytes           = 0;
-      bs->page.temp_string_size    = 0;
-      bs->page.temp_string_buf     = nullptr;
-      bs->page.kernel_mask         = decode_kernel_mask::NONE;
+      bs->page.chunk_row            = 0;
+      bs->page.num_rows             = 0;
+      bs->page.skipped_values       = -1;
+      bs->page.skipped_leaf_values  = 0;
+      bs->page.str_bytes            = 0;
+      bs->page.str_bytes_from_index = 0;
+      bs->page.num_valids           = 0;
+      bs->page.start_val            = 0;
+      bs->page.end_val              = 0;
+      bs->page.has_page_index       = false;
+      bs->page.temp_string_size     = 0;
+      bs->page.temp_string_buf      = nullptr;
+      bs->page.kernel_mask          = decode_kernel_mask::NONE;
     }
     num_values    = bs->ck.num_values;
     page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
-    max_num_pages = page_info ? bs->ck.max_num_pages : 0;
+    max_num_pages = page_info ? (bs->ck.num_data_pages + bs->ck.num_dict_pages) : 0;
     values_found  = 0;
     __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
@@ -526,6 +552,7 @@ void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
+
   gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
     chunks, chunk_pages, num_chunks, error_code);
 }

@@ -179,8 +179,7 @@ auto build_json_string_column(int desired_bytes, int num_rows)
     desired_bytes, num_rows, {*d_books, *d_bicycles}, *d_book_pct, *d_misc_order, *d_store_order};
   auto [offsets, chars] = cudf::strings::detail::make_strings_children(
     jb, num_rows, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  return cudf::make_strings_column(
-    num_rows, std::move(offsets), std::move(chars->release().data.release()[0]), 0, {});
+  return cudf::make_strings_column(num_rows, std::move(offsets), chars.release(), 0, {});
 }
 
 void BM_case(benchmark::State& state, std::string query_arg)

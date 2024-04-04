@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/regex/regcomp.h>
-#include <strings/regex/regex.cuh>
+#include "strings/regex/regcomp.h"
+#include "strings/regex/regex.cuh"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/char_tables.hpp>

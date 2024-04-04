@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from string import ascii_lowercase
 
@@ -22,20 +22,13 @@ pytestmark = pytest.mark.spilling
         (range(10), [1, 2, 3, 4, 5] * 2),
     ],
 )
-def test_get_dummies(data, index):
-    gdf = cudf.DataFrame({"x": data}, index=index)
+@pytest.mark.parametrize("dtype", ["bool", "uint8"])
+def test_get_dummies(data, index, dtype):
     pdf = pd.DataFrame({"x": data}, index=index)
+    gdf = cudf.from_pandas(pdf)
 
-    encoded_expected = pd.get_dummies(pdf, prefix="test")
-    with pytest.warns(FutureWarning):
-        encoded_actual = cudf.get_dummies(gdf, prefix="test")
-
-    assert_eq(
-        encoded_expected,
-        encoded_actual,
-        check_dtype=len(data) != 0,
-    )
-    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
+    encoded_expected = pd.get_dummies(pdf, prefix="test", dtype=dtype)
+    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=dtype)
 
     assert_eq(
         encoded_expected,
@@ -55,8 +48,7 @@ def test_onehot_get_dummies_multicol(n_cols):
     pdf = pd.DataFrame(data)
 
     encoded_expected = pd.get_dummies(pdf, prefix="test")
-    with pytest.warns(FutureWarning):
-        encoded_actual = cudf.get_dummies(gdf, prefix="test")
+    encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
     assert_eq(encoded_expected, encoded_actual)
 
@@ -64,17 +56,13 @@ def test_onehot_get_dummies_multicol(n_cols):
 @pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize("dummy_na", [True, False])
 def test_onehost_get_dummies_dummy_na(nan_as_null, dummy_na):
-    pdf = pd.DataFrame({"a": [0, 1, np.nan]})
-    df = cudf.DataFrame.from_pandas(pdf, nan_as_null=nan_as_null)
+    df = cudf.DataFrame({"a": [0, 1, np.nan]}, nan_as_null=nan_as_null)
+    pdf = df.to_pandas(nullable=nan_as_null)
 
     expected = pd.get_dummies(pdf, dummy_na=dummy_na, columns=["a"])
-    with pytest.warns(FutureWarning):
-        actual = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
+    got = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
 
-    if dummy_na and nan_as_null:
-        actual = actual.rename(columns={"a_<NA>": "a_nan"})[expected.columns]
-
-    assert_eq(expected, actual)
+    assert_eq(expected, got, check_like=True)
 
 
 @pytest.mark.parametrize(
@@ -109,10 +97,9 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
     encoded_expected = pd.get_dummies(
         pdf, prefix=prefix, prefix_sep=prefix_sep
     )
-    with pytest.warns(FutureWarning):
-        encoded_actual = cudf.get_dummies(
-            gdf, prefix=prefix, prefix_sep=prefix_sep
-        )
+    encoded_actual = cudf.get_dummies(
+        gdf, prefix=prefix, prefix_sep=prefix_sep
+    )
 
     assert_eq(encoded_expected, encoded_actual)
 
@@ -126,8 +113,7 @@ def test_get_dummies_with_nan():
         df.to_pandas(nullable=True), dummy_na=True, columns=["a"]
     )
 
-    with pytest.warns(FutureWarning):
-        actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
+    actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
 
     assert_eq(expected, actual)
 
@@ -166,9 +152,6 @@ def test_get_dummies_array_like_with_nan():
         ser.to_pandas(nullable=True), dummy_na=True, prefix="a", prefix_sep="_"
     )
 
-    with pytest.warns(FutureWarning):
-        actual = cudf.get_dummies(
-            ser, dummy_na=True, prefix="a", prefix_sep="_"
-        )
+    actual = cudf.get_dummies(ser, dummy_na=True, prefix="a", prefix_sep="_")
 
     assert_eq(expected, actual)

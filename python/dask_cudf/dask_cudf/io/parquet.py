@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 import itertools
 import warnings
 from contextlib import ExitStack
@@ -73,7 +73,6 @@ class CudfEngine(ArrowDatasetEngine):
         dataset_kwargs=None,
         **kwargs,
     ):
-
         # Simplify row_groups if all None
         if row_groups == [None for path in paths]:
             row_groups = None
@@ -94,7 +93,6 @@ class CudfEngine(ArrowDatasetEngine):
         dataset_kwargs = dataset_kwargs or {}
         dataset_kwargs["partitioning"] = partitioning or "hive"
         with ExitStack() as stack:
-
             # Non-local filesystem handling
             paths_or_fobs = paths
             if not _is_local_filesystem(fs):
@@ -153,7 +151,6 @@ class CudfEngine(ArrowDatasetEngine):
             df = df[projected_columns]
 
         if partitions and partition_keys is None:
-
             # Use `HivePartitioning` by default
             ds = pa_ds.dataset(
                 paths,
@@ -175,7 +172,6 @@ class CudfEngine(ArrowDatasetEngine):
                 raise ValueError("Must pass partition sets")
 
             for i, (name, index2) in enumerate(partition_keys):
-
                 if len(partitions[i].keys):
                     # Build a categorical column from `codes` directly
                     # (since the category is often a larger dtype)
@@ -211,7 +207,6 @@ class CudfEngine(ArrowDatasetEngine):
         open_file_options=None,
         **kwargs,
     ):
-
         if columns is not None:
             columns = [c for c in columns]
         if isinstance(index, list):
@@ -241,7 +236,6 @@ class CudfEngine(ArrowDatasetEngine):
         # inform the user that the `read_parquet` partition
         # size is too large for the available memory
         try:
-
             # Assume multi-piece read
             paths = []
             rgs = []
@@ -249,7 +243,6 @@ class CudfEngine(ArrowDatasetEngine):
             dfs = []
 
             for i, piece in enumerate(pieces):
-
                 (path, row_group, partition_keys) = piece
                 row_group = None if row_group == [None] else row_group
 

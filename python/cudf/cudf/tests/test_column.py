@@ -81,7 +81,7 @@ def test_column_offset_and_size(pandas_input, offset, size):
         children=col.base_children,
     )
 
-    if cudf.api.types.is_categorical_dtype(col.dtype):
+    if cudf.api.types._is_categorical_dtype(col.dtype):
         assert col.size == col.codes.size
         assert col.size == (col.codes.data.size / col.codes.dtype.itemsize)
     elif cudf.api.types.is_string_dtype(col.dtype):
@@ -120,7 +120,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
     else:
         pd_series = series.to_pandas()
 
-    if cudf.api.types.is_categorical_dtype(col.dtype):
+    if cudf.api.types._is_categorical_dtype(col.dtype):
         # The cudf.Series is constructed from an already sliced column, whereas
         # the pandas.Series is constructed from the unsliced series and then
         # sliced, so the indexes should be different and we must ignore it.
@@ -333,7 +333,6 @@ def test_column_view_valid_string_to_numeric(data, to_dtype):
 
 
 def test_column_view_nulls_widths_even():
-
     data = [1, 2, None, 4, None]
     expect_data = [
         np.int32(val).view("float32") if val is not None else np.nan
@@ -361,7 +360,6 @@ def test_column_view_nulls_widths_even():
 
 @pytest.mark.parametrize("slc", [slice(1, 5), slice(0, 4), slice(2, 4)])
 def test_column_view_numeric_slice(slc):
-
     data = np.array([1, 2, 3, 4, 5], dtype="int32")
     sr = cudf.Series(data)
 

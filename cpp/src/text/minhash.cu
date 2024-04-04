@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <nvtext/minhash.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -31,15 +29,16 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <nvtext/minhash.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 
 #include <limits>
-
-#include <cuda/atomic>
 
 namespace nvtext {
 namespace detail {

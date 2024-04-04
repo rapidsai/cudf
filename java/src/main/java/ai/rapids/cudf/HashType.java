@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -23,9 +23,7 @@ package ai.rapids.cudf;
  */
 public enum HashType {
   IDENTITY(0),
-  MURMUR3(1),
-  HASH_SPARK_MURMUR3(2),
-  HASH_MD5(3);
+  MURMUR3(1);
 
   private static final HashType[] HASH_TYPES = HashType.values();
   final int nativeId;

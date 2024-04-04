@@ -23,10 +23,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/scan.h>
-
 #include <cuda_runtime.h>
 #include <nvtx3/nvToolsExt.h>
+#include <thrust/scan.h>
 
 /**
  * @brief Computes the size of each output row
@@ -155,8 +154,7 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
     *d_names, *d_visibilities, offsets.data(), chars.data());
 
   // create column from offsets and chars vectors (no copy is performed)
-  auto result =
-    cudf::make_strings_column(names.size(), std::move(offsets), std::move(chars), {}, 0);
+  auto result = cudf::make_strings_column(names.size(), std::move(offsets), chars.release(), {}, 0);
 
   // wait for all of the above to finish
   stream.synchronize();

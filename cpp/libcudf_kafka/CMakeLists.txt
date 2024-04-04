@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -13,7 +13,7 @@
 # =============================================================================
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../../fetch_rapids.cmake)
+include(../../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -22,7 +22,7 @@ include(rapids-find)
 
 project(
   CUDF_KAFKA
-  VERSION 24.02.02
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES CXX
 )
 

@@ -29,7 +29,6 @@
 #include <rmm/device_scalar.hpp>
 
 #include <cub/cub.cuh>
-
 #include <cuda_runtime.h>
 
 #include <memory>

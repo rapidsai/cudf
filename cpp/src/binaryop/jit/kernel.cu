@@ -24,8 +24,11 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <binaryop/jit/operation-udf.hpp>
 #include <cuda/std/type_traits>
+
+// clang-format off
+#include "binaryop/jit/operation-udf.hpp"
+// clang-format on
 
 namespace cudf {
 namespace binops {

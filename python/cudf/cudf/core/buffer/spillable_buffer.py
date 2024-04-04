@@ -154,7 +154,7 @@ class SpillableBufferOwner(BufferOwner):
         Parameters
         ----------
         data : Any
-            An object that represens host memory.
+            An object that represents host memory.
 
         Returns
         -------
@@ -226,7 +226,6 @@ class SpillableBufferOwner(BufferOwner):
                     color=_get_color_for_nvtx("SpillHtoD"),
                     domain="cudf_python-spill",
                 ):
-
                     dev_mem = rmm.DeviceBuffer.to_device(
                         self._ptr_desc.pop("memoryview")
                     )

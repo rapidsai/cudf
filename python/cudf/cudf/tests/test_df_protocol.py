@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.buffer import as_buffer
 from cudf.core.column import as_column, build_column
 from cudf.core.df_protocol import (
@@ -278,9 +277,5 @@ def test_NA_mixed_dtype():
     assert_df_unique_dtype_cols(data_mixed)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_150,
-    reason="Pandas versions < 1.5.0 do not support interchange protocol",
-)
 def test_from_cpu_df(pandas_df):
     cudf.from_dataframe(pandas_df, allow_copy=True)

@@ -1,14 +1,11 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.testing._utils import (
-    _create_pandas_series_float64_default,
-    assert_eq,
-)
+from cudf.testing._utils import assert_eq
 
 
 @pytest.mark.parametrize(
@@ -24,8 +21,7 @@ from cudf.testing._utils import (
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dropna_series(data, nulls, inplace):
-
-    psr = _create_pandas_series_float64_default(data)
+    psr = pd.Series(data)
 
     if len(data) > 0:
         if nulls == "one":
@@ -256,21 +252,12 @@ def test_dropna_index(data, dtype):
 
 @pytest.mark.parametrize("data", [[[1, None, 2], [None, None, 2]]])
 @pytest.mark.parametrize("how", ["all", "any"])
-def test_dropna_multiindex(data, how, request):
+def test_dropna_multiindex(data, how):
     pi = pd.MultiIndex.from_arrays(data)
     gi = cudf.from_pandas(pi)
 
     expect = pi.dropna(how)
     got = gi.dropna(how)
-
-    if how == "all" and "data0" in request.node.callspec.id:
-        request.applymarker(
-            pytest.mark.xfail(
-                reason="pandas NA value np.nan results in float type. "
-                "cuDF correctly retains int type "
-                "(https://github.com/pandas-dev/pandas/issues/44792)"
-            )
-        )
     assert_eq(expect, got)
 
 

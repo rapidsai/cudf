@@ -26,19 +26,24 @@
 namespace cudf {
 namespace strings {
 namespace detail {
+
 /**
- * @brief Create a chars column to be a child of a strings column.
+ * @brief Create an offsets column to be a child of a strings column
  *
- * This will return the properly sized column to be filled in by the caller.
+ * This will return the properly typed column to be filled in by the caller
+ * given the number of bytes to address.
  *
- * @param bytes Number of bytes for the chars column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return The chars child column for a strings column.
+ * @param chars_bytes Number of bytes for the chars in the strings column
+ * @param count Number of elements for the offsets column.
+ *              This is the number of rows in the parent strings column +1.
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return The offsets child column for a strings column
  */
-std::unique_ptr<column> create_chars_child_column(size_type bytes,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
+                                                    size_type count,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Creates a string_view vector from a strings column.
@@ -64,6 +69,15 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
  * @return size in bytes
  */
 int64_t get_offset64_threshold();
+
+/**
+ * @brief Checks if large strings is enabled
+ *
+ * This checks the setting in the environment variable LIBCUDF_LARGE_STRINGS_ENABLED.
+ *
+ * @return true if large strings are supported
+ */
+bool is_large_strings_enabled();
 
 /**
  * @brief Return a normalized offset value from a strings offsets column

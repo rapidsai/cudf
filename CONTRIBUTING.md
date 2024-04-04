@@ -217,7 +217,7 @@ cuda-gdb -ex r --args python <program_name>.py <program_arguments>
 ```
 
 ```bash
-cuda-memcheck python <program_name>.py <program_arguments>
+compute-sanitizer --tool memcheck python <program_name>.py <program_arguments>
 ```
 
 ### Device debug symbols

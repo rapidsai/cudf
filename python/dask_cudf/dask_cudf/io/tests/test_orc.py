@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2022, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import glob
 import os
@@ -12,6 +12,10 @@ from dask import dataframe as dd
 import cudf
 
 import dask_cudf
+from dask_cudf.tests.utils import skip_dask_expr
+
+# No dask-expr support
+pytestmark = skip_dask_expr()
 
 cur_dir = os.path.dirname(__file__)
 sample_orc = os.path.join(cur_dir, "data/orc/sample.orc")
@@ -85,7 +89,6 @@ def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
 
 
 def test_read_orc_first_file_empty(tmpdir):
-
     # Write a 3-file dataset where the first file is empty
     # See: https://github.com/rapidsai/cudf/issues/8011
     path = str(tmpdir)
@@ -112,7 +115,6 @@ def test_read_orc_first_file_empty(tmpdir):
     ],
 )
 def test_to_orc(tmpdir, dtypes, compression, compute):
-
     # Create cudf and dask_cudf dataframes
     df = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
     df = df.set_index("index").sort_index()

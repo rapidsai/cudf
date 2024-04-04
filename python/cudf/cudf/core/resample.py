@@ -1,6 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION &
-# AFFILIATES. All rights reserved.  SPDX-License-Identifier:
-# Apache-2.0
+# SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 # limitations under the License.
 
 import pickle
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -33,7 +34,6 @@ from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
 
 
 class _Resampler(GroupBy):
-
     grouping: "_ResampleGrouping"
 
     def __init__(self, obj, by, axis=None, kind=None):
@@ -73,7 +73,9 @@ class _Resampler(GroupBy):
         )
 
         # fill the gaps:
-        filled = upsampled.fillna(method=method)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            filled = upsampled.fillna(method=method)
 
         # filter the result to only include the values corresponding
         # to the bin labels:
@@ -118,7 +120,6 @@ class SeriesResampler(_Resampler, SeriesGroupBy):
 
 
 class _ResampleGrouping(_Grouping):
-
     bin_labels: cudf.core.index.Index
 
     def __init__(self, obj, by=None, level=None):

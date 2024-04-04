@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -42,8 +43,6 @@
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sort.h>
-
-#include <cuda/functional>
 
 #include <limits>
 #include <memory>
@@ -56,13 +55,8 @@ struct count_accessor {
   std::enable_if_t<std::is_integral_v<T>, cudf::size_type> operator()(rmm::cuda_stream_view stream)
   {
     using ScalarType = cudf::scalar_type_t<T>;
-#if 1
-    // TODO: temporary till cudf::scalar's value() function is marked as const
-    auto p_count = const_cast<ScalarType*>(static_cast<ScalarType const*>(this->p_scalar));
-#else
-    auto p_count = static_cast<ScalarType const*>(this->p_scalar);
-#endif
-    auto count = p_count->value(stream);
+    auto p_count     = static_cast<ScalarType const*>(this->p_scalar);
+    auto count       = p_count->value(stream);
     // static_cast is necessary due to bool
     CUDF_EXPECTS(static_cast<int64_t>(count) <= std::numeric_limits<cudf::size_type>::max(),
                  "count should not exceed the column size limit",

@@ -195,8 +195,8 @@ def test_serialize_range_index():
 
 
 def test_serialize_generic_index():
-    index = cudf.core.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.core.index.GenericIndex.deserialize(*index.serialize())
+    index = cudf.core.index.Index(cudf.Series(np.arange(10)))
+    outindex = cudf.core.index.Index.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
@@ -352,9 +352,9 @@ def test_serialize_seriesgroupby():
 
 
 def test_serialize_seriesresampler():
-    index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+    index = cudf.date_range(start="2001-01-01", periods=10, freq="1min")
     sr = cudf.Series(range(10), index=index)
-    re_sampler = sr.resample("3T")
+    re_sampler = sr.resample("3min")
     actual = re_sampler.sum()
     recreated = re_sampler.__class__.deserialize(*re_sampler.serialize())
     expected = recreated.sum()

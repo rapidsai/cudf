@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,9 +26,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <thrust/iterator/transform_iterator.h>
 
-#include <cuda/functional>
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -40,7 +41,7 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(not gather_map.has_nulls(), "gather_map contains nulls");
+  CUDF_EXPECTS(not gather_map.has_nulls(), "gather_map contains nulls", std::invalid_argument);
 
   // create index type normalizing iterator for the gather_map
   auto map_begin = indexalator_factory::make_input_iterator(gather_map);

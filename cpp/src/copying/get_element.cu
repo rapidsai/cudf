@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,8 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <stdexcept>
 
 namespace cudf {
 namespace detail {
@@ -193,7 +195,7 @@ std::unique_ptr<scalar> get_element(column_view const& input,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds");
+  CUDF_EXPECTS(index >= 0 and index < input.size(), "Index out of bounds", std::out_of_range);
   return type_dispatcher(input.type(), get_element_functor{}, input, index, stream, mr);
 }
 
