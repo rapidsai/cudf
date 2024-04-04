@@ -453,7 +453,6 @@ add_library(
   src/join/mixed_join_semi.cu
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
-  src/join/mixed_join_size_kernels_semi.cu
   src/join/semi_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
