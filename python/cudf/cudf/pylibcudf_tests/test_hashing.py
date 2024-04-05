@@ -6,7 +6,7 @@ import numpy as np
 import pyarrow as pa
 import pytest
 import xxhash
-from utils import assert_column_eq
+from utils import assert_column_eq, assert_table_eq
 
 import cudf._lib.pylibcudf as plc
 
@@ -137,6 +137,11 @@ def test_hash_column(pa_input_column, method):
     )
     plc_hasher = getattr(plc.hashing, method)
 
+    if isinstance(pa_input_column.type, (pa.ListType, pa.StructType)):
+        with pytest.raises(TypeError):
+            plc_hasher(plc_tbl)
+        return
+
     expect = pa.Array.from_pandas(
         pa_input_column.to_pandas().apply(_applyfunc)
     )
@@ -153,7 +158,7 @@ def test_sha_list_struct_err(all_types_input_table, dtype, method):
     plc_tbl = plc.interop.from_arrow(err_types)
     plc_hasher = getattr(plc.hashing, method)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         plc_hasher(plc_tbl)
 
 
@@ -201,7 +206,11 @@ def test_xxhash_64_string(xxhash_64_string_tbl):
     def hasher(x):
         return xxhash.xxh64(bytes(x, "utf-8")).intdigest()
 
-    expected = pa.from_pandas(xxhash_64_string_tbl.to_pandas().apply(hasher))
+    expected = pa.Array.from_pandas(
+        plc.interop.to_arrow(xxhash_64_string_tbl)
+        .to_pandas()[""]
+        .apply(hasher)
+    )
     got = plc.hashing.xxhash_64(xxhash_64_string_tbl, 0)
 
     assert_column_eq(got, expected)
@@ -219,4 +228,4 @@ def test_xxhash64_decimal(xxhash_64_decimal_tbl):
         type=pa.uint64(),
     )
     got = plc.hashing.xxhash_64(xxhash_64_decimal_tbl, 0)
-    assert_column_eq(got, expected)
+    assert_table_eq(got, expected)
