@@ -1716,6 +1716,8 @@ class DatetimeIndex(Index):
         name = _setdefault_name(data, name=name)["name"]
         data = column.as_column(data)
 
+        # TODO: Remove this if statement and fix tests now that
+        # there's timezone support
         if isinstance(data.dtype, pd.DatetimeTZDtype):
             raise NotImplementedError(
                 "cuDF does not yet support timezone-aware datetimes"
