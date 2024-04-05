@@ -28,6 +28,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
+#include <cudf/detail/interop.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
@@ -485,3 +486,162 @@ INSTANTIATE_TEST_CASE_P(FromArrowDeviceTest,
                                           std::make_tuple(0, 0),
                                           std::make_tuple(0, 3000),
                                           std::make_tuple(10000, 10000)));
+
+template <typename T>
+using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
+
+TEST_F(FromArrowDeviceTest, FixedPoint128Table)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6};
+    auto const col      = fp_wrapper<__int128_t>(data.cbegin(), data.cend(), scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    ArrowSchemaInit(input_schema->children[0]);
+    ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                              NANOARROW_TYPE_DECIMAL128,
+                              cudf::detail::max_precision<__int128_t>(),
+                              -scale);
+    ArrowSchemaSetName(input_schema->children[0], "a");
+
+    nanoarrow::UniqueArray input_array;
+    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    input_array->length = expected.num_rows();
+
+    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+
+    ArrowDeviceArray input_device_array;
+    input_device_array.device_id   = rmm::get_current_cuda_device().value();
+    input_device_array.device_type = ARROW_DEVICE_CUDA;
+    input_device_array.sync_event  = nullptr;
+    memcpy(&input_device_array.array, input_array.get(), sizeof(ArrowArray));
+
+    auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+  }
+}
+
+TEST_F(FromArrowDeviceTest, FixedPoint128TableLarge)
+{
+  using namespace numeric;
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto iota           = thrust::make_counting_iterator(1);
+    auto const data     = std::vector<__int128_t>(iota, iota + NUM_ELEMENTS);
+    auto const col      = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    ArrowSchemaInit(input_schema->children[0]);
+    ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                              NANOARROW_TYPE_DECIMAL128,
+                              cudf::detail::max_precision<__int128_t>(),
+                              -scale);
+    ArrowSchemaSetName(input_schema->children[0], "a");
+
+    nanoarrow::UniqueArray input_array;
+    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    input_array->length = expected.num_rows();
+
+    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+
+    ArrowDeviceArray input_device_array;
+    input_device_array.device_id   = rmm::get_current_cuda_device().value();
+    input_device_array.device_type = ARROW_DEVICE_CUDA;
+    input_device_array.sync_event  = nullptr;
+    memcpy(&input_device_array.array, input_array.get(), sizeof(ArrowArray));
+
+    auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+  }
+}
+
+TEST_F(FromArrowDeviceTest, FixedPoint128TableNulls)
+{
+  using namespace numeric;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto const data     = std::vector<__int128_t>{1, 2, 3, 4, 5, 6, 0, 0};
+    auto const validity = std::vector<int32_t>{1, 1, 1, 1, 1, 1, 0, 0};
+    auto const col =
+      fp_wrapper<__int128_t>({1, 2, 3, 4, 5, 6, 0, 0}, {1, 1, 1, 1, 1, 1, 0, 0}, scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    ArrowSchemaInit(input_schema->children[0]);
+    ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                              NANOARROW_TYPE_DECIMAL128,
+                              cudf::detail::max_precision<__int128_t>(),
+                              -scale);
+    ArrowSchemaSetName(input_schema->children[0], "a");
+
+    nanoarrow::UniqueArray input_array;
+    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    input_array->length = expected.num_rows();
+
+    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+
+    ArrowDeviceArray input_device_array;
+    input_device_array.device_id   = rmm::get_current_cuda_device().value();
+    input_device_array.device_type = ARROW_DEVICE_CUDA;
+    input_device_array.sync_event  = nullptr;
+    memcpy(&input_device_array.array, input_array.get(), sizeof(ArrowArray));
+
+    auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+  }
+}
+
+TEST_F(FromArrowDeviceTest, FixedPoint128TableNullsLarge)
+{
+  using namespace numeric;
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
+    auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
+    auto validity    = cudf::detail::make_counting_transform_iterator(0, every_other);
+    auto iota        = thrust::make_counting_iterator(1);
+    auto const data  = std::vector<__int128_t>(iota, iota + NUM_ELEMENTS);
+    auto const col = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, validity, scale_type{scale});
+    auto const expected = cudf::table_view({col});
+
+    nanoarrow::UniqueSchema input_schema;
+    ArrowSchemaInit(input_schema.get());
+    ArrowSchemaSetTypeStruct(input_schema.get(), 1);
+    ArrowSchemaInit(input_schema->children[0]);
+    ArrowSchemaSetTypeDecimal(input_schema->children[0],
+                              NANOARROW_TYPE_DECIMAL128,
+                              cudf::detail::max_precision<__int128_t>(),
+                              -scale);
+    ArrowSchemaSetName(input_schema->children[0], "a");
+
+    nanoarrow::UniqueArray input_array;
+    ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr);
+    input_array->length = expected.num_rows();
+
+    populate_from_col<__int128_t>(input_array->children[0], expected.column(0));
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+
+    ArrowDeviceArray input_device_array;
+    input_device_array.device_id   = rmm::get_current_cuda_device().value();
+    input_device_array.device_type = ARROW_DEVICE_CUDA;
+    input_device_array.sync_event  = nullptr;
+    memcpy(&input_device_array.array, input_array.get(), sizeof(ArrowArray));
+
+    auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+  }
+}

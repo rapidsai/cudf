@@ -68,12 +68,12 @@ std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> p
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->size_bytes = sizeof(T) * view.size();
   ArrowArrayBuffer(arr, 1)->data       = const_cast<uint8_t*>(view.data<uint8_t>());
 }

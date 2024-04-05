@@ -128,6 +128,25 @@ std::tuple<column_view, owned_columns_t> get_column(ArrowSchemaView* schema,
                                                     rmm::mr::device_memory_resource* mr);
 
 template <>
+std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<numeric::decimal128>(
+  ArrowSchemaView* schema,
+  const ArrowArray* input,
+  data_type type,
+  bool skip_mask,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  size_type const num_rows = input->length;
+  size_type const offset   = input->offset;
+  bitmask_type const* null_mask =
+    skip_mask ? nullptr : reinterpret_cast<bitmask_type const*>(input->buffers[0]);
+  auto data_buffer = input->buffers[1];
+  return std::make_tuple<column_view, owned_columns_t>(
+    {type, num_rows, data_buffer, null_mask, static_cast<size_type>(input->null_count), offset},
+    {});
+}
+
+template <>
 std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<bool>(
   ArrowSchemaView* schema,
   const ArrowArray* input,
@@ -328,8 +347,9 @@ std::tuple<column_view, owned_columns_t> dispatch_to_cudf_column::operator()<cud
   // in the scenario where we were sliced and there are more elements in the child_view
   // than can be referenced by the sliced offsets, we need to slice the child_view
   // so that when `get_sliced_child` is called, we still produce the right result
-  auto max_child_offset = cudf::detail::get_value<int32_t>(offsets_view, input->offset + input->length, stream);
-  child_view            = cudf::slice(child_view, {0, max_child_offset}, stream).front();
+  auto max_child_offset =
+    cudf::detail::get_value<int32_t>(offsets_view, input->offset + input->length, stream);
+  child_view = cudf::slice(child_view, {0, max_child_offset}, stream).front();
 
   return std::make_tuple<column_view, owned_columns_t>(
     {type,
@@ -384,7 +404,7 @@ unique_table_view_t from_arrow_device(ArrowSchemaView* schema,
       [&owned_mem, &stream, &mr](ArrowArray const* child, ArrowSchema const* child_schema) {
         ArrowSchemaView view;
         NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, child_schema, nullptr));
-        auto type = arrow_to_cudf_type(&view);
+        auto type              = arrow_to_cudf_type(&view);
         auto [out_view, owned] = get_column(&view, child, type, false, stream, mr);
         if (owned_mem.empty()) {
           owned_mem = std::move(owned);
