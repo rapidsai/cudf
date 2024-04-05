@@ -5,6 +5,7 @@ from libcpp.utility cimport move
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.hash cimport (
+    DEFAULT_HASH_SEED,
     md5 as cpp_md5,
     murmurhash3_x64_128 as cpp_murmurhash3_x64_128,
     murmurhash3_x86_32 as cpp_murmurhash3_x86_32,
@@ -23,7 +24,7 @@ from .table cimport Table
 
 cpdef Column murmurhash3_x86_32(
     Table input,
-    uint32_t seed
+    uint32_t seed=DEFAULT_HASH_SEED
 ):
     """Computes the MurmurHash3 32-bit hash value of each row in the given table.
 
@@ -57,7 +58,7 @@ cpdef Column murmurhash3_x86_32(
 
 cpdef Table murmurhash3_x64_128(
     Table input,
-    uint64_t seed
+    uint64_t seed=DEFAULT_HASH_SEED
 ):
     """Computes the MurmurHash3 64-bit hash value of each row in the given table.
 
@@ -91,7 +92,7 @@ cpdef Table murmurhash3_x64_128(
 
 cpdef Column xxhash_64(
     Table input,
-    uint64_t seed
+    uint64_t seed=DEFAULT_HASH_SEED
 ):
     cdef unique_ptr[column] c_result
     with  nogil:

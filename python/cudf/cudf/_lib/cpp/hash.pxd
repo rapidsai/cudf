@@ -50,3 +50,6 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
         const table_view& input,
         const uint64_t seed
     ) except +cudf_exception_handler
+
+cdef extern from "cudf/hashing.hpp" namespace "cudf" nogil:
+    cdef uint32_t DEFAULT_HASH_SEED

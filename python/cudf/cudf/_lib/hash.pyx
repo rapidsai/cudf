@@ -22,7 +22,6 @@ from cudf._lib.pylibcudf.hashing cimport (
     sha256,
     sha384,
     sha512,
-    xxhash_64,
 )
 from cudf._lib.utils cimport columns_from_unique_ptr, table_view_from_columns
 
@@ -55,8 +54,8 @@ def hash(list source_columns, str method, int seed=0):
     ctbl = pylibcudf.Table([c.to_pylibcudf(mode="read") for c in source_columns])
     if method == "murmur3":
         return Column.from_pylibcudf(murmurhash3_x86_32(ctbl, seed))
-    elif method == "xxhash64":
-        return Column.from_pylibcudf(xxhash_64(ctbl, seed))
+#    elif method == "xxhash64":
+#        return Column.from_pylibcudf(xxhash_64(ctbl, seed))
     elif method == "md5":
         return Column.from_pylibcudf(md5(ctbl))
     elif method == "sha1":
