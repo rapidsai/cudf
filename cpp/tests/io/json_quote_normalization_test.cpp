@@ -20,8 +20,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
-#include <cudf/io/detail/json.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 
@@ -48,7 +48,8 @@ void run_test(const std::string& host_input, const std::string& expected_host_ou
                                 cudaMemcpyHostToDevice,
                                 cudf::test::get_default_stream().value()));
   // Preprocessing FST
-  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(std::move(device_input));
+  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(
+    std::move(device_input));
   cudf::io::json::detail::normalize_single_quotes(
     device_data, cudf::test::get_default_stream(), rsc.get());
 

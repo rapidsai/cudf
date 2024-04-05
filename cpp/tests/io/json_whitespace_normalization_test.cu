@@ -19,8 +19,8 @@
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/io/detail/json.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -40,7 +40,8 @@ void run_test(std::string const& host_input, std::string const& expected_host_ou
     host_input, stream_view, rmm::mr::get_current_device_resource());
 
   // Preprocessing FST
-  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(std::move(device_input));
+  cudf::io::datasource::owning_buffer<rmm::device_uvector<char>> device_data(
+    std::move(device_input));
   cudf::io::json::detail::normalize_whitespace(
     device_data, stream_view, rmm::mr::get_current_device_resource());
 

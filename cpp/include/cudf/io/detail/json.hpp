@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <cudf/io/json.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/io/json.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -61,8 +61,8 @@ void write_json(data_sink* sink,
  * @param mr Device memory resource to use for device memory allocation
  */
 void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>>& inbuf,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
@@ -72,6 +72,6 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>
  * @param mr Device memory resource to use for device memory allocation
  */
 void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& inbuf,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr);
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr);
 }  // namespace cudf::io::json::detail

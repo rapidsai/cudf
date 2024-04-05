@@ -298,8 +298,8 @@ struct TransduceToNormalizedWS {
 namespace detail {
 
 void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+                             rmm::cuda_stream_view stream,
+                             rmm::mr::device_memory_resource* mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_quotes::qna_sgs),
@@ -323,8 +323,8 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_uvector<char>
 }
 
 void normalize_whitespace(datasource::owning_buffer<rmm::device_uvector<char>>& indata,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+                          rmm::cuda_stream_view stream,
+                          rmm::mr::device_memory_resource* mr)
 {
   auto parser = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(normalize_whitespace::wna_sgs),
