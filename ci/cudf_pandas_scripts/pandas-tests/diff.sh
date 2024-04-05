@@ -28,7 +28,7 @@ COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by
 echo "$COMMENT"
 jq --arg COMMENT "$COMMENT" --arg GH_JOB_NAME "$GH_JOB_NAME" -n \
   '{"context": "Pandas tests",
-    "description": $COMMENT, 
-    "state":"success", 
+    "description": $COMMENT,
+    "state":"success",
     "job_name": $GH_JOB_NAME}' \
     > gh-status.json
