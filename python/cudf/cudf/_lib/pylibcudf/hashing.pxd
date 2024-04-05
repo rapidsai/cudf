@@ -1,9 +1,6 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 from libc.stdint cimport uint32_t, uint64_t
-from cudf._lib.cpp.types cimport size_type
-from cudf._lib.cpp.table cimport table
-from libcpp.vector cimport vector
 
 #from cudf._lib.cpp.hash cimport hash_id
 

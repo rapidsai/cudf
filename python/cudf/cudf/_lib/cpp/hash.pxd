@@ -17,7 +17,7 @@ cdef extern from "cudf/hashing.hpp" namespace "cudf::hashing" nogil:
         const uint32_t seed
     ) except +cudf_exception_handler
 
-    cdef unique_ptr[table] murmurhash3_x64_128 "cudf::hashing::murmurhash3_x64_128" (
+    cdef unique_ptr[table] murmurhash3_x64_128
         const table_view& input,
         const uint64_t seed
     ) except +cudf_exception_handler
