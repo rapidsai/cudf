@@ -26,4 +26,4 @@ python ci/cudf_pandas_scripts/pandas-tests/job-summary.py main-results.json pr-r
 
 COMMENT=$(head -1 summary.txt | grep -oP '\d+/\d+ \(\d+\.\d+%\).*?(a decrease by|an increase by) \d+\.\d+%')
 echo "$COMMENT"
-echo "{\"context\":\"Pandas tests\", \"description\":\"$COMMENT\", \"state\":\"success\"}" > gh-status.json
+echo "{\"context\":\"Pandas tests\", \"description\":\"$COMMENT\", \"state\":\"success\", \"job_name\": \"$GH_JOB_NAME\"}" > gh-status.json
