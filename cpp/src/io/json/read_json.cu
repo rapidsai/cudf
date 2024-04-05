@@ -47,6 +47,88 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
+/**
+ * @brief Read from array of data sources into RMM buffer
+ *
+ * @param sources Array of data sources
+ * @param compression Compression format of source
+ * @param range_offset Number of bytes to skip from source start
+ * @param range_size Number of bytes to read from source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
+                                           compression_type compression,
+                                           size_t range_offset,
+                                           size_t range_size,
+                                           rmm::cuda_stream_view stream)
+{
+  CUDF_FUNC_RANGE();
+  // We append a line delimiter between two files to make sure the last line of file i and the first
+  // line of file i+1 don't end up on the same JSON line, if file i does not already end with a line
+  // delimiter.
+  auto constexpr num_delimiter_chars = 1;
+  auto const num_extra_delimiters    = num_delimiter_chars * (sources.size() - 1);
+
+  // Iterate through the user defined sources and read the contents into the local buffer
+  auto const total_source_size =
+    sources_size(sources, range_offset, range_size) + num_extra_delimiters;
+
+  if (compression == compression_type::NONE) {
+    std::vector<size_type> delimiter_map{};
+    delimiter_map.reserve(sources.size());
+    auto d_buffer     = rmm::device_uvector<char>(total_source_size, stream);
+    size_t bytes_read = 0;
+    std::vector<std::unique_ptr<datasource::buffer>> h_buffers;
+    for (auto const& source : sources) {
+      if (!source->is_empty()) {
+        auto data_size   = (range_size != 0) ? range_size : source->size();
+        auto destination = reinterpret_cast<uint8_t*>(d_buffer.data()) + bytes_read;
+        if (source->is_device_read_preferred(data_size)) {
+          bytes_read += source->device_read(range_offset, data_size, destination, stream);
+        } else {
+          h_buffers.emplace_back(source->host_read(range_offset, data_size));
+          auto const& h_buffer = h_buffers.back();
+          CUDF_CUDA_TRY(cudaMemcpyAsync(
+            destination, h_buffer->data(), h_buffer->size(), cudaMemcpyDefault, stream.value()));
+          bytes_read += h_buffer->size();
+        }
+        delimiter_map.push_back(bytes_read);
+        bytes_read += num_delimiter_chars;
+      }
+    }
+
+    // If this is a multi-file source, we scatter the JSON line delimiters between files
+    if (sources.size() > 1) {
+      static_assert(num_delimiter_chars == 1,
+                    "Currently only single-character delimiters are supported");
+      auto const delimiter_source = thrust::make_constant_iterator('\n');
+      auto const d_delimiter_map  = cudf::detail::make_device_uvector_async(
+        host_span<size_type const>{delimiter_map.data(), delimiter_map.size() - 1},
+        stream,
+        rmm::mr::get_current_device_resource());
+      thrust::scatter(rmm::exec_policy_nosync(stream),
+                      delimiter_source,
+                      delimiter_source + d_delimiter_map.size(),
+                      d_delimiter_map.data(),
+                      d_buffer.data());
+    }
+
+    stream.synchronize();
+    return d_buffer;
+
+  } else {
+    auto buffer = std::vector<uint8_t>(total_source_size);
+    // Single read because only a single compressed source is supported
+    // Reading to host because decompression of a single block is much faster on the CPU
+    sources[0]->host_read(range_offset, total_source_size, buffer.data());
+    auto const uncomp_data = decompress(compression, buffer);
+    return cudf::detail::make_device_uvector_sync(
+      host_span<char const>{reinterpret_cast<char const*>(uncomp_data.data()), uncomp_data.size()},
+      stream,
+      rmm::mr::get_current_device_resource());
+  }
+}
+
 size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::datasource>> sources,
                                         json_reader_options const& reader_opts,
                                         char const delimiter,
