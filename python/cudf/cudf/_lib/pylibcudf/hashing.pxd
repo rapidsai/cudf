@@ -2,14 +2,12 @@
 
 from libc.stdint cimport uint32_t, uint64_t
 
-#from cudf._lib.cpp.hash cimport hash_id
-
 from .column cimport Column
 from .table cimport Table
 
 
 cpdef Column murmurhash3_x86_32(
-    Table input, 
+    Table input,
     uint32_t seed
 )
 
