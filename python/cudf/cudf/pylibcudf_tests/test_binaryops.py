@@ -40,65 +40,72 @@ BINARY_OPS = list(plc.binaryop.BinaryOperator.__members__.values())
 @pytest.fixture(scope="module")
 def columns():
     return {
-        "int8": plc.interop.from_arrow(pa.array([1, 2, 3, 4], type=pa.int8())),
+        "int8": plc.interop.from_arrow(
+            pa.array([1, None, 3, None], type=pa.int8())
+        ),
         "int16": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.int16())
+            pa.array([1, 2, None, None], type=pa.int16())
         ),
         "int32": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.int32())
+            pa.array([1, None, 3, None], type=pa.int32())
         ),
         "int64": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.int64())
+            pa.array([1, 2, None, None], type=pa.int64())
         ),
         "uint8": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.uint8())
+            pa.array([1, None, 3, None], type=pa.uint8())
         ),
         "uint16": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.uint16())
+            pa.array([1, 2, None, None], type=pa.uint16())
         ),
         "uint32": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.uint32())
+            pa.array([1, None, 3, None], type=pa.uint32())
         ),
         "uint64": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.uint64())
+            pa.array([1, 2, None, None], type=pa.uint64())
         ),
         "float32": plc.interop.from_arrow(
-            pa.array([1.0, 2.0, 3.0, 4.0], type=pa.float32())
+            pa.array([1.0, None, 3.0, None], type=pa.float32())
         ),
         "float64": plc.interop.from_arrow(
-            pa.array([1.0, 2.0, 3.0, 4.0], type=pa.float64())
+            pa.array([1.0, 2.0, None, None], type=pa.float64())
         ),
         "object": plc.interop.from_arrow(
-            pa.array(["a", "b", "c", "d"], type=pa.string())
+            pa.array(["a", None, "c", None], type=pa.string())
         ),
         "bool": plc.interop.from_arrow(
-            pa.array([True, False, True, False], type=pa.bool_())
+            pa.array([True, False, None, None], type=pa.bool_())
         ),
         "datetime64[ns]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.timestamp("ns"))
+            pa.array([1, None, 3, None], type=pa.timestamp("ns"))
         ),
         "datetime64[ms]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.timestamp("ms"))
+            pa.array([1, 2, None, None], type=pa.timestamp("ms"))
         ),
         "datetime64[us]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.timestamp("us"))
+            pa.array([1, None, 3, None], type=pa.timestamp("us"))
         ),
         "datetime64[s]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.timestamp("s"))
+            pa.array([1, 2, None, None], type=pa.timestamp("s"))
         ),
         "timedelta64[ns]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.duration("ns"))
+            pa.array([1, None, 3, None], type=pa.duration("ns"))
         ),
         "timedelta64[ms]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.duration("ms"))
+            pa.array([1, 2, None, None], type=pa.duration("ms"))
         ),
         "timedelta64[us]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.duration("us"))
+            pa.array([1, None, 3, None], type=pa.duration("us"))
         ),
         "timedelta64[s]": plc.interop.from_arrow(
-            pa.array([1, 2, 3, 4], type=pa.duration("s"))
+            pa.array([1, 2, None, None], type=pa.duration("s"))
         ),
     }
+
+
+@pytest.fixture(scope="module")
+def null_columns(columns):
+    breakpoint()
 
 
 @pytest.fixture(scope="module", params=LIBCUDF_SUPPORTED_TYPES)
@@ -141,7 +148,6 @@ def _test_binaryop_inner(test, columns, pyop, cuop):
     lhs = columns[binop_lhs_ty]
     rhs = columns[binop_rhs_ty]
     pylibcudf_outty = dtype_to_pylibcudf_type(binop_out_ty)
-
     if not fail:
         expect_data = pyop(
             plc.interop.to_arrow(lhs).to_numpy(),
@@ -567,6 +573,12 @@ def test_log_base(log_base_tests, columns):
         )
 
 
+def test_atan2(atan2_tests, columns):
+    _test_binaryop_inner(
+        atan2_tests, columns, np.arctan2, plc.binaryop.BinaryOperator.ATAN2
+    )
+
+
 def test_shift_left(shift_left_tests, columns):
     _test_binaryop_inner(
         shift_left_tests,
@@ -684,3 +696,46 @@ def test_greater_equal(greater_equal_tests, columns):
         np.greater_equal,
         plc.binaryop.BinaryOperator.GREATER_EQUAL,
     )
+
+
+def test_null_equals(null_equals_tests, columns):
+    def numpy_null_equals(x, y):
+        # TODO
+        pass
+
+    _test_binaryop_inner(
+        null_equals_tests,
+        columns,
+        numpy_null_equals,
+        plc.binaryop.BinaryOperator.GREATER_EQUAL,
+    )
+
+
+def test_null_max(null_max_tests, columns):
+    # TODO
+    pass
+
+
+def test_null_min(null_min_tests, columns):
+    # TODO
+    pass
+
+
+def test_generic_binary(generic_binary_tests, columns):
+    # TODO
+    pass
+
+
+def test_null_logical_and(null_logical_and_tests, columns):
+    # TODO
+    pass
+
+
+def test_null_logical_or(null_logical_or_tests, columns):
+    # TODO
+    pass
+
+
+def test_invalid_binary(invalid_binary_tests, columns):
+    # TODO
+    pass
