@@ -131,7 +131,7 @@ std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(ArrowArray* ar
         auto buf = reinterpret_cast<std::unique_ptr<rmm::device_buffer>*>(alloc->private_data);
         delete buf;
       },
-      new std::unique_ptr<rmm::device_buffer>(std::move(bitmask.first))));
+      new std::unique_ptr<rmm::device_buffer>(std::move(bitmask.first)))));
   ArrowArrayBuffer(arr, 1)->size_bytes = cudf::bitmask_allocation_size_bytes(view.size());
   ArrowArrayBuffer(arr, 1)->data       = ptr;
 }
@@ -170,7 +170,7 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
-  
+
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.size_bytes =
     cudf::bitmask_allocation_size_bytes(view.size());

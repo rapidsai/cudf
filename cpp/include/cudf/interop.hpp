@@ -300,7 +300,7 @@ using owned_columns_t = std::vector<std::unique_ptr<cudf::column>>;
  */
 struct custom_view_deleter {
   explicit custom_view_deleter(owned_columns_t&& owned) : owned_mem_{std::move(owned)} {}
-  void operator()(table_view* ptr) const { delete ptr; }
+  void operator()(cudf::table_view* ptr) const { delete ptr; }
   owned_columns_t owned_mem_;
 };
 

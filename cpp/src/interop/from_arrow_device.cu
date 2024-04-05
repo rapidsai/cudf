@@ -30,6 +30,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
@@ -384,7 +385,8 @@ unique_table_view_t from_arrow_device(ArrowSchemaView* schema,
                                       rmm::mr::device_memory_resource* mr)
 {
   if (input->sync_event != nullptr) {
-    cudaStreamWaitEvent(stream.value(), *reinterpret_cast<cudaEvent_t*>(input->sync_event));
+    CUDF_CUDA_TRY(
+      cudaStreamWaitEvent(stream.value(), *reinterpret_cast<cudaEvent_t*>(input->sync_event)));
   }
 
   std::vector<column_view> columns;
@@ -436,6 +438,8 @@ unique_table_view_t from_arrow_device(const ArrowSchema* schema,
 
   CUDF_FUNC_RANGE();
 
+  rmm::cuda_set_device_raii dev(
+    rmm::cuda_device_id{static_cast<rmm::cuda_device_id::value_type>(input->device_id)});
   ArrowSchemaView view;
   NANOARROW_THROW_NOT_OK(ArrowSchemaViewInit(&view, schema, nullptr));
   return detail::from_arrow_device(&view, input, stream, mr);
