@@ -10,6 +10,8 @@ jobs:
   process_artifacts:
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+    outputs:
+      artifact_downloaded: ${{ steps.download_artifact.outputs.artifact_downloaded }}
     permissions:
       actions: read
       checks: read
@@ -26,13 +28,45 @@ jobs:
       statuses: write
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4
+        id: download_artifact
+        uses: actions/github-script@v7
         with:
-          name: gh-status
-          path: downloaded_artifacts/
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          retries: 3
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const artifactName = 'gh-status';
+
+            const allArtifacts = await github.rest.actions.listWorkflowRunArtifacts({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: context.payload.workflow_run.id,
+              });
+            // Find the specific artifact
+            const artifact = allArtifacts.data.artifacts.find(artifact => artifact.name === artifactName);
+            if (!artifact) {
+              core.info(`Artifact "${artifactName}" not found. Exiting safely.`);
+              core.setOutput('artifact_downloaded', 'false');
+              return;
+            }
+            core.setOutput('artifact_downloaded', 'true');
+            // Download the artifact
+            const download = await github.rest.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: artifact.id,
+              archive_format: 'zip',
+            });
+
+            // Write the artifact to a file
+            fs.writeFileSync(`${process.env.GITHUB_WORKSPACE}/${artifactName}.zip`, Buffer.from(download.data));
+
+      - name: 'Unzip artifact'
+        if: ${{ steps.download_artifact.outputs.artifact_downloaded == 'true' }}
+        run: unzip 'gh-status.zip'
+
       - name: Create status
+        if: ${{ steps.download_artifact.outputs.artifact_downloaded == 'true' }}
         uses: actions/github-script@v7
         env:
           WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id }}
@@ -42,7 +76,7 @@ jobs:
           retries: 3
           script: |
             // Load the JSON content
-            const contentJSON = require('./downloaded_artifacts/gh-status.json');
+            const contentJSON = require('./gh-status.json');
             const {
                 job_name: JOB_NAME,
                 context: CUSTOM_CONTEXT = 'Custom CI Status Check',
