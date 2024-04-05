@@ -33,13 +33,14 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
-/** @brief Convert a floating-point value to fixed-point
+/** 
+ * @brief Convert a floating-point value to fixed-point
  *
  * @tparam Fixed The fixed-point type we are converting to
  * @tparam Floating The floating-point type we are converting from
  * @param floating The floating-point value to convert
- * @param scale The desired scale of the fixed-point value.
- * @return The converted-to fixed-point value.
+ * @param scale The desired scale of the fixed-point value
+ * @return The converted to fixed-point value
  */
 template <typename Fixed,
           typename Floating,
