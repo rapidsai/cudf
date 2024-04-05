@@ -2004,7 +2004,11 @@ def as_column(
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif is_scalar(arbitrary) and not isinstance(arbitrary, memoryview):
+    elif (
+        is_scalar(arbitrary)
+        and not isinstance(arbitrary, memoryview)
+        and not _is_categorical_dtype(dtype)
+    ):
         if length is None:
             length = 1
         elif length < 0:
