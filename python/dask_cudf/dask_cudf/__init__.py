@@ -1,13 +1,7 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-from dask import config
-
-# For dask>2024.2.0, we can silence the loud deprecation
-# warning before importing `dask.dataframe` (this won't
-# do anything for dask==2024.2.0)
-config.set({"dataframe.query-planning-warning": False})
-
 import dask.dataframe as dd
+from dask import config
 from dask.dataframe import from_delayed
 
 import cudf
@@ -16,6 +10,14 @@ from . import backends
 from ._version import __git_commit__, __version__
 from .core import concat, from_cudf, from_dask_dataframe
 from .expr import QUERY_PLANNING_ON
+
+# For dask>2024.2.0, we can silence the loud deprecation
+# warning before importing `dask.dataframe` (this won't
+# do anything for dask==2024.2.0)
+#config.set({"dataframe.query-planning-warning": False})
+
+
+
 
 
 def read_csv(*args, **kwargs):
