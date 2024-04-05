@@ -13,6 +13,15 @@ RESULTS_DIR=${RAPIDS_TESTS_DIR:-"$(mktemp -d)"}
 RAPIDS_TESTS_DIR=${RAPIDS_TESTS_DIR:-"${RESULTS_DIR}/test-results"}/
 mkdir -p "${RAPIDS_TESTS_DIR}"
 
+
+rapids-logger "pytest pylibcudf"
+pushd python/cudf/cudf/pylibcudf_tests
+python -m pytest \
+  --cache-clear \
+  --dist=worksteal \
+  .
+popd
+
 rapids-logger "pytest cudf"
 pushd python/cudf/cudf/tests
 python -m pytest \
