@@ -189,11 +189,13 @@ void ingest_raw_input(std::unique_ptr<rmm::device_uvector<char>>& bufptr,
       std::upper_bound(prefsum_source_sizes.begin(), prefsum_source_sizes.end(), range_offset);
     size_t start_source = std::distance(prefsum_source_sizes.begin(), upper);
 
+    // std::printf("range_size = %lu, range_offset = %lu\n", range_size, range_offset);
     range_size = !range_size || range_size > prefsum_source_sizes.back()
                    ? prefsum_source_sizes.back() - range_offset
                    : range_size;
     range_offset =
       start_source ? range_offset - prefsum_source_sizes[start_source - 1] : range_offset;
+    // std::printf("range_size = %lu, range_offset = %lu\n", range_size, range_offset);
     for (size_t i = start_source; i < sources.size() && range_size; i++) {
       if (sources[i]->is_empty()) continue;
       auto data_size   = std::min(sources[i]->size() - range_offset, range_size);
@@ -212,6 +214,7 @@ void ingest_raw_input(std::unique_ptr<rmm::device_uvector<char>>& bufptr,
       delimiter_map.push_back(bytes_read);
       bytes_read += num_delimiter_chars;
     }
+    if (bytes_read) bytes_read -= num_delimiter_chars;
 
     // If this is a multi-file source, we scatter the JSON line delimiters between files
     if (sources.size() > 1) {
@@ -270,14 +273,19 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
   auto geometric_mean       = [](double a, double b) { return std::pow(a * b, 0.5); };
   auto find_first_delimiter = [&bufptr, &stream](
                                 size_t const start, size_t const end, char const delimiter) {
+    // std::printf("inside first delimiter\n");
     auto const first_delimiter_position = thrust::find(
       rmm::exec_policy(stream), bufptr->data() + start, bufptr->data() + end, delimiter);
+    // std::printf("after thrust first delimiter\n");
     return first_delimiter_position != bufptr->begin() + end
              ? first_delimiter_position - bufptr->begin()
              : -1;
   };
 
+  // std::printf("in get_record_range_raw_input\n");
   size_t const total_source_size            = sources_size(sources, 0, 0);
+  auto constexpr num_delimiter_chars        = 1;
+  auto const num_extra_delimiters           = num_delimiter_chars * (sources.size() - 1);
   size_t chunk_size                         = reader_opts.get_byte_range_size();
   size_t chunk_offset                       = reader_opts.get_byte_range_offset();
   compression_type const reader_compression = reader_opts.get_compression();
@@ -290,24 +298,35 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     geometric_mean(reader_opts.get_byte_range_size() / num_subchunks, 10000);
 
   if (!chunk_size || chunk_size > total_source_size - chunk_offset)
-    chunk_size = total_source_size - chunk_offset;
+    chunk_size = total_source_size - chunk_offset + num_extra_delimiters;
   bufptr = std::make_unique<rmm::device_uvector<char>>(chunk_size + 3 * size_per_subchunk, stream);
   size_t bufptr_offset = 0;
 
+  // std::printf("before ingesting : bufptr_offset = %lu\n", bufptr_offset);
   ingest_raw_input(
     bufptr, sources, reader_compression, chunk_offset, chunk_size, bufptr_offset, stream);
+  // std::printf("done ingesting : bufptr_offset = %lu\n", bufptr_offset);
+  /*
+  std::printf("bufptr : ");
+  for(size_t i = 0; i < bufptr_offset; i++)
+    std::printf("%c", bufptr->element(i, stream));
+  std::printf("\n");
+  */
+
   auto first_delim_pos = chunk_offset == 0 ? 0 : find_first_delimiter(0, bufptr_offset, '\n');
   if (first_delim_pos == -1) {
     // return empty owning datasource buffer
     auto empty_buf = rmm::device_uvector<char>(0, stream);
-    return datasource::owning_buffer<rmm::device_uvector<char>>(
-      std::move(empty_buf), reinterpret_cast<uint8_t*>(empty_buf.data()), 0);
+    return datasource::owning_buffer<rmm::device_uvector<char>>(std::move(empty_buf));
   } else if (reader_opts.get_byte_range_size() > 0 &&
              reader_opts.get_byte_range_size() < total_source_size - chunk_offset) {
     // Find next delimiter
     std::int64_t next_delim_pos = -1;
     size_t next_subchunk_start  = chunk_offset + chunk_size;
+    // std::printf("next_subchunk_start = %lu, size_per_subchunk = %lu\n", next_subchunk_start,
+    // size_per_subchunk);
     while (next_subchunk_start < total_source_size && next_delim_pos == -1) {
+      std::int64_t bytes_read = -bufptr_offset;
       ingest_raw_input(bufptr,
                        sources,
                        reader_compression,
@@ -315,7 +334,18 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
                        size_per_subchunk,
                        bufptr_offset,
                        stream);
-      next_delim_pos = find_first_delimiter(bufptr_offset - size_per_subchunk, bufptr_offset, '\n');
+      bytes_read += bufptr_offset;
+      // std::printf("done ingesting subchunk : bufptr_offset = %lu, bytes_read = %ld\n",
+      // bufptr_offset, bytes_read);
+      /*
+      std::printf("bufptr : ");
+      for(size_t i = 0; i < bufptr_offset; i++)
+        std::printf("%c", bufptr->element(i, stream));
+      std::printf("\n");
+      */
+      next_delim_pos = find_first_delimiter(bufptr_offset - bytes_read, bufptr_offset, '\n');
+      // std::printf("first_delim_pos = %lu, next_delim_pos = %ld\n", first_delim_pos,
+      // next_delim_pos); std::printf("========================================\n");
       if (next_delim_pos == -1) { next_subchunk_start += size_per_subchunk; }
     }
     if (next_delim_pos == -1)
@@ -324,14 +354,16 @@ datasource::owning_buffer<rmm::device_uvector<char>> get_record_range_raw_input(
     auto* released_bufptr = bufptr.release();
     return datasource::owning_buffer<rmm::device_uvector<char>>(
       std::move(*released_bufptr),
-      reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos,
-      released_bufptr->size() - first_delim_pos - next_delim_pos);
+      reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos +
+        (chunk_offset ? 1 : 0),
+      next_delim_pos - first_delim_pos);
   }
+  // std::printf("first_delim_pos = %lu\n", first_delim_pos);
   auto* released_bufptr = bufptr.release();
   return datasource::owning_buffer<rmm::device_uvector<char>>(
     std::move(*released_bufptr),
-    reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos,
-    released_bufptr->size() - first_delim_pos);
+    reinterpret_cast<uint8_t*>(released_bufptr->data()) + first_delim_pos + (chunk_offset ? 1 : 0),
+    bufptr_offset - first_delim_pos - (chunk_offset ? 1 : 0));
 }
 
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
