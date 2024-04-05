@@ -2042,16 +2042,6 @@ def as_column(
             arbitrary = arbitrary[np.newaxis]
 
         if arbitrary.dtype.kind in "OSU":
-            # Handle case that `arbitrary` elements are cupy arrays
-            if len(arbitrary) > 0 and hasattr(
-                arbitrary[0], "__cuda_array_interface__"
-            ):
-                return as_column(
-                    cupy.asarray(arbitrary, dtype=arbitrary[0].dtype),
-                    nan_as_null=nan_as_null,
-                    dtype=dtype,
-                    length=length,
-                )
             if pd.isna(arbitrary).any():
                 arbitrary = pa.array(arbitrary)
             else:
