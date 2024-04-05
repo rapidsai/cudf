@@ -110,7 +110,7 @@ class CategoricalAccessor(ColumnMethods):
         """
         The categories of this categorical.
         """
-        return cudf.core.index.as_index(self._column.categories)
+        return self._column.dtype.categories
 
     @property
     def codes(self) -> "cudf.Series":
@@ -629,10 +629,6 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def ordered(self) -> bool:
         return self.dtype.ordered
-
-    @ordered.setter
-    def ordered(self, value: bool):
-        self.dtype.ordered = value
 
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
@@ -1169,9 +1165,11 @@ class CategoricalColumn(column.ColumnBase):
     def copy(self, deep: bool = True) -> Self:
         result_col = super().copy(deep=deep)
         if deep:
-            result_col.categories = libcudf.copying.copy_column(
-                self.dtype._categories
+            dtype_copy = CategoricalDtype(
+                categories=self.categories.copy(),
+                ordered=self.ordered,
             )
+            result_col = cast(Self, result_col._with_type_metadata(dtype_copy))
         return result_col
 
     @cached_property

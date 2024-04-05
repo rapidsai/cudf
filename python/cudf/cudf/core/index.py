@@ -2643,7 +2643,7 @@ class CategoricalIndex(Index):
         """
         The categories of this categorical.
         """
-        return as_index(self._values.categories)
+        return self.dtype.categories
 
     def _is_boolean(self):
         return False
