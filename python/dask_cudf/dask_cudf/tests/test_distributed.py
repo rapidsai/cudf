@@ -16,7 +16,7 @@ import dask_cudf
 dask_cuda = pytest.importorskip("dask_cuda")
 
 
-def more_than_n_gpus(n):
+def at_least_n_gpus(n):
     ngpus = len(numba.cuda.gpus)
     return ngpus >= n
 
@@ -54,7 +54,7 @@ def test_merge():
 
 
 @pytest.mark.skipif(
-    not more_than_n_gpus(2), reason="Machine does not have more than two GPUs"
+    not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
 def test_ucx_seriesgroupby():
     pytest.importorskip("ucp")
@@ -100,8 +100,8 @@ def test_p2p_shuffle():
 
 
 @pytest.mark.skipif(
-    not more_than_n_gpus(3),
-    reason="Machine does not have more than three GPUs",
+    not at_least_n_gpus(3),
+    reason="Machine does not have three GPUs",
 )
 def test_unique():
     with dask_cuda.LocalCUDACluster(n_workers=3) as cluster:
