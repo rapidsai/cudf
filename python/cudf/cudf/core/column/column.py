@@ -2061,8 +2061,9 @@ def as_column(
             if pd.isna(arbitrary).any():
                 arbitrary = pa.array(arbitrary)
             else:
+                # Let pandas potentially infer object type
+                # e.g. np.array([pd.Timestamp(...)], dtype=object) -> datetime64
                 arbitrary = pd.Series(arbitrary)
-            # Let pandas potentially infer object type
             return as_column(arbitrary, dtype=dtype, nan_as_null=nan_as_null)
         elif arbitrary.dtype.kind in "biuf":
             from_pandas = nan_as_null is None or nan_as_null
@@ -2093,11 +2094,10 @@ def as_column(
                         dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
-                else:
-                    # Consider NaT as NA in the mask
-                    # but maintain NaT as a value
-                    bool_mask = as_column(~is_nat)
-                    mask = as_buffer(bools_to_mask(bool_mask))
+                # Consider NaT as NA in the mask
+                # but maintain NaT as a value
+                bool_mask = as_column(~is_nat)
+                mask = as_buffer(bools_to_mask(bool_mask))
             buffer = as_buffer(arbitrary.view("|u1"))
             col = build_column(data=buffer, mask=mask, dtype=arbitrary.dtype)
             if dtype:
