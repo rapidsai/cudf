@@ -65,10 +65,10 @@ std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> p
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->data = const_cast<uint8_t*>(view.data<uint8_t>());
 }
 
@@ -109,20 +109,20 @@ std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(ArrowArray* ar
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
 
   auto bitmask = cudf::bools_to_mask(view);
   auto ptr     = reinterpret_cast<uint8_t*>(bitmask.first->data());
-  ArrowBufferSetAllocator(
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(
     ArrowArrayBuffer(arr, 1),
     ArrowBufferDeallocator(
       [](ArrowBufferAllocator* alloc, uint8_t*, int64_t) {
         auto buf = reinterpret_cast<std::unique_ptr<rmm::device_buffer>*>(alloc->private_data);
         delete buf;
       },
-      new std::unique_ptr<rmm::device_buffer>(std::move(bitmask.first))));
+      new std::unique_ptr<rmm::device_buffer>(std::move(bitmask.first)))));
   ArrowArrayBuffer(arr, 1)->data = ptr;
 }
 
@@ -160,14 +160,14 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
 
   cudf::strings_column_view sview{view};
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->data = const_cast<uint8_t*>(sview.offsets().data<uint8_t>());
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 2), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 2), noop_alloc));
   ArrowArrayBuffer(arr, 2)->data = const_cast<uint8_t*>(view.data<uint8_t>());
 }
 
@@ -217,10 +217,10 @@ void populate_list_from_col(ArrowArray* arr, cudf::lists_column_view view)
   arr->length     = view.size();
   arr->null_count = view.null_count();
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 0), noop_alloc));
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(view.null_mask()));
 
-  ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc);
+  NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(ArrowArrayBuffer(arr, 1), noop_alloc));
   ArrowArrayBuffer(arr, 1)->data = const_cast<uint8_t*>(view.offsets().data<uint8_t>());
 }
