@@ -104,6 +104,9 @@ def test_p2p_shuffle():
     reason="Machine does not have three GPUs",
 )
 def test_unique():
+    # Using `"p2p"` can produce dispatching problems
+    # TODO: Test "p2p" after dask > 2024.4.1 is required
+    # See: https://github.com/dask/dask/pull/11040
     with dask_cuda.LocalCUDACluster(n_workers=3) as cluster:
         with Client(cluster):
             df = cudf.DataFrame({"x": ["a", "b", "c", "a", "a"]})
