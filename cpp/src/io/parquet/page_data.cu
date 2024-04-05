@@ -77,7 +77,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
-    switch (s->col.data_type & 7) {
+    switch (s->col.physical_type) {
       case BOOLEAN: [[fallthrough]];
       case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
@@ -123,16 +123,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
-      } else if ((s->col.data_type & 7) == BOOLEAN) {
+      } else if (s->col.physical_type == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY or
-                 (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+      } else if (s->col.physical_type == BYTE_ARRAY or
+                 s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
       if (t == 32) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      int const dtype = s->col.data_type & 7;
+      int const dtype = s->col.physical_type;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -166,10 +166,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         uint32_t dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+        auto const is_decimal =
+          s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
         if (dtype == BYTE_ARRAY) {
-          if (s->col.converted_type == DECIMAL) {
+          if (is_decimal) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
-            auto const decimal_precision = s->col.decimal_precision;
+            auto const decimal_precision = s->col.logical_type->precision();
             if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
               gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
             } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
@@ -182,7 +184,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           }
         } else if (dtype == BOOLEAN) {
           gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
-        } else if (s->col.converted_type == DECIMAL) {
+        } else if (is_decimal) {
           switch (dtype) {
             case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
             case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;

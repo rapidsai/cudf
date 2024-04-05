@@ -220,9 +220,6 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings exceeds the column size limit",
                std::overflow_error);
-  CUDF_EXPECTS(total_bytes <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-               "total size of strings exceeds the column size limit",
-               std::overflow_error);
 
   bool const has_nulls =
     std::any_of(columns.begin(), columns.end(), [](auto const& col) { return col.has_nulls(); });
@@ -232,8 +229,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto d_new_chars = output_chars.data();
 
   // create output offsets column
-  auto offsets_column = make_numeric_column(
-    data_type{type_id::INT32}, offsets_count, mask_state::UNALLOCATED, stream, mr);
+  auto offsets_column = create_offsets_child_column(total_bytes, offsets_count, stream, mr);
   auto itr_new_offsets =
     cudf::detail::offsetalator_factory::make_output_iterator(offsets_column->mutable_view());
 
