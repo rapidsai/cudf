@@ -54,6 +54,7 @@ cpdef Column murmurhash3_x86_32(
 
     return Column.from_libcudf(move(c_result))
 
+
 cpdef Table murmurhash3_x64_128(
     Table input,
     uint64_t seed
@@ -132,6 +133,7 @@ cpdef Column sha1(Table input):
         c_result = move(cpp_sha1(input.view()))
     return Column.from_libcudf(move(c_result))
 
+
 cpdef Column sha224(Table input):
     """Computes the SHA-224 hash value of each row in the given table.
 
@@ -152,6 +154,7 @@ cpdef Column sha224(Table input):
     with nogil:
         c_result = move(cpp_sha224(input.view()))
     return Column.from_libcudf(move(c_result))
+
 
 cpdef Column sha256(Table input):
     """Computes the SHA-256 hash value of each row in the given table.
@@ -174,6 +177,7 @@ cpdef Column sha256(Table input):
         c_result = move(cpp_sha256(input.view()))
     return Column.from_libcudf(move(c_result))
 
+
 cpdef Column sha384(Table input):
     """Computes the SHA-384 hash value of each row in the given table.
 
@@ -194,6 +198,7 @@ cpdef Column sha384(Table input):
     with nogil:
         c_result = move(cpp_sha384(input.view()))
     return Column.from_libcudf(move(c_result))
+
 
 cpdef Column sha512(Table input):
     """Computes the SHA-512 hash value of each row in the given table.
