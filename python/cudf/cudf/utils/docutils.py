@@ -3,6 +3,7 @@
 """
 Helper functions for parameterized docstring
 """
+
 import functools
 import re
 import string
