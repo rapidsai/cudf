@@ -142,7 +142,14 @@ repos:
         exclude: |
           (?x)
               cpp/include/cudf_test/cxxopts[.]hpp$
-
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.17
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-black
+          - mdformat_frontmatter
 
 default_language_version:
       python: python3
