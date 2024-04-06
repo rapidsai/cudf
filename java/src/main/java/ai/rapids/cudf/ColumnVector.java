@@ -772,42 +772,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), 0));
-  }
-
-  /**
-   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table.
-   * Spark's murmur3 hash uses a different tail processing algorithm.
-   *
-   * @param seed integer seed for the murmur3 hash function
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32-bit values representing each row's hash value.
-   */
-  public static ColumnVector spark32BitMurmurHash3(int seed, ColumnView columns[]) {
-    if (columns.length < 1) {
-      throw new IllegalArgumentException("Murmur3 hashing requires at least 1 column of input");
-    }
-    long[] columnViews = new long[columns.length];
-    long size = columns[0].getRowCount();
-
-    for(int i = 0; i < columns.length; i++) {
-      assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      assert !columns[i].getType().isDurationType() : "Unsupported column type Duration";
-      columnViews[i] = columns[i].getNativeView();
-    }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), seed));
-  }
-
-  /**
-   * Create a new vector containing spark's 32-bit murmur3 hash of each row in the table with the
-   * seed set to 0. Spark's murmur3 hash uses a different tail processing algorithm.
-   *
-   * @param columns array of columns to hash, must have identical number of rows.
-   * @return the new ColumnVector of 32-bit values representing each row's hash value.
-   */
-  public static ColumnVector spark32BitMurmurHash3(ColumnView columns[]) {
-    return spark32BitMurmurHash3(0, columns);
+    return new ColumnVector(md5(columnViews));
   }
 
   /**
@@ -914,15 +879,12 @@ public final class ColumnVector extends ColumnView {
                                                        boolean separate_nulls);
 
   /**
-   * Native method to hash each row of the given table. Hashing function dispatched on the
-   * native side using the hashId.
+   * Native method to MD5 hash each row of the given table
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
-   * @param hashId integer native ID of the hashing function identifier HashType.
-   * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId, int seed) throws CudfException;
+  private static native long md5(long[] viewHandles) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
