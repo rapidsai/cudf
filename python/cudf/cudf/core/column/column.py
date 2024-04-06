@@ -2264,13 +2264,11 @@ def _construct_array(
 
 def _mask_from_cuda_array_interface_desc(obj, cai_mask) -> Buffer:
     desc = cai_mask.__cuda_array_interface__
-    ptr = desc["data"][0]
-    nelem = desc["shape"][0]
     typestr = desc["typestr"]
     typecode = typestr[1]
     if typecode == "t":
-        mask_size = bitmask_allocation_size_bytes(nelem)
-        return as_buffer(data=ptr, size=mask_size, owner=obj)
+        mask_size = bitmask_allocation_size_bytes(desc["shape"][0])
+        return as_buffer(data=desc["data"][0], size=mask_size, owner=obj)
     elif typecode == "b":
         col = as_column(cai_mask)
         return bools_to_mask(col)
