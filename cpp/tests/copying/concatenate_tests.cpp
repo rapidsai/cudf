@@ -32,6 +32,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <thrust/iterator/constant_iterator.h>
+
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -164,37 +166,6 @@ TEST_F(StringColumnTest, ConcatenateColumnView)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-TEST_F(StringColumnTest, ConcatenateColumnViewLarge)
-{
-  // Test large concatenate, causes out of bound device memory errors if kernel
-  // indexing is not int64_t.
-  // 1.5GB bytes, 5k columns
-  constexpr size_t num_strings        = 10000;
-  constexpr size_t string_length      = 150000;
-  constexpr size_t strings_per_column = 2;
-  constexpr size_t num_columns        = num_strings / strings_per_column;
-
-  std::vector<std::string> strings;
-  std::vector<char const*> h_strings;
-  std::vector<cudf::test::strings_column_wrapper> strings_column_wrappers;
-  std::vector<cudf::column_view> strings_columns;
-
-  std::string s(string_length, 'a');
-  for (size_t i = 0; i < num_strings; ++i)
-    h_strings.push_back(s.data());
-
-  for (size_t i = 0; i < num_columns; ++i)
-    strings_column_wrappers.push_back(cudf::test::strings_column_wrapper(
-      h_strings.data() + i * strings_per_column, h_strings.data() + (i + 1) * strings_per_column));
-  for (auto& wrapper : strings_column_wrappers)
-    strings_columns.push_back(wrapper);
-
-  auto results = cudf::concatenate(strings_columns);
-
-  cudf::test::strings_column_wrapper expected(h_strings.begin(), h_strings.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-}
-
 TEST_F(StringColumnTest, ConcatenateManyColumns)
 {
   std::vector<char const*> h_strings{
@@ -224,6 +195,49 @@ TEST_F(StringColumnTest, ConcatenateTooLarge)
     input_cols.push_back(input);
   }
   EXPECT_THROW(cudf::concatenate(input_cols), std::overflow_error);
+}
+
+TEST_F(StringColumnTest, ConcatenateLargeStrings)
+{
+  CUDF_TEST_ENABLE_LARGE_STRINGS();
+  auto itr = thrust::constant_iterator<std::string_view>(
+    "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
+  auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
+  auto view  = cudf::column_view(input);
+  std::vector<cudf::column_view> input_cols;
+  std::vector<cudf::size_type> splits;
+  int const multiplier = 10;
+  for (int i = 0; i < multiplier; ++i) {  // 2500MB > 2GB
+    input_cols.push_back(view);
+    splits.push_back(view.size() * (i + 1));
+  }
+  splits.pop_back();  // remove last entry
+  auto result = cudf::concatenate(input_cols);
+  auto sv     = cudf::strings_column_view(result->view());
+  EXPECT_EQ(sv.size(), view.size() * multiplier);
+  EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+
+  // verify results in sections
+  auto sliced = cudf::split(result->view(), splits);
+  for (auto c : sliced) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
+  }
+
+  // also test with large strings column as input
+  {
+    input_cols.clear();
+    input_cols.push_back(input);           // regular column
+    input_cols.push_back(result->view());  // large column
+    result = cudf::concatenate(input_cols);
+    sv     = cudf::strings_column_view(result->view());
+    EXPECT_EQ(sv.size(), view.size() * (multiplier + 1));
+    EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+    splits.push_back(view.size() * multiplier);
+    sliced = cudf::split(result->view(), splits);
+    for (auto c : sliced) {
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
+    }
+  }
 }
 
 struct TableTest : public cudf::test::BaseFixture {};
