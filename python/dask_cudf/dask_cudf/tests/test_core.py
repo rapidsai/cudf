@@ -913,3 +913,37 @@ def test_categorical_dtype_round_trip():
     actual = ds.compute()
     expected = pds.compute()
     assert actual.dtype.ordered == expected.dtype.ordered
+
+
+def test_implicit_array_conversion_cupy():
+    s = cudf.Series(range(10))
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+
+    def func(x):
+        return x.values
+
+    # Need to compute the dask collection for now.
+    # See: https://github.com/dask/dask/issues/11017
+    result = ds.map_partitions(func, meta=s.values).compute()
+    expect = func(s)
+
+    dask.array.assert_eq(result, expect)
+
+
+def test_implicit_array_conversion_cupy_sparse():
+    cupyx = pytest.importorskip("cupyx")
+
+    s = cudf.Series(range(10), dtype="float32")
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+
+    def func(x):
+        return cupyx.scipy.sparse.csr_matrix(x.values)
+
+    # Need to compute the dask collection for now.
+    # See: https://github.com/dask/dask/issues/11017
+    result = ds.map_partitions(func, meta=s.values).compute()
+    expect = func(s)
+
+    # NOTE: The calculation here doesn't need to make sense.
+    # We just need to make sure we get the right type back.
+    assert type(result) == type(expect)
