@@ -346,7 +346,6 @@ add_library(
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
   src/groupby/sort/sort_helper.cu
-  src/hash/hashing.cu
   src/hash/md5_hash.cu
   src/hash/murmurhash3_x86_32.cu
   src/hash/murmurhash3_x64_128.cu
@@ -355,7 +354,6 @@ add_library(
   src/hash/sha256_hash.cu
   src/hash/sha384_hash.cu
   src/hash/sha512_hash.cu
-  src/hash/spark_murmurhash3_x86_32.cu
   src/hash/xxhash_64.cu
   src/interop/dlpack.cpp
   src/interop/from_arrow.cu
