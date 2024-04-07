@@ -23,8 +23,9 @@ target_link_libraries(jitify_preprocess PUBLIC ${CMAKE_DL_LIBS})
 function(jit_preprocess_files)
   cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
 
-  foreach(inc IN LISTS libcudacxx_raw_includes)
-    list(APPEND libcudacxx_includes "-I${inc}")
+  set(includes)
+  foreach(inc IN LISTS libcudacxx_raw_includes CUDAToolkit_INCLUDE_DIRS)
+    list(APPEND includes "-I${inc}")
   endforeach()
   foreach(ARG_FILE ${ARG_FILES})
     set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
@@ -44,8 +45,7 @@ function(jit_preprocess_files)
         $<TARGET_FILE:jitify_preprocess> ${ARG_FILE} -o
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
         -remove-unused-globals -D_FILE_OFFSET_BITS=64 -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
-        -I${CUDF_SOURCE_DIR}/src ${libcudacxx_includes} -I${CUDAToolkit_INCLUDE_DIRS}
-        --no-preinclude-workarounds --no-replace-pragma-once
+        -I${CUDF_SOURCE_DIR}/src ${includes} --no-preinclude-workarounds --no-replace-pragma-once
       COMMENT "Custom command to JIT-compile files."
     )
   endforeach()
