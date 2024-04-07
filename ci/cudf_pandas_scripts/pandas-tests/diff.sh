@@ -7,6 +7,8 @@
 # branch and the PR branch:
 
 # Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
+rapids-logger "Latest available results from nightly: ${1}, $1"
+
 MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py310.main-results.json
 PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py39.pr-results.json
 
