@@ -2079,7 +2079,7 @@ class DatetimeIndex(Index):
         return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
-    def day_name(self):
+    def day_name(self, locale=None):
         """
         Return the day names. Currently supports English locale only.
 
@@ -2105,7 +2105,7 @@ class DatetimeIndex(Index):
         return Index(day_names)
 
     @_cudf_nvtx_annotate
-    def month_name(self):
+    def month_name(self, locale=None):
         """
         Return the month names. Currently supports English locale only.
 
