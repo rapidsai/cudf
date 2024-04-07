@@ -4225,6 +4225,81 @@ class DatetimeProperties:
         )
 
     @_cudf_nvtx_annotate
+    def day_name(self):
+        """
+        Return the day names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        ...     '2017-01-08', freq='D'))
+        >>> datetime_series
+        0   2016-12-31
+        1   2017-01-01
+        2   2017-01-02
+        3   2017-01-03
+        4   2017-01-04
+        5   2017-01-05
+        6   2017-01-06
+        7   2017-01-07
+        8   2017-01-08
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.day_name()
+        0     Saturday
+        1       Sunday
+        2       Monday
+        3      Tuesday
+        4    Wednesday
+        5     Thursday
+        6       Friday
+        7     Saturday
+        dtype: object
+        """
+        days = self._get_dt_field("weekday")
+        day_names = cudf.core.tools.datetimes._get_date_name_field(
+            days, "day_name"
+        )
+        return Series._from_data(
+            ColumnAccessor({None: day_names}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @_cudf_nvtx_annotate
+    def month_name(self):
+        """
+        Return the month names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
+        ...         periods=3, freq="M"))
+        >>> datetime_series
+        0   2000-01-31
+        1   2000-02-29
+        2   2000-03-31
+        dtype: datetime64[ns]
+        >>> datetime_series.dt.month_name()
+        0     January
+        1    February
+        2       March
+        dtype: object
+        """
+        months = self._get_dt_field("month")
+        month_names = cudf.core.tools.datetimes._get_date_name_field(
+            months, "month_name"
+        )
+        return Series._from_data(
+            ColumnAccessor({None: month_names}),
+            index=self.series._index,
+            name=self.series.name,
+        )
+
+    @_cudf_nvtx_annotate
     def isocalendar(self):
         """
         Returns a DataFrame with the year, week, and day

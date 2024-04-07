@@ -2373,3 +2373,69 @@ def test_date_range_tz():
     result = pd.date_range("2020-01-01", "2020-01-02", periods=2, tz="UTC")
     expected = cudf.date_range("2020-01-01", "2020-01-02", periods=2, tz="UTC")
     assert_eq(result, expected)
+
+
+def test_day_name():
+    data = [
+        "2020-05-31 08:00:00",
+        None,
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        None,
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+
+    # Series
+    ps = pd.Series(data, dtype="datetime64[s]")
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.day_name()
+    got = gs.dt.day_name()
+
+    assert_eq(expect, got)
+
+    # DatetimeIndex
+    pIndex = pd.DatetimeIndex(data)
+    gIndex = cudf.from_pandas(pIndex)
+
+    expect2 = pIndex.day_name()
+    got2 = gIndex.day_name()
+
+    assert_eq(expect2, got2)
+
+
+def test_month_name():
+    data = [
+        "2020-05-31 08:00:00",
+        None,
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        None,
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+
+    # Series
+    ps = pd.Series(data, dtype="datetime64[s]")
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.month_name()
+    got = gs.dt.month_name()
+
+    assert_eq(expect, got)
+
+    # DatetimeIndex
+    pIndex = pd.DatetimeIndex(data)
+    gIndex = cudf.from_pandas(pIndex)
+
+    expect2 = pIndex.month_name()
+    got2 = gIndex.month_name()
+
+    assert_eq(expect2, got2)

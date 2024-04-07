@@ -2079,6 +2079,54 @@ class DatetimeIndex(Index):
         return Index(res, dtype="int8")
 
     @_cudf_nvtx_annotate
+    def day_name(self):
+        """
+        Return the day names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        ...     "2017-01-08", freq="D"))
+        >>> datetime_index
+        DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
+                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
+                    '2017-01-08'],
+                    dtype='datetime64[ns]')
+        >>> datetime_index.day_name()
+        Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
+               'Friday', 'Saturday'], dtype='object')
+        """
+        days = self._get_dt_field("weekday")
+        day_names = cudf.core.tools.datetimes._get_date_name_field(
+            days.to_series(), "day_name"
+        )
+        return Index(day_names)
+
+    @_cudf_nvtx_annotate
+    def month_name(self):
+        """
+        Return the month names. Currently supports English locale only.
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import cudf
+        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
+        ...             periods=3, freq="M"))
+        >>> datetime_index
+        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        >>> datetime_index.month_name()
+        Index(['January', 'February', 'March'], dtype='object')
+        """
+        months = self._get_dt_field("month")
+        month_names = cudf.core.tools.datetimes._get_date_name_field(
+            months.to_series(), "month_name"
+        )
+        return Index(month_names)
+
+    @_cudf_nvtx_annotate
     def isocalendar(self):
         """
         Returns a DataFrame with the year, week, and day
