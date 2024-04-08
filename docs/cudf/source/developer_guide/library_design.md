@@ -9,7 +9,6 @@ At a high level, cuDF is structured in three layers, each of which serves a dist
 In this document we will review each of these layers, their roles, and the requisite tradeoffs.
 Finally we tie these pieces together to provide a more holistic view of the project.
 
-
 ## The Frame layer
 
 % The class diagram below was generated using PlantUML (https://plantuml.com/).
@@ -28,25 +27,24 @@ Finally we tie these pieces together to provide a more holistic view of the proj
 % class DataFrame
 % class Series
 %
-% Frame <|-- IndexedFrame
+% Frame \<|-- IndexedFrame
 %
-% Frame <|-- SingleColumnFrame
+% Frame \<|-- SingleColumnFrame
 %
-% SingleColumnFrame <|-- Series
-% IndexedFrame <|-- Series
+% SingleColumnFrame \<|-- Series
+% IndexedFrame \<|-- Series
 %
-% IndexedFrame <|-- DataFrame
+% IndexedFrame \<|-- DataFrame
 %
-% BaseIndex <|-- RangeIndex
+% BaseIndex \<|-- RangeIndex
 %
-% BaseIndex <|-- MultiIndex
-% Frame <|-- MultiIndex
+% BaseIndex \<|-- MultiIndex
+% Frame \<|-- MultiIndex
 %
-% BaseIndex <|-- Index
-% SingleColumnFrame <|-- Index
+% BaseIndex \<|-- Index
+% SingleColumnFrame \<|-- Index
 %
 % @enduml
-
 
 ```{image} frame_class_diagram.png
 ```
@@ -90,9 +88,11 @@ In practice, `BaseIndex` does have concrete implementations of a small set of me
 However, currently many of these implementations are not applicable to all subclasses and will be eventually be removed.
 
 Almost all indexes are subclasses of `Index`, a single-columned index with the class hierarchy:
+
 ```python
 class Index(SingleColumnFrame, BaseIndex)
 ```
+
 Integer, float, or string indexes are all composed of a single column of data.
 Most `Index` methods are inherited from `Frame`, saving us the trouble of rewriting them.
 
@@ -109,7 +109,6 @@ We now consider the three main exceptions to this model:
 - To enable sharing constructor logic across different index classes,
   we define `BaseIndex` as the parent class of all indexes.
   `Index` inherits from `BaseIndex`, but it masquerades as a `BaseIndex` to match pandas.
-
 
 ## The Column layer
 
@@ -172,7 +171,9 @@ As one example, a `NumericalColumn` with 1000 `int32` elements and containing nu
 As another example, a `StringColumn` backing the Series `['do', 'you', 'have', 'any', 'cheese?']` is composed of:
 
 1. No data buffer
+
 2. No mask buffer as there are no nulls in the Series
+
 3. Two children columns:
 
    - A column of UTF-8 characters
@@ -180,12 +181,12 @@ As another example, a `StringColumn` backing the Series `['do', 'you', 'have', '
    - A column of "offsets" to the characters column (in this case,
      `[0, 2, 5, 9, 12, 19]`)
 
-
 ### Data types
 
 cuDF uses [dtypes](https://numpy.org/doc/stable/reference/arrays.dtypes.html) to represent different types of data.
 Since efficient GPU algorithms require preexisting knowledge of data layouts,
 cuDF does not support the arbitrary `object` dtype, but instead defines a few custom types for common use-cases:
+
 - `ListDtype`: Lists where each element in every list in a Column is of the same type
 - `StructDtype`: Dicts where a given key always maps to values of the same type
 - `CategoricalDtype`: Analogous to the pandas categorical dtype except that the categories are stored in device memory
@@ -194,7 +195,6 @@ cuDF does not support the arbitrary `object` dtype, but instead defines a few cu
 
 Note that there is a many-to-one mapping between data types and `Column` classes.
 For instance, all numerical types (floats and ints of different widths) are all managed using `NumericalColumn`.
-
 
 ### Buffer
 
@@ -206,7 +206,6 @@ Conversely, when constructed from a host object,
 The data is then copied from the host object into the newly allocated device memory.
 You can read more about [device memory allocation with RMM here](https://github.com/rapidsai/rmm).
 
-
 ### Spilling to host memory
 
 Setting the environment variable `CUDF_SPILL=on` enables automatic spilling (and "unspilling") of buffers from
@@ -214,23 +213,27 @@ device to host to enable out-of-memory computation, i.e., computing on objects t
 available on the GPU.
 
 Spilling can be enabled in two ways (it is disabled by default):
-  - setting the environment variable `CUDF_SPILL=on`, or
-  - setting the `spill` option in `cudf` by doing `cudf.set_option("spill", True)`.
+
+- setting the environment variable `CUDF_SPILL=on`, or
+- setting the `spill` option in `cudf` by doing `cudf.set_option("spill", True)`.
 
 Additionally, parameters are:
-  - `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory
-    error handler that spills buffers in order to free up memory. If spilling is enabled, spill on demand is **enabled by default**.
-  - `CUDF_SPILL_DEVICE_LIMIT=<X>` / `cudf.set_option("spill_device_limit", <X>)`, which sets a device memory limit
-    of `<X>` in bytes. This introduces a modest overhead and is **disabled by default**. Furthermore, this is a
-    *soft* limit. The memory usage might exceed the limit if too many buffers are unspillable.
+
+- `CUDF_SPILL_ON_DEMAND=ON` / `cudf.set_option("spill_on_demand", True)`, which registers an RMM out-of-memory
+  error handler that spills buffers in order to free up memory. If spilling is enabled, spill on demand is **enabled by default**.
+- `CUDF_SPILL_DEVICE_LIMIT=<X>` / `cudf.set_option("spill_device_limit", <X>)`, which sets a device memory limit
+  of `<X>` in bytes. This introduces a modest overhead and is **disabled by default**. Furthermore, this is a
+  *soft* limit. The memory usage might exceed the limit if too many buffers are unspillable.
 
 (Buffer-design)=
+
 #### Design
 
 Spilling consists of two components:
-  - A new buffer sub-class, `SpillableBuffer`, that implements moving of its data from host to device memory in-place.
-  - A spill manager that tracks all instances of `SpillableBuffer` and spills them on demand.
-A global spill manager is used throughout cudf when spilling is enabled, which makes `as_buffer()` return `SpillableBuffer` instead of the default `Buffer` instances.
+
+- A new buffer sub-class, `SpillableBuffer`, that implements moving of its data from host to device memory in-place.
+- A spill manager that tracks all instances of `SpillableBuffer` and spills them on demand.
+  A global spill manager is used throughout cudf when spilling is enabled, which makes `as_buffer()` return `SpillableBuffer` instead of the default `Buffer` instances.
 
 Accessing `Buffer.get_ptr(...)`, we get the device memory pointer of the buffer. This is unproblematic in the case of `Buffer` but what happens when accessing `SpillableBuffer.get_ptr(...)`, which might have spilled its device memory. In this case, `SpillableBuffer` needs to unspill the memory before returning its device memory pointer. Furthermore, while this device memory pointer is being used (or could be used), `SpillableBuffer` cannot spill its memory back to host memory because doing so would invalidate the device pointer.
 
@@ -239,20 +242,22 @@ To address this, we mark the `SpillableBuffer` as unspillable, we say that the b
 The `SpillableBuffer.get_ptr(...)` returns the device pointer of the buffer memory but if called within an `acquire_spill_lock` decorator/context, the buffer is only marked unspillable while running within the decorator/context.
 
 #### Statistics
+
 cuDF supports spilling statistics, which can be very useful for performance profiling and to identify code that renders buffers unspillable.
 
 Three levels of information gathering exist:
 
-  0. disabled (no overhead). 
-  1. gather statistics of duration and number of bytes spilled (very low overhead). 
-  2. gather statistics of each time a spillable buffer is exposed permanently (potential high overhead).
+0. disabled (no overhead).
+1. gather statistics of duration and number of bytes spilled (very low overhead).
+2. gather statistics of each time a spillable buffer is exposed permanently (potential high overhead).
 
 Statistics can be enabled in two ways (it is disabled by default):
-  - setting the environment variable `CUDF_SPILL_STATS=<statistics-level>`, or
-  - setting the `spill_stats` option in `cudf` by doing `cudf.set_option("spill_stats", <statistics-level>)`.
 
+- setting the environment variable `CUDF_SPILL_STATS=<statistics-level>`, or
+- setting the `spill_stats` option in `cudf` by doing `cudf.set_option("spill_stats", <statistics-level>)`.
 
 It is possible to access the statistics through the spill manager like:
+
 ```python
 >>> import cudf
 >>> from cudf.core.buffer.spill_manager import get_global_manager
@@ -264,6 +269,7 @@ It is possible to access the statistics through the spill manager like:
 ```
 
 To have each worker in dask print spill statistics, do something like:
+
 ```python
     def spill_info():
         from cudf.core.buffer.spill_manager import get_global_manager
@@ -291,7 +297,6 @@ calling a `libcudf` API with these arguments, then constructing new `cudf.Column
 By the time code reaches this layer, all questions of pandas compatibility should already have been addressed.
 These functions should be as close to trivial wrappers around `libcudf` APIs as possible.
 
-
 ## Putting It All Together
 
 To this point, our discussion has assumed that all cuDF functions follow a strictly linear descent through these layers.
@@ -311,7 +316,6 @@ cuDF implements corresponding objects with the same APIs.
 Internally, these objects typically interact with cuDF objects at the Frame layer via composition.
 However, for performance reasons they frequently access internal attributes and methods of `Frame` and its subclasses.
 
-
 (copy-on-write-dev-doc)=
 
 ## Copy-on-write
@@ -322,12 +326,11 @@ below.
 
 The core copy-on-write implementation relies on `ExposureTrackedBuffer` and the tracking features of `BufferOwner`.
 
-`BufferOwner` tracks internal and external references to its underlying memory. Internal references are tracked by maintaining [weak references](https://docs.python.org/3/library/weakref.html) to every `ExposureTrackedBuffer` of the underlying memory. External references are tracked through "exposure" status of the underlying memory. A buffer is considered exposed if the device pointer (integer or void*) has been handed out to a library outside of cudf. In this case, we have no way of knowing if the data are being modified by a third party.
+`BufferOwner` tracks internal and external references to its underlying memory. Internal references are tracked by maintaining [weak references](https://docs.python.org/3/library/weakref.html) to every `ExposureTrackedBuffer` of the underlying memory. External references are tracked through "exposure" status of the underlying memory. A buffer is considered exposed if the device pointer (integer or void\*) has been handed out to a library outside of cudf. In this case, we have no way of knowing if the data are being modified by a third party.
 
 `ExposureTrackedBuffer` is a subclass of `Buffer` that represents a _slice_ of the memory underlying an exposure tracked buffer.
 
 When the cudf option `"copy_on_write"` is `True`, `as_buffer` returns a `ExposureTrackedBuffer`. It is this class that determines whether or not to make a copy when a write operation is performed on a `Column` (see below). If multiple slices point to the same underlying memory, then a copy must be made whenever a modification is attempted.
-
 
 ### Eager copies when exposing to third-party libraries
 
@@ -342,7 +345,6 @@ mutate the data. This can be achieved by calling `.get_ptr(mode="read")`, and us
 This will not trigger a deep copy even if multiple `ExposureTrackedBuffer`s point to the same `ExposureTrackedBufferOwner`. This API should only be used when the lifetime of the proxy object is restricted to cudf's internal code execution. Handing this out to external libraries or user-facing APIs will lead to untracked references and undefined copy-on-write behavior. We currently use this API for device to host
 copies like in `ColumnBase.data_array_view(mode="read")` which is used for `Column.values_host`.
 
-
 ### Internal access to raw data pointers
 
 Since it is unsafe to access the raw pointer associated with a buffer when
@@ -354,14 +356,13 @@ that the caller has no intention of modifying the buffer through this pointer.
 In this case, any shallow copies are not unlinked. In contrast, if modification is
 required one may pass `mode="write"`, provoking unlinking of any shallow copies.
 
-
 ### Variable width data types
+
 Weak references are implemented only for fixed-width data types as these are only column
 types that can be mutated in place.
 Requests for deep copies of variable width data types always return shallow copies of the Columns, because these
 types don't support real in-place mutation of the data.
 Internally, we mimic in-place mutations using `_mimic_inplace`, but the resulting data is always a deep copy of the underlying data.
-
 
 ### Examples
 
@@ -378,16 +379,19 @@ Let's create a series:
 ```
 
 Make a copy of `s1`:
+
 ```python
 >>> s2 = s1.copy(deep=False)
 ```
 
 Make another copy, but of `s2`:
+
 ```python
 >>> s3 = s2.copy(deep=False)
 ```
 
 Viewing the data and memory addresses show that they all point to the same device memory:
+
 ```python
 >>> s1
 0    1
@@ -489,5 +493,6 @@ If we inspect the memory address of the data, the addresses of `s2` and `s3` rem
 ```
 
 cuDF's copy-on-write implementation is motivated by the pandas proposals documented here:
+
 1. [Google doc](https://docs.google.com/document/d/1ZCQ9mx3LBMy-nhwRl33_jgcvWo9IWdEfxDNQ2thyTb0/edit#heading=h.iexejdstiz8u)
 2. [Github issue](https://github.com/pandas-dev/pandas/issues/36195)

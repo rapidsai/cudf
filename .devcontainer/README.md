@@ -6,25 +6,25 @@ This container is a turnkey development environment for building and testing the
 
 ## Table of Contents
 
-* [Prerequisites](#prerequisites)
-* [Host bind mounts](#host-bind-mounts)
-* [Launch a Dev Container](#launch-a-dev-container)
+- [Prerequisites](#prerequisites)
+- [Host bind mounts](#host-bind-mounts)
+- [Launch a Dev Container](#launch-a-dev-container)
 
 ## Prerequisites
 
-* [VSCode](https://code.visualstudio.com/download)
-* [VSCode Remote Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+- [VSCode](https://code.visualstudio.com/download)
+- [VSCode Remote Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
 ## Host bind mounts
 
 By default, the following directories are bind-mounted into the devcontainer:
 
-* `${repo}:/home/coder/cudf`
-* `${repo}/../.aws:/home/coder/.aws`
-* `${repo}/../.local:/home/coder/.local`
-* `${repo}/../.cache:/home/coder/.cache`
-* `${repo}/../.conda:/home/coder/.conda`
-* `${repo}/../.config:/home/coder/.config`
+- `${repo}:/home/coder/cudf`
+- `${repo}/../.aws:/home/coder/.aws`
+- `${repo}/../.local:/home/coder/.local`
+- `${repo}/../.cache:/home/coder/.cache`
+- `${repo}/../.conda:/home/coder/.conda`
+- `${repo}/../.config:/home/coder/.config`
 
 This ensures caches, configurations, dependencies, and your commits are persisted on the host across container runs.
 

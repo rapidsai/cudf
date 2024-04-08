@@ -23,21 +23,21 @@ conduct. More information can be found at:
 
 ### Your first issue
 
-1. Follow the guide at the bottom of this page for
-   [Setting up your build environment](#setting-up-your-build-environment).
-2. Find an issue to work on. The best way is to look for the
-   [good first issue](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
-   or [help wanted](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
-   labels.
-3. Comment on the issue stating that you are going to work on it.
-4. Create a fork of the cudf repository and check out a branch with a name that
-   describes your planned work. For example, `fix-documentation`.
-5. Write code to address the issue or implement the feature.
-6. Add unit tests and unit benchmarks.
-7. [Create your pull request](https://github.com/rapidsai/cudf/compare). To run continuous integration (CI) tests without requesting review, open a draft pull request.
-8. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
-   Fix if needed.
-9. Wait for other developers to review your code and update code as needed.
+01. Follow the guide at the bottom of this page for
+    [Setting up your build environment](#setting-up-your-build-environment).
+02. Find an issue to work on. The best way is to look for the
+    [good first issue](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+    or [help wanted](https://github.com/rapidsai/cudf/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+    labels.
+03. Comment on the issue stating that you are going to work on it.
+04. Create a fork of the cudf repository and check out a branch with a name that
+    describes your planned work. For example, `fix-documentation`.
+05. Write code to address the issue or implement the feature.
+06. Add unit tests and unit benchmarks.
+07. [Create your pull request](https://github.com/rapidsai/cudf/compare). To run continuous integration (CI) tests without requesting review, open a draft pull request.
+08. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
+    Fix if needed.
+09. Wait for other developers to review your code and update code as needed.
 10. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
@@ -71,15 +71,15 @@ for a minimal build of libcudf without using conda are also listed below.
 
 Compilers:
 
-* `gcc` version 9.3+
-* `nvcc` version 11.5+
-* `cmake` version 3.26.4+
+- `gcc` version 9.3+
+- `nvcc` version 11.5+
+- `cmake` version 3.26.4+
 
 CUDA/GPU:
 
-* CUDA 11.5+
-* NVIDIA driver 450.80.02+
-* Volta architecture or better (Compute Capability >=7.0)
+- CUDA 11.5+
+- NVIDIA driver 450.80.02+
+- Volta architecture or better (Compute Capability >=7.0)
 
 You can obtain CUDA from
 [https://developer.nvidia.com/cuda-downloads](https://developer.nvidia.com/cuda-downloads).
@@ -171,6 +171,7 @@ ctest --test-dir ${CUDF_HOME}/cpp/libcudf_kafka/build  # libcudf_kafka
 To run python tests, run
 
 - To run `cudf` tests:
+
 ```bash
 cd $CUDF_HOME/python
 pytest -v ${CUDF_HOME}/python/cudf/cudf/tests
@@ -305,7 +306,6 @@ This will bring up an interactive prompt to select which spelling fixes to apply
 The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
 
 The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
-
 
 ## Attribution
 

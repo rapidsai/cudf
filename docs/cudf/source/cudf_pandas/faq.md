@@ -60,23 +60,23 @@ print(pd)
 within these libraries. As part of our CI/CD system, we currently test
 common interactions with the following Python libraries:
 
-| Library          | Status |
-|------------------|--------|
-| cuGraph          | ✅      |
-| cuML             | ✅      |
-| Hvplot           | ✅      |
-| Holoview         | ✅      |
-| Ibis             | ✅      |
-| Joblib           | ❌      |
-| NumPy            | ✅      |
-| Matplotlib       | ✅      |
-| Plotly           | ✅      |
-| PyTorch          | ✅      |
-| Seaborn          | ✅      |
-| Scikit-Learn     | ✅      |
-| SciPy            | ✅      |
-| Tensorflow       | ✅      |
-| XGBoost          | ✅      |
+| Library      | Status |
+| ------------ | ------ |
+| cuGraph      | ✅      |
+| cuML         | ✅      |
+| Hvplot       | ✅      |
+| Holoview     | ✅      |
+| Ibis         | ✅      |
+| Joblib       | ❌      |
+| NumPy        | ✅      |
+| Matplotlib   | ✅      |
+| Plotly       | ✅      |
+| PyTorch      | ✅      |
+| Seaborn      | ✅      |
+| Scikit-Learn | ✅      |
+| SciPy        | ✅      |
+| Tensorflow   | ✅      |
+| XGBoost      | ✅      |
 
 Please review the section on [Known Limitations](#are-there-any-known-limitations)
 for details about what is expected not to work (and why).
@@ -103,19 +103,25 @@ There are a few known limitations that you should be aware of:
   [value mutability](https://pandas.pydata.org/pandas-docs/stable/getting_started/overview.html#mutability-and-copying-of-data)
   of Pandas objects is not always guaranteed. You should follow the
   pandas recommendation to favor immutable operations.
+
 - `cudf.pandas` can't currently interface smoothly with functions that
   interact with objects using a C API (such as the Python or NumPy C
   API)
+
   - For example, you can write `torch.tensor(df.values)` but not
     `torch.from_numpy(df.values)`, as the latter uses the NumPy C API
+
 - For performance reasons, joins and join-based operations are not
   currently implemented to maintain the same row ordering as standard
   pandas
+
 - `cudf.pandas` isn't compatible with directly using `import cudf`
-   and is intended to be used with pandas-based workflows.
+  and is intended to be used with pandas-based workflows.
+
 - Unpickling objects that were pickled with "regular" pandas will not
   work: you must have pickled an object with `cudf.pandas` enabled for
   it to be unpickled when `cudf.pandas` is enabled.
+
 - Global variables can be accessed but can't be modified during CPU-fallback
 
   ```python
@@ -135,7 +141,8 @@ There are a few known limitations that you should be aware of:
    dtype: int64
    print(lst) # lst is unchanged, as this specific UDF could not run on the GPU
    [10]
-   ```
+  ```
+
 - `cudf.pandas` (and cuDF in general) is only compatible with pandas 2. Version
   24.02 of cudf was the last to support pandas 1.5.x.
 

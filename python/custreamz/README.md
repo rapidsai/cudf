@@ -8,7 +8,6 @@ For example, the following snippet consumes CSV data from a Kafka topic named `c
 
 Users can visit [Apache Kafka Quickstart](https://kafka.apache.org/quickstart) to learn how to install, create `custreamz_tips` topic, and insert the [tips](https://github.com/plotly/datasets/raw/master/tips.csv) data into Kafka.
 
-
 ```python
 from custreamz import kafka
 
@@ -22,17 +21,15 @@ kafka_configs = {
 consumer = kafka.Consumer(kafka_configs)
 
 # Read 10,000 messages from `custreamz_tips` topic in CSV format.
-tips_df = consumer.read_gdf(topic="custreamz_tips",
-                        partition=0,
-                        start=0,
-                        end=10000,
-                        message_format="CSV")
+tips_df = consumer.read_gdf(
+    topic="custreamz_tips", partition=0, start=0, end=10000, message_format="CSV"
+)
 
 print(tips_df.head())
-tips_df['tip_percentage'] = tips_df['tip'] / tips_df['total_bill'] * 100
+tips_df["tip_percentage"] = tips_df["tip"] / tips_df["total_bill"] * 100
 
 # display average tip by dining party size
-print(tips_df.groupby('size').tip_percentage.mean())
+print(tips_df.groupby("size").tip_percentage.mean())
 ```
 
 A "hello world" of using cuStreamz with python streamz can be found [here](https://github.com/rapidsai-community/notebooks-contrib/blob/main/getting_started_materials/hello_worlds/hello_streamz.ipynb)
@@ -45,23 +42,24 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 
 ## Installation
 
-
 ### CUDA/GPU requirements
 
-* CUDA 11.0+
-* NVIDIA driver 450.80.02+
-* Volta architecture or better (Compute Capability >=7.0)
+- CUDA 11.0+
+- NVIDIA driver 450.80.02+
+- Volta architecture or better (Compute Capability >=7.0)
 
 ### Conda
 
 cuStreamz is installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` or `rapidsai-nightly` channel:
 
 Release:
+
 ```bash
 conda install -c rapidsai cudf_kafka custreamz
 ```
 
 Nightly:
+
 ```bash
 conda install -c rapidsai-nightly cudf_kafka custreamz
 ```

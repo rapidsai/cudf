@@ -8,10 +8,11 @@ Each option name is its key in the dictionary.
 The value of the option is an instance of an `Options` object.
 
 An `Options` object has the following attributes:
+
 - `value`: the current value of the option
 - `description`: a text description of the option
 - `validator`: a boolean function that returns `True` if `value` is valid,
-`False` otherwise.
+  `False` otherwise.
 
 Developers can use `cudf.options._register_option` to add options to the dictionary.
 {py:func}`cudf.get_option` is provided to get option values from the dictionary.

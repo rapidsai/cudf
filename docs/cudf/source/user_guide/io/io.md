@@ -75,7 +75,6 @@ IO format.
 
 </div>
 
-
 **Notes:**
 
 - \[¹\] - Not all orientations are GPU-accelerated.
@@ -111,8 +110,8 @@ This environment variable also affects how cuDF treats GDS errors.
   fails for any reason, cuDF falls back to the internal implementation
   with bounce buffers.
 - When `LIBCUDF_CUFILE_POLICY` is set to "ALWAYS" and a GDS API call
-fails for any reason (unlikely, given that the compatibility mode is
-on), cuDF throws an exception to propagate the error to the user.
+  fails for any reason (unlikely, given that the compatibility mode is
+  on), cuDF throws an exception to propagate the error to the user.
 - When `LIBCUDF_CUFILE_POLICY` is set to "KVIKIO" and a KvikIO API
   call fails for any reason (unlikely, given that KvikIO implements
   its own compatibility mode) cuDF throws an exception to propagate

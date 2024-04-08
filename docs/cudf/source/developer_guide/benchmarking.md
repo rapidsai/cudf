@@ -57,6 +57,7 @@ When benchmarks are run, the default behavior is to output the results in a tabl
 A common requirement is to then compare the performance of benchmarks before and after a change.
 We can generate these comparisons by saving the output using the `--benchmark-autosave` option to pytest.
 When using this option, after the benchmarks are run the output will contain a line:
+
 ```
 Saved benchmark data in: /path/to/XXXX_*.json
 ```
@@ -65,12 +66,15 @@ The `XXXX` is a four-digit number identifying the benchmark.
 If preferred, a user may also use the `--benchmark-save=NAME` option,
 which allows more control over the resulting filename.
 Given two benchmark runs `XXXX` and `YYYY`, benchmarks can then be compared using
+
 ```
 pytest-benchmark compare XXXX YYYY
 ```
+
 Note that the comparison uses the `pytest-benchmark` command rather than the `pytest` command.
 `pytest-benchmark` has a number of additional options that can be used to customize the output.
 The next line contains one useful example, but developers should experiment to find a useful output
+
 ```
 pytest-benchmark compare XXXX YYYY --sort="name" --columns=Mean --name=short --group-by=param
 ```
@@ -83,6 +87,7 @@ For more details, see the [`pytest-benchmark` documentation](https://pytest-benc
 
 Benchmarks must support [comparing to pandas](#comparing-to-pandas) and [being run as tests](#testing-benchmarks).
 To satisfy these requirements, one must follow these rules when writing benchmarks:
+
 1. Import `cudf` and `cupy` from the config module:
    ```python
        from ..common.config import cudf, cupy # Do this
@@ -91,7 +96,6 @@ To satisfy these requirements, one must follow these rules when writing benchmar
    This enables swapping out for `pandas` and `numpy` respectively.
 2. Avoid hard-coding benchmark dataset sizes, and instead use the sizes advertised by `config.py`.
    This enables running the benchmarks in "test" mode on small datasets, which will be much faster.
-
 
 ### Writing benchmarks
 
@@ -142,7 +146,6 @@ These data sizes can be tweaked for debugging purposes (see [](#testing-benchmar
 Fixture sizes should be relative to the `NUM_ROWS` and/or `NUM_COLS` variables defined in the config module.
 These rules ensure consistency between these fixtures and those provided by `benchmark_with_object`.
 
-
 ## Comparing to pandas
 
 An important aspect of benchmarking cuDF is comparing it to pandas.
@@ -181,14 +184,17 @@ This is why it is crucial for developers to use these variables when defining cu
 
 Although not strictly part of our benchmarking suite, profiling is a common need so we provide some guidelines here.
 Here are two easy ways (there may be others) to profile benchmarks:
+
 1. The [`pytest-profiling`](https://github.com/man-group/pytest-plugins/tree/master/pytest-profiling) plugin.
 2. The [`py-spy`](https://github.com/benfred/py-spy) package.
 
 Using the former is as simple as adding the `--profile` (or `--profile-svg`) arguments to the `pytest` invocation.
 The latter requires instead invoking pytest from py-spy, like so:
+
 ```
 py-spy record -- pytest bench_foo.py
 ```
+
 Each tool has different strengths and provides somewhat different information.
 Developers should try both and see what works for a particular workflow.
 Developers are also encouraged to share useful alternatives that they discover.

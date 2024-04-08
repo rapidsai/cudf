@@ -9,18 +9,18 @@ All data types in cuDF are [nullable](missing-data).
 
 <div class="special-table">
 
-| Kind of data         | Data type(s)                                                                                                                             |
-|----------------------|------------------------------------------------------------------------------------------------------------------------------------------|
-| Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                                                                                |
-| Unsigned integer     | `'uint32'`, `'uint64'`                                                                                                                   |
-| Floating-point       | `'float32'`, `'float64'`                                                                                                                 |
-| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`                                                           |
-| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                                                               |
-| Category             | {py:class}`~cudf.core.dtypes.CategoricalDtype`                                                                                           |
-| String               | `'object'` or `'string'`                                                                                                                 |
-| Decimal              | {py:class}`~cudf.core.dtypes.Decimal32Dtype`, {py:class}`~cudf.core.dtypes.Decimal64Dtype`, {py:class}`~cudf.core.dtypes.Decimal128Dtype`|
-| List                 | {py:class}`~cudf.core.dtypes.ListDtype`                                                                                                  |
-| Struct               | {py:class}`~cudf.core.dtypes.StructDtype`                                                                                                |
+| Kind of data         | Data type(s)                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Signed integer       | `'int8'`, `'int16'`, `'int32'`, `'int64'`                                                                                                 |
+| Unsigned integer     | `'uint32'`, `'uint64'`                                                                                                                    |
+| Floating-point       | `'float32'`, `'float64'`                                                                                                                  |
+| Datetime             | `'datetime64[s]'`, `'datetime64[ms]'`, `'datetime64['us']`, `'datetime64[ns]'`                                                            |
+| Timedelta (duration) | `'timedelta[s]'`, `'timedelta[ms]'`, `'timedelta['us']`, `'timedelta[ns]'`                                                                |
+| Category             | {py:class}`~cudf.core.dtypes.CategoricalDtype`                                                                                            |
+| String               | `'object'` or `'string'`                                                                                                                  |
+| Decimal              | {py:class}`~cudf.core.dtypes.Decimal32Dtype`, {py:class}`~cudf.core.dtypes.Decimal64Dtype`, {py:class}`~cudf.core.dtypes.Decimal128Dtype` |
+| List                 | {py:class}`~cudf.core.dtypes.ListDtype`                                                                                                   |
+| Struct               | {py:class}`~cudf.core.dtypes.StructDtype`                                                                                                 |
 
 </div>
 
@@ -72,7 +72,7 @@ precision represents the total number of digits in each value of this
 dtype. For example, the precision associated with the decimal value
 `1.023` is `4`. The scale is the total number of digits to the right
 of the decimal point. The scale associated with the value `1.023` is
-3.
+3\.
 
 Each decimal data type is associated with a maximum precision:
 
@@ -151,5 +151,4 @@ Or by reading them from disk, using a [file format that supports nested data](/u
 ListDtype(int64)
 ```
 
-[numpy-dtype]: https://numpy.org/doc/stable/reference/arrays.dtypes.html#arrays-dtypes
 [python-decimal]: https://docs.python.org/3/library/decimal.html#decimal.Decimal

@@ -1,6 +1,7 @@
 # Testing cuDF
 
 ## Tooling
+
 Tests in cuDF are written using [`pytest`](https://docs.pytest.org/en/latest/).
 Test coverage is measured using [`coverage.py`](https://coverage.readthedocs.io/en/latest/),
 specifically the [`pytest-cov`](https://github.com/pytest-dev/pytest-cov) plugin.
@@ -29,23 +30,25 @@ the tests may be placed in a directory corresponding to the parent class.
 In general, functionality must be tested for both standard and exceptional cases.
 Standard use cases may be covered using parametrization (using `pytest.mark.parametrize`).
 Tests of standard use cases should typically include some coverage of:
+
 - Different dtypes, including nested dtypes (especially strings)
 - Mixed objects, e.g. binary operations between `DataFrame` and `Series`
 - Operations on scalars
 - Verifying all combinations of parameters for complex APIs like `cudf.merge`.
 
 Here are some of the most common exceptional cases to test:
-1. `Series`/`DataFrame`/`Index` with zero rows
-2. `DataFrame` with zero columns
-3. All null data
-4. For string or list APIs, empty strings/lists
-5. For list APIs, lists containing all null elements or empty strings
-6. For numeric data:
-  1. All 0s.
-  2. All 1s.
-  3. Containing/all inf
-  4. Containing/all nan
-  5. `INT${PRECISION}_MAX` for a given precision (e.g. `2**32` for `int32`).
+
+01. `Series`/`DataFrame`/`Index` with zero rows
+02. `DataFrame` with zero columns
+03. All null data
+04. For string or list APIs, empty strings/lists
+05. For list APIs, lists containing all null elements or empty strings
+06. For numeric data:
+07. All 0s.
+08. All 1s.
+09. Containing/all inf
+10. Containing/all nan
+11. `INT${PRECISION}_MAX` for a given precision (e.g. `2**32` for `int32`).
 
 Most specific APIs will also include a range of other cases.
 
@@ -76,9 +79,11 @@ In particular, developers should avoid performing GPU memory allocations during 
 With that in mind, here are some ground rules for how to parametrize.
 
 Use `pytest.mark.parametrize` when:
+
 - One test must be run on many inputs and those inputs are simple to construct.
 
 Use fixtures when:
+
 - One or more tests must be run on the same set of inputs,
   and all of those inputs can be constructed with simple parametrizations.
   In practice, that means that it is acceptable to use a fixture like this:
@@ -126,6 +131,7 @@ There are multiple potential solutions to this problem.
 One possibility is to encapsulate common test logic in a helper function,
 then call it from multiple `test_*` functions that construct the necessary inputs.
 Another possibility is to use functions rather than fixtures to construct inputs, allowing for more flexible input construction:
+
 ```python
 def get_values(predicate):
     values = range(10)
@@ -164,9 +170,7 @@ with appropriate marks.
     [
         1,
         2,
-        pytest.param(
-            3, marks=pytest.mark.xfail(reason="code doesn't work for 3")
-        ),
+        pytest.param(3, marks=pytest.mark.xfail(reason="code doesn't work for 3")),
     ],
 )
 def test_value(value):
@@ -221,7 +225,6 @@ def test_sum_lt_6(request, v1, v2):
 This way, when the bug is fixed, the test suite will fail at this
 point (and we will remember to update the test).
 
-
 (testing_warnings)=
 
 ### Testing code that throws warnings
@@ -252,10 +255,10 @@ The cudf testing suite should avoid such ambiguities.
 The `cudf.testing` subpackage provides a handful of utilities for testing the equality of objects.
 The internal `cudf.testing._utils` module provides additional helper functions for use in tests.
 In particular:
+
 - `testing._utils.assert_eq` is the biggest hammer to reach for. It can be used to compare any pair of objects.
 - For comparing specific objects, use `testing.testing.assert_[frame|series|index]_equal`.
 - For verifying that the expected assertions are raised, use `testing._utils.assert_exceptions_equal`.
-
 
 ### Version testing
 

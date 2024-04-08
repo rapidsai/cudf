@@ -1,4 +1,4 @@
-# <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
+# <div align="left"><img src="img/rapids_logo.png" width="90px"/> cuDF - GPU DataFrames</div>
 
 ## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
 
@@ -65,9 +65,9 @@ and other RAPIDS packages.
 
 ### CUDA/GPU requirements
 
-* CUDA 11.2+
-* NVIDIA driver 450.80.02+
-* Volta architecture or better (Compute Capability >=7.0)
+- CUDA 11.2+
+- NVIDIA driver 450.80.02+
+- Volta architecture or better (Compute Capability >=7.0)
 
 ### Pip
 
@@ -104,6 +104,7 @@ Note: cuDF is supported only on Linux, and with Python versions 3.9 and later.
 See the [RAPIDS installation guide](https://docs.rapids.ai/install) for more OS and version info.
 
 ## Build/Install from Source
+
 See build [instructions](CONTRIBUTING.md#setting-up-your-build-environment).
 
 ## Contributing

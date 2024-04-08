@@ -18,22 +18,21 @@ different behavior.
 
 1. Use `cudf.set_option`:
 
-    ```python
-    >>> import cudf
-    >>> cudf.set_option("copy_on_write", True)
-    ```
+   ```python
+   >>> import cudf
+   >>> cudf.set_option("copy_on_write", True)
+   ```
 
-2. Set the environment variable ``CUDF_COPY_ON_WRITE`` to ``1`` prior to the
-launch of the Python interpreter:
+2. Set the environment variable `CUDF_COPY_ON_WRITE` to `1` prior to the
+   launch of the Python interpreter:
 
-    ```bash
-    export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
-    ```
+   ```bash
+   export CUDF_COPY_ON_WRITE="1" python -c "import cudf"
+   ```
 
 ## Disabling copy-on-write
 
-
-Copy-on-write can be disabled by setting the ``copy_on_write`` option to ``False``:
+Copy-on-write can be disabled by setting the `copy_on_write` option to `False`:
 
 ```python
 >>> cudf.set_option("copy_on_write", False)
@@ -66,8 +65,8 @@ dtype: int64
 dtype: int64
 ```
 
-When a write operation is performed on either ``series`` or
-``copied_series``, a true physical copy of the data is created:
+When a write operation is performed on either `series` or
+`copied_series`, a true physical copy of the data is created:
 
 ```python
 >>> series[0:2] = 10
@@ -84,7 +83,6 @@ dtype: int64
 3    4
 dtype: int64
 ```
-
 
 ## Notes
 
@@ -169,11 +167,9 @@ dtype: int64
 dtype: int64
 ```
 
-
 ### Explicit deep and shallow copies comparison
 
-
-|                     | Copy-on-Write enabled                                                                                                                                                                                          | Copy-on-Write disabled (default)                                                                               |
-|---------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------|
-| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                            | A true copy is made and changes don't propagate to the original object.                  |
+|                     | Copy-on-Write enabled                                                                                                                                                                                        | Copy-on-Write disabled (default)                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `.copy(deep=True)`  | A true copy is made and changes don't propagate to the original object.                                                                                                                                      | A true copy is made and changes don't propagate to the original object.                                   |
 | `.copy(deep=False)` | Memory is shared between the two objects and but any write operation on one object will trigger a true physical copy before the write is performed. Hence changes will not propagate to the original object. | Memory is shared between the two objects and changes performed on one will propagate to the other object. |

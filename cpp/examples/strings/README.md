@@ -7,6 +7,7 @@ The example source code loads a csv file and produces a redacted strings
 column from the names column using the values from the visibilities column.
 
 Four examples are included:
+
 1. Using libcudf APIs to build the output
 2. Using a simple custom kernel with dynamic memory
 3. Using a custom kernel with pre-allocated device memory

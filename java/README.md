@@ -39,6 +39,7 @@ In some cases there may be a classifier to indicate the version of cuda required
 can happen. No official release of the jar will have a classifier on it.
 
 CUDA 11.0:
+
 ```xml
 <dependency>
     <groupId>ai.rapids</groupId>
@@ -56,6 +57,7 @@ that Apache Arrow is linked statically to libcudf, as this will help create a ja
 does not require Arrow and its dependencies to be available in the runtime environment.
 
 After building libcudf, the Java bindings can be built via Maven, e.g.:
+
 ```
 mvn clean install
 ```
@@ -99,6 +101,7 @@ between different threads (see
 
 Since the PTDS option is for each compilation unit, it should be done at the same time across the
 whole codebase. To enable PTDS, first build cuDF:
+
 ```shell script
 cd src/cudf/cpp/build
 cmake .. -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
@@ -107,6 +110,7 @@ make install
 ```
 
 then build the jar:
+
 ```shell script
 cd src/cudf/java
 mvn clean install -DCUDF_USE_PER_THREAD_DEFAULT_STREAM=ON
@@ -120,6 +124,7 @@ https://docs.nvidia.com/gpudirect-storage/).
 
 To enable GDS support, first make sure GDS is installed (see
 https://docs.nvidia.com/gpudirect-storage/troubleshooting-guide/index.html), then run:
+
 ```shell script
 cd src/cudf/java
 mvn clean install -DUSE_GDS=ON

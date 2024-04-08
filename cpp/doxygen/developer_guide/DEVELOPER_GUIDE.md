@@ -3,9 +3,9 @@
 This document serves as a guide for contributors to libcudf C++ code. Developers should also refer
 to these additional files for further documentation of libcudf best practices.
 
-* [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
-* [Testing Guide](TESTING.md) for guidelines on writing unit tests.
-* [Benchmarking Guide](BENCHMARKING.md) for guidelines on writing unit benchmarks.
+- [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
+- [Testing Guide](TESTING.md) for guidelines on writing unit tests.
+- [Benchmarking Guide](BENCHMARKING.md) for guidelines on writing unit benchmarks.
 
 # Overview
 
@@ -120,24 +120,24 @@ In general, we recommend following
 recommend watching Sean Parent's [C++ Seasoning talk](https://www.youtube.com/watch?v=W2tWOdzgXHA),
 and we try to follow his rules: "No raw loops. No raw pointers. No raw synchronization primitives."
 
- * Prefer algorithms from STL and Thrust to raw loops.
- * Prefer libcudf and RMM [owning data structures and views](#libcudf-data-structures) to raw
-   pointers and raw memory allocation.
- * libcudf doesn't have a lot of CPU-thread concurrency, but there is some. And currently libcudf
-   does use raw synchronization primitives. So we should revisit Parent's third rule and improve
-   here.
+- Prefer algorithms from STL and Thrust to raw loops.
+- Prefer libcudf and RMM [owning data structures and views](#libcudf-data-structures) to raw
+  pointers and raw memory allocation.
+- libcudf doesn't have a lot of CPU-thread concurrency, but there is some. And currently libcudf
+  does use raw synchronization primitives. So we should revisit Parent's third rule and improve
+  here.
 
 Additional style guidelines for libcudf code:
 
- * Prefer "east const", placing `const` after the type. This is not
-   automatically enforced by `clang-format` because the option
-   `QualifierAlignment: Right` has been observed to produce false negatives and
-   false positives.
- * [NL.11: Make Literals
-   Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
-   Decimal values should use integer separators every thousands place, like
-   `1'234'567`. Hexadecimal values should use separators every 4 characters,
-   like `0x0123'ABCD`.
+- Prefer "east const", placing `const` after the type. This is not
+  automatically enforced by `clang-format` because the option
+  `QualifierAlignment: Right` has been observed to produce false negatives and
+  false positives.
+- [NL.11: Make Literals
+  Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
+  Decimal values should use integer separators every thousands place, like
+  `1'234'567`. Hexadecimal values should use separators every 4 characters,
+  like `0x0123'ABCD`.
 
 Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
@@ -145,34 +145,34 @@ Documentation is discussed in the [Documentation Guide](DOCUMENTATION.md).
 
 The following guidelines apply to organizing `#include` lines.
 
- * Group includes by library (e.g. cuDF, RMM, Thrust, STL). `clang-format` will respect the
-   groupings and sort the individual includes within a group lexicographically.
- * Separate groups by a blank line.
- * Order the groups from "nearest" to "farthest". In other words, local includes, then includes
-   from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
-   includes from dependencies installed with cuDF, and then standard headers (for example
-   `<string>`, `<iostream>`).
- * We use clang-format for grouping and sorting headers automatically. See the
-   `cudf/cpp/.clang-format` file for specifics.
- * Use `<>` for all includes except for internal headers that are not in the `include`
-   directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
-   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
-   should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
- * `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
-   public headers in `include` that should be included with `<>`.
- * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
-   and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
-   the grouping.
- * Always check that includes are only necessary for the file in which they are included.
-   Try to avoid excessive including especially in header files. Double check this when you remove
-   code.
- * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
-   (internal) headers from source paths not in the same directory as the including file,
-   because source paths are not passed with `-I`.
- * Avoid including library internal headers from non-internal files. For example, try not to include
-   headers from libcudf `src` directories in tests or in libcudf public headers. If you find
-   yourself doing this, start a discussion about moving (parts of) the included internal header
-   to a public header.
+- Group includes by library (e.g. cuDF, RMM, Thrust, STL). `clang-format` will respect the
+  groupings and sort the individual includes within a group lexicographically.
+- Separate groups by a blank line.
+- Order the groups from "nearest" to "farthest". In other words, local includes, then includes
+  from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
+  includes from dependencies installed with cuDF, and then standard headers (for example
+  `<string>`, `<iostream>`).
+- We use clang-format for grouping and sorting headers automatically. See the
+  `cudf/cpp/.clang-format` file for specifics.
+- Use `<>` for all includes except for internal headers that are not in the `include`
+  directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
+  directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
+  should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+- `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
+  public headers in `include` that should be included with `<>`.
+- Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
+  and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
+  the grouping.
+- Always check that includes are only necessary for the file in which they are included.
+  Try to avoid excessive including especially in header files. Double check this when you remove
+  code.
+- Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
+  (internal) headers from source paths not in the same directory as the including file,
+  because source paths are not passed with `-I`.
+- Avoid including library internal headers from non-internal files. For example, try not to include
+  headers from libcudf `src` directories in tests or in libcudf public headers. If you find
+  yourself doing this, start a discussion about moving (parts of) the included internal header
+  to a public header.
 
 # libcudf Data Structures
 
@@ -323,21 +323,23 @@ any type that cudf supports. For example, a `list_scalar` representing a list of
 `cudf::column` of type `INT32`. A `list_scalar` representing a list of lists of integers stores a
 `cudf::column` of type `LIST`, which in turn stores a column of type `INT32`.
 
-|Value type|Scalar class|Notes|
-|-|-|-|
-|fixed-width|`fixed_width_scalar<T>`| `T` can be any fixed-width type|
-|numeric|`numeric_scalar<T>` | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double`|
-|fixed-point|`fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`|
-|timestamp|`timestamp_scalar<T>` | `T` can be `timestamp_D`, `timestamp_s`, etc.|
-|duration|`duration_scalar<T>` | `T` can be `duration_D`, `duration_s`, etc.|
-|string|`string_scalar`| This class object is immutable|
-|list|`list_scalar`| Underlying data can be any type supported by cudf |
+| Value type  | Scalar class            | Notes                                                                      |
+| ----------- | ----------------------- | -------------------------------------------------------------------------- |
+| fixed-width | `fixed_width_scalar<T>` | `T` can be any fixed-width type                                            |
+| numeric     | `numeric_scalar<T>`     | `T` can be `int8_t`, `int16_t`, `int32_t`, `int_64_t`, `float` or `double` |
+| fixed-point | `fixed_point_scalar<T>` | `T` can be `numeric::decimal32` or `numeric::decimal64`                    |
+| timestamp   | `timestamp_scalar<T>`   | `T` can be `timestamp_D`, `timestamp_s`, etc.                              |
+| duration    | `duration_scalar<T>`    | `T` can be `duration_D`, `duration_s`, etc.                                |
+| string      | `string_scalar`         | This class object is immutable                                             |
+| list        | `list_scalar`           | Underlying data can be any type supported by cudf                          |
 
 ### Construction
+
 `scalar`s can be created using either their respective constructors or using factory functions like
 `make_numeric_scalar()`, `make_timestamp_scalar()` or `make_string_scalar()`.
 
 ### Casting
+
 All the factory methods return a `unique_ptr<scalar>` which needs to be statically downcasted to
 its respective scalar class type before accessing its value. Their validity (nullness) can be
 accessed without casting. Generally, the value needs to be accessed from a function that is aware
@@ -354,6 +356,7 @@ auto s1 = static_cast<ScalarType *>(s.get());
 ```
 
 ### Passing to device
+
 Each scalar type, except `list_scalar`, has a corresponding non-owning device view class which
 allows access to the value and its validity from the device. This can be obtained using the function
 `get_scalar_device_view(ScalarType s)`. Note that a device view is not provided for a base scalar
@@ -383,6 +386,7 @@ document these policies and the reasons behind them here.
 
 libcudf APIs generally do not perform deep introspection and validation of input data.
 There are numerous reasons for this:
+
 1. It violates the single responsibility principle: validation is separate from execution.
 2. Since libcudf data structures store data on the GPU, any validation incurs _at minimum_ the
    overhead of a kernel launch, and may in general be prohibitively expensive.
@@ -395,13 +399,14 @@ To give some idea of what should or should not be validated, here are (non-exhau
 examples.
 
 **Things that libcudf should validate**:
+
 - Input column/table sizes or data types
 
 **Things that libcudf should not validate**:
+
 - Integer overflow
 - Ensuring that outputs will not exceed the [2GB size](#cudfsize_type) limit for a given set of
   inputs
-
 
 ## libcudf expects nested types to have sanitized null masks
 
@@ -409,6 +414,7 @@ Various libcudf APIs accepting columns of nested data types (such as `LIST` or `
 that these columns have been sanitized. In this context, sanitization refers to ensuring that the
 null elements in a column with a nested dtype are compatible with the elements of nested columns.
 Specifically:
+
 - Null elements of list columns should also be empty. The starting offset of a null element should
   be equal to the ending offset.
 - Null elements of struct columns should also be null elements in the underlying structs.
@@ -503,7 +509,7 @@ asynchrony.
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
 This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
 
- ### Stream Creation
+### Stream Creation
 
 There may be times in implementing libcudf features where it would be advantageous to use streams
 *internally*, i.e., to accomplish overlap in implementing an algorithm. However, dynamically
@@ -564,6 +570,7 @@ libcudf code generally eschews raw pointers and direct memory allocation. Use RM
 use `device_memory_resource`s for device memory allocation with automated lifetime management.
 
 #### rmm::device_buffer
+
 Allocates a specified number of bytes of untyped, uninitialized device memory using a
 `device_memory_resource`. If no resource is explicitly provided, uses
 `rmm::mr::get_current_device_resource()`.
@@ -590,6 +597,7 @@ rmm::device_buffer custom_buff(100, mr, stream);
 ```
 
 #### rmm::device_scalar<T>
+
 Allocates a single element of the specified type initialized to the specified value. Use this for
 scalar input/outputs into device kernels, e.g., reduction results, null count, etc. This is
 effectively a convenience wrapper around a `rmm::device_vector<T>` of length 1.
@@ -623,10 +631,11 @@ a number of benefits, as described in the following section on `rmm::device_uvec
 
 Similar to a `device_vector`, allocates a contiguous set of elements in device memory but with key
 differences:
+
 - As an optimization, elements are uninitialized and no synchronization occurs at construction.
-This limits the types `T` to trivially copyable types.
+  This limits the types `T` to trivially copyable types.
 - All operations are stream ordered (i.e., they accept a `cuda_stream_view` specifying the stream
-on which the operation is performed). This improves safety when using non-default streams.
+  on which the operation is performed). This improves safety when using non-default streams.
 - `device_uvector.hpp` does not include any `__device__` code, unlike `thrust/device_vector.hpp`,
   which means `device_uvector`s can be used in `.cpp` files, rather than just in `.cu` files.
 
@@ -666,35 +675,37 @@ defaults.
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
 should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::scoped_range`
 for declaring NVTX ranges in the current scope:
+
 - Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
-NVTX range
+  NVTX range
 - Use `cudf::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
-NVTX range
+  NVTX range
 
 For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
 
 The preferred style for how inputs are passed in and outputs are returned is the following:
+
 - Inputs
   - Columns:
     - `column_view const&`
   - Tables:
     - `table_view const&`
     - Scalar:
-        - `scalar const&`
+      - `scalar const&`
     - Everything else:
-       - Trivial or inexpensively copied types
-          - Pass by value
-       - Non-trivial or expensive to copy types
-          - Pass by `const&`
+      - Trivial or inexpensively copied types
+        - Pass by value
+      - Non-trivial or expensive to copy types
+        - Pass by `const&`
 - In/Outs
   - Columns:
     - `mutable_column_view&`
   - Tables:
     - `mutable_table_view&`
     - Everything else:
-        - Pass by via raw pointer
+      - Pass by via raw pointer
 - Outputs
   - Outputs should be *returned*, i.e., no output parameters
   - Columns:
@@ -702,8 +713,7 @@ The preferred style for how inputs are passed in and outputs are returned is the
   - Tables:
     - `std::unique_ptr<table>`
     - Scalars:
-        - `std::unique_ptr<scalar>`
-
+      - `std::unique_ptr<scalar>`
 
 ### Multiple Return Values
 
@@ -837,6 +847,7 @@ thrust::lower_bound(rmm::exec_policy(stream),
 ## Namespaces
 
 ### External
+
 All public libcudf APIs should be placed in the `cudf` namespace. Example:
 
 ```c++
@@ -907,7 +918,6 @@ the "breaking" tag. This ensures that the "Breaking" section of the release note
 description of what has broken from the past release. Label pull requests that contain deprecations
 with the "non-breaking" tag.
 
-
 # Error Handling {#errors}
 
 libcudf follows conventions (and provides utilities) enforcing compile-time and run-time
@@ -971,13 +981,13 @@ library), which should be used to log important events (e.g. user warnings). Thi
 be used to log debug information, as long as the correct logging level is used. There are six macros
 that should be used for logging at different levels:
 
-* `CUDF_LOG_TRACE` - verbose debug messages (targeted at developers)
-* `CUDF_LOG_DEBUG` - debug messages (targeted at developers)
-* `CUDF_LOG_INFO` - information about rare events (e.g. once per run) that occur during normal
-execution
-* `CUDF_LOG_WARN` - user warnings about potentially unexpected behavior or deprecations
-* `CUDF_LOG_ERROR` - recoverable errors
-* `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
+- `CUDF_LOG_TRACE` - verbose debug messages (targeted at developers)
+- `CUDF_LOG_DEBUG` - debug messages (targeted at developers)
+- `CUDF_LOG_INFO` - information about rare events (e.g. once per run) that occur during normal
+  execution
+- `CUDF_LOG_WARN` - user warnings about potentially unexpected behavior or deprecations
+- `CUDF_LOG_ERROR` - recoverable errors
+- `CUDF_LOG_CRITICAL` - unrecoverable errors (e.g. memory corruption)
 
 By default, `TRACE`, `DEBUG` and `INFO` messages are excluded from the log. In addition, in public
 builds, the code that logs at `TRACE` and `DEBUG` levels is compiled out. This prevents logging of
@@ -986,17 +996,17 @@ include expensive computation in the trace/debug logs, as the overhead will not 
 public builds.
 The minimum enabled logging level is `WARN`, and it can be modified in multiple ways:
 
-* CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum level of logging that
-will be compiled in the build.
-Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and `OFF`.
-* Environment variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum logging level during
-initialization. If this setting is higher than the compile-time CMake variable, any logging levels
-in between the two settings will be excluded from the written log. The available levels are the same
-as for the CMake variable.
-* Global logger object exposed via `cudf::logger()` - sets the minimum logging level at runtime.
-For example, calling `cudf::logger().set_level(spdlog::level::err)`, will exclude any messages that
-are not errors or critical errors. This API should not be used within libcudf to manipulate logging,
-its purpose is to allow upstream users to configure libcudf logging to fit their application.
+- CMake configuration variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum level of logging that
+  will be compiled in the build.
+  Available levels are `TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, and `OFF`.
+- Environment variable `LIBCUDF_LOGGING_LEVEL` - sets the minimum logging level during
+  initialization. If this setting is higher than the compile-time CMake variable, any logging levels
+  in between the two settings will be excluded from the written log. The available levels are the same
+  as for the CMake variable.
+- Global logger object exposed via `cudf::logger()` - sets the minimum logging level at runtime.
+  For example, calling `cudf::logger().set_level(spdlog::level::err)`, will exclude any messages that
+  are not errors or critical errors. This API should not be used within libcudf to manipulate logging,
+  its purpose is to allow upstream users to configure libcudf logging to fit their application.
 
 By default, logging messages are output to stderr.
 Setting the environment variable `LIBCUDF_DEBUG_LOG_FILE` redirects the log to a file with the
@@ -1008,15 +1018,15 @@ standard output or even a custom spdlog sink.
 
 Columns may contain data of a number of types (see `enum class type_id` in `include/cudf/types.hpp`)
 
- * Numeric data: signed and unsigned integers (8-, 16-, 32-, or 64-bit), floats (32- or 64-bit), and
-   Booleans (8-bit).
- * Timestamp data with resolution of days, seconds, milliseconds, microseconds, or nanoseconds.
- * Duration data with resolution of days, seconds, milliseconds, microseconds, or nanoseconds.
- * Decimal fixed-point data (32- or 64-bit).
- * Strings
- * Dictionaries
- * Lists of any type
- * Structs of columns of any type
+- Numeric data: signed and unsigned integers (8-, 16-, 32-, or 64-bit), floats (32- or 64-bit), and
+  Booleans (8-bit).
+- Timestamp data with resolution of days, seconds, milliseconds, microseconds, or nanoseconds.
+- Duration data with resolution of days, seconds, milliseconds, microseconds, or nanoseconds.
+- Decimal fixed-point data (32- or 64-bit).
+- Strings
+- Dictionaries
+- Lists of any type
+- Structs of columns of any type
 
 Most algorithms must support columns of any data type. This leads to complexity in the code, and
 is one of the primary challenges a libcudf developer faces. Sometimes we develop new algorithms with
@@ -1146,13 +1156,13 @@ specialize for any numeric type.
 libcudf supports a number of variable-size and nested data types, including strings, lists, and
 structs.
 
- * `string`: Simply a character string, but a column of strings may have a different-length string
-   in each row.
- * `list`: A list of elements of any type, so a column of lists of integers has rows with a list of
-   integers, possibly of a different length, in each row.
- * `struct`: In a column of structs, each row is a structure comprising one or more fields. These
-   fields are stored in structure-of-arrays format, so that the column of structs has a nested
-   column for each field of the structure.
+- `string`: Simply a character string, but a column of strings may have a different-length string
+  in each row.
+- `list`: A list of elements of any type, so a column of lists of integers has rows with a list of
+  integers, possibly of a different length, in each row.
+- `struct`: In a column of structs, each row is a structure comprising one or more fields. These
+  fields are stored in structure-of-arrays format, so that the column of structs has a nested
+  column for each field of the structure.
 
 As the heading implies, list and struct columns may be nested arbitrarily. One may create a column
 of lists of structs, where the fields of the struct may be of any type, including strings, lists and
@@ -1292,11 +1302,13 @@ The second challenge is that in an out-of-place operation on a strings column, u
 width elements, the size of the output cannot be known *a priori*. For example, consider scattering
 into a column of strings:
 
-    destination:    {"this", "is", "a", "column", "of", "strings"}
-    scatter_map:    {1, 3, 5}
-    scatter_values: {"red", "green", "blue"}
+```
+destination:    {"this", "is", "a", "column", "of", "strings"}
+scatter_map:    {1, 3, 5}
+scatter_values: {"red", "green", "blue"}
 
-    result:         {"this", "red", "a", "green", "of", "blue"}
+result:         {"this", "red", "a", "green", "of", "blue"}
+```
 
 In this example, the strings "red", "green", and "blue" will respectively be scattered into
 positions `1`, `3`, and `5` of `destination`. Recall from above that this operation cannot be done
@@ -1388,6 +1400,7 @@ formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and 
 # Debugging Tips
 
 Here are some tools that can help with debugging libcudf (besides printf of course):
+
 1. `cuda-gdb`\
    Follow the instructions in the [Contributor to cuDF guide](../../../CONTRIBUTING.md#debugging-cudf) to build
    and run libcudf with debug symbols.

@@ -46,6 +46,7 @@ The documentation for the API should also be updated to reflect its deprecation.
 When the time comes to remove a deprecated API, make sure to remove all tests and documentation.
 
 Deprecation messages should:
+
 - emit a FutureWarning;
 - consist of a single line with no newline characters;
 - indicate replacement APIs, if any exist
@@ -53,11 +54,12 @@ Deprecation messages should:
 - not specify a version when removal will occur (this gives us more flexibility).
 
 For example:
+
 ```python
 warnings.warn(
     "`Series.foo` is deprecated and will be removed in a future version of cudf. "
     "Use `Series.new_foo` instead.",
-    FutureWarning
+    FutureWarning,
 )
 ```
 
@@ -102,6 +104,7 @@ Therefore, developers should generally prefer Python code over Cython where poss
 
 The primary use-case for Cython in cuDF is to expose libcudf C++ APIs to Python.
 This Cython usage is generally composed of two parts:
+
 1. A `pxd` file declaring C++ APIs so that they may be used in Cython, and
 2. A `pyx` file containing Cython functions that wrap those C++ APIs so that they can be called from Python.
 

@@ -10,12 +10,14 @@
 ### Build the docker image
 
 In the root path of cuDF repo, run below command to build the docker image.
+
 ```bash
 docker build -f java/ci/Dockerfile.centos7 --build-arg CUDA_VERSION=11.8.0 -t cudf-build:11.8.0-devel-centos7 .
 ```
 
 The following CUDA versions are supported w/ CUDA Enhanced Compatibility:
-* CUDA 11.0+
+
+- CUDA 11.0+
 
 Change the --build-arg CUDA_VERSION to what you need.
 You can replace the tag "cudf-build:11.8.0-devel-centos7" with another name you like.
@@ -25,6 +27,7 @@ You can replace the tag "cudf-build:11.8.0-devel-centos7" with another name you 
 ### Start the docker
 
 Run below command to start a docker container with GPU.
+
 ```bash
 nvidia-docker run -it cudf-build:11.8.0-devel-centos7 bash
 ```
@@ -33,6 +36,7 @@ nvidia-docker run -it cudf-build:11.8.0-devel-centos7 bash
 
 You can download the cuDF repo in the docker container or you can mount it into the container.
 Here I choose to download again in the container.
+
 ```bash
 git clone --recursive https://github.com/rapidsai/cudf.git -b branch-24.06
 ```

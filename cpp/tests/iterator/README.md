@@ -1,4 +1,3 @@
-
 # Iterator Test decomposition
 
 The Iterator tests have been decomposed across different types to
@@ -6,10 +5,11 @@ make sure that no single test file takes too long to compile.
 
 The decomposition is that each of the following
 categorizes of types should be placed in a separate file:
- - numeric
- - chrono ( timestamp, duration )
- - fixed point ( numeric::decimal32, numeric::decimal64 )
- - string
+
+- numeric
+- chrono ( timestamp, duration )
+- fixed point ( numeric::decimal32, numeric::decimal64 )
+- string
 
 The `numeric` and `chrono` type lists have roughly the same
 number of entries allowing for a balanced compile time between

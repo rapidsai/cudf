@@ -1,10 +1,9 @@
 ---
 name: Documentation request
 about: Report incorrect or needed documentation
-title: "[DOC]"
-labels: "? - Needs Triage, doc"
+title: '[DOC]'
+labels: '? - Needs Triage, doc'
 assignees: ''
-
 ---
 
 ## Report incorrect documentation
@@ -21,7 +20,7 @@ List any steps you have taken:
 **Suggested fix for documentation**
 Detail proposed changes to fix the documentation if you have any.
 
----
+______________________________________________________________________
 
 ## Report needed documentation
 

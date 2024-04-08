@@ -12,7 +12,6 @@ sub-namespaces.
 Likewise, do not use `using namespace cudf;` or `using namespace cudf::test;`
 in the global namespace.
 
-
 ## Best Practices: What Should We Test?
 
 In general we should test to make sure all code paths are covered. This is not always easy or
@@ -20,35 +19,34 @@ possible. But generally this means we test all supported combinations of algorit
 and all operators supported by algorithms that support multiple operators (e.g. reductions,
 groupby).  Here are some other guidelines.
 
- * In general empty input is not an error in libcudf. Typically empty input results in empty output.
-   Tests should verify this.
+- In general empty input is not an error in libcudf. Typically empty input results in empty output.
+  Tests should verify this.
 
- * Anything that involves manipulating bitmasks (especially hand-rolled kernels) should have tests
-   that check varying number of rows, especially around boundaries like the warp size (32). So, test
-   fewer than 32 rows, more than 32 rows, exactly 32 rows, and greater than 64 rows.
+- Anything that involves manipulating bitmasks (especially hand-rolled kernels) should have tests
+  that check varying number of rows, especially around boundaries like the warp size (32). So, test
+  fewer than 32 rows, more than 32 rows, exactly 32 rows, and greater than 64 rows.
 
- * Most algorithms should have one or more tests exercising inputs with a large enough number of
-   rows to require launching multiple thread blocks, especially when values are ultimately
-   communicated between blocks (e.g. reductions). This is especially important for custom kernels
-   but also applies to Thrust and CUB algorithm calls with lambdas / functors.
+- Most algorithms should have one or more tests exercising inputs with a large enough number of
+  rows to require launching multiple thread blocks, especially when values are ultimately
+  communicated between blocks (e.g. reductions). This is especially important for custom kernels
+  but also applies to Thrust and CUB algorithm calls with lambdas / functors.
 
- * For anything involving strings or lists, test exhaustive combinations of empty strings/lists,
-   null strings/lists and strings/lists with null elements.
+- For anything involving strings or lists, test exhaustive combinations of empty strings/lists,
+  null strings/lists and strings/lists with null elements.
 
- * Strings tests should include a mixture of non-ASCII UTF-8 characters like `é` in test data.
+- Strings tests should include a mixture of non-ASCII UTF-8 characters like `é` in test data.
 
- * Test sliced columns as input (that is, columns that have a nonzero `offset`). This is an easy to
-   forget case.
+- Test sliced columns as input (that is, columns that have a nonzero `offset`). This is an easy to
+  forget case.
 
- * Tests that verify various forms of "degenerate" column inputs, for example: empty
-   string columns that have no children (not many paths in cudf can generate these but it
-   does happen); columns with zero size but that somehow have non-null data pointers; and struct
-   columns with no children.
+- Tests that verify various forms of "degenerate" column inputs, for example: empty
+  string columns that have no children (not many paths in cudf can generate these but it
+  does happen); columns with zero size but that somehow have non-null data pointers; and struct
+  columns with no children.
 
- * Decimal types are not included in the `cudf::test::NumericTypes` type list, but are included in
-   `cudf::test::FixedWidthTypes`, so be careful that tests either include or exclude decimal types as
-   appropriate.
-
+- Decimal types are not included in the `cudf::test::NumericTypes` type list, but are included in
+  `cudf::test::FixedWidthTypes`, so be careful that tests either include or exclude decimal types as
+  appropriate.
 
 ## Directory and File Naming
 
@@ -74,7 +72,9 @@ not necessary for your test fixtures to inherit from it.
 
 Example:
 
-    class MyTestFixture : public cudf::test::BaseFixture {...};
+```
+class MyTestFixture : public cudf::test::BaseFixture {...};
+```
 
 ## Typed Tests
 
@@ -459,12 +459,14 @@ The `<cudf_test/debug_utilities.hpp>` header defines various functions and overl
 columns (`print`), converting column data to string (`to_string`, `to_strings`), and copying data to
 the host (`to_host`). For example, to print a `cudf::column_view` contents or `column_wrapper` instance
 to the console use the `cudf::test::print()`:
+
 ```cpp
   cudf::test::fixed_width_column_wrapper<int32_t> input({1,2,3,4});
   auto splits = cudf::split(input,{2});
   cudf::test::print(input);
   cudf::test::print(splits.front());
 ```
+
 Fixed-width and strings columns output as comma-separated entries including null rows.
 Nested columns are also supported and output includes the offsets and data children as well as
 the null mask bits.
