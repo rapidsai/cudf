@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import (
     assert_eq,
     assert_exceptions_equal,
@@ -118,34 +118,23 @@ def test_series_setitem_singleton_range():
     assert_eq(sr, psr, check_dtype=True)
 
 
+@pytest.mark.xfail(reason="Copy-on-Write should make a copy")
 @pytest.mark.parametrize(
-    "df",
+    "index",
     [
-        pd.DataFrame(
-            {"a": [1, 2, 3]},
-            index=pd.MultiIndex.from_frame(
-                pd.DataFrame({"b": [3, 2, 1], "c": ["a", "b", "c"]})
-            ),
+        pd.MultiIndex.from_frame(
+            pd.DataFrame({"b": [3, 2, 1], "c": ["a", "b", "c"]})
         ),
-        pd.DataFrame({"a": [1, 2, 3]}, index=["a", "b", "c"]),
+        ["a", "b", "c"],
     ],
 )
-def test_setitem_dataframe_series_inplace(df):
-    pdf = df.copy(deep=True)
-    gdf = cudf.from_pandas(pdf)
+def test_setitem_dataframe_series_inplace(index):
+    gdf = cudf.DataFrame({"a": [1, 2, 3]}, index=index)
+    expected = gdf.copy()
+    with cudf.option_context("copy_on_write", True):
+        gdf["a"].replace(1, 500, inplace=True)
 
-    pdf["a"].replace(1, 500, inplace=True)
-    gdf["a"].replace(1, 500, inplace=True)
-
-    assert_eq(pdf, gdf)
-
-    psr_a = pdf["a"]
-    gsr_a = gdf["a"]
-
-    psr_a.replace(500, 501, inplace=True)
-    gsr_a.replace(500, 501, inplace=True)
-
-    assert_eq(pdf, gdf)
+    assert_eq(expected, gdf)
 
 
 @pytest.mark.parametrize(
@@ -293,6 +282,10 @@ def test_series_slice_setitem_struct():
     assert_eq(actual, expected)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
 @pytest.mark.parametrize("indices", [0, [1, 2]])
 def test_series_setitem_upcasting(dtype, indices):
@@ -304,7 +297,7 @@ def test_series_setitem_upcasting(dtype, indices):
     # column dtype.
     new_value = np.float64(np.pi)
     col_ref = cr._column
-    with expect_warning_if(PANDAS_GE_210 and dtype != np.float64):
+    with expect_warning_if(dtype != np.float64):
         sr[indices] = new_value
     with expect_warning_if(dtype != np.float64):
         cr[indices] = new_value

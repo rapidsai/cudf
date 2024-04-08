@@ -13,11 +13,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/hashing.hpp>
-#include <cudf/partitioning.hpp>
-#include <cudf/sorting.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -25,6 +20,12 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
+
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/hashing.hpp>
+#include <cudf/partitioning.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/table/table.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -192,21 +193,6 @@ TEST_F(HashPartition, IdentityHashFailure)
     cudf::logic_error);
 }
 
-TEST_F(HashPartition, UnsupportedHashFunction)
-{
-  fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
-  fixed_width_column_wrapper<int16_t> integers({1, 2, 3, 4, 5, 6, 7, 8});
-  strings_column_wrapper strings({"a", "bb", "ccc", "d", "ee", "fff", "gg", "h"});
-  auto input = cudf::table_view({floats, integers, strings});
-
-  auto columns_to_hash = std::vector<cudf::size_type>({2});
-
-  cudf::size_type const num_partitions = 3;
-  EXPECT_THROW(
-    cudf::hash_partition(input, columns_to_hash, num_partitions, cudf::hash_id::HASH_MD5),
-    cudf::logic_error);
-}
-
 TEST_F(HashPartition, CustomSeedValue)
 {
   fixed_width_column_wrapper<float> floats({1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
@@ -309,11 +295,11 @@ void run_fixed_width_test(size_t cols,
   cudf::table_view partitions_table({partitions_col});
 
   // Sort partition numbers by the corresponding row hashes of each output
-  auto hash1 = cudf::hash(output1->view());
+  auto hash1 = cudf::hashing::murmurhash3_x86_32(output1->view());
   cudf::table_view hash1_table({hash1->view()});
   auto sorted_partitions1 = cudf::sort_by_key(partitions_table, hash1_table);
 
-  auto hash2 = cudf::hash(output2->view());
+  auto hash2 = cudf::hashing::murmurhash3_x86_32(output2->view());
   cudf::table_view hash2_table({hash2->view()});
   auto sorted_partitions2 = cudf::sort_by_key(partitions_table, hash2_table);
 

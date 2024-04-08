@@ -68,6 +68,7 @@ Indexing, iteration
    Series.items
    Series.iteritems
    Series.keys
+   Series.squeeze
 
 Binary operator functions
 -------------------------

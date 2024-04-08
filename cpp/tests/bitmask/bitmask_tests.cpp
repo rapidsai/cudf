@@ -13,6 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
+
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -21,16 +28,12 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/random.hpp>
-#include <cudf_test/testing_main.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <stdexcept>
 
 struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {};
 
@@ -109,10 +112,10 @@ TEST_F(CountBitmaskTest, NegativeStart)
   std::vector<cudf::size_type> indices = {0, 16, -1, 32};
   EXPECT_THROW(
     cudf::detail::segmented_count_set_bits(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::out_of_range);
   EXPECT_THROW(
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::out_of_range);
 }
 
 TEST_F(CountBitmaskTest, StartLargerThanStop)
@@ -126,10 +129,10 @@ TEST_F(CountBitmaskTest, StartLargerThanStop)
   std::vector<cudf::size_type> indices = {0, 16, 31, 30};
   EXPECT_THROW(
     cudf::detail::segmented_count_set_bits(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::invalid_argument);
   EXPECT_THROW(
     cudf::detail::segmented_valid_count(mask.data(), indices, cudf::get_default_stream()),
-    cudf::logic_error);
+    std::invalid_argument);
 }
 
 TEST_F(CountBitmaskTest, EmptyRange)

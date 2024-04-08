@@ -18,6 +18,7 @@
 #include "error.hpp"
 #include "page_decode.cuh"
 #include "page_string_utils.cuh"
+#include "rle_stream.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/stream_pool.hpp>
@@ -56,12 +57,13 @@ constexpr int preproc_buf_size         = LEVEL_DECODE_BUF_SIZE;
  * @tparam rle_buf_size Size of the buffer used when decoding repetition and definition levels
  */
 template <typename level_t, int rle_buf_size>
-__device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
-                                              size_t min_row,
-                                              size_t num_rows,
-                                              bool is_bounds_pg,
-                                              bool has_repetition,
-                                              rle_stream<level_t, rle_buf_size>* decoders)
+__device__ thrust::pair<int, int> page_bounds(
+  page_state_s* const s,
+  size_t min_row,
+  size_t num_rows,
+  bool is_bounds_pg,
+  bool has_repetition,
+  rle_stream<level_t, rle_buf_size, preproc_buf_size>* decoders)
 {
   using block_reduce = cub::BlockReduce<int, preprocess_block_size>;
   using block_scan   = cub::BlockScan<int, preprocess_block_size>;
@@ -97,7 +99,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
   decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
                                         s->abs_lvl_start[level_type::DEFINITION],
                                         s->abs_lvl_end[level_type::DEFINITION],
-                                        preproc_buf_size,
                                         def_decode,
                                         s->page.num_input_values);
   // only need repetition if this is a bounds page. otherwise all we need is def level info
@@ -106,7 +107,6 @@ __device__ thrust::pair<int, int> page_bounds(page_state_s* const s,
     decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
-                                          preproc_buf_size,
                                           rep_decode,
                                           s->page.num_input_values);
   }
@@ -535,6 +535,9 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
         uint32_t const idx = db->current_value_idx + i + lane_id;
         if (idx >= start_value && idx < end_value && idx < db->value_count) {
           lane_sum += db->value[rolling_index<delta_rolling_buf_size>(idx)];
+        }
+        // need lane_max over all values, not just in bounds
+        if (idx < db->value_count) {
           lane_max = max(lane_max, db->value[rolling_index<delta_rolling_buf_size>(idx)]);
         }
       }
@@ -546,6 +549,7 @@ __device__ thrust::pair<size_t, size_t> totalDeltaByteArraySize(uint8_t const* d
     // get sum for warp.
     // note: warp_sum will only be valid on lane 0.
     auto const warp_sum = WarpReduce(temp_storage[warp_id]).Sum(lane_sum);
+    __syncwarp();
     auto const warp_max = WarpReduce(temp_storage[warp_id]).Reduce(lane_max, cub::Max());
 
     if (lane_id == 0) {
@@ -595,10 +599,12 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
   PageInfo* const pp    = &pages[page_idx];
 
   if (t == 0) {
-    s->page.num_nulls  = 0;
-    s->page.num_valids = 0;
+    // don't clobber these if they're already computed from the index
+    if (!pp->has_page_index) {
+      s->page.num_nulls  = 0;
+      s->page.num_valids = 0;
+    }
     // reset str_bytes to 0 in case it's already been calculated (esp needed for chunked reads).
-    // TODO: need to rethink this once str_bytes is in the statistics
     pp->str_bytes = 0;
   }
 
@@ -612,8 +618,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
   // the level stream decoders
   __shared__ rle_run<level_t> def_runs[rle_run_buffer_size];
   __shared__ rle_run<level_t> rep_runs[rle_run_buffer_size];
-  rle_stream<level_t, preprocess_block_size> decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs},
-                                                                                      {rep_runs}};
+  rle_stream<level_t, preprocess_block_size, preproc_buf_size>
+    decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // setup page info
   if (!setupLocalPageInfo(s,
@@ -627,6 +633,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputeStringPageBo
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) { return; }
 
   // find start/end value indices
   auto const [start_value, end_value] =
@@ -680,7 +689,7 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
   auto const start_value = pp->start_val;
 
   // if data size is known, can short circuit here
-  if ((chunks[pp->chunk_idx].data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+  if (chunks[pp->chunk_idx].physical_type == FIXED_LEN_BYTE_ARRAY) {
     if (t == 0) {
       pp->str_bytes = pp->num_valids * s->dtype_len_in;
 
@@ -694,6 +703,15 @@ CUDF_KERNEL void __launch_bounds__(delta_preproc_block_size) gpuComputeDeltaPage
       }
     }
   } else {
+    bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+    // if we have size info, then we only need to do this for bounds pages
+    if (pp->has_page_index && !is_bounds_pg) {
+      // check if we need to store values from the index
+      if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+      return;
+    }
+
     // now process string info in the range [start_value, end_value)
     // set up for decoding strings...can be either plain or dictionary
     uint8_t const* data      = s->data_start;
@@ -754,6 +772,13 @@ CUDF_KERNEL void __launch_bounds__(delta_length_block_size) gpuComputeDeltaLengt
   }
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
+
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) {
+    // check if we need to store values from the index
+    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    return;
+  }
 
   // for DELTA_LENGTH_BYTE_ARRAY, string size is page_data_size - size_of_delta_binary_block.
   // so all we need to do is skip the encoded string size info and then do pointer arithmetic,
@@ -846,10 +871,17 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size) gpuComputePageStringSi
 
   bool const is_bounds_pg = is_bounds_page(s, min_row, num_rows, has_repetition);
 
+  // if we have size info, then we only need to do this for bounds pages
+  if (pp->has_page_index && !is_bounds_pg) {
+    // check if we need to store values from the index
+    if (is_page_contained(s, min_row, num_rows)) { pp->str_bytes = pp->str_bytes_from_index; }
+    return;
+  }
+
   auto const& col  = s->col;
   size_t str_bytes = 0;
   // short circuit for FIXED_LEN_BYTE_ARRAY
-  if ((col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+  if (col.physical_type == FIXED_LEN_BYTE_ARRAY) {
     str_bytes = pp->num_valids * s->dtype_len_in;
   } else {
     // now process string info in the range [start_value, end_value)
@@ -1013,12 +1045,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       //
       if (!has_repetition) { dst_pos -= s->first_row; }
 
-      // need to do this before we branch on src_pos/dst_pos so we don't deadlock
-      // choose a character parallel string copy when the average string is longer than a warp
-      using cudf::detail::warp_size;
-      auto const use_char_ll =
-        s->page.num_valids > 0 && (s->page.str_bytes / s->page.num_valids) >= warp_size;
-
       if (me < warp_size) {
         for (int i = 0; i < decode_block_size - out_thread0; i += warp_size) {
           dst_pos = sb->nz_idx[rolling_index<rolling_buf_size>(src_pos + i)];
@@ -1029,9 +1055,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
                               : cuda::std::pair<char const*, size_t>{nullptr, 0};
 
           __shared__ cub::WarpScan<size_type>::TempStorage temp_storage;
-          size_type offset;
-          cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset);
+          size_type offset, warp_total;
+          cub::WarpScan<size_type>(temp_storage).ExclusiveSum(len, offset, warp_total);
           offset += last_offset;
+
+          // choose a character parallel string copy when the average string is longer than a warp
+          auto const use_char_ll = warp_total / warp_size >= warp_size;
 
           if (use_char_ll) {
             __shared__ __align__(8) uint8_t const* pointers[warp_size];
@@ -1109,8 +1138,8 @@ struct page_tform_functor {
 /**
  * @copydoc cudf::io::parquet::detail::ComputePageStringSizes
  */
-void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                            cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void ComputePageStringSizes(cudf::detail::hostdevice_span<PageInfo> pages,
+                            cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                             rmm::device_uvector<uint8_t>& temp_string_buf,
                             size_t min_row,
                             size_t num_rows,
@@ -1154,7 +1183,7 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 
   // check for needed temp space for DELTA_BYTE_ARRAY
   auto const need_sizes = thrust::any_of(
-    rmm::exec_policy(stream), pages.d_begin(), pages.d_end(), [] __device__(auto& page) {
+    rmm::exec_policy(stream), pages.device_begin(), pages.device_end(), [] __device__(auto& page) {
       return page.temp_string_size != 0;
     });
 
@@ -1162,8 +1191,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     // sum up all of the temp_string_sizes
     auto const page_sizes = [] __device__(PageInfo const& page) { return page.temp_string_size; };
     auto const total_size = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                     pages.d_begin(),
-                                                     pages.d_end(),
+                                                     pages.device_begin(),
+                                                     pages.device_end(),
                                                      page_sizes,
                                                      0L,
                                                      thrust::plus<int64_t>{});
@@ -1172,8 +1201,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
     // page's chunk of the temp buffer
     rmm::device_uvector<int64_t> page_string_offsets(pages.size(), stream);
     thrust::transform_exclusive_scan(rmm::exec_policy_nosync(stream),
-                                     pages.d_begin(),
-                                     pages.d_end(),
+                                     pages.device_begin(),
+                                     pages.device_end(),
                                      page_string_offsets.begin(),
                                      page_sizes,
                                      0L,
@@ -1184,10 +1213,10 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 
     // now use the offsets array to set each page's temp_string_buf pointers
     thrust::transform(rmm::exec_policy_nosync(stream),
-                      pages.d_begin(),
-                      pages.d_end(),
+                      pages.device_begin(),
+                      pages.device_end(),
                       page_string_offsets.begin(),
-                      pages.d_begin(),
+                      pages.device_begin(),
                       page_tform_functor{temp_string_buf.data()});
   }
 }
@@ -1195,8 +1224,8 @@ void ComputePageStringSizes(cudf::detail::hostdevice_vector<PageInfo>& pages,
 /**
  * @copydoc cudf::io::parquet::detail::DecodeStringPageData
  */
-void __host__ DecodeStringPageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                                   cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void __host__ DecodeStringPageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                                   cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                                    size_t num_rows,
                                    size_t min_row,
                                    int level_type_size,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,16 +20,11 @@
 #include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/strings/detail/replace.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-
 #include <vector>
-
-using algorithm = cudf::strings::detail::replace_algorithm;
 
 struct StringsReplaceTest : public cudf::test::BaseFixture {
   cudf::test::strings_column_wrapper build_corpus()
@@ -46,6 +41,13 @@ struct StringsReplaceTest : public cudf::test::BaseFixture {
       h_strings.begin(),
       h_strings.end(),
       thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  }
+
+  std::unique_ptr<cudf::column> build_large(cudf::column_view const& first,
+                                            cudf::column_view const& remaining)
+  {
+    return cudf::strings::concatenate(cudf::table_view(
+      {first, remaining, remaining, remaining, remaining, remaining, remaining, remaining}));
   }
 };
 
@@ -64,26 +66,23 @@ TEST_F(StringsReplaceTest, Replace)
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto target      = cudf::string_scalar("the ");
+  auto replacement = cudf::string_scalar("++++ ");
 
-  auto results =
-    cudf::strings::replace(strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "));
+  auto results = cudf::strings::replace(strings_view, target, replacement);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("the "), cudf::string_scalar("++++ "), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto input_large    = build_large(input, input);
+  strings_view        = cudf::strings_column_view(input_large->view());
+  auto expected_large = build_large(expected, expected);
+  results             = cudf::strings::replace(strings_view, target, replacement);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected_large);
 }
 
 TEST_F(StringsReplaceTest, ReplaceReplLimit)
 {
   auto input        = build_corpus();
   auto strings_view = cudf::strings_column_view(input);
-  auto stream       = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
 
   // only remove the first occurrence of 'the '
   std::vector<char const*> h_expected{"quick brown fox jumps over the lazy dog",
@@ -95,15 +94,16 @@ TEST_F(StringsReplaceTest, ReplaceReplLimit)
                                       nullptr};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
-  auto results =
-    cudf::strings::replace(strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1);
+  auto target      = cudf::string_scalar("the ");
+  auto replacement = cudf::string_scalar("");
+  auto results     = cudf::strings::replace(strings_view, target, replacement, 1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("the "), cudf::string_scalar(""), 1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto input_large    = build_large(input, input);
+  strings_view        = cudf::strings_column_view(input_large->view());
+  auto expected_large = build_large(expected, input);
+  results             = cudf::strings::replace(strings_view, target, replacement, 1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected_large);
 }
 
 TEST_F(StringsReplaceTest, ReplaceReplLimitInputSliced)
@@ -119,22 +119,28 @@ TEST_F(StringsReplaceTest, ReplaceReplLimitInputSliced)
                                       nullptr};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
-  auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
   std::vector<cudf::size_type> slice_indices{0, 2, 2, 3, 3, 7};
   auto sliced_strings  = cudf::slice(input, slice_indices);
   auto sliced_expected = cudf::slice(expected, slice_indices);
+
+  auto input_large    = build_large(input, input);
+  auto expected_large = build_large(expected, input);
+
+  auto sliced_large          = cudf::slice(input_large->view(), slice_indices);
+  auto sliced_expected_large = cudf::slice(expected_large->view(), slice_indices);
+
+  auto target      = cudf::string_scalar(" ");
+  auto replacement = cudf::string_scalar("--");
+
   for (size_t i = 0; i < sliced_strings.size(); ++i) {
     auto strings_view = cudf::strings_column_view(sliced_strings[i]);
-    auto results =
+    auto results      = cudf::strings::replace(strings_view, target, replacement, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
+
+    strings_view = cudf::strings_column_view(sliced_large[i]);
+    results =
       cudf::strings::replace(strings_view, cudf::string_scalar(" "), cudf::string_scalar("--"), 2);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
-    results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-      strings_view, cudf::string_scalar(" "), cudf::string_scalar("--"), 2, stream, mr);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
-    results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-      strings_view, cudf::string_scalar(" "), cudf::string_scalar("--"), 2, stream, mr);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected[i]);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, sliced_expected_large[i]);
   }
 }
 
@@ -158,59 +164,49 @@ TEST_F(StringsReplaceTest, ReplaceTargetOverlap)
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto target      = cudf::string_scalar("+++");
+  auto replacement = cudf::string_scalar("plus ");
 
-  auto results =
-    cudf::strings::replace(strings_view, cudf::string_scalar("+++"), cudf::string_scalar("plus "));
+  auto results = cudf::strings::replace(strings_view, target, replacement);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("+++"), cudf::string_scalar("plus "), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("+++"), cudf::string_scalar("plus "), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  auto input_large    = build_large(input->view(), input->view());
+  strings_view        = cudf::strings_column_view(input_large->view());
+  auto expected_large = build_large(expected, expected);
+
+  results = cudf::strings::replace(strings_view, target, replacement);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected_large);
 }
 
 TEST_F(StringsReplaceTest, ReplaceTargetOverlapsStrings)
 {
   auto input        = build_corpus();
   auto strings_view = cudf::strings_column_view(input);
-  auto stream       = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
 
   // replace all occurrences of 'dogthe' with '+'
+  auto target      = cudf::string_scalar("dogthe");
+  auto replacement = cudf::string_scalar("+");
+
   // should not replace anything unless it incorrectly matches across a string boundary
-  auto results =
-    cudf::strings::replace(strings_view, cudf::string_scalar("dogthe"), cudf::string_scalar("+"));
+  auto results = cudf::strings::replace(strings_view, target, replacement);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
-  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("dogthe"), cudf::string_scalar("+"), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("dogthe"), cudf::string_scalar("+"), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
+
+  auto input_large = cudf::strings::concatenate(
+    cudf::table_view({input, input, input, input, input, input, input, input}),
+    cudf::string_scalar(" "));
+  strings_view = cudf::strings_column_view(input_large->view());
+  results      = cudf::strings::replace(strings_view, target, replacement);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *input_large);
 }
 
-TEST_F(StringsReplaceTest, ReplaceNullInput)
+TEST_F(StringsReplaceTest, ReplaceAllNullInput)
 {
   std::vector<char const*> h_null_strings(128);
   auto input = cudf::test::strings_column_wrapper(
     h_null_strings.begin(), h_null_strings.end(), thrust::make_constant_iterator(false));
   auto strings_view = cudf::strings_column_view(input);
-  auto stream       = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
-  // replace all occurrences of '+' with ''
-  // should not replace anything as input is all null
   auto results =
     cudf::strings::replace(strings_view, cudf::string_scalar("+"), cudf::string_scalar(""));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
-  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("+"), cudf::string_scalar(""), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("+"), cudf::string_scalar(""), -1, stream, mr);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, input);
 }
 
@@ -218,8 +214,6 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
 {
   auto input        = build_corpus();
   auto strings_view = cudf::strings_column_view(input);
-  auto stream       = cudf::get_default_stream();
-  auto mr           = rmm::mr::get_current_device_resource();
 
   // replace all occurrences of 'in' with  ' '
   std::vector<char const*> h_expected{"the quick brown fox jumps over the lazy dog",
@@ -233,39 +227,56 @@ TEST_F(StringsReplaceTest, ReplaceEndOfString)
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
 
-  auto results =
-    cudf::strings::replace(strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "));
+  auto target      = cudf::string_scalar("in");
+  auto replacement = cudf::string_scalar(" ");
+
+  auto results = cudf::strings::replace(strings_view, target, replacement);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
-  results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::CHAR_PARALLEL>(
-    strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-
-  results = cudf::strings::detail::replace<cudf::strings::detail::replace_algorithm::ROW_PARALLEL>(
-    strings_view, cudf::string_scalar("in"), cudf::string_scalar(" "), -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  auto input_large    = build_large(input, input);
+  strings_view        = cudf::strings_column_view(input_large->view());
+  auto expected_large = build_large(expected, expected);
+  results             = cudf::strings::replace(strings_view, target, replacement);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected_large);
 }
 
 TEST_F(StringsReplaceTest, ReplaceAdjacentMultiByteTarget)
 {
-  auto input = cudf::test::strings_column_wrapper({"ééééééé", "eéeéeée", "eeeeeee"});
+  auto input = cudf::test::strings_column_wrapper({"ééééééééééééééééééééé",
+                                                   "eéeéeéeeéeéeéeeéeéeée",
+                                                   "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"});
   auto strings_view = cudf::strings_column_view(input);
   // replace all occurrences of 'é' with 'e'
-  cudf::test::strings_column_wrapper expected({"eeeeeee", "eeeeeee", "eeeeeee"});
+  cudf::test::strings_column_wrapper expected({"eeeeeeeeeeeeeeeeeeeee",
+                                               "eeeeeeeeeeeeeeeeeeeee",
+                                               "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"});
 
-  auto stream = cudf::get_default_stream();
-  auto mr     = rmm::mr::get_current_device_resource();
+  auto target      = cudf::string_scalar("é");
+  auto replacement = cudf::string_scalar("e");
 
-  auto target  = cudf::string_scalar("é", true, stream);
-  auto repl    = cudf::string_scalar("e", true, stream);
-  auto results = cudf::strings::replace(strings_view, target, repl);
+  auto results = cudf::strings::replace(strings_view, target, replacement);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::CHAR_PARALLEL>(
-    strings_view, target, repl, -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
-  results = cudf::strings::detail::replace<algorithm::ROW_PARALLEL>(
-    strings_view, target, repl, -1, stream, mr);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+
+  auto input_large    = build_large(input, input);
+  strings_view        = cudf::strings_column_view(input_large->view());
+  auto expected_large = build_large(expected, expected);
+  results             = cudf::strings::replace(strings_view, target, replacement);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected_large);
+}
+
+TEST_F(StringsReplaceTest, ReplaceErrors)
+{
+  auto input = cudf::test::strings_column_wrapper({"this column intentionally left blank"});
+
+  auto target      = cudf::string_scalar(" ");
+  auto replacement = cudf::string_scalar("_");
+  auto null_input  = cudf::string_scalar("", false);
+  auto empty_input = cudf::string_scalar("");
+  auto sv          = cudf::strings_column_view(input);
+
+  EXPECT_THROW(cudf::strings::replace(sv, target, null_input), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace(sv, null_input, replacement), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::replace(sv, empty_input, replacement), cudf::logic_error);
 }
 
 TEST_F(StringsReplaceTest, ReplaceSlice)
@@ -369,22 +380,30 @@ TEST_F(StringsReplaceTest, ReplaceMulti)
 
 TEST_F(StringsReplaceTest, ReplaceMultiLong)
 {
-  // The length of the strings are to trigger the code path governed by the AVG_CHAR_BYTES_THRESHOLD
-  // setting in the multi.cu.
+  // The length of the strings are to trigger the code path governed by the
+  // AVG_CHAR_BYTES_THRESHOLD setting in the multi.cu.
   auto input = cudf::test::strings_column_wrapper(
     {"This string needs to be very long to trigger the long-replace internal functions. "
      "This string needs to be very long to trigger the long-replace internal functions. "
      "This string needs to be very long to trigger the long-replace internal functions. "
      "This string needs to be very long to trigger the long-replace internal functions.",
-     "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
-     "345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345"
-     "678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
-     "901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901"
+     "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+     "12"
+     "3456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123"
+     "45"
+     "6789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456"
+     "78"
+     "9012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+     "01"
      "2345678901234567890123456789",
-     "012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012"
-     "345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345"
-     "678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678"
-     "901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901"
+     "0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890"
+     "12"
+     "3456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123"
+     "45"
+     "6789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456"
+     "78"
+     "9012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789"
+     "01"
      "2345678901234567890123456789",
      "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
      "Test string for overlap check: bananaápple bananá ápplebananá banápple ápple bananá "
@@ -410,11 +429,15 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "This string needs to be very long to trigger the long-replace internal functions. "
        "This string needs to be very long to trigger the long-replace internal functions. "
        "This string needs to be very long to trigger the long-replace internal functions.",
-       "0123456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456"
-       "x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x"
+       "0123456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x234"
+       "56"
+       "x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x2345"
+       "6x"
        "23456x23456x23456x23456x23456x23456x23456x23456x23456x23456$$9",
-       "0123456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456"
-       "x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x"
+       "0123456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x234"
+       "56"
+       "x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x23456x2345"
+       "6x"
        "23456x23456x23456x23456x23456x23456x23456x23456x23456x23456$$9",
        "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR "
        "Test string for overlap check: bananaavocado PEAR avocadoPEAR banavocado avocado PEAR "
@@ -445,8 +468,10 @@ TEST_F(StringsReplaceTest, ReplaceMultiLong)
        "23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*"
        "23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*23456*9",
        "Test string for overlap check: banana* * ** ban* * * Test string for overlap check: "
-       "banana* * ** ban* * * Test string for overlap check: banana* * ** ban* * * Test string for "
-       "overlap check: banana* * ** ban* * * Test string for overlap check: banana* * ** ban* * *",
+       "banana* * ** ban* * * Test string for overlap check: banana* * ** ban* * * Test string "
+       "for "
+       "overlap check: banana* * ** ban* * * Test string for overlap check: banana* * ** ban* * "
+       "*",
        "",
        ""},
       {1, 1, 1, 1, 0, 1});

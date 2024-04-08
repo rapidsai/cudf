@@ -22,11 +22,11 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <memory>
 #include <string>
 #include <vector>
-
-#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf::io {
 
@@ -124,14 +124,6 @@ class writer {
    * @brief Finishes the chunked/streamed write process.
    */
   void close();
-
-  /**
-   * @brief Skip work done in `close()`; should be called if `write()` failed.
-   *
-   * Calling skip_close() prevents the writer from writing the (invalid) file footer and the
-   * postscript.
-   */
-  void skip_close();
 };
 }  // namespace orc::detail
 }  // namespace cudf::io

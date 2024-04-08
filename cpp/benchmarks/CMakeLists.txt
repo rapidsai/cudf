@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil
+         cudftestutil nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -164,7 +164,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -208,8 +208,9 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * reduction benchmark ---------------------------------------------------------------------------
+# * replace benchmark ---------------------------------------------------------------------------
 ConfigureBench(REPLACE_BENCH replace/clamp.cpp replace/nans.cpp)
+ConfigureNVBench(REPLACE_NVBENCH replace/nulls.cpp)
 
 # ##################################################################################################
 # * filling benchmark -----------------------------------------------------------------------------
@@ -311,6 +312,8 @@ ConfigureNVBench(
   string/case.cpp
   string/char_types.cpp
   string/contains.cpp
+  string/copy_if_else.cpp
+  string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
   string/gather.cpp

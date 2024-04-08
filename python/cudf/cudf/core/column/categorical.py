@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections import abc
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Mapping, Optional, Sequence, Tuple, cast
@@ -733,8 +734,8 @@ class CategoricalColumn(column.ColumnBase):
                 )
             return other
 
-        ary = column.full(
-            len(self), self._encode(other), dtype=self.codes.dtype
+        ary = column.as_column(
+            self._encode(other), length=len(self), dtype=self.codes.dtype
         )
         return column.build_categorical_column(
             categories=self.dtype.categories._values,
@@ -769,10 +770,16 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(
-        self, *, index: Optional[pd.Index] = None, nullable: bool = False
+        self,
+        *,
+        index: Optional[pd.Index] = None,
+        nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
         if nullable:
             raise NotImplementedError(f"{nullable=} is not implemented.")
+        elif arrow_type:
+            raise NotImplementedError(f"{arrow_type=} is not implemented.")
 
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
@@ -990,7 +997,7 @@ class CategoricalColumn(column.ColumnBase):
             replaced, to_replace_col, replacement_col
         )
 
-        return column.build_categorical_column(
+        result = column.build_categorical_column(
             categories=new_cats["cats"],
             codes=column.build_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
@@ -998,6 +1005,16 @@ class CategoricalColumn(column.ColumnBase):
             size=output.size,
             ordered=self.dtype.ordered,
         )
+        if result.dtype != self.dtype:
+            warnings.warn(
+                "The behavior of replace with "
+                "CategoricalDtype is deprecated. In a future version, replace "
+                "will only be used for cases that preserve the categories. "
+                "To change the categories, use ser.cat.rename_categories "
+                "instead.",
+                FutureWarning,
+            )
+        return result
 
     def isnull(self) -> ColumnBase:
         """
@@ -1427,11 +1444,9 @@ def _create_empty_categorical_column(
     return column.build_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
-            column.full(
-                categorical_column.size,
-                _DEFAULT_CATEGORICAL_VALUE,
-                categorical_column.codes.dtype,
-            )
+            _DEFAULT_CATEGORICAL_VALUE,
+            length=categorical_column.size,
+            dtype=categorical_column.codes.dtype,
         ),
         offset=categorical_column.offset,
         size=categorical_column.size,

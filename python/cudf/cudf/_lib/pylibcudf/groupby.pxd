@@ -37,6 +37,7 @@ cdef class GroupByRequest:
 
 cdef class GroupBy:
     cdef unique_ptr[groupby] c_obj
+    cdef Table _keys
     cpdef tuple aggregate(self, list requests)
     cpdef tuple scan(self, list requests)
     cpdef tuple shift(self, Table values, list offset, list fill_values)

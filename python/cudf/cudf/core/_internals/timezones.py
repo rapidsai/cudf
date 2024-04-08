@@ -85,8 +85,9 @@ def _read_tzfile_as_frame(tzdir, zone_name):
     if not transition_times_and_offsets:
         # this happens for UTC-like zones
         min_date = np.int64(np.iinfo("int64").min + 1).astype("M8[s]")
-        transition_times_and_offsets = as_column([min_date]), as_column(
-            [np.timedelta64(0, "s")]
+        transition_times_and_offsets = (
+            as_column([min_date]),
+            as_column([np.timedelta64(0, "s")]),
         )
 
     return DataFrame._from_data(
@@ -113,7 +114,7 @@ def _find_ambiguous_and_nonexistent(
     tz_data_for_zone = get_tz_data(zone_name)
     transition_times = tz_data_for_zone["transition_times"]
     offsets = tz_data_for_zone["offsets"].astype(
-        f"timedelta64[{data._time_unit}]"
+        f"timedelta64[{data.time_unit}]"
     )
 
     if len(offsets) == 1:  # no transitions
@@ -182,7 +183,7 @@ def localize(
             "Already localized. "
             "Use `tz_convert` to convert between time zones."
         )
-    dtype = pd.DatetimeTZDtype(data._time_unit, zone_name)
+    dtype = pd.DatetimeTZDtype(data.time_unit, zone_name)
     ambiguous, nonexistent = _find_ambiguous_and_nonexistent(data, zone_name)
     localized = cast(
         DatetimeColumn,
@@ -229,7 +230,7 @@ def convert(data: DatetimeTZColumn, zone_name: str) -> DatetimeTZColumn:
         DatetimeTZColumn,
         build_column(
             data=utc_time.base_data,
-            dtype=pd.DatetimeTZDtype(data._time_unit, zone_name),
+            dtype=pd.DatetimeTZDtype(data.time_unit, zone_name),
             mask=utc_time.base_mask,
             size=utc_time.size,
             offset=utc_time.offset,

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/type_lists.hpp>
-
 #include <cuda/std/climits>
+
 #include <vector>
 
 template <typename T>

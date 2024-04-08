@@ -13,7 +13,7 @@ import pyarrow as pa
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_200, PANDAS_GE_210
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
@@ -216,18 +216,16 @@ def test_cudf_json_writer_read(gdf_writer_types):
     if pdf2.empty:
         pdf2.reset_index(drop=True, inplace=True)
         pdf2.columns = pdf2.columns.astype("object")
-    if PANDAS_GE_200:
-        # Pandas moved to consistent datetimes parsing format:
-        # https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#datetimes-are-now-parsed-with-a-consistent-format
-        for unit in ["s", "ms"]:
-            if f"col_datetime64[{unit}]" in pdf2.columns:
-                pdf2[f"col_datetime64[{unit}]"] = (
-                    pd.to_datetime(
-                        pdf2[f"col_datetime64[{unit}]"], format="mixed"
-                    )
-                    .dt.tz_localize(None)
-                    .astype(f"datetime64[{unit}]")
-                )
+
+    # Pandas moved to consistent datetimes parsing format:
+    # https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#datetimes-are-now-parsed-with-a-consistent-format
+    for unit in ["s", "ms"]:
+        if f"col_datetime64[{unit}]" in pdf2.columns:
+            pdf2[f"col_datetime64[{unit}]"] = (
+                pd.to_datetime(pdf2[f"col_datetime64[{unit}]"], format="mixed")
+                .dt.tz_localize(None)
+                .astype(f"datetime64[{unit}]")
+            )
     assert_eq(pdf2, gdf2)
 
 
@@ -338,18 +336,17 @@ def json_input(request, tmp_path_factory):
         return Path(fname).as_uri()
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
 def test_json_lines_basic(json_input, engine):
-    with expect_warning_if(
-        isinstance(json_input, str) and not json_input.endswith(".json")
-    ):
+    can_warn = isinstance(json_input, str) and not json_input.endswith(".json")
+    with expect_warning_if(can_warn):
         cu_df = cudf.read_json(json_input, engine=engine, lines=True)
-    with expect_warning_if(
-        isinstance(json_input, str)
-        and PANDAS_GE_210
-        and not json_input.endswith(".json")
-    ):
+    with expect_warning_if(can_warn):
         pd_df = pd.read_json(json_input, lines=True)
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
@@ -358,6 +355,10 @@ def test_json_lines_basic(json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_lines_multiple(tmpdir, json_input, engine):
@@ -365,9 +366,7 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
     tmp_file2 = tmpdir.join("MultiInputs2.json")
 
     with expect_warning_if(
-        isinstance(json_input, str)
-        and PANDAS_GE_210
-        and not json_input.endswith(".json")
+        isinstance(json_input, str) and not json_input.endswith(".json")
     ):
         pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(tmp_file1, compression="infer", lines=True, orient="records")
@@ -382,12 +381,14 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_read_directory(tmpdir, json_input, engine):
     with expect_warning_if(
-        isinstance(json_input, str)
-        and PANDAS_GE_210
-        and not json_input.endswith(".json")
+        isinstance(json_input, str) and not json_input.endswith(".json")
     ):
         pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(
@@ -1177,9 +1178,15 @@ class TestNestedJsonReaderCommon:
         df = cudf.concat(chunks, ignore_index=True)
         assert expected.to_arrow().equals(df.to_arrow())
 
+    @pytest.mark.skipif(
+        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+        reason="https://github.com/pandas-dev/pandas/pull/57439",
+    )
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(StringIO(data), lines=True)
+        # Using pyarrow instead of assert_eq because pandas
+        # doesn't handle nested values comparisons correctly
         if tag == "dtype_mismatch":
             with pytest.raises(AssertionError):
                 # pandas parses integer values in float representation

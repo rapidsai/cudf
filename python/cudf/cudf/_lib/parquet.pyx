@@ -1,7 +1,5 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-# cython: boundscheck = False
-
 import io
 
 import pyarrow as pa
@@ -37,11 +35,13 @@ cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.expressions cimport expression
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
+    parquet_reader_options_builder,
     parquet_writer_options,
     read_parquet as parquet_reader,
     write_parquet as parquet_writer,
@@ -49,6 +49,7 @@ from cudf._lib.cpp.io.parquet cimport (
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
+from cudf._lib.expressions cimport Expression
 from cudf._lib.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sinks_info,
@@ -119,9 +120,13 @@ def _parse_metadata(meta):
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   use_pandas_metadata=True):
+                   use_pandas_metadata=True,
+                   Expression filters=None):
     """
     Cython function to call into libcudf API, see `read_parquet`.
+
+    filters, if not None, should be an Expression that evaluates to a
+    boolean predicate as a function of columns being read.
 
     See Also
     --------
@@ -148,19 +153,22 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
     )
-
     if row_groups is not None:
         cpp_row_groups = row_groups
 
-    cdef parquet_reader_options args
     # Setup parquet reader arguments
-    args = move(
+    cdef parquet_reader_options args
+    cdef parquet_reader_options_builder builder
+    builder = (
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
         .use_pandas_metadata(cpp_use_pandas_metadata)
         .timestamp_type(cpp_timestamp_type)
-        .build()
     )
+    if filters is not None:
+        builder = builder.filter(<expression &>dereference(filters.c_obj.get()))
+
+    args = move(builder.build())
     cdef vector[string] cpp_columns
     allow_range_index = True
     if columns is not None:
@@ -169,6 +177,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
+    # Filters don't handle the range index correctly
+    allow_range_index &= filters is None
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_result
@@ -693,10 +703,14 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
 cdef cudf_io_types.compression_type _get_comp_type(object compression):
     if compression is None:
         return cudf_io_types.compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return cudf_io_types.compression_type.SNAPPY
     elif compression == "ZSTD":
         return cudf_io_types.compression_type.ZSTD
+    elif compression == "LZ4":
+        return cudf_io_types.compression_type.LZ4
     else:
         raise ValueError("Unsupported `compression` type")
 

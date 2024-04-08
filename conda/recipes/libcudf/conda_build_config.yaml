@@ -23,10 +23,10 @@ gtest_version:
   - ">=1.13.0"
 
 libarrow_version:
-  - "==14.0.1"
+  - "==14.0.2"
 
 dlpack_version:
-  - ">=0.5,<0.6.0a0"
+  - ">=0.8,<1.0"
 
 librdkafka_version:
   - ">=1.9.0,<1.10.0a0"
@@ -38,7 +38,7 @@ spdlog_version:
   - ">=1.12.0,<1.13"
 
 nvcomp_version:
-  - "=3.0.5"
+  - "=3.0.6"
 
 zlib_version:
   - ">=1.2.13"

@@ -36,11 +36,10 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <limits>
-#include <numeric>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -50,8 +49,8 @@
 #include <thrust/transform.h>
 #include <thrust/tuple.h>
 
-#include <cuda/functional>
-
+#include <limits>
+#include <numeric>
 #include <queue>
 #include <vector>
 

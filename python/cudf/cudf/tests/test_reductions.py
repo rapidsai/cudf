@@ -366,3 +366,13 @@ def test_reductions_axis_none_warning(op):
     ):
         expected = getattr(pdf, op)(axis=None)
     assert_eq(expected, actual, check_dtype=False)
+
+
+def test_reduction_column_multiindex():
+    idx = cudf.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2)], names=["foo", "bar"]
+    )
+    df = cudf.DataFrame(np.array([[1, 3], [2, 4]]), columns=idx)
+    result = df.mean()
+    expected = df.to_pandas().mean()
+    assert_eq(result, expected)

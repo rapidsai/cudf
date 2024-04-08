@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2024, NVIDIA CORPORATION.
-
+import datetime
 import decimal
 import hashlib
 import operator
@@ -15,6 +15,7 @@ import pytest
 
 import cudf
 from cudf.api.extensions import no_default
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.errors import MixedTypeError
 from cudf.testing._utils import (
     NUMERIC_TYPES,
@@ -1747,6 +1748,10 @@ def test_fill_new_category():
     gs[0:1] = "d"
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Warning newly introduced in pandas-2.2.0",
+)
 @pytest.mark.parametrize(
     "data",
     [
@@ -1795,8 +1800,11 @@ def test_isin_datetime(data, values):
     psr = pd.Series(data)
     gsr = cudf.Series.from_pandas(psr)
 
-    got = gsr.isin(values)
-    expected = psr.isin(values)
+    is_len_str = isinstance(next(iter(values), None), str) and len(data)
+    with expect_warning_if(is_len_str):
+        got = gsr.isin(values)
+    with expect_warning_if(is_len_str):
+        expected = psr.isin(values)
     assert_eq(got, expected)
 
 
@@ -2629,22 +2637,24 @@ def test_series_setitem_mixed_bool_dtype():
 @pytest.mark.parametrize(
     "nat, value",
     [
-        [np.datetime64("nat"), np.datetime64("2020-01-01")],
-        [np.timedelta64("nat"), np.timedelta64(1)],
+        [np.datetime64("nat", "ns"), np.datetime64("2020-01-01", "ns")],
+        [np.timedelta64("nat", "ns"), np.timedelta64(1, "ns")],
     ],
 )
 @pytest.mark.parametrize("nan_as_null", [True, False])
-def test_series_np_array_nat_nan_as_nulls(nat, value, request, nan_as_null):
+def test_series_np_array_nat_nan_as_nulls(nat, value, nan_as_null):
     expected = np.array([nat, value])
-    if expected.dtype.kind == "m":
-        request.applymarker(
-            pytest.mark.xfail(
-                raises=TypeError, reason="timedelta64 not supported by cupy"
-            )
-        )
     ser = cudf.Series(expected, nan_as_null=nan_as_null)
     assert ser[0] is pd.NaT
     assert ser[1] == value
+
+
+def test_series_unitness_np_datetimelike_units():
+    data = np.array([np.timedelta64(1)])
+    with pytest.raises(TypeError):
+        cudf.Series(data)
+    with pytest.raises(TypeError):
+        pd.Series(data)
 
 
 def test_series_duplicate_index_reindex():
@@ -2657,6 +2667,22 @@ def test_series_duplicate_index_reindex():
         lfunc_args_and_kwargs=([10, 11, 12, 13], {}),
         rfunc_args_and_kwargs=([10, 11, 12, 13], {}),
     )
+
+
+def test_list_category_like_maintains_dtype():
+    dtype = cudf.CategoricalDtype(categories=[1, 2, 3, 4], ordered=True)
+    data = [1, 2, 3]
+    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    expected = pd.Series(data, dtype=dtype.to_pandas())
+    assert_eq(result, expected)
+
+
+def test_list_interval_like_maintains_dtype():
+    dtype = cudf.IntervalDtype(subtype=np.int8)
+    data = [pd.Interval(1, 2)]
+    result = cudf.Series(cudf.core.column.as_column(data, dtype=dtype))
+    expected = pd.Series(data, dtype=dtype.to_pandas())
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -2696,3 +2722,67 @@ def test_series_dtype_astypes(data):
     result = cudf.Series(data, dtype="float64")
     expected = cudf.Series([1.0, 2.0, 3.0])
     assert_eq(result, expected)
+
+
+def test_series_from_large_string():
+    pa_large_string_array = pa.array(["a", "b", "c"]).cast(pa.large_string())
+    got = cudf.Series(pa_large_string_array)
+    expected = pd.Series(pa_large_string_array)
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type_nullable_raises(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    with pytest.raises(ValueError, match=".* cannot both be set"):
+        ser.to_pandas(nullable=True, arrow_type=True)
+
+
+@pytest.mark.parametrize(
+    "scalar",
+    [
+        1,
+        1.0,
+        "a",
+        datetime.datetime(2020, 1, 1),
+        datetime.timedelta(1),
+        {"1": 2},
+        [1],
+        decimal.Decimal("1.0"),
+    ],
+)
+def test_series_to_pandas_arrow_type(scalar):
+    pa_array = pa.array([scalar, None])
+    ser = cudf.Series(pa_array)
+    result = ser.to_pandas(arrow_type=True)
+    expected = pd.Series(pd.arrays.ArrowExtensionArray(pa_array))
+    pd.testing.assert_series_equal(result, expected)
+
+
+@pytest.mark.parametrize("axis", [None, 0, "index"])
+@pytest.mark.parametrize("data", [[1, 2], [1]])
+def test_squeeze(axis, data):
+    ser = cudf.Series(data)
+    result = ser.squeeze(axis=axis)
+    expected = ser.to_pandas().squeeze(axis=axis)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_squeeze_invalid_axis(axis):
+    with pytest.raises(ValueError):
+        cudf.Series([1]).squeeze(axis=axis)

@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 
+#include "page_data.cuh"
 #include "page_decode.cuh"
 
-#include <io/utilities/column_buffer.hpp>
-
-#include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
-
 #include <rmm/exec_policy.hpp>
+
 #include <thrust/reduce.h>
 
 namespace cudf::io::parquet::detail {
@@ -29,382 +27,6 @@ namespace {
 
 constexpr int decode_block_size = 128;
 constexpr int rolling_buf_size  = decode_block_size * 2;
-
-/**
- * @brief Output a string descriptor
- *
- * @param[in,out] s Page state input/output
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[in] dstv Pointer to row output data (string descriptor or 32-bit hash)
- */
-template <typename state_buf>
-inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_pos, void* dstv)
-{
-  auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
-  // make sure to only hash `BYTE_ARRAY` when specified with the output type size
-  if (s->dtype_len == 4 and (s->col.data_type & 7) == BYTE_ARRAY) {
-    // Output hash. This hash value is used if the option to convert strings to
-    // categoricals is enabled. The seed value is chosen arbitrarily.
-    uint32_t constexpr hash_seed = 33;
-    cudf::string_view const sv{ptr, static_cast<size_type>(len)};
-    *static_cast<uint32_t*>(dstv) =
-      cudf::hashing::detail::MurmurHash3_x86_32<cudf::string_view>{hash_seed}(sv);
-  } else {
-    // Output string descriptor
-    auto* dst   = static_cast<string_index_pair*>(dstv);
-    dst->first  = ptr;
-    dst->second = len;
-  }
-}
-
-/**
- * @brief Output a boolean
- *
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[in] dst Pointer to row output data
- */
-template <typename state_buf>
-inline __device__ void gpuOutputBoolean(state_buf* sb, int src_pos, uint8_t* dst)
-{
-  *dst = sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)];
-}
-
-/**
- * @brief Store a 32-bit data element
- *
- * @param[out] dst ptr to output
- * @param[in] src8 raw input bytes
- * @param[in] dict_pos byte position in dictionary
- * @param[in] dict_size size of dictionary
- */
-inline __device__ void gpuStoreOutput(uint32_t* dst,
-                                      uint8_t const* src8,
-                                      uint32_t dict_pos,
-                                      uint32_t dict_size)
-{
-  uint32_t bytebuf;
-  unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
-  if (dict_pos < dict_size) {
-    bytebuf = *reinterpret_cast<uint32_t const*>(src8 + dict_pos);
-    if (ofs) {
-      uint32_t bytebufnext = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-      bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
-    }
-  } else {
-    bytebuf = 0;
-  }
-  *dst = bytebuf;
-}
-
-/**
- * @brief Store a 64-bit data element
- *
- * @param[out] dst ptr to output
- * @param[in] src8 raw input bytes
- * @param[in] dict_pos byte position in dictionary
- * @param[in] dict_size size of dictionary
- */
-inline __device__ void gpuStoreOutput(uint2* dst,
-                                      uint8_t const* src8,
-                                      uint32_t dict_pos,
-                                      uint32_t dict_size)
-{
-  uint2 v;
-  unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
-  if (dict_pos < dict_size) {
-    v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
-    v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-    if (ofs) {
-      uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
-      v.x           = __funnelshift_r(v.x, v.y, ofs);
-      v.y           = __funnelshift_r(v.y, next, ofs);
-    }
-  } else {
-    v.x = v.y = 0;
-  }
-  *dst = v;
-}
-
-/**
- * @brief Convert an INT96 Spark timestamp to 64-bit timestamp
- *
- * @param[in,out] s Page state input/output
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[out] dst Pointer to row output data
- */
-template <typename state_buf>
-inline __device__ void gpuOutputInt96Timestamp(page_state_s* s,
-                                               state_buf* sb,
-                                               int src_pos,
-                                               int64_t* dst)
-{
-  using cuda::std::chrono::duration_cast;
-
-  uint8_t const* src8;
-  uint32_t dict_pos, dict_size = s->dict_size, ofs;
-
-  if (s->dict_base) {
-    // Dictionary
-    dict_pos =
-      (s->dict_bits > 0) ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] : 0;
-    src8 = s->dict_base;
-  } else {
-    // Plain
-    dict_pos = src_pos;
-    src8     = s->data_start;
-  }
-  dict_pos *= (uint32_t)s->dtype_len_in;
-  ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
-
-  if (dict_pos + 4 >= dict_size) {
-    *dst = 0;
-    return;
-  }
-
-  uint3 v;
-  int64_t nanos, days;
-  v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
-  v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-  v.z = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
-  if (ofs) {
-    uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 12);
-    v.x           = __funnelshift_r(v.x, v.y, ofs);
-    v.y           = __funnelshift_r(v.y, v.z, ofs);
-    v.z           = __funnelshift_r(v.z, next, ofs);
-  }
-  nanos = v.y;
-  nanos <<= 32;
-  nanos |= v.x;
-  // Convert from Julian day at noon to UTC seconds
-  days = static_cast<int32_t>(v.z);
-  cudf::duration_D d_d{
-    days - 2440588};  // TBD: Should be noon instead of midnight, but this matches pyarrow
-
-  *dst = [&]() {
-    switch (s->col.ts_clock_rate) {
-      case 1:  // seconds
-        return duration_cast<duration_s>(d_d).count() +
-               duration_cast<duration_s>(duration_ns{nanos}).count();
-      case 1'000:  // milliseconds
-        return duration_cast<duration_ms>(d_d).count() +
-               duration_cast<duration_ms>(duration_ns{nanos}).count();
-      case 1'000'000:  // microseconds
-        return duration_cast<duration_us>(d_d).count() +
-               duration_cast<duration_us>(duration_ns{nanos}).count();
-      case 1'000'000'000:  // nanoseconds
-      default: return duration_cast<cudf::duration_ns>(d_d).count() + nanos;
-    }
-  }();
-}
-
-/**
- * @brief Output a 64-bit timestamp
- *
- * @param[in,out] s Page state input/output
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[in] dst Pointer to row output data
- */
-template <typename state_buf>
-inline __device__ void gpuOutputInt64Timestamp(page_state_s* s,
-                                               state_buf* sb,
-                                               int src_pos,
-                                               int64_t* dst)
-{
-  uint8_t const* src8;
-  uint32_t dict_pos, dict_size = s->dict_size, ofs;
-  int64_t ts;
-
-  if (s->dict_base) {
-    // Dictionary
-    dict_pos =
-      (s->dict_bits > 0) ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] : 0;
-    src8 = s->dict_base;
-  } else {
-    // Plain
-    dict_pos = src_pos;
-    src8     = s->data_start;
-  }
-  dict_pos *= (uint32_t)s->dtype_len_in;
-  ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
-  if (dict_pos + 4 < dict_size) {
-    uint2 v;
-    int64_t val;
-    int32_t ts_scale;
-    v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
-    v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-    if (ofs) {
-      uint32_t next = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 8);
-      v.x           = __funnelshift_r(v.x, v.y, ofs);
-      v.y           = __funnelshift_r(v.y, next, ofs);
-    }
-    val = v.y;
-    val <<= 32;
-    val |= v.x;
-    // Output to desired clock rate
-    ts_scale = s->ts_scale;
-    if (ts_scale < 0) {
-      // round towards negative infinity
-      int sign = (val < 0);
-      ts       = ((val + sign) / -ts_scale) + sign;
-    } else {
-      ts = val * ts_scale;
-    }
-  } else {
-    ts = 0;
-  }
-  *dst = ts;
-}
-
-/**
- * @brief Output a byte array as int.
- *
- * @param[in] ptr Pointer to the byte array
- * @param[in] len Byte array length
- * @param[out] dst Pointer to row output data
- */
-template <typename T>
-__device__ void gpuOutputByteArrayAsInt(char const* ptr, int32_t len, T* dst)
-{
-  T unscaled = 0;
-  for (auto i = 0; i < len; i++) {
-    uint8_t v = ptr[i];
-    unscaled  = (unscaled << 8) | v;
-  }
-  // Shift the unscaled value up and back down when it isn't all 8 bytes,
-  // which sign extend the value for correctly representing negative numbers.
-  unscaled <<= (sizeof(T) - len) * 8;
-  unscaled >>= (sizeof(T) - len) * 8;
-  *dst = unscaled;
-}
-
-/**
- * @brief Output a fixed-length byte array as int.
- *
- * @param[in,out] s Page state input/output
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[in] dst Pointer to row output data
- */
-template <typename T, typename state_buf>
-__device__ void gpuOutputFixedLenByteArrayAsInt(page_state_s* s, state_buf* sb, int src_pos, T* dst)
-{
-  uint32_t const dtype_len_in = s->dtype_len_in;
-  uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
-  uint32_t const pos =
-    (s->dict_base
-       ? ((s->dict_bits > 0) ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] : 0)
-       : src_pos) *
-    dtype_len_in;
-  uint32_t const dict_size = s->dict_size;
-
-  T unscaled = 0;
-  for (unsigned int i = 0; i < dtype_len_in; i++) {
-    uint32_t v = (pos + i < dict_size) ? data[pos + i] : 0;
-    unscaled   = (unscaled << 8) | v;
-  }
-  // Shift the unscaled value up and back down when it isn't all 8 bytes,
-  // which sign extend the value for correctly representing negative numbers.
-  if (dtype_len_in < sizeof(T)) {
-    unscaled <<= (sizeof(T) - dtype_len_in) * 8;
-    unscaled >>= (sizeof(T) - dtype_len_in) * 8;
-  }
-  *dst = unscaled;
-}
-
-/**
- * @brief Output a small fixed-length value
- *
- * @param[in,out] s Page state input/output
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[in] dst Pointer to row output data
- */
-template <typename T, typename state_buf>
-inline __device__ void gpuOutputFast(page_state_s* s, state_buf* sb, int src_pos, T* dst)
-{
-  uint8_t const* dict;
-  uint32_t dict_pos, dict_size = s->dict_size;
-
-  if (s->dict_base) {
-    // Dictionary
-    dict_pos =
-      (s->dict_bits > 0) ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] : 0;
-    dict = s->dict_base;
-  } else {
-    // Plain
-    dict_pos = src_pos;
-    dict     = s->data_start;
-  }
-  dict_pos *= (uint32_t)s->dtype_len_in;
-  gpuStoreOutput(dst, dict, dict_pos, dict_size);
-}
-
-/**
- * @brief Output a N-byte value
- *
- * @param[in,out] s Page state input/output
- * @param[out] sb Page state buffer output
- * @param[in] src_pos Source position
- * @param[in] dst8 Pointer to row output data
- * @param[in] len Length of element
- */
-template <typename state_buf>
-static __device__ void gpuOutputGeneric(
-  page_state_s* s, state_buf* sb, int src_pos, uint8_t* dst8, int len)
-{
-  uint8_t const* dict;
-  uint32_t dict_pos, dict_size = s->dict_size;
-
-  if (s->dict_base) {
-    // Dictionary
-    dict_pos =
-      (s->dict_bits > 0) ? sb->dict_idx[rolling_index<state_buf::dict_buf_size>(src_pos)] : 0;
-    dict = s->dict_base;
-  } else {
-    // Plain
-    dict_pos = src_pos;
-    dict     = s->data_start;
-  }
-  dict_pos *= (uint32_t)s->dtype_len_in;
-  if (len & 3) {
-    // Generic slow path
-    for (unsigned int i = 0; i < len; i++) {
-      dst8[i] = (dict_pos + i < dict_size) ? dict[dict_pos + i] : 0;
-    }
-  } else {
-    // Copy 4 bytes at a time
-    uint8_t const* src8 = dict;
-    unsigned int ofs    = 3 & reinterpret_cast<size_t>(src8);
-    src8 -= ofs;  // align to 32-bit boundary
-    ofs <<= 3;    // bytes -> bits
-    for (unsigned int i = 0; i < len; i += 4) {
-      uint32_t bytebuf;
-      if (dict_pos < dict_size) {
-        bytebuf = *reinterpret_cast<uint32_t const*>(src8 + dict_pos);
-        if (ofs) {
-          uint32_t bytebufnext = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-          bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
-        }
-      } else {
-        bytebuf = 0;
-      }
-      dict_pos += 4;
-      *reinterpret_cast<uint32_t*>(dst8 + i) = bytebuf;
-    }
-  }
-}
 
 /**
  * @brief Kernel for computing the column data stored in the pages
@@ -455,7 +77,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
   if (s->dict_base) {
     out_thread0 = (s->dict_bits > 0) ? 64 : 32;
   } else {
-    switch (s->col.data_type & 7) {
+    switch (s->col.physical_type) {
       case BOOLEAN: [[fallthrough]];
       case BYTE_ARRAY: [[fallthrough]];
       case FIXED_LEN_BYTE_ARRAY: out_thread0 = 64; break;
@@ -501,16 +123,16 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
       // be needed in the other DecodeXXX kernels.
       if (s->dict_base) {
         src_target_pos = gpuDecodeDictionaryIndices<false>(s, sb, src_target_pos, t & 0x1f).first;
-      } else if ((s->col.data_type & 7) == BOOLEAN) {
+      } else if (s->col.physical_type == BOOLEAN) {
         src_target_pos = gpuDecodeRleBooleans(s, sb, src_target_pos, t & 0x1f);
-      } else if ((s->col.data_type & 7) == BYTE_ARRAY or
-                 (s->col.data_type & 7) == FIXED_LEN_BYTE_ARRAY) {
+      } else if (s->col.physical_type == BYTE_ARRAY or
+                 s->col.physical_type == FIXED_LEN_BYTE_ARRAY) {
         gpuInitStringDescriptors<false>(s, sb, src_target_pos, t & 0x1f);
       }
       if (t == 32) { s->dict_pos = src_target_pos; }
     } else {
       // WARP1..WARP3: Decode values
-      int const dtype = s->col.data_type & 7;
+      int const dtype = s->col.physical_type;
       src_pos += t - out_thread0;
 
       // the position in the output column/buffer
@@ -544,10 +166,12 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
         uint32_t dtype_len = s->dtype_len;
         void* dst =
           nesting_info_base[leaf_level_index].data_out + static_cast<size_t>(dst_pos) * dtype_len;
+        auto const is_decimal =
+          s->col.logical_type.has_value() and s->col.logical_type->type == LogicalType::DECIMAL;
         if (dtype == BYTE_ARRAY) {
-          if (s->col.converted_type == DECIMAL) {
+          if (is_decimal) {
             auto const [ptr, len]        = gpuGetStringData(s, sb, val_src_pos);
-            auto const decimal_precision = s->col.decimal_precision;
+            auto const decimal_precision = s->col.logical_type->precision();
             if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
               gpuOutputByteArrayAsInt(ptr, len, static_cast<int32_t*>(dst));
             } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
@@ -560,7 +184,7 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size)
           }
         } else if (dtype == BOOLEAN) {
           gpuOutputBoolean(sb, val_src_pos, static_cast<uint8_t*>(dst));
-        } else if (s->col.converted_type == DECIMAL) {
+        } else if (is_decimal) {
           switch (dtype) {
             case INT32: gpuOutputFast(s, sb, val_src_pos, static_cast<uint32_t*>(dst)); break;
             case INT64: gpuOutputFast(s, sb, val_src_pos, static_cast<uint2*>(dst)); break;
@@ -609,11 +233,11 @@ struct mask_tform {
 
 }  // anonymous namespace
 
-uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>& pages,
+uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_span<PageInfo const> pages,
                                        rmm::cuda_stream_view stream)
 {
   // determine which kernels to invoke
-  auto mask_iter = thrust::make_transform_iterator(pages.d_begin(), mask_tform{});
+  auto mask_iter = thrust::make_transform_iterator(pages.device_begin(), mask_tform{});
   return thrust::reduce(
     rmm::exec_policy(stream), mask_iter, mask_iter + pages.size(), 0U, thrust::bit_or<uint32_t>{});
 }
@@ -621,8 +245,8 @@ uint32_t GetAggregatedDecodeKernelMask(cudf::detail::hostdevice_vector<PageInfo>
 /**
  * @copydoc cudf::io::parquet::detail::DecodePageData
  */
-void __host__ DecodePageData(cudf::detail::hostdevice_vector<PageInfo>& pages,
-                             cudf::detail::hostdevice_vector<ColumnChunkDesc> const& chunks,
+void __host__ DecodePageData(cudf::detail::hostdevice_span<PageInfo> pages,
+                             cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
                              size_t num_rows,
                              size_t min_row,
                              int level_type_size,

@@ -2,8 +2,9 @@
 
 ## 📢 cuDF can now be used as a no-code-change accelerator for pandas! To learn more, see [here](https://rapids.ai/cudf-pandas/)!
 
-cuDF is a GPU DataFrame library for loading joining, aggregating,
-filtering, and otherwise manipulating data. cuDF leverages
+cuDF (pronounced "KOO-dee-eff") is a GPU DataFrame library
+for loading, joining, aggregating, filtering, and otherwise
+manipulating data. cuDF leverages
 [libcudf](https://docs.rapids.ai/api/libcudf/stable/), a
 blazing-fast C++/CUDA dataframe library and the [Apache
 Arrow](https://arrow.apache.org/) columnar format to provide a
@@ -92,7 +93,7 @@ cuDF can be installed with conda (via [miniconda](https://docs.conda.io/projects
 
 ```bash
 conda install -c rapidsai -c conda-forge -c nvidia \
-    cudf=24.04 python=3.10 cuda-version=11.8
+    cudf=24.06 python=3.11 cuda-version=12.2
 ```
 
 We also provide [nightly Conda packages](https://anaconda.org/rapidsai-nightly) built from the HEAD

@@ -16,9 +16,9 @@
 
 #pragma once
 
-#include <random>
-
 #include <cudf/utilities/traits.hpp>
+
+#include <random>
 
 namespace cudf {
 namespace test {

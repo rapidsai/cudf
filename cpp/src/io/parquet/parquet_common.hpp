@@ -103,8 +103,9 @@ enum Compression {
   GZIP         = 2,
   LZO          = 3,
   BROTLI       = 4,  // Added in 2.3.2
-  LZ4          = 5,  // Added in 2.3.2
+  LZ4          = 5,  // deprecated; based on LZ4, but with an additional undocumented framing scheme
   ZSTD         = 6,  // Added in 2.3.2
+  LZ4_RAW      = 7,  // "standard" LZ4 block format
 };
 
 /**

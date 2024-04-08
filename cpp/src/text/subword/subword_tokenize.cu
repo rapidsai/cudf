@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "text/subword/detail/wordpiece_tokenizer.hpp"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
@@ -26,7 +28,6 @@
 
 #include <nvtext/detail/load_hash_file.hpp>
 #include <nvtext/subword_tokenize.hpp>
-#include <text/subword/detail/wordpiece_tokenizer.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -59,7 +60,7 @@ namespace {
 CUDF_KERNEL void kernel_compute_tensor_metadata(
   // input
   uint32_t const* token_ids,
-  cudf::size_type const* offsets,
+  int64_t const* offsets,
   uint32_t const* row2tensor,
   uint32_t const* row2row_within_tensor,
   uint32_t max_sequence_length,
@@ -183,16 +184,11 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     "max_sequence_length times number of input rows exceeds the column size limit",
     std::overflow_error);
 
-  auto const offsets   = strings.offsets();
-  auto const d_offsets = offsets.data<cudf::size_type>() + strings.offset();
-  auto const offset  = cudf::detail::get_value<cudf::size_type>(offsets, strings.offset(), stream);
-  auto const d_chars = strings.chars_begin(stream) + offset;
-
   // Create tokenizer
   wordpiece_tokenizer tokenizer(
     vocab_table, max_sequence_length, stride, do_truncate, do_lower_case);
   // Run tokenizer
-  auto const tokens = tokenizer.tokenize(d_chars, d_offsets, strings_count, stream);
+  auto const tokens = tokenizer.tokenize(strings, stream);
   // assign output components
   auto device_token_ids = tokens.first->data();
   auto device_offsets   = tokens.second->data();
