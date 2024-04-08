@@ -1782,10 +1782,8 @@ def as_column(
         data = as_buffer(arbitrary, exposed=cudf.get_option("copy_on_write"))
         col = build_column(data, dtype=arbitrary.dtype, mask=mask)
         if (
-            nan_as_null
-            or (mask is None and nan_as_null is None)
-            and col.dtype.kind == "f"
-        ):
+            nan_as_null or (mask is None and nan_as_null is None)
+        ) and col.dtype.kind == "f":
             col = col.nans_to_nulls()
         if dtype is not None:
             col = col.astype(dtype)
