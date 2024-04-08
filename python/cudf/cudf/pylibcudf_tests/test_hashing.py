@@ -129,8 +129,21 @@ def all_types_output_table(input, method):
 @pytest.mark.parametrize("method", METHODS)
 def test_hash_column(pa_input_column, method):
     def _applyfunc(x):
-        hasher = getattr(hashlib, method)
-        return hasher(str(x).encode()).hexdigest()
+        if isinstance(x, str):
+            hasher = getattr(hashlib, method)
+            return hasher(str(x).encode()).hexdigest()
+        elif isinstance(x, float):
+            raise NotImplementedError
+        elif isinstance(x, bool):
+            raise NotImplementedError
+        elif isinstance(x, int):
+            raise NotImplementedError
+        elif isinstance(x, list):
+            raise NotImplementedError
+        elif isinstance(x, dict):
+            raise NotImplementedError
+        else:
+            raise NotImplementedError("Unsupported type")
 
     plc_tbl = plc.interop.from_arrow(
         pa.Table.from_arrays([pa_input_column], names=["data"])
