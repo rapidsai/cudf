@@ -7,7 +7,7 @@
 # branch and the PR branch:
 
 # Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
-GH_JOB_NAME=${1}
+GH_JOB_NAME="pandas-tests-diff / build"
 rapids-logger "Github job name: ${GH_JOB_NAME}"
 
 MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py310.main-results.json
