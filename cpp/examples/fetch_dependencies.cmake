@@ -26,11 +26,10 @@ set(CUDF_TAG branch-24.06)
 # find or build it via CPM
 CPMFindPackage(
   NAME cudf
-  FIND_PACKAGE_ARGUMENTS "HINTS ${cudf_ROOT}/latest"
-  GIT_REPOSITORY https://github.com/rapidsai/cudf
+  FIND_PACKAGE_ARGUMENTS "HINTS ${cudf_ROOT}/latest" GIT_REPOSITORY https://github.com/rapidsai/cudf
   GIT_TAG ${CUDF_TAG}
   GIT_SHALLOW
     TRUE
     SOURCE_SUBDIR
     cpp
-  )
+)
