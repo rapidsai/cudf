@@ -15,7 +15,7 @@ MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.main-results.json
 PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-results.json
 
 rapids-logger "Fetching latest available results from nightly"
-aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '.main-results.json')], &LastModified)[::-1].[Key]" --output text > s3_output.txt
+aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-results.json')], &LastModified)[::-1].[Key]" --output text > s3_output.txt
 
 read -r COMPARE_ENV < s3_output.txt
 export COMPARE_ENV
