@@ -16,9 +16,9 @@ import dask_cudf
 dask_cuda = pytest.importorskip("dask_cuda")
 
 
-def more_than_two_gpus():
+def at_least_n_gpus(n):
     ngpus = len(numba.cuda.gpus)
-    return ngpus >= 2
+    return ngpus >= n
 
 
 @pytest.mark.parametrize("delayed", [True, False])
@@ -54,7 +54,7 @@ def test_merge():
 
 
 @pytest.mark.skipif(
-    not more_than_two_gpus(), reason="Machine does not have more than two GPUs"
+    not at_least_n_gpus(2), reason="Machine does not have two GPUs"
 )
 def test_ucx_seriesgroupby():
     pytest.importorskip("ucp")
@@ -95,5 +95,24 @@ def test_p2p_shuffle():
             dd.assert_eq(
                 ddf.sort_values("x", shuffle_method="p2p").compute(),
                 ddf.compute().sort_values("x"),
+                check_index=False,
+            )
+
+
+@pytest.mark.skipif(
+    not at_least_n_gpus(3),
+    reason="Machine does not have three GPUs",
+)
+def test_unique():
+    # Using `"p2p"` can produce dispatching problems
+    # TODO: Test "p2p" after dask > 2024.4.1 is required
+    # See: https://github.com/dask/dask/pull/11040
+    with dask_cuda.LocalCUDACluster(n_workers=3) as cluster:
+        with Client(cluster):
+            df = cudf.DataFrame({"x": ["a", "b", "c", "a", "a"]})
+            ddf = dask_cudf.from_cudf(df, npartitions=2)
+            dd.assert_eq(
+                df.x.unique(),
+                ddf.x.unique().compute(),
                 check_index=False,
             )
