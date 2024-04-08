@@ -13,29 +13,7 @@
 # =============================================================================
 
 set(cython_sources
-    aggregation.pyx
-    binaryop.pyx
-    column.pyx
-    concatenate.pyx
-    copying.pyx
-    filling.pyx
-    gpumemoryview.pyx
-    groupby.pyx
-    interop.pyx
-    join.pyx
-    lists.pyx
-    merge.pyx
-    reduce.pyx
-    replace.pyx
-    rolling.pyx
-    scalar.pyx
-    search.pyx
-    stream_compaction.pyx
-    sorting.pyx
-    table.pyx
-    types.pyx
-    unary.pyx
-    utils.pyx
+    case.pyx
 )
 set(linked_libraries cudf::cudf)
 rapids_cython_create_modules(
@@ -43,6 +21,3 @@ rapids_cython_create_modules(
   SOURCE_FILES "${cython_sources}"
   LINKED_LIBRARIES "${linked_libraries}" MODULE_PREFIX pylibcudf_ ASSOCIATED_TARGETS cudf
 )
-link_to_pyarrow_headers(pylibcudf_interop)
-
-add_subdirectory(strings)
