@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime
+import functools
 import locale
 import re
 from locale import nl_langinfo
@@ -241,6 +242,8 @@ class DatetimeColumn(column.ColumnBase):
         null_count: Optional[int] = None,
     ):
         dtype = cudf.dtype(dtype)
+        if dtype.kind != "M":
+            raise TypeError(f"{self.dtype} is not a supported datetime type")
 
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
@@ -256,26 +259,26 @@ class DatetimeColumn(column.ColumnBase):
             null_count=null_count,
         )
 
-        if self.dtype.type is not np.datetime64:
-            raise TypeError(f"{self.dtype} is not a supported datetime type")
-
-        self._time_unit, _ = np.datetime_data(self.dtype)
-
     def __contains__(self, item: ScalarLike) -> bool:
         try:
-            item_as_dt64 = np.datetime64(item, self._time_unit)
-        except ValueError:
-            # If item cannot be converted to datetime type
-            # np.datetime64 raises ValueError, hence `item`
-            # cannot exist in `self`.
+            ts = pd.Timestamp(item).as_unit(self.time_unit)
+        except Exception:
+            # pandas can raise a variety of errors
+            # item cannot exist in self.
             return False
-        return item_as_dt64.astype("int64") in self.as_numerical_column(
+        if ts.tzinfo is None and isinstance(self.dtype, pd.DatetimeTZDtype):
+            return False
+        elif ts.tzinfo is not None:
+            ts = ts.tz_convert(None)
+        return ts.to_numpy().astype("int64") in self.as_numerical_column(
             "int64"
         )
 
-    @property
+    @functools.cached_property
     def time_unit(self) -> str:
-        return self._time_unit
+        if isinstance(self.dtype, pd.DatetimeTZDtype):
+            return self.dtype.unit
+        return np.datetime_data(self.dtype)[0]
 
     @property
     def year(self) -> ColumnBase:
@@ -321,6 +324,12 @@ class DatetimeColumn(column.ColumnBase):
         raise NotImplementedError(
             "DateTime Arrays is not yet implemented in cudf"
         )
+
+    def element_indexing(self, index: int):
+        result = super().element_indexing(index)
+        if cudf.get_option("mode.pandas_compatible"):
+            return pd.Timestamp(result)
+        return result
 
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
