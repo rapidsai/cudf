@@ -16,8 +16,8 @@ from . import (
     rolling,
     search,
     sorting,
-    strings,
     stream_compaction,
+    strings,
     types,
     unary,
 )
