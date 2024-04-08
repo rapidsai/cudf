@@ -735,10 +735,6 @@ dependencies:
           # Clipboard tests
           - pytest-qt
           - pyside2
-      - output_types: conda
-        packages:
-          # Clipboard tests
-          - qt
   test_python_cudf_pandas:
     common:
       - output_types: pyproject
