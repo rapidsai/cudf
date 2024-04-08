@@ -554,7 +554,10 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
-    if isinstance(dtype, cudf.CategoricalDtype) or (isinstance(dtype, str) and dtype == "category"):
+    if (
+        isinstance(dtype, cudf.CategoricalDtype)
+        or (isinstance(dtype, str) and dtype == "category")
+       ):
         if isinstance(dtype, str):
             dtype = "str"
         else:
