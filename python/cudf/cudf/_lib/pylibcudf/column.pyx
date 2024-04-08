@@ -1,7 +1,7 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from cython.operator cimport dereference
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer
@@ -273,6 +273,13 @@ cdef class Column:
     cpdef list children(self):
         """The children of the column."""
         return self._children
+
+    cpdef Column copy(self):
+        """Create a copy of the column."""
+        cdef unique_ptr[column] c_result
+        with nogil:
+            c_result = move(make_unique[column](self.view()))
+        return Column.from_libcudf(move(c_result))
 
 
 cdef class ListColumnView:

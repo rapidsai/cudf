@@ -1011,5 +1011,16 @@ std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(c
   return {std::move(host_data), bitmask_to_host(c)};
 }
 
+large_strings_enabler::large_strings_enabler(bool default_enable)
+{
+  default_enable ? enable() : disable();
+}
+
+large_strings_enabler::~large_strings_enabler() { disable(); }
+
+void large_strings_enabler::enable() { setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "1", 1); }
+
+void large_strings_enabler::disable() { setenv("LIBCUDF_LARGE_STRINGS_ENABLED", "0", 1); }
+
 }  // namespace test
 }  // namespace cudf

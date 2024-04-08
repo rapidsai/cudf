@@ -2,6 +2,7 @@
 
 import warnings
 from collections.abc import Iterator
+from functools import partial
 
 import cupy as cp
 import numpy as np
@@ -484,7 +485,6 @@ try:
     def _simple_cudf_encode(_):
         # Basic pickle-based encoding for a partd k-v store
         import pickle
-        from functools import partial
 
         import partd
 
@@ -684,6 +684,19 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             dtype=dtype,
             columns=columns,
             constructor=constructor,
+        )
+
+    @staticmethod
+    def read_json(*args, engine="auto", **kwargs):
+        return _default_backend(
+            dd.read_json,
+            *args,
+            engine=(
+                partial(cudf.read_json, engine=engine)
+                if isinstance(engine, str)
+                else engine
+            ),
+            **kwargs,
         )
 
 

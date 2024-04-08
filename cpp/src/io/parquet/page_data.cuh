@@ -34,8 +34,7 @@ template <typename state_buf>
 inline __device__ void gpuOutputString(page_state_s* s, state_buf* sb, int src_pos, void* dstv)
 {
   auto [ptr, len] = gpuGetStringData(s, sb, src_pos);
-  // make sure to only hash `BYTE_ARRAY` when specified with the output type size
-  if (s->dtype_len == 4 and (s->col.data_type & 7) == BYTE_ARRAY) {
+  if (s->col.is_strings_to_cat and s->col.physical_type == BYTE_ARRAY) {
     // Output hash. This hash value is used if the option to convert strings to
     // categoricals is enabled. The seed value is chosen arbitrarily.
     uint32_t constexpr hash_seed = 33;
