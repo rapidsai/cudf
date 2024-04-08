@@ -10,7 +10,7 @@
 GH_JOB_NAME="pandas-tests-diff / build"
 rapids-logger "Github job name: ${GH_JOB_NAME}"
 
-PY_VER=$(python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")
+PY_VER="39"
 MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.main-results.json
 PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-results.json
 
