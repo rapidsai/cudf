@@ -146,28 +146,27 @@ struct upper_lower_fn {
 
 // Long strings are divided into smaller strings using this value as a guide.
 // Generally strings are split into sub-blocks of bytes of this size but
-// care is taken to sub-block in the middle of a multi-byte character.
+// care is taken to not sub-block in the middle of a multi-byte character.
 constexpr size_type LS_SUB_BLOCK_SIZE = 32;
 
 /**
  * @brief Produces sub-offsets for the chars in the given strings column
  */
 struct sub_offset_fn {
-  column_device_view d_strings;
+  char const* d_input_chars;
+  int64_t first_offset;
+  int64_t last_offset;
 
   __device__ int64_t operator()(int64_t idx) const
   {
-    auto const first  = d_strings.element<string_view>(0);
-    auto const last   = d_strings.element<string_view>(d_strings.size() - 1);
-    auto const end    = last.data() + last.size_bytes();
-    auto const offset = thrust::distance(d_strings.head<char>(), first.data());
-    auto position     = (idx + 1) * LS_SUB_BLOCK_SIZE;
-    auto begin        = first.data() + position;
+    auto const end = d_input_chars + last_offset;
+    auto position  = (idx + 1) * LS_SUB_BLOCK_SIZE;
+    auto begin     = d_input_chars + first_offset + position;
     while ((begin < end) && is_utf8_continuation_char(static_cast<u_char>(*begin))) {
       ++begin;
       ++position;
     }
-    return (begin < end) ? position + offset : thrust::distance(d_strings.head<char>(), end);
+    return (begin < end) ? position + first_offset : last_offset;
   }
 };
 
@@ -351,7 +350,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
                       count_itr,
                       count_itr + sub_count,
                       sub_offsets.data(),
-                      sub_offset_fn{*d_strings});
+                      sub_offset_fn{input_chars, first_offset, last_offset});
 
     // merge them with input offsets
     auto input_offsets =
