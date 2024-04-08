@@ -2004,16 +2004,12 @@ def as_column(
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif (
-        is_scalar(arbitrary)
-        and not isinstance(arbitrary, memoryview)
-        and not _is_categorical_dtype(dtype)
-    ):
+    elif is_scalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if length is None:
             length = 1
         elif length < 0:
             raise ValueError(f"{length=} must be >=0.")
-        if isinstance(arbitrary, pd.Interval):
+        if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
             # No cudf.Scalar support yet
             return as_column(
                 pd.Series([arbitrary] * length),
