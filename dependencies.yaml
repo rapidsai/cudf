@@ -21,6 +21,7 @@ files:
       - py_version
       - run_common
       - run_cudf
+      - run_libcudf
       - run_dask_cudf
       - run_custreamz
       - test_cpp
@@ -75,6 +76,18 @@ files:
       - docs
       - libarrow_run
       - py_version
+  # This is the shared library, bundled as a wheel. It is meant to be consumed by the wrapper.
+  py_build_libcudf:
+    output: pyproject
+    pyproject_dir: python/libcudf
+    extras:
+      table: build-system
+    includes:
+      - build_base
+      - build_cpp
+      - build_python_common
+      - build_python_cudf
+  # This is the wrapper that gets used in Python, not the shared library wheel
   py_build_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -84,6 +97,7 @@ files:
       - build_base
       - build_python_common
       - build_python_cudf
+      - run_libcudf
   py_run_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -94,6 +108,7 @@ files:
       - run_cudf
       - pyarrow_run
       - depends_on_cupy
+      - run_libcudf
   py_test_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -336,6 +351,13 @@ dependencies:
           # Allow runtime version to float up to minor version
           # Disallow pyarrow 14.0.0 due to a CVE
           - pyarrow>=14.0.1,<15.0.0a0
+  run_libcudf:
+    common:
+      # TODO: Currently this is a hack for devcontainers. Need to figure out the best solution.
+      #- output_types: [requirements, pyproject]
+      - output_types: [pyproject]
+        packages:
+          - libcudf==24.6.*
   cuda_version:
     specific:
       - output_types: conda

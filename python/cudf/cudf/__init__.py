@@ -1,5 +1,15 @@
 # Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
+# If libcudf was installed as a wheel, we must request it to load the library symbols.
+# Otherwise, we assume that the library was installed in a system path that ld can find.
+try:
+    import libcudf
+except ModuleNotFoundError:
+    pass
+else:
+    libcudf.load_library()
+    del libcudf
+
 # _setup_numba _must be called before numba.cuda is imported, because
 # it sets the numba config variable responsible for enabling
 # Minor Version Compatibility. Setting it after importing numba.cuda has no effect.
