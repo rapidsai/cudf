@@ -95,10 +95,51 @@ cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftes
 # Run the tests
 cd pandas-tests/
 
+
+# TODO: Needs motoserver/moto container running on http://localhost:5000
+TEST_THAT_NEED_MOTO_SERVER="not test_styler_to_s3 \
+and not test_with_s3_url[None] \
+and not test_with_s3_url[gzip] \
+and not test_with_s3_url[bz2] \
+and not test_with_s3_url[zip] \
+and not test_with_s3_url[xz] \
+and not test_with_s3_url[tar] \
+and not test_s3_permission_output[etree] \
+and not test_read_s3_jsonl \
+and not test_s3_parser_consistency \
+and not test_to_s3 \
+and not test_parse_public_s3a_bucket \
+and not test_parse_public_s3_bucket_nrows \
+and not test_parse_public_s3_bucket_chunked \
+and not test_parse_public_s3_bucket_chunked_python \
+and not test_parse_public_s3_bucket_python \
+and not test_infer_s3_compression \
+and not test_parse_public_s3_bucket_nrows_python \
+and not test_read_s3_fails_private \
+and not test_read_csv_handles_boto_s3_object \
+and not test_read_csv_chunked_download \
+and not test_read_s3_with_hash_in_key \
+and not test_read_feather_s3_file_path \
+and not test_parse_public_s3_bucket \
+and not test_parse_private_s3_bucket \
+and not test_parse_public_s3n_bucket \
+and not test_read_with_creds_from_pub_bucket \
+and not test_read_without_creds_from_pub_bucket \
+and not test_from_s3_csv \
+and not test_s3_protocols[s3] \
+and not test_s3_protocols[s3a] \
+and not test_s3_protocols[s3n] \
+and not test_s3_parquet \
+and not test_s3_roundtrip_explicit_fs \
+and not test_s3_roundtrip \
+and not test_s3_roundtrip_for_dir[partition_col0] \
+and not test_s3_roundtrip_for_dir[partition_col1] \
+and not test_s3_roundtrip"
+
 # TODO: Remove "not db" once a postgres & mysql container is set up on the CI
 PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
     -v -m "not single_cpu and not db" \
-    -k "not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods" \
+    -k "not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_THAT_NEED_MOTO_SERVER" \
     --import-mode=importlib \
     ${PYTEST_IGNORES} \
     "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
