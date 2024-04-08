@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.string cimport string
@@ -15,6 +15,7 @@ from cudf._lib.cpp.table.table_view cimport table_view
 cdef extern from "dlpack/dlpack.h" nogil:
     ctypedef struct DLManagedTensor:
         void(*deleter)(DLManagedTensor*) except +
+
 
 cdef extern from "cudf/interop.hpp" namespace "cudf" \
         nogil:

@@ -1,6 +1,8 @@
 # Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
+from cpython cimport pycapsule
 from cython.operator cimport dereference
+from libc.stdlib cimport free
 from libcpp.memory cimport shared_ptr, unique_ptr
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
@@ -11,6 +13,8 @@ from functools import singledispatch
 
 from pyarrow import lib as pa
 
+# from cuda cimport ccudart
+
 from cudf._lib.cpp.interop cimport (
     column_metadata,
     from_arrow as cpp_from_arrow,
@@ -18,6 +22,7 @@ from cudf._lib.cpp.interop cimport (
 )
 from cudf._lib.cpp.scalar.scalar cimport fixed_point_scalar, scalar
 from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.wrappers.decimals cimport (
     decimal32,
     decimal64,
@@ -210,3 +215,97 @@ def _to_arrow_array(cudf_object, metadata=None):
         metadata = ColumnMetadata()
     metadata = ColumnMetadata(metadata) if isinstance(metadata, str) else metadata
     return to_arrow(Table([cudf_object]), [metadata])[0]
+
+
+cdef void release_arrow_schema_py_capsule(object schema_capsule) noexcept:
+    cdef ArrowSchema* schema = <ArrowSchema*>pycapsule.PyCapsule_GetPointer(
+        schema_capsule, 'arrow_schema'
+    )
+    if schema.release != NULL:
+        schema.release(schema)
+
+    free(schema)
+
+
+cdef extern from *:
+    # Rather than exporting the underlying functions directly to Cython, we expose
+    # these wrappers that handle the release to avoid needing to teach Cython how
+    # to handle unique_ptrs with custom deleters that aren't default constructible.
+    """
+    ArrowSchema* to_arrow_schema_raw(
+      cudf::table_view const& input,
+      cudf::host_span<cudf::column_metadata const> metadata) {
+      return to_arrow_schema(input, metadata).release();
+    }
+    ArrowDeviceArray* to_arrow_device_raw(
+      cudf::table_view tbl,
+      rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) {
+      return cudf::to_arrow_device(tbl, stream, mr).release();
+    }
+    """
+    cdef ArrowSchema *to_arrow_schema_raw(
+        const table_view& tbl,
+        const vector[column_metadata]& metadata,
+    ) except + nogil
+    cdef ArrowDeviceArray* to_arrow_device_raw(table_view tbl) except + nogil
+
+    # The minimal declarations for Arrow C Data Interface types needed for the
+    # Cython implementations.
+    cdef struct ArrowSchema:
+        void (*release)(ArrowSchema*) noexcept nogil
+
+    cdef struct ArrowArray:
+        void (*release)(ArrowArray*) noexcept nogil
+
+    cdef struct ArrowArrayStream:
+        void (*release)(ArrowArrayStream*) noexcept nogil
+
+    cdef struct ArrowDeviceArray:
+        ArrowArray array
+
+
+def table_to_schema(Table tbl, metadata):
+    if metadata is None:
+        metadata = [ColumnMetadata() for _ in range(len(tbl.columns()))]
+    metadata = [ColumnMetadata(m) if isinstance(m, str) else m for m in metadata]
+
+    cdef vector[column_metadata] c_metadata
+    for meta in metadata:
+        c_metadata.push_back(_metadata_to_libcudf(meta))
+
+    cdef ArrowSchema* raw_schema_ptr
+    with nogil:
+        raw_schema_ptr = to_arrow_schema_raw(tbl.view(), c_metadata)
+
+    capsule = pycapsule.PyCapsule_New(
+        <void*>raw_schema_ptr,
+        'arrow_schema',
+        release_arrow_schema_py_capsule,
+    )
+    return capsule
+
+
+cdef void release_arrow_device_array_py_capsule(object device_array_capsule) noexcept:
+    cdef ArrowDeviceArray* device_array = (
+        <ArrowDeviceArray*>pycapsule.PyCapsule_GetPointer(
+            device_array_capsule, 'arrow_device_array'
+        )
+    )
+    if device_array.array.release != NULL:
+        device_array.array.release(&device_array.array)
+
+    free(device_array)
+
+
+def table_to_device_array(Table tbl):
+    cdef ArrowDeviceArray* raw_device_array_ptr
+    with nogil:
+        raw_device_array_ptr = to_arrow_device_raw(tbl.view())
+
+    capsule = pycapsule.PyCapsule_New(
+        <void*>raw_device_array_ptr,
+        'arrow_device_array',
+        release_arrow_device_array_py_capsule,
+    )
+    return capsule
