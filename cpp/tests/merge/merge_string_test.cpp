@@ -414,35 +414,44 @@ TYPED_TEST(MergeStringTest, Merge2StringKeyNullColumns)
 
 class MergeLargeStringsTest : public cudf::test::BaseFixture {};
 
-TEST_F(MergeLargeStringsTest, DISABLED_MergeLargeStrings)
+TEST_F(MergeLargeStringsTest, MergeLargeStrings)
 {
-  // CUDF_TEST_ENABLE_LARGE_STRINGS(); implemented in PR 15195
+  CUDF_TEST_ENABLE_LARGE_STRINGS();
   auto itr = thrust::constant_iterator<std::string_view>(
-    "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                // 50 bytes
-  auto input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
-  std::vector<cudf::table_view> input_views;
-  for (int i = 0; i < 10; ++i) {  // 2500MB > 2GB
-    input_views.push_back(cudf::table_view({input}));
+    "abcdefghijklmnopqrstuvwxyABCDEFGHIJKLMNOPQRSTUVWXY");                      // 50 bytes
+  auto const input = cudf::test::strings_column_wrapper(itr, itr + 5'000'000);  // 250MB
+  auto input_views = std::vector<cudf::table_view>();
+  auto const view  = cudf::table_view({input});
+  std::vector<cudf::size_type> splits;
+  int const multiplier = 10;
+  for (int i = 0; i < multiplier; ++i) {  // 2500MB > 2GB
+    input_views.push_back(view);
+    splits.push_back(view.num_rows() * (i + 1));
   }
-  std::vector<cudf::order> column_order{cudf::order::ASCENDING};
-  std::vector<cudf::null_order> null_precedence{cudf::null_order::AFTER};
+  splits.pop_back();  // remove last entry
+  auto const column_order    = std::vector<cudf::order>{cudf::order::ASCENDING};
+  auto const null_precedence = std::vector<cudf::null_order>{cudf::null_order::AFTER};
 
   auto result = cudf::merge(input_views, {0}, column_order, null_precedence);
   auto sv     = cudf::strings_column_view(result->view().column(0));
-  EXPECT_EQ(sv.size(), 50'000'000);
+  EXPECT_EQ(sv.size(), view.num_rows() * multiplier);
   EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
 
-  // verify results in sections
-  auto splits = std::vector<cudf::size_type>({5'000'000,
-                                              10'000'000,
-                                              15'000'000,
-                                              20'000'000,
-                                              25'000'000,
-                                              30'000'000,
-                                              35'000'000,
-                                              40'000'000,
-                                              45'000'000});
   auto sliced = cudf::split(sv.parent(), splits);
+  for (auto c : sliced) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
+  }
+
+  // also test with large strings column as input
+  input_views.clear();
+  input_views.push_back(view);            // regular column
+  input_views.push_back(result->view());  // large column
+  result = cudf::merge(input_views, {0}, column_order, null_precedence);
+  sv     = cudf::strings_column_view(result->view().column(0));
+  EXPECT_EQ(sv.size(), view.num_rows() * (multiplier + 1));
+  EXPECT_EQ(sv.offsets().type(), cudf::data_type{cudf::type_id::INT64});
+  splits.push_back(view.num_rows() * multiplier);
+  sliced = cudf::split(sv.parent(), splits);
   for (auto c : sliced) {
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(c, input);
   }
