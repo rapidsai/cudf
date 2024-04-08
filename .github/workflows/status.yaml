@@ -92,7 +92,6 @@ jobs:
                 run_id: process.env.WORKFLOW_RUN_ID,
             });
             const job = jobs.data.jobs.find(job => job.name === JOB_NAME);
-            console.log(SON.stringify(jobs.data.jobs, undefined, 2));
             const JOB_ID = job ? job.id : null;
 
             // Set default target URL if not defined
