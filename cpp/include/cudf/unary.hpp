@@ -33,7 +33,7 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
-/** 
+/**
  * @brief Convert a floating-point value to fixed-point
  *
  * @tparam Fixed The fixed-point type we are converting to
