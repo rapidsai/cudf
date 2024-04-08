@@ -4830,27 +4830,14 @@ class StringMethods(ColumnMethods):
         2         [xyz]
         dtype: list
         """
-        ngrams = libstrings.generate_character_ngrams(self._column, n)
-
-        # convert the output to a list by just generating the
-        # offsets for the output list column
-        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
-        sizes = libcudf.concat.concat_columns(
-            [column.as_column(0, dtype=np.int32, length=1), sn._column]
+        result = self._return_or_inplace(
+            libstrings.generate_character_ngrams(self._column, n),
+            retain_index=True,
         )
-        oc = libcudf.reduce.scan("cumsum", sizes, True)
-        lc = cudf.core.column.ListColumn(
-            size=self._column.size,
-            dtype=cudf.ListDtype(self._column.dtype),
-            mask=self._column.mask,
-            offset=0,
-            null_count=self._column.null_count,
-            children=(oc, ngrams),
-        )
-        result = self._return_or_inplace(lc, retain_index=True)
-
         if isinstance(result, cudf.Series) and not as_list:
-            return result.explode()
+            # before exploding, removes those lists which have 0 length
+            result = result[result.list.len() > 0]
+            return result.explode()  # type: ignore
         return result
 
     def hash_character_ngrams(
