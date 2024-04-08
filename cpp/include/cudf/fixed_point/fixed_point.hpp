@@ -85,34 +85,23 @@ constexpr inline auto is_supported_construction_value_type()
 namespace detail {
 
 /**
- * @brief Helper struct containing large compile-time-computed powers of 10
+ * @brief Recursively calculate a large power of 10 (>= 10^19) that can only be stored in an 128bit
+ * integer
+ *
+ * @note Intended to be run at compile time
+ *
+ * @tparam Exp10 The power of 10 to calculate
+ * @return Returns 10^Exp10
  */
-struct PowersOf10 {
-  // Largest power-of-10 that fits within uint64_t
-  static constexpr auto power19 = 10000000000000000000ULL;  ///< 10^19
-
-  // Can't write literaels of type __uint128_t, so we pre-compute
-  // large powers of 10 here for reusability.
-  static constexpr auto power20 = __uint128_t(power19) * 10;                      ///< 10^20
-  static constexpr auto power21 = __uint128_t(power19) * 100;                     ///< 10^21
-  static constexpr auto power22 = __uint128_t(power19) * 1000;                    ///< 10^22
-  static constexpr auto power23 = __uint128_t(power19) * 10000;                   ///< 10^23
-  static constexpr auto power24 = __uint128_t(power19) * 100000;                  ///< 10^24
-  static constexpr auto power25 = __uint128_t(power19) * 1000000;                 ///< 10^25
-  static constexpr auto power26 = __uint128_t(power19) * 10000000;                ///< 10^26
-  static constexpr auto power27 = __uint128_t(power19) * 100000000;               ///< 10^27
-  static constexpr auto power28 = __uint128_t(power19) * 1000000000ULL;           ///< 10^28
-  static constexpr auto power29 = __uint128_t(power19) * 10000000000ULL;          ///< 10^29
-  static constexpr auto power30 = __uint128_t(power19) * 100000000000ULL;         ///< 10^30
-  static constexpr auto power31 = __uint128_t(power19) * 1000000000000ULL;        ///< 10^31
-  static constexpr auto power32 = __uint128_t(power19) * 10000000000000ULL;       ///< 10^32
-  static constexpr auto power33 = __uint128_t(power19) * 100000000000000ULL;      ///< 10^33
-  static constexpr auto power34 = __uint128_t(power19) * 1000000000000000ULL;     ///< 10^34
-  static constexpr auto power35 = __uint128_t(power19) * 10000000000000000ULL;    ///< 10^35
-  static constexpr auto power36 = __uint128_t(power19) * 100000000000000000ULL;   ///< 10^36
-  static constexpr auto power37 = __uint128_t(power19) * 1000000000000000000ULL;  ///< 10^37
-  static constexpr auto power38 = __uint128_t(power19) * power19;                 ///< 10^38
-};
+template <int Exp10>
+constexpr __uint128_t large_power_of_10()
+{
+  static_assert(Exp10 >= 19);
+  if constexpr (Exp10 == 19)
+    return __uint128_t(10000000000000000000ULL);
+  else
+    return large_power_of_10<Exp10 - 1>() * __uint128_t(10);
+}
 
 /**
  * @brief Divide by a power of 10 that fits within a 32bit integer.
@@ -250,25 +239,25 @@ CUDF_HOST_DEVICE constexpr T divide_power10_128bit(T value, int exp10)
     case 17: return value / 100000000000000000ULL;
     case 18: return value / 1000000000000000000ULL;
     case 19: return value / 10000000000000000000ULL;
-    case 20: return value / PowersOf10::power20;
-    case 21: return value / PowersOf10::power21;
-    case 22: return value / PowersOf10::power22;
-    case 23: return value / PowersOf10::power23;
-    case 24: return value / PowersOf10::power24;
-    case 25: return value / PowersOf10::power25;
-    case 26: return value / PowersOf10::power26;
-    case 27: return value / PowersOf10::power27;
-    case 28: return value / PowersOf10::power28;
-    case 29: return value / PowersOf10::power29;
-    case 30: return value / PowersOf10::power30;
-    case 31: return value / PowersOf10::power31;
-    case 32: return value / PowersOf10::power32;
-    case 33: return value / PowersOf10::power33;
-    case 34: return value / PowersOf10::power34;
-    case 35: return value / PowersOf10::power35;
-    case 36: return value / PowersOf10::power36;
-    case 37: return value / PowersOf10::power37;
-    case 38: return value / PowersOf10::power38;
+    case 20: return value / large_power_of_10<20>();
+    case 21: return value / large_power_of_10<21>();
+    case 22: return value / large_power_of_10<22>();
+    case 23: return value / large_power_of_10<23>();
+    case 24: return value / large_power_of_10<24>();
+    case 25: return value / large_power_of_10<25>();
+    case 26: return value / large_power_of_10<26>();
+    case 27: return value / large_power_of_10<27>();
+    case 28: return value / large_power_of_10<28>();
+    case 29: return value / large_power_of_10<29>();
+    case 30: return value / large_power_of_10<30>();
+    case 31: return value / large_power_of_10<31>();
+    case 32: return value / large_power_of_10<32>();
+    case 33: return value / large_power_of_10<33>();
+    case 34: return value / large_power_of_10<34>();
+    case 35: return value / large_power_of_10<35>();
+    case 36: return value / large_power_of_10<36>();
+    case 37: return value / large_power_of_10<37>();
+    case 38: return value / large_power_of_10<38>();
     default: return 0;
   }
   // clang-format on
@@ -379,25 +368,25 @@ CUDF_HOST_DEVICE constexpr T multiply_power10_128bit(T value, int exp10)
     case 17: return value * 100000000000000000ULL;
     case 18: return value * 1000000000000000000ULL;
     case 19: return value * 10000000000000000000ULL;
-    case 20: return value * PowersOf10::power20;
-    case 21: return value * PowersOf10::power21;
-    case 22: return value * PowersOf10::power22;
-    case 23: return value * PowersOf10::power23;
-    case 24: return value * PowersOf10::power24;
-    case 25: return value * PowersOf10::power25;
-    case 26: return value * PowersOf10::power26;
-    case 27: return value * PowersOf10::power27;
-    case 28: return value * PowersOf10::power28;
-    case 29: return value * PowersOf10::power29;
-    case 30: return value * PowersOf10::power30;
-    case 31: return value * PowersOf10::power31;
-    case 32: return value * PowersOf10::power32;
-    case 33: return value * PowersOf10::power33;
-    case 34: return value * PowersOf10::power34;
-    case 35: return value * PowersOf10::power35;
-    case 36: return value * PowersOf10::power36;
-    case 37: return value * PowersOf10::power37;
-    case 38: return value * PowersOf10::power38;
+    case 20: return value * large_power_of_10<20>();
+    case 21: return value * large_power_of_10<21>();
+    case 22: return value * large_power_of_10<22>();
+    case 23: return value * large_power_of_10<23>();
+    case 24: return value * large_power_of_10<24>();
+    case 25: return value * large_power_of_10<25>();
+    case 26: return value * large_power_of_10<26>();
+    case 27: return value * large_power_of_10<27>();
+    case 28: return value * large_power_of_10<28>();
+    case 29: return value * large_power_of_10<29>();
+    case 30: return value * large_power_of_10<30>();
+    case 31: return value * large_power_of_10<31>();
+    case 32: return value * large_power_of_10<32>();
+    case 33: return value * large_power_of_10<33>();
+    case 34: return value * large_power_of_10<34>();
+    case 35: return value * large_power_of_10<35>();
+    case 36: return value * large_power_of_10<36>();
+    case 37: return value * large_power_of_10<37>();
+    case 38: return value * large_power_of_10<38>();
     default: return 0;
   }
   // clang-format on
