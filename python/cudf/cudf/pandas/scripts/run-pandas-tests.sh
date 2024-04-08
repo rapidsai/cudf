@@ -23,8 +23,7 @@ set -euo pipefail
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 # tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
-PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
---ignore=tests/window/test_dtypes.py \
+PYTEST_IGNORES="--ignore=tests/window/test_dtypes.py \
 --ignore=tests/strings/test_api.py \
 --ignore=tests/window/test_numba.py \
 --ignore=tests/window \
