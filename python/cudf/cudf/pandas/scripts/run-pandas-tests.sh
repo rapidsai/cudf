@@ -22,7 +22,7 @@ set -euo pipefail
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
+PYTEST_IGNORES="--ignore=tests/interchange/test_impl.py \
 --ignore=tests/window/test_dtypes.py \
 --ignore=tests/strings/test_api.py \
 --ignore=tests/window/test_numba.py \
