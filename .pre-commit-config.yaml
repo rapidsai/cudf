@@ -150,6 +150,7 @@ repos:
           - mdformat-gfm
           - mdformat-black
           - mdformat_frontmatter
+        args: ["--number"]
 
 default_language_version:
       python: python3
