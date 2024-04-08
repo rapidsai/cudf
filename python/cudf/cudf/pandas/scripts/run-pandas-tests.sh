@@ -24,10 +24,8 @@ PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
 PYTEST_IGNORES="--ignore=tests/interchange/test_impl.py \
 --ignore=tests/window/test_dtypes.py \
---ignore=tests/strings/test_api.py \
 --ignore=tests/window/test_numba.py \
 --ignore=tests/window \
---ignore=tests/io/pytables \
 --ignore=tests/plotting \
 --ignore=tests/scalar \
 --ignore=tests/series/test_arithmetic.py \
