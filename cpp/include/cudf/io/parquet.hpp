@@ -519,9 +519,9 @@ class chunked_parquet_reader {
  * @brief Struct used to describe column sorting metadata
  */
 struct sorting_column {
-  int column_idx{};            //!< leaf column index within the row group
-  bool is_descending{false};   //!< true if sort order is descending
-  bool is_nulls_first{false};  //!< true if nulls come before non-null values
+  int column_idx{};           //!< leaf column index within the row group
+  bool is_descending{false};  //!< true if sort order is descending
+  bool is_nulls_first{true};  //!< true if nulls come before non-null values
 };
 
 class parquet_writer_options_builder;
