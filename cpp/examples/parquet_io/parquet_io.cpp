@@ -134,9 +134,30 @@ int main(int argc, char const** argv)
   timer.start();
   // read the parquet file written with encoding and compression
   std::cout << "Reading " << output_filepath << "..." << std::endl;
-  auto table_with_metadata = read_parquet(output_filepath);
+  auto [transcoded_input, transcoded_metadata] = read_parquet(output_filepath);
   timer.stop();
   timer.print_elapsed_millis();
+
+  // check for validity
+  bool valid = true;
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> indices;
+  try {
+    // left anti-join the original and transcoded tables
+    // identical tables should not throw an excpetion and
+    // retun an empty indices vector
+    indices = cudf::left_anti_join(
+      input->view(), transcoded_input->view(), cudf::null_equality::EQUAL, resource.get());
+  } catch (std::exception& e) {
+    std::cerr << e.what() << std::endl << std::endl;
+    std::cout << "Transcoding valid: false" << std::endl;
+    valid = false;
+  }
+
+  // no exception thrown, check ofr indices->size
+  if (valid) {
+    bool valid = indices->size() == 0;
+    std::cout << "Transcoding valid: " << std::boolalpha << valid << std::endl;
+  }
 
   return 0;
 }
