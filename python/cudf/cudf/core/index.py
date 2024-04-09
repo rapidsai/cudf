@@ -2624,9 +2624,9 @@ class CategoricalIndex(Index):
         elif isinstance(dtype, (pd.CategoricalDtype, cudf.CategoricalDtype)):
             data = data.set_categories(dtype.categories, ordered=ordered)
         elif ordered is True and data.ordered is False:
-            data = data.as_ordered()
+            data = data.as_ordered(ordered=True)
         elif ordered is False and data.ordered is True:
-            data = data.as_unordered()
+            data = data.as_ordered(ordered=False)
         super().__init__(data, **kwargs)
 
     @property  # type: ignore
@@ -2643,7 +2643,7 @@ class CategoricalIndex(Index):
         """
         The categories of this categorical.
         """
-        return as_index(self._values.categories)
+        return self.dtype.categories
 
     def _is_boolean(self):
         return False
