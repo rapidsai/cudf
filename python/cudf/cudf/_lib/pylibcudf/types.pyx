@@ -28,7 +28,14 @@ cdef class DataType:
         The scale associated with the data. Only used for decimal data types.
     """
     def __cinit__(self, type_id id, int32_t scale=0):
-        self.c_obj = data_type(id, scale)
+        if (
+            id == type_id.DECIMAL32
+            or id == type_id.DECIMAL64
+            or id == type_id.DECIMAL128
+        ):
+            self.c_obj = data_type(id, scale)
+        else:
+            self.c_obj = data_type(id)
 
     # TODO: Consider making both id and scale cached properties.
     cpdef type_id id(self):
