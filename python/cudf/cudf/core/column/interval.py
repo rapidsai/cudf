@@ -99,7 +99,9 @@ class IntervalColumn(StructColumn):
                     mask=self.mask,
                     offset=self.offset,
                     null_count=self.null_count,
-                    children=self.children,
+                    children=tuple(
+                        child.astype(dtype.subtype) for child in self.children
+                    ),
                 )
         else:
             raise ValueError("dtype must be IntervalDtype")
@@ -124,8 +126,10 @@ class IntervalColumn(StructColumn):
             raise NotImplementedError(f"{nullable=} is not implemented.")
         elif arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not implemented.")
+
+        pd_type = self.dtype.to_pandas()
         return pd.Series(
-            self.dtype.to_pandas().__from_arrow__(self.to_arrow()), index=index
+            pd_type.__from_arrow__(self.to_arrow()), index=index, dtype=pd_type
         )
 
     def element_indexing(self, index: int):

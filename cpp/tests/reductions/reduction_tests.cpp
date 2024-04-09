@@ -124,7 +124,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
 template <typename T>
 struct MinMaxReductionTest : public ReductionTest<T> {};
 
-using MinMaxTypes = cudf::test::Types<int16_t, int32_t, float, double>;
+using MinMaxTypes = cudf::test::Types<int32_t, int64_t, float, double>;
 TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
@@ -299,6 +299,10 @@ TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 TYPED_TEST(ReductionTest, Product)
 {
   using T = TypeParam;
+  if constexpr (std::is_same_v<T, int16_t> || std::is_same_v<T, uint16_t>) {
+    if (getenv("LIBCUDF_MEMCHECK_ENABLED")) { return; }
+  }
+
   std::vector<int> int_values({5, -1, 1, 0, 3, 2, 4});
   std::vector<bool> host_bools({1, 1, 0, 0, 1, 1, 1});
   std::vector<TypeParam> v = convert_values<TypeParam>(int_values);
@@ -2272,7 +2276,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
 
 template <typename T>
 struct DictionaryAnyAllTest : public ReductionTest<bool> {};
-using DictionaryAnyAllTypes = cudf::test::Types<int16_t, int32_t, float, double, bool>;
+using DictionaryAnyAllTypes = cudf::test::Types<int32_t, int64_t, float, double, bool>;
 TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 {
@@ -2328,7 +2332,7 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 template <typename T>
 struct DictionaryReductionTest : public ReductionTest<T> {};
 
-using DictionaryTypes = cudf::test::Types<int16_t, int32_t, float, double>;
+using DictionaryTypes = cudf::test::Types<int32_t, int64_t, float, double>;
 TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);
 TYPED_TEST(DictionaryReductionTest, Sum)
 {

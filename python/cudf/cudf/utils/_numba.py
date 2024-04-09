@@ -181,6 +181,7 @@ def _get_cuda_version_from_ptx_file(path):
         "8.1": (12, 1),
         "8.2": (12, 2),
         "8.3": (12, 3),
+        "8.4": (12, 4),
     }
 
     cuda_ver = ver_map.get(version)

@@ -664,11 +664,11 @@ defaults.
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::thread_range`
+should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::scoped_range`
 for declaring NVTX ranges in the current scope:
 - Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
 NVTX range
-- Use `cudf::thread_range rng{"custom_name"};` to provide a custom name for the current scope's
+- Use `cudf::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
 NVTX range
 
 For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
@@ -1384,3 +1384,25 @@ cuIO is a component of libcudf that provides GPU-accelerated reading and writing
 formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and JSON_Lines.
 
 // TODO: add more detail and move to a separate file.
+
+# Debugging Tips
+
+Here are some tools that can help with debugging libcudf (besides printf of course):
+1. `cuda-gdb`\
+   Follow the instructions in the [Contributor to cuDF guide](../../../CONTRIBUTING.md#debugging-cudf) to build
+   and run libcudf with debug symbols.
+2. `compute-sanitizer`\
+   The [CUDA Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)
+   tool can be used to locate many CUDA reported errors by providing a call stack
+   close to where the error occurs even with a non-debug build. The sanitizer includes various
+   tools including `memcheck`, `racecheck`, and `initcheck` as well as others.
+   The `racecheck` and `initcheck` have been known to produce false positives.
+3. `cudf::test::print()`\
+   The `print()` utility can be called within a gtest to output the data in a `cudf::column_view`.
+   More information is available in the [Testing Guide](TESTING.md#printing-and-accessing-column-data)
+4. GCC Address Sanitizer\
+   The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flag.
+   There is a compatibility issue with the CUDA runtime that can be worked around by setting
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0` before running the executable.
+   Note that the CUDA `compute-sanitizer` can also be used with GCC ASAN by setting the
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`.

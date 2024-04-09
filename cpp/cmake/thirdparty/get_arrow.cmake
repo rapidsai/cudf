@@ -68,37 +68,6 @@ list(POP_BACK CMAKE_PREFIX_PATH)
   find_package(Arrow ${PYARROW_VERSION} MODULE REQUIRED GLOBAL)
   add_library(arrow_shared ALIAS Arrow::Arrow)
 
-  # When using the libarrow inside a wheel, whether or not libcudf may be built using the new C++11
-  # ABI is dependent on whether the libarrow inside the wheel was compiled using that ABI because we
-  # need the arrow library that we bundle in cudf to be ABI-compatible with the one inside pyarrow.
-  # We determine what options to use by checking the glibc version on the current system, which is
-  # also how pip determines which manylinux-versioned pyarrow wheel to install. Note that tests will
-  # not build successfully without also propagating these options to builds of GTest. Similarly,
-  # benchmarks will not work without updating GBench (and possibly NVBench) builds. We are currently
-  # ignoring these limitations since we don't anticipate using this feature except for building
-  # wheels.
-  enable_language(C)
-  execute_process(
-    COMMAND ${CMAKE_C_COMPILER} -print-file-name=libc.so.6
-    OUTPUT_VARIABLE GLIBC_EXECUTABLE
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  execute_process(
-    COMMAND ${GLIBC_EXECUTABLE}
-    OUTPUT_VARIABLE GLIBC_OUTPUT
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  string(REGEX MATCH "stable release version ([0-9]+\\.[0-9]+)" GLIBC_VERSION ${GLIBC_OUTPUT})
-  string(REPLACE "stable release version " "" GLIBC_VERSION ${GLIBC_VERSION})
-  string(REPLACE "." ";" GLIBC_VERSION_LIST ${GLIBC_VERSION})
-  list(GET GLIBC_VERSION_LIST 1 GLIBC_VERSION_MINOR)
-  if(GLIBC_VERSION_MINOR LESS 28)
-    target_compile_options(
-      Arrow::Arrow INTERFACE "$<$<COMPILE_LANGUAGE:CXX>:-D_GLIBCXX_USE_CXX11_ABI=0>"
-                             "$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-D_GLIBCXX_USE_CXX11_ABI=0>"
-    )
-  endif()
-
   rapids_export_package(BUILD Arrow cudf-exports)
   rapids_export_package(INSTALL Arrow cudf-exports)
 endfunction()

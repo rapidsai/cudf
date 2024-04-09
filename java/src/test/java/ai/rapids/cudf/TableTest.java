@@ -331,6 +331,59 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private static final byte[] EMPTY_JSON_DATA_BUFFER = ("{}\n").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadEmptyJson() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "name")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withKeepQuotes(true)
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeSingleQuotes(true)
+        .withNormalizeWhitespace(true)
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column((String)null)
+        .build();
+         Table table = Table.readJSON(schema, opts, EMPTY_JSON_DATA_BUFFER, 0,
+             EMPTY_JSON_DATA_BUFFER.length, 1)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  private static final byte[] EMPTY_ARRAY_JSON_DATA_BUFFER =
+      ("{'a':[]}\n").getBytes(StandardCharsets.UTF_8);
+
+  @Test
+  void testReadEmptyArrayJson() {
+    Schema.Builder builder = Schema.builder();
+    Schema.Builder listBuilder = builder.addColumn(DType.LIST, "a");
+    // INT8 is selected here because CUDF always returns INT8 for this no matter what we ask for.
+    listBuilder.addColumn(DType.INT8, "child");
+    Schema schema = builder.build();
+    JSONOptions opts = JSONOptions.builder()
+        .withKeepQuotes(true)
+        .withRecoverWithNull(true)
+        .withMixedTypesAsStrings(true)
+        .withNormalizeSingleQuotes(true)
+        .withNormalizeWhitespace(true)
+        .withLines(true)
+        .build();
+    ListType lt = new ListType(true, new BasicType(true, DType.INT8));
+    try (Table expected = new Table.TestBuilder()
+        .column(lt, new ArrayList<Byte>())
+        .build();
+         Table table = Table.readJSON(schema, opts, EMPTY_ARRAY_JSON_DATA_BUFFER, 0,
+             EMPTY_ARRAY_JSON_DATA_BUFFER.length, 1)) {
+      TableDebug.get().debug("OUTPUT", table);
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
   @Test
   void testReadSingleQuotesJSONFile() throws IOException {
     Schema schema = Schema.builder()
@@ -1734,6 +1787,107 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private void checkLeftDistinctJoin(Table leftKeys, Table rightKeys, ColumnView expected,
+                                     boolean compareNullsEqual) {
+    try (GatherMap map = leftKeys.leftDistinctJoinGatherMap(rightKeys, compareNullsEqual)) {
+      int numRows = (int) expected.getRowCount();
+      assertEquals(numRows, map.getRowCount());
+      try (ColumnView view = map.toColumnView(0, numRows)) {
+        assertColumnsAreEqual(expected, view);
+      }
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8, 6).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         ColumnVector expected = ColumnVector.fromInts(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3, 0)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsWithNested() {
+    final int inv = Integer.MIN_VALUE;
+    StructType structType = new StructType(false,
+        new BasicType(false, DType.STRING),
+        new BasicType(false, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", 2),
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3)
+    };
+    StructData[] rightData = new StructData[]{
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData("abc", -1),
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         ColumnVector expected = ColumnVector.fromInts(0, inv, inv, 2, 0, inv, inv)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, false);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsNullsEqual() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, 9, 8, 10, 32)
+             .build();
+         ColumnVector expected = ColumnVector.fromInts(inv, inv, 1, inv, inv, inv, inv, 0, 0, 2)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
+  @Test
+  void testLeftDistinctJoinGatherMapsWithNestedNullsEqual() {
+    final int inv = Integer.MIN_VALUE;
+    StructType structType = new StructType(true,
+        new BasicType(true, DType.STRING),
+        new BasicType(true, DType.INT32));
+    StructData[] leftData = new StructData[]{
+        new StructData("abc", 1),
+        null,
+        new StructData("xyz", 1),
+        new StructData("abc", 2),
+        new StructData("xyz", null),
+        null,
+        new StructData("abc", 1),
+        new StructData("abc", 3),
+        new StructData("xyz", 3),
+        new StructData(null, null),
+        new StructData(null, 1)
+    };
+    StructData[] rightData = new StructData[]{
+        null,
+        new StructData("abc", 1),
+        new StructData("xyz", 4),
+        new StructData("xyz", 2),
+        new StructData(null, null),
+        new StructData(null, 2),
+        new StructData(null, 1),
+        new StructData("xyz", null),
+        new StructData("abc", null),
+        new StructData("abc", -1)
+    };
+    try (Table leftKeys = new Table.TestBuilder().column(structType, leftData).build();
+         Table rightKeys = new Table.TestBuilder().column(structType, rightData).build();
+         ColumnVector expected = ColumnVector.fromInts(1, 0, inv, inv, 7, 0, 1, inv, inv, 4, 6)) {
+      checkLeftDistinctJoin(leftKeys, rightKeys, expected, true);
+    }
+  }
+
   @Test
   void testLeftHashJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
@@ -2905,64 +3059,6 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testMixedLeftSemiJoinGatherMapWithSize() {
-    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
-        new ColumnReference(1, TableReference.LEFT),
-        new ColumnReference(1, TableReference.RIGHT));
-    try (CompiledExpression condition = expr.compile();
-         Table left = new Table.TestBuilder()
-             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
-             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
-             .build();
-         Table leftKeys = new Table(left.getColumn(0));
-         Table right = new Table.TestBuilder()
-             .column(6, 5, 9, 8, 10, 32)
-             .column(0, 1, 2, 3, 4, 5)
-             .column(7, 8, 9, 0, 1, 2).build();
-         Table rightKeys = new Table(right.getColumn(0));
-         Table expected = new Table.TestBuilder()
-             .column(2, 7, 8)
-             .build();
-         MixedJoinSize sizeInfo = Table.mixedLeftSemiJoinSize(leftKeys, rightKeys, left, right,
-             condition, NullEquality.UNEQUAL)) {
-      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
-      try (GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
-          condition, NullEquality.UNEQUAL, sizeInfo)) {
-        verifySemiJoinGatherMap(map, expected);
-      }
-    }
-  }
-
-  @Test
-  void testMixedLeftSemiJoinGatherMapNullsWithSize() {
-    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
-        new ColumnReference(1, TableReference.LEFT),
-        new ColumnReference(1, TableReference.RIGHT));
-    try (CompiledExpression condition = expr.compile();
-         Table left = new Table.TestBuilder()
-             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
-             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
-             .build();
-         Table leftKeys = new Table(left.getColumn(0));
-         Table right = new Table.TestBuilder()
-             .column(null, 5, null, 8, 10, 32)
-             .column(   0, 1,    2, 3,  4,  5)
-             .column(   7, 8,    9, 0,  1,  2).build();
-         Table rightKeys = new Table(right.getColumn(0));
-         Table expected = new Table.TestBuilder()
-             .column(0, 7, 8)
-             .build();
-         MixedJoinSize sizeInfo = Table.mixedLeftSemiJoinSize(leftKeys, rightKeys, left, right,
-             condition, NullEquality.EQUAL)) {
-      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
-      try (GatherMap map = Table.mixedLeftSemiJoinGatherMap(leftKeys, rightKeys, left, right,
-          condition, NullEquality.EQUAL, sizeInfo)) {
-        verifySemiJoinGatherMap(map, expected);
-      }
-    }
-  }
-
-  @Test
   void testMixedLeftAntiJoinGatherMap() {
     BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(1, TableReference.LEFT),
@@ -3009,64 +3105,6 @@ public class TableTest extends CudfTestBase {
          GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
              condition, NullEquality.EQUAL)) {
       verifySemiJoinGatherMap(map, expected);
-    }
-  }
-
-  @Test
-  void testMixedLeftAntiJoinGatherMapWithSize() {
-    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
-        new ColumnReference(1, TableReference.LEFT),
-        new ColumnReference(1, TableReference.RIGHT));
-    try (CompiledExpression condition = expr.compile();
-         Table left = new Table.TestBuilder()
-             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
-             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
-             .build();
-         Table leftKeys = new Table(left.getColumn(0));
-         Table right = new Table.TestBuilder()
-             .column(6, 5, 9, 8, 10, 32)
-             .column(0, 1, 2, 3, 4, 5)
-             .column(7, 8, 9, 0, 1, 2).build();
-         Table rightKeys = new Table(right.getColumn(0));
-         Table expected = new Table.TestBuilder()
-             .column(0, 1, 3, 4, 5, 6, 9)
-             .build();
-         MixedJoinSize sizeInfo = Table.mixedLeftAntiJoinSize(leftKeys, rightKeys, left, right,
-             condition, NullEquality.UNEQUAL)) {
-      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
-      try (GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
-          condition, NullEquality.UNEQUAL, sizeInfo)) {
-        verifySemiJoinGatherMap(map, expected);
-      }
-    }
-  }
-
-  @Test
-  void testMixedLeftAntiJoinGatherMapNullsWithSize() {
-    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
-        new ColumnReference(1, TableReference.LEFT),
-        new ColumnReference(1, TableReference.RIGHT));
-    try (CompiledExpression condition = expr.compile();
-         Table left = new Table.TestBuilder()
-             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
-             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
-             .build();
-         Table leftKeys = new Table(left.getColumn(0));
-         Table right = new Table.TestBuilder()
-             .column(null, 5, null, 8, 10, 32)
-             .column(   0, 1,    2, 3,  4,  5)
-             .column(   7, 8,    9, 0,  1,  2).build();
-         Table rightKeys = new Table(right.getColumn(0));
-         Table expected = new Table.TestBuilder()
-             .column(1, 2, 3, 4, 5, 6, 9)
-             .build();
-         MixedJoinSize sizeInfo = Table.mixedLeftAntiJoinSize(leftKeys, rightKeys, left, right,
-             condition, NullEquality.EQUAL)) {
-      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
-      try (GatherMap map = Table.mixedLeftAntiJoinGatherMap(leftKeys, rightKeys, left, right,
-          condition, NullEquality.EQUAL, sizeInfo)) {
-        verifySemiJoinGatherMap(map, expected);
-      }
     }
   }
 
