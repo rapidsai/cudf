@@ -54,8 +54,6 @@ else
     python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,cudf_pandas_tests]
 fi
 
-python -m pytest -p cudf.pandas ./python/cudf/cudf_pandas_tests/
-
 python -m pytest -p cudf.pandas \
     --cov-config=./python/cudf/.coveragerc \
     --cov=cudf \
