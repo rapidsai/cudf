@@ -143,8 +143,8 @@ int main(int argc, char const** argv)
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> indices;
   try {
     // left anti-join the original and transcoded tables
-    // identical tables should not throw an excpetion and
-    // retun an empty indices vector
+    // identical tables should not throw an exception and
+    // return an empty indices vector
     indices = cudf::left_anti_join(
       input->view(), transcoded_input->view(), cudf::null_equality::EQUAL, resource.get());
   } catch (std::exception& e) {
