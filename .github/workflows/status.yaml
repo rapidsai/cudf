@@ -84,33 +84,16 @@ jobs:
                 target_url: CUSTOM_TARGET_URL,
                 state: CUSTOM_STATE = 'success'
             } = contentJSON;
-
-            async function fetchAllJobs(owner, repo, run_id) {
-              let allJobs = [];
-              let page = 1;
-              const perPage = 100; // Adjust this value as needed, up to a maximum of 100
-
-              while (true) {
-                const response = await github.rest.actions.listJobsForWorkflowRun({
-                  owner: owner,
-                  repo: repo,
-                  run_id: run_id,
-                  per_page: perPage,
-                  page: page
-                });
-
-                allJobs = allJobs.concat(response.data.jobs);
-
-                if (response.data.jobs.length < perPage) {
-                  break; // No more jobs to fetch, exit the loop
-                }
-
-                page++; // Increment the page number to fetch the next set of jobs
+            
+            // Fetch all jobs using pagination
+            const jobs = await github.paginate(
+              github.rest.actions.listJobsForWorkflowRun,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: process.env.WORKFLOW_RUN_ID,
               }
-
-              return allJobs;
-            }
-            const jobs = await fetchAllJobs(context.repo.owner, context.repo.repo, process.env.WORKFLOW_RUN_ID);
+            );
 
             // Fetch the first job ID from the workflow run
             const job = jobs.find(job => job.name === JOB_NAME);
