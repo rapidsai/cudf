@@ -848,6 +848,11 @@ def test_empty_series_category_cast(ordered):
     assert_eq(expected.dtype.ordered, actual.dtype.ordered)
 
 
+def test_categorical_dtype_ordered_not_settable():
+    with pytest.raises(AttributeError):
+        cudf.CategoricalDtype().ordered = False
+
+
 @pytest.mark.parametrize("scalar", [1, "a", None, 10.2])
 def test_cat_from_scalar(scalar):
     ps = pd.Series(scalar, dtype="category")
