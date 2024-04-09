@@ -1583,6 +1583,9 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                         thrust::make_discard_iterator(),
                                         fix_stack_of_excess_chars::start_state,
                                         stream);
+
+    // Make sure memory of the FST's lookup tables isn't freed before the FST completes
+    stream.synchronize();
   }
 
   constexpr auto max_translation_table_size =
@@ -2042,7 +2045,8 @@ void make_json_column(json_column& root_column,
  * options
  * @param stream The CUDA stream to which kernels are dispatched
  */
-auto parsing_options(cudf::io::json_reader_options const& options, rmm::cuda_stream_view stream)
+cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
+                                        rmm::cuda_stream_view stream)
 {
   auto parse_opts = cudf::io::parse_options{',', '\n', '\"', '.'};
 

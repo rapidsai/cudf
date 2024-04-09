@@ -257,14 +257,12 @@ class StringMethods(ColumnMethods):
     @overload
     def cat(
         self, sep: Optional[str] = None, na_rep: Optional[str] = None
-    ) -> str:
-        ...
+    ) -> str: ...
 
     @overload
     def cat(
         self, others, sep: Optional[str] = None, na_rep: Optional[str] = None
-    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]:
-        ...
+    ) -> Union[SeriesOrIndex, "cudf.core.column.string.StringColumn"]: ...
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -4832,27 +4830,14 @@ class StringMethods(ColumnMethods):
         2         [xyz]
         dtype: list
         """
-        ngrams = libstrings.generate_character_ngrams(self._column, n)
-
-        # convert the output to a list by just generating the
-        # offsets for the output list column
-        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
-        sizes = libcudf.concat.concat_columns(
-            [column.as_column(0, dtype=np.int32, length=1), sn._column]
+        result = self._return_or_inplace(
+            libstrings.generate_character_ngrams(self._column, n),
+            retain_index=True,
         )
-        oc = libcudf.reduce.scan("cumsum", sizes, True)
-        lc = cudf.core.column.ListColumn(
-            size=self._column.size,
-            dtype=cudf.ListDtype(self._column.dtype),
-            mask=self._column.mask,
-            offset=0,
-            null_count=self._column.null_count,
-            children=(oc, ngrams),
-        )
-        result = self._return_or_inplace(lc, retain_index=True)
-
         if isinstance(result, cudf.Series) and not as_list:
-            return result.explode()
+            # before exploding, removes those lists which have 0 length
+            result = result[result.list.len() > 0]
+            return result.explode()  # type: ignore
         return result
 
     def hash_character_ngrams(
@@ -5499,7 +5484,9 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = column.full(size + 1, 0, dtype=size_type_dtype)
+            offsets = column.as_column(
+                0, length=size + 1, dtype=size_type_dtype
+            )
 
             children = (offsets,)
 
@@ -5791,16 +5778,21 @@ class StringColumn(column.ColumnBase):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        elif nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            pd_series = pd.Series(pandas_array, copy=False)
+            return pd.Series(pandas_array, copy=False, index=index)
         else:
-            pd_series = self.to_arrow().to_pandas()
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+            return super().to_pandas(index=index, nullable=nullable)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.api.types.dtype(to_dtype)
@@ -5921,8 +5913,8 @@ class StringColumn(column.ColumnBase):
                     "__eq__",
                     "__ne__",
                 }:
-                    return column.full(
-                        len(self), op == "__ne__", dtype="bool"
+                    return column.as_column(
+                        op == "__ne__", length=len(self), dtype="bool"
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
@@ -5931,7 +5923,9 @@ class StringColumn(column.ColumnBase):
                 if isinstance(other, cudf.Scalar):
                     other = cast(
                         StringColumn,
-                        column.full(len(self), other, dtype="object"),
+                        column.as_column(
+                            other, length=len(self), dtype="object"
+                        ),
                     )
 
                 # Explicit types are necessary because mypy infers ColumnBase

@@ -68,7 +68,7 @@ def test_series_reduce(reducer):
 )
 def test_rowwise_reductions(data, op):
     gddf = dask_cudf.from_cudf(data, npartitions=10)
-    pddf = gddf.to_dask_dataframe()
+    pddf = gddf.to_backend("pandas")
 
     with dask.config.set({"dataframe.convert-string": False}):
         if op in ("var", "std"):
@@ -84,3 +84,13 @@ def test_rowwise_reductions(data, op):
             check_exact=False,
             check_dtype=op not in ("var", "std"),
         )
+
+
+@pytest.mark.parametrize("skipna", [True, False])
+def test_var_nulls(skipna):
+    # Copied from 10min example notebook
+    # See: https://github.com/rapidsai/cudf/pull/15347
+    s = cudf.Series([1, 2, 3, None, 4])
+    ds = dask_cudf.from_cudf(s, npartitions=2)
+    dd.assert_eq(s.var(skipna=skipna), ds.var(skipna=skipna))
+    dd.assert_eq(s.std(skipna=skipna), ds.std(skipna=skipna))

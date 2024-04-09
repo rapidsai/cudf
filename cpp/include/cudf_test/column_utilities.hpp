@@ -174,9 +174,9 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
 template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
 {
-  thrust::host_vector<T> host_data(c.size());
-  CUDF_CUDA_TRY(cudaMemcpy(host_data.data(), c.data<T>(), c.size() * sizeof(T), cudaMemcpyDefault));
-  return {host_data, bitmask_to_host(c)};
+  auto col_span  = cudf::device_span<T const>(c.data<T>(), c.size());
+  auto host_data = cudf::detail::make_host_vector_sync(col_span, cudf::get_default_stream());
+  return {std::move(host_data), bitmask_to_host(c)};
 }
 
 // This signature is identical to the above overload apart from SFINAE so
@@ -194,23 +194,7 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c)
-{
-  using namespace numeric;
-  using Rep = typename T::rep;
-
-  auto host_rep_types = thrust::host_vector<Rep>(c.size());
-
-  CUDF_CUDA_TRY(
-    cudaMemcpy(host_rep_types.data(), c.begin<Rep>(), c.size() * sizeof(Rep), cudaMemcpyDefault));
-
-  auto to_fp = [&](Rep val) { return T{scaled_integer<Rep>{val, scale_type{c.type().scale()}}}; };
-  auto begin = thrust::make_transform_iterator(std::cbegin(host_rep_types), to_fp);
-  auto const host_fixed_points = thrust::host_vector<T>(begin, begin + c.size());
-
-  return {host_fixed_points, bitmask_to_host(c)};
-}
-//! @endcond
+std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view c);
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
@@ -223,29 +207,31 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(column_view
  * and second is the column's bitmask.
  */
 template <>
-inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c)
-{
-  thrust::host_vector<std::string> host_data(c.size());
-  auto stream = cudf::get_default_stream();
-  if (c.size() > c.null_count()) {
-    auto const scv     = strings_column_view(c);
-    auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
-    auto const h_offsets = cudf::detail::make_std_vector_sync(
-      cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
-                                               scv.size() + 1),
-      stream);
+std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(column_view c);
+//! @endcond
 
-    // build std::string vector from chars and offsets
-    std::transform(
-      std::begin(h_offsets),
-      std::end(h_offsets) - 1,
-      std::begin(h_offsets) + 1,
-      host_data.begin(),
-      [&](auto start, auto end) { return std::string(h_chars.data() + start, end - start); });
-  }
-  return {std::move(host_data), bitmask_to_host(c)};
-}
+/**
+ * @brief For enabling large strings testing in specific tests
+ */
+struct large_strings_enabler {
+  /**
+   * @brief Create large strings enable object
+   *
+   * @param default_enable Default enables large strings support
+   */
+  large_strings_enabler(bool default_enable = true);
+  ~large_strings_enabler();
+
+  /**
+   * @brief Enable large strings support
+   */
+  void enable();
+
+  /**
+   * @brief Disable large strings support
+   */
+  void disable();
+};
 
 }  // namespace cudf::test
 
@@ -279,3 +265,5 @@ inline std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to
     SCOPED_TRACE(" <--  line of failure\n");                        \
     cudf::test::detail::expect_equal_buffers(lhs, rhs, size_bytes); \
   } while (0)
+
+#define CUDF_TEST_ENABLE_LARGE_STRINGS() cudf::test::large_strings_enabler ls___

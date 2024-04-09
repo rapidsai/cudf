@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
+#include <cuda/std/utility>
 
 #include <algorithm>
 #include <cassert>
@@ -82,12 +83,9 @@ constexpr inline auto is_supported_construction_value_type()
 
 // Helper functions for `fixed_point` type
 namespace detail {
+
 /**
- * @brief A function for integer exponentiation by squaring
- *
- * https://simple.wikipedia.org/wiki/Exponentiation_by_squaring <br>
- * Note: this is the iterative equivalent of the recursive definition (faster) <br>
- * Quick-bench: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+ * @brief A function for integer exponentiation by squaring.
  *
  * @tparam Rep Representation type for return type
  * @tparam Base The base to be exponentiated
@@ -102,16 +100,19 @@ template <typename Rep,
 CUDF_HOST_DEVICE inline Rep ipow(T exponent)
 {
   cudf_assert(exponent >= 0 && "integer exponentiation with negative exponent is not possible.");
-  if (exponent == 0) { return static_cast<Rep>(1); }
 
+  if constexpr (Base == numeric::Radix::BASE_2) { return static_cast<Rep>(1) << exponent; }
+
+  // Note: Including an array here introduces too much register pressure
+  // https://simple.wikipedia.org/wiki/Exponentiation_by_squaring
+  // This is the iterative equivalent of the recursive definition (faster)
+  // Quick-bench for squaring: http://quick-bench.com/Wg7o7HYQC9FW5M0CO0wQAjSwP_Y
+  if (exponent == 0) { return static_cast<Rep>(1); }
   auto extra  = static_cast<Rep>(1);
   auto square = static_cast<Rep>(Base);
   while (exponent > 1) {
-    if (exponent & 1 /* odd */) {
-      extra *= square;
-      exponent -= 1;
-    }
-    exponent /= 2;
+    if (exponent & 1) { extra *= square; }
+    exponent >>= 1;
     square *= square;
   }
   return square * extra;

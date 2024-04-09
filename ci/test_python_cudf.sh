@@ -14,11 +14,19 @@ EXITCODE=0
 trap "EXITCODE=1" ERR
 set +e
 
+rapids-logger "pytest pylibcudf"
+pushd python/cudf/cudf/pylibcudf_tests
+python -m pytest \
+  --cache-clear \
+  --dist=worksteal \
+  .
+popd
+
 rapids-logger "pytest cudf"
 ./ci/run_cudf_pytests.sh \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf.xml" \
   --numprocesses=8 \
-  --dist=loadscope \
+  --dist=worksteal \
   --cov-config=../.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-coverage.xml" \
@@ -32,7 +40,7 @@ rapids-logger "pytest cudf"
 rapids-logger "pytest for cudf benchmarks"
 ./ci/run_cudf_pytest_benchmarks.sh \
   --numprocesses=8 \
-  --dist=loadscope \
+  --dist=worksteal \
   --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-coverage.xml" \
@@ -41,7 +49,7 @@ rapids-logger "pytest for cudf benchmarks"
 rapids-logger "pytest for cudf benchmarks using pandas"
 ./ci/run_cudf_pandas_pytest_benchmarks.sh \
   --numprocesses=8 \
-  --dist=loadscope \
+  --dist=worksteal \
   --cov-config=.coveragerc \
   --cov=cudf \
   --cov-report=xml:"${RAPIDS_COVERAGE_DIR}/cudf-benchmark-pandas-coverage.xml" \

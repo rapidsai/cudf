@@ -20,7 +20,11 @@ import rmm
 import cudf
 from cudf import DataFrame, Series
 from cudf.api.extensions import no_default
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220
+from cudf.core._compat import (
+    PANDAS_CURRENT_SUPPORTED_VERSION,
+    PANDAS_GE_220,
+    PANDAS_VERSION,
+)
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.groupby_typing import SUPPORTED_GROUPBY_NUMPY_TYPES
 from cudf.core.udf.utils import UDFError, precompiled
@@ -55,12 +59,12 @@ def assert_groupby_results_equal(
             if isinstance(expect, (pd.DataFrame, cudf.DataFrame)):
                 expect = expect.sort_values(by=by).reset_index(drop=True)
             else:
-                expect = expect.sort_values().reset_index(drop=True)
+                expect = expect.sort_values(by=by).reset_index(drop=True)
 
             if isinstance(got, cudf.DataFrame):
                 got = got.sort_values(by=by).reset_index(drop=True)
             else:
-                got = got.sort_values().reset_index(drop=True)
+                got = got.sort_values(by=by).reset_index(drop=True)
 
     assert_eq(expect, got, **kwargs)
 
@@ -179,7 +183,7 @@ def test_groupby_agg_min_max_dictlist(nelem):
 def test_groupby_as_index_single_agg(pdf, gdf, as_index):
     gdf = gdf.groupby("y", as_index=as_index).agg({"x": "mean"})
     pdf = pdf.groupby("y", as_index=as_index).agg({"x": "mean"})
-    assert_groupby_results_equal(pdf, gdf)
+    assert_groupby_results_equal(pdf, gdf, as_index=as_index, by="y")
 
 
 @pytest.mark.parametrize("engine", ["cudf", "jit"])
@@ -190,7 +194,7 @@ def test_groupby_as_index_apply(pdf, gdf, as_index, engine):
     )
     kwargs = {"func": lambda df: df["x"].mean(), "include_groups": False}
     pdf = pdf.groupby("y", as_index=as_index).apply(**kwargs)
-    assert_groupby_results_equal(pdf, gdf)
+    assert_groupby_results_equal(pdf, gdf, as_index=as_index, by="y")
 
 
 @pytest.mark.parametrize("as_index", [True, False])
@@ -871,6 +875,33 @@ def test_groupby_apply_return_df(func):
     assert_groupby_results_equal(expect, got)
 
 
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_apply_return_reindexed_series(as_index):
+    def gdf_func(df):
+        return cudf.Series([df["a"].sum(), df["b"].min(), df["c"].max()])
+
+    def pdf_func(df):
+        return pd.Series([df["a"].sum(), df["b"].min(), df["c"].max()])
+
+    df = cudf.DataFrame(
+        {
+            "key": [0, 0, 1, 1, 2, 2],
+            "a": [1, 2, 3, 4, 5, 6],
+            "b": [7, 8, 9, 10, 11, 12],
+            "c": [13, 14, 15, 16, 17, 18],
+        }
+    )
+    pdf = df.to_pandas()
+
+    kwargs = {}
+    if PANDAS_GE_220:
+        kwargs["include_groups"] = False
+
+    expect = pdf.groupby("key", as_index=as_index).apply(pdf_func, **kwargs)
+    got = df.groupby("key", as_index=as_index).apply(gdf_func, **kwargs)
+    assert_groupby_results_equal(expect, got)
+
+
 @pytest.mark.parametrize("nelem", [2, 3, 100, 500, 1000])
 @pytest.mark.parametrize(
     "func",
@@ -1228,7 +1259,7 @@ def test_groupby_unsupported_columns():
     pdg = pdf.groupby("x").sum(numeric_only=True)
     # cudf does not yet support numeric_only, so our default is False (unlike
     # pandas, which defaults to inferring and throws a warning about it).
-    gdg = gdf.groupby("x").sum()
+    gdg = gdf.groupby("x").sum(numeric_only=True)
     assert_groupby_results_equal(pdg, gdg)
 
 
@@ -1397,6 +1428,10 @@ def test_groupby_multi_agg_hash_groupby(agg):
     assert_groupby_results_equal(pdg, gdg, check_dtype=check_dtype)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="previous verion of pandas throws a warning",
+)
 @pytest.mark.parametrize(
     "agg", ["min", "max", "idxmax", "idxmin", "sum", "prod", "count", "mean"]
 )
@@ -1436,12 +1471,12 @@ def test_groupby_nulls_basic(agg):
 
     # TODO: fillna() used here since we don't follow
     # Pandas' null semantics. Should we change it?
-    with expect_warning_if(agg in {"idxmax", "idxmin"} and not PANDAS_GE_220):
-        assert_groupby_results_equal(
-            getattr(pdf.groupby("a"), agg)().fillna(0),
-            getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
-            check_dtype=check_dtype,
-        )
+
+    assert_groupby_results_equal(
+        getattr(pdf.groupby("a"), agg)().fillna(0),
+        getattr(gdf.groupby("a"), agg)().fillna(0 if agg != "prod" else 1),
+        check_dtype=check_dtype,
+    )
 
 
 def test_groupby_nulls_in_index():
@@ -2123,7 +2158,9 @@ def test_groupby_list_columns_excluded():
     pandas_agg_result = pdf.groupby("a").agg("mean", numeric_only=True)
 
     assert_groupby_results_equal(
-        pandas_result, gdf.groupby("a").mean(), check_dtype=False
+        pandas_result,
+        gdf.groupby("a").mean(numeric_only=True),
+        check_dtype=False,
     )
 
     assert_groupby_results_equal(
@@ -2319,7 +2356,9 @@ def test_groupby_unique(by, data, dtype):
 
 
 @pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
-@pytest.mark.parametrize("func", ["cummin", "cummax", "cumcount", "cumsum"])
+@pytest.mark.parametrize(
+    "func", ["cummin", "cummax", "cumcount", "cumsum", "cumprod"]
+)
 def test_groupby_2keys_scan(nelem, func):
     pdf = make_frame(pd.DataFrame, nelem=nelem)
     expect_df = pdf.groupby(["x", "y"], sort=True).agg(func)
@@ -2821,6 +2860,10 @@ def test_groupby_various_by_fillna(by, data, args):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize("nelem", [10, 100, 1000])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
 def test_groupby_fillna_method(nelem, method):
@@ -2860,7 +2903,7 @@ def test_groupby_fillna_method(nelem, method):
     pdf = t.to_pandas()
     gdf = cudf.from_pandas(pdf)
 
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expect = pdf.groupby(key_col).fillna(method=method)
     with pytest.warns(FutureWarning):
         got = gdf.groupby(key_col).fillna(method=method)
@@ -3206,6 +3249,10 @@ def test_groupby_transform_maintain_index(by):
     )
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "data, gkey",
     [
@@ -3246,8 +3293,7 @@ def test_groupby_pct_change(data, gkey, periods, fill_method):
             periods=periods, fill_method=fill_method
         )
     with expect_warning_if(
-        PANDAS_GE_210
-        and (
+        (
             fill_method not in (no_default, None)
             or (fill_method is not None and pdf.isna().any().any())
         )
@@ -3339,6 +3385,10 @@ def test_groupby_ngroup(by, ascending, df_ngroup):
     assert_eq(expected, actual, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize(
     "groups", ["a", "b", "c", ["a", "c"], ["a", "b", "c"]]
 )
@@ -3347,7 +3397,7 @@ def test_groupby_dtypes(groups):
         {"a": [1, 2, 3, 3], "b": ["x", "y", "z", "a"], "c": [10, 11, 12, 12]}
     )
     pdf = df.to_pandas()
-    with expect_warning_if(PANDAS_GE_210):
+    with pytest.warns(FutureWarning):
         expected = pdf.groupby(groups).dtypes
     with pytest.warns(FutureWarning):
         actual = df.groupby(groups).dtypes
@@ -3714,7 +3764,13 @@ def test_group_by_value_counts(normalize, sort, ascending, dropna, as_index):
 
     # TODO: Remove `check_names=False` once testing against `pandas>=2.0.0`
     assert_groupby_results_equal(
-        actual, expected, check_names=False, check_index_type=False
+        actual,
+        expected,
+        check_names=False,
+        check_index_type=False,
+        as_index=as_index,
+        by=["gender", "education"],
+        sort=sort,
     )
 
 
@@ -3771,4 +3827,28 @@ def test_groupby_shift_series_multiindex():
     ser = Series(range(4), index=idx)
     result = ser.groupby(level=0).shift(1)
     expected = ser.to_pandas().groupby(level=0).shift(1)
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize(
+    "func", ["min", "max", "sum", "mean", "idxmin", "idxmax"]
+)
+@pytest.mark.parametrize(
+    "by,data",
+    [
+        ("a", {"a": [1, 2, 3]}),
+        (["a", "id"], {"id": [0, 0, 1], "a": [1, 2, 3]}),
+        ("a", {"a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        ("id", {"id": [0, 0, 1], "a": [1, 2, 3], "b": ["A", "B", "C"]}),
+        (["b", "id"], {"id": [0, 0, 1], "b": ["A", "B", "C"]}),
+        ("b", {"b": ["A", "B", "C"]}),
+    ],
+)
+def test_group_by_reduce_numeric_only(by, data, func):
+    # Test that simple groupby reductions support numeric_only=True
+    df = cudf.DataFrame(data)
+    expected = getattr(df.to_pandas().groupby(by, sort=True), func)(
+        numeric_only=True
+    )
+    result = getattr(df.groupby(by, sort=True), func)(numeric_only=True)
     assert_eq(expected, result)
