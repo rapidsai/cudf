@@ -921,7 +921,7 @@ Use the `CUDF_EXPECTS` macro to enforce runtime conditions necessary for correct
 Example usage:
 
 ```c++
-CUDF_EXPECTS(cudf::column_types_equal(lhs, rhs), "Column type mismatch", cudf::data_type_error);
+CUDF_EXPECTS(cudf::types_equal(lhs, rhs), "Type mismatch", cudf::data_type_error);
 ```
 
 The first argument is the conditional expression expected to resolve to `true` under normal
@@ -1031,11 +1031,7 @@ as discussed in [Specializing Type-Dispatched Code Paths](#specializing-type-dis
 
 When comparing the data types of two columns or scalars, do not directly compare
 `a.type() == b.type()`. Nested types such as lists of structs of integers will not be handled
-properly if only the top level type is compared. Instead, use one of the following helpers:
-
- * `cudf::column_types_equal` for comparing the types of two columns
- * `cudf::column_scalar_types_equal` for comparing the types of a column and a scalar
- * `cudf::scalar_types_equal` for comparing the types of two scalars
+properly if only the top level type is compared. Instead, use the `cudf::types_equal` function.
 
 # Type Dispatcher
 
