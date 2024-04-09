@@ -33,14 +33,18 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
-/**
- * @brief Convert a floating-point value to fixed-point
+/** @brief Convert a floating-point value to fixed-point
  *
- * @tparam Fixed The fixed-point type we are converting to
- * @tparam Floating The floating-point type we are converting from
+ * @note This conversion was moved from fixed-point member functions to free functions.
+ * This is so that the complex conversion code is not included into many parts of the
+ * code base that don't need it, and so that it's more obvious to pinpoint where these
+ * conversions are occuring.
+ *
+ * @tparam Fixed The fixed-point type to convert to
+ * @tparam Floating The floating-point type to convert from
  * @param floating The floating-point value to convert
  * @param scale The desired scale of the fixed-point value
- * @return The converted to fixed-point value
+ * @return The converted-to fixed-point value
  */
 template <typename Fixed,
           typename Floating,
@@ -56,10 +60,15 @@ CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::sca
 
 /** @brief Convert a fixed-point value to floating-point
  *
- * @tparam Floating The floating-point type we are converting to
- * @tparam Fixed The fixed-point type we are converting from
+ * @note This conversion was moved from fixed-point member functions to free functions.
+ * This is so that the complex conversion code is not included into many parts of the
+ * code base that don't need it, and so that it's more obvious to pinpoint where these
+ * conversions are occuring.
+ *
+ * @tparam Floating The floating-point type to convert to
+ * @tparam Fixed The fixed-point type to convert from
  * @param fixed The fixed-point value to convert
- * @return The converted-to floating-point value.
+ * @return The converted-to floating-point value
  */
 template <typename Floating,
           typename Fixed,
@@ -75,10 +84,10 @@ CUDF_HOST_DEVICE Floating convert_fixed_to_floating(Fixed fixed)
 
 /** @brief Convert a value to floating-point
  *
- * @tparam Floating The floating-point type we are converting to
- * @tparam Input The input type we are converting from
+ * @tparam Floating The floating-point type to convert to
+ * @tparam Input The input type to convert from
  * @param input The input value to convert
- * @return The converted-to floating-point value.
+ * @return The converted-to floating-point value
  */
 template <typename Floating,
           typename Input,
