@@ -84,7 +84,7 @@ jobs:
                 target_url: CUSTOM_TARGET_URL,
                 state: CUSTOM_STATE = 'success'
             } = contentJSON;
-            
+
             // Fetch all jobs using pagination
             const jobs = await github.paginate(
               github.rest.actions.listJobsForWorkflowRun,
