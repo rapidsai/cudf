@@ -1,0 +1,29 @@
+#!/bin/bash
+# A utility script that downloads an artifact archive from S3, untars it,
+# and prints the location where it was untarred.
+# The script can be used locally and in CI.
+# Positional Arguments:
+#   1) path to s3 artifact
+#   2) location to untar it to
+set -euo pipefail
+source rapids-constants
+
+s3_dl_path="$1"
+untar_dest="$2"
+
+mkdir -p "${untar_dest}"
+
+if [ "${CI:-false}" = "false" ]; then
+  # shellcheck disable=SC2001
+  s3_dl_path=$(echo "${s3_dl_path}" | sed "s|s3://${RAPIDS_DOWNLOADS_BUCKET}|https://${RAPIDS_DOWNLOADS_DOMAIN}|")
+  rapids-echo-stderr "Downloading and decompressing ${s3_dl_path} into ${untar_dest}"
+  wget -qO- "${s3_dl_path}" | tar xzf - -C "${untar_dest}"
+else
+  rapids-echo-stderr "Downloading and decompressing ${s3_dl_path} into ${untar_dest}"
+  aws s3 cp "${s3_dl_path}" /tmp/tmp.tar.gz
+  tar xzf /tmp/tmp.tar.gz -C "${untar_dest}"
+  rm /tmp/tmp.tar.gz
+fi
+
+# echo path to untarred contents
+echo -n "${untar_dest}"
