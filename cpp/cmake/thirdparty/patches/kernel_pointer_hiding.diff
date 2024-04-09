@@ -1,0 +1,186 @@
+diff --git a/cub/cub/device/dispatch/dispatch_histogram.cuh b/cub/cub/device/dispatch/dispatch_histogram.cuh
+index c059c21f9..f654b09c9 100644
+--- a/cub/cub/device/dispatch/dispatch_histogram.cuh
++++ b/cub/cub/device/dispatch/dispatch_histogram.cuh
+@@ -300,7 +300,7 @@ struct dispatch_histogram
+   template <typename ActivePolicyT,
+             typename DeviceHistogramInitKernelT,
+             typename DeviceHistogramSweepKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t
+   Invoke(DeviceHistogramInitKernelT histogram_init_kernel,
+          DeviceHistogramSweepKernelT histogram_sweep_kernel)
+   {
+diff --git a/cub/cub/device/dispatch/dispatch_radix_sort.cuh b/cub/cub/device/dispatch/dispatch_radix_sort.cuh
+index e1ea61e23..6a84292a9 100644
+--- a/cub/cub/device/dispatch/dispatch_radix_sort.cuh
++++ b/cub/cub/device/dispatch/dispatch_radix_sort.cuh
+@@ -1268,7 +1268,7 @@ struct DispatchRadixSort : SelectedPolicy
+     template <
+         typename                ActivePolicyT,          ///< Umbrella policy active for the target device
+         typename                SingleTileKernelT>      ///< Function type of cub::DeviceRadixSortSingleTileKernel
+-    CUB_RUNTIME_FUNCTION __forceinline__
++    CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__
+     cudaError_t InvokeSingleTile(
+         SingleTileKernelT       single_tile_kernel)     ///< [in] Kernel function pointer to parameterization of cub::DeviceRadixSortSingleTileKernel
+     {
+@@ -1480,7 +1480,7 @@ struct DispatchRadixSort : SelectedPolicy
+             typename UpsweepPolicyT,
+             typename ScanPolicyT,
+             typename DownsweepPolicyT>
+-        CUB_RUNTIME_FUNCTION __forceinline__
++        CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__
+         cudaError_t InitPassConfig(
+             UpsweepKernelT      upsweep_kernel,
+             ScanKernelT         scan_kernel,
+@@ -1732,7 +1732,7 @@ struct DispatchRadixSort : SelectedPolicy
+         typename            UpsweepKernelT,         ///< Function type of cub::DeviceRadixSortUpsweepKernel
+         typename            ScanKernelT,            ///< Function type of cub::SpineScanKernel
+         typename            DownsweepKernelT>       ///< Function type of cub::DeviceRadixSortDownsweepKernel
+-    CUB_RUNTIME_FUNCTION __forceinline__
++    CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__
+     cudaError_t InvokePasses(
+         UpsweepKernelT      upsweep_kernel,         ///< [in] Kernel function pointer to parameterization of cub::DeviceRadixSortUpsweepKernel
+         UpsweepKernelT      alt_upsweep_kernel,     ///< [in] Alternate kernel function pointer to parameterization of cub::DeviceRadixSortUpsweepKernel
+@@ -2252,7 +2252,7 @@ struct DispatchSegmentedRadixSort : SelectedPolicy
+
+         /// Initialize pass configuration
+         template <typename SegmentedPolicyT>
+-        CUB_RUNTIME_FUNCTION __forceinline__
++        CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__
+         cudaError_t InitPassConfig(SegmentedKernelT segmented_kernel)
+         {
+             this->segmented_kernel  = segmented_kernel;
+@@ -2263,12 +2263,11 @@ struct DispatchSegmentedRadixSort : SelectedPolicy
+         }
+     };
+
+-
+     /// Invocation (run multiple digit passes)
+     template <
+         typename                ActivePolicyT,          ///< Umbrella policy active for the target device
+         typename                SegmentedKernelT>       ///< Function type of cub::DeviceSegmentedRadixSortKernel
+-    CUB_RUNTIME_FUNCTION __forceinline__
++    CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__
+     cudaError_t InvokePasses(
+         SegmentedKernelT     segmented_kernel,          ///< [in] Kernel function pointer to parameterization of cub::DeviceSegmentedRadixSortKernel
+         SegmentedKernelT     alt_segmented_kernel)      ///< [in] Alternate kernel function pointer to parameterization of cub::DeviceSegmentedRadixSortKernel
+diff --git a/cub/cub/device/dispatch/dispatch_reduce.cuh b/cub/cub/device/dispatch/dispatch_reduce.cuh
+index d1fff4141..768c15012 100644
+--- a/cub/cub/device/dispatch/dispatch_reduce.cuh
++++ b/cub/cub/device/dispatch/dispatch_reduce.cuh
+@@ -646,7 +646,7 @@ struct DispatchReduce : SelectedPolicy
+    *   cub::DeviceReduceSingleTileKernel
+    */
+   template <typename ActivePolicyT, typename SingleTileKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t
+   InvokeSingleTile(SingleTileKernelT single_tile_kernel)
+   {
+     cudaError error = cudaSuccess;
+@@ -716,7 +716,7 @@ struct DispatchReduce : SelectedPolicy
+   template <typename ActivePolicyT,
+             typename ReduceKernelT,
+             typename SingleTileKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t
+   InvokePasses(ReduceKernelT reduce_kernel,
+                SingleTileKernelT single_tile_kernel)
+   {
+@@ -1181,7 +1181,7 @@ struct DispatchSegmentedReduce : SelectedPolicy
+    *   cub::DeviceSegmentedReduceKernel
+    */
+   template <typename ActivePolicyT, typename DeviceSegmentedReduceKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t
+   InvokePasses(DeviceSegmentedReduceKernelT segmented_reduce_kernel)
+   {
+     cudaError error = cudaSuccess;
+diff --git a/cub/cub/device/dispatch/dispatch_reduce_by_key.cuh b/cub/cub/device/dispatch/dispatch_reduce_by_key.cuh
+index 146a54547..db675fef7 100644
+--- a/cub/cub/device/dispatch/dispatch_reduce_by_key.cuh
++++ b/cub/cub/device/dispatch/dispatch_reduce_by_key.cuh
+@@ -284,7 +284,7 @@ struct DispatchReduceByKey
+   //---------------------------------------------------------------------
+
+   template <typename ActivePolicyT, typename ScanInitKernelT, typename ReduceByKeyKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t Invoke(ScanInitKernelT init_kernel,
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t Invoke(ScanInitKernelT init_kernel,
+                                                           ReduceByKeyKernelT reduce_by_key_kernel)
+   {
+     using AgentReduceByKeyPolicyT = typename ActivePolicyT::ReduceByKeyPolicyT;
+diff --git a/cub/cub/device/dispatch/dispatch_segmented_sort.cuh b/cub/cub/device/dispatch/dispatch_segmented_sort.cuh
+index b13f97b59..8694796ae 100644
+--- a/cub/cub/device/dispatch/dispatch_segmented_sort.cuh
++++ b/cub/cub/device/dispatch/dispatch_segmented_sort.cuh
+@@ -547,7 +547,7 @@ template <typename LargeSegmentPolicyT,
+           typename ValueT,
+           typename BeginOffsetIteratorT,
+           typename EndOffsetIteratorT>
+-CUB_RUNTIME_FUNCTION cudaError_t
++CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden")))  cudaError_t
+ DeviceSegmentedSortContinuation(
+     LargeKernelT large_kernel,
+     SmallKernelT small_kernel,
+@@ -1590,7 +1590,7 @@ private:
+             typename SmallAndMediumPolicyT,
+             typename LargeKernelT,
+             typename SmallKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t
+   SortWithPartitioning(
+     LargeKernelT large_kernel,
+     SmallKernelT small_kernel,
+@@ -1725,7 +1725,7 @@ private:
+
+   template <typename LargeSegmentPolicyT,
+             typename FallbackKernelT>
+-  CUB_RUNTIME_FUNCTION __forceinline__ cudaError_t SortWithoutPartitioning(
++  CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ cudaError_t SortWithoutPartitioning(
+     FallbackKernelT fallback_kernel,
+     cub::detail::device_double_buffer<KeyT> &d_keys_double_buffer,
+     cub::detail::device_double_buffer<ValueT> &d_values_double_buffer)
+diff --git a/cub/cub/device/dispatch/dispatch_spmv_orig.cuh b/cub/cub/device/dispatch/dispatch_spmv_orig.cuh
+index 227c2a42c..585e9d2a4 100644
+--- a/cub/cub/device/dispatch/dispatch_spmv_orig.cuh
++++ b/cub/cub/device/dispatch/dispatch_spmv_orig.cuh
+@@ -489,7 +489,7 @@ struct DispatchSpmv
+         typename                SpmvKernelT,                        ///< Function type of cub::AgentSpmvKernel
+         typename                SegmentFixupKernelT,                ///< Function type of cub::DeviceSegmentFixupKernelT
+         typename                SpmvEmptyMatrixKernelT>             ///< Function type of cub::DeviceSpmvEmptyMatrixKernel
+-    CUB_RUNTIME_FUNCTION __forceinline__
++    CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__
+     static cudaError_t Dispatch(
+         void*                   d_temp_storage,                     ///< [in] Device-accessible allocation of temporary storage.  When NULL, the required allocation size is written to \p temp_storage_bytes and no work is done.
+         size_t&                 temp_storage_bytes,                 ///< [in,out] Reference to size in bytes of \p d_temp_storage allocation
+@@ -780,7 +780,7 @@ struct DispatchSpmv
+               typename SegmentFixupKernelT,
+               typename SpmvEmptyMatrixKernelT>
+     CUB_DETAIL_RUNTIME_DEBUG_SYNC_IS_NOT_SUPPORTED
+-    CUB_RUNTIME_FUNCTION __forceinline__ static cudaError_t
++    CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) __forceinline__ static cudaError_t
+     Dispatch(void *d_temp_storage,
+              size_t &temp_storage_bytes,
+              SpmvParamsT &spmv_params,
+diff --git a/cub/cub/util_device.cuh b/cub/cub/util_device.cuh
+index 4cd5fddb0..cd44a0ead 100644
+--- a/cub/cub/util_device.cuh
++++ b/cub/cub/util_device.cuh
+@@ -623,7 +623,7 @@ CUB_RUNTIME_FUNCTION inline cudaError_t HasUVA(bool& has_uva)
+  *
+  */
+ template <typename KernelPtr>
+-CUB_RUNTIME_FUNCTION inline
++CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden"))) inline
+ cudaError_t MaxSmOccupancy(
+     int&                max_sm_occupancy,          ///< [out] maximum number of thread blocks that can reside on a single SM
+     KernelPtr           kernel_ptr,                 ///< [in] Kernel pointer for which to compute SM occupancy
+@@ -656,7 +656,7 @@ struct KernelConfig
+     KernelConfig() : block_threads(0), items_per_thread(0), tile_size(0), sm_occupancy(0) {}
+
+     template <typename AgentPolicyT, typename KernelPtrT>
+-    CUB_RUNTIME_FUNCTION __forceinline__
++    CUB_RUNTIME_FUNCTION __attribute__ ((__visibility__("hidden")))  __forceinline__
+     cudaError_t Init(KernelPtrT kernel_ptr)
+     {
+         block_threads        = AgentPolicyT::BLOCK_THREADS;
