@@ -2,13 +2,8 @@
 {
   "packages" : {
     "nvbench" : {
-      "patches" : [
-        {
-          "file" : "${current_json_dir}/nvbench_global_setup.diff",
-          "issue" : "Fix add support for global setup to initialize RMM in nvbench [https://github.com/NVIDIA/nvbench/pull/123]",
-          "fixed_in" : ""
-        }
-      ]
+      "git_url": "https://github.com/NVIDIA/nvbench.git",
+      "git_tag": "5ee8811a1ac5a90f73a4dc52ab8572c25724a0e8"
     }
   }
 }
