@@ -92,8 +92,6 @@ int main(int argc, char** argv)
   // memory resource.
   rmm::mr::set_current_device_resource(&mr);
 
-#error "Force compilation error to test CI"
-
   // Read data
   auto stock_table_with_metadata = read_csv("4stock_5day.csv");
 
