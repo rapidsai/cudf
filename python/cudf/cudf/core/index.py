@@ -2085,22 +2085,22 @@ class DatetimeIndex(Index):
 
         Examples
         --------
-        >>> import pandas as pd
         >>> import cudf
-        >>> datetime_index = cudf.Index(pd.date_range("2016-12-31",
+        >>> datetime_index = cudf.Index(cudf.date_range("2016-12-31",
         ...     "2017-01-08", freq="D"))
         >>> datetime_index
         DatetimeIndex(['2016-12-31', '2017-01-01', '2017-01-02', '2017-01-03',
-                    '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07',
-                    '2017-01-08'],
-                    dtype='datetime64[ns]')
+                       '2017-01-04', '2017-01-05', '2017-01-06', '2017-01-07'],
+                      dtype='datetime64[ns]', freq='D')
         >>> datetime_index.day_name()
         Index(['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
                'Friday', 'Saturday'], dtype='object')
         """
+        if locale and locale != "en_US.utf8":
+            raise NotImplementedError("non-English locale is not implemented.")
         days = self._get_dt_field("weekday")
         day_names = cudf.core.tools.datetimes._get_date_name_field(
-            days.to_series(), "day_name"
+            days.to_series().astype(str), "day_name"
         )
         return Index(day_names)
 
@@ -2111,18 +2111,20 @@ class DatetimeIndex(Index):
 
         Examples
         --------
-        >>> import pandas as pd
         >>> import cudf
-        >>> datetime_index = cudf.Index(pd.date_range("2000-01-01",
-        ...             periods=3, freq="M"))
+        >>> datetime_index = cudf.Index(cudf.date_range("2017-12-30", periods=6, freq='W'))
         >>> datetime_index
-        DatetimeIndex(['2000-01-31', '2000-02-29', '2000-03-31'], dtype='datetime64[ns]')
+        DatetimeIndex(['2017-12-30', '2018-01-06', '2018-01-13', '2018-01-20',
+                       '2018-01-27', '2018-02-03'],
+                      dtype='datetime64[ns]', freq='7D')
         >>> datetime_index.month_name()
-        Index(['January', 'February', 'March'], dtype='object')
+        Index(['December', 'January', 'January', 'January', 'January', 'February'], dtype='object')
         """
+        if locale and locale != "en_US.utf8":
+            raise NotImplementedError("non-English locale is not implemented.")
         months = self._get_dt_field("month")
         month_names = cudf.core.tools.datetimes._get_date_name_field(
-            months.to_series(), "month_name"
+            months.to_series().astype(str), "month_name"
         )
         return Index(month_names)
 

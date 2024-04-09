@@ -4231,9 +4231,8 @@ class DatetimeProperties:
 
         Examples
         --------
-        >>> import pandas as pd
         >>> import cudf
-        >>> datetime_series = cudf.Series(pd.date_range('2016-12-31',
+        >>> datetime_series = cudf.Series(cudf.date_range('2016-12-31',
         ...     '2017-01-08', freq='D'))
         >>> datetime_series
         0   2016-12-31
@@ -4257,7 +4256,9 @@ class DatetimeProperties:
         7     Saturday
         dtype: object
         """
-        days = self._get_dt_field("weekday")
+        if locale and locale != "en_US.utf8":
+            raise NotImplementedError("non-English locale is not implemented.")
+        days = self._get_dt_field("weekday").astype(str)
         day_names = cudf.core.tools.datetimes._get_date_name_field(
             days, "day_name"
         )
@@ -4274,22 +4275,28 @@ class DatetimeProperties:
 
         Examples
         --------
-        >>> import pandas as pd
         >>> import cudf
-        >>> datetime_series = cudf.Series(pd.date_range("2000-01-01",
-        ...         periods=3, freq="M"))
+        >>> datetime_series = cudf.Series(cudf.date_range("2017-12-30", periods=6, freq='W'))
         >>> datetime_series
-        0   2000-01-31
-        1   2000-02-29
-        2   2000-03-31
+        0   2017-12-30
+        1   2018-01-06
+        2   2018-01-13
+        3   2018-01-20
+        4   2018-01-27
+        5   2018-02-03
         dtype: datetime64[ns]
         >>> datetime_series.dt.month_name()
-        0     January
-        1    February
-        2       March
+        0    December
+        1     January
+        2     January
+        3     January
+        4     January
+        5    February
         dtype: object
         """
-        months = self._get_dt_field("month")
+        if locale and locale != "en_US.utf8":
+            raise NotImplementedError("non-English locale is not implemented.")
+        months = self._get_dt_field("month").astype(str)
         month_names = cudf.core.tools.datetimes._get_date_name_field(
             months, "month_name"
         )

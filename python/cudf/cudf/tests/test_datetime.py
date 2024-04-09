@@ -2375,7 +2375,7 @@ def test_date_range_tz():
     assert_eq(result, expected)
 
 
-def test_day_name():
+def test_day_name_series():
     data = [
         "2020-05-31 08:00:00",
         None,
@@ -2389,7 +2389,6 @@ def test_day_name():
         "1969-12-31 12:59:00",
     ]
 
-    # Series
     ps = pd.Series(data, dtype="datetime64[s]")
     gs = cudf.from_pandas(ps)
 
@@ -2398,17 +2397,8 @@ def test_day_name():
 
     assert_eq(expect, got)
 
-    # DatetimeIndex
-    pIndex = pd.DatetimeIndex(data)
-    gIndex = cudf.from_pandas(pIndex)
 
-    expect2 = pIndex.day_name()
-    got2 = gIndex.day_name()
-
-    assert_eq(expect2, got2)
-
-
-def test_month_name():
+def test_day_name_index():
     data = [
         "2020-05-31 08:00:00",
         None,
@@ -2422,7 +2412,29 @@ def test_month_name():
         "1969-12-31 12:59:00",
     ]
 
-    # Series
+    pIndex = pd.DatetimeIndex(data)
+    gIndex = cudf.from_pandas(pIndex)
+
+    expect = pIndex.day_name()
+    got = gIndex.day_name()
+
+    assert_eq(expect, got)
+
+
+def test_month_name_series():
+    data = [
+        "2020-05-31 08:00:00",
+        None,
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        None,
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+
     ps = pd.Series(data, dtype="datetime64[s]")
     gs = cudf.from_pandas(ps)
 
@@ -2431,11 +2443,31 @@ def test_month_name():
 
     assert_eq(expect, got)
 
-    # DatetimeIndex
+
+def test_month_name_index():
+    data = [
+        "2020-05-31 08:00:00",
+        None,
+        "1999-12-31 18:40:00",
+        "2000-12-31 04:00:00",
+        None,
+        "1900-02-28 07:00:00",
+        "1800-03-14 07:30:00",
+        "2100-03-14 07:30:00",
+        "1970-01-01 00:00:00",
+        "1969-12-31 12:59:00",
+    ]
+
     pIndex = pd.DatetimeIndex(data)
     gIndex = cudf.from_pandas(pIndex)
 
-    expect2 = pIndex.month_name()
-    got2 = gIndex.month_name()
+    expect = pIndex.month_name()
+    got = gIndex.month_name()
 
-    assert_eq(expect2, got2)
+    assert_eq(expect, got)
+
+
+def test_day_name_not_implemented():
+    gs = cudf.Series(cudf.date_range("2020-01-01", periods=7))
+    with pytest.raises(NotImplementedError):
+        gs.dt.day_name(locale="pt_BR.utf8")
