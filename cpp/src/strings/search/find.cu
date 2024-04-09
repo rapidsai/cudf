@@ -335,6 +335,110 @@ std::unique_ptr<column> find(strings_column_view const& input,
 namespace detail {
 namespace {
 
+#if 0
+// neater than compare_vector1() but not faster
+struct vloader_unaligned {
+  uint32_t const* ptr;
+  int const offset{};
+  uint32_t value{};
+
+  __device__ inline vloader_unaligned(unsigned char const* in)
+    : offset(static_cast<int>(reinterpret_cast<uintptr_t>(in) & 3) * 8)
+  {
+    ptr   = reinterpret_cast<uint32_t const*>(in - offset / 8);
+    value = *ptr++;
+  }
+
+  //__device__ inline uint32_t next()
+  //{
+  //  uint32_t const block = *ptr++;
+  //  uint32_t const rtn   = __funnelshift_r(value, block, offset);
+  //  value                = block;
+  //  return rtn;
+  //}
+
+  // way cool, but not faster
+  __device__ inline uint64_t next2()
+  {
+    uint32_t const block1 = *ptr++;
+    uint32_t const block2 = *ptr++;
+    uint32_t const rtn1   = __funnelshift_r(value, block1, offset);
+    uint32_t const rtn2   = __funnelshift_r(block1, block2, offset);
+    value                 = block2;
+    return static_cast<uint64_t>(rtn1) << 32 | static_cast<uint64_t>(rtn2);
+  }
+};
+
+__device__ inline int compare_vload(const char* data1, int len1, const char* data2, int len2)
+{
+  unsigned char const* ptr1 = reinterpret_cast<const unsigned char*>(data1);
+  unsigned char const* ptr2 = reinterpret_cast<const unsigned char*>(data2);
+
+  int const len = min(len1, len2);
+  int idx       = 0;
+
+  if (len >= 8) {
+    vloader_unaligned loader1{ptr1};
+    vloader_unaligned loader2{ptr2};
+    do {
+      auto const a = loader1.next2();
+      auto const b = loader2.next2();
+      // if (a != b) { return __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123) ? -1 : 1; }
+      if (a != b) { return 1; }
+      idx += sizeof(a);
+    } while (idx + 8 <= len);  // 4
+  }
+
+  while (idx < len) {
+    auto const a = ptr1[idx];
+    auto const b = ptr2[idx];
+    if (a != b) { return static_cast<int>(a) - static_cast<int>(b); }
+    ++idx;
+  }
+  if (len1 < len2) return -1;
+  if (len2 < len1) return 1;
+  return 0;
+}
+
+
+// vector loading is not showing up faster even for long strings
+__device__ int compare_vector1(const char* data1, int len1, const char* data2, int len2)
+{
+  unsigned char const* ptr1 = reinterpret_cast<const unsigned char*>(data1);
+  unsigned char const* ptr2 = reinterpret_cast<const unsigned char*>(data2);
+
+  int const len = min(len1, len2);
+  int idx       = 0;
+
+  if (len >= 8) {
+    uint32_t const align_a  = (3 & reinterpret_cast<uintptr_t>(ptr1));
+    uint32_t const align_b  = (3 & reinterpret_cast<uintptr_t>(ptr2));
+    auto s32_a              = reinterpret_cast<uint32_t const*>(ptr1 - align_a) + 1;
+    auto s32_b              = reinterpret_cast<uint32_t const*>(ptr2 - align_b) + 1;
+    uint32_t const offset_a = align_a * 8;
+    uint32_t const offset_b = align_b * 8;
+    do {
+      uint32_t const a = __funnelshift_r(*(s32_a - 1), *s32_a, offset_a);
+      uint32_t const b = __funnelshift_r(*(s32_b - 1), *s32_b, offset_b);
+      if (a != b) { return __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123) ? -1 : 1; }
+      idx += 4;
+      ++s32_a;  // value_a = *s32_a++; // block_a;
+      ++s32_b;  // value_b = *s32_b++; // block_b;
+    } while (idx + 4 <= len);
+  }
+  while (idx < len) {
+    auto const a = ptr1[idx];
+    auto const b = ptr2[idx];
+    if (a != b) { return static_cast<int>(a) - static_cast<int>(b); }
+    ++idx;
+  }
+
+  if (len1 < len2) return -1;
+  if (len2 < len1) return 1;
+  return 0;
+}
+#endif
+
 /**
  * @brief Check if `d_target` appears in a row in `d_strings`.
  *
@@ -357,19 +461,27 @@ CUDF_KERNEL void contains_warp_parallel_fn(column_device_view const d_strings,
 
   auto const str_idx  = idx / cudf::detail::warp_size;
   auto const lane_idx = idx % cudf::detail::warp_size;
+  if (lane_idx) { d_results[str_idx] = false; }  // not faster
   if (d_strings.is_null(str_idx)) { return; }
   // get the string for this warp
   auto const d_str = d_strings.element<string_view>(str_idx);
   // each thread of the warp will check just part of the string
   auto found = false;
-  for (auto i = static_cast<size_type>(idx % cudf::detail::warp_size);
-       !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
+  for (auto i = lane_idx; !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
        i += cudf::detail::warp_size) {
     // check the target matches this part of the d_str data
-    if (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0) { found = true; }
+    found = (d_target.compare(d_str.data() + i, d_target.size_bytes()) == 0);
+    // not faster
+    // found = compare_vload(
+    //           d_target.data(), d_target.size_bytes(), d_str.data() + i, d_target.size_bytes()) ==
+    //           0;
+    // not faster
+    // auto result = warp_reduce(temp_storage).Reduce(found, cub::Max());
+    // found       = result;
   }
   auto const result = warp_reduce(temp_storage).Reduce(found, cub::Max());
   if (lane_idx == 0) { d_results[str_idx] = result; }
+  // if (lane_idx == 0) { d_results[str_idx] = found; }
 }
 
 std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
@@ -390,12 +502,10 @@ std::unique_ptr<column> contains_warp_parallel(strings_column_view const& input,
 
   // fill the output with `false` unless the `d_target` is empty
   auto results_view = results->mutable_view();
-  thrust::fill(rmm::exec_policy(stream),
-               results_view.begin<bool>(),
-               results_view.end<bool>(),
-               d_target.empty());
-
-  if (!d_target.empty()) {
+  if (d_target.empty()) {
+    thrust::fill(
+      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+  } else {
     // launch warp per string
     auto const d_strings     = column_device_view::create(input.parent(), stream);
     constexpr int block_size = 256;
