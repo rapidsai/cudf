@@ -27,8 +27,6 @@ PYTEST_IGNORES="--ignore=tests/interchange/test_impl.py \
 --ignore=tests/window/test_numba.py \
 --ignore=tests/window \
 --ignore=tests/plotting \
---ignore=tests/scalar \
---ignore=tests/series/test_arithmetic.py \
 --ignore=tests/tslibs/test_parsing.py \
 --ignore=tests/io/parser/common/test_read_errors.py"
 
