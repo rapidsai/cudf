@@ -38,7 +38,7 @@ namespace cudf {
  * @note This conversion was moved from fixed-point member functions to free functions.
  * This is so that the complex conversion code is not included into many parts of the
  * code base that don't need it, and so that it's more obvious to pinpoint where these
- * conversions are occuring.
+ * conversions are occurring.
  *
  * @tparam Fixed The fixed-point type to convert to
  * @tparam Floating The floating-point type to convert from
@@ -63,7 +63,7 @@ CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::sca
  * @note This conversion was moved from fixed-point member functions to free functions.
  * This is so that the complex conversion code is not included into many parts of the
  * code base that don't need it, and so that it's more obvious to pinpoint where these
- * conversions are occuring.
+ * conversions are occurring.
  *
  * @tparam Floating The floating-point type to convert to
  * @tparam Fixed The fixed-point type to convert from
