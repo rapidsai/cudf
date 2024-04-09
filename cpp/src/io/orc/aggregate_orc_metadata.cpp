@@ -194,7 +194,7 @@ aggregate_orc_metadata::select_stripes(
   } else {
     int64_t count            = 0;
     int64_t stripe_skip_rows = 0;
-    // Iterate all source files, each source file has corelating metadata
+    // Iterate all source files, each source file has correlating metadata
     for (size_t src_file_idx = 0;
          src_file_idx < per_file_metadata.size() && count < rows_to_skip + rows_to_read;
          ++src_file_idx) {

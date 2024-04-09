@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -204,8 +204,8 @@ struct alignas(16) base_normalator {
 
  private:
   struct integer_sizeof_fn {
-    template <typename T, CUDF_ENABLE_IF(not cudf::is_fixed_width<T>())>
-    CUDF_HOST_DEVICE constexpr std::size_t operator()() const
+    template <typename T, CUDF_ENABLE_IF(not cudf::is_integral_not_bool<T>())>
+    CUDF_HOST_DEVICE std::size_t operator()() const
     {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("only integral types are supported");
@@ -213,8 +213,8 @@ struct alignas(16) base_normalator {
       CUDF_UNREACHABLE("only integral types are supported");
 #endif
     }
-    template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_width<T>())>
-    CUDF_HOST_DEVICE constexpr std::size_t operator()() const noexcept
+    template <typename T, CUDF_ENABLE_IF(cudf::is_integral_not_bool<T>())>
+    CUDF_HOST_DEVICE std::size_t operator()() const noexcept
     {
       return sizeof(T);
     }

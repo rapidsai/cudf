@@ -16,12 +16,10 @@ The `.pre-commit-config.yaml` file at the root of the repo is the primary source
 Specifically, cuDF uses the following tools:
 
 - [`ruff`](https://beta.ruff.rs/) checks for general code formatting compliance.
-- [`black`](https://github.com/psf/black) is an automatic code formatter.
 - [`isort`](https://pycqa.github.io/isort/) ensures imports are sorted consistently.
 - [`mypy`](http://mypy-lang.org/) performs static type checking.
   In conjunction with [type hints](https://docs.python.org/3/library/typing.html),
   `mypy` can help catch various bugs that are otherwise difficult to find.
-- [`pydocstyle`](https://github.com/PyCQA/pydocstyle/) lints docstring style.
 - [`codespell`](https://github.com/codespell-project/codespell) finds spelling errors.
 
 Linter config data is stored in a number of files.
