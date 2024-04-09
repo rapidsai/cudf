@@ -1775,10 +1775,8 @@ def as_column(
         return column
     elif isinstance(arbitrary, (ColumnBase, cudf.Series, cudf.BaseIndex)):
         # Ignoring nan_as_null per the docstring
-        if isinstance(arbitrary, cudf.Series):
+        if isinstance(arbitrary, (cudf.Series, cudf.BaseIndex)):
             arbitrary = arbitrary._column
-        elif isinstance(arbitrary, cudf.BaseIndex):
-            arbitrary = arbitrary._values
         if dtype is not None:
             return arbitrary.astype(dtype)
         return arbitrary

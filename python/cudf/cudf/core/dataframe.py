@@ -1768,10 +1768,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 indices[:first_data_column_position],
             )
             if not isinstance(out._index, MultiIndex) and isinstance(
-                out._index._values.dtype, cudf.CategoricalDtype
+                out._index._column.dtype, cudf.CategoricalDtype
             ):
                 out = out.set_index(
-                    cudf.core.index.as_index(out.index._values)
+                    cudf.core.index.as_index(out.index._column)
                 )
         for name, col in out._data.items():
             out._data[name] = col._with_type_metadata(
@@ -3576,9 +3576,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
 
         if index:
-            if (
-                any(isinstance(item, str) for item in index.values())
-                and type(self.index._values) != cudf.core.column.StringColumn
+            if any(
+                isinstance(item, str) for item in index.values()
+            ) and not isinstance(
+                self.index._column, cudf.core.column.StringColumn
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "

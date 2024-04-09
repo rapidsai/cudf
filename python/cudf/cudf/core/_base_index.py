@@ -48,7 +48,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @cached_property
-    def _values(self) -> ColumnBase:
+    def _column(self) -> ColumnBase:
         raise NotImplementedError
 
     def copy(self, deep: bool = True) -> Self:
@@ -275,7 +275,7 @@ class BaseIndex(Serializable):
         raise NotImplementedError()
 
     def __contains__(self, item):
-        return item in self._values
+        return item in self._column
 
     def _copy_type_metadata(
         self, other: Self, *, override_dtypes=None
@@ -856,7 +856,7 @@ class BaseIndex(Serializable):
             col_name = name
 
         return cudf.DataFrame(
-            {col_name: self._values}, index=self if index else None
+            {col_name: self._column}, index=self if index else None
         )
 
     def to_arrow(self):
@@ -1862,7 +1862,7 @@ class BaseIndex(Serializable):
             )
         else:
             try:
-                left, right = self._values._find_first_and_last(label)
+                left, right = self._column._find_first_and_last(label)
             except ValueError:
                 raise KeyError(f"{label=} not in index")
             if left != right:

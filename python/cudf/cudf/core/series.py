@@ -356,7 +356,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                 else:
                     if isinstance(idx_copy, cudf.RangeIndex):
                         idx_copy = idx_copy._as_int_index()
-                    _append_new_row_inplace(idx_copy._values, key)
+                    _append_new_row_inplace(idx_copy._column, key)
                 self._frame._index = idx_copy
                 _append_new_row_inplace(self._frame._column, value)
                 return

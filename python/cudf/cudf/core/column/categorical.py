@@ -612,7 +612,7 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def categories(self) -> ColumnBase:
-        return self.dtype.categories._values
+        return self.dtype.categories._column
 
     @categories.setter
     def categories(self, value):
@@ -733,7 +733,7 @@ class CategoricalColumn(column.ColumnBase):
             self._encode(other), length=len(self), dtype=self.codes.dtype
         )
         return column.build_categorical_column(
-            categories=self.dtype.categories._values,
+            categories=self.dtype.categories._column,
             codes=column.as_column(ary),
             mask=self.base_mask,
             ordered=self.dtype.ordered,
@@ -744,7 +744,7 @@ class CategoricalColumn(column.ColumnBase):
     ) -> CategoricalColumn:
         codes = self.codes.sort_values(ascending, na_position)
         col = column.build_categorical_column(
-            categories=self.dtype.categories._values,
+            categories=self.dtype.categories._column,
             codes=column.build_column(codes.base_data, dtype=codes.dtype),
             mask=codes.base_mask,
             size=codes.size,
@@ -1120,7 +1120,7 @@ class CategoricalColumn(column.ColumnBase):
         if not isinstance(dtype, CategoricalDtype):
             raise ValueError("dtype must be CategoricalDtype")
 
-        if not isinstance(self.categories, type(dtype.categories._values)):
+        if not isinstance(self.categories, type(dtype.categories._column)):
             # If both categories are of different Column types,
             # return a column full of Nulls.
             return _create_empty_categorical_column(self, dtype)
@@ -1236,7 +1236,7 @@ class CategoricalColumn(column.ColumnBase):
     ) -> CategoricalColumn:
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
-                categories=dtype.categories._values,
+                categories=dtype.categories._column,
                 codes=column.build_column(
                     self.codes.base_data, dtype=self.codes.dtype
                 ),

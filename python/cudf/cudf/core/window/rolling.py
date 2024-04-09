@@ -480,7 +480,7 @@ class Rolling(GetAttrGetItemMixin, Reducible):
         else:
             with acquire_spill_lock():
                 return cudautils.window_sizes_from_offset(
-                    self.obj.index._values.data_array_view(mode="write"),
+                    self.obj.index._column.data_array_view(mode="write"),
                     window,
                 )
 
@@ -527,7 +527,7 @@ class RollingGroupby(Rolling):
             )
         else:
             return cudautils.grouped_window_sizes_from_offset(
-                self.obj.index._values.data_array_view(mode="read"),
+                self.obj.index._column.data_array_view(mode="read"),
                 self._group_starts,
                 window,
             )

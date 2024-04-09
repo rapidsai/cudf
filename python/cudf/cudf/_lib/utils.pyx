@@ -110,14 +110,14 @@ cpdef generate_pandas_metadata(table, index):
                 else:
                     materialize_index = True
                     # When `index=True`, RangeIndex needs to be materialized.
-                    materialized_idx = cudf.Index(idx._values, name=idx.name)
+                    materialized_idx = idx._as_int_index()
                     descr = _index_level_name(
                         index_name=materialized_idx.name,
                         level=level,
                         column_names=col_names
                     )
                     index_levels.append(materialized_idx)
-                    columns_to_convert.append(materialized_idx._values)
+                    columns_to_convert.append(materialized_idx._column)
                     col_names.append(descr)
                     types.append(np_to_pa_dtype(materialized_idx.dtype))
             else:
@@ -126,7 +126,7 @@ cpdef generate_pandas_metadata(table, index):
                     level=level,
                     column_names=col_names
                 )
-                columns_to_convert.append(idx._values)
+                columns_to_convert.append(idx._column)
                 col_names.append(descr)
                 if isinstance(idx.dtype, cudf.CategoricalDtype):
                     raise ValueError(

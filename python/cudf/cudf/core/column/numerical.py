@@ -672,7 +672,7 @@ class NumericalColumn(NumericalBaseColumn):
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
-                categories=dtype.categories._values,
+                categories=dtype.categories._column,
                 codes=build_column(self.base_data, dtype=self.dtype),
                 mask=self.base_mask,
                 ordered=dtype.ordered,
