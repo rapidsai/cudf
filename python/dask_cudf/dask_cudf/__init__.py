@@ -51,8 +51,9 @@ if QUERY_PLANNING_ON:
     from .expr._collection import DataFrame, Index, Series
 
     groupby_agg = raise_not_implemented_error("groupby_agg")
-    read_text = raise_not_implemented_error("read_text")
+    read_text = DataFrame.read_text
     to_orc = raise_not_implemented_error("to_orc")
+
 else:
     from .core import DataFrame, Index, Series
     from .groupby import groupby_agg
