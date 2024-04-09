@@ -110,7 +110,7 @@ class CategoricalAccessor(ColumnMethods):
         """
         The categories of this categorical.
         """
-        return cudf.core.index.as_index(self._column.categories)
+        return self._column.dtype.categories
 
     @property
     def codes(self) -> "cudf.Series":
@@ -165,7 +165,7 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1 < 2 < 10]
         """
-        return self._return_or_inplace(self._column.as_ordered())
+        return self._return_or_inplace(self._column.as_ordered(ordered=True))
 
     def as_unordered(self) -> Optional[SeriesOrIndex]:
         """
@@ -212,8 +212,7 @@ class CategoricalAccessor(ColumnMethods):
         dtype: category
         Categories (3, int64): [1, 2, 10]
         """
-
-        return self._return_or_inplace(self._column.as_unordered())
+        return self._return_or_inplace(self._column.as_ordered(ordered=False))
 
     def add_categories(self, new_categories: Any) -> Optional[SeriesOrIndex]:
         """
@@ -630,10 +629,6 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def ordered(self) -> bool:
         return self.dtype.ordered
-
-    @ordered.setter
-    def ordered(self, value: bool):
-        self.dtype.ordered = value
 
     def __setitem__(self, key, value):
         if cudf.api.types.is_scalar(
@@ -1170,9 +1165,11 @@ class CategoricalColumn(column.ColumnBase):
     def copy(self, deep: bool = True) -> Self:
         result_col = super().copy(deep=deep)
         if deep:
-            result_col.categories = libcudf.copying.copy_column(
-                self.dtype._categories
+            dtype_copy = CategoricalDtype(
+                categories=self.categories.copy(),
+                ordered=self.ordered,
             )
+            result_col = cast(Self, result_col._with_type_metadata(dtype_copy))
         return result_col
 
     @cached_property
@@ -1411,31 +1408,17 @@ class CategoricalColumn(column.ColumnBase):
             )
         return self._set_categories(new_categories, ordered=ordered)
 
-    def as_ordered(self):
-        out_col = self
-        if not out_col.ordered:
-            out_col = column.build_categorical_column(
-                categories=self.categories,
-                codes=self.codes,
-                mask=self.base_mask,
-                size=self.base_size,
-                offset=self.offset,
-                ordered=True,
-            )
-        return out_col
-
-    def as_unordered(self):
-        out_col = self
-        if out_col.ordered:
-            out_col = column.build_categorical_column(
-                categories=self.categories,
-                codes=self.codes,
-                mask=self.base_mask,
-                size=self.base_size,
-                offset=self.offset,
-                ordered=False,
-            )
-        return out_col
+    def as_ordered(self, ordered: bool):
+        if self.dtype.ordered == ordered:
+            return self
+        return column.build_categorical_column(
+            categories=self.categories,
+            codes=self.codes,
+            mask=self.base_mask,
+            size=self.base_size,
+            offset=self.offset,
+            ordered=ordered,
+        )
 
 
 def _create_empty_categorical_column(
