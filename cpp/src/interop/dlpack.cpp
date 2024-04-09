@@ -231,7 +231,7 @@ DLManagedTensor* to_dlpack(table_view const& input,
   DLDataType const dltype = data_type_to_DLDataType(type);
 
   // Ensure all columns are the same type
-  CUDF_EXPECTS(cudf::all_column_types_equal(input.begin(), input.end()),
+  CUDF_EXPECTS(cudf::all_types_equal(input.begin(), input.end()),
                "All columns required to have same data type",
                cudf::data_type_error);
 

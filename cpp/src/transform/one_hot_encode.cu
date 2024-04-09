@@ -61,7 +61,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
                                                               rmm::cuda_stream_view stream,
                                                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::column_types_equal(input, categories),
+  CUDF_EXPECTS(cudf::types_equal(input, categories),
                "Mismatch type between input and categories.",
                cudf::data_type_error);
 

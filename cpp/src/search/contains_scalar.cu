@@ -64,7 +64,7 @@ struct contains_scalar_dispatch {
                                                            scalar const& needle,
                                                            rmm::cuda_stream_view stream) const
   {
-    CUDF_EXPECTS(cudf::column_scalar_types_equal(haystack, needle),
+    CUDF_EXPECTS(cudf::types_equal(haystack, needle),
                  "Scalar and column types must match",
                  cudf::data_type_error);
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller
@@ -91,7 +91,7 @@ struct contains_scalar_dispatch {
                                                           scalar const& needle,
                                                           rmm::cuda_stream_view stream) const
   {
-    CUDF_EXPECTS(cudf::column_scalar_types_equal(haystack, needle),
+    CUDF_EXPECTS(cudf::types_equal(haystack, needle),
                  "Scalar and column types must match",
                  cudf::data_type_error);
     // Don't need to check for needle validity. If it is invalid, it should be handled by the caller

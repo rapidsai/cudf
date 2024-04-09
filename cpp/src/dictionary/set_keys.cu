@@ -124,8 +124,7 @@ std::unique_ptr<column> set_keys(dictionary_column_view const& dictionary_column
 {
   CUDF_EXPECTS(!new_keys.has_nulls(), "keys parameter must not have nulls");
   auto keys = dictionary_column.keys();
-  CUDF_EXPECTS(
-    cudf::column_types_equal(keys, new_keys), "keys types must match", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::types_equal(keys, new_keys), "keys types must match", cudf::data_type_error);
 
   // copy the keys -- use cudf::distinct to make sure there are no duplicates,
   // then sort the results.

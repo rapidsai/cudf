@@ -112,10 +112,9 @@ std::unique_ptr<column> segmented_reduce(column_view const& segmented_values,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(
-    !init.has_value() || cudf::column_scalar_types_equal(segmented_values, init.value().get()),
-    "column and initial value must be the same type",
-    cudf::data_type_error);
+  CUDF_EXPECTS(!init.has_value() || cudf::types_equal(segmented_values, init.value().get()),
+               "column and initial value must be the same type",
+               cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||
                             agg.kind == aggregation::MIN || agg.kind == aggregation::MAX ||
                             agg.kind == aggregation::ANY || agg.kind == aggregation::ALL)) {

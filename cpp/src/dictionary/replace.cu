@@ -85,9 +85,8 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
   if (!input.has_nulls()) { return std::make_unique<cudf::column>(input.parent(), stream, mr); }
-  CUDF_EXPECTS(cudf::column_types_equal(input.keys(), replacement.keys()),
-               "keys must match",
-               cudf::data_type_error);
+  CUDF_EXPECTS(
+    cudf::types_equal(input.keys(), replacement.keys()), "keys must match", cudf::data_type_error);
   CUDF_EXPECTS(replacement.size() == input.size(), "column sizes must match");
 
   // first combine the keys so both input dictionaries have the same set
@@ -122,7 +121,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
   if (!input.has_nulls() || !replacement.is_valid(stream)) {
     return std::make_unique<cudf::column>(input.parent(), stream, mr);
   }
-  CUDF_EXPECTS(cudf::column_scalar_types_equal(input.parent(), replacement),
+  CUDF_EXPECTS(cudf::types_equal(input.parent(), replacement),
                "keys must match scalar type",
                cudf::data_type_error);
 

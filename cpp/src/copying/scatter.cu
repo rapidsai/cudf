@@ -113,7 +113,7 @@ struct column_scalar_scatterer_impl {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_EXPECTS(cudf::column_scalar_types_equal(target, source.get()),
+    CUDF_EXPECTS(cudf::types_equal(target, source.get()),
                  "scalar and column types must match",
                  cudf::data_type_error);
 
@@ -146,7 +146,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    CUDF_EXPECTS(cudf::column_scalar_types_equal(target, source.get()),
+    CUDF_EXPECTS(cudf::types_equal(target, source.get()),
                  "scalar and column types must match",
                  cudf::data_type_error);
 
@@ -490,8 +490,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   CUDF_EXPECTS(std::all_of(thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(target.num_columns()),
                            [&input, &target](auto index) {
-                             return cudf::column_scalar_types_equal(target.column(index),
-                                                                    input[index].get());
+                             return cudf::types_equal(target.column(index), input[index].get());
                            }),
                "Type mismatch in input scalar and target column",
                cudf::data_type_error);

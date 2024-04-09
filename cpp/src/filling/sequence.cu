@@ -128,7 +128,7 @@ std::unique_ptr<column> sequence(size_type size,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::scalar_types_equal(init, step),
+  CUDF_EXPECTS(cudf::types_equal(init, step),
                "init and step must be of the same type.",
                cudf::data_type_error);
   CUDF_EXPECTS(size >= 0, "size must be >= 0");

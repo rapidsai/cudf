@@ -158,7 +158,7 @@ std::unique_ptr<column> shift(column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::column_scalar_types_equal(input, fill_value),
+  CUDF_EXPECTS(cudf::types_equal(input, fill_value),
                "shift requires each fill value type to match the corresponding column type.",
                cudf::data_type_error);
 

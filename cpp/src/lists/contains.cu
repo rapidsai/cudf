@@ -194,7 +194,7 @@ std::unique_ptr<column> dispatch_index_of(lists_column_view const& lists,
   // comparisons.
   auto const child = lists.child();
 
-  CUDF_EXPECTS(cudf::column_types_equal(child, search_keys),
+  CUDF_EXPECTS(cudf::types_equal(child, search_keys),
                "Type/Scale of search key does not match list column element type.",
                cudf::data_type_error);
   CUDF_EXPECTS(search_keys.type().id() != type_id::EMPTY, "Type cannot be empty.");

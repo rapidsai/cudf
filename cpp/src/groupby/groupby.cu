@@ -312,14 +312,12 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(values.num_columns() == static_cast<size_type>(fill_values.size()),
                "Mismatch number of fill_values and columns.");
-  CUDF_EXPECTS(std::all_of(thrust::make_counting_iterator(0),
-                           thrust::make_counting_iterator(values.num_columns()),
-                           [&](auto i) {
-                             return cudf::column_scalar_types_equal(values.column(i),
-                                                                    fill_values[i].get());
-                           }),
-               "values and fill_value should have the same type.",
-               cudf::data_type_error);
+  CUDF_EXPECTS(
+    std::all_of(thrust::make_counting_iterator(0),
+                thrust::make_counting_iterator(values.num_columns()),
+                [&](auto i) { return cudf::types_equal(values.column(i), fill_values[i].get()); }),
+    "values and fill_value should have the same type.",
+    cudf::data_type_error);
 
   auto stream = cudf::get_default_stream();
   std::vector<std::unique_ptr<column>> results;

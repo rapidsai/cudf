@@ -51,17 +51,18 @@ bool columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view
 {
   if (rhs.type().id() != type_id::LIST) { return false; }
   auto const& ci = lists_column_view::child_column_index;
-  return column_types_equal(lhs.child(ci), rhs.child(ci));
+  return types_equal(lhs.child(ci), rhs.child(ci));
 }
 
 template <>
 bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_view const& rhs)
 {
   if (rhs.type().id() != type_id::STRUCT) { return false; }
-  return lhs.num_children() == rhs.num_children() and
-         std::all_of(thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(lhs.num_children()),
-                     [&](auto i) { return column_types_equal(lhs.child(i), rhs.child(i)); });
+  return std::equal(lhs.child_begin(),
+                    lhs.child_end(),
+                    rhs.child_begin(),
+                    rhs.child_end(),
+                    [](auto const& lhs, auto const& rhs) { return types_equal(lhs, rhs); });
 }
 
 struct column_scalar_equal_fn {
@@ -78,7 +79,7 @@ bool column_scalar_equal_fn::operator()<dictionary32>(column_view const& col, sc
   // It is not possible to have a scalar dictionary, so compare the dictionary
   // column keys type to the scalar type.
   auto col_keys = cudf::dictionary_column_view(col).keys();
-  return column_scalar_types_equal(col_keys, slr);
+  return types_equal(col_keys, slr);
 }
 
 template <>
@@ -87,7 +88,7 @@ bool column_scalar_equal_fn::operator()<list_view>(column_view const& col, scala
   if (slr.type().id() != type_id::LIST) { return false; }
   auto const& ci      = lists_column_view::child_column_index;
   auto const list_slr = static_cast<list_scalar const*>(&slr);
-  return column_types_equal(col.child(ci), list_slr->view());
+  return types_equal(col.child(ci), list_slr->view());
 }
 
 template <>
@@ -96,10 +97,11 @@ bool column_scalar_equal_fn::operator()<struct_view>(column_view const& col, sca
   if (slr.type().id() != type_id::STRUCT) { return false; }
   auto const struct_slr = static_cast<struct_scalar const*>(&slr);
   auto const slr_tbl    = struct_slr->view();
-  return col.num_children() == slr_tbl.num_columns() and
-         std::all_of(thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(col.num_children()),
-                     [&](auto i) { return column_types_equal(col.child(i), slr_tbl.column(i)); });
+  return std::equal(col.child_begin(),
+                    col.child_end(),
+                    slr_tbl.begin(),
+                    slr_tbl.end(),
+                    [](auto const& lhs, auto const& rhs) { return types_equal(lhs, rhs); });
 }
 
 struct scalars_equal_fn {
@@ -116,7 +118,7 @@ bool scalars_equal_fn::operator()<list_view>(scalar const& lhs, scalar const& rh
   if (rhs.type().id() != type_id::LIST) { return false; }
   auto const list_lhs = static_cast<list_scalar const*>(&lhs);
   auto const list_rhs = static_cast<list_scalar const*>(&rhs);
-  return column_types_equal(list_lhs->view(), list_rhs->view());
+  return types_equal(list_lhs->view(), list_rhs->view());
 }
 
 template <>
@@ -125,38 +127,43 @@ bool scalars_equal_fn::operator()<struct_view>(scalar const& lhs, scalar const& 
   if (rhs.type().id() != type_id::STRUCT) { return false; }
   auto const tbl_lhs = static_cast<struct_scalar const*>(&lhs)->view();
   auto const tbl_rhs = static_cast<struct_scalar const*>(&rhs)->view();
-  return tbl_lhs.num_columns() == tbl_rhs.num_columns() and
-         std::all_of(
-           thrust::make_counting_iterator(0),
-           thrust::make_counting_iterator(tbl_lhs.num_columns()),
-           [&](auto i) { return column_types_equal(tbl_lhs.column(i), tbl_rhs.column(i)); });
+  return std::equal(tbl_lhs.begin(),
+                    tbl_lhs.end(),
+                    tbl_rhs.begin(),
+                    tbl_rhs.end(),
+                    [](auto const& lhs, auto const& rhs) { return types_equal(lhs, rhs); });
 }
 
 };  // namespace
 
 // Implementation note: avoid using double dispatch for this function
 // as it increases code paths to NxN for N types.
-bool column_types_equal(column_view const& lhs, column_view const& rhs)
+bool types_equal(column_view const& lhs, column_view const& rhs)
 {
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
 }
 
-bool column_scalar_types_equal(column_view const& col, scalar const& slr)
+bool types_equal(column_view const& lhs, scalar const& rhs)
 {
-  return type_dispatcher(col.type(), column_scalar_equal_fn{}, col, slr);
+  return type_dispatcher(lhs.type(), column_scalar_equal_fn{}, lhs, rhs);
 }
 
-bool scalar_types_equal(scalar const& lhs, scalar const& rhs)
+bool types_equal(scalar const& lhs, column_view const& rhs)
+{
+  return type_dispatcher(rhs.type(), column_scalar_equal_fn{}, rhs, lhs);
+}
+
+bool types_equal(scalar const& lhs, scalar const& rhs)
 {
   return type_dispatcher(lhs.type(), scalars_equal_fn{}, lhs, rhs);
 }
 
-bool column_types_equivalent(column_view const& lhs, column_view const& rhs)
+bool types_equivalent(column_view const& lhs, column_view const& rhs)
 {
   // Check if the columns have fixed point types. This is the only case where
   // type equality and equivalence differ.
   if (cudf::is_fixed_point(lhs.type())) { return lhs.type().id() == rhs.type().id(); }
-  return column_types_equal(lhs, rhs);
+  return types_equal(lhs, rhs);
 }
 
 }  // namespace cudf

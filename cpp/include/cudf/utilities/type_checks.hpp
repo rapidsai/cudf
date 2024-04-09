@@ -37,12 +37,12 @@ namespace cudf {
  * @param rhs The second `column_view` to compare
  * @return true if column types match
  */
-bool column_types_equal(column_view const& lhs, column_view const& rhs);
+bool types_equal(column_view const& lhs, column_view const& rhs);
 
 /**
  * @brief Compares the type of a `column_view` and a `scalar`
  *
- * This function returns true if the type of `col` equals that of `slr`.
+ * This function returns true if the type of `lhs` equals that of `rhs`.
  * - For fixed point types, the scale is compared.
  * - For dictionary column types, the type of the keys are compared to the
  *   scalar type.
@@ -50,11 +50,28 @@ bool column_types_equal(column_view const& lhs, column_view const& rhs);
  * - For struct types, the type of each field are compared in order.
  * - For all other types, the `id` of `data_type` is compared.
  *
- * @param col The `column_view` to compare
- * @param slr The `scalar` to compare
+ * @param lhs The `column_view` to compare
+ * @param rhs The `scalar` to compare
  * @return true if column/scalar types match
  */
-bool column_scalar_types_equal(column_view const& col, scalar const& slr);
+bool types_equal(column_view const& lhs, scalar const& rhs);
+
+/**
+ * @brief Compares the type of a `scalar` and a `column_view`
+ *
+ * This function returns true if the type of `lhs` equals that of `rhs`.
+ * - For fixed point types, the scale is compared.
+ * - For dictionary column types, the type of the keys are compared to the
+ *   scalar type.
+ * - For lists types, the type of child columns are compared recursively.
+ * - For struct types, the type of each field are compared in order.
+ * - For all other types, the `id` of `data_type` is compared.
+ *
+ * @param lhs The `scalar` to compare
+ * @param rhs The `column_view` to compare
+ * @return true if column/scalar types match
+ */
+bool types_equal(scalar const& lhs, column_view const& rhs);
 
 /**
  * @brief Compares the type of two `scalar`s
@@ -69,7 +86,7 @@ bool column_scalar_types_equal(column_view const& col, scalar const& slr);
  * @param rhs The second `scalar` to compare
  * @return true if scalar types match
  */
-bool scalar_types_equal(scalar const& lhs, scalar const& rhs);
+bool types_equal(scalar const& lhs, scalar const& rhs);
 
 /**
  * @brief Compare the type IDs of two `column_view`s
@@ -80,25 +97,25 @@ bool scalar_types_equal(scalar const& lhs, scalar const& rhs);
  * @param rhs The second `column_view` to compare
  * @return true if column types match
  */
-bool column_types_equivalent(column_view const& lhs, column_view const& rhs);
+bool types_equivalent(column_view const& lhs, column_view const& rhs);
 
 /**
- * @brief Compare the types of a range of `column_views`
+ * @brief Compare the types of a range of `column_view` or `scalar` objects
  *
- * This function returns true if cudf::column_types_equal is true for every
- * pair of consecutive columns in the range.
+ * This function returns true if cudf::types_equal is true for every pair of
+ * consecutive objects (`column_view` or `scalar`) in the range.
  *
  * @tparam ForwardIt Forward iterator
- * @param first The first column
- * @param last The last column
- * @return true if all column types match
+ * @param first The first iterator
+ * @param last The last iterator
+ * @return true if all types match
  */
 template <typename ForwardIt>
-inline bool all_column_types_equal(ForwardIt first, ForwardIt last)
+inline bool all_types_equal(ForwardIt first, ForwardIt last)
 {
-  return std::all_of(std::next(first), last, [want = *first](auto const& c) {
-    return cudf::column_types_equal(want, c);
-  });
+  return first == last || std::all_of(std::next(first), last, [want = *first](auto const& c) {
+           return cudf::types_equal(want, c);
+         });
 }
 
 }  // namespace cudf
