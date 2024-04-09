@@ -302,10 +302,7 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
  * @param view The table to check for nullability
  * @return True if any of the columns in the table is nullable, false otherwise
  */
-inline bool nullable(table_view const& view)
-{
-  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.nullable(); });
-}
+bool nullable(table_view const& view);
 
 /**
  * @brief Returns True if the table has nulls in any of its columns.
@@ -315,10 +312,7 @@ inline bool nullable(table_view const& view)
  * @param view The table to check for nulls
  * @return True if the table has nulls in any of its columns, false otherwise
  */
-inline bool has_nulls(table_view const& view)
-{
-  return std::any_of(view.begin(), view.end(), [](auto const& col) { return col.has_nulls(); });
-}
+bool has_nulls(table_view const& view);
 
 /**
  * @brief Returns True if the table has nulls in any of its columns hierarchy
@@ -326,15 +320,7 @@ inline bool has_nulls(table_view const& view)
  * @param input The table to check for nulls
  * @return True if the table has nulls in any of its columns hierarchy, false otherwise
  */
-inline bool has_nested_nulls(table_view const& input)
-{
-  return std::any_of(input.begin(), input.end(), [](auto const& col) {
-    return col.has_nulls() ||
-           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
-             return has_nested_nulls(table_view{{child_col}});
-           });
-  });
-}
+bool has_nested_nulls(table_view const& input);
 
 /**
  * @brief Returns True if the table has a nullable column at any level of the column hierarchy
@@ -343,15 +329,7 @@ inline bool has_nested_nulls(table_view const& input)
  * @return True if the table has nullable columns at any level of the column hierarchy, false
  * otherwise
  */
-inline bool has_nested_nullable_columns(table_view const& input)
-{
-  return std::any_of(input.begin(), input.end(), [](auto const& col) {
-    return col.nullable() ||
-           std::any_of(col.child_begin(), col.child_end(), [](auto const& child_col) {
-             return has_nested_nullable_columns(table_view{{child_col}});
-           });
-  });
-}
+bool has_nested_nullable_columns(table_view const& input);
 
 /**
  * @brief The function to collect all nullable columns at all nested levels in a given table.
@@ -368,15 +346,7 @@ std::vector<column_view> get_nullable_columns(table_view const& table);
  * @param rhs right-side table_view operand
  * @return boolean comparison result
  */
-inline bool have_same_types(table_view const& lhs, table_view const& rhs)
-{
-  return std::equal(
-    lhs.begin(),
-    lhs.end(),
-    rhs.begin(),
-    rhs.end(),
-    [](column_view const& lcol, column_view const& rcol) { return (lcol.type() == rcol.type()); });
-}
+bool have_same_types(table_view const& lhs, table_view const& rhs);
 
 /**
  * @brief Copy column_views from a table_view into another table_view according to

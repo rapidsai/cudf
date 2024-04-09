@@ -1,4 +1,4 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import os
 
@@ -130,7 +130,7 @@ def test_delocalize_naive():
     "to_tz", ["Europe/London", "America/Chicago", "UTC", None]
 )
 def test_convert(from_tz, to_tz):
-    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="H"))
+    ps = pd.Series(pd.date_range("2023-01-01", periods=3, freq="h"))
     gs = cudf.from_pandas(ps)
     ps = ps.dt.tz_localize(from_tz)
     gs = gs.dt.tz_localize(from_tz)
@@ -140,7 +140,7 @@ def test_convert(from_tz, to_tz):
 
 
 def test_convert_from_naive():
-    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="H"))
+    gs = cudf.Series(cudf.date_range("2023-01-01", periods=3, freq="h"))
     with pytest.raises(TypeError):
         gs.dt.tz_convert("America/New_York")
 
@@ -203,3 +203,18 @@ def test_tz_aware_attributes_local():
     result = dti.hour
     expected = cudf.Index([9, 9, 9], dtype="int16")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "item, expected",
+    [
+        ["2020-01-01", False],
+        ["2020-01-01T00:00:00+00:00", True],
+        ["2020-01-01T00:00:00-08:00", False],
+        ["2019-12-31T16:00:00-08:00", True],
+    ],
+)
+def test_contains_tz_aware(item, expected):
+    dti = cudf.date_range("2020", periods=2, freq="D").tz_localize("UTC")
+    result = item in dti
+    assert result == expected

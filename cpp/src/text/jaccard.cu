@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-#include <nvtext/detail/generate_ngrams.hpp>
-#include <nvtext/jaccard.hpp>
-
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -28,15 +25,17 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <nvtext/detail/generate_ngrams.hpp>
+#include <nvtext/jaccard.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/cub.cuh>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
-
-#include <cub/cub.cuh>
 
 namespace nvtext {
 namespace detail {
@@ -113,7 +112,7 @@ struct sorted_intersect_fn {
   cudf::size_type* d_results;
 
   // warp per row
-  __device__ float operator()(cudf::size_type idx) const
+  __device__ void operator()(cudf::size_type idx) const
   {
     using warp_reduce = cub::WarpReduce<cudf::size_type>;
     __shared__ typename warp_reduce::TempStorage temp_storage;
@@ -286,7 +285,7 @@ std::unique_ptr<cudf::column> jaccard_index(cudf::strings_column_view const& inp
   if (input1.null_count() || input2.null_count()) {
     auto [null_mask, null_count] =
       cudf::detail::bitmask_and(cudf::table_view({input1.parent(), input2.parent()}), stream, mr);
-    results->set_null_mask(null_mask, null_count);
+    results->set_null_mask(std::move(null_mask), null_count);
   }
 
   return results;

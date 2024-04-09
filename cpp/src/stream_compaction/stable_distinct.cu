@@ -40,12 +40,12 @@ std::unique_ptr<table> stable_distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const distinct_indices = get_distinct_indices(input.select(keys),
-                                                     keep,
-                                                     nulls_equal,
-                                                     nans_equal,
-                                                     stream,
-                                                     rmm::mr::get_current_device_resource());
+  auto const distinct_indices = detail::distinct_indices(input.select(keys),
+                                                         keep,
+                                                         nulls_equal,
+                                                         nans_equal,
+                                                         stream,
+                                                         rmm::mr::get_current_device_resource());
 
   // The only difference between this implementation and the unstable version
   // is that the stable implementation must retain the input order. The

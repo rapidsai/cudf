@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil
+         cudftestutil nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -164,7 +164,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -182,6 +182,11 @@ ConfigureNVBench(
   SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
   sort/sort_lists.cpp sort/sort_structs.cpp
 )
+
+# ##################################################################################################
+# * structs benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -203,8 +208,9 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * reduction benchmark ---------------------------------------------------------------------------
+# * replace benchmark ---------------------------------------------------------------------------
 ConfigureBench(REPLACE_BENCH replace/clamp.cpp replace/nans.cpp)
+ConfigureNVBench(REPLACE_NVBENCH replace/nulls.cpp)
 
 # ##################################################################################################
 # * filling benchmark -----------------------------------------------------------------------------
@@ -306,6 +312,8 @@ ConfigureNVBench(
   string/case.cpp
   string/char_types.cpp
   string/contains.cpp
+  string/copy_if_else.cpp
+  string/copy_range.cpp
   string/count.cpp
   string/extract.cpp
   string/gather.cpp
@@ -323,6 +331,7 @@ ConfigureNVBench(
 ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
+ConfigureNVBench(JSON_READER_OPTION io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <groupby/common/utils.hpp>
-#include <groupby/sort/functors.hpp>
-#include <groupby/sort/group_reductions.hpp>
-#include <groupby/sort/group_scan.hpp>
+#include "groupby/common/utils.hpp"
+#include "groupby/sort/functors.hpp"
+#include "groupby/sort/group_reductions.hpp"
+#include "groupby/sort/group_scan.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
@@ -82,6 +82,18 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
     values,
     agg,
     detail::sum_scan(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::product_scan(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 

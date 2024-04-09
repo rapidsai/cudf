@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -133,11 +134,12 @@ generate_list_offsets_and_validities(column_view const& input,
   // Compute output list sizes and validities.
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
     0,
-    [lists_of_lists_dv = *lists_of_lists_dv_ptr,
-     lists_dv          = *lists_dv_ptr,
-     d_row_offsets,
-     d_list_offsets,
-     d_validities = validities.begin()] __device__(auto const idx) {
+    cuda::proclaim_return_type<size_type>([lists_of_lists_dv = *lists_of_lists_dv_ptr,
+                                           lists_dv          = *lists_dv_ptr,
+                                           d_row_offsets,
+                                           d_list_offsets,
+                                           d_validities =
+                                             validities.begin()] __device__(auto const idx) {
       if (d_row_offsets[idx] == d_row_offsets[idx + 1]) {  // This is a null/empty row.
         d_validities[idx] = static_cast<int8_t>(lists_of_lists_dv.is_valid(idx));
         return size_type{0};
@@ -154,7 +156,7 @@ generate_list_offsets_and_validities(column_view const& input,
 
       // Compute size of the output list as sum of sizes of all lists in the current input row.
       return d_list_offsets[d_row_offsets[idx + 1]] - d_list_offsets[d_row_offsets[idx]];
-    });
+    }));
   // Compute offsets from sizes.
   auto out_offsets = std::get<0>(
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + num_rows, stream, mr));

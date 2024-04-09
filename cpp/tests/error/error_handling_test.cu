@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/stream_checking_resource_adaptor.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -39,7 +40,7 @@ TEST(StreamCheck, success) { EXPECT_NO_THROW(CUDF_CHECK_CUDA(0)); }
 
 namespace {
 // Some silly kernel that will cause an error
-void __global__ test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
+CUDF_KERNEL void test_kernel(int* data) { data[threadIdx.x] = threadIdx.x; }
 }  // namespace
 
 // In a release build and without explicit synchronization, CUDF_CHECK_CUDA may
@@ -69,7 +70,7 @@ TEST(StreamCheck, CatchFailedKernel)
   EXPECT_THROW(CUDF_CHECK_CUDA(stream.value()), cudf::cuda_error);
 }
 
-__global__ void kernel() { asm("trap;"); }
+CUDF_KERNEL void kernel() { asm("trap;"); }
 
 TEST(DeathTest, CudaFatalError)
 {
@@ -87,16 +88,17 @@ TEST(DeathTest, CudaFatalError)
 
 #ifndef NDEBUG
 
-__global__ void assert_false_kernel() { cudf_assert(false && "this kernel should die"); }
+CUDF_KERNEL void assert_false_kernel() { cudf_assert(false && "this kernel should die"); }
 
-__global__ void assert_true_kernel() { cudf_assert(true && "this kernel should live"); }
+CUDF_KERNEL void assert_true_kernel() { cudf_assert(true && "this kernel should live"); }
 
 TEST(DebugAssertDeathTest, cudf_assert_false)
 {
   testing::FLAGS_gtest_death_test_style = "threadsafe";
 
   auto call_kernel = []() {
-    assert_false_kernel<<<1, 1>>>();
+    auto const stream = cudf::get_default_stream().value();
+    assert_false_kernel<<<1, 1, 0, stream>>>();
 
     // Kernel should fail with `cudaErrorAssert`
     // This error invalidates the current device context, so we need to kill
@@ -113,7 +115,8 @@ TEST(DebugAssertDeathTest, cudf_assert_false)
 
 TEST(DebugAssert, cudf_assert_true)
 {
-  assert_true_kernel<<<1, 1>>>();
+  auto const stream = cudf::get_default_stream().value();
+  assert_true_kernel<<<1, 1, 0, stream>>>();
   ASSERT_EQ(cudaSuccess, cudaDeviceSynchronize());
 }
 
@@ -125,16 +128,7 @@ TEST(DebugAssert, cudf_assert_true)
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  auto const cmd_opts    = parse_cudf_test_opts(argc, argv);
-  auto const stream_mode = cmd_opts["stream_mode"].as<std::string>();
-  if ((stream_mode == "new_cudf_default") || (stream_mode == "new_testing_default")) {
-    auto resource                      = rmm::mr::get_current_device_resource();
-    auto const stream_error_mode       = cmd_opts["stream_error_mode"].as<std::string>();
-    auto const error_on_invalid_stream = (stream_error_mode == "error");
-    auto const check_default_stream    = (stream_mode == "new_cudf_default");
-    auto adaptor                       = make_stream_checking_resource_adaptor(
-      resource, error_on_invalid_stream, check_default_stream);
-    rmm::mr::set_current_device_resource(&adaptor);
-  }
+  auto const cmd_opts = parse_cudf_test_opts(argc, argv);
+  auto adaptor        = make_stream_mode_adaptor(cmd_opts);
   return RUN_ALL_TESTS();
 }

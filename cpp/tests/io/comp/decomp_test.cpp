@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-#include <io/comp/gpuinflate.hpp>
-#include <io/utilities/hostdevice_vector.hpp>
-#include <src/io/comp/nvcomp_adapter.hpp>
+#include "io/comp/gpuinflate.hpp"
+#include "io/utilities/hostdevice_vector.hpp"
+
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/utilities/default_stream.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <src/io/comp/nvcomp_adapter.hpp>
 
 #include <vector>
 
@@ -213,8 +215,6 @@ TEST_F(NvcompConfigTest, Decompression)
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 2, 0, true, true, 7}));
   // stable integrations enabled required
   EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, false, false, 7}));
-  // 2.4.0 disabled on Pascal
-  EXPECT_TRUE(decomp_disabled(compression_type::ZSTD, {2, 4, 0, true, true, 6}));
 
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 4, 0, true, true, 7}));
   EXPECT_FALSE(decomp_disabled(compression_type::SNAPPY, {2, 3, 0, false, true, 7}));

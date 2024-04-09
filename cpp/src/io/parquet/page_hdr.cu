@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
+#include "error.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "parquet_gpu.hpp"
-#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/utilities/cuda.cuh>
 
-#include <thrust/tuple.h>
-
 #include <rmm/cuda_stream_view.hpp>
+
+#include <thrust/tuple.h>
 
 namespace cudf::io::parquet::detail {
 
@@ -113,30 +114,45 @@ __device__ void skip_struct_field(byte_stream_s* bs, int field_type)
       field_type = c & 0xf;
       if (!(c & 0xf0)) get_i32(bs);
     }
-    switch (field_type) {
-      case ST_FLD_TRUE:
-      case ST_FLD_FALSE: break;
-      case ST_FLD_I16:
-      case ST_FLD_I32:
-      case ST_FLD_I64: get_u32(bs); break;
-      case ST_FLD_BYTE: skip_bytes(bs, 1); break;
-      case ST_FLD_DOUBLE: skip_bytes(bs, 8); break;
-      case ST_FLD_BINARY: skip_bytes(bs, get_u32(bs)); break;
-      case ST_FLD_LIST:
-      case ST_FLD_SET: {  // NOTE: skipping a list of lists is not handled
+    switch (static_cast<FieldType>(field_type)) {
+      case FieldType::BOOLEAN_TRUE:
+      case FieldType::BOOLEAN_FALSE: break;
+      case FieldType::I16:
+      case FieldType::I32:
+      case FieldType::I64: get_u32(bs); break;
+      case FieldType::I8: skip_bytes(bs, 1); break;
+      case FieldType::DOUBLE: skip_bytes(bs, 8); break;
+      case FieldType::BINARY: skip_bytes(bs, get_u32(bs)); break;
+      case FieldType::LIST:
+      case FieldType::SET: {  // NOTE: skipping a list of lists is not handled
         auto const c = getb(bs);
         int n        = c >> 4;
         if (n == 0xf) { n = get_u32(bs); }
         field_type = c & 0xf;
-        if (field_type == ST_FLD_STRUCT) {
+        if (static_cast<FieldType>(field_type) == FieldType::STRUCT) {
           struct_depth += n;
         } else {
           rep_cnt = n;
         }
       } break;
-      case ST_FLD_STRUCT: struct_depth++; break;
+      case FieldType::STRUCT: struct_depth++; break;
     }
   } while (rep_cnt || struct_depth);
+}
+
+__device__ inline bool is_nested(ColumnChunkDesc const& chunk)
+{
+  return chunk.max_nesting_depth > 1;
+}
+
+__device__ inline bool is_byte_array(ColumnChunkDesc const& chunk)
+{
+  return chunk.physical_type == BYTE_ARRAY;
+}
+
+__device__ inline bool is_boolean(ColumnChunkDesc const& chunk)
+{
+  return chunk.physical_type == BOOLEAN;
 }
 
 /**
@@ -150,11 +166,19 @@ __device__ decode_kernel_mask kernel_mask_for_page(PageInfo const& page,
                                                    ColumnChunkDesc const& chunk)
 {
   if (page.flags & PAGEINFO_FLAGS_DICTIONARY) { return decode_kernel_mask::NONE; }
-
+  if (!is_string_col(chunk) && !is_nested(chunk) && !is_byte_array(chunk) && !is_boolean(chunk)) {
+    if (page.encoding == Encoding::PLAIN) {
+      return decode_kernel_mask::FIXED_WIDTH_NO_DICT;
+    } else if (page.encoding == Encoding::PLAIN_DICTIONARY) {
+      return decode_kernel_mask::FIXED_WIDTH_DICT;
+    }
+  }
   if (page.encoding == Encoding::DELTA_BINARY_PACKED) {
     return decode_kernel_mask::DELTA_BINARY;
   } else if (page.encoding == Encoding::DELTA_BYTE_ARRAY) {
     return decode_kernel_mask::DELTA_BYTE_ARRAY;
+  } else if (page.encoding == Encoding::DELTA_LENGTH_BYTE_ARRAY) {
+    return decode_kernel_mask::DELTA_LENGTH_BA;
   } else if (is_string_col(chunk)) {
     return decode_kernel_mask::STRING;
   }
@@ -177,7 +201,7 @@ struct ParquetFieldInt32 {
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = get_i32(bs);
-    return (field_type != ST_FLD_I32);
+    return (static_cast<FieldType>(field_type) != FieldType::I32);
   }
 };
 
@@ -196,7 +220,7 @@ struct ParquetFieldEnum {
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
     val = static_cast<Enum>(get_i32(bs));
-    return (field_type != ST_FLD_I32);
+    return (static_cast<FieldType>(field_type) != FieldType::I32);
   }
 };
 
@@ -215,7 +239,7 @@ struct ParquetFieldStruct {
 
   inline __device__ bool operator()(byte_stream_s* bs, int field_type)
   {
-    return ((field_type != ST_FLD_STRUCT) || !op(bs));
+    return ((static_cast<FieldType>(field_type) != FieldType::STRUCT) || !op(bs));
   }
 };
 
@@ -345,14 +369,18 @@ struct gpuParsePageHeader {
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
-  gpuDecodePageHeaders(ColumnChunkDesc* chunks, int32_t num_chunks, int32_t* error_code)
+CUDF_KERNEL
+void __launch_bounds__(128) gpuDecodePageHeaders(ColumnChunkDesc* chunks,
+                                                 chunk_page_info* chunk_pages,
+                                                 int32_t num_chunks,
+                                                 kernel_error::pointer error_code)
 {
   using cudf::detail::warp_size;
   gpuParsePageHeader parse_page_header;
   __shared__ byte_stream_s bs_g[4];
 
-  int32_t error[4]   = {0};
+  kernel_error::value_type error[4] = {0};
+
   auto const lane_id = threadIdx.x % warp_size;
   auto const warp_id = threadIdx.x / warp_size;
   auto const chunk   = (blockIdx.x * 4) + warp_id;
@@ -378,20 +406,24 @@ __global__ void __launch_bounds__(128)
       // this computation is only valid for flat schemas. for nested schemas,
       // they will be recomputed in the preprocess step by examining repetition and
       // definition levels
-      bs->page.chunk_row           = 0;
-      bs->page.num_rows            = 0;
-      bs->page.skipped_values      = -1;
-      bs->page.skipped_leaf_values = 0;
-      bs->page.str_bytes           = 0;
-      bs->page.temp_string_size    = 0;
-      bs->page.temp_string_buf     = nullptr;
-      bs->page.kernel_mask         = decode_kernel_mask::NONE;
+      bs->page.chunk_row            = 0;
+      bs->page.num_rows             = 0;
+      bs->page.skipped_values       = -1;
+      bs->page.skipped_leaf_values  = 0;
+      bs->page.str_bytes            = 0;
+      bs->page.str_bytes_from_index = 0;
+      bs->page.num_valids           = 0;
+      bs->page.start_val            = 0;
+      bs->page.end_val              = 0;
+      bs->page.has_page_index       = false;
+      bs->page.temp_string_size     = 0;
+      bs->page.temp_string_buf      = nullptr;
+      bs->page.kernel_mask          = decode_kernel_mask::NONE;
     }
-    num_values     = bs->ck.num_values;
-    page_info      = bs->ck.page_info;
-    num_dict_pages = bs->ck.num_dict_pages;
-    max_num_pages  = (page_info) ? bs->ck.max_num_pages : 0;
-    values_found   = 0;
+    num_values    = bs->ck.num_values;
+    page_info     = chunk_pages ? chunk_pages[chunk].pages : nullptr;
+    max_num_pages = page_info ? (bs->ck.num_data_pages + bs->ck.num_dict_pages) : 0;
+    values_found  = 0;
     __syncwarp();
     while (values_found < num_values && bs->cur < bs->end) {
       int index_out = -1;
@@ -440,7 +472,8 @@ __global__ void __launch_bounds__(128)
           bs->page.page_data = const_cast<uint8_t*>(bs->cur);
           bs->cur += bs->page.compressed_page_size;
           if (bs->cur > bs->end) {
-            error[warp_id] |= static_cast<int32_t>(decode_error::DATA_STREAM_OVERRUN);
+            error[warp_id] |=
+              static_cast<kernel_error::value_type>(decode_error::DATA_STREAM_OVERRUN);
           }
           bs->page.kernel_mask = kernel_mask_for_page(bs->page, bs->ck);
         } else {
@@ -474,7 +507,7 @@ __global__ void __launch_bounds__(128)
  * @param[in] num_chunks Number of column chunks
  */
 // blockDim {128,1,1}
-__global__ void __launch_bounds__(128)
+CUDF_KERNEL void __launch_bounds__(128)
   gpuBuildStringDictionaryIndex(ColumnChunkDesc* chunks, int32_t num_chunks)
 {
   __shared__ ColumnChunkDesc chunk_g[4];
@@ -489,9 +522,9 @@ __global__ void __launch_bounds__(128)
   if (!lane_id && ck->num_dict_pages > 0 && ck->str_dict_index) {
     // Data type to describe a string
     string_index_pair* dict_index = ck->str_dict_index;
-    uint8_t const* dict           = ck->page_info[0].page_data;
-    int dict_size                 = ck->page_info[0].uncompressed_page_size;
-    int num_entries               = ck->page_info[0].num_input_values;
+    uint8_t const* dict           = ck->dict_page->page_data;
+    int dict_size                 = ck->dict_page->uncompressed_page_size;
+    int num_entries               = ck->dict_page->num_input_values;
     int pos = 0, cur = 0;
     for (int i = 0; i < num_entries; i++) {
       int len = 0;
@@ -512,13 +545,16 @@ __global__ void __launch_bounds__(128)
 }
 
 void __host__ DecodePageHeaders(ColumnChunkDesc* chunks,
+                                chunk_page_info* chunk_pages,
                                 int32_t num_chunks,
-                                int32_t* error_code,
+                                kernel_error::pointer error_code,
                                 rmm::cuda_stream_view stream)
 {
   dim3 dim_block(128, 1);
   dim3 dim_grid((num_chunks + 3) >> 2, 1);  // 1 chunk per warp, 4 warps per block
-  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(chunks, num_chunks, error_code);
+
+  gpuDecodePageHeaders<<<dim_grid, dim_block, 0, stream.value()>>>(
+    chunks, chunk_pages, num_chunks, error_code);
 }
 
 void __host__ BuildStringDictionaryIndex(ColumnChunkDesc* chunks,

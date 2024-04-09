@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
@@ -33,6 +32,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -121,7 +121,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
 
   // builds the offsets and the vector of all tokens
   auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
-  auto const d_offsets   = offsets->view().template data<size_type>();
+  auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
   auto const d_tokens    = tokens.data();
 
   // compute the maximum number of tokens for any string
@@ -129,18 +129,22 @@ std::unique_ptr<table> split_fn(strings_column_view const& input,
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_counting_iterator<size_type>(input.size()),
-    [d_offsets] __device__(auto idx) -> size_type { return d_offsets[idx + 1] - d_offsets[idx]; },
+    cuda::proclaim_return_type<size_type>([d_offsets] __device__(auto idx) -> size_type {
+      return static_cast<size_type>(d_offsets[idx + 1] - d_offsets[idx]);
+    }),
     0,
     thrust::maximum{});
 
   // build strings columns for each token position
   for (size_type col = 0; col < columns_count; ++col) {
     auto itr = cudf::detail::make_counting_transform_iterator(
-      0, [d_tokens, d_offsets, col] __device__(size_type idx) {
-        auto const offset      = d_offsets[idx];
-        auto const token_count = d_offsets[idx + 1] - offset;
-        return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
-      });
+      0,
+      cuda::proclaim_return_type<string_index_pair>(
+        [d_tokens, d_offsets, col] __device__(size_type idx) {
+          auto const offset      = d_offsets[idx];
+          auto const token_count = static_cast<size_type>(d_offsets[idx + 1] - offset);
+          return (col < token_count) ? d_tokens[offset + col] : string_index_pair{nullptr, 0};
+        }));
     results.emplace_back(make_strings_column(itr, itr + input.size(), stream, mr));
   }
 
@@ -334,7 +338,9 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
                     thrust::make_counting_iterator<size_type>(0),
                     thrust::make_counting_iterator<size_type>(strings_count),
                     d_token_counts,
-                    [tokenizer] __device__(size_type idx) { return tokenizer.count_tokens(idx); });
+                    cuda::proclaim_return_type<size_type>([tokenizer] __device__(size_type idx) {
+                      return tokenizer.count_tokens(idx);
+                    }));
 
   // column count is the maximum number of tokens for any string
   size_type const columns_count = thrust::reduce(
@@ -352,12 +358,11 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
   }
 
   // get the positions for every token
-  rmm::device_uvector<string_index_pair> tokens(columns_count * strings_count, stream);
+  rmm::device_uvector<string_index_pair> tokens(
+    static_cast<int64_t>(columns_count) * static_cast<int64_t>(strings_count), stream);
   string_index_pair* d_tokens = tokens.data();
-  thrust::fill(rmm::exec_policy(stream),
-               d_tokens,
-               d_tokens + (columns_count * strings_count),
-               string_index_pair{nullptr, 0});
+  thrust::fill(
+    rmm::exec_policy(stream), tokens.begin(), tokens.end(), string_index_pair{nullptr, 0});
   thrust::for_each_n(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
@@ -377,6 +382,46 @@ std::unique_ptr<table> whitespace_split_fn(size_type strings_count,
 }
 
 }  // namespace
+
+std::unique_ptr<column> create_offsets_from_positions(strings_column_view const& input,
+                                                      device_span<int64_t const> const& positions,
+                                                      rmm::cuda_stream_view stream,
+                                                      rmm::mr::device_memory_resource* mr)
+{
+  auto const d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
+
+  // first, create a vector of string indices for each position
+  auto indices = rmm::device_uvector<size_type>(positions.size(), stream);
+  thrust::upper_bound(rmm::exec_policy_nosync(stream),
+                      d_offsets,
+                      d_offsets + input.size(),
+                      positions.begin(),
+                      positions.end(),
+                      indices.begin());
+
+  // compute position offsets per string
+  auto counts = rmm::device_uvector<size_type>(input.size(), stream);
+  // memset to zero-out the counts for any null-entries or strings with no positions
+  thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), counts.begin(), counts.end(), 0);
+
+  // next, count the number of positions per string
+  auto d_counts  = counts.data();
+  auto d_indices = indices.data();
+  thrust::for_each_n(
+    rmm::exec_policy_nosync(stream),
+    thrust::counting_iterator<int64_t>(0),
+    positions.size(),
+    [d_indices, d_counts] __device__(int64_t idx) {
+      auto const str_idx = d_indices[idx] - 1;
+      cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(d_counts + str_idx)};
+      ref.fetch_add(1L, cuda::std::memory_order_relaxed);
+    });
+
+  // finally, convert the counts into offsets
+  return std::get<0>(
+    cudf::strings::detail::make_offsets_child_column(counts.begin(), counts.end(), stream, mr));
+}
 
 std::unique_ptr<table> split(strings_column_view const& strings_column,
                              string_scalar const& delimiter,

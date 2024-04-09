@@ -262,6 +262,67 @@ struct Statistics {
 };
 
 /**
+ * @brief Thrift-derived struct containing statistics used to estimate page and column chunk sizes
+ */
+struct SizeStatistics {
+  // Number of variable-width bytes stored for the page/chunk. Should not be set for anything
+  // but the BYTE_ARRAY physical type.
+  thrust::optional<int64_t> unencoded_byte_array_data_bytes;
+  /**
+   * When present, there is expected to be one element corresponding to each
+   * repetition (i.e. size=max repetition_level+1) where each element
+   * represents the number of times the repetition level was observed in the
+   * data.
+   *
+   * This value should not be written if max_repetition_level is 0.
+   */
+  thrust::optional<std::vector<int64_t>> repetition_level_histogram;
+
+  /**
+   * Same as repetition_level_histogram except for definition levels.
+   *
+   * This value should not be written if max_definition_level is 0 or 1.
+   */
+  thrust::optional<std::vector<int64_t>> definition_level_histogram;
+};
+
+/**
+ * @brief Thrift-derived struct describing page location information stored
+ * in the offsets index.
+ */
+struct PageLocation {
+  int64_t offset;                // Offset of the page in the file
+  int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
+  int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
+                            // 0 at the beginning of each column chunk
+};
+
+/**
+ * @brief Thrift-derived struct describing the offset index.
+ */
+struct OffsetIndex {
+  std::vector<PageLocation> page_locations;
+  // per-page size info. see description of the same field in SizeStatistics. only present for
+  // columns with a BYTE_ARRAY physical type.
+  thrust::optional<std::vector<int64_t>> unencoded_byte_array_data_bytes;
+};
+
+/**
+ * @brief Thrift-derived struct describing the column index.
+ */
+struct ColumnIndex {
+  std::vector<bool> null_pages;  // Boolean used to determine if a page contains only null values
+  std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
+  std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
+  BoundaryOrder boundary_order =
+    BoundaryOrder::UNORDERED;  // Indicates if min and max values are ordered
+  thrust::optional<std::vector<int64_t>> null_counts;  // Optional count of null values per page
+  // Repetition/definition level histograms for the column chunk
+  thrust::optional<std::vector<int64_t>> repetition_level_histogram;
+  thrust::optional<std::vector<int64_t>> definition_level_histogram;
+};
+
+/**
  * @brief Thrift-derived struct describing a column chunk
  */
 struct ColumnChunkMetaData {
@@ -279,6 +340,7 @@ struct ColumnChunkMetaData {
   int64_t dictionary_page_offset =
     0;                    // Byte offset from the beginning of file to first (only) dictionary page
   Statistics statistics;  // Encoded chunk-level statistics
+  thrust::optional<SizeStatistics> size_statistics;  // Size statistics for the chunk
 };
 
 /**
@@ -300,6 +362,9 @@ struct ColumnChunk {
 
   // Following fields are derived from other fields
   int schema_idx = -1;  // Index in flattened schema (derived from path_in_schema)
+  // The indexes don't really live here, but it's a convenient place to hang them.
+  std::optional<OffsetIndex> offset_index;
+  std::optional<ColumnIndex> column_index;
 };
 
 /**
@@ -388,36 +453,6 @@ struct PageHeader {
   DataPageHeader data_page_header;
   DictionaryPageHeader dictionary_page_header;
   DataPageHeaderV2 data_page_header_v2;
-};
-
-/**
- * @brief Thrift-derived struct describing page location information stored
- * in the offsets index.
- */
-struct PageLocation {
-  int64_t offset;                // Offset of the page in the file
-  int32_t compressed_page_size;  // Compressed page size in bytes plus the heeader length
-  int64_t first_row_index;  // Index within the column chunk of the first row of the page. reset to
-                            // 0 at the beginning of each column chunk
-};
-
-/**
- * @brief Thrift-derived struct describing the offset index.
- */
-struct OffsetIndex {
-  std::vector<PageLocation> page_locations;
-};
-
-/**
- * @brief Thrift-derived struct describing the column index.
- */
-struct ColumnIndex {
-  std::vector<bool> null_pages;  // Boolean used to determine if a page contains only null values
-  std::vector<std::vector<uint8_t>> min_values;  // lower bound for values in each page
-  std::vector<std::vector<uint8_t>> max_values;  // upper bound for values in each page
-  BoundaryOrder boundary_order =
-    BoundaryOrder::UNORDERED;        // Indicates if min and max values are ordered
-  std::vector<int64_t> null_counts;  // Optional count of null values per page
 };
 
 // bit space we are reserving in column_buffer::user_data

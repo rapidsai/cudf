@@ -1,14 +1,14 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections.abc import Iterator
+from functools import partial
 
 import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_scalar
-from pandas.core.tools.datetimes import is_datetime64tz_dtype
 
 import dask.dataframe as dd
 from dask import config
@@ -62,8 +62,6 @@ def _nonempty_index(idx):
         data = np.array([start, "1970-01-02"], dtype=idx.dtype)
         values = cudf.core.column.as_column(data)
         return cudf.core.index.DatetimeIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.StringIndex):
-        return cudf.StringIndex(["cat", "dog"], name=idx.name)
     elif isinstance(idx, cudf.core.index.CategoricalIndex):
         key = tuple(idx._data.keys())
         assert len(key) == 1
@@ -74,15 +72,17 @@ def _nonempty_index(idx):
             categories=categories, codes=codes, ordered=ordered
         )
         return cudf.core.index.CategoricalIndex(values, name=idx.name)
-    elif isinstance(idx, cudf.core.index.GenericIndex):
-        return cudf.core.index.GenericIndex(
-            np.arange(2, dtype=idx.dtype), name=idx.name
-        )
     elif isinstance(idx, cudf.core.multiindex.MultiIndex):
         levels = [meta_nonempty(lev) for lev in idx.levels]
         codes = [[0, 0] for i in idx.levels]
         return cudf.core.multiindex.MultiIndex(
             levels=levels, codes=codes, names=idx.names
+        )
+    elif isinstance(idx._column, cudf.core.column.StringColumn):
+        return cudf.Index(["cat", "dog"], name=idx.name)
+    elif isinstance(idx, cudf.core.index.Index):
+        return cudf.core.index.Index(
+            np.arange(2, dtype=idx.dtype), name=idx.name
         )
 
     raise TypeError(f"Don't know how to handle index of type {type(idx)}")
@@ -106,8 +106,10 @@ def _get_non_empty_data(s):
         categories = (
             s.categories if len(s.categories) else [UNKNOWN_CATEGORIES]
         )
-        codes = cudf.core.column.full(
-            size=2, fill_value=0, dtype=cudf._lib.types.size_type_dtype
+        codes = cudf.core.column.as_column(
+            0,
+            dtype=cudf._lib.types.size_type_dtype,
+            length=2,
         )
         ordered = s.ordered
         data = cudf.core.column.build_categorical_column(
@@ -127,7 +129,7 @@ def _get_non_empty_data(s):
         data = cudf.core.column.as_column(data, dtype=s.dtype)
     elif is_string_dtype(s.dtype):
         data = pa.array(["cat", "dog"])
-    elif is_datetime64tz_dtype(s.dtype):
+    elif isinstance(s.dtype, pd.DatetimeTZDtype):
         from cudf.utils.dtypes import get_time_unit
 
         data = cudf.date_range("2001-01-01", periods=2, freq=get_time_unit(s))
@@ -313,7 +315,7 @@ def tolist_cudf(obj):
 )
 @_dask_cudf_nvtx_annotate
 def is_categorical_dtype_cudf(obj):
-    return cudf.api.types.is_categorical_dtype(obj)
+    return cudf.api.types._is_categorical_dtype(obj)
 
 
 @grouper_dispatch.register((cudf.Series, cudf.DataFrame))
@@ -334,7 +336,7 @@ def percentile_cudf(a, q, interpolation="linear"):
     if isinstance(q, Iterator):
         q = list(q)
 
-    if cudf.api.types.is_categorical_dtype(a.dtype):
+    if cudf.api.types._is_categorical_dtype(a.dtype):
         result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
         return (
@@ -438,7 +440,6 @@ def hash_object_cudf(frame, index=True):
 @hash_object_dispatch.register(cudf.BaseIndex)
 @_dask_cudf_nvtx_annotate
 def hash_object_cudf_index(ind, index=None):
-
     if isinstance(ind, cudf.MultiIndex):
         return ind.to_frame(index=False).hash_values()
 
@@ -484,7 +485,6 @@ try:
     def _simple_cudf_encode(_):
         # Basic pickle-based encoding for a partd k-v store
         import pickle
-        from functools import partial
 
         import partd
 
@@ -586,7 +586,6 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
         columns=None,
         constructor=cudf.DataFrame,
     ):
-
         return _default_backend(
             dd.from_dict,
             data,
@@ -628,13 +627,90 @@ class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
     @staticmethod
     def read_hdf(*args, **kwargs):
-        from dask_cudf import from_dask_dataframe
-
         # HDF5 reader not yet implemented in cudf
         warnings.warn(
             "read_hdf is not yet implemented in cudf/dask_cudf. "
             "Moving to cudf from pandas. Expect poor performance!"
         )
-        return from_dask_dataframe(
-            _default_backend(dd.read_hdf, *args, **kwargs)
+        return _default_backend(dd.read_hdf, *args, **kwargs).to_backend(
+            "cudf"
         )
+
+
+# Define "cudf" backend entrypoint for dask-expr
+class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Backend-entrypoint class for Dask-Expressions
+
+    This class is registered under the name "cudf" for the
+    ``dask-expr.dataframe.backends`` entrypoint in ``setup.cfg``.
+    Dask-DataFrame will use the methods defined in this class
+    in place of ``dask_expr.<creation-method>`` when the
+    "dataframe.backend" configuration is set to "cudf":
+
+    Examples
+    --------
+    >>> import dask
+    >>> import dask_expr
+    >>> with dask.config.set({"dataframe.backend": "cudf"}):
+    ...     ddf = dx.from_dict({"a": range(10)})
+    >>> type(ddf._meta)
+    <class 'cudf.core.dataframe.DataFrame'>
+    """
+
+    @classmethod
+    def to_backend_dispatch(cls):
+        return CudfBackendEntrypoint.to_backend_dispatch()
+
+    @classmethod
+    def to_backend(cls, *args, **kwargs):
+        return CudfBackendEntrypoint.to_backend(*args, **kwargs)
+
+    @staticmethod
+    def from_dict(
+        data,
+        npartitions,
+        orient="columns",
+        dtype=None,
+        columns=None,
+        constructor=cudf.DataFrame,
+    ):
+        import dask_expr as dx
+
+        return _default_backend(
+            dx.from_dict,
+            data,
+            npartitions=npartitions,
+            orient=orient,
+            dtype=dtype,
+            columns=columns,
+            constructor=constructor,
+        )
+
+    @staticmethod
+    def read_json(*args, engine="auto", **kwargs):
+        return _default_backend(
+            dd.read_json,
+            *args,
+            engine=(
+                partial(cudf.read_json, engine=engine)
+                if isinstance(engine, str)
+                else engine
+            ),
+            **kwargs,
+        )
+
+    @staticmethod
+    def read_orc(*args, **kwargs):
+        from dask_expr import from_legacy_dataframe
+
+        from dask_cudf.io.orc import read_orc as legacy_read_orc
+
+        ddf = legacy_read_orc(*args, **kwargs)
+        return from_legacy_dataframe(ddf)
+
+
+# Import/register cudf-specific classes for dask-expr
+try:
+    import dask_cudf.expr  # noqa: F401
+except ImportError:
+    pass

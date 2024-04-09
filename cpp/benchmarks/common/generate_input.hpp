@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -223,7 +223,7 @@ class data_profile {
   std::map<cudf::type_id, distribution_params<double>> float_params;
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
   distribution_params<cudf::list_view> list_dist_desc{
-    cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
+    cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 64}, 2};
   distribution_params<cudf::struct_view> struct_dist_desc{
     {cudf::type_id::INT32, cudf::type_id::FLOAT32, cudf::type_id::STRING}, 2};
   std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
@@ -313,8 +313,9 @@ class data_profile {
     }
   }
 
-  auto get_bool_probability_true() const { return bool_probability_true; }
-  auto get_null_probability() const { return null_probability; };
+  [[nodiscard]] auto get_bool_probability_true() const { return bool_probability_true; }
+  [[nodiscard]] auto get_null_probability() const { return null_probability; };
+  [[nodiscard]] auto get_valid_probability() const { return 1. - null_probability.value_or(0.); };
   [[nodiscard]] auto get_cardinality() const { return cardinality; };
   [[nodiscard]] auto get_avg_run_length() const { return avg_run_length; };
 

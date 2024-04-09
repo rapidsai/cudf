@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 # This function is from the rapidsai/clx repo at below link
 # https://github.com/rapidsai/clx/blob/267c6d30805c9dcbf80840f222bf31c5c4b7068a/python/clx/analytics/_perfect_hash.py
 import numpy as np
@@ -158,7 +158,6 @@ def _perfect_hash(integers, max_constant):
 
 
 def _pack_keys_and_values(flattened_hash_table, original_dict):
-
     for i in range(len(flattened_hash_table)):
         if flattened_hash_table[i] in original_dict:
             value = original_dict[flattened_hash_table[i]]
@@ -189,7 +188,6 @@ def _store_func(
     first_token_id,
     sep_token_id,
 ):
-
     with open(out_name, mode="w+") as f:
         f.write(f"{outer_a}\n")
         f.write(f"{outer_b}\n")
@@ -215,7 +213,6 @@ def _retrieve(
     inner_table_coeffs,
     offsets_into_ht,
 ):
-
     bin_hash = _hash_func(k, outer_a, outer_b, num_outer_bins)
     start_offset_in_ht = offsets_into_ht[bin_hash]
     inner_table_values = inner_table_coeffs[bin_hash]

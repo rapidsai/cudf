@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,7 +51,9 @@ column_view_base::column_view_base(data_type type,
     CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
     CUDF_EXPECTS(nullptr == null_mask, "EMPTY column should have no null mask.");
   } else if (is_compound(type)) {
-    CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
+    if (type.id() != type_id::STRING) {
+      CUDF_EXPECTS(nullptr == data, "Compound (parent) columns cannot have data");
+    }
   } else if (size > 0) {
     CUDF_EXPECTS(nullptr != data, "Null data pointer.");
   }

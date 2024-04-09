@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/distance.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -38,12 +39,12 @@
 namespace cudf {
 namespace detail {
 
-rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
-                                                    duplicate_keep_option keep,
-                                                    null_equality nulls_equal,
-                                                    nan_equality nans_equal,
-                                                    rmm::cuda_stream_view stream,
-                                                    rmm::mr::device_memory_resource* mr)
+rmm::device_uvector<size_type> distinct_indices(table_view const& input,
+                                                duplicate_keep_option keep,
+                                                null_equality nulls_equal,
+                                                nan_equality nans_equal,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return rmm::device_uvector<size_type>(0, stream, mr);
@@ -52,7 +53,7 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto map = hash_map_type{compute_hash_table_size(input.num_rows()),
                            cuco::empty_key{-1},
                            cuco::empty_value{std::numeric_limits<size_type>::min()},
-                           detail::hash_table_allocator_type{default_allocator<char>{}, stream},
+                           cudf::detail::cuco_allocator{stream},
                            stream.value()};
 
   auto const preprocessed_input =
@@ -66,7 +67,9 @@ rmm::device_uvector<size_type> get_distinct_indices(table_view const& input,
   auto const row_comp = cudf::experimental::row::equality::self_comparator(preprocessed_input);
 
   auto const pair_iter = cudf::detail::make_counting_transform_iterator(
-    size_type{0}, [] __device__(size_type const i) { return cuco::make_pair(i, i); });
+    size_type{0},
+    cuda::proclaim_return_type<cuco::pair<size_type, size_type>>(
+      [] __device__(size_type const i) { return cuco::make_pair(i, i); }));
 
   auto const insert_keys = [&](auto const value_comp) {
     if (has_nested_columns) {
@@ -148,12 +151,12 @@ std::unique_ptr<table> distinct(table_view const& input,
     return empty_like(input);
   }
 
-  auto const gather_map = get_distinct_indices(input.select(keys),
-                                               keep,
-                                               nulls_equal,
-                                               nans_equal,
-                                               stream,
-                                               rmm::mr::get_current_device_resource());
+  auto const gather_map = detail::distinct_indices(input.select(keys),
+                                                   keep,
+                                                   nulls_equal,
+                                                   nans_equal,
+                                                   stream,
+                                                   rmm::mr::get_current_device_resource());
   return detail::gather(input,
                         gather_map,
                         out_of_bounds_policy::DONT_CHECK,
@@ -174,6 +177,18 @@ std::unique_ptr<table> distinct(table_view const& input,
   CUDF_FUNC_RANGE();
   return detail::distinct(
     input, keys, keep, nulls_equal, nans_equal, cudf::get_default_stream(), mr);
+}
+
+std::unique_ptr<column> distinct_indices(table_view const& input,
+                                         duplicate_keep_option keep,
+                                         null_equality nulls_equal,
+                                         nan_equality nans_equal,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  auto indices = detail::distinct_indices(input, keep, nulls_equal, nans_equal, stream, mr);
+  return std::make_unique<column>(std::move(indices), rmm::device_buffer{}, 0);
 }
 
 }  // namespace cudf

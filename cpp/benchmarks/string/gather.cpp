@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,7 +43,8 @@ static void bench_gather(nvbench::state& state)
     create_random_table({cudf::type_id::INT32}, row_count{num_rows}, map_profile);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  auto chars_size = cudf::strings_column_view(input_table->view().column(0)).chars_size();
+  auto chars_size =
+    cudf::strings_column_view(input_table->view().column(0)).chars_size(cudf::get_default_stream());
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);  // all bytes are read;
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 

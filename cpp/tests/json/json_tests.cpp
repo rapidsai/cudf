@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/testing_main.hpp>
+
 #include <cudf/json/json.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/replace.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <stdexcept>
 
@@ -587,6 +588,15 @@ TEST_F(JsonPathTests, GetJsonObjectIllegalQuery)
     };
     EXPECT_THROW(query(), std::invalid_argument);
   }
+
+  {
+    auto const input     = cudf::test::strings_column_wrapper{R"({"a": "b"})"};
+    auto const json_path = std::string{"${a}"};
+    auto const query     = [&]() {
+      auto const result = cudf::get_json_object(cudf::strings_column_view(input), json_path);
+    };
+    EXPECT_THROW(query(), std::invalid_argument);
+  }
 }
 
 // queries that are legal, but reference invalid parts of the input
@@ -1016,3 +1026,34 @@ TEST_F(JsonPathTests, MissingFieldsAsNulls)
   do_test("$.x[*].array", "", "null", false);
   do_test("$.tup[*].a.x", "[\"5\"]", "[null,null,null,\"5\"]");
 }
+
+TEST_F(JsonPathTests, QueriesContainingQuotes)
+{
+  std::string input_string = R"({"AB": 1, "A.B": 2, "'A": {"B'": 3}, "A": {"B": 4} })";
+
+  auto do_test = [&input_string](auto const& json_path_string,
+                                 auto const& expected_string,
+                                 bool const& expect_null = false) {
+    auto const input     = cudf::test::strings_column_wrapper{input_string};
+    auto const json_path = std::string{json_path_string};
+    cudf::get_json_object_options options;
+    options.set_allow_single_quotes(true);
+    auto const result = cudf::get_json_object(cudf::strings_column_view(input), json_path, options);
+    auto const expected =
+      cudf::test::strings_column_wrapper{std::initializer_list<std::string>{expected_string},
+                                         std::initializer_list<bool>{!expect_null}};
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+  };
+
+  // Set 1
+  do_test(R"($.AB)", "1");
+  do_test(R"($['A.B'])", "2");
+  do_test(R"($.'A.B')", "3");
+  do_test(R"($.A.B)", "4");
+
+  // Set 2
+  do_test(R"($.'A)", R"({"B'": 3})");
+}
+
+CUDF_TEST_PROGRAM_MAIN()

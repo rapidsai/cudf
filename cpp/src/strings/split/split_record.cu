@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -64,6 +65,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& input,
 
   // builds the offsets and the vector of all tokens
   auto [offsets, tokens] = split_helper(input, tokenizer, stream, mr);
+  CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+               "Size of output exceeds the column size limit",
+               std::overflow_error);
 
   // build a strings column from the tokens
   auto strings_child = make_strings_column(tokens.begin(), tokens.end(), stream, mr);
@@ -142,7 +146,9 @@ std::unique_ptr<column> whitespace_split_record_fn(strings_column_view const& in
 {
   // create offsets column by counting the number of tokens per string
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
-    0, [reader] __device__(auto idx) { return reader.count_tokens(idx); });
+    0, cuda::proclaim_return_type<size_type>([reader] __device__(auto idx) {
+      return reader.count_tokens(idx);
+    }));
   auto [offsets, total_tokens] =
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + input.size(), stream, mr);
   auto d_offsets = offsets->view().template data<cudf::size_type>();

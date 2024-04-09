@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/string_parsing.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
@@ -32,6 +32,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
+#include <cuda/functional>
 #include <thrust/count.h>
 #include <thrust/for_each.h>
 #include <thrust/functional.h>
@@ -45,8 +47,6 @@
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
-
-#include <cuda/atomic>
 
 #include <algorithm>
 #include <cstdint>
@@ -276,6 +276,16 @@ reduce_to_column_tree(tree_meta_t& tree,
       return is_non_list_parent(parent_col_id);
     });
 
+  // For Struct and List (to avoid copying entire strings when mixed type as string is enabled)
+  thrust::transform_if(
+    rmm::exec_policy(stream),
+    col_range_begin.begin(),
+    col_range_begin.end(),
+    column_categories.begin(),
+    col_range_end.begin(),
+    [] __device__(auto i) { return i + 1; },
+    [] __device__(NodeT type) { return type == NC_STRUCT || type == NC_LIST; });
+
   return std::tuple{tree_meta_t{std::move(column_categories),
                                 std::move(parent_col_ids),
                                 std::move(column_levels),
@@ -362,7 +372,7 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
     if (col.is_empty()) return std::vector<std::string>{};
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_sync<char>(
-      cudf::device_span<char const>(scv.chars().data<char>(), scv.chars().size()), stream);
+      cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto const h_offsets = cudf::detail::make_std_vector_sync(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
@@ -380,6 +390,54 @@ std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
     return host_data;
   };
   return to_host(d_column_names->view());
+}
+
+/**
+ * @brief Checks if all strings in each string column in the tree are nulls.
+ * For non-string columns, it's set as true. If any of rows in a string column is false, it's set as
+ * false.
+ *
+ * @param input Input JSON string device data
+ * @param d_column_tree column tree representation of JSON string
+ * @param tree Node tree representation of the JSON string
+ * @param col_ids Column ids of the nodes in the tree
+ * @param options Parsing options specifying the parsing behaviour
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Array of bytes where each byte indicate if it is all nulls string column.
+ */
+rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const> input,
+                                                      tree_meta_t const& d_column_tree,
+                                                      tree_meta_t const& tree,
+                                                      device_span<NodeIndexT> col_ids,
+                                                      cudf::io::json_reader_options const& options,
+                                                      rmm::cuda_stream_view stream)
+{
+  auto const num_nodes = col_ids.size();
+  auto const num_cols  = d_column_tree.node_categories.size();
+  rmm::device_uvector<uint8_t> is_all_nulls(num_cols, stream);
+  thrust::fill(rmm::exec_policy(stream), is_all_nulls.begin(), is_all_nulls.end(), true);
+
+  auto parse_opt = parsing_options(options, stream);
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<size_type>(0),
+    num_nodes,
+    [options           = parse_opt.view(),
+     data              = input.data(),
+     column_categories = d_column_tree.node_categories.begin(),
+     col_ids           = col_ids.begin(),
+     range_begin       = tree.node_range_begin.begin(),
+     range_end         = tree.node_range_end.begin(),
+     is_all_nulls      = is_all_nulls.begin()] __device__(size_type i) {
+      auto const node_category = column_categories[col_ids[i]];
+      if (node_category == NC_STR or node_category == NC_VAL) {
+        auto const is_null_literal = serialized_trie_contains(
+          options.trie_na,
+          {data + range_begin[i], static_cast<size_t>(range_end[i] - range_begin[i])});
+        if (!is_null_literal) is_all_nulls[col_ids[i]] = false;
+      }
+    });
+  return is_all_nulls;
 }
 
 /**
@@ -405,7 +463,10 @@ struct json_column_data {
  * @param row_offsets Row offsets of the nodes in the tree
  * @param root Root node of the `d_json_column` tree
  * @param is_array_of_arrays Whether the tree is an array of arrays
- * @param is_enabled_lines Whether the input is a line-delimited JSON
+ * @param options Parsing options specifying the parsing behaviour
+ * options affecting behaviour are
+ *   is_enabled_lines: Whether the input is a line-delimited JSON
+ *   is_enabled_mixed_types_as_string: Whether to enable reading mixed types as string
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the device memory
  * of child_offets and validity members of `d_json_column`
@@ -416,12 +477,15 @@ void make_device_json_column(device_span<SymbolT const> input,
                              device_span<size_type> row_offsets,
                              device_json_column& root,
                              bool is_array_of_arrays,
-                             bool is_enabled_lines,
+                             cudf::io::json_reader_options const& options,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  auto num_nodes = col_ids.size();
+
+  bool const is_enabled_lines                 = options.is_enabled_lines();
+  bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();
+  auto const num_nodes                        = col_ids.size();
   rmm::device_uvector<NodeIndexT> sorted_col_ids(col_ids.size(), stream);  // make a copy
   thrust::copy(rmm::exec_policy(stream), col_ids.begin(), col_ids.end(), sorted_col_ids.begin());
 
@@ -432,15 +496,16 @@ void make_device_json_column(device_span<SymbolT const> input,
     rmm::exec_policy(stream), sorted_col_ids.begin(), sorted_col_ids.end(), node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id = [&]() {
-    if (!is_array_of_arrays) return parent_node_sentinel;
-    auto const list_node_index = is_enabled_lines ? 0 : 1;
-    NodeIndexT value;
-    CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
-                                  col_ids.data() + list_node_index,
-                                  sizeof(NodeIndexT),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    stream.synchronize();
+    NodeIndexT value = parent_node_sentinel;
+    if (!col_ids.empty()) {
+      auto const list_node_index = is_enabled_lines ? 0 : 1;
+      CUDF_CUDA_TRY(cudaMemcpyAsync(&value,
+                                    col_ids.data() + list_node_index,
+                                    sizeof(NodeIndexT),
+                                    cudaMemcpyDefault,
+                                    stream.value()));
+      stream.synchronize();
+    }
     return value;
   }();
 
@@ -515,6 +580,25 @@ void make_device_json_column(device_span<SymbolT const> input,
     col.type = to_json_col_type(column_categories[i]);
   };
 
+  auto reinitialize_as_string = [&](auto i, auto& col) {
+    col.string_offsets.resize(max_row_offsets[i] + 1, stream);
+    col.string_lengths.resize(max_row_offsets[i] + 1, stream);
+    init_to_zero(col.string_offsets);
+    init_to_zero(col.string_lengths);
+    col.num_rows = max_row_offsets[i] + 1;
+    col.validity =
+      cudf::detail::create_null_mask(col.num_rows, cudf::mask_state::ALL_NULL, stream, mr);
+    col.type = json_col_t::StringColumn;
+    col.child_columns.clear();  // their references should be deleted too.
+    col.column_order.clear();
+  };
+
+  path_from_tree tree_path{column_categories,
+                           column_parent_ids,
+                           column_names,
+                           is_array_of_arrays,
+                           row_array_parent_col_id};
+
   // 2. generate nested columns tree and its device_memory
   // reorder unique_col_ids w.r.t. column_range_begin for order of column to be in field order.
   auto h_range_col_id_it =
@@ -523,12 +607,19 @@ void make_device_json_column(device_span<SymbolT const> input,
     return thrust::get<0>(a) < thrust::get<0>(b);
   });
 
+  std::vector<uint8_t> is_str_column_all_nulls{};
+  if (is_enabled_mixed_types_as_string) {
+    is_str_column_all_nulls = cudf::detail::make_std_vector_async(
+      is_all_nulls_each_column(input, d_column_tree, tree, col_ids, options, stream), stream);
+  }
+
   // use hash map because we may skip field name's col_ids
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>> columns;
   // map{parent_col_id, child_col_name}> = child_col_id, used for null value column tracking
   std::map<std::pair<NodeIndexT, std::string>, NodeIndexT> mapped_columns;
   // find column_ids which are values, but should be ignored in validity
   std::vector<uint8_t> ignore_vals(num_columns, 0);
+  std::vector<uint8_t> is_mixed_type_column(num_columns, 0);
   columns.try_emplace(parent_node_sentinel, std::ref(root));
 
   for (auto const this_col_id : unique_col_ids) {
@@ -551,6 +642,14 @@ void make_device_json_column(device_span<SymbolT const> input,
     } else {
       CUDF_FAIL("Unexpected parent column category");
     }
+
+    if (parent_col_id != parent_node_sentinel && is_mixed_type_column[parent_col_id] == 1) {
+      // if parent is mixed type column, ignore this column.
+      is_mixed_type_column[this_col_id] = 1;
+      ignore_vals[this_col_id]          = 1;
+      continue;
+    }
+
     // If the child is already found,
     // replace if this column is a nested column and the existing was a value column
     // ignore this column if this column is a value column and the existing was a nested column
@@ -559,11 +658,40 @@ void make_device_json_column(device_span<SymbolT const> input,
     auto& parent_col = it->second.get();
     bool replaced    = false;
     if (mapped_columns.count({parent_col_id, name}) > 0) {
+      auto const old_col_id = mapped_columns[{parent_col_id, name}];
+      // If mixed type as string is enabled, make both of them strings and merge them.
+      // All child columns will be ignored when parsing.
+      if (is_enabled_mixed_types_as_string) {
+        bool const is_mixed_type = [&]() {
+          // If new or old is STR and they are all not null, make it mixed type, else ignore.
+          if (column_categories[this_col_id] == NC_VAL ||
+              column_categories[this_col_id] == NC_STR) {
+            if (is_str_column_all_nulls[this_col_id]) return false;
+          }
+          if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
+            if (is_str_column_all_nulls[old_col_id]) return false;
+          }
+          return true;
+        }();
+        if (is_mixed_type) {
+          is_mixed_type_column[this_col_id] = 1;
+          is_mixed_type_column[old_col_id]  = 1;
+          // if old col type (not cat) is list or struct, replace with string.
+          auto& col = columns.at(old_col_id).get();
+          if (col.type == json_col_t::ListColumn or col.type == json_col_t::StructColumn) {
+            reinitialize_as_string(old_col_id, col);
+            // all its children (which are already inserted) are ignored later.
+          }
+          col.forced_as_string_column = true;
+          columns.try_emplace(this_col_id, columns.at(old_col_id));
+          continue;
+        }
+      }
+
       if (column_categories[this_col_id] == NC_VAL || column_categories[this_col_id] == NC_STR) {
         ignore_vals[this_col_id] = 1;
         continue;
       }
-      auto old_col_id = mapped_columns[{parent_col_id, name}];
       if (column_categories[old_col_id] == NC_VAL || column_categories[old_col_id] == NC_STR) {
         // remap
         ignore_vals[old_col_id] = 1;
@@ -581,6 +709,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                      "A mix of lists and structs within the same column is not supported");
       }
     }
+    if (is_enabled_mixed_types_as_string) {
+      // get path of this column, check if it is a struct forced as string, and enforce it
+      auto nt                          = tree_path.get_path(this_col_id);
+      std::optional<data_type> user_dt = get_path_data_type(nt, options);
+      if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
+          user_dt.value().id() == type_id::STRING) {
+        is_mixed_type_column[this_col_id] = 1;
+        column_categories[this_col_id]    = NC_STR;
+      }
+    }
+
     CUDF_EXPECTS(parent_col.child_columns.count(name) == 0, "duplicate column name: " + name);
     // move into parent
     device_json_column col(stream, mr);
@@ -591,6 +730,28 @@ void make_device_json_column(device_span<SymbolT const> input,
     columns.try_emplace(this_col_id, std::ref(parent_col.child_columns.at(name)));
     mapped_columns.try_emplace(std::make_pair(parent_col_id, name), this_col_id);
   }
+
+  if (is_enabled_mixed_types_as_string) {
+    // ignore all children of mixed type columns
+    for (auto const this_col_id : unique_col_ids) {
+      auto parent_col_id = column_parent_ids[this_col_id];
+      if (parent_col_id != parent_node_sentinel and is_mixed_type_column[parent_col_id] == 1) {
+        is_mixed_type_column[this_col_id] = 1;
+        ignore_vals[this_col_id]          = 1;
+        columns.erase(this_col_id);
+      }
+      // Convert only mixed type columns as string (so to copy), but not its children
+      if (parent_col_id != parent_node_sentinel and is_mixed_type_column[parent_col_id] == 0 and
+          is_mixed_type_column[this_col_id] == 1)
+        column_categories[this_col_id] = NC_STR;
+    }
+    cudaMemcpyAsync(d_column_tree.node_categories.begin(),
+                    column_categories.data(),
+                    column_categories.size() * sizeof(column_categories[0]),
+                    cudaMemcpyDefault,
+                    stream.value());
+  }
+
   // restore unique_col_ids order
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
     return thrust::get<1>(a) < thrust::get<1>(b);
@@ -616,14 +777,16 @@ void make_device_json_column(device_span<SymbolT const> input,
     rmm::exec_policy(stream),
     thrust::counting_iterator<size_type>(0),
     num_nodes,
-    [node_categories = tree.node_categories.begin(),
-     col_ids         = col_ids.begin(),
-     row_offsets     = row_offsets.begin(),
-     range_begin     = tree.node_range_begin.begin(),
-     range_end       = tree.node_range_end.begin(),
-     d_ignore_vals   = d_ignore_vals.begin(),
-     d_columns_data  = d_columns_data.begin()] __device__(size_type i) {
-      switch (node_categories[i]) {
+    [column_categories = d_column_tree.node_categories.begin(),
+     col_ids           = col_ids.begin(),
+     row_offsets       = row_offsets.begin(),
+     range_begin       = tree.node_range_begin.begin(),
+     range_end         = tree.node_range_end.begin(),
+     d_ignore_vals     = d_ignore_vals.begin(),
+     d_columns_data    = d_columns_data.begin()] __device__(size_type i) {
+      if (d_ignore_vals[col_ids[i]]) return;
+      auto const node_category = column_categories[col_ids[i]];
+      switch (node_category) {
         case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
         case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
         case NC_STR: [[fallthrough]];
@@ -648,11 +811,12 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
   auto parent_col_id   = thrust::make_transform_iterator(
     thrust::make_counting_iterator<size_type>(0),
-    [col_ids         = col_ids.begin(),
-     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
-      return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
-                                                                : col_ids[parent_node_ids[node_id]];
-    });
+    cuda::proclaim_return_type<NodeIndexT>(
+      [col_ids         = col_ids.begin(),
+       parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+        return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
+                                                                  : col_ids[parent_node_ids[node_id]];
+      }));
   auto const list_children_end = thrust::copy_if(
     rmm::exec_policy(stream),
     thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
@@ -660,10 +824,14 @@ void make_device_json_column(device_span<SymbolT const> input,
       num_nodes,
     thrust::make_counting_iterator<size_type>(0),
     thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
-    [node_categories = tree.node_categories.begin(),
-     parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
+    [d_ignore_vals     = d_ignore_vals.begin(),
+     parent_node_ids   = tree.parent_node_ids.begin(),
+     column_categories = d_column_tree.node_categories.begin(),
+     col_ids           = col_ids.begin()] __device__(size_type node_id) {
       auto parent_node_id = parent_node_ids[node_id];
-      return parent_node_id != parent_node_sentinel and node_categories[parent_node_id] == NC_LIST;
+      return parent_node_id != parent_node_sentinel and
+             column_categories[col_ids[parent_node_id]] == NC_LIST and
+             (!d_ignore_vals[col_ids[parent_node_id]]);
     });
 
   auto const num_list_children =
@@ -714,15 +882,6 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
   }
 }
-
-/**
- * @brief Retrieves the parse_options to be used for type inference and type casting
- *
- * @param options The reader options to influence the relevant type inference and type casting
- * options
- */
-cudf::io::parse_options parsing_options(cudf::io::json_reader_options const& options,
-                                        rmm::cuda_stream_view stream);
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
   device_json_column& json_col,
@@ -776,6 +935,8 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
                                          : "n/a");
 #endif
         target_type = schema.value().type;
+      } else if (json_col.forced_as_string_column) {
+        target_type = data_type{type_id::STRING};
       }
       // Infer column type, if we don't have an explicit type for it
       else {
@@ -799,9 +960,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // This is to match the existing JSON reader's behaviour:
       // - Non-string columns will always be returned as nullable
       // - String columns will be returned as nullable, iff there's at least one null entry
-      if (target_type.id() == type_id::STRING and col->null_count() == 0) {
-        col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0);
-      }
+      if (col->null_count() == 0) { col->set_null_mask(rmm::device_buffer{0, stream, mr}, 0); }
 
       // For string columns return ["offsets", "char"] schema
       if (target_type.id() == type_id::STRING) {
@@ -830,7 +989,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // The null_mask is set after creation of struct column is to skip the superimpose_nulls and
       // null validation applied in make_structs_column factory, which is not needed for json
       auto ret_col = make_structs_column(num_rows, std::move(child_columns), 0, {}, stream, mr);
-      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
       return {std::move(ret_col), column_names};
     }
     case json_col_t::ListColumn: {
@@ -877,7 +1036,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_co
       // The null_mask is set after creation of list column is to skip the purge_nonempty_nulls and
       // null validation applied in make_lists_column factory, which is not needed for json
       // parent column cannot be null when its children is non-empty in JSON
-      ret_col->set_null_mask(std::move(result_bitmask), null_count);
+      if (null_count != 0) { ret_col->set_null_mask(std::move(result_bitmask), null_count); }
       return {std::move(ret_col), std::move(column_names)};
     }
     default: CUDF_FAIL("Unsupported column type"); break;
@@ -896,8 +1055,11 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
     const auto [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, rmm::mr::get_current_device_resource());
     // gpu tree generation
-    return get_tree_representation(
-      tokens_gpu, token_indices_gpu, stream, rmm::mr::get_current_device_resource());
+    return get_tree_representation(tokens_gpu,
+                                   token_indices_gpu,
+                                   options.is_enabled_mixed_types_as_string(),
+                                   stream,
+                                   rmm::mr::get_current_device_resource());
   }();  // IILE used to free memory of token data.
 #ifdef NJP_DEBUG_PRINT
   auto h_input = cudf::detail::make_host_vector_async(d_input, stream);
@@ -940,7 +1102,7 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
                           gpu_row_offsets,
                           root_column,
                           is_array_of_arrays,
-                          options.is_enabled_lines(),
+                          options,
                           stream,
                           mr);
 

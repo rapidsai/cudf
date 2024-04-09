@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2017-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -130,10 +130,10 @@ __forceinline__ __device__ void store_pair_vectorized(pair_type* __restrict__ co
 }
 
 template <typename value_type, typename size_type, typename key_type, typename elem_type>
-__global__ void init_hashtbl(value_type* __restrict__ const hashtbl_values,
-                             size_type const n,
-                             key_type const key_val,
-                             elem_type const elem_val)
+CUDF_KERNEL void init_hashtbl(value_type* __restrict__ const hashtbl_values,
+                              size_type const n,
+                              key_type const key_val,
+                              elem_type const elem_val)
 {
   size_type const idx = blockIdx.x * blockDim.x + threadIdx.x;
   if (idx < n) {

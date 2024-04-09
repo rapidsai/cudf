@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
 import itertools
@@ -20,7 +20,7 @@ from pyarrow import dataset as ds
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import build_categorical_column, column_empty, full
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
@@ -762,9 +762,9 @@ def _parquet_to_frame(
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = full(
-                    size=_len,
-                    fill_value=partition_categories[name].index(value),
+                codes = as_column(
+                    partition_categories[name].index(value),
+                    length=_len,
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -788,19 +788,21 @@ def _parquet_to_frame(
                         masked=True,
                     )
                 else:
-                    dfs[-1][name] = full(
-                        size=_len,
-                        fill_value=value,
+                    dfs[-1][name] = as_column(
+                        value,
                         dtype=_dtype,
+                        length=_len,
                     )
 
-    # Concatenate dfs and return.
-    # Assume we can ignore the index if it has no name.
-    return (
-        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
-        if len(dfs) > 1
-        else dfs[0]
-    )
+    if len(dfs) > 1:
+        # Concatenate dfs and return.
+        # Assume we can ignore the index if it has no name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res = cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+        return res
+    else:
+        return dfs[0]
 
 
 @_cudf_nvtx_annotate
@@ -1218,9 +1220,9 @@ class ParquetDatasetWriter:
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.dir_: Optional[
-                tempfile.TemporaryDirectory
-            ] = tempfile.TemporaryDirectory()
+            self.dir_: Optional[tempfile.TemporaryDirectory] = (
+                tempfile.TemporaryDirectory()
+            )
             self.path = self.dir_.name
         else:
             self.fs_meta = {}
@@ -1259,7 +1261,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],

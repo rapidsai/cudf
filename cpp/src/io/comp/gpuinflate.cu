@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,9 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 */
 
 #include "gpuinflate.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "io_uncomp.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -805,8 +804,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
         uint8_t const* src = out + ((i >= dist) ? (i % dist) : i) - dist;
-        uint8_t b          = (src < outbase) ? 0 : *src;
-        if (out + i < outend) { out[i] = b; }
+        if (out + i < outend and src >= outbase) { out[i] = *src; }
       }
       out += len;
       pos++;
@@ -1024,7 +1022,7 @@ __device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
  * @param parse_hdr If nonzero, indicates that the compressed bitstream includes a GZIP header
  */
 template <int block_size>
-__global__ void __launch_bounds__(block_size)
+CUDF_KERNEL void __launch_bounds__(block_size)
   inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
                  device_span<device_span<uint8_t> const> outputs,
                  device_span<compression_result> results,
@@ -1152,7 +1150,7 @@ __global__ void __launch_bounds__(block_size)
  *
  * @param inputs Source and destination information per block
  */
-__global__ void __launch_bounds__(1024)
+CUDF_KERNEL void __launch_bounds__(1024)
   copy_uncompressed_kernel(device_span<device_span<uint8_t const> const> inputs,
                            device_span<device_span<uint8_t> const> outputs)
 {

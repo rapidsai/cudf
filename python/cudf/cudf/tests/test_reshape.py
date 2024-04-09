@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import re
 from itertools import chain
@@ -9,6 +9,7 @@ import pytest
 
 import cudf
 from cudf import melt as cudf_melt
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -76,7 +77,9 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     expect = pd.melt(frame=pdf, id_vars=id_vars, value_vars=value_vars)
     # pandas' melt makes the 'variable' column of 'object' type (string)
     # cuDF's melt makes it Categorical because it doesn't support strings
-    expect["variable"] = expect["variable"].astype("category")
+    expect["variable"] = expect["variable"].astype(
+        got["variable"].dtype.to_pandas()
+    )
 
     assert_eq(expect, got)
 
@@ -151,6 +154,10 @@ def test_df_stack_reset_index():
     assert_eq(expected, actual)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
 @pytest.mark.parametrize(
     "columns",
     [
@@ -204,8 +211,15 @@ def test_df_stack_multiindex_column_axis(columns, index, level, dropna):
     )
     gdf = cudf.from_pandas(pdf)
 
-    got = gdf.stack(level=level, dropna=dropna)
-    expect = pdf.stack(level=level, dropna=dropna)
+    with pytest.warns(FutureWarning):
+        got = gdf.stack(level=level, dropna=dropna, future_stack=False)
+    with pytest.warns(FutureWarning):
+        expect = pdf.stack(level=level, dropna=dropna, future_stack=False)
+
+    assert_eq(expect, got, check_dtype=False)
+
+    got = gdf.stack(level=level, future_stack=True)
+    expect = pdf.stack(level=level, future_stack=True)
 
     assert_eq(expect, got, check_dtype=False)
 
@@ -226,6 +240,10 @@ def test_df_stack_mixed_dtypes():
     assert_eq(expect, got, check_dtype=False)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="Need pandas-2.1.0+ to match `stack` api",
+)
 @pytest.mark.parametrize("level", [["animal", "hair_length"], [1, 2]])
 def test_df_stack_multiindex_column_axis_pd_example(level):
     columns = pd.MultiIndex.from_tuples(
@@ -240,8 +258,16 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
 
     df = pd.DataFrame(np.random.randn(4, 4), columns=columns)
 
-    expect = df.stack(level=level)
-    got = cudf.from_pandas(df).stack(level=level)
+    with pytest.warns(FutureWarning):
+        expect = df.stack(level=level, future_stack=False)
+    gdf = cudf.from_pandas(df)
+    with pytest.warns(FutureWarning):
+        got = gdf.stack(level=level, future_stack=False)
+
+    assert_eq(expect, got)
+
+    expect = df.stack(level=level, future_stack=True)
+    got = gdf.stack(level=level, future_stack=True)
 
     assert_eq(expect, got)
 
@@ -253,7 +279,6 @@ def test_df_stack_multiindex_column_axis_pd_example(level):
 )
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_interleave_columns(nulls, num_cols, num_rows, dtype):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -290,7 +315,6 @@ def test_interleave_columns(nulls, num_cols, num_rows, dtype):
 @pytest.mark.parametrize("dtype", ALL_TYPES)
 @pytest.mark.parametrize("nulls", ["none", "some"])
 def test_tile(nulls, num_cols, num_rows, dtype, count):
-
     if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(reason="nulls not supported in dtype: " + dtype)
 
@@ -492,14 +516,8 @@ def test_pivot_simple(index, column, data):
     pdf = pd.DataFrame({"index": index, "column": column, "data": data})
     gdf = cudf.from_pandas(pdf)
 
-    # In pandas 2.0 this will be a failure because pandas will require all of
-    # these as keyword arguments. Matching that check in cudf is a bit
-    # cumbersome and not worth the effort to match the warning, so this code
-    # just catches pandas's warning (rather than updating the signature) so
-    # that when it starts failing we know to update our impl of pivot.
-    with pytest.warns(FutureWarning):
-        expect = pdf.pivot("index", "column")
-    got = gdf.pivot("index", "column")
+    expect = pdf.pivot(columns="column", index="index")
+    got = gdf.pivot(columns="column", index="index")
 
     check_index_and_columns = expect.shape != (0, 0)
     assert_eq(

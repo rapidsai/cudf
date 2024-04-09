@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -524,6 +524,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   Scalar(DType type, long scalarHandle) {
     this.type = type;
     this.offHeap = new OffHeapState(scalarHandle);
+    MemoryCleaner.register(this, offHeap);
     incRefCount();
   }
 
@@ -536,6 +537,7 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
       offHeap.logRefCountDebug("INC AFTER CLOSE " + this);
       throw new IllegalStateException("Scalar is already closed");
     }
+    offHeap.addRef();
     ++refCount;
     return this;
   }

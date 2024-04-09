@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/binary_search.h>
 #include <thrust/distance.h>
 #include <thrust/execution_policy.h>
@@ -151,10 +152,11 @@ struct dispatch_compute_indices {
       keys_view->begin<Element>(),
       thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
-        [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
-          if (d_all_indices.is_null(idx)) return 0;
-          return indices_itr[idx] + d_offsets[d_map_to_keys[idx]].first;
-        }));
+        cuda::proclaim_return_type<size_type>(
+          [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
+            if (d_all_indices.is_null(idx)) return 0;
+            return indices_itr[idx] + d_offsets[d_map_to_keys[idx]].first;
+          })));
 
     auto new_keys_view = column_device_view::create(new_keys, stream);
 
@@ -256,10 +258,10 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   // build a vector of values to map the old indices to the concatenated keys
   auto children_offsets = child_offsets_fn.create_children_offsets(stream);
   rmm::device_uvector<size_type> map_to_keys(indices_size, stream);
-  auto indices_itr =
-    cudf::detail::make_counting_transform_iterator(1, [] __device__(size_type idx) {
+  auto indices_itr = cudf::detail::make_counting_transform_iterator(
+    1, cuda::proclaim_return_type<offsets_pair>([] __device__(size_type idx) {
       return offsets_pair{0, idx};
-    });
+    }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
     rmm::exec_policy(stream),

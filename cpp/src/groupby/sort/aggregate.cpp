@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <groupby/common/utils.hpp>
-#include <groupby/sort/functors.hpp>
-#include <groupby/sort/group_reductions.hpp>
+#include "groupby/common/utils.hpp"
+#include "groupby/sort/functors.hpp"
+#include "groupby/sort/group_reductions.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -569,11 +569,14 @@ void aggregate_result_functor::operator()<aggregation::MERGE_HISTOGRAM>(aggregat
  *
  * @param column_0 The first column
  * @param column_1 The second column
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return tuple with new null mask (if null masks of input differ) and new column views
  */
-auto column_view_with_common_nulls(column_view const& column_0, column_view const& column_1)
+auto column_view_with_common_nulls(column_view const& column_0,
+                                   column_view const& column_1,
+                                   rmm::cuda_stream_view stream)
 {
-  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}});
+  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
   if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
   auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
     return column_view(col.type(),
@@ -610,7 +613,7 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
   // Covariance only for valid values in both columns.
   // in non-identical null mask cases, this prevents caching of the results - STD, MEAN, COUNT.
   auto [_, values_child0, values_child1] =
-    column_view_with_common_nulls(values.child(0), values.child(1));
+    column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto mean_agg = make_mean_aggregation();
   aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
@@ -659,7 +662,7 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   // Correlation only for valid values in both columns.
   // in non-identical null mask cases, this prevents caching of the results - STD, MEAN, COUNT
   auto [_, values_child0, values_child1] =
-    column_view_with_common_nulls(values.child(0), values.child(1));
+    column_view_with_common_nulls(values.child(0), values.child(1), stream);
 
   auto std_agg = make_std_aggregation();
   aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);

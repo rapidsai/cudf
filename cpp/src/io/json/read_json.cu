@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
+#include "io/comp/io_uncomp.hpp"
+#include "io/json/legacy/read_json.hpp"
+#include "io/json/nested_json.hpp"
 #include "read_json.hpp"
-
-#include <io/comp/io_uncomp.hpp>
-#include <io/json/legacy/read_json.hpp>
-#include <io/json/nested_json.hpp>
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/io/detail/json.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -45,6 +45,15 @@ size_t sources_size(host_span<std::unique_ptr<datasource>> const sources,
   });
 }
 
+/**
+ * @brief Read from array of data sources into RMM buffer
+ *
+ * @param sources Array of data sources
+ * @param compression Compression format of source
+ * @param range_offset Number of bytes to skip from source start
+ * @param range_size Number of bytes to read from source
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
 rmm::device_uvector<char> ingest_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                            compression_type compression,
                                            size_t range_offset,
@@ -131,10 +140,11 @@ size_type find_first_delimiter_in_chunk(host_span<std::unique_ptr<cudf::io::data
   return find_first_delimiter(buffer, delimiter, stream);
 }
 
-bool should_load_whole_source(json_reader_options const& reader_opts)
+bool should_load_whole_source(json_reader_options const& opts, size_t source_size)
 {
-  return reader_opts.get_byte_range_offset() == 0 and  //
-         reader_opts.get_byte_range_size() == 0;
+  auto const range_offset = opts.get_byte_range_offset();
+  auto const range_size   = opts.get_byte_range_size();
+  return range_offset == 0 and (range_size == 0 or range_size >= source_size);
 }
 
 /**
@@ -159,7 +169,7 @@ auto get_record_range_raw_input(host_span<std::unique_ptr<datasource>> sources,
                                  reader_opts.get_byte_range_offset(),
                                  reader_opts.get_byte_range_size(),
                                  stream);
-  if (should_load_whole_source(reader_opts)) return buffer;
+  if (should_load_whole_source(reader_opts, sources[0]->size())) return buffer;
   auto first_delim_pos =
     reader_opts.get_byte_range_offset() == 0 ? 0 : find_first_delimiter(buffer, '\n', stream);
   if (first_delim_pos == -1) {
@@ -203,7 +213,7 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
     return legacy::read_json(sources, reader_opts, stream, mr);
   }
 
-  if (not should_load_whole_source(reader_opts)) {
+  if (reader_opts.get_byte_range_offset() != 0 or reader_opts.get_byte_range_size() != 0) {
     CUDF_EXPECTS(reader_opts.is_enabled_lines(),
                  "Specifying a byte range is supported only for JSON Lines");
     CUDF_EXPECTS(sources.size() == 1,
@@ -217,7 +227,21 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                  "Multiple inputs are supported only for JSON Lines format");
   }
 
-  auto const buffer = get_record_range_raw_input(sources, reader_opts, stream);
+  auto buffer = get_record_range_raw_input(sources, reader_opts, stream);
+
+  // If input JSON buffer has single quotes and option to normalize single quotes is enabled,
+  // invoke pre-processing FST
+  if (reader_opts.is_enabled_normalize_single_quotes()) {
+    buffer =
+      normalize_single_quotes(std::move(buffer), stream, rmm::mr::get_current_device_resource());
+  }
+
+  // If input JSON buffer has unquoted spaces and tabs and option to normalize whitespaces is
+  // enabled, invoke pre-processing FST
+  if (reader_opts.is_enabled_normalize_whitespace()) {
+    buffer =
+      normalize_whitespace(std::move(buffer), stream, rmm::mr::get_current_device_resource());
+  }
 
   return device_parse_nested_json(buffer, reader_opts, stream, mr);
   // For debug purposes, use host_parse_nested_json()

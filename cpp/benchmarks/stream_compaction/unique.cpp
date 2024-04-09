@@ -64,7 +64,7 @@ void nvbench_unique(nvbench::state& state, nvbench::type_list<Type, nvbench::enu
   auto input_column = source_column->view();
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
-  auto const run_bench = [&](auto const input) {
+  auto const run_bench = [&](auto const& input) {
     state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::unique(input, {0}, Keep, cudf::null_equality::EQUAL);
@@ -120,7 +120,7 @@ void nvbench_unique_list(nvbench::state& state, nvbench::type_list<Type, nvbench
   auto const input_table = create_random_table(
     {dtype}, table_size_bytes{static_cast<size_t>(size)}, data_profile{builder}, 0);
 
-  auto const run_bench = [&](auto const input) {
+  auto const run_bench = [&](auto const& input) {
     state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       auto result = cudf::unique(input, {0}, Keep, cudf::null_equality::EQUAL);

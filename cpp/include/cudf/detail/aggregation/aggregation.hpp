@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,6 +170,7 @@ class sum_aggregation final : public rolling_aggregation,
  * @brief Derived class for specifying a product aggregation
  */
 class product_aggregation final : public groupby_aggregation,
+                                  public groupby_scan_aggregation,
                                   public reduce_aggregation,
                                   public scan_aggregation,
                                   public segmented_reduce_aggregation {

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import datetime
 import os
@@ -15,6 +15,7 @@ from fsspec.core import get_fs_token_paths
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.lib import NativeFile
 
+from cudf.core._compat import PANDAS_LT_300
 from cudf.utils.docutils import docfmt_partial
 
 try:
@@ -84,9 +85,7 @@ Examples
 0       10   hello
 1       20  rapids
 2       30      ai
-""".format(
-    remote_data_sources=_docstring_remote_sources
-)
+""".format(remote_data_sources=_docstring_remote_sources)
 doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
@@ -228,8 +227,9 @@ path : str or list of str
     File path or Root Directory path. Will be used as Root Directory path
     while writing a partitioned dataset. Use list of str with partition_offsets
     to write parts of the dataframe to different files.
-compression : {{'snappy', 'ZSTD', None}}, default 'snappy'
-    Name of the compression to use. Use ``None`` for no compression.
+compression : {{'snappy', 'ZSTD', 'LZ4', None}}, default 'snappy'
+    Name of the compression to use; case insensitive.
+    Use ``None`` for no compression.
 index : bool, default None
     If ``True``, include the dataframe's index(es) in the file output.
     If ``False``, they will not be written to the file.
@@ -490,8 +490,9 @@ Parameters
 ----------
 fname : str
     File path or object where the ORC dataset will be stored.
-compression : {{ 'snappy', 'ZSTD', None }}, default 'snappy'
-    Name of the compression to use. Use None for no compression.
+compression : {{ 'snappy', 'ZSTD', 'ZLIB', 'LZ4', None }}, default 'snappy'
+    Name of the compression to use; case insensitive.
+    Use ``None`` for no compression.
 statistics: str {{ "ROWGROUP", "STRIPE", None }}, default "ROWGROUP"
     The granularity with which column statistics must
     be written to the file.
@@ -1413,9 +1414,7 @@ filepath_or_buffer : str, bytes, BytesIO, list
     list of Filepath strings or in-memory buffers of data.
 compression : str
     Type of compression algorithm for the content
-    """.format(
-    bytes_per_thread=_BYTES_PER_THREAD_DEFAULT
-)
+    """.format(bytes_per_thread=_BYTES_PER_THREAD_DEFAULT)
 
 
 doc_get_reader_filepath_or_buffer = docfmt_partial(
@@ -1666,6 +1665,8 @@ def get_reader_filepath_or_buffer(
     allow_raw_text_input=False,
     storage_options=None,
     bytes_per_thread=_BYTES_PER_THREAD_DEFAULT,
+    warn_on_raw_text_input=None,
+    warn_meta=None,
 ):
     """{docstring}"""
 
@@ -1679,6 +1680,18 @@ def get_reader_filepath_or_buffer(
                 path_or_data, storage_options
             )
             if fs is None:
+                if warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
                 return path_or_data, compression
 
         if _is_local_filesystem(fs):
@@ -1691,6 +1704,30 @@ def get_reader_filepath_or_buffer(
                     raise FileNotFoundError(
                         f"{path_or_data} could not be resolved to any files"
                     )
+                elif warn_on_raw_text_input:
+                    # Do not remove until pandas 3.0 support is added.
+                    assert (
+                        PANDAS_LT_300
+                    ), "Need to drop after pandas-3.0 support is added."
+                    warnings.warn(
+                        f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                        "deprecated and will be removed in a future version. "
+                        "To read from a literal string, wrap it in a "
+                        "'StringIO' object.",
+                        FutureWarning,
+                    )
+            elif warn_on_raw_text_input:
+                # Do not remove until pandas 3.0 support is added.
+                assert (
+                    PANDAS_LT_300
+                ), "Need to drop after pandas-3.0 support is added."
+                warnings.warn(
+                    f"Passing literal {warn_meta[0]} to {warn_meta[1]} is "
+                    "deprecated and will be removed in a future version. "
+                    "To read from a literal string, wrap it in a "
+                    "'StringIO' object.",
+                    FutureWarning,
+                )
 
         else:
             if len(paths) == 0:
@@ -1807,6 +1844,7 @@ def stringify_pathlike(pathlike):
     """
     Convert any object that implements the fspath protocol
     to a string. Leaves other objects unchanged
+
     Parameters
     ----------
     pathlike
@@ -2028,7 +2066,7 @@ def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
         return new_ranges
 
     offset, size = byte_ranges[0]
-    for (new_offset, new_size) in byte_ranges[1:]:
+    for new_offset, new_size in byte_ranges[1:]:
         gap = new_offset - (offset + size)
         if gap > max_gap or (size + new_size + gap) > max_block:
             # Gap is too large or total read is too large
@@ -2068,7 +2106,7 @@ def _read_byte_ranges(
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf
     workers = []
-    for (offset, nbytes) in ranges:
+    for offset, nbytes in ranges:
         if len(ranges) > 1:
             workers.append(
                 Thread(

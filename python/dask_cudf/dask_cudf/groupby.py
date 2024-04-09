@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from functools import wraps
 from typing import Set
@@ -16,6 +16,8 @@ from dask.utils import funcname
 
 import cudf
 from cudf.utils.nvtx_annotation import _dask_cudf_nvtx_annotate
+
+from dask_cudf.sorting import _deprecate_shuffle_kwarg
 
 # aggregations that are dask-cudf optimized
 OPTIMIZED_AGGS = (
@@ -189,8 +191,11 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             split_out,
         )
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, shuffle_method=None
+    ):
         if arg == "size":
             return self.size()
 
@@ -211,7 +216,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                 sep=self.sep,
                 sort=self.sort,
                 as_index=self.as_index,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
                 **self.dropna,
             )
 
@@ -219,7 +224,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
 
@@ -330,8 +335,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             split_out,
         )[self._slice]
 
+    @_deprecate_shuffle_kwarg
     @_dask_cudf_nvtx_annotate
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, split_every=None, split_out=1, shuffle_method=None
+    ):
         if arg == "size":
             return self.size()
 
@@ -342,14 +350,14 @@ class CudfSeriesGroupBy(SeriesGroupBy):
 
         if _groupby_optimized(self) and _aggs_optimized(arg, OPTIMIZED_AGGS):
             return _make_groupby_agg_call(
-                self, arg, split_every, split_out, shuffle
+                self, arg, split_every, split_out, shuffle_method
             )[self._slice]
 
         return super().aggregate(
             arg,
             split_every=split_every,
             split_out=split_out,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         )
 
 
@@ -364,7 +372,7 @@ def _shuffle_aggregate(
     split_out,
     token=None,
     sort=None,
-    shuffle=None,
+    shuffle_method=None,
 ):
     # Shuffle-based groupby aggregation
     # NOTE: This function is the dask_cudf version of
@@ -391,7 +399,7 @@ def _shuffle_aggregate(
             .sort_values(
                 gb_cols,
                 ignore_index=True,
-                shuffle=shuffle,
+                shuffle_method=shuffle_method,
             )
             .map_partitions(
                 aggregate,
@@ -405,7 +413,7 @@ def _shuffle_aggregate(
             gb_cols,
             npartitions=shuffle_npartitions,
             ignore_index=True,
-            shuffle=shuffle,
+            shuffle_method=shuffle_method,
         ).map_partitions(
             aggregate,
             meta=aggregate(chunked._meta, **aggregate_kwargs),
@@ -429,7 +437,7 @@ def groupby_agg(
     sep="___",
     sort=False,
     as_index=True,
-    shuffle=None,
+    shuffle_method=None,
 ):
     """Optimized groupby aggregation for Dask-CuDF.
 
@@ -450,7 +458,7 @@ def groupby_agg(
     sort : bool
         Sort the group keys, better performance is obtained when
         not sorting.
-    shuffle : str (optional)
+    shuffle_method : str (optional)
         Control how shuffling of the DataFrame is performed.
     sep : str
         Internal usage.
@@ -575,12 +583,12 @@ def groupby_agg(
         "aggs_renames": aggs_renames,
     }
 
-    # Use shuffle=True for split_out>1
-    if sort and split_out > 1 and shuffle is None:
-        shuffle = "tasks"
+    # Use shuffle_method=True for split_out>1
+    if sort and split_out > 1 and shuffle_method is None:
+        shuffle_method = "tasks"
 
     # Check if we are using the shuffle-based algorithm
-    if shuffle:
+    if shuffle_method:
         # Shuffle-based aggregation
         return _shuffle_aggregate(
             ddf,
@@ -593,7 +601,9 @@ def groupby_agg(
             split_out,
             token="cudf-aggregate",
             sort=sort,
-            shuffle=shuffle if isinstance(shuffle, str) else None,
+            shuffle_method=shuffle_method
+            if isinstance(shuffle_method, str)
+            else None,
         )
 
     # Deal with sort/shuffle defaults
@@ -602,7 +612,7 @@ def groupby_agg(
             "dask-cudf's groupby algorithm does not yet support "
             "`sort=True` when `split_out>1`, unless a shuffle-based "
             "algorithm is used. Please use `split_out=1`, group "
-            "with `sort=False`, or set `shuffle=True`."
+            "with `sort=False`, or set `shuffle_method=True`."
         )
 
     # Determine required columns to enable column projection
@@ -629,7 +639,9 @@ def groupby_agg(
 
 
 @_dask_cudf_nvtx_annotate
-def _make_groupby_agg_call(gb, aggs, split_every, split_out, shuffle=None):
+def _make_groupby_agg_call(
+    gb, aggs, split_every, split_out, shuffle_method=None
+):
     """Helper method to consolidate the common `groupby_agg` call for all
     aggregations in one place
     """
@@ -643,7 +655,7 @@ def _make_groupby_agg_call(gb, aggs, split_every, split_out, shuffle=None):
         sep=gb.sep,
         sort=gb.sort,
         as_index=gb.as_index,
-        shuffle=shuffle,
+        shuffle_method=shuffle_method,
         **gb.dropna,
     )
 

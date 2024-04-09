@@ -1,7 +1,6 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 from libcpp.memory cimport unique_ptr
-from pyarrow cimport lib as pa
 
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
@@ -9,13 +8,17 @@ from cudf._lib.cpp.table.table_view cimport table_view
 
 cdef class Table:
     # List[pylibcudf.Column]
-    cdef list _columns
+    cdef public list _columns
 
     cdef table_view view(self) nogil
+
+    cpdef int num_columns(self)
+    cpdef int num_rows(self)
 
     @staticmethod
     cdef Table from_libcudf(unique_ptr[table] libcudf_tbl)
 
-    cpdef list columns(self)
+    @staticmethod
+    cdef Table from_table_view(const table_view& tv, Table owner)
 
-    cpdef pa.Table to_arrow(self, list metadata)
+    cpdef list columns(self)

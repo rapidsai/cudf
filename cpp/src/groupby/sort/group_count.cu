@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/adjacent_difference.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
@@ -54,7 +55,9 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
     // so we need to transform it to cast it to an integer type
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
-                                      [] __device__(auto b) { return static_cast<size_type>(b); });
+                                      cuda::proclaim_return_type<size_type>([] __device__(auto b) {
+                                        return static_cast<size_type>(b);
+                                      }));
 
     thrust::reduce_by_key(rmm::exec_policy(stream),
                           group_labels.begin(),

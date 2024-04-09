@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,35 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/timestamp_utilities.cuh>
-#include <cudf_test/type_lists.hpp>
-
 #include <thrust/host_vector.h>
 
 #include <algorithm>
 
 template <typename T>
-__global__ void gpu_atomic_test(T* result, T* data, size_t size)
+CUDF_KERNEL void gpu_atomic_test(T* result, T* data, size_t size)
 {
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;
 
   for (; id < size; id += step) {
-    atomicAdd(&result[0], data[id]);
-    atomicMin(&result[1], data[id]);
-    atomicMax(&result[2], data[id]);
-    cudf::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
-    cudf::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
-    cudf::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
+    cudf::detail::atomic_add(&result[0], data[id]);
+    cudf::detail::atomic_min(&result[1], data[id]);
+    cudf::detail::atomic_max(&result[2], data[id]);
+    cudf::detail::genericAtomicOperation(&result[3], data[id], cudf::DeviceSum{});
+    cudf::detail::genericAtomicOperation(&result[4], data[id], cudf::DeviceMin{});
+    cudf::detail::genericAtomicOperation(&result[5], data[id], cudf::DeviceMax{});
   }
 }
 
@@ -70,14 +72,14 @@ __device__ T atomic_op(T* addr, T const& value, BinaryOp op)
     assumed     = old_value;
     T new_value = op(old_value, value);
 
-    old_value = atomicCAS(addr, assumed, new_value);
+    old_value = cudf::detail::atomic_cas(addr, assumed, new_value);
   } while (assumed != old_value);
 
   return old_value;
 }
 
 template <typename T>
-__global__ void gpu_atomicCAS_test(T* result, T* data, size_t size)
+CUDF_KERNEL void gpu_atomicCAS_test(T* result, T* data, size_t size)
 {
   size_t id   = blockIdx.x * blockDim.x + threadIdx.x;
   size_t step = blockDim.x * gridDim.x;

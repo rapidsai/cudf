@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -83,12 +84,12 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
   auto sizes_itr = cudf::detail::make_counting_transform_iterator(
     0,
-    [source_column_nullmask,
-     source_column_offset = source_column.offset(),
-     gather_map,
-     output_count,
-     src_offsets,
-     src_size] __device__(int32_t index) -> int32_t {
+    cuda::proclaim_return_type<int32_t>([source_column_nullmask,
+                                         source_column_offset = source_column.offset(),
+                                         gather_map,
+                                         output_count,
+                                         src_offsets,
+                                         src_size] __device__(int32_t index) -> int32_t {
       int32_t offset_index = index < output_count ? gather_map[index] : 0;
 
       // if this is an invalid index, this will be a NULL list
@@ -102,7 +103,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
 
       // the length of this list
       return src_offsets[offset_index + 1] - src_offsets[offset_index];
-    });
+    }));
 
   auto [dst_offsets_c, map_size] =
     cudf::detail::make_offsets_child_column(sizes_itr, sizes_itr + output_count, stream, mr);

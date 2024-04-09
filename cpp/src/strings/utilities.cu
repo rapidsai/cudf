@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-#include <strings/char_types/char_cases.h>
-#include <strings/char_types/char_flags.h>
+#include "strings/char_types/char_cases.h"
+#include "strings/char_types/char_flags.h"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/strings/detail/char_tables.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -29,6 +31,9 @@
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
+
+#include <cstdlib>
+#include <string>
 
 namespace cudf {
 namespace strings {
@@ -64,12 +69,25 @@ rmm::device_uvector<string_view> create_string_vector_from_column(
   return strings_vector;
 }
 
-std::unique_ptr<column> create_chars_child_column(cudf::size_type total_bytes,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr)
+/**
+ * @copydoc cudf::strings::detail::create_offsets_child_column
+ */
+std::unique_ptr<column> create_offsets_child_column(int64_t chars_bytes,
+                                                    size_type count,
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
+  auto const threshold = get_offset64_threshold();
+  if (!is_large_strings_enabled()) {
+    CUDF_EXPECTS(
+      chars_bytes < threshold, "Size of output exceeds the column size limit", std::overflow_error);
+  }
   return make_numeric_column(
-    data_type{type_id::INT8}, total_bytes, mask_state::UNALLOCATED, stream, mr);
+    chars_bytes < threshold ? data_type{type_id::INT32} : data_type{type_id::INT64},
+    count,
+    mask_state::UNALLOCATED,
+    stream,
+    mr);
 }
 
 namespace {
@@ -126,6 +144,33 @@ special_case_mapping const* get_special_case_mapping_table()
     CUDF_CUDA_TRY(cudaGetSymbolAddress((void**)&table, character_special_case_mappings));
     return table;
   });
+}
+
+int64_t get_offset64_threshold()
+{
+  auto const threshold = std::getenv("LIBCUDF_LARGE_STRINGS_THRESHOLD");
+  int64_t const rtn    = threshold != nullptr ? std::atol(threshold) : 0L;
+  return (rtn > 0 && rtn < std::numeric_limits<int32_t>::max())
+           ? rtn
+           : std::numeric_limits<int32_t>::max();
+}
+
+bool is_large_strings_enabled()
+{
+  auto const env = std::getenv("LIBCUDF_LARGE_STRINGS_ENABLED");
+  return env != nullptr && std::string(env) == "1";
+}
+
+int64_t get_offset_value(cudf::column_view const& offsets,
+                         size_type index,
+                         rmm::cuda_stream_view stream)
+{
+  auto const otid = offsets.type().id();
+  CUDF_EXPECTS(otid == type_id::INT64 || otid == type_id::INT32,
+               "Offsets must be of type INT32 or INT64",
+               std::invalid_argument);
+  return otid == type_id::INT64 ? cudf::detail::get_value<int64_t>(offsets, index, stream)
+                                : cudf::detail::get_value<int32_t>(offsets, index, stream);
 }
 
 }  // namespace detail

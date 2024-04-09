@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import codecs
 import gzip
@@ -17,7 +17,7 @@ from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
-from cudf.core._compat import PANDAS_LT_140
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
@@ -247,11 +247,14 @@ def test_csv_reader_datetime(parse_dates):
         parse_dates=parse_dates,
         dayfirst=True,
     )
+    # Need to used `date_format='mixed'`,
+    # https://github.com/pandas-dev/pandas/issues/53355
     pdf = pd.read_csv(
         StringIO(buffer),
         names=["date1", "date2", "bad"],
         parse_dates=parse_dates,
         dayfirst=True,
+        date_format="mixed",
     )
 
     assert_eq(gdf, pdf)
@@ -341,6 +344,10 @@ def test_csv_reader_dtype_extremes(use_names):
     assert_eq(gdf, pdf)
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="https://github.com/pandas-dev/pandas/issues/52449",
+)
 def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file5.csv")
 
@@ -369,7 +376,8 @@ def test_csv_reader_skiprows_skipfooter(tmpdir, pd_mixed_dataframe):
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
-    assert_eq(df_out, out)
+
+    assert_eq(df_out, out, check_dtype=False)
 
 
 def test_csv_reader_negative_vals(tmpdir):
@@ -587,12 +595,12 @@ def test_csv_reader_NaN_values():
         header=None,
         na_values=custom_na_values,
     )
-    assert gdf.dtypes[0] == "int8"
+    assert gdf.dtypes.iloc[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))
 
     # data type detection should evaluate the column to object if some nulls
     gdf = read_csv(StringIO(all_cells), header=None)
-    assert gdf.dtypes[0] == np.dtype("object")
+    assert gdf.dtypes.iloc[0] == np.dtype("object")
 
 
 def test_csv_reader_thousands(tmpdir):
@@ -1255,20 +1263,28 @@ def test_csv_reader_delim_whitespace():
     buffer = "1    2  3\n4  5 6"
 
     # with header row
-    cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
-    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
+    with pytest.warns(FutureWarning):
+        cu_df = read_csv(StringIO(buffer), delim_whitespace=True)
+    with pytest.warns(FutureWarning):
+        pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True)
     assert_eq(pd_df, cu_df)
 
     # without header row
-    cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
-    pd_df = pd.read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    with pytest.warns(FutureWarning):
+        cu_df = read_csv(StringIO(buffer), delim_whitespace=True, header=None)
+    with pytest.warns(FutureWarning):
+        pd_df = pd.read_csv(
+            StringIO(buffer), delim_whitespace=True, header=None
+        )
     assert pd_df.shape == cu_df.shape
 
     # should raise an error if used with delimiter or sep
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
+        with pytest.warns(FutureWarning):
+            read_csv(StringIO(buffer), delim_whitespace=True, delimiter=" ")
     with pytest.raises(ValueError):
-        read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
+        with pytest.warns(FutureWarning):
+            read_csv(StringIO(buffer), delim_whitespace=True, sep=" ")
 
 
 def test_csv_reader_unnamed_cols():
@@ -1360,10 +1376,6 @@ def test_csv_reader_column_names(names):
         assert list(df) == list(names)
 
 
-@pytest.mark.xfail(
-    condition=PANDAS_LT_140,
-    reason="https://github.com/rapidsai/cudf/issues/10618",
-)
 def test_csv_reader_repeated_column_name():
     buffer = """A,A,A.1,A,A.2,A,A.4,A,A
                 1,2,3.1,4,a.2,a,a.4,a,a

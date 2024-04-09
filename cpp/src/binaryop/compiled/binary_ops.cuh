@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -237,7 +237,7 @@ struct binary_op_double_device_dispatcher {
  * @param f Functor object to call for each element.
  */
 template <typename Functor>
-__global__ void for_each_kernel(cudf::size_type size, Functor f)
+CUDF_KERNEL void for_each_kernel(cudf::size_type size, Functor f)
 {
   int tid    = threadIdx.x;
   int blkid  = blockIdx.x;

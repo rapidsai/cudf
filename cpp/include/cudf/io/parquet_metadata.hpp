@@ -30,7 +30,13 @@
 
 namespace cudf {
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
 
+//! Parquet I/O interfaces
 namespace parquet {
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
@@ -227,5 +233,6 @@ class parquet_metadata {
  */
 parquet_metadata read_parquet_metadata(source_info const& src_info);
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
 
 #include "reader_impl_helpers.hpp"
 
-#include <io/utilities/row_selection.hpp>
+#include "io/parquet/parquet.hpp"
+#include "io/utilities/row_selection.hpp"
 
 #include <numeric>
 #include <regex>
@@ -25,44 +26,35 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-ConvertedType logical_type_to_converted_type(thrust::optional<LogicalType> const& logical)
+thrust::optional<LogicalType> converted_to_logical_type(SchemaElement const& schema)
 {
-  if (not logical.has_value()) { return UNKNOWN; }
-  switch (logical->type) {
-    case LogicalType::STRING: return UTF8;
-    case LogicalType::MAP: return MAP;
-    case LogicalType::LIST: return LIST;
-    case LogicalType::ENUM: return ENUM;
-    case LogicalType::DECIMAL: return DECIMAL;  // TODO use decimal scale/precision
-    case LogicalType::DATE: return DATE;
-    case LogicalType::TIME:
-      if (logical->is_time_millis()) {
-        return TIME_MILLIS;
-      } else if (logical->is_time_micros()) {
-        return TIME_MICROS;
-      }
-      break;
-    case LogicalType::TIMESTAMP:
-      if (logical->is_timestamp_millis()) {
-        return TIMESTAMP_MILLIS;
-      } else if (logical->is_timestamp_micros()) {
-        return TIMESTAMP_MICROS;
-      }
-      break;
-    case LogicalType::INTEGER:
-      switch (logical->bit_width()) {
-        case 8: return logical->is_signed() ? INT_8 : UINT_8;
-        case 16: return logical->is_signed() ? INT_16 : UINT_16;
-        case 32: return logical->is_signed() ? INT_32 : UINT_32;
-        case 64: return logical->is_signed() ? INT_64 : UINT_64;
-        default: break;
-      }
-    case LogicalType::UNKNOWN: return NA;
-    case LogicalType::JSON: return JSON;
-    case LogicalType::BSON: return BSON;
-    default: break;
+  if (schema.converted_type.has_value()) {
+    switch (schema.converted_type.value()) {
+      case ENUM:  // treat ENUM as UTF8 string
+      case UTF8: return LogicalType{LogicalType::STRING};
+      case MAP: return LogicalType{LogicalType::MAP};
+      case LIST: return LogicalType{LogicalType::LIST};
+      case DECIMAL: return LogicalType{DecimalType{schema.decimal_scale, schema.decimal_precision}};
+      case DATE: return LogicalType{LogicalType::DATE};
+      case TIME_MILLIS: return LogicalType{TimeType{true, TimeUnit::MILLIS}};
+      case TIME_MICROS: return LogicalType{TimeType{true, TimeUnit::MICROS}};
+      case TIMESTAMP_MILLIS: return LogicalType{TimestampType{true, TimeUnit::MILLIS}};
+      case TIMESTAMP_MICROS: return LogicalType{TimestampType{true, TimeUnit::MICROS}};
+      case UINT_8: return LogicalType{IntType{8, false}};
+      case UINT_16: return LogicalType{IntType{16, false}};
+      case UINT_32: return LogicalType{IntType{32, false}};
+      case UINT_64: return LogicalType{IntType{64, false}};
+      case INT_8: return LogicalType{IntType{8, true}};
+      case INT_16: return LogicalType{IntType{16, true}};
+      case INT_32: return LogicalType{IntType{32, true}};
+      case INT_64: return LogicalType{IntType{64, true}};
+      case JSON: return LogicalType{LogicalType::JSON};
+      case BSON: return LogicalType{LogicalType::BSON};
+      case INTERVAL:  // there is no logical type for INTERVAL yet
+      default: return LogicalType{LogicalType::UNDEFINED};
+    }
   }
-  return UNKNOWN;
+  return thrust::nullopt;
 }
 
 }  // namespace
@@ -74,76 +66,90 @@ type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
                    type_id timestamp_type_id)
 {
-  auto const physical       = schema.type;
-  auto const logical_type   = schema.logical_type;
-  auto converted_type       = schema.converted_type;
-  int32_t decimal_precision = schema.decimal_precision;
+  auto const physical = schema.type;
+  auto logical_type   = schema.logical_type;
 
-  // FIXME(ets): this should just use logical type to deduce the type_id. then fall back to
-  // converted_type if logical_type isn't set
-  // Logical type used for actual data interpretation; the legacy converted type
-  // is superseded by 'logical' type whenever available.
-  auto const inferred_converted_type = logical_type_to_converted_type(logical_type);
-  if (inferred_converted_type != UNKNOWN) { converted_type = inferred_converted_type; }
-  if (inferred_converted_type == DECIMAL) { decimal_precision = schema.logical_type->precision(); }
-
-  switch (converted_type.value_or(UNKNOWN)) {
-    case UINT_8: return type_id::UINT8;
-    case INT_8: return type_id::INT8;
-    case UINT_16: return type_id::UINT16;
-    case INT_16: return type_id::INT16;
-    case UINT_32: return type_id::UINT32;
-    case UINT_64: return type_id::UINT64;
-    case DATE: return type_id::TIMESTAMP_DAYS;
-    case TIME_MILLIS: return type_id::DURATION_MILLISECONDS;
-    case TIME_MICROS: return type_id::DURATION_MICROSECONDS;
-    case TIMESTAMP_MILLIS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MILLISECONDS;
-    case TIMESTAMP_MICROS:
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_MICROSECONDS;
-    case DECIMAL:
-      if (physical == INT32) { return type_id::DECIMAL32; }
-      if (physical == INT64) { return type_id::DECIMAL64; }
-      if (physical == FIXED_LEN_BYTE_ARRAY) {
-        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
-          return type_id::DECIMAL32;
-        }
-        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
-          return type_id::DECIMAL64;
-        }
-        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
-          return type_id::DECIMAL128;
-        }
-      }
-      if (physical == BYTE_ARRAY) {
-        CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
-        if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
-          return type_id::DECIMAL32;
-        } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
-          return type_id::DECIMAL64;
-        } else {
-          return type_id::DECIMAL128;
-        }
-      }
-      CUDF_FAIL("Invalid representation of decimal type");
-      break;
-
-    // maps are just List<Struct<>>.
-    case MAP:
-    case LIST: return type_id::LIST;
-    case NA: return type_id::STRING;
-    // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
-    default: break;
+  // sanity check, but not worth failing over
+  if (schema.converted_type.has_value() and not logical_type.has_value()) {
+    CUDF_LOG_WARN("ConvertedType is specified but not LogicalType");
+    logical_type = converted_to_logical_type(schema);
   }
 
-  if (inferred_converted_type == UNKNOWN and physical == INT64 and logical_type.has_value()) {
-    if (logical_type->is_timestamp_nanos()) {
-      return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
-                                                   : type_id::TIMESTAMP_NANOSECONDS;
-    } else if (logical_type->is_time_nanos()) {
-      return type_id::DURATION_NANOSECONDS;
+  if (logical_type.has_value()) {
+    switch (logical_type->type) {
+      case LogicalType::INTEGER: {
+        auto const is_signed = logical_type->is_signed();
+        switch (logical_type->bit_width()) {
+          case 8: return is_signed ? type_id::INT8 : type_id::UINT8;
+          case 16: return is_signed ? type_id::INT16 : type_id::UINT16;
+          case 32: return is_signed ? type_id::INT32 : type_id::UINT32;
+          case 64: return is_signed ? type_id::INT64 : type_id::UINT64;
+          default: CUDF_FAIL("Invalid integer bitwidth");
+        }
+      } break;
+
+      case LogicalType::DATE: return type_id::TIMESTAMP_DAYS;
+
+      case LogicalType::TIME:
+        if (logical_type->is_time_millis()) {
+          return type_id::DURATION_MILLISECONDS;
+        } else if (logical_type->is_time_micros()) {
+          return type_id::DURATION_MICROSECONDS;
+        } else if (logical_type->is_time_nanos()) {
+          return type_id::DURATION_NANOSECONDS;
+        }
+        break;
+
+      case LogicalType::TIMESTAMP:
+        if (timestamp_type_id != type_id::EMPTY) {
+          return timestamp_type_id;
+        } else if (logical_type->is_timestamp_millis()) {
+          return type_id::TIMESTAMP_MILLISECONDS;
+        } else if (logical_type->is_timestamp_micros()) {
+          return type_id::TIMESTAMP_MICROSECONDS;
+        } else if (logical_type->is_timestamp_nanos()) {
+          return type_id::TIMESTAMP_NANOSECONDS;
+        }
+
+      case LogicalType::DECIMAL: {
+        int32_t const decimal_precision = logical_type->precision();
+        if (physical == INT32) {
+          return type_id::DECIMAL32;
+        } else if (physical == INT64) {
+          return type_id::DECIMAL64;
+        } else if (physical == FIXED_LEN_BYTE_ARRAY) {
+          if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+            return type_id::DECIMAL32;
+          } else if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+            return type_id::DECIMAL64;
+          } else if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+            return type_id::DECIMAL128;
+          }
+        } else if (physical == BYTE_ARRAY) {
+          CUDF_EXPECTS(decimal_precision <= MAX_DECIMAL128_PRECISION, "Invalid decimal precision");
+          if (decimal_precision <= MAX_DECIMAL32_PRECISION) {
+            return type_id::DECIMAL32;
+          } else if (decimal_precision <= MAX_DECIMAL64_PRECISION) {
+            return type_id::DECIMAL64;
+          } else {
+            return type_id::DECIMAL128;
+          }
+        } else {
+          CUDF_FAIL("Invalid representation of decimal type");
+        }
+      } break;
+
+      // maps are just List<Struct<>>.
+      case LogicalType::MAP:
+      case LogicalType::LIST: return type_id::LIST;
+
+      // All null column that can't have its type deduced.
+      // Note: originally LogicalType::UNKNOWN was converted to ConvertedType::NA, and
+      // NA then became type_id::STRING, but with the following TODO:
+      // return type_id::EMPTY; //TODO(kn): enable after Null/Empty column support
+      case LogicalType::UNKNOWN: return type_id::STRING;
+
+      default: break;
     }
   }
 
@@ -208,6 +214,7 @@ void metadata::sanitize_schema()
         // This is a list of structs, so we need to mark this as a list, but also
         // add a struct child and move this element's children to the struct
         schema_elem.converted_type  = LIST;
+        schema_elem.logical_type    = LogicalType::LIST;
         schema_elem.repetition_type = OPTIONAL;
         auto const struct_node_idx  = static_cast<size_type>(schema.size());
 
@@ -216,7 +223,7 @@ void metadata::sanitize_schema()
         struct_elem.repetition_type = REQUIRED;
         struct_elem.num_children    = schema_elem.num_children;
         struct_elem.type            = UNDEFINED_TYPE;
-        struct_elem.converted_type  = UNKNOWN;
+        struct_elem.converted_type  = thrust::nullopt;
 
         // swap children
         struct_elem.children_idx = std::move(schema_elem.children_idx);
@@ -236,6 +243,11 @@ void metadata::sanitize_schema()
         // add our struct
         schema.push_back(struct_elem);
       }
+    }
+
+    // convert ConvertedType to LogicalType for older files
+    if (schema_elem.converted_type.has_value() and not schema_elem.logical_type.has_value()) {
+      schema_elem.logical_type = converted_to_logical_type(schema_elem);
     }
 
     for (auto& child_idx : schema_elem.children_idx) {
@@ -264,8 +276,52 @@ metadata::metadata(datasource* source)
 
   auto const buffer = source->host_read(len - ender->footer_len - ender_len, ender->footer_len);
   CompactProtocolReader cp(buffer->data(), ender->footer_len);
-  CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
+  cp.read(this);
   CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
+
+  // Reading the page indexes is somewhat expensive, so skip if there are no byte array columns.
+  // Currently the indexes are only used for the string size calculations.
+  // Could also just read indexes for string columns, but that would require changes elsewhere
+  // where we're trying to determine if we have the indexes or not.
+  // Note: This will have to be modified if there are other uses in the future (e.g. calculating
+  // chunk/pass boundaries).
+  auto const has_strings = std::any_of(
+    schema.begin(), schema.end(), [](auto const& elem) { return elem.type == BYTE_ARRAY; });
+
+  if (has_strings and not row_groups.empty() and not row_groups.front().columns.empty()) {
+    // column index and offset index are encoded back to back.
+    // the first column of the first row group will have the first column index, the last
+    // column of the last row group will have the final offset index.
+    int64_t const min_offset = row_groups.front().columns.front().column_index_offset;
+    auto const& last_col     = row_groups.back().columns.back();
+    int64_t const max_offset = last_col.offset_index_offset + last_col.offset_index_length;
+
+    if (max_offset > 0) {
+      int64_t const length = max_offset - min_offset;
+      auto const idx_buf   = source->host_read(min_offset, length);
+
+      // now loop over row groups
+      for (auto& rg : row_groups) {
+        for (auto& col : rg.columns) {
+          if (col.column_index_length > 0 && col.column_index_offset > 0) {
+            int64_t const offset = col.column_index_offset - min_offset;
+            cp.init(idx_buf->data() + offset, col.column_index_length);
+            ColumnIndex ci;
+            cp.read(&ci);
+            col.column_index = std::move(ci);
+          }
+          if (col.offset_index_length > 0 && col.offset_index_offset > 0) {
+            int64_t const offset = col.offset_index_offset - min_offset;
+            cp.init(idx_buf->data() + offset, col.offset_index_length);
+            OffsetIndex oi;
+            cp.read(&oi);
+            col.offset_index = std::move(oi);
+          }
+        }
+      }
+    }
+  }
+
   sanitize_schema();
 }
 
@@ -321,6 +377,142 @@ size_type aggregate_reader_metadata::calc_num_row_groups() const
     per_file_metadata.cbegin(), per_file_metadata.cend(), 0, [](auto& sum, auto& pfm) {
       return sum + pfm.row_groups.size();
     });
+}
+
+// Copies info from the column and offset indexes into the passed in row_group_info.
+void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
+                                                          size_type chunk_start_row) const
+{
+  auto const& fmd = per_file_metadata[rg_info.source_index];
+  auto const& rg  = fmd.row_groups[rg_info.index];
+
+  std::vector<column_chunk_info> chunks(rg.columns.size());
+
+  for (size_t col_idx = 0; col_idx < rg.columns.size(); col_idx++) {
+    auto const& col_chunk    = rg.columns[col_idx];
+    auto& schema             = get_schema(col_chunk.schema_idx);
+    auto const max_def_level = schema.max_definition_level;
+    auto const max_rep_level = schema.max_repetition_level;
+
+    // If any columns lack the page indexes then just return without modifying the
+    // row_group_info.
+    if (not col_chunk.offset_index.has_value() or not col_chunk.column_index.has_value()) {
+      return;
+    }
+
+    auto const& offset_index = col_chunk.offset_index.value();
+    auto const& column_index = col_chunk.column_index.value();
+
+    auto& chunk_info     = chunks[col_idx];
+    auto const num_pages = offset_index.page_locations.size();
+
+    // There is a bug in older versions of parquet-mr where the first data page offset
+    // really points to the dictionary page. The first possible offset in a file is 4 (after
+    // the "PAR1" header), so check to see if the dictionary_page_offset is > 0. If it is, then
+    // we haven't encountered the bug.
+    if (col_chunk.meta_data.dictionary_page_offset > 0) {
+      chunk_info.dictionary_offset = col_chunk.meta_data.dictionary_page_offset;
+      chunk_info.dictionary_size =
+        col_chunk.meta_data.data_page_offset - chunk_info.dictionary_offset.value();
+    } else {
+      // dictionary_page_offset is 0, so check to see if the data_page_offset does not match
+      // the first offset in the offset index.  If they don't match, then data_page_offset points
+      // to the dictionary page.
+      if (num_pages > 0 &&
+          col_chunk.meta_data.data_page_offset < offset_index.page_locations[0].offset) {
+        chunk_info.dictionary_offset = col_chunk.meta_data.data_page_offset;
+        chunk_info.dictionary_size =
+          offset_index.page_locations[0].offset - col_chunk.meta_data.data_page_offset;
+      }
+    }
+
+    // Use the definition_level_histogram to get num_valid and num_null. For now, these are
+    // only ever used for byte array columns. The repetition_level_histogram might be
+    // necessary to determine the total number of values in the page if the
+    // definition_level_histogram is absent.
+    //
+    // In the future we might want the full histograms saved in the `column_info` struct.
+    int64_t const* const def_hist = column_index.definition_level_histogram.has_value()
+                                      ? column_index.definition_level_histogram.value().data()
+                                      : nullptr;
+    int64_t const* const rep_hist = column_index.repetition_level_histogram.has_value()
+                                      ? column_index.repetition_level_histogram.value().data()
+                                      : nullptr;
+
+    for (size_t pg_idx = 0; pg_idx < num_pages; pg_idx++) {
+      auto const& page_loc = offset_index.page_locations[pg_idx];
+      // translate chunk-relative row nums to absolute within the file
+      auto const pg_start_row = chunk_start_row + page_loc.first_row_index;
+      auto const pg_end_row =
+        chunk_start_row + (pg_idx == (num_pages - 1)
+                             ? rg.num_rows
+                             : offset_index.page_locations[pg_idx + 1].first_row_index);
+
+      auto const num_rows = pg_end_row - pg_start_row;
+      page_info pg_info{page_loc, num_rows};
+
+      // check to see if we already have null counts for each page
+      if (column_index.null_counts.has_value()) {
+        pg_info.num_nulls = column_index.null_counts.value()[pg_idx];
+      }
+
+      // save variable length byte info if present
+      if (offset_index.unencoded_byte_array_data_bytes.has_value()) {
+        pg_info.var_bytes_size = offset_index.unencoded_byte_array_data_bytes.value()[pg_idx];
+      }
+
+      // if def histogram is present, then use it to calculate num_valid and num_nulls
+      if (def_hist != nullptr) {
+        auto const h      = &def_hist[pg_idx * (max_def_level + 1)];
+        pg_info.num_valid = h[max_def_level];
+
+        // calculate num_nulls if not available from column index
+        if (not pg_info.num_nulls.has_value()) {
+          pg_info.num_nulls = std::reduce(h, h + max_def_level);
+        }
+      }
+      // there is no def histogram.
+      // if there is no repetition (no lists), then num_values == num_rows, and num_nulls can be
+      // obtained from the column index
+      else if (max_rep_level == 0) {
+        // if we already have num_nulls from column index
+        if (pg_info.num_nulls.has_value()) {
+          pg_info.num_valid = pg_info.num_rows - pg_info.num_nulls.value();
+        }
+        // if max_def is 0, there are no nulls
+        else if (max_def_level == 0) {
+          pg_info.num_nulls = 0;
+          pg_info.num_valid = pg_info.num_rows;
+        }
+      }
+      // if the rep level histogram is present, we can get the total number of values
+      // from that
+      else if (rep_hist != nullptr) {
+        if (pg_info.num_nulls.has_value()) {
+          auto const h          = &rep_hist[pg_idx * (max_rep_level + 1)];
+          auto const num_values = std::reduce(h, h + max_rep_level + 1);
+          pg_info.num_valid     = num_values - pg_info.num_nulls.value();
+        }
+      }
+
+      // If none of the ifs above triggered, then we have neither histogram (likely the writer
+      // doesn't produce them, the r:0 d:1 case should have been handled above). The column index
+      // doesn't give us value counts, so we'll have to rely on the page headers. If the histogram
+      // info is missing or insufficient, then just return without modifying the row_group_info.
+      if (not pg_info.num_nulls.has_value() or not pg_info.num_valid.has_value()) { return; }
+
+      // Like above, if using older page indexes that lack size info, then return without modifying
+      // the row_group_info.
+      // TODO: cudf will still set the per-page var_bytes to '0' even for all null pages. Need to
+      // check the behavior of other implementations (once there are some). Some may not set the
+      // var bytes for all null pages, so check the `null_pages` field on the column index.
+      if (schema.type == BYTE_ARRAY and not pg_info.var_bytes_size.has_value()) { return; }
+
+      chunk_info.pages.push_back(std::move(pg_info));
+    }
+  }
+
+  rg_info.column_chunks = std::move(chunks);
 }
 
 aggregate_reader_metadata::aggregate_reader_metadata(
@@ -447,23 +639,29 @@ aggregate_reader_metadata::select_row_groups(
                  "Must specify row groups for each source");
 
     for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+      auto const& fmd = per_file_metadata[src_idx];
       for (auto const& rowgroup_idx : row_group_indices[src_idx]) {
         CUDF_EXPECTS(
-          rowgroup_idx >= 0 &&
-            rowgroup_idx < static_cast<size_type>(per_file_metadata[src_idx].row_groups.size()),
+          rowgroup_idx >= 0 && rowgroup_idx < static_cast<size_type>(fmd.row_groups.size()),
           "Invalid rowgroup index");
         selection.emplace_back(rowgroup_idx, rows_to_read, src_idx);
+        // if page-level indexes are present, then collect extra chunk and page info.
+        column_info_for_row_group(selection.back(), 0);
         rows_to_read += get_row_group(rowgroup_idx, src_idx).num_rows;
       }
     }
   } else {
     size_type count = 0;
     for (size_t src_idx = 0; src_idx < per_file_metadata.size(); ++src_idx) {
-      for (size_t rg_idx = 0; rg_idx < per_file_metadata[src_idx].row_groups.size(); ++rg_idx) {
+      auto const& fmd = per_file_metadata[src_idx];
+      for (size_t rg_idx = 0; rg_idx < fmd.row_groups.size(); ++rg_idx) {
+        auto const& rg             = fmd.row_groups[rg_idx];
         auto const chunk_start_row = count;
-        count += get_row_group(rg_idx, src_idx).num_rows;
+        count += rg.num_rows;
         if (count > rows_to_skip || count == 0) {
           selection.emplace_back(rg_idx, chunk_start_row, src_idx);
+          // if page-level indexes are present, then collect extra chunk and page info.
+          column_info_for_row_group(selection.back(), chunk_start_row);
         }
         if (count >= rows_to_skip + rows_to_read) { break; }
       }

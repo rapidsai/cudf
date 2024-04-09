@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import datetime
 import re
@@ -178,7 +178,6 @@ def test_scalar_device_initialization_decimal(value, decimal_type):
 
 @pytest.mark.parametrize("value", SCALAR_VALUES + DECIMAL_VALUES)
 def test_scalar_roundtrip(value):
-
     s = cudf.Scalar(value)
 
     assert s._is_host_value_current
@@ -352,7 +351,6 @@ def test_scalar_implicit_int_conversion(value):
 @pytest.mark.parametrize("cls", [int, float, bool])
 @pytest.mark.parametrize("dtype", sorted(set(ALL_TYPES) - {"category"}))
 def test_scalar_invalid_implicit_conversion(cls, dtype):
-
     try:
         cls(
             pd.NaT
