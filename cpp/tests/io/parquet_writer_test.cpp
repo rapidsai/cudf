@@ -31,7 +31,7 @@
 using cudf::test::iterators::no_nulls;
 
 template <typename mask_op_t>
-void test_durations(mask_op_t mask_op)
+void test_durations(mask_op_t mask_op, bool use_byte_stream_split)
 {
   std::default_random_engine generator;
   std::uniform_int_distribution<int> distribution_d(0, 30);
@@ -63,6 +63,13 @@ void test_durations(mask_op_t mask_op)
 
   auto expected = table_view{{durations_d, durations_s, durations_ms, durations_us, durations_ns}};
 
+  if (use_byte_stream_split) {
+    cudf::io::table_input_metadata expected_metadata(expected);
+    for (auto& col_meta : expected_metadata.column_metadata) {
+      col_meta.set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+    }
+  }
+
   auto filepath = temp_env->get_temp_filepath("Durations.parquet");
   cudf::io::parquet_writer_options out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
@@ -87,10 +94,10 @@ void test_durations(mask_op_t mask_op)
 
 TEST_F(ParquetWriterTest, Durations)
 {
-  test_durations([](auto i) { return true; });
-  test_durations([](auto i) { return (i % 2) != 0; });
-  test_durations([](auto i) { return (i % 3) != 0; });
-  test_durations([](auto i) { return false; });
+  test_durations([](auto i) { return true; }, false);
+  test_durations([](auto i) { return (i % 2) != 0; }, false);
+  test_durations([](auto i) { return (i % 3) != 0; }, false);
+  test_durations([](auto i) { return false; }, false);
 }
 
 TEST_F(ParquetWriterTest, MultiIndex)
@@ -1725,7 +1732,7 @@ TEST_F(ParquetWriterTest, ByteStreamSplit)
   expected_metadata.column_metadata[3].set_name("doubles");
   expected_metadata.column_metadata[4].set_name("int32list");
   auto const encoding = cudf::io::column_encoding::BYTE_STREAM_SPLIT;
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i <= 3; i++) {
     expected_metadata.column_metadata[i].set_encoding(encoding);
   }
 
@@ -1763,8 +1770,8 @@ TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
   expected_metadata.column_metadata[0].set_name("int32s").set_decimal_precision(7);
   expected_metadata.column_metadata[1].set_name("int64s").set_decimal_precision(11);
   expected_metadata.column_metadata[2].set_name("int128s").set_decimal_precision(22);
-  for (size_t i = 0; i < expected_metadata.column_metadata.size(); i++) {
-    expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
+  for (auto& col_meta : expected_metadata.column_metadata) {
+    col_meta.set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
   }
 
   auto const filepath = temp_env->get_temp_filepath("DecimalByteStreamSplit.parquet");
@@ -1782,34 +1789,10 @@ TEST_F(ParquetWriterTest, DecimalByteStreamSplit)
 
 TEST_F(ParquetWriterTest, DurationByteStreamSplit)
 {
-  constexpr cudf::size_type num_rows = 100;
-  auto seq_col0                      = random_values<int32_t>(num_rows);
-  auto seq_col1                      = random_values<int64_t>(num_rows);
-
-  auto durations_ms = cudf::test::fixed_width_column_wrapper<cudf::duration_ms, int64_t>(
-    seq_col0.begin(), seq_col0.end(), no_nulls());
-  auto durations_us = cudf::test::fixed_width_column_wrapper<cudf::duration_us, int64_t>(
-    seq_col1.begin(), seq_col1.end(), no_nulls());
-
-  auto expected = table_view{{durations_ms, durations_us}};
-  cudf::io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].set_name("millis");
-  expected_metadata.column_metadata[1].set_name("micros");
-  for (size_t i = 0; i < expected_metadata.column_metadata.size(); i++) {
-    expected_metadata.column_metadata[i].set_encoding(cudf::io::column_encoding::BYTE_STREAM_SPLIT);
-  }
-
-  auto filepath = temp_env->get_temp_filepath("DurationByteStreamSplit.parquet");
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
-      .metadata(expected_metadata);
-  cudf::io::write_parquet(out_opts);
-
-  cudf::io::parquet_reader_options in_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath});
-  auto result = cudf::io::read_parquet(in_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  test_durations([](auto i) { return true; }, true);
+  test_durations([](auto i) { return (i % 2) != 0; }, true);
+  test_durations([](auto i) { return (i % 3) != 0; }, true);
+  test_durations([](auto i) { return false; }, true);
 }
 
 /////////////////////////////////////////////////////////////
