@@ -22,6 +22,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -38,7 +39,7 @@ namespace detail {
 rmm::device_uvector<string_view> create_string_vector_from_column(
   cudf::strings_column_view const strings,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr);
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Return the threshold size for a strings column to use int64 offsets

@@ -22,6 +22,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -42,7 +43,7 @@ struct store_result_functor {
                        sort::sort_groupby_helper& helper,
                        cudf::detail::result_cache& cache,
                        rmm::cuda_stream_view stream,
-                       rmm::mr::device_memory_resource* mr,
+                       rmm::device_async_resource_ref mr,
                        sorted keys_are_sorted = sorted::NO)
     : helper(helper),
       cache(cache),
@@ -98,8 +99,8 @@ struct store_result_functor {
   cudf::detail::result_cache& cache;  ///< cache of results to store into
   column_view const& values;          ///< Column of values to group and aggregate
 
-  rmm::cuda_stream_view stream;         ///< CUDA stream on which to execute kernels
-  rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
+  rmm::cuda_stream_view stream;       ///< CUDA stream on which to execute kernels
+  rmm::device_async_resource_ref mr;  ///< Memory resource to allocate space for results
 
   sorted keys_are_sorted;                  ///< Whether the keys are sorted
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values

@@ -19,6 +19,8 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 //! NVText APIs
 namespace nvtext {
 /**
@@ -60,8 +62,8 @@ namespace nvtext {
 std::unique_ptr<cudf::column> edit_distance(
   cudf::strings_column_view const& input,
   cudf::strings_column_view const& targets,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Compute the edit distance between all the strings in the input column.
@@ -98,8 +100,8 @@ std::unique_ptr<cudf::column> edit_distance(
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(
   cudf::strings_column_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

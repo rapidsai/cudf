@@ -23,6 +23,8 @@
 #pragma nv_diag_suppress 611
 #pragma nv_diag_suppress 2810
 #endif
+#include <rmm/resource_ref.hpp>
+
 #include <arrow/api.h>
 #ifdef __CUDACC__
 #pragma nv_diag_default 611
@@ -65,7 +67,7 @@ namespace cudf {
  */
 std::unique_ptr<table> from_dlpack(
   DLManagedTensor const* managed_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Convert a cudf table into a DLPack DLTensor
@@ -87,7 +89,7 @@ std::unique_ptr<table> from_dlpack(
  */
 DLManagedTensor* to_dlpack(
   table_view const& input,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 
@@ -173,8 +175,8 @@ std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
 
 std::unique_ptr<table> from_arrow(
   arrow::Table const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create `cudf::scalar` from given arrow Scalar input
@@ -187,8 +189,8 @@ std::unique_ptr<table> from_arrow(
 
 std::unique_ptr<cudf::scalar> from_arrow(
   arrow::Scalar const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

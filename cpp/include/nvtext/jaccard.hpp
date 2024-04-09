@@ -18,6 +18,8 @@
 #include <cudf/column/column.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace nvtext {
 /**
  * @addtogroup nvtext_jaccard
@@ -72,8 +74,8 @@ std::unique_ptr<cudf::column> jaccard_index(
   cudf::strings_column_view const& input1,
   cudf::strings_column_view const& input2,
   cudf::size_type width,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace nvtext

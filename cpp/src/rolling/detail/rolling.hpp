@@ -20,6 +20,8 @@
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 namespace cudf {
 // helper functions - used in the rolling window implementation and tests
 
@@ -64,7 +66,7 @@ struct rolling_store_output_functor<_T, true> {
  *                               size_type following_window,
  *                               size_type min_periods,
  *                               rolling_aggregation const& agg,
- *                               rmm::mr::device_memory_resource* mr)
+ *                               rmm::device_async_resource_ref mr)
  *
  * @param stream CUDA stream to use for device memory operations
  */
@@ -75,7 +77,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::rolling_window(column_view const& input,
@@ -83,7 +85,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
  *                               column_view const& following_window,
  *                               size_type min_periods,
  *                               rolling_aggregation const& agg,
- *                               rmm::mr::device_memory_resource* mr);
+ *                               rmm::device_async_resource_ref mr);
  *
  * @param stream CUDA stream to use for device memory operations
  */
@@ -93,7 +95,7 @@ std::unique_ptr<column> rolling_window(column_view const& input,
                                        size_type min_periods,
                                        rolling_aggregation const& agg,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr);
+                                       rmm::device_async_resource_ref mr);
 }  // namespace detail
 
 }  // namespace cudf

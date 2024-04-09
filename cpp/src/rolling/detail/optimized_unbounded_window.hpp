@@ -18,6 +18,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace rmm::mr {
 class device_memory_resource;
@@ -51,6 +52,6 @@ std::unique_ptr<column> optimized_unbounded_window(table_view const& group_keys,
                                                    column_view const& input,
                                                    rolling_aggregation const& aggr,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr);
+                                                   rmm::device_async_resource_ref mr);
 }  // namespace detail
 }  // namespace cudf

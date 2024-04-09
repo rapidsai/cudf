@@ -23,6 +23,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 namespace cudf {
 namespace groupby {
 namespace detail {
@@ -40,7 +41,7 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
                                             device_span<size_type const> group_labels,
                                             cudf::replace_policy replace_policy,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr);
+                                            rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace groupby

@@ -22,6 +22,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <vector>
 
@@ -29,22 +30,22 @@ namespace cudf {
 //! Inner interfaces and implementations
 namespace detail {
 /**
- * @copydoc cudf::concatenate(host_span<column_view const>,rmm::mr::device_memory_resource*)
+ * @copydoc cudf::concatenate(host_span<column_view const>,rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_concat,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 /**
- * @copydoc cudf::concatenate(host_span<table_view const>,rmm::mr::device_memory_resource*)
+ * @copydoc cudf::concatenate(host_span<table_view const>,rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                                    rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr);
+                                   rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

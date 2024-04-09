@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
@@ -82,7 +83,7 @@ template <typename Op>
 std::unique_ptr<column> scan_inclusive(column_view const& input,
                                        bitmask_type const* mask,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto d_input = column_device_view::create(input, stream);
 
@@ -120,12 +121,12 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 template std::unique_ptr<column> scan_inclusive<DeviceMin>(column_view const& input,
                                                            bitmask_type const* mask,
                                                            rmm::cuda_stream_view stream,
-                                                           rmm::mr::device_memory_resource* mr);
+                                                           rmm::device_async_resource_ref mr);
 
 template std::unique_ptr<column> scan_inclusive<DeviceMax>(column_view const& input,
                                                            bitmask_type const* mask,
                                                            rmm::cuda_stream_view stream,
-                                                           rmm::mr::device_memory_resource* mr);
+                                                           rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace strings

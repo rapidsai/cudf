@@ -19,6 +19,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace lists {
@@ -51,8 +52,8 @@ namespace lists {
  */
 std::unique_ptr<column> count_elements(
   lists_column_view const& input,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of lists_elements group
 

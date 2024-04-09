@@ -20,6 +20,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -28,7 +29,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::repeat(table_view const&, column_view const&, bool,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -36,18 +37,18 @@ std::unique_ptr<table> repeat(table_view const& input_table,
                               column_view const& count,
                               bool check_count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::repeat(table_view const&, size_type,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<table> repeat(table_view const& input_table,
                               size_type count,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

@@ -26,6 +26,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -103,7 +104,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             side_type side,
                             std::string_view fill_char,
                             rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(!fill_char.empty(), "fill_char parameter must not be empty");
@@ -146,7 +147,7 @@ struct zfill_fn : base_fn<zfill_fn> {
 std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
@@ -170,7 +171,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
                             side_type side,
                             std::string_view fill_char,
                             rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource* mr)
+                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::pad(input, width, side, fill_char, stream, mr);
@@ -179,7 +180,7 @@ std::unique_ptr<column> pad(strings_column_view const& input,
 std::unique_ptr<column> zfill(strings_column_view const& input,
                               size_type width,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+                              rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::zfill(input, width, stream, mr);

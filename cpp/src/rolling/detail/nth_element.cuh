@@ -23,6 +23,7 @@
 #include <cudf/utilities/bit.hpp>
 
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -150,7 +151,7 @@ std::unique_ptr<column> nth_element(size_type n,
                                     FollowingIter following,
                                     size_type min_periods,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   auto const gather_iter = cudf::detail::make_counting_transform_iterator(
     0,

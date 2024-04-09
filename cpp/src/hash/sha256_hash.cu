@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -63,7 +64,7 @@ struct SHA256Hash : HashBase<SHA256Hash> {
 
 std::unique_ptr<column> sha256(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   return sha_hash<SHA256Hash>(input, stream, mr);
 }
@@ -72,7 +73,7 @@ std::unique_ptr<column> sha256(table_view const& input,
 
 std::unique_ptr<column> sha256(table_view const& input,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::sha256(input, stream, mr);

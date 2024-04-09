@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 #include <vector>
@@ -105,7 +106,7 @@ std::unique_ptr<cudf::table> merge(
   std::vector<cudf::size_type> const& key_cols,
   std::vector<cudf::order> const& column_order,
   std::vector<cudf::null_order> const& null_precedence = {},
-  rmm::mr::device_memory_resource* mr                  = rmm::mr::get_current_device_resource());
+  rmm::device_async_resource_ref mr                    = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

@@ -20,13 +20,15 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <optional>
 
 namespace cudf::reduction::detail {
 
 /**
  * @copydoc cudf::reduce(column_view const&, reduce_aggregation const&, data_type,
- * std::optional<std::reference_wrapper<scalar const>>, rmm::mr::device_memory_resource*)
+ * std::optional<std::reference_wrapper<scalar const>>, rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -35,6 +37,6 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                data_type output_dtype,
                                std::optional<std::reference_wrapper<scalar const>> init,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr);
+                               rmm::device_async_resource_ref mr);
 
 }  // namespace cudf::reduction::detail

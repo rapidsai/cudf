@@ -18,6 +18,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace hashing {
@@ -27,7 +28,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   switch (hash_function) {
     case (hash_id::HASH_MURMUR3): return murmurhash3_x86_32(input, seed, stream, mr);
@@ -44,7 +45,7 @@ std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
-                             rmm::mr::device_memory_resource* mr)
+                             rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return hashing::detail::hash(input, hash_function, seed, stream, mr);

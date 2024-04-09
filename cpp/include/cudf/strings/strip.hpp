@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace strings {
@@ -63,10 +64,10 @@ namespace strings {
  */
 std::unique_ptr<column> strip(
   strings_column_view const& input,
-  side_type side                      = side_type::BOTH,
-  string_scalar const& to_strip       = string_scalar(""),
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  side_type side                    = side_type::BOTH,
+  string_scalar const& to_strip     = string_scalar(""),
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group
 }  // namespace strings

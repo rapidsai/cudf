@@ -27,6 +27,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -36,7 +37,7 @@ namespace detail {
 
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
 
@@ -88,7 +89,7 @@ std::unique_ptr<column> reverse(lists_column_view const& input,
 
 std::unique_ptr<column> reverse(lists_column_view const& input,
                                 rmm::cuda_stream_view stream,
-                                rmm::mr::device_memory_resource* mr)
+                                rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::reverse(input, stream, mr);

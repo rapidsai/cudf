@@ -22,6 +22,8 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -48,7 +50,7 @@ std::unique_ptr<scalar> compound_reduction(column_view const& col,
                                            data_type const output_dtype,
                                            size_type ddof,
                                            rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+                                           rmm::device_async_resource_ref mr)
 {
   auto const valid_count = col.size() - col.null_count();
 
@@ -101,7 +103,7 @@ struct result_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return compound_reduction<ElementType, ResultType, Op>(col, output_dtype, ddof, stream, mr);
   }
@@ -111,7 +113,7 @@ struct result_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL("Unsupported output data type");
   }
@@ -134,7 +136,7 @@ struct element_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     return cudf::type_dispatcher(
       output_dtype, result_type_dispatcher<ElementType, Op>(), col, output_dtype, ddof, stream, mr);
@@ -145,7 +147,7 @@ struct element_type_dispatcher {
                                      cudf::data_type const output_dtype,
                                      size_type ddof,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+                                     rmm::device_async_resource_ref mr)
   {
     CUDF_FAIL(
       "Reduction operators other than `min` and `max`"

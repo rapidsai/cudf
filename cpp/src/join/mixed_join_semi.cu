@@ -34,6 +34,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/fill.h>
 #include <thrust/iterator/counting_iterator.h>
@@ -94,7 +95,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
   join_kind join_type,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS((join_type != join_kind::INNER_JOIN) && (join_type != join_kind::LEFT_JOIN) &&
                  (join_type != join_kind::FULL_JOIN),
@@ -348,7 +349,7 @@ compute_mixed_join_output_size_semi(table_view const& left_equality,
                                     null_equality compare_nulls,
                                     join_kind join_type,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     (join_type != join_kind::INNER_JOIN) && (join_type != join_kind::LEFT_JOIN) &&
@@ -543,7 +544,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size_semi(left_equality,
@@ -565,7 +566,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_semi_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join_semi(left_equality,
@@ -587,7 +588,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size_semi(left_equality,
@@ -609,7 +610,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_left_anti_join(
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type const>>> output_size_data,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::mixed_join_semi(left_equality,

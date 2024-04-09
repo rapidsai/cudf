@@ -20,6 +20,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -27,14 +28,14 @@ namespace detail {
 
 /**
  * @copydoc cudf::dictionary::get_index(dictionary_column_view const&,scalar
- * const&,rmm::mr::device_memory_resource*)
+ * const&,rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
                                   scalar const& key,
                                   rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr);
+                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Get the index for a key if it were added to the given dictionary.
@@ -58,7 +59,7 @@ std::unique_ptr<scalar> get_index(dictionary_column_view const& dictionary,
 std::unique_ptr<scalar> get_insert_index(dictionary_column_view const& dictionary,
                                          scalar const& key,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr);
+                                         rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace dictionary

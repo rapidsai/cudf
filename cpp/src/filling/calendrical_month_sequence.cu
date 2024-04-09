@@ -23,6 +23,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace detail {
@@ -30,7 +31,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
+                                                         rmm::device_async_resource_ref mr)
 {
   return type_dispatcher(
     init.type(), calendrical_month_sequence_functor{}, size, init, months, stream, mr);
@@ -41,7 +42,7 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(size_type size,
                                                          scalar const& init,
                                                          size_type months,
                                                          rmm::cuda_stream_view stream,
-                                                         rmm::mr::device_memory_resource* mr)
+                                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::calendrical_month_sequence(size, init, months, stream, mr);

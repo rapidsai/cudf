@@ -28,6 +28,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -138,7 +139,7 @@ struct edit_distance_matrix_levenshtein_algorithm {
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& strings,
                                             cudf::strings_column_view const& targets,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   auto const strings_count = strings.size();
   if (strings_count == 0) {
@@ -203,7 +204,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& str
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& strings,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   cudf::size_type strings_count = strings.size();
   if (strings_count == 0) {
@@ -301,7 +302,7 @@ std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view con
 std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& input,
                                             cudf::strings_column_view const& targets,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::edit_distance(input, targets, stream, mr);
@@ -312,7 +313,7 @@ std::unique_ptr<cudf::column> edit_distance(cudf::strings_column_view const& inp
  */
 std::unique_ptr<cudf::column> edit_distance_matrix(cudf::strings_column_view const& input,
                                                    rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource* mr)
+                                                   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::edit_distance_matrix(input, stream, mr);

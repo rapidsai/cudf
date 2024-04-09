@@ -20,6 +20,7 @@
 #include <cudf/reduction/detail/reduction_functions.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace reduction {
@@ -29,7 +30,7 @@ std::unique_ptr<cudf::scalar> product(column_view const& col,
                                       cudf::data_type const output_dtype,
                                       std::optional<std::reference_wrapper<scalar const>> init,
                                       rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+                                      rmm::device_async_resource_ref mr)
 {
   return cudf::type_dispatcher(
     cudf::is_dictionary(col.type()) ? dictionary_column_view(col).keys().type() : col.type(),

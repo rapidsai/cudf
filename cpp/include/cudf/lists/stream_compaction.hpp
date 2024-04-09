@@ -20,6 +20,7 @@
 
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::lists {
 
@@ -61,8 +62,8 @@ namespace cudf::lists {
 std::unique_ptr<column> apply_boolean_mask(
   lists_column_view const& input,
   lists_column_view const& boolean_mask,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create a new list column without duplicate elements in each list.
@@ -86,10 +87,10 @@ std::unique_ptr<column> apply_boolean_mask(
  */
 std::unique_ptr<column> distinct(
   lists_column_view const& input,
-  null_equality nulls_equal           = null_equality::EQUAL,
-  nan_equality nans_equal             = nan_equality::ALL_EQUAL,
-  rmm::cuda_stream_view stream        = cudf::get_default_stream(),
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  null_equality nulls_equal         = null_equality::EQUAL,
+  nan_equality nans_equal           = nan_equality::ALL_EQUAL,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 

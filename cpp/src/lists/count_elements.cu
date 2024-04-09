@@ -27,6 +27,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
@@ -45,7 +46,7 @@ namespace detail {
  */
 std::unique_ptr<column> count_elements(lists_column_view const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   auto device_column = cudf::column_device_view::create(input.parent(), stream);
   auto d_column      = *device_column;
@@ -74,7 +75,7 @@ std::unique_ptr<column> count_elements(lists_column_view const& input,
 
 std::unique_ptr<column> count_elements(lists_column_view const& input,
                                        rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+                                       rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::count_elements(input, stream, mr);

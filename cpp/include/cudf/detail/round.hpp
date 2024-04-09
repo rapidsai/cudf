@@ -20,6 +20,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 //! Inner interfaces and implementations
@@ -27,7 +28,7 @@ namespace detail {
 
 /**
  * @copydoc cudf::round(column_view const&, int32_t, rounding_method,
- * rmm::mr::device_memory_resource*)
+ * rmm::device_async_resource_ref )
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -35,7 +36,7 @@ std::unique_ptr<column> round(column_view const& input,
                               int32_t decimal_places,
                               rounding_method method,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

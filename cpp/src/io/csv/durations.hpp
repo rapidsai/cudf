@@ -20,6 +20,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <memory>
 
@@ -30,7 +31,7 @@ namespace csv {
 
 std::unique_ptr<column> pandas_format_durations(column_view const& durations,
                                                 rmm::cuda_stream_view stream,
-                                                rmm::mr::device_memory_resource* mr);
+                                                rmm::device_async_resource_ref mr);
 
 }  // namespace csv
 }  // namespace detail

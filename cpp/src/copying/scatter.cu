@@ -34,6 +34,7 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <thrust/count.h>
@@ -77,7 +78,7 @@ void scatter_scalar_bitmask_inplace(std::reference_wrapper<scalar const> const& 
                                     size_type num_scatter_rows,
                                     column& target,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+                                    rmm::device_async_resource_ref mr)
 {
   constexpr size_type block_size = 256;
   size_type const grid_size      = grid_1d(num_scatter_rows, block_size).num_blocks;
@@ -109,7 +110,7 @@ struct column_scalar_scatterer_impl {
                                      size_type scatter_rows,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     CUDF_EXPECTS(source.get().type() == target.type(),
                  "scalar and column types must match",
@@ -142,7 +143,7 @@ struct column_scalar_scatterer_impl<string_view, MapIterator> {
                                      size_type scatter_rows,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     CUDF_EXPECTS(source.get().type() == target.type(), "scalar and column types must match");
 
@@ -164,7 +165,7 @@ struct column_scalar_scatterer_impl<list_view, MapIterator> {
                                      size_type scatter_rows,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     auto result =
       lists::detail::scatter(source, scatter_iter, scatter_iter + scatter_rows, target, stream, mr);
@@ -181,7 +182,7 @@ struct column_scalar_scatterer_impl<dictionary32, MapIterator> {
                                      size_type scatter_rows,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     auto dict_target =
       dictionary::detail::add_keys(dictionary_column_view(target),
@@ -233,7 +234,7 @@ struct column_scalar_scatterer {
                                      size_type scatter_rows,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     column_scalar_scatterer_impl<Element, MapIterator> scatterer{};
     return scatterer(source, scatter_iter, scatter_rows, target, stream, mr);
@@ -247,7 +248,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
                                      size_type scatter_rows,
                                      column_view const& target,
                                      rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr) const
+                                     rmm::device_async_resource_ref mr) const
   {
     // For each field of `source`, copy construct a scalar from the field
     // and dispatch to the corresponding scalar scatterer
@@ -297,7 +298,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                column_view const& scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(source.num_columns() == target.num_columns(),
                "Number of columns in source and target not equal",
@@ -327,7 +328,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                device_span<size_type const> const scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(scatter_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "scatter map size exceeds the column size limit",
@@ -344,7 +345,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
                                column_view const& indices,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(source.size() == static_cast<size_t>(target.num_columns()),
                "Number of scalars in source and number of columns in target not equal",
@@ -396,7 +397,7 @@ std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
                                              column_view const& target,
                                              column_view const& boolean_mask,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   auto indices = cudf::make_numeric_column(
     data_type{type_id::INT32}, target.size(), mask_state::UNALLOCATED, stream);
@@ -421,7 +422,7 @@ std::unique_ptr<column> boolean_mask_scatter(scalar const& input,
                                              column_view const& target,
                                              column_view const& boolean_mask,
                                              rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+                                             rmm::device_async_resource_ref mr)
 {
   return detail::copy_if_else(input, target, boolean_mask, stream, mr);
 }
@@ -430,7 +431,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             table_view const& target,
                                             column_view const& boolean_mask,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(input.num_columns() == target.num_columns(),
                "Mismatch in number of input columns and target columns",
@@ -473,7 +474,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   table_view const& target,
   column_view const& boolean_mask,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(static_cast<size_type>(input.size()) == target.num_columns(),
                "Mismatch in number of scalars and target columns",
@@ -518,7 +519,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                column_view const& scatter_map,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::scatter(source, scatter_map, target, stream, mr);
@@ -528,7 +529,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
                                column_view const& indices,
                                table_view const& target,
                                rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+                               rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::scatter(source, indices, target, stream, mr);
@@ -538,7 +539,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                                             table_view const& target,
                                             column_view const& boolean_mask,
                                             rmm::cuda_stream_view stream,
-                                            rmm::mr::device_memory_resource* mr)
+                                            rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::boolean_mask_scatter(input, target, boolean_mask, stream, mr);
@@ -549,7 +550,7 @@ std::unique_ptr<table> boolean_mask_scatter(
   table_view const& target,
   column_view const& boolean_mask,
   rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::boolean_mask_scatter(input, target, boolean_mask, stream, mr);

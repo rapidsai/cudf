@@ -20,6 +20,8 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/resource_ref.hpp>
+
 #include <memory>
 #include <vector>
 
@@ -31,7 +33,7 @@ template <typename RequestType>
 inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
                                                        cudf::detail::result_cache& cache,
                                                        rmm::cuda_stream_view stream,
-                                                       rmm::mr::device_memory_resource* mr)
+                                                       rmm::device_async_resource_ref mr)
 {
   std::vector<aggregation_result> results(requests.size());
   std::unordered_map<std::pair<column_view, std::reference_wrapper<aggregation const>>,

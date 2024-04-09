@@ -21,6 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf {
 namespace dictionary {
@@ -39,7 +40,7 @@ namespace detail {
  */
 std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                     rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr);
+                                    rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace dictionary
