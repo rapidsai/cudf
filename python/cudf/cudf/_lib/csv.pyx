@@ -434,7 +434,7 @@ def read_csv(
     if dtype is not None:
         if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
-                if cudf.api.types._is_categorical_dtype(v):
+                if isinstance(cudf.dtype(v), cudf.CategoricalDtype):
                     df._data[str(k)] = df._data[str(k)].astype(v)
         elif (
             cudf.api.types.is_scalar(dtype) or
@@ -442,11 +442,11 @@ def read_csv(
                 np.dtype, pd.api.extensions.ExtensionDtype, type
             ))
         ):
-            if cudf.api.types._is_categorical_dtype(dtype):
+            if isinstance(cudf.dtype(dtype), cudf.CategoricalDtype):
                 df = df.astype(dtype)
         elif isinstance(dtype, abc.Collection):
             for index, col_dtype in enumerate(dtype):
-                if cudf.api.types._is_categorical_dtype(col_dtype):
+                if isinstance(cudf.dtype(col_dtype), cudf.CategoricalDtype):
                     col_name = df._data.names[index]
                     df._data[col_name] = df._data[col_name].astype(col_dtype)
 
@@ -554,11 +554,10 @@ cdef data_type _get_cudf_data_type_from_dtype(object dtype) except *:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
-    if cudf.api.types._is_categorical_dtype(dtype):
-        if isinstance(dtype, str):
-            dtype = "str"
-        else:
-            dtype = dtype.categories.dtype
+    if isinstance(dtype, cudf.CategoricalDtype):
+        dtype = dtype.categories.dtype
+    elif dtype == "category":
+        dtype = "str"
 
     if isinstance(dtype, str):
         if str(dtype) == "date32":
