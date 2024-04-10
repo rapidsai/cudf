@@ -21,9 +21,9 @@ if [ "${CI:-false}" = "false" ]; then
 else
   rapids-echo-stderr "Downloading and decompressing ${s3_dl_path} into ${untar_dest}"
   rapids-echo-stderr "Using custom script"
-  aws s3 cp "${s3_dl_path}" /tmp/tmp.tar.gz
+  aws s3 cp "${s3_dl_path}" /tmp/tmp.tar.gz 1>&2
   tar xzf /tmp/tmp.tar.gz -C "${untar_dest}"
-  rm /tmp/tmp.tar.gz
+  rm -rf /tmp/tmp.tar.gz
 fi
 
 # echo path to untarred contents
