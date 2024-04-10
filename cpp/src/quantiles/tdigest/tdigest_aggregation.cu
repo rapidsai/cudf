@@ -28,6 +28,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/unary.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
@@ -73,7 +74,7 @@ struct make_centroid {
   centroid operator() __device__(size_type index) const
   {
     auto const is_valid = col.is_valid(index);
-    auto const mean     = is_valid ? static_cast<double>(col.element<T>(index)) : 0.0;
+    auto const mean     = is_valid ? convert_to_floating<double>(col.element<T>(index)) : 0.0;
     auto const weight   = is_valid ? 1.0 : 0.0;
     return {mean, weight, is_valid};
   }
@@ -87,7 +88,7 @@ struct make_centroid_no_nulls {
 
   centroid operator() __device__(size_type index) const
   {
-    return {static_cast<double>(col.element<T>(index)), 1.0, true};
+    return {convert_to_floating<double>(col.element<T>(index)), 1.0, true};
   }
 };
 
@@ -808,8 +809,9 @@ struct get_scalar_minmax_grouped {
     auto const valid_count = group_valid_counts[group_index];
     return valid_count > 0
              ? thrust::make_tuple(
-                 static_cast<double>(col.element<T>(group_offsets[group_index])),
-                 static_cast<double>(col.element<T>(group_offsets[group_index] + valid_count - 1)))
+                 convert_to_floating<double>(col.element<T>(group_offsets[group_index])),
+                 convert_to_floating<double>(
+                   col.element<T>(group_offsets[group_index] + valid_count - 1)))
              : thrust::make_tuple(0.0, 0.0);
   }
 };
@@ -823,8 +825,8 @@ struct get_scalar_minmax {
   __device__ thrust::tuple<double, double> operator()(size_type)
   {
     return valid_count > 0
-             ? thrust::make_tuple(static_cast<double>(col.element<T>(0)),
-                                  static_cast<double>(col.element<T>(valid_count - 1)))
+             ? thrust::make_tuple(convert_to_floating<double>(col.element<T>(0)),
+                                  convert_to_floating<double>(col.element<T>(valid_count - 1)))
              : thrust::make_tuple(0.0, 0.0);
   }
 };
