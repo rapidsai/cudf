@@ -28,6 +28,7 @@
 #include <cudf/concatenate.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/io/data_sink.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -2100,8 +2101,7 @@ TEST_F(OrcWriterTest, BounceBufferBug)
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 100; });
 
   constexpr auto num_rows = 150000;
-  column_wrapper<int8_t, typename decltype(sequence)::value_type> col(sequence,
-                                                                      sequence + num_rows);
+  column_wrapper<int8_t> col(sequence, sequence + num_rows);
   table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("BounceBufferBug.orc");
@@ -2120,8 +2120,7 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   static_assert(total_rows > std::numeric_limits<cudf::size_type>::max());
 
   auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 127; });
-  column_wrapper<int8_t, typename decltype(sequence)::value_type> col(sequence,
-                                                                      sequence + num_rows);
+  column_wrapper<int8_t> col(sequence, sequence + num_rows);
   table_view chunk_table({col});
 
   std::vector<char> out_buffer;
@@ -2167,6 +2166,57 @@ TEST_F(OrcReaderTest, SizeTypeRowsOverflow)
   const auto got_with_stripe_selection = cudf::io::read_orc(stripe_opts).tbl;
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got_with_stripe_selection->view());
+}
+
+TEST_F(OrcChunkedWriterTest, NoWriteCloseNotThrow)
+{
+  std::vector<char> out_buffer;
+
+  cudf::io::chunked_orc_writer_options write_opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&out_buffer});
+  auto writer = cudf::io::orc_chunked_writer(write_opts);
+
+  EXPECT_NO_THROW(writer.close());
+}
+
+TEST_F(OrcChunkedWriterTest, FailedWriteCloseNotThrow)
+{
+  // A sink that throws on write()
+  class throw_sink : public cudf::io::data_sink {
+   public:
+    void host_write(void const* data, size_t size) override { throw std::runtime_error("write"); }
+    void flush() override {}
+    size_t bytes_written() override { return 0; }
+  };
+
+  auto sequence = thrust::make_counting_iterator(0);
+  column_wrapper<int8_t> col(sequence, sequence + 10);
+  table_view table({col});
+
+  throw_sink sink;
+  cudf::io::chunked_orc_writer_options write_opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&sink});
+  auto writer = cudf::io::orc_chunked_writer(write_opts);
+
+  try {
+    writer.write(table);
+  } catch (...) {
+    // ignore the exception; we're testing that close() doesn't throw when the only write() fails
+  }
+
+  EXPECT_NO_THROW(writer.close());
+}
+
+TEST_F(OrcChunkedWriterTest, NoDataInSinkWhenNoWrite)
+{
+  std::vector<char> out_buffer;
+
+  cudf::io::chunked_orc_writer_options write_opts =
+    cudf::io::chunked_orc_writer_options::builder(cudf::io::sink_info{&out_buffer});
+  auto writer = cudf::io::orc_chunked_writer(write_opts);
+
+  EXPECT_NO_THROW(writer.close());
+  EXPECT_EQ(out_buffer.size(), 0);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
