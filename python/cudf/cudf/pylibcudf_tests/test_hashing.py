@@ -1,6 +1,7 @@
 # Copyright (c) 2024, NVIDIA CORPORATION.
 
 import hashlib
+import struct
 
 import numpy as np
 import pyarrow as pa
@@ -130,20 +131,16 @@ def all_types_output_table(input, method):
 def test_hash_column(pa_input_column, method):
     def _applyfunc(x):
         if isinstance(x, str):
-            hasher = getattr(hashlib, method)
-            return hasher(str(x).encode()).hexdigest()
+            binary = str(x).encode()
         elif isinstance(x, float):
-            raise NotImplementedError
+            binary = struct.pack("<d", x)
         elif isinstance(x, bool):
-            raise NotImplementedError
+            binary = x.to_bytes(1, byteorder="little", signed=True)
         elif isinstance(x, int):
-            raise NotImplementedError
-        elif isinstance(x, list):
-            raise NotImplementedError
-        elif isinstance(x, dict):
-            raise NotImplementedError
+            binary = x.to_bytes(8, byteorder="little", signed=True)
         else:
-            raise NotImplementedError("Unsupported type")
+            raise NotImplementedError
+        return getattr(hashlib, method)(binary).hexdigest()
 
     plc_tbl = plc.interop.from_arrow(
         pa.Table.from_arrays([pa_input_column], names=["data"])
