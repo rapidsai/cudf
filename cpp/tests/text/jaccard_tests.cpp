@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
-#include <nvtext/jaccard.hpp>
-
 #include <cudf/strings/strings_column_view.hpp>
+
+#include <nvtext/jaccard.hpp>
 
 struct JaccardTest : public cudf::test::BaseFixture {};
 

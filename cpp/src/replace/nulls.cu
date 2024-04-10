@@ -108,7 +108,9 @@ CUDF_KERNEL void replace_nulls_strings(cudf::column_device_view input,
   // Compute total valid count for this block and add it to global count
   uint32_t block_valid_count = cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
   // one thread computes and adds to output_valid_count
-  if (threadIdx.x == 0) { atomicAdd(valid_counter, block_valid_count); }
+  if (threadIdx.x == 0) {
+    atomicAdd(valid_counter, static_cast<cudf::size_type>(block_valid_count));
+  }
 }
 
 template <typename Type, bool replacement_has_nulls>
@@ -153,7 +155,9 @@ CUDF_KERNEL void replace_nulls(cudf::column_device_view input,
     uint32_t block_valid_count =
       cudf::detail::single_lane_block_sum_reduce<BLOCK_SIZE, 0>(valid_sum);
     // one thread computes and adds to output_valid_count
-    if (threadIdx.x == 0) { atomicAdd(output_valid_count, block_valid_count); }
+    if (threadIdx.x == 0) {
+      atomicAdd(output_valid_count, static_cast<cudf::size_type>(block_valid_count));
+    }
   }
 }
 

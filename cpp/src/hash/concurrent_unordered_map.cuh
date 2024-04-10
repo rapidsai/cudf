@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017-2023, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2017-2024, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,25 +16,24 @@
 
 #pragma once
 
-#include <hash/managed.cuh>
+#include "hash/managed.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/hashing/detail/default_hash.cuh>
-#include <cudf/hashing/detail/hash_allocator.cuh>
 #include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/polymorphic_allocator.hpp>
 
+#include <cuda/atomic>
 #include <thrust/pair.h>
 
 #include <iostream>
 #include <iterator>
 #include <limits>
 #include <type_traits>
-
-#include <cuda/atomic>
 
 namespace {
 template <std::size_t N>
@@ -117,7 +116,7 @@ template <typename Key,
           typename Element,
           typename Hasher    = cudf::hashing::detail::default_hash<Key>,
           typename Equality  = equal_to<Key>,
-          typename Allocator = default_allocator<thrust::pair<Key, Element>>>
+          typename Allocator = rmm::mr::polymorphic_allocator<thrust::pair<Key, Element>>>
 class concurrent_unordered_map {
  public:
   using size_type      = size_t;

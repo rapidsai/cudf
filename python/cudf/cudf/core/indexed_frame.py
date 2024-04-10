@@ -48,8 +48,9 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._base_index import BaseIndex
+from cudf.core._compat import PANDAS_LT_300
 from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column, full
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.copy_types import BooleanMask, GatherMap
 from cudf.core.dtypes import ListDtype
@@ -65,8 +66,10 @@ from cudf.core.udf.utils import (
     _post_process_output_col,
     _return_arr_from_dtype,
 )
-from cudf.utils import docutils
+from cudf.core.window import Rolling
+from cudf.utils import docutils, ioutils
 from cudf.utils._numba import _CUDFNumbaConfig
+from cudf.utils.docutils import copy_docstring
 from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 from cudf.utils.utils import _warn_no_dask_cudf
 
@@ -199,9 +202,18 @@ def _get_label_range_or_mask(index, start, stop, step):
         if start is not None and stop is not None:
             if start > stop:
                 return slice(0, 0, None)
-            # TODO: Once Index binary ops are updated to support logical_and,
-            # can use that instead of using cupy.
-            boolean_mask = cp.logical_and((index >= start), (index <= stop))
+            if (start in index) and (stop in index):
+                # when we have a non-monotonic datetime index, return
+                # values in the slice defined by index_of(start) and
+                # index_of(end)
+                start_loc = index.get_loc(start.to_datetime64())
+                stop_loc = index.get_loc(stop.to_datetime64()) + 1
+                return slice(start_loc, stop_loc)
+            else:
+                raise KeyError(
+                    "Value based partial slicing on non-monotonic "
+                    "DatetimeIndexes with non-existing keys is not allowed.",
+                )
         elif start is not None:
             boolean_mask = index >= start
         else:
@@ -446,11 +458,6 @@ class IndexedFrame(Frame):
         out : bool
             If DataFrame/Series is empty, return True, if not return False.
 
-        Notes
-        -----
-        If DataFrame/Series contains only `null` values, it is still not
-        considered empty. See the example below.
-
         Examples
         --------
         >>> import cudf
@@ -491,8 +498,53 @@ class IndexedFrame(Frame):
         Series([], dtype: float64)
         >>> s.empty
         True
+
+        .. pandas-compat::
+            **DataFrame.empty, Series.empty**
+
+            If DataFrame/Series contains only `null` values, it is still not
+            considered empty. See the example above.
         """
         return self.size == 0
+
+    @_cudf_nvtx_annotate
+    @ioutils.doc_to_json()
+    def to_json(self, path_or_buf=None, *args, **kwargs):
+        """{docstring}"""
+
+        return cudf.io.json.to_json(
+            self, path_or_buf=path_or_buf, *args, **kwargs
+        )
+
+    @_cudf_nvtx_annotate
+    @ioutils.doc_to_hdf()
+    def to_hdf(self, path_or_buf, key, *args, **kwargs):
+        """{docstring}"""
+
+        cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
+
+    @_cudf_nvtx_annotate
+    def to_string(self):
+        r"""
+        Convert to string
+
+        cuDF uses Pandas internals for efficient string formatting.
+        Set formatting options using pandas string formatting options and
+        cuDF objects will print identically to Pandas objects.
+
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2]
+        >>> df['val'] = [float(i + 10) for i in range(3)]
+        >>> df.to_string()
+        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
+        """
+        return str(self)
 
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
@@ -588,11 +640,11 @@ class IndexedFrame(Frame):
     def replace(
         self,
         to_replace=None,
-        value=None,
+        value=no_default,
         inplace=False,
         limit=None,
         regex=False,
-        method=None,
+        method=no_default,
     ):
         """Replace values given in ``to_replace`` with ``value``.
 
@@ -637,11 +689,6 @@ class IndexedFrame(Frame):
         -------
         result : Series
             Series after replacement. The mask and index are preserved.
-
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
 
         Examples
         --------
@@ -785,6 +832,12 @@ class IndexedFrame(Frame):
         2    2    7  c
         3    3    8  d
         4    4    9  e
+
+        .. pandas-compat::
+            **DataFrame.replace, Series.replace**
+
+            Parameters that are currently not supported are: `limit`, `regex`,
+            `method`
         """
         if limit is not None:
             raise NotImplementedError("limit parameter is not implemented yet")
@@ -792,12 +845,30 @@ class IndexedFrame(Frame):
         if regex:
             raise NotImplementedError("regex parameter is not implemented yet")
 
-        if method not in ("pad", None):
-            raise NotImplementedError(
-                "method parameter is not implemented yet"
+        if method is not no_default:
+            warnings.warn(
+                "The 'method' keyword in "
+                f"{type(self).__name__}.replace is deprecated and "
+                "will be removed in a future version.",
+                FutureWarning,
             )
+        elif method not in {"pad", None, no_default}:
+            raise NotImplementedError("method parameter is not implemented")
 
-        if not (to_replace is None and value is None):
+        if (
+            value is no_default
+            and method is no_default
+            and not is_dict_like(to_replace)
+            and regex is False
+        ):
+            warnings.warn(
+                f"{type(self).__name__}.replace without 'value' and with "
+                "non-dict-like 'to_replace' is deprecated "
+                "and will raise in a future version. "
+                "Explicitly specify the new values instead.",
+                FutureWarning,
+            )
+        if not (to_replace is None and value is no_default):
             copy_data = {}
             (
                 all_na_per_column,
@@ -957,6 +1028,892 @@ class IndexedFrame(Frame):
         output._copy_type_metadata(self, include_index=False)
         return self._mimic_inplace(output, inplace=inplace)
 
+    @_cudf_nvtx_annotate
+    def abs(self):
+        """
+        Return a Series/DataFrame with absolute numeric value of each element.
+
+        This function only applies to elements that are all numeric.
+
+        Returns
+        -------
+        DataFrame/Series
+            Absolute value of each element.
+
+        Examples
+        --------
+        Absolute numeric values in a Series
+
+        >>> s = cudf.Series([-1.10, 2, -3.33, 4])
+        >>> s.abs()
+        0    1.10
+        1    2.00
+        2    3.33
+        3    4.00
+        dtype: float64
+        """
+        return self._unaryop("abs")
+
+    @_cudf_nvtx_annotate
+    def dot(self, other, reflect=False):
+        """
+        Get dot product of frame and other, (binary operator `dot`).
+
+        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`,
+        `dot`) to arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`,
+        `@`.
+
+        Parameters
+        ----------
+        other : Sequence, Series, or DataFrame
+            Any multiple element data structure, or list-like object.
+        reflect : bool, default False
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
+
+        Returns
+        -------
+        scalar, Series, or DataFrame
+            The result of the operation.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame([[1, 2, 3, 4],
+        ...                      [5, 6, 7, 8]])
+        >>> df @ df.T
+            0    1
+        0  30   70
+        1  70  174
+        >>> s = cudf.Series([1, 1, 1, 1])
+        >>> df @ s
+        0    10
+        1    26
+        dtype: int64
+        >>> [1, 2, 3, 4] @ s
+        10
+        """
+        # TODO: This function does not currently support nulls.
+        lhs = self.values
+        result_index = None
+        result_cols = None
+        if isinstance(self, cudf.Series) and isinstance(
+            other, (cudf.Series, cudf.DataFrame)
+        ):
+            common = self.index.union(other.index)
+            if len(common) > len(self.index) or len(common) > len(other.index):
+                raise ValueError("matrices are not aligned")
+
+            lhs = self.reindex(index=common, copy=False).values
+            rhs = other.reindex(index=common, copy=False).values
+            if isinstance(other, cudf.DataFrame):
+                result_index = other._data.to_pandas_index()
+        elif isinstance(self, cudf.DataFrame) and isinstance(
+            other, (cudf.Series, cudf.DataFrame)
+        ):
+            common = self._data.to_pandas_index().union(
+                other.index.to_pandas()
+            )
+            if len(common) > len(self._data.names) or len(common) > len(
+                other.index
+            ):
+                raise ValueError("matrices are not aligned")
+
+            lhs = self.reindex(columns=common, copy=False)
+            result_index = lhs.index
+
+            rhs = other.reindex(index=common, copy=False).values
+            lhs = lhs.values
+            if isinstance(other, cudf.DataFrame):
+                result_cols = other._data.to_pandas_index()
+
+        elif isinstance(
+            other, (cp.ndarray, np.ndarray)
+        ) or cudf.utils.dtypes.can_convert_to_column(other):
+            rhs = cp.asarray(other)
+        else:
+            # TODO: This should raise an exception, not return NotImplemented,
+            # but __matmul__ relies on the current behavior. We should either
+            # move this implementation to __matmul__ and call it from here
+            # (checking for NotImplemented and raising NotImplementedError if
+            # that's what's returned), or __matmul__ should catch a
+            # NotImplementedError from here and return NotImplemented. The
+            # latter feels cleaner (putting the implementation in this method
+            # rather than in the operator) but will be slower in the (highly
+            # unlikely) case that we're multiplying a cudf object with another
+            # type of object that somehow supports this behavior.
+            return NotImplemented
+        if reflect:
+            lhs, rhs = rhs, lhs
+
+        result = lhs.dot(rhs)
+        if len(result.shape) == 1:
+            return cudf.Series(
+                result,
+                index=self.index if result_index is None else result_index,
+            )
+        if len(result.shape) == 2:
+            return cudf.DataFrame(
+                result,
+                index=self.index if result_index is None else result_index,
+                columns=result_cols,
+            )
+        return result.item()
+
+    @_cudf_nvtx_annotate
+    def __matmul__(self, other):
+        return self.dot(other)
+
+    @_cudf_nvtx_annotate
+    def __rmatmul__(self, other):
+        return self.dot(other, reflect=True)
+
+    @_cudf_nvtx_annotate
+    def head(self, n=5):
+        """
+        Return the first `n` rows.
+        This function returns the first `n` rows for the object based
+        on position. It is useful for quickly testing if your object
+        has the right type of data in it.
+        For negative values of `n`, this function returns all rows except
+        the last `n` rows, equivalent to ``df[:-n]``.
+
+        Parameters
+        ----------
+        n : int, default 5
+            Number of rows to select.
+
+        Returns
+        -------
+        DataFrame or Series
+            The first `n` rows of the caller object.
+
+        Examples
+        --------
+        **Series**
+
+        >>> ser = cudf.Series(['alligator', 'bee', 'falcon',
+        ... 'lion', 'monkey', 'parrot', 'shark', 'whale', 'zebra'])
+        >>> ser
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        6        shark
+        7        whale
+        8        zebra
+        dtype: object
+
+        Viewing the first 5 lines
+
+        >>> ser.head()
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        dtype: object
+
+        Viewing the first `n` lines (three in this case)
+
+        >>> ser.head(3)
+        0    alligator
+        1          bee
+        2       falcon
+        dtype: object
+
+        For negative values of `n`
+
+        >>> ser.head(-3)
+        0    alligator
+        1          bee
+        2       falcon
+        3         lion
+        4       monkey
+        5       parrot
+        dtype: object
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.head(2)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        """
+        return self.iloc[:n]
+
+    @_cudf_nvtx_annotate
+    def tail(self, n=5):
+        """
+        Returns the last n rows as a new DataFrame or Series
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+        >>> df.tail(2)
+           key   val
+        3    3  13.0
+        4    4  14.0
+
+        **Series**
+
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.tail(2)
+        3    1
+        4    0
+        """
+        if n == 0:
+            return self.iloc[0:0]
+
+        return self.iloc[-n:]
+
+    @_cudf_nvtx_annotate
+    def pipe(self, func, *args, **kwargs):
+        """
+        Apply ``func(self, *args, **kwargs)``.
+
+        Parameters
+        ----------
+        func : function
+            Function to apply to the Series/DataFrame.
+            ``args``, and ``kwargs`` are passed into ``func``.
+            Alternatively a ``(callable, data_keyword)`` tuple where
+            ``data_keyword`` is a string indicating the keyword of
+            ``callable`` that expects the Series/DataFrame.
+        args : iterable, optional
+            Positional arguments passed into ``func``.
+        kwargs : mapping, optional
+            A dictionary of keyword arguments passed into ``func``.
+
+        Returns
+        -------
+        object : the return type of ``func``.
+
+        Examples
+        --------
+        Use ``.pipe`` when chaining together functions that expect
+        Series, DataFrames or GroupBy objects. Instead of writing
+
+        >>> func(g(h(df), arg1=a), arg2=b, arg3=c)
+
+        You can write
+
+        >>> (df.pipe(h)
+        ...    .pipe(g, arg1=a)
+        ...    .pipe(func, arg2=b, arg3=c)
+        ... )
+
+        If you have a function that takes the data as (say) the second
+        argument, pass a tuple indicating which keyword expects the
+        data. For example, suppose ``f`` takes its data as ``arg2``:
+
+        >>> (df.pipe(h)
+        ...    .pipe(g, arg1=a)
+        ...    .pipe((func, 'arg2'), arg1=a, arg3=c)
+        ...  )
+        """
+        return cudf.core.common.pipe(self, func, *args, **kwargs)
+
+    @_cudf_nvtx_annotate
+    def sum(
+        self,
+        axis=no_default,
+        skipna=True,
+        dtype=None,
+        numeric_only=False,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return sum of the values in the DataFrame.
+
+        Parameters
+        ----------
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+        dtype: data type
+            Data type to cast the result to.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.sum()
+        a    10
+        b    34
+        dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.sum, Series.sum**
+
+            Parameters currently not supported are `level`, `numeric_only`.
+        """
+        return self._reduce(
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    @_cudf_nvtx_annotate
+    def product(
+        self,
+        axis=no_default,
+        skipna=True,
+        dtype=None,
+        numeric_only=False,
+        min_count=0,
+        **kwargs,
+    ):
+        """
+        Return product of the values in the DataFrame.
+
+        Parameters
+        ----------
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+        dtype: data type
+            Data type to cast the result to.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+        min_count: int, default 0
+            The required number of valid values to perform the operation.
+            If fewer than min_count non-NA values are present the result
+            will be NA.
+
+            The default being 0. This means the sum of an all-NA or empty
+            Series is 0, and the product of an all-NA or empty Series is 1.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.product()
+        a      24
+        b    5040
+        dtype: int64
+
+        .. pandas-compat::
+            **DataFrame.product, Series.product**
+
+            Parameters currently not supported are level`, `numeric_only`.
+        """
+
+        return self._reduce(
+            # cuDF columns use "product" as the op name, but cupy uses "prod"
+            # and we need cupy if axis == 1.
+            "prod" if axis in {1, "columns"} else "product",
+            axis=axis,
+            skipna=skipna,
+            dtype=dtype,
+            numeric_only=numeric_only,
+            min_count=min_count,
+            **kwargs,
+        )
+
+    # Alias for pandas compatibility.
+    prod = product
+
+    @_cudf_nvtx_annotate
+    def mean(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+        """
+        Return the mean of the values for the requested axis.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns'}
+            Axis for the function to be applied on.
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+        **kwargs
+            Additional keyword arguments to be passed to the function.
+
+        Returns
+        -------
+        mean : Series or DataFrame (if level specified)
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.mean()
+        a    2.5
+        b    8.5
+        dtype: float64
+        """
+        return self._reduce(
+            "mean",
+            axis=axis,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    def median(
+        self, axis=None, skipna=True, level=None, numeric_only=None, **kwargs
+    ):
+        """
+        Return the median of the values for the requested axis.
+
+        Parameters
+        ----------
+        axis : {index (0), columns (1)}
+            Axis for the function to be applied on. For Series this
+            parameter is unused and defaults to 0.
+        skipna : bool, default True
+            Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        scalar
+
+        Examples
+        --------
+        >>> import cudf
+        >>> ser = cudf.Series([10, 25, 3, 25, 24, 6])
+        >>> ser
+        0    10
+        1    25
+        2     3
+        3    25
+        4    24
+        5     6
+        dtype: int64
+        >>> ser.median()
+        17.0
+
+        .. pandas-compat::
+            **DataFrame.median, Series.median**
+
+            Parameters currently not supported are `level` and `numeric_only`.
+
+        .. pandas-compat::
+            **DataFrame.median, Series.median**
+
+            Parameters currently not supported are `level` and `numeric_only`.
+        """
+        return self._reduce(
+            "median",
+            axis=axis,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    @_cudf_nvtx_annotate
+    def std(
+        self,
+        axis=no_default,
+        skipna=True,
+        ddof=1,
+        numeric_only=False,
+        **kwargs,
+    ):
+        """
+        Return sample standard deviation of the DataFrame.
+
+        Normalized by N-1 by default. This can be changed using
+        the `ddof` argument
+
+        Parameters
+        ----------
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA, the result
+            will be NA.
+        ddof: int, default 1
+            Delta Degrees of Freedom. The divisor used in calculations
+            is N - ddof, where N represents the number of elements.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.std()
+        a    1.290994
+        b    1.290994
+        dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.std, Series.std**
+
+            Parameters currently not supported are `level` and
+            `numeric_only`
+        """
+
+        return self._reduce(
+            "std",
+            axis=axis,
+            skipna=skipna,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    @_cudf_nvtx_annotate
+    def var(
+        self,
+        axis=no_default,
+        skipna=True,
+        ddof=1,
+        numeric_only=False,
+        **kwargs,
+    ):
+        """
+        Return unbiased variance of the DataFrame.
+
+        Normalized by N-1 by default. This can be changed using the
+        ddof argument.
+
+        Parameters
+        ----------
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values. If an entire row/column is NA, the result
+            will be NA.
+        ddof: int, default 1
+            Delta Degrees of Freedom. The divisor used in calculations is
+            N - ddof, where N represents the number of elements.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        scalar
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.var()
+        a    1.666667
+        b    1.666667
+        dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.var, Series.var**
+
+            Parameters currently not supported are `level` and
+            `numeric_only`
+        """
+        return self._reduce(
+            "var",
+            axis=axis,
+            skipna=skipna,
+            ddof=ddof,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    @_cudf_nvtx_annotate
+    def kurtosis(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+        """
+        Return Fisher's unbiased kurtosis of a sample.
+
+        Kurtosis obtained using Fisher's definition of
+        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
+
+        Parameters
+        ----------
+        axis: {index (0), columns(1)}
+            Axis for the function to be applied on.
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        Series or scalar
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series.kurtosis()
+        -1.1999999999999904
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
+        >>> df.kurt()
+        a   -1.2
+        b   -1.2
+        dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.kurtosis**
+
+            Parameters currently not supported are `level` and `numeric_only`
+        """
+        if axis not in (0, "index", None, no_default):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
+        return self._reduce(
+            "kurtosis",
+            axis=axis,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    # Alias for kurtosis.
+    kurt = kurtosis
+
+    @_cudf_nvtx_annotate
+    def skew(self, axis=0, skipna=True, numeric_only=False, **kwargs):
+        """
+        Return unbiased Fisher-Pearson skew of a sample.
+
+        Parameters
+        ----------
+        skipna: bool, default True
+            Exclude NA/null values when computing the result.
+        numeric_only : bool, default False
+            If True, includes only float, int, boolean columns.
+            If False, will raise error in-case there are
+            non-numeric columns.
+
+        Returns
+        -------
+        Series
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4, 5, 6, 6])
+        >>> series
+        0    1
+        1    2
+        2    3
+        3    4
+        4    5
+        5    6
+        6    6
+        dtype: int64
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 8, 10, 10]})
+        >>> df.skew()
+        a    0.00000
+        b   -0.37037
+        dtype: float64
+
+        .. pandas-compat::
+            **DataFrame.skew, Series.skew, Frame.skew**
+
+            The `axis` parameter is not currently supported.
+        """
+        if axis not in (0, "index", None, no_default):
+            raise NotImplementedError("Only axis=0 is currently supported.")
+
+        return self._reduce(
+            "skew",
+            axis=axis,
+            skipna=skipna,
+            numeric_only=numeric_only,
+            **kwargs,
+        )
+
+    @_cudf_nvtx_annotate
+    def mask(self, cond, other=None, inplace: bool = False) -> Optional[Self]:
+        """
+        Replace values where the condition is True.
+
+        Parameters
+        ----------
+        cond : bool Series/DataFrame, array-like
+            Where cond is False, keep the original value.
+            Where True, replace with corresponding value from other.
+            Callables are not supported.
+        other: scalar, list of scalars, Series/DataFrame
+            Entries where cond is True are replaced with
+            corresponding value from other. Callables are not
+            supported. Default is None.
+
+            DataFrame expects only Scalar or array like with scalars or
+            dataframe with same dimension as self.
+
+            Series expects only scalar or series like with same length
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        Same type as caller
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A":[1, 4, 5], "B":[3, 5, 8]})
+        >>> df.mask(df % 2 == 0, [-1, -1])
+           A  B
+        0  1  3
+        1 -1  5
+        2  5 -1
+
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> ser.mask(ser > 2, 10)
+        0    10
+        1    10
+        2     2
+        3     1
+        4     0
+        dtype: int64
+        >>> ser.mask(ser > 2)
+        0    <NA>
+        1    <NA>
+        2       2
+        3       1
+        4       0
+        dtype: int64
+        """
+
+        if not hasattr(cond, "__invert__"):
+            # We Invert `cond` below and call `where`, so
+            # making sure the object supports
+            # `~`(inversion) operator or `__invert__` method
+            cond = cp.asarray(cond)
+
+        return self.where(cond=~cond, other=other, inplace=inplace)
+
+    @_cudf_nvtx_annotate
+    @copy_docstring(Rolling)
+    def rolling(
+        self, window, min_periods=None, center=False, axis=0, win_type=None
+    ):
+        return Rolling(
+            self,
+            window,
+            min_periods=min_periods,
+            center=center,
+            axis=axis,
+            win_type=win_type,
+        )
+
+    @_cudf_nvtx_annotate
+    def nans_to_nulls(self):
+        """
+        Convert nans (if any) to nulls
+
+        Returns
+        -------
+        DataFrame or Series
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf, numpy as np
+        >>> series = cudf.Series([1, 2, np.nan, None, 10], nan_as_null=False)
+        >>> series
+        0     1.0
+        1     2.0
+        2     NaN
+        3    <NA>
+        4    10.0
+        dtype: float64
+        >>> series.nans_to_nulls()
+        0     1.0
+        1     2.0
+        2    <NA>
+        3    <NA>
+        4    10.0
+        dtype: float64
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = cudf.Series([1, None, np.nan], nan_as_null=False)
+        >>> df['b'] = cudf.Series([None, 3.14, np.nan], nan_as_null=False)
+        >>> df
+              a     b
+        0   1.0  <NA>
+        1  <NA>  3.14
+        2   NaN   NaN
+        >>> df.nans_to_nulls()
+              a     b
+        0   1.0  <NA>
+        1  <NA>  3.14
+        2  <NA>  <NA>
+        """
+        result_data = {}
+        for name, col in self._data.items():
+            try:
+                result_data[name] = col.nans_to_nulls()
+            except AttributeError:
+                result_data[name] = col.copy()
+        return self._from_data_like_self(result_data)
+
     def _copy_type_metadata(
         self,
         other: Self,
@@ -987,7 +1944,7 @@ class IndexedFrame(Frame):
                 self._index, cudf.core.index.CategoricalIndex
             ):
                 self._index = cudf.Index(
-                    cast(cudf.core.index.NumericIndex, self._index)._column,
+                    cast("cudf.Index", self._index)._column,
                     name=self._index.name,
                 )
             elif isinstance(other._index, cudf.MultiIndex) and not isinstance(
@@ -1044,6 +2001,14 @@ class IndexedFrame(Frame):
                 f"`limit_direction` must be 'backward' for method `{method}`"
             )
 
+        if method.lower() in {"ffill", "bfill", "pad", "backfill"}:
+            warnings.warn(
+                f"{type(self).__name__}.interpolate with method={method} is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
+
         data = self
 
         if not isinstance(data._index, cudf.RangeIndex):
@@ -1059,6 +2024,12 @@ class IndexedFrame(Frame):
         interpolator = cudf.core.algorithms.get_column_interpolator(method)
         columns = {}
         for colname, col in data._data.items():
+            if isinstance(col, cudf.core.column.StringColumn):
+                warnings.warn(
+                    f"{type(self).__name__}.interpolate with object dtype is "
+                    "deprecated and will raise in a future version.",
+                    FutureWarning,
+                )
             if col.nullable:
                 col = col.astype("float64").fillna(np.nan)
 
@@ -1124,13 +2095,6 @@ class IndexedFrame(Frame):
         If the index being truncated contains only datetime values,
         `before` and `after` may be specified as strings instead of
         Timestamps.
-
-        .. pandas-compat::
-            **DataFrame.truncate, Series.truncate**
-
-            The ``copy`` parameter is only present for API compatibility, but
-            ``copy=False`` is not supported. This method always generates a
-            copy.
 
         Examples
         --------
@@ -1273,6 +2237,13 @@ class IndexedFrame(Frame):
         2021-01-01 23:45:25  1  2
         2021-01-01 23:45:26  1  2
         2021-01-01 23:45:27  1  2
+
+        .. pandas-compat::
+            **DataFrame.truncate, Series.truncate**
+
+            The ``copy`` parameter is only present for API compatibility, but
+            ``copy=False`` is not supported. This method always generates a
+            copy.
         """
         if not copy:
             raise ValueError("Truncating with copy=False is not supported.")
@@ -1443,6 +2414,139 @@ class IndexedFrame(Frame):
         """
         return self._iloc_indexer_type(self)
 
+    @property  # type:ignore
+    @_cudf_nvtx_annotate
+    def axes(self):
+        """
+        Return a list representing the axes of the Series.
+
+        Series.axes returns a list containing the row index.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> csf1 = cudf.Series([1, 2, 3, 4])
+        >>> csf1.axes
+        [RangeIndex(start=0, stop=4, step=1)]
+
+        """
+        return [self.index]
+
+    def squeeze(self, axis: Literal["index", "columns", 0, 1, None] = None):
+        """
+        Squeeze 1 dimensional axis objects into scalars.
+
+        Series or DataFrames with a single element are squeezed to a scalar.
+        DataFrames with a single column or a single row are squeezed to a
+        Series. Otherwise the object is unchanged.
+
+        This method is most useful when you don't know if your
+        object is a Series or DataFrame, but you do know it has just a single
+        column. In that case you can safely call `squeeze` to ensure you have a
+        Series.
+
+        Parameters
+        ----------
+        axis : {0 or 'index', 1 or 'columns', None}, default None
+            A specific axis to squeeze. By default, all length-1 axes are
+            squeezed. For `Series` this parameter is unused and defaults
+            to `None`.
+
+        Returns
+        -------
+        DataFrame, Series, or scalar
+            The projection after squeezing `axis` or all the axes.
+
+        See Also
+        --------
+        Series.iloc : Integer-location based indexing for selecting scalars.
+        DataFrame.iloc : Integer-location based indexing for selecting Series.
+        Series.to_frame : Inverse of DataFrame.squeeze for a
+            single-column DataFrame.
+
+        Examples
+        --------
+        >>> primes = cudf.Series([2, 3, 5, 7])
+
+        Slicing might produce a Series with a single value:
+
+        >>> even_primes = primes[primes % 2 == 0]
+        >>> even_primes
+        0    2
+        dtype: int64
+
+        >>> even_primes.squeeze()
+        2
+
+        Squeezing objects with more than one value in every axis does nothing:
+
+        >>> odd_primes = primes[primes % 2 == 1]
+        >>> odd_primes
+        1    3
+        2    5
+        3    7
+        dtype: int64
+
+        >>> odd_primes.squeeze()
+        1    3
+        2    5
+        3    7
+        dtype: int64
+
+        Squeezing is even more effective when used with DataFrames.
+
+        >>> df = cudf.DataFrame([[1, 2], [3, 4]], columns=["a", "b"])
+        >>> df
+           a  b
+        0  1  2
+        1  3  4
+
+        Slicing a single column will produce a DataFrame with the columns
+        having only one value:
+
+        >>> df_a = df[["a"]]
+        >>> df_a
+           a
+        0  1
+        1  3
+
+        So the columns can be squeezed down, resulting in a Series:
+
+        >>> df_a.squeeze("columns")
+        0    1
+        1    3
+        Name: a, dtype: int64
+
+        Slicing a single row from a single column will produce a single
+        scalar DataFrame:
+
+        >>> df_0a = df.loc[df.index < 1, ["a"]]
+        >>> df_0a
+           a
+        0  1
+
+        Squeezing the rows produces a single scalar Series:
+
+        >>> df_0a.squeeze("rows")
+        a    1
+        Name: 0, dtype: int64
+
+        Squeezing all axes will project directly into a scalar:
+
+        >>> df_0a.squeeze()
+        1
+        """
+        axes = (
+            range(len(self.axes))
+            if axis is None
+            else (self._get_axis_from_axis_arg(axis),)
+        )
+        indexer = tuple(
+            0 if i in axes and len(a) == 1 else slice(None)
+            for i, a in enumerate(self.axes)
+        )
+        return self.iloc[indexer]
+
     @_cudf_nvtx_annotate
     def scale(self):
         """
@@ -1527,11 +2631,6 @@ class IndexedFrame(Frame):
         -------
         Frame or None
 
-        Notes
-        -----
-        Difference from pandas:
-          * Not supporting: kind, sort_remaining=False
-
         Examples
         --------
         **Series**
@@ -1574,6 +2673,11 @@ class IndexedFrame(Frame):
         1  2  3
         3  1  2
         2  3  1
+
+        .. pandas-compat::
+            **DataFrame.sort_index, Series.sort_index**
+
+            * Not supporting: kind, sort_remaining=False
         """
         if kind is not None:
             raise NotImplementedError("kind is not yet supported")
@@ -1588,8 +2692,6 @@ class IndexedFrame(Frame):
             idx = self.index
             if isinstance(idx, MultiIndex):
                 if level is not None:
-                    # Pandas doesn't handle na_position in case of MultiIndex.
-                    na_position = "first" if ascending is True else "last"
                     if not is_list_like(level):
                         level = [level]
                     by = list(map(idx._get_level_label, level))
@@ -1618,7 +2720,7 @@ class IndexedFrame(Frame):
                     isinstance(self, cudf.core.dataframe.DataFrame)
                     and self._data.multiindex
                 ):
-                    out._set_column_names_like(self)
+                    out._set_columns_like(self._data)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -1638,13 +2740,16 @@ class IndexedFrame(Frame):
                     isinstance(self, cudf.core.dataframe.DataFrame)
                     and self._data.multiindex
                 ):
-                    out._set_column_names_like(self)
+                    out._set_columns_like(self._data)
+            if ignore_index:
+                out = out.reset_index(drop=True)
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
+            if ignore_index:
+                out._data.rangeindex = True
+                out._data.names = list(range(len(self._data.names)))
 
-        if ignore_index is True:
-            out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
 
     def memory_usage(self, index=True, deep=False):
@@ -1900,6 +3005,8 @@ class IndexedFrame(Frame):
             self._column_names,
             None if has_range_index or not keep_index else self._index.names,
         )
+        result._data.label_dtype = self._data.label_dtype
+        result._data.rangeindex = self._data.rangeindex
 
         if keep_index and has_range_index:
             result.index = self.index[start:stop]
@@ -2074,14 +3181,14 @@ class IndexedFrame(Frame):
         (result,) = libcudf.copying.scatter(
             [cudf.Scalar(False, dtype=bool)],
             distinct,
-            [full(len(self), True, dtype=bool)],
+            [as_column(True, length=len(self), dtype=bool)],
             bounds_check=False,
         )
         return cudf.Series(result, index=self.index)
 
     @_cudf_nvtx_annotate
     def _empty_like(self, keep_index=True) -> Self:
-        return self._from_columns_like_self(
+        result = self._from_columns_like_self(
             libcudf.copying.columns_empty_like(
                 [
                     *(self._index._data.columns if keep_index else ()),
@@ -2091,6 +3198,9 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if keep_index else None,
         )
+        result._data.label_dtype = self._data.label_dtype
+        result._data.rangeindex = self._data.rangeindex
+        return result
 
     def _split(self, splits, keep_index=True):
         if self._num_rows == 0:
@@ -2117,6 +3227,17 @@ class IndexedFrame(Frame):
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
     ):  # noqa: D102
+        if method is not None:
+            # Do not remove until pandas 3.0 support is added.
+            assert (
+                PANDAS_LT_300
+            ), "Need to drop after pandas-3.0 support is added."
+            warnings.warn(
+                f"{type(self).__name__}.fillna with 'method' is "
+                "deprecated and will raise in a future version. "
+                "Use obj.ffill() or obj.bfill() instead.",
+                FutureWarning,
+            )
         old_index = self._index
         ret = super().fillna(value, method, axis, inplace, limit)
         if inplace:
@@ -2134,13 +3255,15 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(
-            method="bfill",
-            value=value,
-            axis=axis,
-            inplace=inplace,
-            limit=limit,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return self.fillna(
+                method="bfill",
+                value=value,
+                axis=axis,
+                inplace=inplace,
+                limit=limit,
+            )
 
     @_cudf_nvtx_annotate
     def backfill(self, value=None, axis=None, inplace=None, limit=None):
@@ -2171,13 +3294,15 @@ class IndexedFrame(Frame):
         -------
             Object with missing values filled or None if ``inplace=True``.
         """
-        return self.fillna(
-            method="ffill",
-            value=value,
-            axis=axis,
-            inplace=inplace,
-            limit=limit,
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            return self.fillna(
+                method="ffill",
+                value=value,
+                axis=axis,
+                inplace=inplace,
+                limit=limit,
+            )
 
     @_cudf_nvtx_annotate
     def pad(self, value=None, axis=None, inplace=None, limit=None):
@@ -2335,9 +3460,7 @@ class IndexedFrame(Frame):
 
         # Mask and data column preallocated
         ans_col = _return_arr_from_dtype(retty, len(self))
-        ans_mask = cudf.core.column.full(
-            size=len(self), fill_value=True, dtype="bool"
-        )
+        ans_mask = as_column(True, length=len(self), dtype="bool")
         output_args = [(ans_col, ans_mask), len(self)]
         input_args = _get_input_args_from_frame(self)
         launch_args = output_args + input_args + list(args)
@@ -2383,12 +3506,6 @@ class IndexedFrame(Frame):
         -------
         Frame : Frame with sorted values.
 
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
         Examples
         --------
         >>> import cudf
@@ -2400,6 +3517,12 @@ class IndexedFrame(Frame):
         0  0 -3
         2  2  0
         1  1  2
+
+        .. pandas-compat::
+            **DataFrame.sort_values, Series.sort_values**
+
+            * Support axis='index' only.
+            * Not supporting: inplace, kind
         """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -2923,16 +4046,23 @@ class IndexedFrame(Frame):
         2018-02-28      18.0  63.333333
 
 
-        Notes
-        -----
-        Note that the dtype of the index (or the 'on' column if using
-        'on=') in the result will be of a frequency closest to the
-        resampled frequency.  For example, if resampling from
-        nanoseconds to milliseconds, the index will be of dtype
-        'datetime64[ms]'.
+        .. pandas-compat::
+            **DataFrame.resample, Series.resample**
+
+            Note that the dtype of the index (or the 'on' column if using
+            'on=') in the result will be of a frequency closest to the
+            resampled frequency.  For example, if resampling from
+            nanoseconds to milliseconds, the index will be of dtype
+            'datetime64[ms]'.
         """
         import cudf.core.resample
 
+        if kind is not None:
+            warnings.warn(
+                "The 'kind' keyword in is "
+                "deprecated and will be removed in a future version. ",
+                FutureWarning,
+            )
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
             "start",
@@ -3334,6 +4464,13 @@ class IndexedFrame(Frame):
         2018-04-09  1
         2018-04-11  2
         """
+        # Do not remove until pandas 3.0 support is added.
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+        warnings.warn(
+            "first is deprecated and will be removed in a future version. "
+            "Please create a mask and filter using `.loc` instead",
+            FutureWarning,
+        )
         return self._first_or_last(
             offset,
             idx=0,
@@ -3380,6 +4517,13 @@ class IndexedFrame(Frame):
         2018-04-13  3
         2018-04-15  4
         """
+        # Do not remove until pandas 3.0 support is added.
+        assert PANDAS_LT_300, "Need to drop after pandas-3.0 support is added."
+        warnings.warn(
+            "last is deprecated and will be removed in a future version. "
+            "Please create a mask and filter using `.loc` instead",
+            FutureWarning,
+        )
         return self._first_or_last(
             offset,
             idx=-1,
@@ -3404,18 +4548,6 @@ class IndexedFrame(Frame):
         If reproducible results are required, a random number generator may be
         provided via the `random_state` parameter. This function will always
         produce the same sample given an identical `random_state`.
-
-        Notes
-        -----
-        When sampling from ``axis=0/'index'``, ``random_state`` can be either
-        a numpy random state (``numpy.random.RandomState``) or a cupy random
-        state (``cupy.random.RandomState``). When a numpy random state is
-        used, the output is guaranteed to match the output of the corresponding
-        pandas method call, but generating the sample may be slow. If exact
-        pandas equivalence is not required, using a cupy random state will
-        achieve better performance, especially when sampling large number of
-        items. It's advised to use the matching `ndarray` type to the random
-        state for the `weights` array.
 
         Parameters
         ----------
@@ -3455,7 +4587,7 @@ class IndexedFrame(Frame):
 
         Examples
         --------
-        >>> import cudf as cudf
+        >>> import cudf
         >>> df = cudf.DataFrame({"a":{1, 2, 3, 4, 5}})
         >>> df.sample(3)
            a
@@ -3484,6 +4616,20 @@ class IndexedFrame(Frame):
            a  c
         0  1  3
         1  2  4
+
+        .. pandas-compat::
+            **DataFrame.sample, Series.sample**
+
+            When sampling from ``axis=0/'index'``, ``random_state`` can be
+            either a numpy random state (``numpy.random.RandomState``)
+            or a cupy random state (``cupy.random.RandomState``). When a numpy
+            random state is used, the output is guaranteed to match the output
+            of the corresponding pandas method call, but generating the sample
+            maybe slow. If exact pandas equivalence is not required, using a
+            cupy random state will achieve better performance,
+            especially when sampling large number of
+            items. It's advised to use the matching `ndarray` type to
+            the random state for the `weights` array.
         """
         axis = 0 if axis is None else self._get_axis_from_axis_arg(axis)
         size = self.shape[axis]
@@ -3641,14 +4787,6 @@ class IndexedFrame(Frame):
         fname = ufunc.__name__
 
         if ret is not None:
-            # pandas bitwise operations return bools if indexes are misaligned.
-            if "bitwise" in fname:
-                reflect = self is not inputs[0]
-                other = inputs[0] if reflect else inputs[1]
-                if isinstance(other, self.__class__) and not self.index.equals(
-                    other.index
-                ):
-                    ret = ret.astype(bool)
             return ret
 
         # Attempt to dispatch all other functions to cupy.
@@ -3748,28 +4886,6 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index_names,
         )
-
-    def _append(
-        self, other, ignore_index=False, verify_integrity=False, sort=None
-    ):
-        # Note: Do not remove this function until pandas does. This warning is
-        # to clean up cudf but to match a deprecation in pandas
-        warnings.warn(
-            "The append method is deprecated and will be removed in a future "
-            "version. Use cudf.concat instead.",
-            FutureWarning,
-        )
-        if verify_integrity not in (None, False):
-            raise NotImplementedError(
-                "verify_integrity parameter is not supported yet."
-            )
-
-        if is_list_like(other):
-            to_concat = [self, *other]
-        else:
-            to_concat = [self, other]
-
-        return cudf.concat(to_concat, ignore_index=ignore_index, sort=sort)
 
     def astype(
         self,
@@ -4720,9 +5836,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def rfloordiv(
-        self, other, axis, level=None, fill_value=None
-    ):  # noqa: D102
+    def rfloordiv(self, other, axis, level=None, fill_value=None):  # noqa: D102
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
@@ -4852,9 +5966,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def eq(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def eq(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__eq__", fill_value=fill_value, can_reindex=True
         )
@@ -4894,9 +6006,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ne(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def ne(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__ne__", fill_value=fill_value, can_reindex=True
         )
@@ -4936,9 +6046,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def lt(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def lt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__lt__", fill_value=fill_value, can_reindex=True
         )
@@ -4978,9 +6086,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def le(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def le(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__le__", fill_value=fill_value, can_reindex=True
         )
@@ -5020,9 +6126,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def gt(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def gt(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__gt__", fill_value=fill_value, can_reindex=True
         )
@@ -5062,9 +6166,7 @@ class IndexedFrame(Frame):
             ),
         )
     )
-    def ge(
-        self, other, axis="columns", level=None, fill_value=None
-    ):  # noqa: D102
+    def ge(self, other, axis="columns", level=None, fill_value=None):  # noqa: D102
         return self._binaryop(
             other=other, op="__ge__", fill_value=fill_value, can_reindex=True
         )
@@ -5089,7 +6191,7 @@ class IndexedFrame(Frame):
         self,
         axis=0,
         method="average",
-        numeric_only=None,
+        numeric_only=False,
         na_option="keep",
         ascending=True,
         pct=False,
@@ -5112,7 +6214,7 @@ class IndexedFrame(Frame):
             * max: highest rank in the group
             * first: ranks assigned in order they appear in the array
             * dense: like 'min', but rank always increases by 1 between groups.
-        numeric_only : bool, optional
+        numeric_only : bool, default False
             For DataFrame objects, rank only numeric columns if set to True.
         na_option : {'keep', 'top', 'bottom'}, default 'keep'
             How to rank NaN values:
@@ -5133,7 +6235,7 @@ class IndexedFrame(Frame):
         if method not in {"average", "min", "max", "first", "dense"}:
             raise KeyError(method)
 
-        method_enum = libcudf.aggregation.RankMethod[method.upper()]
+        method_enum = libcudf.pylibcudf.aggregation.RankMethod[method.upper()]
         if na_option not in {"keep", "top", "bottom"}:
             raise ValueError(
                 "na_option must be one of 'keep', 'top', or 'bottom'"
@@ -5147,6 +6249,13 @@ class IndexedFrame(Frame):
 
         source = self
         if numeric_only:
+            if isinstance(
+                source, cudf.Series
+            ) and not _is_non_decimal_numeric_dtype(self.dtype):
+                raise TypeError(
+                    "Series.rank does not allow numeric_only=True with "
+                    "non-numeric dtype."
+                )
             numeric_cols = (
                 name
                 for name in self._data.names
@@ -5198,11 +6307,13 @@ class IndexedFrame(Frame):
 
     @_warn_no_dask_cudf
     def __dask_tokenize__(self):
+        from dask.base import normalize_token
+
         return [
             type(self),
-            self._dtypes,
-            self.index,
-            self.hash_values().values_host,
+            normalize_token(self._dtypes),
+            normalize_token(self.index),
+            normalize_token(self.hash_values().values_host),
         ]
 
 
@@ -5266,10 +6377,10 @@ def _get_replacement_values_for_columns(
             values_columns = {
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
-                else full(
-                    len(to_replace),
+                else as_column(
                     value,
-                    cudf.dtype(type(value)),
+                    length=len(to_replace),
+                    dtype=cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }
@@ -5293,7 +6404,7 @@ def _get_replacement_values_for_columns(
                 "value argument must be scalar, list-like or Series"
             )
     elif _is_series(to_replace):
-        if value is None:
+        if value is None or value is no_default:
             to_replace_columns = {
                 col: as_column(to_replace.index) for col in columns_dtype_map
             }
@@ -5324,7 +6435,7 @@ def _get_replacement_values_for_columns(
                 "value"
             )
     elif is_dict_like(to_replace):
-        if value is None:
+        if value is None or value is no_default:
             to_replace_columns = {
                 col: list(to_replace.keys()) for col in columns_dtype_map
             }

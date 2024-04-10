@@ -16,9 +16,9 @@
 
 #include "csv_common.hpp"
 #include "csv_gpu.hpp"
-
-#include <io/utilities/block_utils.cuh>
-#include <io/utilities/parsing_utils.cuh>
+#include "io/utilities/block_utils.cuh"
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -31,7 +31,6 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <io/utilities/trie.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>

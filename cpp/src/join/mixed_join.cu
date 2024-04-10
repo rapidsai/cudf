@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/hashing/detail/helper_functions.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -127,12 +128,11 @@ mixed_join(
   auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
+  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                                 cuco::empty_value{cudf::detail::JoinNoneValue},
+                                 stream.value(),
+                                 cudf::detail::cuco_allocator{stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -393,12 +393,11 @@ compute_mixed_join_output_size(table_view const& left_equality,
   auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
-  mixed_multimap_type hash_table{
-    compute_hash_table_size(build.num_rows()),
-    cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
-    cuco::empty_value{cudf::detail::JoinNoneValue},
-    stream.value(),
-    detail::hash_table_allocator_type{default_allocator<char>{}, stream}};
+  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                 cuco::empty_key{std::numeric_limits<hash_value_type>::max()},
+                                 cuco::empty_value{cudf::detail::JoinNoneValue},
+                                 stream.value(),
+                                 cudf::detail::cuco_allocator{stream}};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we

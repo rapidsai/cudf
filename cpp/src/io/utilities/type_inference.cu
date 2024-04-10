@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <io/utilities/column_type_histogram.hpp>
-#include <io/utilities/string_parsing.hpp>
-#include <io/utilities/trie.cuh>
+#include "io/utilities/column_type_histogram.hpp"
+#include "io/utilities/string_parsing.hpp"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>

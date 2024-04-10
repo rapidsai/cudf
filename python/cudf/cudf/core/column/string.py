@@ -594,11 +594,6 @@ class StringMethods(ColumnMethods):
             for each group. If `expand=False` and `pat` has only one capture
             group, then return a Series/Index.
 
-        Notes
-        -----
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
-
         Examples
         --------
         >>> import cudf
@@ -625,6 +620,12 @@ class StringMethods(ColumnMethods):
         1       2
         2    <NA>
         dtype: object
+
+        .. pandas-compat::
+            **StringMethods.extract**
+
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """  # noqa W605
         if not _is_supported_regex_flags(flags):
             raise NotImplementedError(
@@ -672,14 +673,6 @@ class StringMethods(ColumnMethods):
             pattern is contained within the string of each element of the
             Series/Index.
 
-        Notes
-        -----
-        The parameters `case` and `na` are not yet supported and will
-        raise a NotImplementedError if anything other than the default
-        value is set.
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
-
         Examples
         --------
         >>> import cudf
@@ -704,9 +697,9 @@ class StringMethods(ColumnMethods):
         >>> data = ['Mouse', 'dog', 'house and parrot', '23.0', np.NaN]
         >>> idx = cudf.Index(data)
         >>> idx
-        StringIndex(['Mouse' 'dog' 'house and parrot' '23.0' None], dtype='object')
+        Index(['Mouse', 'dog', 'house and parrot', '23.0', None], dtype='object')
         >>> idx.str.contains('23', regex=False)
-        GenericIndex([False, False, False, True, <NA>], dtype='bool')
+        Index([False, False, False, True, <NA>], dtype='bool')
 
         Returning 'house' or 'dog' when either expression occurs in a string.
 
@@ -753,6 +746,15 @@ class StringMethods(ColumnMethods):
         3     True
         4     <NA>
         dtype: bool
+
+        .. pandas-compat::
+            **StringMethods.contains**
+
+            The parameters `case` and `na` are not yet supported and will
+            raise a NotImplementedError if anything other than the default
+            value is set.
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """  # noqa W605
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
@@ -951,12 +953,6 @@ class StringMethods(ColumnMethods):
             A copy of the object with all matching occurrences of pat replaced
             by repl.
 
-        Notes
-        -----
-        The parameters `case` and `flags` are not yet supported and will raise
-        a `NotImplementedError` if anything other than the default value
-        is set.
-
         Examples
         --------
         >>> import cudf
@@ -986,6 +982,13 @@ class StringMethods(ColumnMethods):
         1     fuz
         2    <NA>
         dtype: object
+
+        .. pandas-compat::
+            **StringMethods.replace**
+
+            The parameters `case` and `flags` are not yet supported and will
+            raise a `NotImplementedError` if anything other than the default
+            value is set.
         """
         if case is not None:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -2769,11 +2772,6 @@ class StringMethods(ColumnMethods):
         DataFrame or MultiIndex
             Returns a DataFrame / MultiIndex
 
-        Notes
-        -----
-        The parameter `expand` is not yet supported and will raise a
-        `NotImplementedError` if anything other than the default value is set.
-
         See Also
         --------
         rpartition
@@ -2807,7 +2805,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        StringIndex(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -2815,6 +2813,14 @@ class StringMethods(ColumnMethods):
         MultiIndex([('X', ' ', '123'),
                     ('Y', ' ', '999')],
                    )
+
+        .. pandas-compat::
+            **StringMethods.partition**
+
+            The parameter `expand` is not yet supported and will raise a
+            `NotImplementedError` if anything other than the default
+            value is set.
+
         """
         if expand is not True:
             raise NotImplementedError(
@@ -2872,7 +2878,7 @@ class StringMethods(ColumnMethods):
 
         >>> idx = cudf.Index(['X 123', 'Y 999'])
         >>> idx
-        StringIndex(['X 123' 'Y 999'], dtype='object')
+        Index(['X 123', 'Y 999'], dtype='object')
 
         Which will create a MultiIndex:
 
@@ -3500,14 +3506,6 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index
 
-        Notes
-        -----
-            -  `flags` parameter currently only supports re.DOTALL
-               and re.MULTILINE.
-            -  Some characters need to be escaped when passing
-               in pat. e.g. ``'$'`` has a special meaning in regex
-               and must be escaped when finding this literal character.
-
         Examples
         --------
         >>> import cudf
@@ -3538,7 +3536,16 @@ class StringMethods(ColumnMethods):
 
         >>> index = cudf.Index(['A', 'A', 'Aaba', 'cat'])
         >>> index.str.count('a')
-        Int64Index([0, 0, 2, 1], dtype='int64')
+        Index([0, 0, 2, 1], dtype='int64')
+
+        .. pandas-compat::
+            **StringMethods.count**
+
+            -   `flags` parameter currently only supports re.DOTALL
+                and re.MULTILINE.
+            -   Some characters need to be escaped when passing
+                in pat. e.g. ``'$'`` has a special meaning in regex
+                and must be escaped when finding this literal character.
         """  # noqa W605
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -3569,11 +3576,6 @@ class StringMethods(ColumnMethods):
         DataFrame
             All non-overlapping matches of pattern or
             regular expression in each string of this Series/Index.
-
-        Notes
-        -----
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
 
         Examples
         --------
@@ -3615,6 +3617,12 @@ class StringMethods(ColumnMethods):
         1        []
         2    [b, b]
         dtype: list
+
+        .. pandas-compat::
+            **StringMethods.findall**
+
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """
         if isinstance(pat, re.Pattern):
             flags = pat.flags & ~re.U
@@ -3797,11 +3805,6 @@ class StringMethods(ColumnMethods):
             A Series of booleans indicating whether the given
             pattern matches the end of each string element.
 
-        Notes
-        -----
-        `na` parameter is not yet supported, as cudf uses
-        native strings instead of Python objects.
-
         Examples
         --------
         >>> import cudf
@@ -3818,6 +3821,12 @@ class StringMethods(ColumnMethods):
         2    False
         3     <NA>
         dtype: bool
+
+        .. pandas-compat::
+            **StringMethods.endswith**
+
+            `na` parameter is not yet supported, as cudf uses
+            native strings instead of Python objects.
         """
         if pat is None:
             raise TypeError(
@@ -4245,13 +4254,6 @@ class StringMethods(ColumnMethods):
         -------
         Series or Index of boolean values.
 
-        Notes
-        -----
-        Parameters `case` and `na` are currently not supported.
-        The `flags` parameter currently only supports re.DOTALL and
-        re.MULTILINE.
-
-
         Examples
         --------
         >>> import cudf
@@ -4272,6 +4274,13 @@ class StringMethods(ColumnMethods):
         1     True
         2     True
         dtype: bool
+
+        .. pandas-compat::
+            **StringMethods.match**
+
+            Parameters `case` and `na` are currently not supported.
+            The `flags` parameter currently only supports re.DOTALL and
+            re.MULTILINE.
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
@@ -5490,7 +5499,9 @@ class StringColumn(column.ColumnBase):
 
         if len(children) == 0 and size != 0:
             # all nulls-column:
-            offsets = column.full(size + 1, 0, dtype=size_type_dtype)
+            offsets = column.as_column(
+                0, length=size + 1, dtype=size_type_dtype
+            )
 
             children = (offsets,)
 
@@ -5583,6 +5594,21 @@ class StringColumn(column.ColumnBase):
                     self.start_offset : self.end_offset
                 ]
         return self._data
+
+    def all(self, skipna: bool = True) -> bool:
+        if skipna and self.null_count == self.size:
+            return True
+        elif not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        raise NotImplementedError("`all` not implemented for `StringColumn`")
+
+    def any(self, skipna: bool = True) -> bool:
+        if not skipna and self.has_nulls():
+            raise TypeError("boolean value of NA is ambiguous")
+        elif skipna and self.null_count == self.size:
+            return False
+
+        raise NotImplementedError("`any` not implemented for `StringColumn`")
 
     def data_array_view(
         self, *, mode="write"
@@ -5724,6 +5750,10 @@ class StringColumn(column.ColumnBase):
                     self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
+        if format.endswith("%z"):
+            raise NotImplementedError(
+                "cuDF does not yet support timezone-aware datetimes"
+            )
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
     def as_timedelta_column(
@@ -5763,16 +5793,21 @@ class StringColumn(column.ColumnBase):
         *,
         index: Optional[pd.Index] = None,
         nullable: bool = False,
+        arrow_type: bool = False,
     ) -> pd.Series:
-        if nullable:
+        if arrow_type and nullable:
+            raise ValueError(
+                f"{arrow_type=} and {nullable=} cannot both be set."
+            )
+        if arrow_type:
+            return pd.Series(
+                pd.arrays.ArrowExtensionArray(self.to_arrow()), index=index
+            )
+        elif nullable:
             pandas_array = pd.StringDtype().__from_arrow__(self.to_arrow())
-            pd_series = pd.Series(pandas_array, copy=False)
+            return pd.Series(pandas_array, copy=False, index=index)
         else:
-            pd_series = self.to_arrow().to_pandas()
-
-        if index is not None:
-            pd_series.index = index
-        return pd_series
+            return super().to_pandas(index=index, nullable=nullable)
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         to_dtype = cudf.api.types.dtype(to_dtype)
@@ -5893,8 +5928,8 @@ class StringColumn(column.ColumnBase):
                     "__eq__",
                     "__ne__",
                 }:
-                    return column.full(
-                        len(self), op == "__ne__", dtype="bool"
+                    return column.as_column(
+                        op == "__ne__", length=len(self), dtype="bool"
                     ).set_mask(self.mask)
                 else:
                     return NotImplemented
@@ -5903,7 +5938,9 @@ class StringColumn(column.ColumnBase):
                 if isinstance(other, cudf.Scalar):
                     other = cast(
                         StringColumn,
-                        column.full(len(self), other, dtype="object"),
+                        column.as_column(
+                            other, length=len(self), dtype="object"
+                        ),
                     )
 
                 # Explicit types are necessary because mypy infers ColumnBase

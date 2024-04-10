@@ -14,10 +14,11 @@
 
 cmake_minimum_required(VERSION 3.26.4 FATAL_ERROR)
 
-include(../fetch_rapids.cmake)
+include(../rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
+include(${rapids-cmake-dir}/cuda/set_runtime.cmake)
 include(rapids-export)
 include(rapids-find)
 
@@ -25,7 +26,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 24.02.02
+  VERSION "${RAPIDS_VERSION}"
   LANGUAGES C CXX CUDA
 )
 if(CMAKE_CUDA_COMPILER_ID STREQUAL "NVIDIA" AND CMAKE_CUDA_COMPILER_VERSION VERSION_LESS 11.5)
@@ -181,6 +182,8 @@ endif()
 rapids_cpm_init()
 # find jitify
 include(cmake/thirdparty/get_jitify.cmake)
+# find NVTX
+include(cmake/thirdparty/get_nvtx.cmake)
 # find nvCOMP
 include(cmake/thirdparty/get_nvcomp.cmake)
 # find CCCL before rmm so that we get cudf's patched version of CCCL
@@ -336,6 +339,7 @@ add_library(
   src/groupby/sort/group_count_scan.cu
   src/groupby/sort/group_max_scan.cu
   src/groupby/sort/group_min_scan.cu
+  src/groupby/sort/group_product_scan.cu
   src/groupby/sort/group_rank_scan.cu
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_sum_scan.cu
@@ -375,12 +379,13 @@ add_library(
   src/io/functions.cpp
   src/io/json/byte_range_info.cu
   src/io/json/json_column.cu
-  src/io/json/json_quote_normalization.cu
+  src/io/json/json_normalization.cu
   src/io/json/json_tree.cu
   src/io/json/nested_json_gpu.cu
   src/io/json/read_json.cu
   src/io/json/legacy/json_gpu.cu
   src/io/json/legacy/reader_impl.cu
+  src/io/json/parser_features.cpp
   src/io/json/write_json.cu
   src/io/orc/aggregate_orc_metadata.cpp
   src/io/orc/dict_enc.cu
@@ -410,6 +415,7 @@ add_library(
   src/io/parquet/reader_impl_helpers.cpp
   src/io/parquet/reader_impl_preprocess.cu
   src/io/parquet/writer_impl.cu
+  src/io/parquet/decode_fixed.cu
   src/io/statistics/orc_column_statistics.cu
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/byte_range_info.cpp
@@ -433,6 +439,7 @@ add_library(
   src/jit/util.cpp
   src/join/conditional_join.cu
   src/join/cross_join.cu
+  src/join/distinct_hash_join.cu
   src/join/hash_join.cu
   src/join/join.cu
   src/join/join_utils.cu
@@ -569,6 +576,7 @@ add_library(
   src/strings/convert/convert_lists.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
+  src/strings/copying/copy_range.cu
   src/strings/copying/shift.cu
   src/strings/count_matches.cu
   src/strings/extract/extract.cu
@@ -585,7 +593,9 @@ add_library(
   src/strings/replace/multi.cu
   src/strings/replace/multi_re.cu
   src/strings/replace/replace.cu
+  src/strings/replace/replace_nulls.cu
   src/strings/replace/replace_re.cu
+  src/strings/replace/replace_slice.cu
   src/strings/reverse.cu
   src/strings/scan/scan_inclusive.cu
   src/strings/search/findall.cu
@@ -636,7 +646,6 @@ add_library(
   src/transform/nans_to_nulls.cu
   src/transform/one_hot_encode.cu
   src/transform/row_bit_count.cu
-  src/transform/row_conversion.cu
   src/transform/transform.cpp
   src/transpose/transpose.cu
   src/unary/cast_ops.cu
@@ -772,7 +781,7 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} CCCL::CCCL rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3-cpp> cuco::cuco ZLIB::ZLIB nvcomp::nvcomp kvikio::kvikio
           $<TARGET_NAME_IF_EXISTS:cuFile_interface>
 )
 
@@ -781,17 +790,7 @@ if(TARGET conda_env)
   target_link_libraries(cudf PRIVATE conda_env)
 endif()
 
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart_static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudf PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-  # Make sure to export to consumers what runtime we used
-  target_link_libraries(cudf PUBLIC CUDA::cudart)
-endif()
+rapids_cuda_set_runtime(cudf USE_STATIC ${CUDA_STATIC_RUNTIME})
 
 file(
   WRITE "${CUDF_BINARY_DIR}/fatbin.ld"
@@ -839,6 +838,7 @@ if(CUDF_BUILD_TESTUTIL)
     PUBLIC cudf
     PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
   )
+  rapids_cuda_set_runtime(cudftest_default_stream USE_STATIC ${CUDA_STATIC_RUNTIME})
 
   add_library(cudf::cudftest_default_stream ALIAS cudftest_default_stream)
 
@@ -882,6 +882,7 @@ if(CUDF_BUILD_TESTUTIL)
     cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
                         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
   )
+  rapids_cuda_set_runtime(cudftestutil USE_STATIC ${CUDA_STATIC_RUNTIME})
   add_library(cudf::cudftestutil ALIAS cudftestutil)
 
 endif()
@@ -920,6 +921,7 @@ if(CUDF_BUILD_STREAMS_TEST_UTIL)
     if(CUDF_BUILD_STACKTRACE_DEBUG)
       target_link_libraries(${_tgt} PRIVATE cudf_backtrace)
     endif()
+    rapids_cuda_set_runtime(${_tgt} USE_STATIC ${CUDA_STATIC_RUNTIME})
     add_library(cudf::${_tgt} ALIAS ${_tgt})
 
     if("${_mode}" STREQUAL "testing")
@@ -1084,7 +1086,8 @@ rapids_export(
 add_custom_command(
   OUTPUT CUDF_DOXYGEN
   WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/doxygen
-  COMMAND doxygen Doxyfile
+  COMMAND ${CMAKE_COMMAND} -E env "RAPIDS_VERSION=${RAPIDS_VERSION}"
+          "RAPIDS_VERSION_MAJOR_MINOR=${RAPIDS_VERSION_MAJOR_MINOR}" doxygen Doxyfile
   VERBATIM
   COMMENT "Custom command for building cudf doxygen docs."
 )

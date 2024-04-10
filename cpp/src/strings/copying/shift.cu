@@ -59,9 +59,9 @@ struct output_sizes_fn {
 struct shift_chars_fn {
   column_device_view const d_column;  // input strings column
   string_view const d_filler;
-  size_type const offset;
+  int64_t const offset;
 
-  __device__ char operator()(size_type idx)
+  __device__ char operator()(int64_t idx)
   {
     if (offset < 0) {
       auto const last_index = -offset;
@@ -110,7 +110,7 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   // compute the shift-offset for the output characters child column
   auto const shift_offset = [&] {
     auto const index = (offset < 0) ? input.size() + offset : offset;
-    return (offset < 0 ? -1 : 1) * cudf::detail::get_value<size_type>(offsets_view, index, stream);
+    return (offset < 0 ? -1 : 1) * get_offset_value(offsets_view, index, stream);
   }();
 
   // create output chars child column
@@ -119,8 +119,8 @@ std::unique_ptr<column> shift(strings_column_view const& input,
 
   // run kernel to shift all the characters
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(total_bytes),
+                    thrust::counting_iterator<int64_t>(0),
+                    thrust::counting_iterator<int64_t>(total_bytes),
                     d_chars,
                     shift_chars_fn{*d_input, d_fill_str, shift_offset});
 

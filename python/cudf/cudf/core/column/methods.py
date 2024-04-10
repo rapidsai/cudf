@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing_extensions import Literal
 import cudf
 from cudf.utils.utils import NotIterable
 
-ParentType = Union["cudf.Series", "cudf.core.index.GenericIndex"]
+ParentType = Union["cudf.Series", "cudf.core.index.Index"]
 
 
 class ColumnMethods(NotIterable):

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -443,6 +443,35 @@ def test_proxy_binop():
     assert Bar() + FooProxy() == "sum"
     assert Foo() + BarProxy() == "sum"
     assert BarProxy() + Foo() == "sum"
+
+
+def test_slow_attr_still_proxy():
+    class A:
+        pass
+
+    class B:
+        @property
+        def _private(self):
+            return A()
+
+    pxy_a = make_final_proxy_type(
+        "A",
+        _Unusable,
+        A,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+
+    pxy_b = make_final_proxy_type(
+        "B",
+        _Unusable,
+        B,
+        fast_to_slow=_Unusable(),
+        slow_to_fast=_Unusable(),
+    )
+
+    result = pxy_b()._private
+    assert isinstance(result, pxy_a)
 
 
 def tuple_with_attrs(name, fields: list[str], extra_fields: set[str]):

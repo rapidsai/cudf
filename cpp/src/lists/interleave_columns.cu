@@ -30,6 +30,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/functional>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
@@ -37,8 +38,6 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
-
-#include <cuda/functional>
 
 namespace cudf {
 namespace lists {
@@ -229,7 +228,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
       rmm::device_uvector<int8_t>(data_has_null_mask ? num_output_entries : 0, stream);
     comp_fn.d_validities = validities.data();
 
-    auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
+    auto [offsets_column, chars] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
 
     auto [null_mask, null_count] =
@@ -237,7 +236,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
 
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
-                               std::move(chars_column->release().data.release()[0]),
+                               chars.release(),
                                null_count,
                                std::move(null_mask));
   }

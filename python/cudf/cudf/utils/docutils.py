@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 """
 Helper functions for parameterized docstring
@@ -125,15 +125,6 @@ doc_describe = docfmt_partial(
               ``select_dtypes`` (e.g. ``df.describe(include=['O'])``). To
               exclude pandas categorical columns, use ``'category'``
             - None (default) : The result will exclude nothing.
-
-        datetime_is_numeric : bool, default False
-            For DataFrame input, this also controls whether datetime columns
-            are included by default.
-
-            .. deprecated:: 23.04
-
-               `datetime_is_numeric` is deprecated and will be removed in
-               a future version of cudf.
 
         Returns
         -------

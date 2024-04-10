@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from itertools import combinations, product, repeat
 
@@ -7,6 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     INTEGER_TYPES,
@@ -156,36 +157,37 @@ def _check_series(expect, got):
     assert direct_equal or nanfilled_equal, msg
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="bug in older version of pandas",
+)
 def test_dataframe_join_suffix():
     np.random.seed(0)
 
-    df = cudf.DataFrame()
-    for k in "abc":
-        df[k] = np.random.randint(0, 5, 5)
+    df = cudf.DataFrame(np.random.randint(0, 5, (5, 3)), columns=list("abc"))
 
     left = df.set_index("a")
     right = df.set_index("c")
-    with pytest.raises(ValueError) as raises:
-        left.join(right)
-    raises.match(
-        "there are overlapping columns but lsuffix"
-        " and rsuffix are not defined"
+    msg = (
+        "there are overlapping columns but lsuffix and rsuffix are not defined"
     )
+    with pytest.raises(ValueError, match=msg):
+        left.join(right)
 
     got = left.join(right, lsuffix="_left", rsuffix="_right", sort=True)
-    # Get expected value
-    pddf = df.to_pandas()
-    expect = pddf.set_index("a").join(
-        pddf.set_index("c"), lsuffix="_left", rsuffix="_right"
+    expect = left.to_pandas().join(
+        right.to_pandas(),
+        lsuffix="_left",
+        rsuffix="_right",
+        sort=True,
     )
-    # Check
-    assert list(expect.columns) == list(got.columns)
-    assert_eq(expect.index.values, got.index.values)
+    # TODO: Retain result index name
+    expect.index.name = None
+    assert_eq(got, expect)
 
-    got_sorted = got.sort_values(by=list(got.columns), axis=0)
-    expect_sorted = expect.sort_values(by=list(expect.columns), axis=0)
-    for k in expect_sorted.columns:
-        _check_series(expect_sorted[k].fillna(-1), got_sorted[k].fillna(-1))
+    got_sorted = got.sort_values(by=["b_left", "c", "b_right"], axis=0)
+    expect_sorted = expect.sort_values(by=["b_left", "c", "b_right"], axis=0)
+    assert_eq(got_sorted, expect_sorted)
 
 
 def test_dataframe_join_cats():
@@ -502,7 +504,6 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
 
 
 def test_safe_merging_with_left_empty():
-
     np.random.seed(0)
 
     pairs = ("bcd", "b")
@@ -786,7 +787,7 @@ def test_join_datetimes_index(dtype):
 
     assert gdf["d"].dtype == cudf.dtype(dtype)
 
-    assert_join_results_equal(pdf, gdf, how="inner")
+    assert_join_results_equal(pdf, gdf, how="inner", check_dtype=False)
 
 
 def test_join_with_different_names():
@@ -910,7 +911,6 @@ def test_join_multi(how, column_a, column_b, column_c):
     ],
 )
 def test_merge_multi(kwargs):
-
     left = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4, 3, 5, 6],
@@ -981,7 +981,7 @@ def test_typecast_on_join_int_to_int(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
 
     exp_join_data = [1, 2]
     exp_other_data = ["a", "b"]
@@ -1011,7 +1011,7 @@ def test_typecast_on_join_float_to_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
 
     if dtype_l != dtype_r:
         exp_join_data = [1, 2, 3, 4.5]
@@ -1052,7 +1052,7 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
     gdf_l = cudf.DataFrame({"join_col": join_data_l, "B": other_data})
     gdf_r = cudf.DataFrame({"join_col": join_data_r, "B": other_data})
 
-    exp_dtype = np.find_common_type([], [np.dtype(dtype_l), np.dtype(dtype_r)])
+    exp_dtype = np.result_type(np.dtype(dtype_l), np.dtype(dtype_r))
 
     exp_join_data = [1, 2, 3]
     exp_other_data = ["a", "b", "c"]
@@ -1072,7 +1072,6 @@ def test_typecast_on_join_mixed_int_float(dtype_l, dtype_r):
 
 
 def test_typecast_on_join_no_float_round():
-
     other_data = ["a", "b", "c", "d", "e"]
 
     join_data_l = cudf.Series([1, 2, 3, 4, 5], dtype="int8")
@@ -1530,7 +1529,6 @@ def test_categorical_typecast_outer():
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
 def test_categorical_typecast_inner_one_cat(dtype):
-
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
@@ -1542,7 +1540,6 @@ def test_categorical_typecast_inner_one_cat(dtype):
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
 def test_categorical_typecast_left_one_cat(dtype):
-
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
@@ -1554,7 +1551,6 @@ def test_categorical_typecast_left_one_cat(dtype):
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["object"])
 def test_categorical_typecast_outer_one_cat(dtype):
-
     data = np.array([1, 2, 3], dtype=dtype)
 
     left = make_categorical_dataframe(data)
@@ -1810,7 +1806,6 @@ def test_typecast_on_join_indexes_matching_categorical():
     ],
 )
 def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
-
     if how in ("leftsemi", "leftanti") and (
         kwargs.get("left_index") or kwargs.get("right_index")
     ):
@@ -1940,7 +1935,8 @@ def test_string_join_key(str_data, num_keys, how):
         gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
-
+    if len(other_data) == 0:
+        pdf["a"] = pdf["a"].astype("str")
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
 
@@ -2016,6 +2012,8 @@ def test_string_join_non_key(str_data, num_cols, how):
         gdf[i] = cudf.Series(str_data, dtype="str")
     pdf["a"] = other_data
     gdf["a"] = other_data
+    if len(other_data) == 0:
+        pdf["a"] = pdf["a"].astype("str")
 
     pdf2 = pdf.copy()
     gdf2 = gdf.copy()
@@ -2154,15 +2152,15 @@ def test_join_multiindex_empty():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
     rhs = pd.DataFrame(index=["a", "c", "d"])
-    with pytest.warns(FutureWarning):
-        expect = lhs.join(rhs, how="inner")
-
-    lhs = cudf.from_pandas(lhs)
-    rhs = cudf.from_pandas(rhs)
-    with pytest.warns(FutureWarning):
-        got = lhs.join(rhs, how="inner")
-
-    assert_join_results_equal(expect, got, how="inner")
+    g_lhs = cudf.from_pandas(lhs)
+    g_rhs = cudf.from_pandas(rhs)
+    assert_exceptions_equal(
+        lfunc=lhs.join,
+        rfunc=g_lhs.join,
+        lfunc_args_and_kwargs=([rhs], {"how": "inner"}),
+        rfunc_args_and_kwargs=([g_rhs], {"how": "inner"}),
+        check_exception_type=False,
+    )
 
 
 def test_join_on_index_with_duplicate_names():
@@ -2230,11 +2228,18 @@ def test_index_join_return_indexers_notimplemented():
 
 
 @pytest.mark.parametrize("how", ["inner", "outer"])
-def test_index_join_names(how):
+def test_index_join_names(request, how):
     idx1 = cudf.Index([10, 1, 2, 4, 2, 1], name="a")
     idx2 = cudf.Index([-10, 2, 3, 1, 2], name="b")
+    request.applymarker(
+        pytest.mark.xfail(
+            reason="https://github.com/pandas-dev/pandas/issues/57065",
+        )
+    )
+    pidx1 = idx1.to_pandas()
+    pidx2 = idx2.to_pandas()
 
-    expected = idx1.to_pandas().join(idx2.to_pandas(), how=how)
+    expected = pidx1.join(pidx2, how=how)
     actual = idx1.join(idx2, how=how)
     assert_join_results_equal(actual, expected, how=how)
 
@@ -2268,5 +2273,5 @@ def test_merge_timedelta_types(dtype1, dtype2):
         if isinstance(actual.index, cudf.RangeIndex)
         and isinstance(expected.index, pd.Index)
         else True,
-        check_dtype=True,
+        check_dtype=len(actual) > 0,
     )

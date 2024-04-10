@@ -44,9 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 */
 
 #include "gpuinflate.hpp"
+#include "io/utilities/block_utils.cuh"
 #include "io_uncomp.hpp"
-
-#include <io/utilities/block_utils.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -805,8 +804,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
       dist   = symbol >> 16;
       for (int i = t; i < len; i += 32) {
         uint8_t const* src = out + ((i >= dist) ? (i % dist) : i) - dist;
-        uint8_t b          = (src < outbase) ? 0 : *src;
-        if (out + i < outend) { out[i] = b; }
+        if (out + i < outend and src >= outbase) { out[i] = *src; }
       }
       out += len;
       pos++;

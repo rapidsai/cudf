@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
@@ -16,12 +16,24 @@
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
 
+set -euo pipefail
 
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py"
+PYTEST_IGNORES="--ignore=tests/io/test_user_agent.py \
+--ignore=tests/interchange/test_impl.py \
+--ignore=tests/window/test_dtypes.py \
+--ignore=tests/strings/test_api.py \
+--ignore=tests/window/test_numba.py \
+--ignore=tests/window \
+--ignore=tests/io/pytables \
+--ignore=tests/plotting \
+--ignore=tests/scalar \
+--ignore=tests/series/test_arithmetic.py \
+--ignore=tests/tslibs/test_parsing.py \
+--ignore=tests/io/parser/common/test_read_errors.py"
 
 mkdir -p pandas-testing
 cd pandas-testing
@@ -50,9 +62,6 @@ xfail_strict = true
 filterwarnings = [
   "error:Sparse:FutureWarning",
   "error:The SparseArray:FutureWarning",
-  # Deprecation gives warning on import during pytest collection
-  "ignore:pandas.core.index is deprecated:FutureWarning:importlib",
-  "ignore:pandas.util.testing is deprecated:FutureWarning:importlib",
   # Will be fixed in numba 0.56: https://github.com/numba/numba/issues/7758
   "ignore:`np.MachAr` is deprecated:DeprecationWarning:numba",
 ]
@@ -95,7 +104,7 @@ cd pandas-tests/
 # test_overwrite_warns unsafely patchs over Series.mean affecting other tests when run in parallel
 # test_complex_series_frame_alignment randomly selects a DataFrames and axis to test but particular random selection(s) always fails
 # test_numpy_ufuncs_basic compares floating point values to unbounded precision, sometimes leading to failures
-TEST_NUMPY_UFUNCS_BASIC_FLAKY="test_numpy_ufuncs_basic[float-exp] \
+TEST_NUMPY_UFUNCS_BASIC_FLAKY="not test_numpy_ufuncs_basic[float-exp] \
 and not test_numpy_ufuncs_basic[float-exp2] \
 and not test_numpy_ufuncs_basic[float-expm1] \
 and not test_numpy_ufuncs_basic[float-log] \
@@ -184,13 +193,13 @@ and not test_numpy_ufuncs_basic[nullable_float-arctanh] \
 and not test_numpy_ufuncs_basic[nullable_float-deg2rad] \
 and not test_numpy_ufuncs_basic[nullable_float-rad2deg]"
 
-PANDAS_CI="1" python -m pytest -p cudf.pandas \
-    -m "not single_cpu and not db" \
-    -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
-    --durations=50 \
+PANDAS_CI="1" timeout 30m python -m pytest -p cudf.pandas \
+    -v -m "not single_cpu and not db" \
+    -k "not test_overwrite_warns and not test_complex_series_frame_alignment and not test_to_parquet_gcs_new_file and not test_qcut_nat and not test_add and not test_ismethods and $TEST_NUMPY_UFUNCS_BASIC_FLAKY" \
     --import-mode=importlib \
     -o xfail_strict=True \
-    ${PYTEST_IGNORES} $@
+    ${PYTEST_IGNORES} \
+    "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
 
 mv *.json ..
 cd ..

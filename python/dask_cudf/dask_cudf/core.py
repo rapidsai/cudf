@@ -153,7 +153,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
         shuffle_method=None,
         **kwargs,
     ):
-
         pre_sorted = sorted
         del sorted
 
@@ -165,7 +164,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
-
             # Let upstream-dask handle "pre-sorted" case
             if pre_sorted:
                 return dd.shuffle.set_sorted_index(
@@ -283,9 +281,12 @@ class DataFrame(_Frame, dd.core.DataFrame):
         dtype=None,
         out=None,
         naive=False,
+        numeric_only=False,
     ):
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.var(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -295,6 +296,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         elif naive:
@@ -683,18 +685,27 @@ def reduction(
 
 @_dask_cudf_nvtx_annotate
 def from_cudf(data, npartitions=None, chunksize=None, sort=True, name=None):
+    from dask_cudf import QUERY_PLANNING_ON
+
     if isinstance(getattr(data, "index", None), cudf.MultiIndex):
         raise NotImplementedError(
             "dask_cudf does not support MultiIndex Dataframes."
         )
 
-    name = name or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+    # Dask-expr doesn't support the `name` argument
+    name = {}
+    if not QUERY_PLANNING_ON:
+        name = {
+            "name": name
+            or ("from_cudf-" + tokenize(data, npartitions or chunksize))
+        }
+
     return dd.from_pandas(
         data,
         npartitions=npartitions,
         chunksize=chunksize,
         sort=sort,
-        name=name,
+        **name,
     )
 
 
@@ -709,7 +720,10 @@ from_cudf.__doc__ = (
         rather than pandas objects.\n
         """
     )
-    + textwrap.dedent(dd.from_pandas.__doc__)
+    # TODO: `dd.from_pandas.__doc__` is empty when
+    # `DASK_DATAFRAME__QUERY_PLANNING=True`
+    # since dask-expr does not provide a docstring for from_pandas.
+    + textwrap.dedent(dd.from_pandas.__doc__ or "")
 )
 
 

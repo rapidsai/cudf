@@ -21,7 +21,7 @@ cdef class Column:
         gpumemoryview _mask
         size_type _null_count
         size_type _offset
-        # children: List[Column]
+        # _children: List[Column]
         list _children
         size_type _num_children
 

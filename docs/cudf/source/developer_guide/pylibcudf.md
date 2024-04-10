@@ -153,3 +153,26 @@ from cudf._lib.cpp.copying cimport out_of_bounds_policy
 from cudf._lib.cpp.copying import \
     out_of_bounds_policy as OutOfBoundsPolicy  # no-cython-lint
 ```
+
+### Handling overloaded functions in libcudf
+As a C++ library, libcudf makes extensive use of function overloading.
+For example, both of the following functions exist in libcudf:
+```cpp
+std::unique_ptr<table> empty_like(table_view const& input_table);
+std::unique_ptr<column> empty_like(column_view const& input);
+```
+
+However, Cython does not directly support overloading in this way, instead following Pythonic semantics where every function name must uniquely identify the function.
+Therefore, Cython's [fused types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html) should be used when implementing pylibcudf wrappers of overloaded functions like the above.
+Fused types are Cython's version of generic programming and in this case amount to writing templated functions that compile into separate copies corresponding to the different C++ overloads.
+For the above functions, the equivalent Cython function is
+```cython
+ctypedef fused ColumnOrTable:
+    Table
+    Column
+
+cpdef ColumnOrTable empty_like(ColumnOrTable input)
+```
+
+[Cython supports specializing the contents of fused-type functions based on the argument types](https://cython.readthedocs.io/en/latest/src/userguide/fusedtypes.html#type-checking-specializations), so any type-specific logic may be encoded using the appropriate conditionals.
+See the pylibcudf source for examples of how to implement such functions.
