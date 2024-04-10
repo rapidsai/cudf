@@ -5,7 +5,6 @@ import pytest
 from utils import assert_column_eq
 
 import cudf._lib.pylibcudf as plc
-from cudf._lib.pylibcudf.strings import case
 
 
 @pytest.fixture(scope="module")
@@ -26,7 +25,7 @@ def wrap_nulls(func):
 
 def test_to_upper(string_col):
     plc_col = plc.interop.from_arrow(string_col)
-    got = case.to_upper(plc_col)
+    got = plc.strings.case.to_upper(plc_col)
 
     @wrap_nulls
     def to_upper(x):
@@ -38,7 +37,7 @@ def test_to_upper(string_col):
 
 def test_to_lower(string_col):
     plc_col = plc.interop.from_arrow(string_col)
-    got = case.to_lower(plc_col)
+    got = plc.strings.case.to_lower(plc_col)
 
     @wrap_nulls
     def to_lower(x):
@@ -50,7 +49,7 @@ def test_to_lower(string_col):
 
 def test_swapcase(string_col):
     plc_col = plc.interop.from_arrow(string_col)
-    got = case.swapcase(plc_col)
+    got = plc.strings.case.swapcase(plc_col)
 
     @wrap_nulls
     def swapcase(x):
