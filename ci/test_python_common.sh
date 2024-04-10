@@ -38,5 +38,3 @@ rapids-mamba-retry install \
   --channel "${CPP_CHANNEL}" \
   --channel "${PYTHON_CHANNEL}" \
   cudf libcudf
-
-rapids-mamba-retry install protobuf==3.20

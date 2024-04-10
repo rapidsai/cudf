@@ -32,8 +32,6 @@ rapids-mamba-retry install \
   --channel "${PYTHON_CHANNEL}" \
   cudf libcudf
 
-rapids-mamba-retry install protobuf==3.20
-
 NBTEST="$(realpath "$(dirname "$0")/utils/nbtest.sh")"
 pushd notebooks
 
