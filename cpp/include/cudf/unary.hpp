@@ -87,7 +87,7 @@ CUDF_HOST_DEVICE Floating convert_fixed_to_floating(Fixed fixed)
  * @tparam Floating The floating-point type to convert to
  * @tparam Input The input type to convert from
  * @param input The input value to convert
- * @return The converted-to floating-point value
+ * @return The converted floating-point value
  */
 template <typename Floating,
           typename Input,
