@@ -121,7 +121,9 @@ class memory_stats_logger {
   }
 
  private:
-  rmm::device_async_resource_ref existing_mr;
+  // TODO: this needs to be changed to a resource_ref once `set_current_device_resource` is updated
+  // to accept one
+  rmm::mr::device_memory_resource* existing_mr;
   rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
 };
 
