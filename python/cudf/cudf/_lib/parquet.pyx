@@ -1,7 +1,5 @@
 # Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
-# cython: boundscheck = False
-
 import io
 
 import pyarrow as pa

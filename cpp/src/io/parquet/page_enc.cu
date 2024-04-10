@@ -1896,6 +1896,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
       s->rle_len_pos = dst;
     }
+    s->cur             = s->rle_out;
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
@@ -2896,9 +2897,9 @@ __device__ std::pair<void const*, uint32_t> get_extremum(statistics_val const* s
       return {scratch, sizeof(float)};
     }
     case dtype_int64:
+    case dtype_decimal64:
     case dtype_timestamp64:
     case dtype_float64: return {stats_val, sizeof(int64_t)};
-    case dtype_decimal64:
     case dtype_decimal128:
       byte_reverse128(stats_val->d128_val, scratch);
       return {scratch, sizeof(__int128_t)};
