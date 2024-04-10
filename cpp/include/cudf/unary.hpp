@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,10 @@
 
 #pragma once
 
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
@@ -30,6 +32,77 @@ namespace cudf {
  * @file
  * @brief Column APIs for unary ops
  */
+
+/**
+ * @brief Convert a floating-point value to fixed point
+ *
+ * @note This conversion was moved from fixed-point member functions to free functions.
+ * This is so that the complex conversion code is not included into many parts of the
+ * code base that don't need it, and so that it's more obvious to pinpoint where these
+ * conversions are occurring.
+ *
+ * @tparam Fixed The fixed-point type to convert to
+ * @tparam Floating The floating-point type to convert from
+ * @param floating The floating-point value to convert
+ * @param scale The desired scale of the fixed-point value
+ * @return The converted fixed-point value
+ */
+template <typename Fixed,
+          typename Floating,
+          typename cuda::std::enable_if_t<is_fixed_point<Fixed>() &&
+                                          cuda::std::is_floating_point_v<Floating>>* = nullptr>
+CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::scale_type scale)
+{
+  using Rep          = typename Fixed::rep;
+  auto const shifted = numeric::detail::shift<Rep, Fixed::rad>(floating, scale);
+  numeric::scaled_integer<Rep> scaled{static_cast<Rep>(shifted), scale};
+  return Fixed(scaled);
+}
+
+/**
+ * @brief Convert a fixed-point value to floating point
+ *
+ * @note This conversion was moved from fixed-point member functions to free functions.
+ * This is so that the complex conversion code is not included into many parts of the
+ * code base that don't need it, and so that it's more obvious to pinpoint where these
+ * conversions are occurring.
+ *
+ * @tparam Floating The floating-point type to convert to
+ * @tparam Fixed The fixed-point type to convert from
+ * @param fixed The fixed-point value to convert
+ * @return The converted floating-point value
+ */
+template <typename Floating,
+          typename Fixed,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<Floating> &&
+                                          is_fixed_point<Fixed>()>* = nullptr>
+CUDF_HOST_DEVICE Floating convert_fixed_to_floating(Fixed fixed)
+{
+  using Rep         = typename Fixed::rep;
+  auto const casted = static_cast<Floating>(fixed.value());
+  auto const scale  = numeric::scale_type{-fixed.scale()};
+  return numeric::detail::shift<Rep, Fixed::rad>(casted, scale);
+}
+
+/**
+ * @brief Convert a value to floating point
+ *
+ * @tparam Floating The floating-point type to convert to
+ * @tparam Input The input type to convert from
+ * @param input The input value to convert
+ * @return The converted floating-point value
+ */
+template <typename Floating,
+          typename Input,
+          typename cuda::std::enable_if_t<cuda::std::is_floating_point_v<Floating>>* = nullptr>
+CUDF_HOST_DEVICE Floating convert_to_floating(Input input)
+{
+  if constexpr (is_fixed_point<Input>()) {
+    return convert_fixed_to_floating<Floating>(input);
+  } else {
+    return static_cast<Floating>(input);
+  }
+}
 
 /**
  * @brief Types of unary operations that can be performed on data.
