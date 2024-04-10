@@ -374,10 +374,11 @@ std::vector<std::string> copy_strings_to_host_sync(
     auto const scv     = cudf::strings_column_view(col);
     auto const h_chars = cudf::detail::make_std_vector_async<char>(
       cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
-    auto const h_offsets = cudf::detail::make_std_vector_sync(
+    auto const h_offsets = cudf::detail::make_std_vector_async(
       cudf::device_span<cudf::size_type const>(scv.offsets().data<cudf::size_type>() + scv.offset(),
                                                scv.size() + 1),
       stream);
+    stream.synchronize();
 
     // build std::string vector from chars and offsets
     std::vector<std::string> host_data;
