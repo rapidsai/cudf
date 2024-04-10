@@ -143,7 +143,7 @@ jobs:
       script: ci/test_wheel_dask_cudf.sh
   devcontainer:
     secrets: inherit
-    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@fix/devcontainer-json-location
+    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@branch-24.04
     with:
       arch: '["amd64"]'
       cuda: '["12.2"]'
