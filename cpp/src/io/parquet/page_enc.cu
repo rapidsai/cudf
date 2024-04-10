@@ -1896,6 +1896,7 @@ CUDF_KERNEL void __launch_bounds__(block_size, 8)
       s->rle_out     = dst + RLE_LENGTH_FIELD_LEN;
       s->rle_len_pos = dst;
     }
+    s->cur             = s->rle_out;
     s->page_start_val  = row_to_value_idx(s->page.start_row, s->col);
     s->chunk_start_val = row_to_value_idx(s->ck.start_row, s->col);
   }
