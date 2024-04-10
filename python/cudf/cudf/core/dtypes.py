@@ -51,6 +51,11 @@ def dtype(arbitrary):
             raise TypeError(f"Unsupported type {np_dtype}")
         return np_dtype
 
+    if isinstance(arbitrary, str) and arbitrary in {"hex", "hex32", "hex64"}:
+        # read_csv only accepts "hex"
+        # e.g. test_csv_reader_hexadecimals, test_csv_reader_hexadecimal_overflow
+        return arbitrary
+
     # use `pandas_dtype` to try and interpret
     # `arbitrary` as a Pandas extension type.
     #  Return the corresponding NumPy/cuDF type.
@@ -999,7 +1004,10 @@ def _is_categorical_dtype(obj):
             pd.Series,
         ),
     ):
-        return _is_categorical_dtype(obj.dtype)
+        try:
+            return isinstance(cudf.dtype(obj.dtype), cudf.CategoricalDtype)
+        except TypeError:
+            return False
     if hasattr(obj, "type"):
         if obj.type is pd.CategoricalDtype.type:
             return True
