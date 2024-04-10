@@ -2009,7 +2009,7 @@ def as_column(
             length = 1
         elif length < 0:
             raise ValueError(f"{length=} must be >=0.")
-        if isinstance(arbitrary, pd.Interval):
+        if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
             # No cudf.Scalar support yet
             return as_column(
                 pd.Series([arbitrary] * length),
