@@ -333,10 +333,11 @@ rmm::device_uvector<NodeIndexT> get_values_column_indices(TreeDepthT const row_a
  * @param stream CUDA stream
  * @return Vector of strings
  */
-std::vector<std::string> copy_strings_to_host(device_span<SymbolT const> input,
-                                              device_span<SymbolOffsetT const> node_range_begin,
-                                              device_span<SymbolOffsetT const> node_range_end,
-                                              rmm::cuda_stream_view stream)
+std::vector<std::string> copy_strings_to_host_sync(
+  device_span<SymbolT const> input,
+  device_span<SymbolOffsetT const> node_range_begin,
+  device_span<SymbolOffsetT const> node_range_end,
+  rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   auto const num_strings = node_range_begin.size();
@@ -528,7 +529,7 @@ void make_device_json_column(device_span<SymbolT const> input,
   auto column_range_beg =
     cudf::detail::make_std_vector_async(d_column_tree.node_range_begin, stream);
   auto max_row_offsets = cudf::detail::make_std_vector_async(d_max_row_offsets, stream);
-  std::vector<std::string> column_names = copy_strings_to_host(
+  std::vector<std::string> column_names = copy_strings_to_host_sync(
     input, d_column_tree.node_range_begin, d_column_tree.node_range_end, stream);
   stream.synchronize();
   // array of arrays column names
