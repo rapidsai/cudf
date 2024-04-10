@@ -462,7 +462,7 @@ void traverse_children::operator()<cudf::list_view>(host_span<column_view const>
  */
 void bounds_and_type_check(host_span<column_view const> cols, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(cudf::all_types_equal(cols.begin(), cols.end()),
+  CUDF_EXPECTS(cudf::all_have_same_types(cols.begin(), cols.end()),
                "Type mismatch in columns to concatenate.",
                cudf::data_type_error);
 

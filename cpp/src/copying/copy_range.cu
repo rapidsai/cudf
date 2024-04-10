@@ -147,7 +147,7 @@ std::unique_ptr<cudf::column> out_of_place_copy_range_dispatch::operator()<cudf:
   // check the keys in the source and target
   cudf::dictionary_column_view const dict_source(source);
   cudf::dictionary_column_view const dict_target(target);
-  CUDF_EXPECTS(cudf::types_equal(dict_source.keys(), dict_target.keys()),
+  CUDF_EXPECTS(cudf::have_same_types(dict_source.keys(), dict_target.keys()),
                "dictionary keys must be the same type",
                cudf::data_type_error);
 
@@ -212,7 +212,7 @@ void copy_range_in_place(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(cudf::types_equal(target, source), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(target, source), "Data type mismatch.", cudf::data_type_error);
   CUDF_EXPECTS(target.nullable() || not source.has_nulls(),
                "target should be nullable if source has null values.",
                std::invalid_argument);
@@ -240,7 +240,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                  (target_begin <= target.size() - (source_end - source_begin)),
                "Range is out of bounds.",
                std::out_of_range);
-  CUDF_EXPECTS(cudf::types_equal(target, source), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(target, source), "Data type mismatch.", cudf::data_type_error);
 
   return cudf::type_dispatcher<dispatch_storage_type>(
     target.type(),

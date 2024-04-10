@@ -214,7 +214,7 @@ struct column_scatterer_impl<dictionary32> {
     // check the keys match
     dictionary_column_view const source(source_in);
     dictionary_column_view const target(target_in);
-    CUDF_EXPECTS(cudf::types_equal(source.keys(), target.keys()),
+    CUDF_EXPECTS(cudf::have_same_types(source.keys(), target.keys()),
                  "scatter dictionary keys must be the same type",
                  cudf::data_type_error);
 

@@ -220,7 +220,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     // empty column may not have keys so we create an empty column_view place-holder
     if (dict_view.is_empty()) return column_view{keys_type, 0, nullptr, nullptr, 0};
     auto keys = dict_view.keys();
-    // TODO: Use cudf::types_equal to ensure nested types are handled correctly.
+    // TODO: Use cudf::have_same_types to ensure nested types are handled correctly.
     CUDF_EXPECTS(keys.type() == keys_type, "key types of all dictionary columns must match");
     return keys;
   });

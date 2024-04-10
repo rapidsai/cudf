@@ -200,7 +200,7 @@ struct dispatch_clamp {
                                      rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(
-      types_equal(input, lo), "mismatching types of scalar and input", cudf::data_type_error);
+      have_same_types(input, lo), "mismatching types of scalar and input", cudf::data_type_error);
 
     auto lo_itr         = make_optional_iterator<T>(lo, nullate::YES{});
     auto hi_itr         = make_optional_iterator<T>(hi, nullate::YES{});
@@ -325,11 +325,11 @@ std::unique_ptr<column> clamp(column_view const& input,
                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(
-    cudf::types_equal(lo, hi), "mismatching types of limit scalars", cudf::data_type_error);
-  CUDF_EXPECTS(cudf::types_equal(lo_replace, hi_replace),
+    cudf::have_same_types(lo, hi), "mismatching types of limit scalars", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(lo_replace, hi_replace),
                "mismatching types of replace scalars",
                cudf::data_type_error);
-  CUDF_EXPECTS(cudf::types_equal(lo, lo_replace),
+  CUDF_EXPECTS(cudf::have_same_types(lo, lo_replace),
                "mismatching types of limit and replace scalars",
                cudf::data_type_error);
 

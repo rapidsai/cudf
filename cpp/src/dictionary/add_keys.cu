@@ -56,7 +56,7 @@ std::unique_ptr<column> add_keys(dictionary_column_view const& dictionary_column
   CUDF_EXPECTS(!new_keys.has_nulls(), "Keys must not have nulls");
   auto old_keys = dictionary_column.keys();  // [a,b,c,d,f]
   CUDF_EXPECTS(
-    cudf::types_equal(new_keys, old_keys), "Keys must be the same type", cudf::data_type_error);
+    cudf::have_same_types(new_keys, old_keys), "Keys must be the same type", cudf::data_type_error);
   // first, concatenate the keys together
   // [a,b,c,d,f] + [d,b,e] = [a,b,c,d,f,d,b,e]
   auto combined_keys = cudf::detail::concatenate(

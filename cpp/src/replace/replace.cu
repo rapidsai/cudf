@@ -303,8 +303,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
   CUDF_EXPECTS(values_to_replace.size() == replacement_values.size(),
                "values_to_replace and replacement_values size mismatch.");
 
-  CUDF_EXPECTS(cudf::types_equal(input_col, values_to_replace) &&
-                 cudf::types_equal(input_col, replacement_values),
+  CUDF_EXPECTS(cudf::have_same_types(input_col, values_to_replace) &&
+                 cudf::have_same_types(input_col, replacement_values),
                "Columns type mismatch",
                cudf::data_type_error);
   CUDF_EXPECTS(not values_to_replace.has_nulls(), "values_to_replace must not have nulls");

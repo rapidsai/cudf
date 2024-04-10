@@ -228,7 +228,7 @@ std::unique_ptr<column> slice_strings(strings_column_view const& strings,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == strings_count,
                "Parameter stops must have the same number of rows as strings.");
-  CUDF_EXPECTS(cudf::types_equal(starts_column, stops_column),
+  CUDF_EXPECTS(cudf::have_same_types(starts_column, stops_column),
                "Parameters starts and stops must be of the same type.",
                cudf::data_type_error);
   CUDF_EXPECTS(starts_column.null_count() == 0, "Parameter starts must not contain nulls.");

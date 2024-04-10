@@ -37,7 +37,7 @@ namespace cudf {
  * @param rhs The second `column_view` to compare
  * @return true if column types match
  */
-bool types_equal(column_view const& lhs, column_view const& rhs);
+bool have_same_types(column_view const& lhs, column_view const& rhs);
 
 /**
  * @brief Compares the type of a `column_view` and a `scalar`
@@ -54,7 +54,7 @@ bool types_equal(column_view const& lhs, column_view const& rhs);
  * @param rhs The `scalar` to compare
  * @return true if column/scalar types match
  */
-bool types_equal(column_view const& lhs, scalar const& rhs);
+bool have_same_types(column_view const& lhs, scalar const& rhs);
 
 /**
  * @brief Compares the type of a `scalar` and a `column_view`
@@ -71,7 +71,7 @@ bool types_equal(column_view const& lhs, scalar const& rhs);
  * @param rhs The `column_view` to compare
  * @return true if column/scalar types match
  */
-bool types_equal(scalar const& lhs, column_view const& rhs);
+bool have_same_types(scalar const& lhs, column_view const& rhs);
 
 /**
  * @brief Compares the type of two `scalar`s
@@ -86,7 +86,7 @@ bool types_equal(scalar const& lhs, column_view const& rhs);
  * @param rhs The second `scalar` to compare
  * @return true if scalar types match
  */
-bool types_equal(scalar const& lhs, scalar const& rhs);
+bool have_same_types(scalar const& lhs, scalar const& rhs);
 
 /**
  * @brief Compare the type IDs of two `column_view`s
@@ -102,7 +102,7 @@ bool types_equivalent(column_view const& lhs, column_view const& rhs);
 /**
  * @brief Compare the types of a range of `column_view` or `scalar` objects
  *
- * This function returns true if cudf::types_equal is true for every pair of
+ * This function returns true if cudf::have_same_types is true for every pair of
  * consecutive objects (`column_view` or `scalar`) in the range.
  *
  * @tparam ForwardIt Forward iterator
@@ -111,10 +111,10 @@ bool types_equivalent(column_view const& lhs, column_view const& rhs);
  * @return true if all types match
  */
 template <typename ForwardIt>
-inline bool all_types_equal(ForwardIt first, ForwardIt last)
+inline bool all_have_same_types(ForwardIt first, ForwardIt last)
 {
   return first == last || std::all_of(std::next(first), last, [want = *first](auto const& c) {
-           return cudf::types_equal(want, c);
+           return cudf::have_same_types(want, c);
          });
 }
 

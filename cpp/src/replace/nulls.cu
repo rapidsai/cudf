@@ -308,7 +308,7 @@ struct replace_nulls_scalar_kernel_forwarder {
                                            rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(
-      cudf::types_equal(input, replacement), "Data type mismatch", cudf::data_type_error);
+      cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
     std::unique_ptr<cudf::column> output = cudf::detail::allocate_like(
       input, input.size(), cudf::mask_allocation_policy::NEVER, stream, mr);
     auto output_view = output->mutable_view();
@@ -344,7 +344,8 @@ std::unique_ptr<cudf::column> replace_nulls_scalar_kernel_forwarder::operator()<
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::types_equal(input, replacement), "Data type mismatch", cudf::data_type_error);
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
   cudf::strings_column_view input_s(input);
   auto const& repl = static_cast<cudf::string_scalar const&>(replacement);
   return cudf::strings::detail::replace_nulls(input_s, repl, stream, mr);
@@ -410,7 +411,8 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::types_equal(input, replacement), "Data type mismatch", cudf::data_type_error);
+  CUDF_EXPECTS(
+    cudf::have_same_types(input, replacement), "Data type mismatch", cudf::data_type_error);
   CUDF_EXPECTS(replacement.size() == input.size(), "Column size mismatch");
 
   if (input.is_empty()) { return cudf::empty_like(input); }

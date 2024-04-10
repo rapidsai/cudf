@@ -51,7 +51,7 @@ bool columns_equal_fn::operator()<list_view>(column_view const& lhs, column_view
 {
   if (rhs.type().id() != type_id::LIST) { return false; }
   auto const& ci = lists_column_view::child_column_index;
-  return types_equal(lhs.child(ci), rhs.child(ci));
+  return have_same_types(lhs.child(ci), rhs.child(ci));
 }
 
 template <>
@@ -62,7 +62,7 @@ bool columns_equal_fn::operator()<struct_view>(column_view const& lhs, column_vi
                     lhs.child_end(),
                     rhs.child_begin(),
                     rhs.child_end(),
-                    [](auto const& lhs, auto const& rhs) { return types_equal(lhs, rhs); });
+                    [](auto const& lhs, auto const& rhs) { return have_same_types(lhs, rhs); });
 }
 
 struct column_scalar_equal_fn {
@@ -79,7 +79,7 @@ bool column_scalar_equal_fn::operator()<dictionary32>(column_view const& col, sc
   // It is not possible to have a scalar dictionary, so compare the dictionary
   // column keys type to the scalar type.
   auto col_keys = cudf::dictionary_column_view(col).keys();
-  return types_equal(col_keys, slr);
+  return have_same_types(col_keys, slr);
 }
 
 template <>
@@ -88,7 +88,7 @@ bool column_scalar_equal_fn::operator()<list_view>(column_view const& col, scala
   if (slr.type().id() != type_id::LIST) { return false; }
   auto const& ci      = lists_column_view::child_column_index;
   auto const list_slr = static_cast<list_scalar const*>(&slr);
-  return types_equal(col.child(ci), list_slr->view());
+  return have_same_types(col.child(ci), list_slr->view());
 }
 
 template <>
@@ -101,7 +101,7 @@ bool column_scalar_equal_fn::operator()<struct_view>(column_view const& col, sca
                     col.child_end(),
                     slr_tbl.begin(),
                     slr_tbl.end(),
-                    [](auto const& lhs, auto const& rhs) { return types_equal(lhs, rhs); });
+                    [](auto const& lhs, auto const& rhs) { return have_same_types(lhs, rhs); });
 }
 
 struct scalars_equal_fn {
@@ -118,7 +118,7 @@ bool scalars_equal_fn::operator()<list_view>(scalar const& lhs, scalar const& rh
   if (rhs.type().id() != type_id::LIST) { return false; }
   auto const list_lhs = static_cast<list_scalar const*>(&lhs);
   auto const list_rhs = static_cast<list_scalar const*>(&rhs);
-  return types_equal(list_lhs->view(), list_rhs->view());
+  return have_same_types(list_lhs->view(), list_rhs->view());
 }
 
 template <>
@@ -131,29 +131,29 @@ bool scalars_equal_fn::operator()<struct_view>(scalar const& lhs, scalar const& 
                     tbl_lhs.end(),
                     tbl_rhs.begin(),
                     tbl_rhs.end(),
-                    [](auto const& lhs, auto const& rhs) { return types_equal(lhs, rhs); });
+                    [](auto const& lhs, auto const& rhs) { return have_same_types(lhs, rhs); });
 }
 
 };  // namespace
 
 // Implementation note: avoid using double dispatch for this function
 // as it increases code paths to NxN for N types.
-bool types_equal(column_view const& lhs, column_view const& rhs)
+bool have_same_types(column_view const& lhs, column_view const& rhs)
 {
   return type_dispatcher(lhs.type(), columns_equal_fn{}, lhs, rhs);
 }
 
-bool types_equal(column_view const& lhs, scalar const& rhs)
+bool have_same_types(column_view const& lhs, scalar const& rhs)
 {
   return type_dispatcher(lhs.type(), column_scalar_equal_fn{}, lhs, rhs);
 }
 
-bool types_equal(scalar const& lhs, column_view const& rhs)
+bool have_same_types(scalar const& lhs, column_view const& rhs)
 {
   return type_dispatcher(rhs.type(), column_scalar_equal_fn{}, rhs, lhs);
 }
 
-bool types_equal(scalar const& lhs, scalar const& rhs)
+bool have_same_types(scalar const& lhs, scalar const& rhs)
 {
   return type_dispatcher(lhs.type(), scalars_equal_fn{}, lhs, rhs);
 }
@@ -163,7 +163,7 @@ bool types_equivalent(column_view const& lhs, column_view const& rhs)
   // Check if the columns have fixed point types. This is the only case where
   // type equality and equivalence differ.
   if (cudf::is_fixed_point(lhs.type())) { return lhs.type().id() == rhs.type().id(); }
-  return types_equal(lhs, rhs);
+  return have_same_types(lhs, rhs);
 }
 
 }  // namespace cudf

@@ -110,7 +110,7 @@ struct out_of_place_fill_range_dispatch {
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
-    CUDF_EXPECTS(cudf::types_equal(input, value), "Data type mismatch.", cudf::data_type_error);
+    CUDF_EXPECTS(cudf::have_same_types(input, value), "Data type mismatch.", cudf::data_type_error);
     auto p_ret = std::make_unique<cudf::column>(input, stream, mr);
 
     if (end != begin) {  // otherwise no fill
@@ -137,7 +137,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(cudf::types_equal(input, value), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(cudf::have_same_types(input, value), "Data type mismatch.", cudf::data_type_error);
   using ScalarType = cudf::scalar_type_t<cudf::string_view>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   return cudf::strings::detail::fill(
@@ -154,7 +154,7 @@ std::unique_ptr<cudf::column> out_of_place_fill_range_dispatch::operator()<cudf:
   if (input.is_empty()) return std::make_unique<cudf::column>(input, stream, mr);
   cudf::dictionary_column_view const target(input);
   CUDF_EXPECTS(
-    cudf::types_equal(target.parent(), value), "Data type mismatch.", cudf::data_type_error);
+    cudf::have_same_types(target.parent(), value), "Data type mismatch.", cudf::data_type_error);
 
   // if the scalar is invalid, then just copy the column and fill the null mask
   if (!value.is_valid(stream)) {
@@ -220,7 +220,8 @@ void fill_in_place(mutable_column_view& destination,
                "Range is out of bounds.");
   CUDF_EXPECTS(destination.nullable() || value.is_valid(stream),
                "destination should be nullable or value should be non-null.");
-  CUDF_EXPECTS(cudf::types_equal(destination, value), "Data type mismatch.", cudf::data_type_error);
+  CUDF_EXPECTS(
+    cudf::have_same_types(destination, value), "Data type mismatch.", cudf::data_type_error);
 
   if (end != begin) {  // otherwise no-op
     cudf::type_dispatcher(

@@ -76,7 +76,7 @@ struct find_index_fn {
     if (!key.is_valid(stream)) {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     }
-    CUDF_EXPECTS(cudf::types_equal(input.parent(), key),
+    CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
                  "search key type must match dictionary keys type",
                  cudf::data_type_error);
 
@@ -120,7 +120,7 @@ struct find_insert_index_fn {
     if (!key.is_valid(stream)) {
       return type_dispatcher(input.indices().type(), dispatch_scalar_index{}, 0, false, stream, mr);
     }
-    CUDF_EXPECTS(cudf::types_equal(input.parent(), key),
+    CUDF_EXPECTS(cudf::have_same_types(input.parent(), key),
                  "search key type must match dictionary keys type",
                  cudf::data_type_error);
 

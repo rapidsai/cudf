@@ -155,7 +155,7 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(!init.has_value() || cudf::types_equal(col, init.value().get()),
+  CUDF_EXPECTS(!init.has_value() || cudf::have_same_types(col, init.value().get()),
                "column and initial value must be the same type",
                cudf::data_type_error);
   if (init.has_value() && !(agg.kind == aggregation::SUM || agg.kind == aggregation::PRODUCT ||

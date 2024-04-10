@@ -149,7 +149,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
     CUDF_EXPECTS(!steps_cv.has_nulls(), "steps input column must not have nulls.");
     CUDF_EXPECTS(starts.size() == steps_cv.size(),
                  "starts and steps input columns must have the same number of rows.");
-    CUDF_EXPECTS(cudf::types_equal(starts, steps_cv),
+    CUDF_EXPECTS(cudf::have_same_types(starts, steps_cv),
                  "starts and steps input columns must have the same type.",
                  cudf::data_type_error);
   }
