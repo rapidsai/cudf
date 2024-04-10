@@ -559,7 +559,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
   };
   auto init_to_zero = [stream](auto& v) {
-    thrust::uninitialized_fill(rmm::exec_policy(stream), v.begin(), v.end(), 0);
+    thrust::uninitialized_fill(rmm::exec_policy_nosync(stream), v.begin(), v.end(), 0);
   };
 
   auto initialize_json_columns = [&](auto i, auto& col) {
@@ -709,6 +709,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                      "A mix of lists and structs within the same column is not supported");
       }
     }
+
+    // if dtype is used as filter, don't extract non-mentioned columns
+    if (options.is_enabled_use_dtypes_as_filter()) {
+      auto nt                          = tree_path.get_path(this_col_id);
+      std::optional<data_type> user_dt = get_path_data_type(nt, options);
+      if(! user_dt.has_value()) {
+        is_mixed_type_column[this_col_id] = 1; // a hack to ignore children
+        ignore_vals[this_col_id]          = 1;
+        continue;
+      }
+    }
     if (is_enabled_mixed_types_as_string) {
       // get path of this column, check if it is a struct forced as string, and enforce it
       auto nt                          = tree_path.get_path(this_col_id);
@@ -761,6 +772,10 @@ void make_device_json_column(device_span<SymbolT const> input,
   for (auto& [col_id, col_ref] : columns) {
     if (col_id == parent_node_sentinel) continue;
     auto& col            = col_ref.get();
+    // FIXME: bad idea to do all of them at once, but we need to complete them all in single kernel. how?
+    // init_to_zero(col.string_offsets);
+    // init_to_zero(col.string_lengths);
+    // init_to_zero(col.child_offsets);
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
@@ -868,19 +883,20 @@ void make_device_json_column(device_span<SymbolT const> input,
   for (auto& [id, col_ref] : columns) {
     auto& col = col_ref.get();
     if (col.type == json_col_t::StringColumn) {
-      thrust::inclusive_scan(rmm::exec_policy(stream),
+      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.string_offsets.begin(),
                              col.string_offsets.end(),
                              col.string_offsets.begin(),
                              thrust::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
-      thrust::inclusive_scan(rmm::exec_policy(stream),
+      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
                              col.child_offsets.begin(),
                              col.child_offsets.end(),
                              col.child_offsets.begin(),
                              thrust::maximum<json_column::row_offset_t>{});
     }
   }
+  stream.synchronize();
 }
 
 std::pair<std::unique_ptr<column>, std::vector<column_name_info>> device_json_column_to_cudf_column(
