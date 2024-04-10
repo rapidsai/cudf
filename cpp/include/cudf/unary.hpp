@@ -44,7 +44,7 @@ namespace cudf {
  * @tparam Floating The floating-point type to convert from
  * @param floating The floating-point value to convert
  * @param scale The desired scale of the fixed-point value
- * @return The converted-to fixed-point value
+ * @return The converted fixed-point value
  */
 template <typename Fixed,
           typename Floating,
