@@ -127,21 +127,27 @@ def all_types_output_table(input, method):
     return result
 
 
-@pytest.mark.parametrize("method", METHODS)
-def test_hash_column(pa_input_column, method):
-    def _applyfunc(x):
-        if isinstance(x, str):
-            binary = str(x).encode()
-        elif isinstance(x, float):
-            binary = struct.pack("<d", x)
-        elif isinstance(x, bool):
-            binary = x.to_bytes(1, byteorder="little", signed=True)
-        elif isinstance(x, int):
-            binary = x.to_bytes(8, byteorder="little", signed=True)
-        else:
-            raise NotImplementedError
-        return getattr(hashlib, method)(binary).hexdigest()
+def python_hash_value(x, method):
+    if isinstance(x, str):
+        binary = str(x).encode()
+    elif isinstance(x, float):
+        binary = struct.pack("<d", x)
+    elif isinstance(x, bool):
+        binary = x.to_bytes(1, byteorder="little", signed=True)
+    elif isinstance(x, int):
+        binary = x.to_bytes(8, byteorder="little", signed=True)
+    elif isinstance(x, np.ndarray):
+        binary = x.tobytes()
+    else:
+        breakpoint()
+        raise NotImplementedError
+    return getattr(hashlib, method)(binary).hexdigest()
 
+
+@pytest.mark.parametrize(
+    "method", ["sha1", "sha224", "sha256", "sha384", "sha512"]
+)
+def test_hash_column_sha(pa_input_column, method):
     plc_tbl = plc.interop.from_arrow(
         pa.Table.from_arrays([pa_input_column], names=["data"])
     )
@@ -153,9 +159,26 @@ def test_hash_column(pa_input_column, method):
         return
 
     expect = pa.Array.from_pandas(
-        pa_input_column.to_pandas().apply(_applyfunc)
+        pa_input_column.to_pandas().apply(python_hash_value, args=(method,))
     )
     got = plc_hasher(plc_tbl)
+    assert_column_eq(got, expect)
+
+
+def test_hash_column_md5(pa_input_column):
+    plc_tbl = plc.interop.from_arrow(
+        pa.Table.from_arrays([pa_input_column], names=["data"])
+    )
+
+    if isinstance(pa_input_column.type, pa.StructType):
+        with pytest.raises(TypeError):
+            plc.hashing.md5(plc_tbl)
+        return
+
+    expect = pa.Array.from_pandas(
+        pa_input_column.to_pandas().apply(python_hash_value, args=("md5",))
+    )
+    got = plc.hashing.md5(plc_tbl)
     assert_column_eq(got, expect)
 
 
