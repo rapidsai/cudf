@@ -69,7 +69,7 @@ struct concat_strings_base {
         thrust::any_of(thrust::seq, d_table.begin(), d_table.end(), [idx](auto const& col) {
           return col.is_null(idx);
         })) {
-      if (!d_chars) d_sizes[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 
@@ -96,7 +96,7 @@ struct concat_strings_base {
         write_separator || (separate_nulls == separator_on_nulls::YES) || !null_element;
     }
 
-    if (!d_chars) d_sizes[idx] = bytes;
+    if (!d_chars) { d_sizes[idx] = bytes; }
   }
 };
 
@@ -189,7 +189,7 @@ struct multi_separator_concat_fn : concat_strings_base {
   __device__ void operator()(size_type idx)
   {
     if (d_separators.is_null(idx) && !d_separator_narep.is_valid()) {
-      if (!d_chars) d_sizes[idx] = 0;
+      if (!d_chars) { d_sizes[idx] = 0; }
       return;
     }
 

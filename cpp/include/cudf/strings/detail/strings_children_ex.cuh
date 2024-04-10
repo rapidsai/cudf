@@ -38,17 +38,18 @@ namespace experimental {
  * @brief Creates child offsets and chars data by applying the template function that
  * can be used for computing the output size of each string as well as create the output
  *
- * @tparam SizeAndExecuteFunction Function must accept an index.
- *         It must also have members d_sizes, d_offsets and d_chars which are set to
- *         memory containing the offsets and chars columns during write.
+ * @tparam SizeAndExecuteFunction Function must accept a row index.
+ *         It must also have member `d_sizes` to hold computed row output sizes on the 1st pass
+ *         and members `d_offsets` and `d_chars` for the 2nd pass to resolve the output memory
+ *         location for each row.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string
  *        and once again to fill in the memory pointed to by d_chars.
- * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
+ * @param exec_size Number of threads for executing the `size_and_exec_fn` function
  * @param strings_count Number of strings
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned columns' device memory
- * @return Offsets child column and chars data for a strings column
+ * @return Offsets child column and chars vector for creating a strings column
  */
 template <typename SizeAndExecuteFunction>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
@@ -60,7 +61,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   auto output_sizes        = rmm::device_uvector<size_type>(strings_count, stream);
   size_and_exec_fn.d_sizes = output_sizes.data();
 
-  // This is called twice -- once for offsets and once for chars.
+  // This is called twice -- once for computing sizes and once for writing chars.
   // Reducing the number of places size_and_exec_fn is inlined speeds up compile time.
   auto for_each_fn = [exec_size, stream](SizeAndExecuteFunction& size_and_exec_fn) {
     thrust::for_each_n(rmm::exec_policy(stream),
@@ -81,9 +82,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
 
-  // Execute the function fn again to fill the chars column.
-  // Note that if the output chars column has zero size, the function fn should not be called to
-  // avoid accidentally overwriting the offsets.
+  // Execute the function fn again to fill in the chars data.
   if (bytes > 0) {
     size_and_exec_fn.d_chars = chars.data();
     for_each_fn(size_and_exec_fn);
@@ -96,16 +95,17 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
  * @brief Creates child offsets and chars columns by applying the template function that
  * can be used for computing the output size of each string as well as create the output.
  *
- * @tparam SizeAndExecuteFunction Function must accept an index and return a size.
- *         It must also have members d_offsets and d_chars which are set to
- *         memory containing the offsets and chars columns during write.
+ * @tparam SizeAndExecuteFunction Function must accept a row index.
+ *         It must also have member `d_sizes` to hold computed row output sizes on the 1st pass
+ *         and members `d_offsets` and `d_chars` for the 2nd pass to resolve the output memory
+ *         location for each row.
  *
  * @param size_and_exec_fn This is called twice. Once for the output size of each string
  *        and once again to fill in the memory pointed to by d_chars.
- * @param strings_count Number of strings.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned columns' device memory.
- * @return offsets child column and chars child column for a strings column
+ * @param strings_count Number of strings
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned columns' device memory
+ * @return Offsets child column and chars vector for creating a strings column
  */
 template <typename SizeAndExecuteFunction>
 auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,

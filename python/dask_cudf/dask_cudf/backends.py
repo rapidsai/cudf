@@ -699,6 +699,15 @@ class CudfDXBackendEntrypoint(DataFrameBackendEntrypoint):
             **kwargs,
         )
 
+    @staticmethod
+    def read_orc(*args, **kwargs):
+        from dask_expr import from_legacy_dataframe
+
+        from dask_cudf.io.orc import read_orc as legacy_read_orc
+
+        ddf = legacy_read_orc(*args, **kwargs)
+        return from_legacy_dataframe(ddf)
+
 
 # Import/register cudf-specific classes for dask-expr
 try:
