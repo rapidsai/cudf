@@ -68,7 +68,7 @@ CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::sca
  * @tparam Floating The floating-point type to convert to
  * @tparam Fixed The fixed-point type to convert from
  * @param fixed The fixed-point value to convert
- * @return The converted-to floating-point value
+ * @return The converted floating-point value
  */
 template <typename Floating,
           typename Fixed,
