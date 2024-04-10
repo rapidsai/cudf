@@ -82,7 +82,7 @@ CUDF_HOST_DEVICE Floating convert_fixed_to_floating(Fixed fixed)
   return numeric::detail::shift<Rep, Fixed::rad>(casted, scale);
 }
 
-/** @brief Convert a value to floating-point
+/** @brief Convert a value to floating point
  *
  * @tparam Floating The floating-point type to convert to
  * @tparam Input The input type to convert from
