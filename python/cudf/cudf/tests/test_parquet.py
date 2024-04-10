@@ -2442,9 +2442,17 @@ def test_parquet_index(pdf, index):
     run_parquet_index(pdf, index)
 
 
-@pytest.mark.parametrize("index", [None, True])
-@pytest.mark.xfail(
-    reason="https://github.com/rapidsai/cudf/issues/12243",
+@pytest.mark.parametrize(
+    "index",
+    [
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/apache/arrow/issues/40743"
+            ),
+        ),
+        True,
+    ],
 )
 def test_parquet_index_empty(index):
     pdf = pd.DataFrame(index=pd.RangeIndex(0, 10, 1))

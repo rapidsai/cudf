@@ -81,6 +81,18 @@ class DataFrame(VarMixin, DXDataFrame):
             **kwargs,
         )
 
+    def to_orc(self, *args, **kwargs):
+        return self.to_legacy_dataframe().to_orc(*args, **kwargs)
+
+    @staticmethod
+    def read_text(*args, **kwargs):
+        from dask_expr import from_legacy_dataframe
+
+        from dask_cudf.io.text import read_text as legacy_read_text
+
+        ddf = legacy_read_text(*args, **kwargs)
+        return from_legacy_dataframe(ddf)
+
 
 class Series(VarMixin, DXSeries):
     def groupby(self, by, **kwargs):
@@ -108,3 +120,34 @@ class Index(DXIndex):
 get_collection_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_collection_type.register(cudf.Series, lambda _: Series)
 get_collection_type.register(cudf.BaseIndex, lambda _: Index)
+
+
+##
+## Support conversion to GPU-backed Array collections
+##
+
+
+try:
+    from dask_expr._backends import create_array_collection
+
+    @get_collection_type.register_lazy("cupy")
+    def _register_cupy():
+        import cupy
+
+        @get_collection_type.register(cupy.ndarray)
+        def get_collection_type_cupy_array(_):
+            return create_array_collection
+
+    @get_collection_type.register_lazy("cupyx")
+    def _register_cupyx():
+        # Needed for cuml
+        from cupyx.scipy.sparse import spmatrix
+
+        @get_collection_type.register(spmatrix)
+        def get_collection_type_csr_matrix(_):
+            return create_array_collection
+
+except ImportError:
+    # Older version of dask-expr.
+    # Implicit conversion to array wont work.
+    pass
