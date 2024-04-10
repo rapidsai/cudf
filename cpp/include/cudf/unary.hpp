@@ -58,7 +58,7 @@ CUDF_HOST_DEVICE Fixed convert_floating_to_fixed(Floating floating, numeric::sca
   return Fixed(scaled);
 }
 
-/** @brief Convert a fixed-point value to floating-point
+/** @brief Convert a fixed-point value to floating point
  *
  * @note This conversion was moved from fixed-point member functions to free functions.
  * This is so that the complex conversion code is not included into many parts of the
