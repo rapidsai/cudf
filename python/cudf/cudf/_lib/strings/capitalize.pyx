@@ -14,17 +14,15 @@ from cudf._lib.cpp.strings.capitalize cimport (
     title as cpp_title,
 )
 
+import cudf._lib.pylibcudf as plc
 
 @acquire_spill_lock()
 def capitalize(Column source_strings):
-    cdef unique_ptr[column] c_result
-    cdef column_view source_view = source_strings.view()
-
-    with nogil:
-        c_result = move(cpp_capitalize(source_view))
-
-    return Column.from_unique_ptr(move(c_result))
-
+    return Column.from_pylibcudf(
+        plc.strings.capitalize(
+            source_strings.to_pylibcudf(mode="read")
+        )
+    )
 
 @acquire_spill_lock()
 def title(Column source_strings):
