@@ -33,7 +33,8 @@ namespace cudf {
  * @brief Column APIs for unary ops
  */
 
-/** @brief Convert a floating-point value to fixed point
+/**
+ * @brief Convert a floating-point value to fixed point
  *
  * @note This conversion was moved from fixed-point member functions to free functions.
  * This is so that the complex conversion code is not included into many parts of the
