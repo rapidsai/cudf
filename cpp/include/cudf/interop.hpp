@@ -260,8 +260,9 @@ unique_device_array_t to_arrow_device(
  * @brief Create `ArrowDeviceArray` from a table view
  *
  * Populates the C struct ArrowDeviceArray performing copies only if necessary.
- * This maintains the data on the GPU device and gives a view of the table data
- * to the ArrowDeviceArray struct.
+ * This wraps the data on the GPU device and gives a view of the table data
+ * to the ArrowDeviceArray struct. If the caller frees the data referenced by
+ * the table_view, using the returned object results in undefined behavior.
  *
  * After calling this function, the release callback on the returned ArrowDeviceArray
  * must be called to clean up any memory created during conversion.
@@ -289,8 +290,9 @@ unique_device_array_t to_arrow_device(
  * @brief Create `ArrowDeviceArray` from a column view
  *
  * Populates the C struct ArrowDeviceArray performing copies only if necessary.
- * This maintains the data on the GPU device and gives a view of the column data
- * to the ArrowDeviceArray struct.
+ * This wraps the data on the GPU device and gives a view of the column data
+ * to the ArrowDeviceArray struct. If the caller frees the data referenced by
+ * the column_view, using the returned object results in undefined behavior.
  *
  * After calling this function, the release callback on the returned ArrowDeviceArray
  * must be called to clean up any memory created during conversion.
