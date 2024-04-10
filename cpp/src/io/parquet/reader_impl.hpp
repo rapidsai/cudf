@@ -31,6 +31,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
@@ -347,7 +348,7 @@ class reader::impl {
 
  private:
   rmm::cuda_stream_view _stream;
-  rmm::device_async_resource_ref _mr = nullptr;
+  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_reader_metadata> _metadata;

@@ -141,7 +141,7 @@ class column_buffer_base {
   rmm::device_buffer _data{};
   rmm::device_buffer _null_mask{};
   size_type _null_count{0};
-  rmm::device_async_resource_ref _mr;
+  rmm::device_async_resource_ref _mr{rmm::mr::get_current_device_resource()};
 
  public:
   data_type type{type_id::EMPTY};
