@@ -213,39 +213,38 @@ struct upper_lower_ls_fn {
  *
  * This executes as one warp per string and just computes the output sizes.
  */
-struct count_bytes_fn {
-  convert_char_fn converter;
-  column_device_view d_strings;
-  size_type* d_offsets;
+CUDF_KERNEL void count_bytes_fn(convert_char_fn converter,
+                                column_device_view d_strings,
+                                size_type* d_sizes)
+{
+  auto idx = cudf::detail::grid_1d::global_thread_id();
+  if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
 
-  __device__ void operator()(size_type idx) const
-  {
-    auto const str_idx  = idx / cudf::detail::warp_size;
-    auto const lane_idx = idx % cudf::detail::warp_size;
+  auto const str_idx  = idx / cudf::detail::warp_size;
+  auto const lane_idx = idx % cudf::detail::warp_size;
 
-    // initialize the output for the atomicAdd
-    if (lane_idx == 0) { d_offsets[str_idx] = 0; }
-    __syncwarp();
+  // initialize the output for the atomicAdd
+  if (lane_idx == 0) { d_sizes[str_idx] = 0; }
+  __syncwarp();
 
-    if (d_strings.is_null(str_idx)) { return; }
-    auto const d_str   = d_strings.element<string_view>(str_idx);
-    auto const str_ptr = d_str.data();
+  if (d_strings.is_null(str_idx)) { return; }
+  auto const d_str   = d_strings.element<string_view>(str_idx);
+  auto const str_ptr = d_str.data();
 
-    size_type size = 0;
-    for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
-      auto const chr = str_ptr[i];
-      if (is_utf8_continuation_char(chr)) { continue; }
-      char_utf8 u8 = 0;
-      to_char_utf8(str_ptr + i, u8);
-      size += converter.process_character(u8);
-    }
-    // this is every so slightly faster than using the cub::warp_reduce
-    if (size > 0) {
-      cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_offsets + str_idx)};
-      ref.fetch_add(size, cuda::std::memory_order_relaxed);
-    }
+  size_type size = 0;
+  for (auto i = lane_idx; i < d_str.size_bytes(); i += cudf::detail::warp_size) {
+    auto const chr = str_ptr[i];
+    if (is_utf8_continuation_char(chr)) { continue; }
+    char_utf8 u8 = 0;
+    to_char_utf8(str_ptr + i, u8);
+    size += converter.process_character(u8);
   }
-};
+  // this is every so slightly faster than using the cub::warp_reduce
+  if (size > 0) {
+    cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_sizes + str_idx)};
+    ref.fetch_add(size, cuda::std::memory_order_relaxed);
+  }
+}
 
 /**
  * @brief Special functor for processing ASCII-only data
@@ -322,23 +321,16 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   }
 
   // This will use a warp-parallel algorithm to compute the output sizes for each string
-  auto offsets = make_numeric_column(
-    data_type{type_to_id<size_type>()}, input.size() + 1, mask_state::UNALLOCATED, stream, mr);
-  auto d_offsets = offsets->mutable_view().data<size_type>();
-
-  // first pass, compute output sizes
   // note: tried to use segmented-reduce approach instead here and it was consistently slower
-  count_bytes_fn counter{ccfn, *d_strings, d_offsets};
-  auto const count_itr = thrust::make_counting_iterator<size_type>(0);
-  thrust::for_each_n(
-    rmm::exec_policy(stream), count_itr, input.size() * cudf::detail::warp_size, counter);
-
-  // convert sizes to offsets
-  auto const bytes =
-    cudf::detail::sizes_to_offsets(d_offsets, d_offsets + input.size() + 1, d_offsets, stream);
-  CUDF_EXPECTS(bytes <= std::numeric_limits<size_type>::max(),
-               "Size of output exceeds the column size limit",
-               std::overflow_error);
+  auto [offsets, bytes] = [&] {
+    rmm::device_uvector<size_type> sizes(input.size(), stream);
+    constexpr int block_size = 256;
+    cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
+    count_bytes_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      ccfn, *d_strings, sizes.data());
+    // convert sizes to offsets
+    return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
+  }();
 
   // build sub-offsets
   auto const input_chars = input.chars_begin(stream);
@@ -346,6 +338,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   auto tmp_offsets       = rmm::device_uvector<int64_t>(sub_count + input.size() + 1, stream);
   {
     rmm::device_uvector<size_type> sub_offsets(sub_count, stream);
+    auto const count_itr = thrust::make_counting_iterator<size_type>(0);
     thrust::transform(rmm::exec_policy(stream),
                       count_itr,
                       count_itr + sub_count,
