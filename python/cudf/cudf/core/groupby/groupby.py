@@ -1201,7 +1201,9 @@ class GroupBy(Serializable, Reducible, Scannable):
         offsets, grouped_key_cols, grouped_value_cols = self._groupby.groups(
             [*self.obj._index._columns, *self.obj._columns]
         )
-        grouped_keys = cudf.core.index._index_from_columns(grouped_key_cols)
+        grouped_keys = cudf.core.index._index_from_data(
+            dict(enumerate(grouped_key_cols))
+        )
         if isinstance(self.grouping.keys, cudf.MultiIndex):
             grouped_keys.names = self.grouping.keys.names
             to_drop = self.grouping.keys.names
