@@ -17,7 +17,6 @@ if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
     # pip install cudf_cu${RAPIDS_CUDA_VERSION%%.*}
     pip install cudf_${RAPIDS_PY_CUDA_SUFFIX}-24.6.*
 else
-    
     RAPIDS_PY_WHEEL_NAME="cudf_${RAPIDS_PY_CUDA_SUFFIX}" rapids-download-wheels-from-s3 ./local-cudf-dep
     python -m pip install $(ls ./local-cudf-dep/cudf*.whl)[test,pandas-tests]
 fi
