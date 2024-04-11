@@ -36,7 +36,7 @@ ArrowType id_to_arrow_type(cudf::type_id id)
     case cudf::type_id::FLOAT32: return NANOARROW_TYPE_FLOAT;
     case cudf::type_id::FLOAT64: return NANOARROW_TYPE_DOUBLE;
     case cudf::type_id::TIMESTAMP_DAYS: return NANOARROW_TYPE_DATE32;
-    default: CUDF_FAIL("Unsupported type_id conversion to arrow type");
+    default: CUDF_FAIL("Unsupported type_id conversion to arrow type", cudf::data_type_error);
   }
 }
 

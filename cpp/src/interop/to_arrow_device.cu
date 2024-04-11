@@ -123,7 +123,7 @@ struct dispatch_to_arrow_device {
                  rmm::mr::device_memory_resource*,
                  ArrowArray*)
   {
-    CUDF_FAIL("Unsupported type for to_arrow_device");
+    CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
@@ -386,7 +386,7 @@ struct dispatch_to_arrow_device_view {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   int operator()(ArrowArray*) const
   {
-    CUDF_FAIL("Unsupported type for to_arrow_device");
+    CUDF_FAIL("Unsupported type for to_arrow_device", cudf::data_type_error);
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>

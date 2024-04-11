@@ -39,7 +39,7 @@ struct dispatch_to_arrow_type {
   template <typename T, CUDF_ENABLE_IF(not is_rep_layout_compatible<T>())>
   int operator()(column_view, column_metadata const&, ArrowSchema*)
   {
-    CUDF_FAIL("Unsupported type for to_arrow_schema");
+    CUDF_FAIL("Unsupported type for to_arrow_schema", cudf::data_type_error);
   }
 
   template <typename T, CUDF_ENABLE_IF(is_rep_layout_compatible<T>())>
