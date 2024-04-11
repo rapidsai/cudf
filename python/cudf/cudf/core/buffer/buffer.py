@@ -108,6 +108,23 @@ class BufferOwner(Serializable):
 
     Use `_from_device_memory` and `_from_host_memory` to create
     a new instance from either device or host memory respectively.
+
+    Parameters
+    ----------
+    ptr
+        An integer representing a pointer to memory.
+    size
+        The size of the memory in nbytes
+    owner
+        Python object to which the lifetime of the memory allocation is tied.
+        This buffer will keep a reference to `owner`.
+    exposed
+        Pointer to the underlying memory
+
+    Raises
+    ------
+    ValueError
+        If size is negative
     """
 
     _ptr: int
@@ -125,16 +142,6 @@ class BufferOwner(Serializable):
         owner: object,
         exposed: bool,
     ):
-        """Create a new buffer owner.
-
-        Do not use this directly, instead use `_from_device_memory` or
-        `_from_host_memory`.
-
-        Raises
-        ------
-        ValueError
-            If size is negative
-        """
         if size < 0:
             raise ValueError("size cannot be negative")
 
