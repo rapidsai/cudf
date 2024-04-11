@@ -8,7 +8,7 @@
 
 # Hard-coded needs to match the version deduced by rapids-upload-artifacts-dir
 GH_JOB_NAME="pandas-tests-diff / build"
-RAPIDS_FULL_VERSION=$(./VERSION)
+RAPIDS_FULL_VERSION=$(<./VERSION)
 rapids-logger "Github job name: ${GH_JOB_NAME}"
 rapids-logger "Rapids version: ${RAPIDS_FULL_VERSION}"
 
