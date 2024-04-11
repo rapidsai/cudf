@@ -1638,12 +1638,14 @@ class Frame(BinaryOperand, Scannable):
     def __neg__(self):
         """Negate for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
-            {
-                name: col.unary_operator("not")
-                if is_bool_dtype(col.dtype)
-                else -1 * col
-                for name, col in self._data.items()
-            }
+            self._data._from_columns_like_self(
+                (
+                    col.unary_operator("not")
+                    if col.dtype.kind == "b"
+                    else -1 * col
+                    for col in self._data.columns
+                )
+            )
         )
 
     @_cudf_nvtx_annotate
