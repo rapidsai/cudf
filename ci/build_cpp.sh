@@ -4,6 +4,7 @@
 set -euo pipefail
 
 rapids-configure-conda-channels
+conda config --system --remove channels rapidsai
 
 source rapids-configure-sccache
 
