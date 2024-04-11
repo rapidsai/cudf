@@ -27,9 +27,10 @@ bash python/cudf/cudf/pandas/scripts/run-pandas-tests.sh \
   --dist worksteal \
   --report-log=${PANDAS_TESTS_BRANCH}.json 2>&1
 
+SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-24.06-results.json
 # summarize the results and save them to artifacts:
-python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${PANDAS_TESTS_BRANCH}-results.json
+python python/cudf/cudf/pandas/scripts/summarize-test-results.py --output json pandas-testing/${PANDAS_TESTS_BRANCH}.json > pandas-testing/${SUMMARY_FILE_NAME}
 RAPIDS_ARTIFACTS_DIR=${RAPIDS_ARTIFACTS_DIR:-"${PWD}/artifacts"}
 mkdir -p "${RAPIDS_ARTIFACTS_DIR}"
-mv pandas-testing/${PANDAS_TESTS_BRANCH}-results.json ${RAPIDS_ARTIFACTS_DIR}/
-rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${PANDAS_TESTS_BRANCH}-results.json "${RAPIDS_ARTIFACTS_DIR}"
+mv pandas-testing/${SUMMARY_FILE_NAME} ${RAPIDS_ARTIFACTS_DIR}/
+rapids-upload-to-s3 ${RAPIDS_ARTIFACTS_DIR}/${SUMMARY_FILE_NAME} "${RAPIDS_ARTIFACTS_DIR}"
