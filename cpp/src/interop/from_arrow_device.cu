@@ -125,6 +125,9 @@ struct dispatch_from_arrow_device {
   }
 };
 
+// forward declaration is needed because `type_dispatch` instantiates the
+// dispatch_from_arrow_device struct causing a recursive situation for struct,
+// dictionary and list_view types.
 dispatch_tuple_t get_column(ArrowSchemaView* schema,
                             ArrowArray const* input,
                             data_type type,
