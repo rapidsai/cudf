@@ -1506,7 +1506,9 @@ class Frame(BinaryOperand, Scannable):
     @_cudf_nvtx_annotate
     def _unaryop(self, op):
         data_columns = (col.unary_operator(op) for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     @classmethod
     @_cudf_nvtx_annotate
