@@ -924,7 +924,7 @@ inline __device__ uint32_t InitLevelSection(page_state_s* s,
 
   auto start = cur;
 
-  auto init_rle = [s, lvl, end, level_bits](uint8_t const* cur, uint8_t const* end) {
+  auto init_rle = [s, lvl, level_bits](uint8_t const* cur, uint8_t const* end) {
     uint32_t const run      = get_vlq32(cur, end);
     s->initial_rle_run[lvl] = run;
     if (!(run & 1)) {
