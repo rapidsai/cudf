@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -102,6 +102,7 @@ __device__ inline double stod(string_view const& d_str)
           ch = *in_ptr++;
           if (ch < '0' || ch > '9') break;
           exp_ten = (exp_ten * 10) + (int)(ch - '0');
+          if (exp_ten >= 1e8) { break; }
         }
       }
     }
