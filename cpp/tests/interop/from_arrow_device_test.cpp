@@ -58,6 +58,14 @@ TEST_F(FromArrowDeviceTest, FailConditions)
   ArrowDeviceArray arr;
   arr.device_type = ARROW_DEVICE_CPU;
   EXPECT_THROW(cudf::from_arrow_device(&schema, &arr), cudf::logic_error);
+
+  // can't pass null for schema or device array
+  EXPECT_THROW(cudf::from_arrow_device_column(nullptr, nullptr), cudf::logic_error);
+  // can't pass null for device array
+  EXPECT_THROW(cudf::from_arrow_device_column(&schema, nullptr), cudf::logic_error);
+  // device_type must be CUDA/CUDA_HOST/CUDA_MANAGED
+  // should fail with ARROW_DEVICE_CPU
+  EXPECT_THROW(cudf::from_arrow_device_column(&schema, &arr), cudf::logic_error);
 }
 
 TEST_F(FromArrowDeviceTest, EmptyTable)
@@ -74,6 +82,12 @@ TEST_F(FromArrowDeviceTest, EmptyTable)
 
   auto got_cudf_table = cudf::from_arrow_device(schema.get(), &input);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_cudf_table, *got_cudf_table);
+
+  auto got_cudf_col = cudf::from_arrow_device_column(schema.get(), &input);
+  EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+  cudf::table_view from_struct{
+    std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table, from_struct);
 }
 
 TEST_F(FromArrowDeviceTest, DateTimeTable)
@@ -111,6 +125,12 @@ TEST_F(FromArrowDeviceTest, DateTimeTable)
 
   auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
+
+  auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+  EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+  cudf::table_view from_struct{
+    std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
 }
 
 TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
@@ -161,6 +181,12 @@ TYPED_TEST(FromArrowDeviceTestDurationsTest, DurationTable)
 
   auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
+
+  auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+  EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+  cudf::table_view from_struct{
+    std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
 }
 
 TEST_F(FromArrowDeviceTest, NestedList)
@@ -207,6 +233,12 @@ TEST_F(FromArrowDeviceTest, NestedList)
 
   auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
+
+  auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+  EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+  cudf::table_view from_struct{
+    std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
 }
 
 TEST_F(FromArrowDeviceTest, StructColumn)
@@ -339,6 +371,26 @@ TEST_F(FromArrowDeviceTest, StructColumn)
 
   auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
+
+  {
+    // there's one boolean column so we should have one "owned_mem" column in the
+    // returned unique_ptr's custom deleter
+    const cudf::custom_view_deleter<cudf::table_view>& deleter = got_cudf_table_view.get_deleter();
+    EXPECT_EQ(deleter.owned_mem_.size(), 1);
+  }
+
+  auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+  EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+  cudf::table_view from_struct{
+    std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
+
+  {
+    // there's one boolean column so we should have one "owned_mem" column in the
+    // returned unique_ptr's custom deleter
+    const cudf::custom_view_deleter<cudf::column_view>& deleter = got_cudf_col.get_deleter();
+    EXPECT_EQ(deleter.owned_mem_.size(), 1);
+  }
 }
 
 TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
@@ -405,9 +457,21 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
   auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
 
-  // check that the deleter's owned mem are populated
-  const cudf::custom_view_deleter<cudf::table_view>& deleter = got_cudf_table_view.get_deleter();  
-  EXPECT_EQ(deleter.owned_mem_.size(), 0);
+  {
+    const cudf::custom_view_deleter<cudf::table_view>& deleter = got_cudf_table_view.get_deleter();
+    EXPECT_EQ(deleter.owned_mem_.size(), 0);
+  }
+
+  auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+  EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+  cudf::table_view from_struct{
+    std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
+
+  {
+    const cudf::custom_view_deleter<cudf::column_view>& deleter = got_cudf_col.get_deleter();
+    EXPECT_EQ(deleter.owned_mem_.size(), 0);
+  }
 }
 
 void slice_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
@@ -457,8 +521,21 @@ TEST_P(FromArrowDeviceTestSlice, SliceTest)
   auto got_cudf_table_view = cudf::from_arrow_device(schema.get(), &input_device_array);
   if (got_cudf_table_view->num_rows() == 0 and sliced_cudf_table.num_rows() == 0) {
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(sliced_cudf_table, *got_cudf_table_view);
+
+    auto got_cudf_col = cudf::from_arrow_device_column(schema.get(), &input_device_array);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    cudf::table_view from_struct{
+      std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*got_cudf_table_view, from_struct);
+
   } else {
     CUDF_TEST_EXPECT_TABLES_EQUAL(sliced_cudf_table, *got_cudf_table_view);
+
+    auto got_cudf_col = cudf::from_arrow_device_column(schema.get(), &input_device_array);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    cudf::table_view from_struct{
+      std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
   }
 }
 
@@ -508,6 +585,12 @@ TEST_F(FromArrowDeviceTest, FixedPoint128Table)
 
     auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+
+    auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    cudf::table_view from_struct{
+      std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
   }
 }
 
@@ -547,6 +630,12 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableLarge)
 
     auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+
+    auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    cudf::table_view from_struct{
+      std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
   }
 }
 
@@ -586,6 +675,12 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNulls)
 
     auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+
+    auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    cudf::table_view from_struct{
+      std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
   }
 }
 
@@ -627,5 +722,11 @@ TEST_F(FromArrowDeviceTest, FixedPoint128TableNullsLarge)
 
     auto got_cudf_table_view = cudf::from_arrow_device(input_schema.get(), &input_device_array);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, *got_cudf_table_view);
+
+    auto got_cudf_col = cudf::from_arrow_device_column(input_schema.get(), &input_device_array);
+    EXPECT_EQ(got_cudf_col->type(), cudf::data_type{cudf::type_id::STRUCT});
+    cudf::table_view from_struct{
+      std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table_view, from_struct);
   }
 }

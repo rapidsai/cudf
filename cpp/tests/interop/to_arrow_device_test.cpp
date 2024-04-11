@@ -202,35 +202,19 @@ get_nanoarrow_tables(cudf::size_type length)
   NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(arrow.get(), schema.get(), nullptr));
   arrow->length = length;
 
-  populate_from_col<int64_t>(arrow->children[0], columns[0]->view());
-  // get_nanoarrow_array<int64_t>(arrow->children[0], int64_data, validity);
-  populate_from_col<cudf::string_view>(arrow->children[1], columns[1]->view());
-  // get_nanoarrow_array<cudf::string_view>(arrow->children[1], string_data, validity);
+  populate_from_col<int64_t>(arrow->children[0], columns[0]->view());  
+  populate_from_col<cudf::string_view>(arrow->children[1], columns[1]->view());  
   populate_dict_from_col<int64_t, uint32_t>(arrow->children[2],
                                             cudf::dictionary_column_view(columns[2]->view()));
-
-  // cudf::dictionary_column_view view(dict_col->view());
-  // auto keys    = cudf::test::to_host<int64_t>(view.keys()).first;
-  // auto indices = cudf::test::to_host<uint32_t>(view.indices()).first;
-  // get_nanoarrow_dict_array(arrow->children[2],
-  //                          std::vector<int64_t>(keys.begin(), keys.end()),
-  //                          std::vector<int32_t>(indices.begin(), indices.end()),
-  //                          validity);
+  
   populate_from_col<bool>(arrow->children[3], columns[3]->view());
-  // get_nanoarrow_array<bool>(arrow->children[3], bool_data, bool_validity);
   cudf::lists_column_view list_view{columns[4]->view()};
   populate_list_from_col(arrow->children[4], list_view);
   populate_from_col<int64_t>(arrow->children[4]->children[0], list_view.child());
-  // get_nanoarrow_list_array<int64_t>(arrow->children[4],
-  //                                   list_int64_data,
-  //                                   list_offsets,
-  //                                   list_int64_data_validity,
-  //                                   bool_data_validity);
+
   cudf::structs_column_view struct_view{columns[5]->view()};
   populate_from_col<int64_t>(arrow->children[5]->children[0], struct_view.child(0));
   populate_from_col<cudf::string_view>(arrow->children[5]->children[1], struct_view.child(1));
-  // get_nanoarrow_array<int64_t>(arrow->children[5]->children[0], int64_data, validity);
-  // get_nanoarrow_array<cudf::string_view>(arrow->children[5]->children[1], string_data, validity);
   arrow->children[5]->length     = struct_view.size();
   arrow->children[5]->null_count = struct_view.null_count();
   ArrowBufferSetAllocator(ArrowArrayBuffer(arrow->children[5], 0), noop_alloc);
@@ -238,15 +222,6 @@ get_nanoarrow_tables(cudf::size_type length)
     cudf::bitmask_allocation_size_bytes(struct_view.size());
   ArrowArrayValidityBitmap(arrow->children[5])->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<const uint8_t*>(struct_view.null_mask()));
-
-  // NANOARROW_THROW_NOT_OK(ArrowBitmapReserve(ArrowArrayValidityBitmap(arrow->children[5]),
-  // length)); std::for_each(bool_data_validity.begin(), bool_data_validity.end(), [&](auto&& elem)
-  // {
-  //   NANOARROW_THROW_NOT_OK(
-  //     ArrowBitmapAppend(ArrowArrayValidityBitmap(arrow->children[5]), (elem) ? 1 : 0, 1));
-  // });
-  // arrow->children[5]->null_count =
-  //   ArrowBitCountSet(ArrowArrayValidityBitmap(arrow->children[5])->buffer.data, 0, length);
 
   ArrowError error;
   if (ArrowArrayFinishBuilding(arrow.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, &error) !=
