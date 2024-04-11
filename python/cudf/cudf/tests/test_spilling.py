@@ -734,7 +734,8 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
 
         # Write access trigger copy of `a` into `b` but since `a` is spilled
         # the copy is done in host memory and `a` remains spilled.
-        b.get_ptr(mode="write")
+        with acquire_spill_lock():
+            b.get_ptr(mode="write")
         assert a.is_spilled
         assert not b.is_spilled
 
@@ -752,3 +753,34 @@ def test_spilling_and_copy_on_write(manager: SpillManager):
         assert a.spillable
         assert not a.is_spilled
         assert not b.is_spilled
+
+        b = a.copy(deep=False)
+        assert a.owner == b.owner
+        # Write access trigger copy of `a` into `b` in device memory
+        with acquire_spill_lock():
+            b.get_ptr(mode="write")
+        assert a.owner != b.owner
+        assert not a.is_spilled
+        assert not b.is_spilled
+        # And `a` and `b` is now seperated with there one spilling status
+        a.spill(target="cpu")
+        assert a.is_spilled
+        assert not b.is_spilled
+        b.spill(target="cpu")
+        assert a.is_spilled
+        assert b.is_spilled
+
+        # Read access with a spill lock unspill `a` and allows copy-on-write
+        with acquire_spill_lock():
+            a.get_ptr(mode="read")
+        b = a.copy(deep=False)
+        assert a.owner == b.owner
+        assert not a.is_spilled
+
+        # Read access without a spill lock exposes `a` and forces a deep copy
+        a.get_ptr(mode="read")
+        b = a.copy(deep=False)
+        assert a.owner != b.owner
+        assert not a.is_spilled
+        assert a.owner.exposed
+        assert not b.owner.exposed
