@@ -19,6 +19,7 @@
 #include <cudf/io/json.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/resource_ref.hpp>
 
 namespace cudf::io::json::detail {
 
@@ -35,7 +36,7 @@ namespace cudf::io::json::detail {
 table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               json_reader_options const& options,
                               rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr);
+                              rmm::device_async_resource_ref mr);
 
 /**
  * @brief Write an entire dataset to JSON format.
@@ -50,7 +51,7 @@ void write_json(data_sink* sink,
                 table_view const& table,
                 json_writer_options const& options,
                 rmm::cuda_stream_view stream,
-                rmm::mr::device_memory_resource* mr);
+                rmm::device_async_resource_ref mr);
 
 /**
  * @brief Normalize single quotes to double quotes using FST
@@ -61,7 +62,7 @@ void write_json(data_sink* sink,
  */
 rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& inbuf,
                                                   rmm::cuda_stream_view stream,
-                                                  rmm::mr::device_memory_resource* mr);
+                                                  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
@@ -72,5 +73,5 @@ rmm::device_uvector<char> normalize_single_quotes(rmm::device_uvector<char>&& in
  */
 rmm::device_uvector<char> normalize_whitespace(rmm::device_uvector<char>&& inbuf,
                                                rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr);
+                                               rmm::device_async_resource_ref mr);
 }  // namespace cudf::io::json::detail

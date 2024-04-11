@@ -22,6 +22,7 @@
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
 #include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <benchmark/benchmark.h>
 
@@ -120,6 +121,7 @@ class memory_stats_logger {
   }
 
  private:
+  // TODO change to resource_ref once set_current_device_resource supports it
   rmm::mr::device_memory_resource* existing_mr;
   rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> statistics_mr;
 };
