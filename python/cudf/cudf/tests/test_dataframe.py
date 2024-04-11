@@ -10963,6 +10963,7 @@ def test_squeeze(axis, data):
     "operation",
     [
         lambda df: df.where(df < 2, 2),
+        lambda df: df.nans_to_nulls(),
     ],
 )
 def test_op_preserves_column_metadata(column, operation):
