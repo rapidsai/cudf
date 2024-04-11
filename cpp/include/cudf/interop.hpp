@@ -282,7 +282,7 @@ unique_device_array_t to_arrow_device(
  * @return ArrowDeviceArray which will have ownership of any copied data
  */
 unique_device_array_t to_arrow_device(
-  cudf::table_view table,
+  cudf::table_view const& table,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -312,7 +312,7 @@ unique_device_array_t to_arrow_device(
  * @return ArrowDeviceArray which will have ownership of any copied data
  */
 unique_device_array_t to_arrow_device(
-  cudf::column_view col,
+  cudf::column_view const& col,
   rmm::cuda_stream_view stream        = cudf::get_default_stream(),
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

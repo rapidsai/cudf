@@ -653,7 +653,7 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
   return create_device_array(std::move(tmp), stream);
 }
 
-unique_device_array_t to_arrow_device(cudf::table_view table,
+unique_device_array_t to_arrow_device(cudf::table_view const& table,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
@@ -674,7 +674,7 @@ unique_device_array_t to_arrow_device(cudf::table_view table,
   return create_device_array(std::move(tmp), stream);
 }
 
-unique_device_array_t to_arrow_device(cudf::column_view col,
+unique_device_array_t to_arrow_device(cudf::column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
@@ -704,7 +704,7 @@ unique_device_array_t to_arrow_device(cudf::column&& col,
   return detail::to_arrow_device(std::move(col), stream, mr);
 }
 
-unique_device_array_t to_arrow_device(cudf::table_view table,
+unique_device_array_t to_arrow_device(cudf::table_view const& table,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
@@ -712,7 +712,7 @@ unique_device_array_t to_arrow_device(cudf::table_view table,
   return detail::to_arrow_device(table, stream, mr);
 }
 
-unique_device_array_t to_arrow_device(cudf::column_view col,
+unique_device_array_t to_arrow_device(cudf::column_view const& col,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
