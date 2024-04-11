@@ -53,7 +53,7 @@ def set_rmm_memory_pool(nbytes: int):
     mr = rmm.mr.get_current_device_resource()
     rmm.mr.set_current_device_resource(
         rmm.mr.PoolMemoryResource(
-            rmm.mr.get_current_device_resource(),
+            mr,
             initial_pool_size=nbytes,
             maximum_pool_size=nbytes,
         )
