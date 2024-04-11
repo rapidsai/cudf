@@ -177,7 +177,7 @@ jobs:
     with:
       matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
       build_type: pull-request
-      script: ci/cudf_pandas_scripts/pandas-tests/run.sh pr
+      script: ci/cudf_pandas_scripts/pandas-tests/run.sh main
       # Hide test failures because they exceed the GITHUB_STEP_SUMMARY output limit.
       test_summary_show: "none"
   pandas-tests-pr:

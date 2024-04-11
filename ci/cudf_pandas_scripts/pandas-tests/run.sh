@@ -10,9 +10,8 @@ PANDAS_TESTS_BRANCH=${1}
 rapids-logger "Running Pandas tests using $PANDAS_TESTS_BRANCH branch"
 rapids-logger "PR number: ${RAPIDS_REF_NAME:-"unknown"}"
 
-
 if [[ "${PANDAS_TESTS_BRANCH}" == "main" ]]; then
-    git checkout main
+    git checkout branch-24.06
     pip install cudf_cu${RAPIDS_CUDA_VERSION%%.*}
 else
     RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen ${RAPIDS_CUDA_VERSION})"
