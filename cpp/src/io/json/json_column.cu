@@ -710,22 +710,26 @@ void make_device_json_column(device_span<SymbolT const> input,
       }
     }
 
+    std::optional<data_type> user_dtype = [&]() -> std::optional<data_type> {
+      // get path of this column, and get its dtype if present in options
+      if (options.is_enabled_use_dtypes_as_filter() or is_enabled_mixed_types_as_string) {
+        auto nt = tree_path.get_path(this_col_id);
+        return get_path_data_type(nt, options);
+      }
+      return {};
+    }();
     // if dtype is used as filter, don't extract non-mentioned columns
     if (options.is_enabled_use_dtypes_as_filter()) {
-      auto nt                          = tree_path.get_path(this_col_id);
-      std::optional<data_type> user_dt = get_path_data_type(nt, options);
-      if(! user_dt.has_value()) {
-        is_mixed_type_column[this_col_id] = 1; // a hack to ignore children
+      if (!user_dtype.has_value()) {
+        is_mixed_type_column[this_col_id] = 1;  // a hack to ignore children
         ignore_vals[this_col_id]          = 1;
         continue;
       }
     }
     if (is_enabled_mixed_types_as_string) {
-      // get path of this column, check if it is a struct forced as string, and enforce it
-      auto nt                          = tree_path.get_path(this_col_id);
-      std::optional<data_type> user_dt = get_path_data_type(nt, options);
-      if (column_categories[this_col_id] == NC_STRUCT and user_dt.has_value() and
-          user_dt.value().id() == type_id::STRING) {
+      // check if it is a struct forced as string, and enforce it
+      if (column_categories[this_col_id] == NC_STRUCT and user_dtype.has_value() and
+          user_dtype.value().id() == type_id::STRING) {
         is_mixed_type_column[this_col_id] = 1;
         column_categories[this_col_id]    = NC_STR;
       }
@@ -772,10 +776,6 @@ void make_device_json_column(device_span<SymbolT const> input,
   for (auto& [col_id, col_ref] : columns) {
     if (col_id == parent_node_sentinel) continue;
     auto& col            = col_ref.get();
-    // FIXME: bad idea to do all of them at once, but we need to complete them all in single kernel. how?
-    // init_to_zero(col.string_offsets);
-    // init_to_zero(col.string_lengths);
-    // init_to_zero(col.child_offsets);
     columns_data[col_id] = json_column_data{col.string_offsets.data(),
                                             col.string_lengths.data(),
                                             col.child_offsets.data(),
