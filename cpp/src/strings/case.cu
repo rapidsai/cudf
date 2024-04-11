@@ -217,9 +217,9 @@ struct upper_lower_ls_fn : public base_upper_lower_fn {
  *
  * This executes as one warp per string and just computes the output sizes.
  */
-CUDF_KERNEL void count_bytes_fn(convert_char_fn converter,
-                                column_device_view d_strings,
-                                size_type* d_sizes)
+CUDF_KERNEL void count_bytes_kernel(convert_char_fn converter,
+                                    column_device_view d_strings,
+                                    size_type* d_sizes)
 {
   auto idx = cudf::detail::grid_1d::global_thread_id();
   if (idx >= (d_strings.size() * cudf::detail::warp_size)) { return; }
@@ -243,7 +243,7 @@ CUDF_KERNEL void count_bytes_fn(convert_char_fn converter,
     to_char_utf8(str_ptr + i, u8);
     size += converter.process_character(u8);
   }
-  // this is every so slightly faster than using the cub::warp_reduce
+  // this is slightly faster than using the cub::warp_reduce
   if (size > 0) {
     cuda::atomic_ref<size_type, cuda::thread_scope_block> ref{*(d_sizes + str_idx)};
     ref.fetch_add(size, cuda::std::memory_order_relaxed);
@@ -328,9 +328,9 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   // note: tried to use segmented-reduce approach instead here and it was consistently slower
   auto [offsets, bytes] = [&] {
     rmm::device_uvector<size_type> sizes(input.size(), stream);
-    constexpr int block_size = 256;
+    constexpr int block_size = 512;
     cudf::detail::grid_1d grid{input.size() * cudf::detail::warp_size, block_size};
-    count_bytes_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+    count_bytes_kernel<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
       ccfn, *d_strings, sizes.data());
     // convert sizes to offsets
     return cudf::strings::detail::make_offsets_child_column(sizes.begin(), sizes.end(), stream, mr);
@@ -343,7 +343,7 @@ std::unique_ptr<column> convert_case(strings_column_view const& input,
   {
     rmm::device_uvector<size_type> sub_offsets(sub_count, stream);
     auto const count_itr = thrust::make_counting_iterator<size_type>(0);
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream),
                       count_itr,
                       count_itr + sub_count,
                       sub_offsets.data(),
