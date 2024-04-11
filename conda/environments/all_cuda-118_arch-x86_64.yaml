@@ -68,7 +68,7 @@ dependencies:
 - pandoc
 - pip
 - pre-commit
-- protobuf
+- protobuf>=4.21,<5
 - ptxcompiler
 - pyarrow==15.0.2.*
 - pydata-sphinx-theme!=0.14.2
@@ -79,7 +79,7 @@ dependencies:
 - pytest<8
 - python-confluent-kafka>=1.9.0,<1.10.0a0
 - python>=3.9,<3.12
-- pytorch
+- pytorch>=2.1.0
 - rapids-dask-dependency==24.6.*
 - rich
 - rmm==24.6.*

@@ -286,7 +286,7 @@ dependencies:
       - output_types: conda
         packages:
           - &rmm_conda rmm==24.6.*
-          - &protobuf protobuf
+          - &protobuf protobuf>=4.21,<5
           - pip
           - pip:
               - git+https://github.com/python-streamz/streamz.git@master
@@ -651,7 +651,7 @@ dependencies:
               arch: x86_64
             packages:
               # Currently, CUDA + aarch64 builds of pytorch do not exist on conda-forge.
-              - pytorch
+              - pytorch>=2.1.0
               # We only install these on x86_64 to avoid pulling pytorch as a
               # dependency of transformers.
               - *tokenizers
