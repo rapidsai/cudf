@@ -12,8 +12,8 @@ from dask.utils import tmpfile
 import dask_cudf
 from dask_cudf.tests.utils import skip_dask_expr
 
-# No dask-expr support for dask_expr<=1.0.5
-pytestmark = skip_dask_expr(lt_version="1.0.5+a")
+# No dask-expr support for dask_expr<1.0.6
+pytestmark = skip_dask_expr(lt_version="1.0.6")
 
 
 def test_read_json_backend_dispatch(tmp_path):
