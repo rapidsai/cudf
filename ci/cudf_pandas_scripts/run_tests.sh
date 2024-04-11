@@ -13,6 +13,7 @@ function display_usage {
 # Default value for the --no-cudf option
 no_cudf=false
 
+
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
