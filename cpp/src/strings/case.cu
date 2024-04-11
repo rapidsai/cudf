@@ -114,21 +114,17 @@ struct convert_char_fn {
  *
  * This can be used in calls to make_strings_children.
  */
-struct upper_lower_fn {
+struct base_upper_lower_fn {
   convert_char_fn converter;
-  column_device_view d_strings;
   size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void operator()(size_type idx) const
+  base_upper_lower_fn(convert_char_fn converter) : converter(converter) {}
+
+  __device__ inline void process_string(string_view d_str, size_type idx) const
   {
-    if (d_strings.is_null(idx)) {
-      if (!d_chars) d_offsets[idx] = 0;
-      return;
-    }
-    auto const d_str = d_strings.element<string_view>(idx);
-    size_type bytes  = 0;
-    char* d_buffer   = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
     for (auto itr = d_str.data(); itr < (d_str.data() + d_str.size_bytes()); ++itr) {
       if (is_utf8_continuation_char(static_cast<u_char>(*itr))) continue;
       char_utf8 chr = 0;
@@ -141,6 +137,25 @@ struct upper_lower_fn {
       }
     }
     if (!d_buffer) { d_offsets[idx] = bytes; }
+  }
+};
+
+struct upper_lower_fn : public base_upper_lower_fn {
+  column_device_view d_strings;
+
+  upper_lower_fn(convert_char_fn converter, column_device_view const& d_strings)
+    : base_upper_lower_fn{converter}, d_strings{d_strings}
+  {
+  }
+
+  __device__ void operator()(size_type idx) const
+  {
+    if (d_strings.is_null(idx)) {
+      if (!d_chars) { d_offsets[idx] = 0; }
+      return;
+    }
+    auto const d_str = d_strings.element<string_view>(idx);
+    process_string(d_str, idx);
   }
 };
 
@@ -177,12 +192,15 @@ struct sub_offset_fn {
  * Also, nulls are ignored since this purely builds the output chars.
  * The d_offsets are only temporary to help address the sub-blocks.
  */
-struct upper_lower_ls_fn {
+struct upper_lower_ls_fn : public base_upper_lower_fn {
   convert_char_fn converter;
   char const* d_input_chars;
   int64_t* d_input_offsets;  // includes column offset
-  size_type* d_offsets{};
-  char* d_chars{};
+
+  upper_lower_ls_fn(convert_char_fn converter, char const* d_input_chars, int64_t* d_input_offsets)
+    : base_upper_lower_fn{converter}, d_input_chars{d_input_chars}, d_input_offsets{d_input_offsets}
+  {
+  }
 
   // idx is row index
   __device__ void operator()(size_type idx) const
@@ -190,21 +208,7 @@ struct upper_lower_ls_fn {
     auto const offset = d_input_offsets[idx];
     auto const d_str  = string_view{d_input_chars + offset,
                                    static_cast<size_type>(d_input_offsets[idx + 1] - offset)};
-    // TODO: factor out this common code (with upper_lower_fn)
-    size_type bytes = 0;
-    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    for (auto itr = d_str.data(); itr < (d_str.data() + d_str.size_bytes()); ++itr) {
-      if (is_utf8_continuation_char(static_cast<u_char>(*itr))) continue;
-      char_utf8 chr = 0;
-      to_char_utf8(itr, chr);
-      auto const size = converter.process_character(chr, d_buffer);
-      if (d_buffer) {
-        d_buffer += size;
-      } else {
-        bytes += size;
-      }
-    }
-    if (!d_buffer) { d_offsets[idx] = bytes; }
+    process_string(d_str, idx);
   }
 };
 
