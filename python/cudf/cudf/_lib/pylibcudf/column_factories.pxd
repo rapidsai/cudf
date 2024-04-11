@@ -10,11 +10,12 @@ from cudf._lib.cpp.types cimport (
 )
 
 from .column cimport Column
-from .types cimport DataType, TypeId
+from .types cimport DataType, type_id
 
 ctypedef fused MakeEmptyColumnOperand:
     DataType
-    TypeId
+    type_id
+    object
 
 ctypedef fused MaskArg:
     mask_state

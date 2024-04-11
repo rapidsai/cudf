@@ -4,6 +4,7 @@ from libc.stdint cimport int32_t
 
 from cudf._lib.cpp.types cimport data_type, type_id
 
+from cudf._lib.cpp.types import type_id as TypeId  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import nan_policy as NanPolicy  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import null_policy as NullPolicy  # no-cython-lint, isort:skip
 from cudf._lib.cpp.types import interpolation as Interpolation  # no-cython-lint, isort:skip
@@ -61,14 +62,4 @@ cdef class DataType:
         # Spoof an empty data type then swap in the real one.
         cdef DataType ret = DataType.__new__(DataType, type_id.EMPTY)
         ret.c_obj = dt
-        return ret
-
-cdef class TypeId:
-    def __cinit__(self, type_id id):
-        self.c_obj = id
-
-    @staticmethod
-    cdef TypeId from_libcudf(type_id id):
-        cdef TypeId ret = TypeId.__new__(TypeId)
-        ret.c_obj = id
         return ret

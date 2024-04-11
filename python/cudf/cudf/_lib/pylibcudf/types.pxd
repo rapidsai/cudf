@@ -27,9 +27,3 @@ cdef class DataType:
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt)
-
-cdef class TypeId:
-    cdef type_id c_obj
-
-    @staticmethod
-    cdef TypeId from_libcudf(type_id id)

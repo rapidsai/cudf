@@ -17,16 +17,45 @@ from cudf._lib.cpp.types import mask_state as MaskState
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
-from .types cimport DataType
+from .types cimport DataType, type_id
+
+from .types import TypeId
 
 
 cpdef Column make_empty_column(MakeEmptyColumnOperand type_or_id):
     cdef unique_ptr[column] result
-    with nogil:
-        result = move(
-            cpp_make_empty_column(
-                type_or_id.c_obj
+    cdef type_id id
+
+    if MakeEmptyColumnOperand is object:
+        if isinstance(type_or_id, TypeId):
+            id = type_or_id
+            with nogil:
+                result = move(
+                    cpp_make_empty_column(
+                        id
+                    )
+                )
+        else:
+            raise TypeError(
+                "Must pass a TypeId or DataType"
             )
+    elif MakeEmptyColumnOperand is DataType:
+        with nogil:
+            result = move(
+                cpp_make_empty_column(
+                    type_or_id.c_obj
+                )
+            )
+    elif MakeEmptyColumnOperand is type_id:
+        with nogil:
+            result = move(
+                cpp_make_empty_column(
+                    type_or_id
+                )
+            )
+    else:
+        raise TypeError(
+            "Must pass a TypeId or DataType"
         )
     return Column.from_libcudf(move(result))
 
