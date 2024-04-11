@@ -27,7 +27,14 @@ cdef class DataType:
         The scale associated with the data. Only used for decimal data types.
     """
     def __cinit__(self, type_id id, int32_t scale=0):
-        self.c_obj = data_type(id, scale)
+        if (
+            id == type_id.DECIMAL32
+            or id == type_id.DECIMAL64
+            or id == type_id.DECIMAL128
+        ):
+            self.c_obj = data_type(id, scale)
+        else:
+            self.c_obj = data_type(id)
 
     # TODO: Consider making both id and scale cached properties.
     cpdef type_id id(self):
@@ -37,6 +44,11 @@ cdef class DataType:
     cpdef int32_t scale(self):
         """Get the scale associated with this data type."""
         return self.c_obj.scale()
+
+    def __eq__(self, other):
+        if not isinstance(other, DataType):
+            return False
+        return self.id() == other.id() and self.scale() == other.scale()
 
     @staticmethod
     cdef DataType from_libcudf(data_type dt):

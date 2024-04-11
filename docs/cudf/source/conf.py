@@ -306,6 +306,7 @@ texinfo_documents = [
 intersphinx_mapping = {
     "cupy": ("https://docs.cupy.dev/en/stable/", None),
     "dlpack": ("https://dmlc.github.io/dlpack/latest/", None),
+    "nanoarrow": ("https://arrow.apache.org/nanoarrow/latest", None),
     "numpy": ("https://numpy.org/doc/stable", None),
     "pandas": ("https://pandas.pydata.org/docs/", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
@@ -388,6 +389,7 @@ _names_to_skip_in_cpp = {
     "thrust",
     "cuda",
     "arrow",
+    "DLManagedTensor",
     # Unknown types
     "int8_t",
     "int16_t",
