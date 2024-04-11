@@ -89,10 +89,11 @@ using `.from_arrow()` or `.from_pandas()`.
 
 In Pandas, `join` (or `merge`), `value_counts` and `groupby` operations provide
 certain guarantees about the order of rows in the result returned.  In a Pandas
-`join`, the order of join keys are either preserved or sorted lexicographically
-by default.  `groupby` sorts the group keys, and preserves the order of rows
-within each group. In some cases, disabling this option in Pandas can yield
-better performance.
+`join`, the order of join keys is (depending on the particular style of join
+being performed) either preserved or sorted lexicographically by default.
+`groupby` sorts the group keys, and preserves the order of rows within each
+group. In some cases, disabling this option in Pandas can yield better
+performance.
 
 By contrast, cuDF's default behavior is to return rows in a
 non-deterministic order to maximize performance.  Compare the results
