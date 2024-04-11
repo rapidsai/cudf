@@ -305,11 +305,8 @@ def test_series_zero_copy_cow_on():
 
 
 def test_series_zero_copy_cow_off():
-    if get_global_manager() is not None:
-        pytest.skip(
-            "cannot test zero-copy and no-copy-on-write when "
-            "spilling is enabled globally, set `CUDF_SPILL=off`"
-        )
+    is_spill_enabled = get_global_manager() is not None
+
     with cudf.option_context("copy_on_write", False):
         s = cudf.Series([1, 2, 3, 4, 5])
         s1 = s.copy(deep=False)
@@ -342,8 +339,12 @@ def test_series_zero_copy_cow_off():
         assert_eq(s, cudf.Series([20, 10, 10, 4, 5]))
         assert_eq(s1, cudf.Series([20, 10, 10, 4, 5]))
         assert_eq(cp_array, cp.array([20, 10, 10, 4, 5]))
-        assert_eq(s2, cudf.Series([20, 10, 10, 4, 5]))
-        assert_eq(s3, cudf.Series([20, 10, 10, 4, 5]))
+        if not is_spill_enabled:
+            # Since spilling might make a copy of the data, we cannot
+            # expect the two series to be a zero-copy of the cupy array
+            # when spilling is enabled globally.
+            assert_eq(s2, cudf.Series([20, 10, 10, 4, 5]))
+            assert_eq(s3, cudf.Series([20, 10, 10, 4, 5]))
 
         s4 = cudf.Series([10, 20, 30, 40, 50])
         s5 = cudf.Series(s4)
