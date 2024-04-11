@@ -1909,10 +1909,9 @@ class Frame(BinaryOperand, Scannable):
     def __invert__(self):
         """Bitwise invert (~) for integral dtypes, logical NOT for bools."""
         return self._from_data_like_self(
-            {
-                name: _apply_inverse_column(col)
-                for name, col in self._data.items()
-            }
+            self._data._from_columns_like_self(
+                (_apply_inverse_column(col) for col in self._data.columns)
+            )
         )
 
     @_cudf_nvtx_annotate
