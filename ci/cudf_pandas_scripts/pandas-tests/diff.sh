@@ -13,8 +13,8 @@ rapids-logger "Github job name: ${GH_JOB_NAME}"
 rapids-logger "Rapids version: ${RAPIDS_FULL_VERSION}"
 
 PY_VER="39"
-MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.main-results.json
-PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-results.json
+MAIN_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json
+PR_ARTIFACT=$(rapids-s3-path)cuda12_$(arch)_py${PY_VER}.pr-${RAPIDS_FULL_VERSION}-results.json
 
 rapids-logger "Fetching latest available results from nightly"
 aws s3api list-objects-v2 --bucket rapids-downloads --prefix "nightly/" --query "sort_by(Contents[?ends_with(Key, '_py${PY_VER}.main-${RAPIDS_FULL_VERSION}-results.json')], &LastModified)[::-1].[Key]" --output text > s3_output.txt
