@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "arrow_utilities.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/interop.hpp>
@@ -44,8 +46,6 @@
 namespace cudf {
 namespace detail {
 namespace {
-static constexpr int validity_buffer_idx         = 0;
-static constexpr int fixed_width_data_buffer_idx = 1;
 
 ArrowType id_to_arrow_type(cudf::type_id id)
 {

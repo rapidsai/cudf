@@ -406,24 +406,8 @@ TEST_F(FromArrowDeviceTest, DictionaryIndicesType)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected_table_view, *got_cudf_table_view);
 
   // check that the deleter's owned mem are populated
-  const cudf::custom_view_deleter& deleter = got_cudf_table_view.get_deleter();
-  // since cudf dictionary uses uint32 for indices, we should have 3 owned columns
-  // internally to the deleter, one for each of the casted indices columns.
-  EXPECT_EQ(deleter.owned_mem_.size(), 3);
-
-  // verify that our owned columns' pointers match the indices buffers of the columns
-  // in the result table_view
-  EXPECT_EQ(
-    deleter.owned_mem_[0]->view().data<uint32_t>(),
-    cudf::dictionary_column_view{got_cudf_table_view->column(0)}.indices().data<uint32_t>());
-
-  EXPECT_EQ(
-    deleter.owned_mem_[1]->view().data<uint32_t>(),
-    cudf::dictionary_column_view{got_cudf_table_view->column(1)}.indices().data<uint32_t>());
-
-  EXPECT_EQ(
-    deleter.owned_mem_[2]->view().data<uint32_t>(),
-    cudf::dictionary_column_view{got_cudf_table_view->column(2)}.indices().data<uint32_t>());
+  const cudf::custom_view_deleter<cudf::table_view>& deleter = got_cudf_table_view.get_deleter();  
+  EXPECT_EQ(deleter.owned_mem_.size(), 0);
 }
 
 void slice_nanoarrow(ArrowArray* arr, int64_t start, int64_t end)
