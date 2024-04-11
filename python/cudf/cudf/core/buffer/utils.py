@@ -133,13 +133,13 @@ def as_buffer(
     if not hasattr(data, "__cuda_array_interface__"):
         if exposed:
             raise ValueError("cannot created exposed host memory")
-        return buffer_class(owner=owner_class._from_host_memory(data))
+        return buffer_class(owner=owner_class.from_host_memory(data))
 
     # Check if `data` is owned by a known class
     owner = get_buffer_owner(data)
     if owner is None:  # `data` is new device memory
         return buffer_class(
-            owner=owner_class._from_device_memory(data, exposed=exposed)
+            owner=owner_class.from_device_memory(data, exposed=exposed)
         )
 
     # At this point, we know that `data` is owned by a known class, which

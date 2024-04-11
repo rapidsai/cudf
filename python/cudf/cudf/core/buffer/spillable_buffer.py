@@ -94,8 +94,8 @@ class SpillableBufferOwner(BufferOwner):
     def _finalize_init(self, ptr_desc: Dict[str, Any]) -> None:
         """Finish initialization of the spillable buffer
 
-        This implements the common initialization that `_from_device_memory`
-        and `_from_host_memory` are missing.
+        This implements the common initialization that `from_device_memory`
+        and `from_host_memory` are missing.
 
         Parameters
         ----------
@@ -120,7 +120,7 @@ class SpillableBufferOwner(BufferOwner):
         self._manager.add(self)
 
     @classmethod
-    def _from_device_memory(cls, data: Any, exposed: bool) -> Self:
+    def from_device_memory(cls, data: Any, exposed: bool) -> Self:
         """Create a spillabe buffer from device memory.
 
         No data is being copied.
@@ -137,12 +137,12 @@ class SpillableBufferOwner(BufferOwner):
         SpillableBufferOwner
             Buffer representing the same device memory as `data`
         """
-        ret = super()._from_device_memory(data, exposed=exposed)
+        ret = super().from_device_memory(data, exposed=exposed)
         ret._finalize_init(ptr_desc={"type": "gpu"})
         return ret
 
     @classmethod
-    def _from_host_memory(cls, data: Any) -> Self:
+    def from_host_memory(cls, data: Any) -> Self:
         """Create a spillabe buffer from host memory.
 
         Data must implement `__array_interface__`, the buffer protocol, and/or
@@ -426,7 +426,7 @@ class SpillableBuffer(ExposureTrackedBuffer):
                 ptr, size, _ = self.memory_info()
                 frames = [
                     Buffer(
-                        owner=BufferOwner._from_device_memory(
+                        owner=BufferOwner.from_device_memory(
                             cuda_array_interface_wrapper(
                                 ptr=ptr,
                                 size=size,
@@ -448,7 +448,7 @@ class SpillableBuffer(ExposureTrackedBuffer):
             # In this case, we make the new copy point to the same spilled
             # data in host memory. We can do this since spilled data is never
             # modified.
-            owner = self._owner._from_host_memory(self.memoryview())
+            owner = self._owner.from_host_memory(self.memoryview())
             return self.__class__(owner=owner, offset=0, size=owner.size)
 
         with acquire_spill_lock():
