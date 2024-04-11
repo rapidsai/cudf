@@ -9,7 +9,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.api.types import _is_categorical_dtype
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing._utils import (
     assert_eq,
@@ -609,8 +608,8 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     actual = cudf.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
         for key, col in actual[actual.columns].items():
-            if _is_categorical_dtype(col.dtype):
-                if not _is_categorical_dtype(expected[key].dtype):
+            if isinstance(col.dtype, cudf.CategoricalDtype):
+                if not isinstance(expected[key].dtype, pd.CategoricalDtype):
                     # TODO: Pandas bug:
                     # https://github.com/pandas-dev/pandas/issues/42840
                     expected[key] = expected[key].fillna("-1").astype("str")
@@ -1195,10 +1194,10 @@ def test_concat_join_series(ignore_index, sort, join, axis):
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("sort", [True, False])
 @pytest.mark.parametrize("join", ["inner", "outer"])
-@pytest.mark.parametrize("axis", [0])
 def test_concat_join_empty_dataframes(
-    df, other, ignore_index, axis, join, sort
+    request, df, other, ignore_index, join, sort
 ):
+    axis = 0
     other_pd = [df] + other
     gdf = cudf.from_pandas(df)
     other_gd = [gdf] + [cudf.from_pandas(o) for o in other]
@@ -1209,50 +1208,27 @@ def test_concat_join_empty_dataframes(
     actual = cudf.concat(
         other_gd, ignore_index=ignore_index, axis=axis, join=join, sort=sort
     )
-    if expected.shape != df.shape:
-        if axis == 0:
-            for key, col in actual[actual.columns].items():
-                if _is_categorical_dtype(col.dtype):
-                    if not _is_categorical_dtype(expected[key].dtype):
-                        # TODO: Pandas bug:
-                        # https://github.com/pandas-dev/pandas/issues/42840
-                        expected[key] = (
-                            expected[key].fillna("-1").astype("str")
-                        )
-                    else:
-                        expected[key] = (
-                            expected[key]
-                            .cat.add_categories(["-1"])
-                            .fillna("-1")
-                            .astype("str")
-                        )
-                    actual[key] = col.astype("str").fillna("-1")
-                else:
-                    expected[key] = expected[key].fillna(-1)
-                    actual[key] = col.fillna(-1)
-
-            assert_eq(
-                expected.fillna(-1),
-                actual.fillna(-1),
-                check_dtype=False,
-                check_index_type=False
-                if len(expected) == 0 or actual.empty
-                else True,
-                check_column_type=False,
+    if (
+        join == "outer"
+        and any(
+            isinstance(dtype, pd.CategoricalDtype)
+            for dtype in df.dtypes.tolist()
+        )
+        and any(
+            isinstance(dtype, pd.CategoricalDtype)
+            for other_df in other
+            for dtype in other_df.dtypes.tolist()
+        )
+    ):
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/42840"
             )
-        else:
-            # no need to fill in if axis=1
-            assert_eq(
-                expected,
-                actual,
-                check_index_type=False,
-                check_column_type=False,
-            )
+        )
     assert_eq(
         expected,
         actual,
         check_dtype=False,
-        check_index_type=False,
         check_column_type=False,
     )
 
@@ -1332,7 +1308,7 @@ def test_concat_join_empty_dataframes_axis_1(
     if expected.shape != df.shape:
         if axis == 0:
             for key, col in actual[actual.columns].items():
-                if _is_categorical_dtype(col.dtype):
+                if isinstance(expected[key].dtype, pd.CategoricalDtype):
                     expected[key] = expected[key].fillna("-1")
                     actual[key] = col.astype("str").fillna("-1")
             # if not expected.empty:
