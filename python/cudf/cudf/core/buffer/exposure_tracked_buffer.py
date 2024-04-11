@@ -94,7 +94,7 @@ class ExposureTrackedBuffer(Buffer):
 
         if len(self.owner._slices) > 1:
             # If this is not the only slice pointing to `self.owner`, we
-            # point to a new deep copy of the owner.
+            # point to a new copy of our slice of `self.owner`.
             t = self.copy(deep=True)
             self._owner = t.owner
             self._offset = t._offset
