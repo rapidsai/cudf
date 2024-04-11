@@ -139,7 +139,6 @@ def python_hash_value(x, method):
     elif isinstance(x, np.ndarray):
         binary = x.tobytes()
     else:
-        breakpoint()
         raise NotImplementedError
     return getattr(hashlib, method)(binary).hexdigest()
 
