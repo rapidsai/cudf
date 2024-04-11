@@ -102,7 +102,8 @@ __device__ inline double stod(string_view const& d_str)
           ch = *in_ptr++;
           if (ch < '0' || ch > '9') break;
           exp_ten = (exp_ten * 10) + (int)(ch - '0');
-          if (exp_ten >= 1e8) { break; }
+          // prevent integer overflow
+          if (exp_ten >= 100'000'000) { break; }
         }
       }
     }
