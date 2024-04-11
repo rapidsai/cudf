@@ -185,7 +185,6 @@ def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     )
 
 
-@xfail_dask_expr("Categorical column support")
 @pytest.mark.parametrize("index", [False, None])
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
@@ -193,7 +192,9 @@ def test_dask_timeseries_from_daskcudf(tmpdir, index, divisions):
     ddf2 = dask_cudf.from_cudf(
         cudf.datasets.timeseries(freq="D"), npartitions=4
     )
-    ddf2.name = ddf2.name.astype("object")
+    # Use assign in lieu of `ddf2.name = ...`
+    # See: https://github.com/dask/dask-expr/issues/1010
+    ddf2 = ddf2.assign(name=ddf2.name.astype("object"))
     ddf2.to_parquet(fn, write_index=index)
     read_df = dask_cudf.read_parquet(
         fn, index=index, calculate_divisions=divisions
