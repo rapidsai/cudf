@@ -562,6 +562,12 @@ ConfigureTest(
 )
 
 # ##################################################################################################
+# * large strings test ----------------------------------------------------------------------------
+ConfigureTest(
+  LARGE_STRINGS_TEST large_strings/large_strings_tests.cpp large_strings/concatenate_tests.cpp
+)
+
+# ##################################################################################################
 # * json path test --------------------------------------------------------------------------------
 ConfigureTest(JSON_PATH_TEST json/json_tests.cpp)
 
