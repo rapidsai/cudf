@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2023, NVIDIA CORPORATION.
 
 import warnings
 from typing import Tuple, Union
@@ -9,11 +9,11 @@ import cudf
 from cudf._typing import ScalarLike
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_categorical_dtype,
+    is_bool_dtype,
     is_scalar,
 )
 from cudf.core.column import ColumnBase
-from cudf.core.missing import NA
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     _can_cast,
     _dtype_can_hold_element,
@@ -46,7 +46,7 @@ def _check_and_cast_columns_with_other(
 ) -> Tuple[ColumnBase, Union[ScalarLike, ColumnBase]]:
     # Returns type-casted `source_col` & `other` based on `inplace`.
     source_dtype = source_col.dtype
-    if is_categorical_dtype(source_dtype):
+    if isinstance(source_dtype, CategoricalDtype):
         return _normalize_categorical(source_col, other)
 
     other_is_scalar = is_scalar(other)
@@ -59,7 +59,7 @@ def _check_and_cast_columns_with_other(
                 f"{type(other).__name__} to {source_dtype.name}"
             )
 
-        if other in {None, NA}:
+        if cudf.utils.utils.is_na_like(other):
             return _normalize_categorical(
                 source_col, cudf.Scalar(other, dtype=source_dtype)
             )
@@ -102,7 +102,9 @@ def _check_and_cast_columns_with_other(
     if other_is_scalar:
         other = cudf.Scalar(other)
 
-    if is_mixed_with_object_dtype(other, source_col):
+    if is_mixed_with_object_dtype(other, source_col) or (
+        is_bool_dtype(source_dtype) and not is_bool_dtype(common_dtype)
+    ):
         raise TypeError(mixed_err)
 
     other = other.astype(common_dtype)

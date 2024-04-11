@@ -20,6 +20,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 enum class force_use_sort_impl : bool { NO, YES };
 

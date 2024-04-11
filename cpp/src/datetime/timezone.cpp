@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <cudf/detail/timezone.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/timezone.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
 
@@ -124,7 +123,7 @@ struct timezone_file {
     }
     CUDF_EXPECTS(
       header.typecnt > 0 && header.typecnt <= file_size / sizeof(localtime_type_record_s),
-      "Invalid number number of time types in timezone file.");
+      "Invalid number of time types in timezone file.");
     CUDF_EXPECTS(header.timecnt <= file_size,
                  "Number of transition times is larger than the file size.");
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,17 +55,20 @@ std::unique_ptr<column> is_valid(cudf::column_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<column> is_null(cudf::column_view const& input, rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> is_null(cudf::column_view const& input,
+                                rmm::cuda_stream_view stream,
+                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_null(input, cudf::get_default_stream(), mr);
+  return detail::is_null(input, stream, mr);
 }
 
 std::unique_ptr<column> is_valid(cudf::column_view const& input,
+                                 rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::is_valid(input, cudf::get_default_stream(), mr);
+  return detail::is_valid(input, stream, mr);
 }
 
 }  // namespace cudf

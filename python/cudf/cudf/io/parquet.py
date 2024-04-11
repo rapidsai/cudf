@@ -1,6 +1,7 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import itertools
 import math
 import operator
 import shutil
@@ -14,14 +15,14 @@ from uuid import uuid4
 
 import numpy as np
 import pandas as pd
-from pyarrow import dataset as ds, parquet as pq
+from pyarrow import dataset as ds
 
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
-from cudf.core.column import build_categorical_column, column_empty, full
+from cudf.core.column import as_column, build_categorical_column, column_empty
 from cudf.utils import ioutils
-from cudf.utils.utils import _cudf_nvtx_annotate
+from cudf.utils.nvtx_annotation import _cudf_nvtx_annotate
 
 BYTE_SIZES = {
     "kb": 1000,
@@ -65,6 +66,8 @@ def _write_parquet(
     partitions_info=None,
     storage_options=None,
     force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
 ):
     if is_list_like(paths) and len(paths) > 1:
         if partitions_info is None:
@@ -95,6 +98,8 @@ def _write_parquet(
         "max_page_size_rows": max_page_size_rows,
         "partitions_info": partitions_info,
         "force_nullable_schema": force_nullable_schema,
+        "header_version": header_version,
+        "use_dictionary": use_dictionary,
     }
     if all(ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs):
         with ExitStack() as stack:
@@ -203,7 +208,6 @@ def write_to_dataset(
     fs.mkdirs(root_path, exist_ok=True)
 
     if partition_cols is not None and len(partition_cols) > 0:
-
         (
             full_paths,
             metadata_file_paths,
@@ -265,6 +269,7 @@ def write_to_dataset(
 @_cudf_nvtx_annotate
 def read_parquet_metadata(path):
     """{docstring}"""
+    import pyarrow.parquet as pq
 
     pq_file = pq.ParquetFile(path)
 
@@ -302,7 +307,9 @@ def _process_dataset(
 
     # Convert filters to ds.Expression
     if filters is not None:
-        filters = pq.filters_to_expression(filters)
+        from pyarrow.parquet import filters_to_expression
+
+        filters = filters_to_expression(filters)
 
     # Initialize ds.FilesystemDataset
     # TODO: Remove the if len(paths) workaround after following bug is fixed:
@@ -436,7 +443,6 @@ def read_parquet(
     storage_options=None,
     filters=None,
     row_groups=None,
-    strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=True,
     categorical_partitions=True,
@@ -447,7 +453,10 @@ def read_parquet(
     **kwargs,
 ):
     """{docstring}"""
-
+    if engine not in {"cudf", "pyarrow"}:
+        raise ValueError(
+            f"Only supported engines are {{'cudf', 'pyarrow'}}, got {engine=}"
+        )
     # Do not allow the user to set file-opening options
     # when `use_python_file_object=False` is specified
     if use_python_file_object is False:
@@ -552,6 +561,18 @@ def read_parquet(
                 "for full CPU-based filtering functionality."
             )
 
+    # Make sure we read in the columns needed for row-wise
+    # filtering after IO. This means that one or more columns
+    # will be dropped almost immediately after IO. However,
+    # we do NEED these columns for accurate filtering.
+    projected_columns = None
+    if columns and filters:
+        projected_columns = columns
+        columns = sorted(
+            set(v[0] for v in itertools.chain.from_iterable(filters))
+            | set(columns)
+        )
+
     # Convert parquet data to a cudf.DataFrame
     df = _parquet_to_frame(
         filepaths_or_buffers,
@@ -559,7 +580,6 @@ def read_parquet(
         *args,
         columns=columns,
         row_groups=row_groups,
-        strings_to_categorical=strings_to_categorical,
         use_pandas_metadata=use_pandas_metadata,
         partition_keys=partition_keys,
         partition_categories=partition_categories,
@@ -568,7 +588,15 @@ def read_parquet(
     )
 
     # Apply filters row-wise (if any are defined), and return
-    return _apply_post_filters(df, filters)
+    df = _apply_post_filters(df, filters)
+    if projected_columns:
+        # Elements of `projected_columns` may now be in the index.
+        # We must filter these names from our projection
+        projected_columns = [
+            col for col in projected_columns if col in df._column_names
+        ]
+        return df[projected_columns]
+    return df
 
 
 def _normalize_filters(filters: list | None) -> List[List[tuple]] | None:
@@ -687,7 +715,6 @@ def _parquet_to_frame(
     dataset_kwargs=None,
     **kwargs,
 ):
-
     # If this is not a partitioned read, only need
     # one call to `_read_parquet`
     if not partition_keys:
@@ -731,13 +758,13 @@ def _parquet_to_frame(
             )
         )
         # Add partition columns to the last DataFrame
-        for (name, value) in part_key:
+        for name, value in part_key:
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = full(
-                    size=_len,
-                    fill_value=partition_categories[name].index(value),
+                codes = as_column(
+                    partition_categories[name].index(value),
+                    length=_len,
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -761,19 +788,21 @@ def _parquet_to_frame(
                         masked=True,
                     )
                 else:
-                    dfs[-1][name] = full(
-                        size=_len,
-                        fill_value=value,
+                    dfs[-1][name] = as_column(
+                        value,
                         dtype=_dtype,
+                        length=_len,
                     )
 
-    # Concatenate dfs and return.
-    # Assume we can ignore the index if it has no name.
-    return (
-        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
-        if len(dfs) > 1
-        else dfs[0]
-    )
+    if len(dfs) > 1:
+        # Concatenate dfs and return.
+        # Assume we can ignore the index if it has no name.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            res = cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+        return res
+    else:
+        return dfs[0]
 
 
 @_cudf_nvtx_annotate
@@ -782,7 +811,6 @@ def _read_parquet(
     engine,
     columns=None,
     row_groups=None,
-    strings_to_categorical=None,
     use_pandas_metadata=None,
     *args,
     **kwargs,
@@ -804,13 +832,22 @@ def _read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
-            strings_to_categorical=strings_to_categorical,
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
-        return cudf.DataFrame.from_arrow(
-            pq.ParquetDataset(filepaths_or_buffers).read_pandas(
-                columns=columns, *args, **kwargs
+        if (
+            isinstance(filepaths_or_buffers, list)
+            and len(filepaths_or_buffers) == 1
+        ):
+            filepaths_or_buffers = filepaths_or_buffers[0]
+
+        return cudf.DataFrame.from_pandas(
+            pd.read_parquet(
+                filepaths_or_buffers,
+                columns=columns,
+                engine=engine,
+                *args,
+                **kwargs,
             )
         )
 
@@ -836,6 +873,8 @@ def to_parquet(
     storage_options=None,
     return_metadata=False,
     force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
     *args,
     **kwargs,
 ):
@@ -910,9 +949,13 @@ def to_parquet(
             partitions_info=partition_info,
             storage_options=storage_options,
             force_nullable_schema=force_nullable_schema,
+            header_version=header_version,
+            use_dictionary=use_dictionary,
         )
 
     else:
+        import pyarrow.parquet as pq
+
         if partition_offsets is not None:
             warnings.warn(
                 "partition_offsets will be ignored when engine is not cudf"
@@ -1010,7 +1053,6 @@ def _get_groups_and_offsets(
     preserve_index=False,
     **kwargs,
 ):
-
     if not (set(df._data) - set(partition_cols)):
         warnings.warn("No data left to save outside partition columns")
 
@@ -1178,9 +1220,9 @@ class ParquetDatasetWriter:
     ) -> None:
         if isinstance(path, str) and path.startswith("s3://"):
             self.fs_meta = {"is_s3": True, "actual_path": path}
-            self.dir_: Optional[
-                tempfile.TemporaryDirectory
-            ] = tempfile.TemporaryDirectory()
+            self.dir_: Optional[tempfile.TemporaryDirectory] = (
+                tempfile.TemporaryDirectory()
+            )
             self.path = self.dir_.name
         else:
             self.fs_meta = {}
@@ -1219,7 +1261,7 @@ class ParquetDatasetWriter:
         """
         Write a dataframe to the file/dataset
         """
-        (part_names, grouped_df, part_offsets,) = _get_groups_and_offsets(
+        part_names, grouped_df, part_offsets = _get_groups_and_offsets(
             df=df,
             partition_cols=self.partition_cols,
             preserve_index=self.common_args["index"],

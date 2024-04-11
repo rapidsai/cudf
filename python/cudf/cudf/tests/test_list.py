@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# Copyright (c) 2020-2024, NVIDIA CORPORATION.
 
 import functools
 import operator
@@ -41,6 +41,8 @@ def test_create_list_series(data):
     expect = pd.Series(data)
     got = cudf.Series(data)
     assert_eq(expect, got)
+    assert isinstance(got[0], type(expect[0]))
+    assert isinstance(got.to_pandas()[0], type(expect[0]))
 
 
 @pytest.mark.parametrize(
@@ -90,10 +92,8 @@ def test_leaves(data):
 
 def test_list_to_pandas_nullable_true():
     df = cudf.DataFrame({"a": cudf.Series([[1, 2, 3]])})
-    actual = df.to_pandas(nullable=True)
-    expected = pd.DataFrame({"a": pd.Series([[1, 2, 3]])})
-
-    assert_eq(actual, expected)
+    with pytest.raises(NotImplementedError):
+        df.to_pandas(nullable=True)
 
 
 def test_listdtype_hash():
@@ -697,7 +697,12 @@ def test_list_scalar_host_construction_null(elem_type, nesting_level):
         dtype = cudf.ListDtype(dtype)
 
     slr = cudf.Scalar(None, dtype=dtype)
-    assert slr.value is cudf.NA
+    assert slr.value is (
+        cudf.NaT
+        if cudf.api.types.is_datetime64_dtype(slr.dtype)
+        or cudf.api.types.is_timedelta64_dtype(slr.dtype)
+        else cudf.NA
+    )
 
 
 @pytest.mark.parametrize(
@@ -890,14 +895,14 @@ def test_memory_usage():
     "data, idx",
     [
         (
-            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": None}]],
+            [[{"f2": {"a": 100}, "f1": "a"}, {"f1": "sf12", "f2": NA}]],
             0,
         ),
         (
             [
                 [
                     {"f2": {"a": 100, "c": 90, "f2": 10}, "f1": "a"},
-                    {"f1": "sf12", "f2": None},
+                    {"f1": "sf12", "f2": NA},
                 ]
             ],
             0,
@@ -914,3 +919,14 @@ def test_nested_list_extract_host_scalars(data, idx):
     series = cudf.Series(data)
 
     assert series[idx] == data[idx]
+
+
+def test_list_iterate_error():
+    s = cudf.Series([[[[1, 2]], [[2], [3]]], [[[2]]], [[[3]]]])
+    with pytest.raises(TypeError):
+        iter(s.list)
+
+
+def test_list_struct_list_memory_usage():
+    df = cudf.DataFrame({"a": [[{"b": [1]}]]})
+    assert df.memory_usage().sum() == 16

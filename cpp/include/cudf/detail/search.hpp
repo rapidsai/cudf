@@ -81,6 +81,8 @@ std::unique_ptr<column> contains(column_view const& haystack,
  * output   = { false, true, true }
  * @endcode
  *
+ * @throws cudf::logic_error If column types of haystack and needles don't match
+ *
  * @param haystack The table containing the search space
  * @param needles A table of rows whose existence to check in the search space
  * @param compare_nulls Control whether nulls should be compared as equal or not

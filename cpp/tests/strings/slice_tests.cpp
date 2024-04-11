@@ -34,12 +34,12 @@ struct StringsSliceTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsSliceTest, Substring)
 {
-  std::vector<const char*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
+  std::vector<char const*> h_strings{"Héllo", "thesé", nullptr, "ARE THE", "tést strings", ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
     thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
-  std::vector<const char*> h_expected({"llo", "esé", nullptr, "E T", "st ", ""});
+  std::vector<char const*> h_expected({"llo", "esé", nullptr, "E T", "st ", ""});
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
@@ -135,7 +135,7 @@ TEST_P(Parameters, AllEmpty)
 
 TEST_P(Parameters, AllNulls)
 {
-  std::vector<const char*> h_strings{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
+  std::vector<char const*> h_strings{nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),
@@ -145,7 +145,7 @@ TEST_P(Parameters, AllNulls)
   auto strings_column = cudf::strings_column_view(strings);
   auto results        = cudf::strings::slice_strings(strings_column, start);
 
-  std::vector<const char*> h_expected(h_strings);
+  std::vector<char const*> h_expected(h_strings);
   cudf::test::strings_column_wrapper expected(
     h_strings.begin(),
     h_strings.end(),
@@ -288,15 +288,15 @@ TEST_F(StringsSliceTest, Error)
 
 TEST_F(StringsSliceTest, ZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
-  auto strings_view = cudf::strings_column_view(zero_size_strings_column);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING)->view();
+  auto strings_view                   = cudf::strings_column_view(zero_size_strings_column);
 
   auto results = cudf::strings::slice_strings(strings_view, 1, 2);
   cudf::test::expect_column_empty(results->view());
 
-  cudf::column_view starts_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
-  cudf::column_view stops_column(cudf::data_type{cudf::type_id::INT32}, 0, nullptr, nullptr, 0);
+  auto const starts_column = cudf::make_empty_column(cudf::type_id::INT32)->view();
+  auto const stops_column  = cudf::make_empty_column(cudf::type_id::INT32)->view();
+
   results = cudf::strings::slice_strings(strings_view, starts_column, stops_column);
   cudf::test::expect_column_empty(results->view());
 }

@@ -114,7 +114,7 @@ def _check_error(tree):
         raise QuerySyntaxError("too many expressions")
 
 
-_cache = {}  # type: Dict[Any, Any]
+_cache: Dict[Any, Any] = {}
 
 
 def query_compile(expr):
@@ -138,7 +138,8 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = f"queryexpr_{np.uintp(hash(expr)):x}"
+    # hash returns in the semi-open interval [-2**63, 2**63)
+    funcid = f"queryexpr_{(hash(expr) + 2**63):x}"
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found

@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -24,7 +24,7 @@ rapids_test_init()
 # properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   set(options)
-  set(one_value GPUS PERCENT)
+  set(one_value GPUS PERCENT STREAM_MODE EXTRA_LIB)
   set(multi_value)
   cmake_parse_arguments(_CUDF_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
   if(NOT DEFINED _CUDF_TEST_GPUS AND NOT DEFINED _CUDF_TEST_PERCENT)
@@ -36,6 +36,9 @@ function(ConfigureTest CMAKE_TEST_NAME)
   endif()
   if(NOT DEFINED _CUDF_TEST_PERCENT)
     set(_CUDF_TEST_PERCENT 100)
+  endif()
+  if(NOT DEFINED _CUDF_TEST_STREAM_MODE)
+    set(_CUDF_TEST_STREAM_MODE cudf)
   endif()
 
   add_executable(${CMAKE_TEST_NAME} ${_CUDF_TEST_UNPARSED_ARGUMENTS})
@@ -52,15 +55,23 @@ function(ConfigureTest CMAKE_TEST_NAME)
   )
 
   target_link_libraries(
-    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main
-                               $<TARGET_NAME_IF_EXISTS:conda_env>
+    ${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main nvtx3-cpp
+                               $<TARGET_NAME_IF_EXISTS:conda_env> "${_CUDF_TEST_EXTRA_LIB}"
   )
+  rapids_cuda_set_runtime(${CMAKE_TEST_NAME} USE_STATIC ${CUDA_STATIC_RUNTIME})
   rapids_test_add(
     NAME ${CMAKE_TEST_NAME}
     COMMAND ${CMAKE_TEST_NAME}
     GPUS ${_CUDF_TEST_GPUS}
     PERCENT ${_CUDF_TEST_PERCENT}
     INSTALL_COMPONENT_SET testing
+  )
+
+  set_tests_properties(
+    ${CMAKE_TEST_NAME}
+    PROPERTIES
+      ENVIRONMENT
+      "GTEST_CUDF_STREAM_MODE=new_${_CUDF_TEST_STREAM_MODE}_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_${_CUDF_TEST_STREAM_MODE}>"
   )
 endfunction()
 
@@ -106,6 +117,7 @@ ConfigureTest(
   groupby/covariance_tests.cpp
   groupby/groupby_test_util.cpp
   groupby/groups_tests.cpp
+  groupby/histogram_tests.cpp
   groupby/keys_tests.cpp
   groupby/lists_tests.cpp
   groupby/m2_tests.cpp
@@ -120,6 +132,7 @@ ConfigureTest(
   groupby/min_scan_tests.cpp
   groupby/nth_element_tests.cpp
   groupby/nunique_tests.cpp
+  groupby/product_scan_tests.cpp
   groupby/product_tests.cpp
   groupby/quantile_tests.cpp
   groupby/rank_scan_tests.cpp
@@ -140,7 +153,7 @@ ConfigureTest(
 # * join tests ------------------------------------------------------------------------------------
 ConfigureTest(
   JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
-  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu
+  join/semi_anti_join_tests.cpp join/mixed_join_tests.cu join/distinct_join_tests.cpp
 )
 
 # ##################################################################################################
@@ -153,7 +166,18 @@ ConfigureTest(DATETIME_OPS_TEST datetime/datetime_ops_test.cpp)
 
 # ##################################################################################################
 # * hashing tests ---------------------------------------------------------------------------------
-ConfigureTest(HASHING_TEST hashing/hash_test.cpp)
+ConfigureTest(
+  HASHING_TEST
+  hashing/md5_test.cpp
+  hashing/murmurhash3_x86_32_test.cpp
+  hashing/murmurhash3_x64_128_test.cpp
+  hashing/sha1_test.cpp
+  hashing/sha224_test.cpp
+  hashing/sha256_test.cpp
+  hashing/sha384_test.cpp
+  hashing/sha512_test.cpp
+  hashing/xxhash_64_test.cpp
+)
 
 # ##################################################################################################
 # * partitioning tests ----------------------------------------------------------------------------
@@ -236,13 +260,15 @@ ConfigureTest(
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
   transform/row_bit_count_test.cu
+  transform/segmented_row_bit_count_test.cu
   transform/one_hot_encode_tests.cpp
 )
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
 ConfigureTest(
-  INTEROP_TEST interop/to_arrow_test.cpp interop/from_arrow_test.cpp interop/dlpack_test.cpp
+  INTEROP_TEST interop/to_arrow_device_test.cpp interop/to_arrow_test.cpp
+  interop/from_arrow_test.cpp interop/dlpack_test.cpp EXTRA_LIB nanoarrow
 )
 
 # ##################################################################################################
@@ -266,7 +292,15 @@ ConfigureTest(
   PERCENT 30
 )
 ConfigureTest(
-  PARQUET_TEST io/parquet_test.cpp io/parquet_chunked_reader_test.cpp
+  PARQUET_TEST
+  io/parquet_test.cpp
+  io/parquet_chunked_reader_test.cu
+  io/parquet_chunked_writer_test.cpp
+  io/parquet_common.cpp
+  io/parquet_misc_test.cpp
+  io/parquet_reader_test.cpp
+  io/parquet_writer_test.cpp
+  io/parquet_v2_test.cpp
   GPUS 1
   PERCENT 30
 )
@@ -280,6 +314,8 @@ ConfigureTest(JSON_TYPE_CAST_TEST io/json_type_cast_test.cu)
 ConfigureTest(NESTED_JSON_TEST io/nested_json_test.cpp io/json_tree.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
 ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
+ConfigureTest(JSON_QUOTE_NORMALIZATION io/json_quote_normalization_test.cpp)
+ConfigureTest(JSON_WHITESPACE_NORMALIZATION io/json_whitespace_normalization_test.cu)
 ConfigureTest(
   DATA_CHUNK_SOURCE_TEST io/text/data_chunk_source_test.cpp
   GPUS 1
@@ -339,8 +375,10 @@ ConfigureTest(
 ConfigureTest(
   UTILITIES_TEST
   utilities_tests/type_list_tests.cpp
+  utilities_tests/column_debug_tests.cpp
   utilities_tests/column_utilities_tests.cpp
   utilities_tests/column_wrapper_tests.cpp
+  utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/logger_tests.cpp
   utilities_tests/default_stream_tests.cpp
@@ -349,13 +387,32 @@ ConfigureTest(
 
 # ##################################################################################################
 # * span tests -------------------------------------------------------------------------------
+
+# This test must be split into two executables so that one can use the preload library and one does
+# not. The one that doesn't includes a thrust::device_vector copy, which is always synchronous on
+# the default stream and is out of libcudf's control (but must be tested).
+set(_allowlist_filter SpanTest.CanConstructFromDeviceContainers)
+
 ConfigureTest(SPAN_TEST utilities_tests/span_tests.cu)
+ConfigureTest(SPAN_TEST_DEVICE_VECTOR utilities_tests/span_tests.cu)
+
+# Overwrite the environments set by ConfigureTest
+set_tests_properties(
+  SPAN_TEST
+  PROPERTIES
+    ENVIRONMENT
+    "GTEST_FILTER=-${_allowlist_filter};GTEST_CUDF_STREAM_MODE=new_cudf_default;LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>"
+)
+set_tests_properties(
+  SPAN_TEST_DEVICE_VECTOR PROPERTIES ENVIRONMENT "GTEST_FILTER=${_allowlist_filter}"
+)
 
 # ##################################################################################################
 # * iterator tests --------------------------------------------------------------------------------
 ConfigureTest(
   ITERATOR_TEST
   iterator/indexalator_test.cu
+  iterator/offsetalator_test.cu
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
   iterator/pair_iterator_test_chrono.cu
@@ -384,8 +441,13 @@ ConfigureTest(
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
 ConfigureTest(
-  TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
-  table/experimental_row_operator_tests.cu table/row_operator_tests_utilities.cu
+  TABLE_TEST
+  table/table_tests.cpp
+  table/table_view_tests.cu
+  table/row_operators_tests.cpp
+  table/experimental_row_operator_tests.cu
+  table/row_operator_tests_utilities.cu
+  table/row_operator_tests_utilities2.cu
 )
 
 # ##################################################################################################
@@ -418,6 +480,8 @@ ConfigureTest(
   rolling/grouped_rolling_test.cpp
   rolling/lead_lag_test.cpp
   rolling/nth_element_test.cpp
+  rolling/offset_row_window_test.cpp
+  rolling/range_comparator_test.cu
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
   rolling/rolling_test.cpp
@@ -484,7 +548,6 @@ ConfigureTest(
   strings/format_lists_tests.cpp
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
-  strings/json_tests.cpp
   strings/like_tests.cpp
   strings/pad_tests.cpp
   strings/repeat_strings_tests.cpp
@@ -499,6 +562,10 @@ ConfigureTest(
 )
 
 # ##################################################################################################
+# * json path test --------------------------------------------------------------------------------
+ConfigureTest(JSON_PATH_TEST json/json_tests.cpp)
+
+# ##################################################################################################
 # * structs test ----------------------------------------------------------------------------------
 ConfigureTest(STRUCTS_TEST structs/structs_column_tests.cpp structs/utilities_tests.cpp)
 
@@ -508,6 +575,7 @@ ConfigureTest(
   TEXT_TEST
   text/bpe_tests.cpp
   text/edit_distance_tests.cpp
+  text/jaccard_tests.cpp
   text/minhash_tests.cpp
   text/ngrams_tests.cpp
   text/ngrams_tokenize_tests.cpp
@@ -578,17 +646,62 @@ ConfigureTest(
 ConfigureTest(LABEL_BINS_TEST labeling/label_bins_tests.cpp)
 
 # ##################################################################################################
-# * stream identification tests -------------------------------------------------------------------
+# * jit tests ----------------------------------------------------------------------------------
+ConfigureTest(JIT_PARSER_TEST jit/parse_ptx_function.cpp)
+target_include_directories(JIT_PARSER_TEST PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+
+# ##################################################################################################
+# * stream testing ---------------------------------------------------------------------------------
 ConfigureTest(
   STREAM_IDENTIFICATION_TEST identify_stream_usage/test_default_stream_identification.cu
 )
-# Note that this only works when the test is invoked via ctest. At the moment CI is running all
-# tests by manually invoking the executable, so we'll have to manually pass this environment
-# variable in that setup.
-set_tests_properties(
-  STREAM_IDENTIFICATION_TEST
-  PROPERTIES ENVIRONMENT LD_PRELOAD=$<TARGET_FILE:cudf_identify_stream_usage_mode_cudf>
+
+ConfigureTest(STREAM_BINARYOP_TEST streams/binaryop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_CONCATENATE_TEST streams/concatenate_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_COPYING_TEST streams/copying_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_CSVIO_TEST streams/io/csv_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_DICTIONARY_TEST streams/dictionary_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_FILLING_TEST streams/filling_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_GROUPBY_TEST streams/groupby_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_HASHING_TEST streams/hash_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_INTEROP_TEST streams/interop_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_JSONIO_TEST streams/io/json_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_LABELING_BINS_TEST streams/labeling_bins_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_LISTS_TEST streams/lists_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_NULL_MASK_TEST streams/null_mask_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_ORCIO_TEST streams/io/orc_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_PARQUETIO_TEST streams/io/parquet_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_POOL_TEST streams/pool_test.cu STREAM_MODE testing)
+ConfigureTest(STREAM_REPLACE_TEST streams/replace_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SEARCH_TEST streams/search_test.cpp STREAM_MODE testing)
+ConfigureTest(STREAM_SORTING_TEST streams/sorting_test.cpp STREAM_MODE testing)
+ConfigureTest(
+  STREAM_STRINGS_TEST
+  streams/strings/case_test.cpp
+  streams/strings/combine_test.cpp
+  streams/strings/contains_test.cpp
+  streams/strings/convert_test.cpp
+  streams/strings/extract_test.cpp
+  streams/strings/filter_test.cpp
+  streams/strings/find_test.cpp
+  streams/strings/replace_test.cpp
+  streams/strings/reverse_test.cpp
+  streams/strings/split_test.cpp
+  streams/strings/strings_tests.cpp
+  STREAM_MODE
+  testing
 )
+ConfigureTest(
+  STREAM_TEXT_TEST
+  streams/text/edit_distance_test.cpp
+  streams/text/ngrams_test.cpp
+  streams/text/replace_test.cpp
+  streams/text/stemmer_test.cpp
+  streams/text/tokenize_test.cpp
+  STREAM_MODE
+  testing
+)
+ConfigureTest(STREAM_UNARY_TEST streams/unary_test.cpp STREAM_MODE testing)
 
 # ##################################################################################################
 # Install tests ####################################################################################

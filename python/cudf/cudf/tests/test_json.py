@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import copy
 import gzip
@@ -13,11 +13,13 @@ import pyarrow as pa
 import pytest
 
 import cudf
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing._utils import (
     DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
+    expect_warning_if,
 )
 
 
@@ -31,22 +33,18 @@ def make_numeric_dataframe(nrows, dtype):
 @pytest.fixture(params=[0, 1, 10, 100])
 def pdf(request):
     types = NUMERIC_TYPES + DATETIME_TYPES + ["bool"]
-    typer = {"col_" + val: val for val in types}
-    ncols = len(types)
     nrows = request.param
 
     # Create a pandas dataframe with random data of mixed types
     test_pdf = pd.DataFrame(
-        [list(range(ncols * i, ncols * (i + 1))) for i in range(nrows)],
-        columns=pd.Index([f"col_{typ}" for typ in types], name="foo"),
+        {
+            f"col_{typ}": np.random.randint(0, nrows, nrows).astype(typ)
+            for typ in types
+        }
     )
     # Delete the name of the column index, and rename the row index
     test_pdf.columns.name = None
     test_pdf.index.name = "test_index"
-
-    # Cast all the column dtypes to objects, rename them, and then cast to
-    # appropriate types
-    test_pdf = test_pdf.astype("object").astype(typer)
 
     return test_pdf
 
@@ -97,6 +95,8 @@ def json_files(request, tmp_path_factory, pdf):
             "'table'"
         )
     if index is False and orient == "table":
+        pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
+    if index is True and orient not in ("split", "table", "index", "columns"):
         pytest.skip("'index=False' isn't valid when 'orient' is 'table'")
     fname_df = tmp_path_factory.mktemp("json") / "test_df.json"
     fname_series = tmp_path_factory.mktemp("json") / "test_series.json"
@@ -216,7 +216,80 @@ def test_cudf_json_writer_read(gdf_writer_types):
     if pdf2.empty:
         pdf2.reset_index(drop=True, inplace=True)
         pdf2.columns = pdf2.columns.astype("object")
+
+    # Pandas moved to consistent datetimes parsing format:
+    # https://pandas.pydata.org/docs/dev/whatsnew/v2.0.0.html#datetimes-are-now-parsed-with-a-consistent-format
+    for unit in ["s", "ms"]:
+        if f"col_datetime64[{unit}]" in pdf2.columns:
+            pdf2[f"col_datetime64[{unit}]"] = (
+                pd.to_datetime(pdf2[f"col_datetime64[{unit}]"], format="mixed")
+                .dt.tz_localize(None)
+                .astype(f"datetime64[{unit}]")
+            )
     assert_eq(pdf2, gdf2)
+
+
+@pytest.mark.parametrize(
+    "jsonl_string, expected",
+    [
+        # fixed width
+        ("""{"a":10, "b":1.1}\n {"a":20, "b":2.1}\n""", None),
+        # simple list
+        ("""{"a":[1, 2, 3], "b":1.1}\n {"a":[]}\n""", None),
+        # simple struct
+        ("""{"a":{"c": 123 }, "b":1.1}\n {"a": {"c": 456}}\n""", None),
+        # list of lists
+        ("""{"a":[[], [1, 2], [3, 4]], "b":1.1}\n""", None),
+        ("""{"a":[null, [1, 2], [null, 4]], "b":1.1}\n""", None),
+        # list of structs
+        # error ("""{"a":[null, {}], "b":1.1}\n""", None),
+        (
+            """{"a":[null, {"L": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}\n""",
+            None,
+        ),
+        (
+            """{"a":[{"L": 123}, null], "b":1.0}\n {"b":1.1}\n {"b":2.1}\n""",
+            None,
+        ),
+        # struct of lists
+        (
+            """{"a":{"L": [1, 2, 3]}, "b":1.1}\n {"a": {"L": [4, 5, 6]}}\n""",
+            None,
+        ),
+        ("""{"a":{"L": [1, 2, null]}, "b":1.1}\n {"a": {"L": []}}\n""", None),
+        # struct of structs
+        (
+            """{"a":{"L": {"M": 123}}, "b":1.1}
+               {"a": {"L": {"M": 456}}}\n""",
+            None,
+        ),
+        (
+            """{"a":{"L": {"M": null}}, "b":1.1}\n {"a": {"L": {}}}\n""",
+            """{"a":{"L": {}}, "b":1.1}\n {"a": {"L": {}}}\n""",
+        ),
+        # list of structs of lists
+        ("""{"a":[{"L": [1, 2, 3]}, {"L": [4, 5, 6]}], "b":1.1}\n""", None),
+        ("""{"a":[{"L": [1, 2, null]}, {"L": []}], "b":1.1}\n""", None),
+        # struct of lists of structs
+        ("""{"a":{"L": [{"M": 123}, {"M": 456}]}, "b":1.1}\n""", None),
+        (
+            """{"a":{"L": [{"M": null}, {}]}, "b":1.1}\n""",
+            """{"a":{"L": [{}, {}]}, "b":1.1}\n""",
+        ),
+    ],
+)
+def test_cudf_json_roundtrip(jsonl_string, expected):
+    gdf = cudf.read_json(
+        StringIO(jsonl_string),
+        lines=True,
+        engine="cudf",
+        # dtype=dict(dtypes),
+    )
+    expected = jsonl_string if expected is None else expected
+    gdf_string = gdf.to_json(
+        orient="records", lines=True, engine="cudf", include_nulls=False
+    )
+    assert_eq(gdf_string, expected.replace(" ", ""))
 
 
 @pytest.mark.parametrize("sink", ["string", "file"])
@@ -263,11 +336,18 @@ def json_input(request, tmp_path_factory):
         return Path(fname).as_uri()
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["auto", "cudf", "pandas"])
 def test_json_lines_basic(json_input, engine):
-    cu_df = cudf.read_json(json_input, engine=engine, lines=True)
-    pd_df = pd.read_json(json_input, lines=True)
+    can_warn = isinstance(json_input, str) and not json_input.endswith(".json")
+    with expect_warning_if(can_warn):
+        cu_df = cudf.read_json(json_input, engine=engine, lines=True)
+    with expect_warning_if(can_warn):
+        pd_df = pd.read_json(json_input, lines=True)
 
     assert all(cu_df.dtypes == ["int64", "int64", "int64"])
     for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
@@ -275,13 +355,20 @@ def test_json_lines_basic(json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_lines_multiple(tmpdir, json_input, engine):
     tmp_file1 = tmpdir.join("MultiInputs1.json")
     tmp_file2 = tmpdir.join("MultiInputs2.json")
 
-    pdf = pd.read_json(json_input, lines=True)
+    with expect_warning_if(
+        isinstance(json_input, str) and not json_input.endswith(".json")
+    ):
+        pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(tmp_file1, compression="infer", lines=True, orient="records")
     pdf.to_json(tmp_file2, compression="infer", lines=True, orient="records")
 
@@ -294,9 +381,16 @@ def test_json_lines_multiple(tmpdir, json_input, engine):
         np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col].to_numpy())
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+    reason="warning not present in older pandas versions",
+)
 @pytest.mark.parametrize("engine", ["auto", "cudf"])
 def test_json_read_directory(tmpdir, json_input, engine):
-    pdf = pd.read_json(json_input, lines=True)
+    with expect_warning_if(
+        isinstance(json_input, str) and not json_input.endswith(".json")
+    ):
+        pdf = pd.read_json(json_input, lines=True)
     pdf.to_json(
         tmpdir.join("MultiInputs1.json"),
         compression="infer",
@@ -328,37 +422,47 @@ def test_json_read_directory(tmpdir, json_input, engine):
 def test_json_lines_byte_range(json_input):
     # include the first row and half of the second row
     # should parse the first two rows
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(0, 15)
+    will_warn = isinstance(json_input, str) and not json_input.endswith(
+        ".json"
     )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(0, 15)
+        )
     assert df.shape == (2, 3)
 
     # include half of the second row and half of the third row
     # should parse only the third row
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(15, 10)
-    )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(15, 10)
+        )
     assert df.shape == (1, 3)
 
     # include half of the second row and entire third row
     # should parse only the third row
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(15, 0)
-    )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(15, 0)
+        )
     assert df.shape == (1, 3)
 
     # include half of the second row till past the end of the file
     # should parse only the third row
-    df = cudf.read_json(
-        copy.deepcopy(json_input), lines=True, byte_range=(10, 50)
-    )
+    with expect_warning_if(will_warn):
+        df = cudf.read_json(
+            copy.deepcopy(json_input), lines=True, byte_range=(10, 50)
+        )
     assert df.shape == (1, 3)
 
 
 def test_json_lines_dtypes(json_input):
-    df = cudf.read_json(
-        json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
-    )
+    with expect_warning_if(
+        isinstance(json_input, str) and not json_input.endswith(".json")
+    ):
+        df = cudf.read_json(
+            json_input, lines=True, dtype={1: "int", 2: "short", 0: "float"}
+        )
     assert all(df.dtypes == ["float64", "int64", "int16"])
 
 
@@ -398,32 +502,32 @@ def test_json_engine_selection():
     json = "[1, 2, 3]"
 
     # should use the cudf engine
-    df = cudf.read_json(json, lines=True)
+    df = cudf.read_json(StringIO(json), lines=True)
     # column names are strings when parsing with cudf
     for col_name in df.columns:
         assert isinstance(col_name, str)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=False, engine="pandas")
+    df = cudf.read_json(StringIO(json), lines=False, engine="pandas")
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
 
     # should use the pandas engine
-    df = cudf.read_json(json, lines=True, engine="pandas")
+    df = cudf.read_json(StringIO(json), lines=True, engine="pandas")
     # column names are ints when parsing with pandas
     for col_name in df.columns:
         assert isinstance(col_name, int)
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_json(json, lines=False, engine="cudf_legacy")
+        cudf.read_json(StringIO(json), lines=False, engine="cudf_legacy")
 
 
 def test_json_bool_values():
     buffer = "[true,1]\n[false,false]\n[true,true]"
-    cu_df = cudf.read_json(buffer, lines=True)
-    pd_df = pd.read_json(buffer, lines=True)
+    cu_df = cudf.read_json(StringIO(buffer), lines=True)
+    pd_df = pd.read_json(StringIO(buffer), lines=True)
 
     # types should be ['bool', 'int64']
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
@@ -432,7 +536,7 @@ def test_json_bool_values():
     np.testing.assert_array_equal(pd_df[1], cu_df["1"].to_numpy())
 
     cu_df = cudf.read_json(
-        buffer, lines=True, dtype={"0": "bool", "1": "long"}
+        StringIO(buffer), lines=True, dtype={"0": "bool", "1": "long"}
     )
     np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
 
@@ -450,7 +554,7 @@ def test_json_bool_values():
     ],
 )
 def test_json_null_literal(buffer):
-    df = cudf.read_json(buffer, lines=True, engine="cudf_legacy")
+    df = cudf.read_json(StringIO(buffer), lines=True, engine="cudf_legacy")
 
     # first column contains a null field, type should be set to float
     # second column contains only empty fields, type should be set to int8
@@ -462,7 +566,7 @@ def test_json_null_literal(buffer):
 
 
 def test_json_bad_protocol_string():
-    test_string = '{"field": "s3://path"}'
+    test_string = StringIO('{"field": "s3://path"}')
 
     expect = pd.DataFrame([{"field": "s3://path"}])
     got = cudf.read_json(test_string, lines=True)
@@ -676,7 +780,7 @@ def test_default_integer_bitwidth_extremes(default_integer_bitwidth, engine):
 def test_default_float_bitwidth(default_float_bitwidth):
     # Test that float columns in json are _inferred_ as 32 bit columns.
     df = cudf.read_json(
-        '{"a": 1.0, "b": 2.5}\n{"a": 3.5, "b": 4.0}',
+        StringIO('{"a": 1.0, "b": 2.5}\n{"a": 3.5, "b": 4.0}'),
         engine="cudf",
         lines=True,
         orient="records",
@@ -1074,9 +1178,15 @@ class TestNestedJsonReaderCommon:
         df = cudf.concat(chunks, ignore_index=True)
         assert expected.to_arrow().equals(df.to_arrow())
 
+    @pytest.mark.skipif(
+        PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
+        reason="https://github.com/pandas-dev/pandas/pull/57439",
+    )
     def test_order_nested_json_reader(self, tag, data):
         expected = pd.read_json(StringIO(data), lines=True)
         target = cudf.read_json(StringIO(data), lines=True)
+        # Using pyarrow instead of assert_eq because pandas
+        # doesn't handle nested values comparisons correctly
         if tag == "dtype_mismatch":
             with pytest.raises(AssertionError):
                 # pandas parses integer values in float representation
@@ -1159,7 +1269,7 @@ def test_json_round_trip_gzip():
 @pytest.mark.parametrize("lines", [True, False])
 def test_json_array_of_arrays(data, lines):
     data = data if lines else "[" + data.replace("\n", ",") + "]"
-    pdf = pd.read_json(data, orient="values", lines=lines)
+    pdf = pd.read_json(StringIO(data), orient="values", lines=lines)
     df = cudf.read_json(
         StringIO(data),
         engine="cudf",
@@ -1189,7 +1299,7 @@ def test_json_array_of_arrays(data, lines):
         # simple list with mixed types
         """{"a":[123, {}], "b":1.1}""",
         """{"a":[123, {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
-        """{"a":[{"0": 123}, 123], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
+        """{"a":[{"L": 123}, 123], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":[123, {"0": 123}, 12.3], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":[123, {"0": 123}, null], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
         """{"a":["123", {"0": 123}], "b":1.0}\n {"b":1.1}\n {"b":2.1}""",
@@ -1253,8 +1363,8 @@ def test_json_nested_mixed_types_in_list(jsonl_string):
 
     # both json lines and json string tested.
     json_string = "[" + jsonl_string.replace("\n", ",") + "]"
-    pdf = pd.read_json(jsonl_string, orient="records", lines=True)
-    pdf2 = pd.read_json(json_string, orient="records", lines=False)
+    pdf = pd.read_json(StringIO(jsonl_string), orient="records", lines=True)
+    pdf2 = pd.read_json(StringIO(json_string), orient="records", lines=False)
     assert_eq(pdf, pdf2)
     # replace list elements with None if it has dict and non-dict
     # in above test cases, these items are mixed with dict/list items

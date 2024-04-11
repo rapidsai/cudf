@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,7 +35,7 @@ struct StringsContainsTests : public cudf::test::BaseFixture {};
 
 TEST_F(StringsContainsTests, ContainsTest)
 {
-  std::vector<const char*> h_strings{"5",
+  std::vector<char const*> h_strings{"5",
                                      "hej",
                                      "\t \n",
                                      "12345",
@@ -154,7 +154,7 @@ TEST_F(StringsContainsTests, ContainsTest)
 
 TEST_F(StringsContainsTests, MatchesTest)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "The quick brown @fox jumps", "ovér the", "lazy @dog", "1234", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
@@ -294,14 +294,17 @@ TEST_F(StringsContainsTests, HexTest)
   std::vector<char> ascii_chars(  // all possible matchable chars
     {thrust::make_counting_iterator<char>(0), thrust::make_counting_iterator<char>(127)});
   auto const count = static_cast<cudf::size_type>(ascii_chars.size());
-  std::vector<cudf::offset_type> offsets(
-    {thrust::make_counting_iterator<cudf::offset_type>(0),
-     thrust::make_counting_iterator<cudf::offset_type>(0) + count + 1});
+  std::vector<cudf::size_type> offsets(
+    {thrust::make_counting_iterator<cudf::size_type>(0),
+     thrust::make_counting_iterator<cudf::size_type>(0) + count + 1});
   auto d_chars = cudf::detail::make_device_uvector_sync(
     ascii_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto d_offsets = cudf::detail::make_device_uvector_sync(
-    offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto input = cudf::make_strings_column(d_chars, d_offsets, {}, 0);
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(
+      offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
+  auto input = cudf::make_strings_column(count, std::move(d_offsets), d_chars.release(), 0, {});
 
   auto strings_view = cudf::strings_column_view(input->view());
   for (auto ch : ascii_chars) {
@@ -380,7 +383,7 @@ TEST_F(StringsContainsTests, Errors)
 
 TEST_F(StringsContainsTests, CountTest)
 {
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "The quick brown @fox jumps ovér the", "lazy @dog", "1:2:3:4", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
@@ -713,7 +716,7 @@ TEST_F(StringsContainsTests, MediumRegex)
     "http://www.world.com";
   auto prog = cudf::strings::regex_program::create(medium_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com thats all",
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"
@@ -754,7 +757,7 @@ TEST_F(StringsContainsTests, LargeRegex)
     "http://www.world.com I'm here @home zzzz";
   auto prog = cudf::strings::regex_program::create(large_regex);
 
-  std::vector<const char*> h_strings{
+  std::vector<char const*> h_strings{
     "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello "
     "http://www.world.com I'm here @home zzzz",
     "1234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234"

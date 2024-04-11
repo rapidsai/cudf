@@ -1,5 +1,5 @@
 /*
- *  Copyright 2008-2023 NVIDIA Corporation
+ *  Copyright (c) 2008-2024, NVIDIA CORPORATION
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -16,13 +16,13 @@
 
 #pragma once
 
-#include <cstddef>
-#include <limits>
-#include <new>  // for bad_alloc
-
 #include <cudf/utilities/error.hpp>
 
 #include <thrust/host_vector.h>
+
+#include <cstddef>
+#include <limits>
+#include <new>  // for bad_alloc
 
 namespace cudf::detail {
 
@@ -50,7 +50,7 @@ class pinned_allocator<void> {
  public:
   using value_type      = void;            ///< The type of the elements in the allocator
   using pointer         = void*;           ///< The type returned by address() / allocate()
-  using const_pointer   = const void*;     ///< The type returned by address()
+  using const_pointer   = void const*;     ///< The type returned by address()
   using size_type       = std::size_t;     ///< The type used for the size of the allocation
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
@@ -76,9 +76,9 @@ class pinned_allocator {
  public:
   using value_type      = T;               ///< The type of the elements in the allocator
   using pointer         = T*;              ///< The type returned by address() / allocate()
-  using const_pointer   = const T*;        ///< The type returned by address()
+  using const_pointer   = T const*;        ///< The type returned by address()
   using reference       = T&;              ///< The parameter type for address()
-  using const_reference = const T&;        ///< The parameter type for address()
+  using const_reference = T const&;        ///< The parameter type for address()
   using size_type       = std::size_t;     ///< The type used for the size of the allocation
   using difference_type = std::ptrdiff_t;  ///< The type of the distance between two pointers
 
@@ -169,7 +169,12 @@ class pinned_allocator {
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
-  __host__ inline void deallocate(pointer p, size_type /*cnt*/) { CUDF_CUDA_TRY(cudaFreeHost(p)); }
+  __host__ inline void deallocate(pointer p, size_type /*cnt*/)
+  {
+    auto dealloc_worked = cudaFreeHost(p);
+    (void)dealloc_worked;
+    assert(dealloc_worked == cudaSuccess);
+  }
 
   /**
    * @brief This method returns the maximum size of the \c cnt parameter

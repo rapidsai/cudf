@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,8 @@
 #pragma once
 
 #include "parquet_gpu.hpp"
+#include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
-
-#include <io/utilities/column_buffer.hpp>
 
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
@@ -37,7 +36,8 @@
 #include <optional>
 #include <vector>
 
-namespace cudf::io::detail::parquet {
+namespace cudf::io::parquet::detail {
+
 /**
  * @brief Implementation for Parquet reader
  */
@@ -67,13 +67,15 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param row_group_indices Lists of row groups to read, one per source
+   * @param filter Optional AST expression to filter output rows
    *
    * @return The set of columns along with metadata
    */
   table_with_metadata read(int64_t skip_rows,
                            std::optional<size_type> const& num_rows,
                            bool uses_custom_row_bounds,
-                           host_span<std::vector<size_type> const> row_group_indices);
+                           host_span<std::vector<size_type> const> row_group_indices,
+                           std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Constructor from a chunk read limit and an array of dataset sources with reader options.
@@ -89,17 +91,20 @@ class reader::impl {
    * ```
    *
    * Reading the whole given file at once through `read()` function is still supported if
-   * `chunk_read_limit == 0` (i.e., no reading limit).
-   * In such case, `read_chunk()` will also return rows of the entire file.
+   * `chunk_read_limit == 0` (i.e., no reading limit) and `pass_read_limit == 0` (no temporary
+   * memory limit) In such case, `read_chunk()` will also return rows of the entire file.
    *
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
+   * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
+   * of input, or `0` if there is no limit.
    * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit impl(std::size_t chunk_read_limit,
+                std::size_t pass_read_limit,
                 std::vector<std::unique_ptr<datasource>>&& sources,
                 parquet_reader_options const& options,
                 rmm::cuda_stream_view stream,
@@ -115,6 +120,8 @@ class reader::impl {
    */
   table_with_metadata read_chunk();
 
+  // top level functions involved with ratcheting through the passes, subpasses
+  // and output chunks of the read process
  private:
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
@@ -124,31 +131,110 @@ class reader::impl {
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param row_group_indices Lists of row groups to read (one per source), or empty if read all
+   * @param filter Optional AST expression to filter row groups based on column chunk statistics
    */
   void prepare_data(int64_t skip_rows,
                     std::optional<size_type> const& num_rows,
                     bool uses_custom_row_bounds,
-                    host_span<std::vector<size_type> const> row_group_indices);
+                    host_span<std::vector<size_type> const> row_group_indices,
+                    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
-   * @brief Create chunk information and start file reads
+   * @brief Preprocess step for the entire file.
    *
-   * @param row_groups_info vector of information about row groups to read
-   * @param num_rows  Maximum number of rows to read
+   * Only ever called once. This function reads in rowgroup and associated chunk
+   * information and computes the schedule of top level passes (see `pass_intermediate_data`).
+   *
+   * @param skip_rows The number of rows to skip in the requested set of rowgroups to be read
+   * @param num_rows The total number of rows to read out of the selected rowgroups
+   * @param row_group_indices Lists of row groups to read, one per source
+   * @param filter Optional AST expression to filter output rows
+   */
+  void preprocess_file(int64_t skip_rows,
+                       std::optional<size_type> const& num_rows,
+                       host_span<std::vector<size_type> const> row_group_indices,
+                       std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  /**
+   * @brief Ratchet the pass/subpass/chunk process forward.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specified
+   *        bounds
+   */
+  void handle_chunking(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Setup step for the next input read pass.
+   *
+   * A 'pass' is defined as a subset of row groups read out of the globally
+   * requested set of all row groups.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   */
+  void setup_next_pass(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Setup step for the next decompression subpass.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   *
+   * A 'subpass' is defined as a subset of pages within a pass that are
+   * decompressed and decoded as a batch. Subpasses may be further subdivided
+   * into output chunks.
+   */
+  void setup_next_subpass(bool uses_custom_row_bounds);
+
+  /**
+   * @brief Read a chunk of data and return an output table.
+   *
+   * This function is called internally and expects all preprocessing steps have already been done.
+   *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
+   * @param filter Optional AST expression to filter output rows
+   * @return The output table along with columns' metadata
+   */
+  table_with_metadata read_chunk_internal(
+    bool uses_custom_row_bounds,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
+
+  // utility functions
+ private:
+  /**
+   * @brief Read the set of column chunks to be processed for this pass.
+   *
+   * Does not decompress the chunk data.
+   *
    * @return pair of boolean indicating if compressed chunks were found and a vector of futures for
    * read completion
    */
-  std::pair<bool, std::vector<std::future<void>>> create_and_read_column_chunks(
-    cudf::host_span<row_group_info const> const row_groups_info, size_type num_rows);
+  std::pair<bool, std::vector<std::future<void>>> read_column_chunks();
 
   /**
-   * @brief Load and decompress the input file(s) into memory.
+   * @brief Read compressed data and page information for the current pass.
    */
-  void load_and_decompress_data(cudf::host_span<row_group_info const> const row_groups_info,
-                                size_type num_rows);
+  void read_compressed_data();
 
   /**
-   * @brief Perform some preprocessing for page data and also compute the split locations
+   * @brief Build string dictionary indices for a pass.
+   *
+   */
+  void build_string_dict_indices();
+
+  /**
+   * @brief For list columns, generate estimated row counts for pages in the current pass.
+   *
+   * The row counts in the pages that come out of the file only reflect the number of values in
+   * all of the rows in the page, not the number of rows themselves. In order to do subpass reading
+   * more accurately, we would like to have a more accurate guess of the real number of rows per
+   * page.
+   */
+  void generate_list_column_row_count_estimates();
+
+  /**
+   * @brief Perform some preprocessing for subpass page data and also compute the split locations
    * {skip_rows, num_rows} for chunked reading.
    *
    * There are several pieces of information we can't compute directly from row counts in
@@ -158,17 +244,12 @@ class reader::impl {
    *
    * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
    *
-   * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
    * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
    *        bounds
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
-  void preprocess_pages(size_t skip_rows,
-                        size_t num_rows,
-                        bool uses_custom_row_bounds,
-                        size_t chunk_read_limit);
+  void preprocess_subpass_pages(bool uses_custom_row_bounds, size_t chunk_read_limit);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -190,15 +271,11 @@ class reader::impl {
   void allocate_level_decode_space();
 
   /**
-   * @brief Read a chunk of data and return an output table.
+   * @brief Populate the output table metadata from the parquet file metadata.
    *
-   * This function is called internally and expects all preprocessing steps have already been done.
-   *
-   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
-   *        bounds
-   * @return The output table along with columns' metadata
+   * @param out_metadata The output table metadata to add to
    */
-  table_with_metadata read_chunk_internal(bool uses_custom_row_bounds);
+  void populate_metadata(table_metadata& out_metadata);
 
   /**
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
@@ -206,10 +283,13 @@ class reader::impl {
    *
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
+   * @param filter Optional AST expression to filter output rows
    * @return The output table along with columns' metadata
    */
-  table_with_metadata finalize_output(table_metadata& out_metadata,
-                                      std::vector<std::unique_ptr<column>>& out_columns);
+  table_with_metadata finalize_output(
+    table_metadata& out_metadata,
+    std::vector<std::unique_ptr<column>>& out_columns,
+    std::optional<std::reference_wrapper<ast::expression const>> filter);
 
   /**
    * @brief Allocate data buffers for the output columns.
@@ -222,12 +302,47 @@ class reader::impl {
   void allocate_columns(size_t skip_rows, size_t num_rows, bool uses_custom_row_bounds);
 
   /**
+   * @brief Calculate per-page offsets for string data
+   *
+   * @return Vector of total string data sizes for each column
+   */
+  std::vector<size_t> calculate_page_string_offsets();
+
+  /**
    * @brief Converts the page data and outputs to columns.
    *
+   * @param uses_custom_row_bounds Whether or not num_rows and skip_rows represents user-specific
+   *        bounds
    * @param skip_rows Minimum number of rows from start
    * @param num_rows Number of rows to output
    */
-  void decode_page_data(size_t skip_rows, size_t num_rows);
+  void decode_page_data(bool uses_custom_row_bounds, size_t skip_rows, size_t num_rows);
+
+  /**
+   * @brief Creates file-wide parquet chunk information.
+   *
+   * Creates information about all chunks in the file, storing it in
+   * the file-wide _file_itm_data structure.
+   */
+  void create_global_chunk_info();
+
+  /**
+   * @brief Computes all of the passes we will perform over the file.
+   */
+  void compute_input_passes();
+
+  /**
+   * @brief Given a set of pages that have had their sizes computed by nesting level and
+   * a limit on total read size, generate a set of {skip_rows, num_rows} pairs representing
+   * a set of reads that will generate output columns of total size <= `chunk_read_limit` bytes.
+   */
+  void compute_output_chunks_for_subpass();
+
+  [[nodiscard]] bool has_more_work() const
+  {
+    return _file_itm_data.num_passes() > 0 &&
+           _file_itm_data._current_input_pass < _file_itm_data.num_passes();
+  }
 
  private:
   rmm::cuda_stream_view _stream;
@@ -240,10 +355,10 @@ class reader::impl {
   std::vector<input_column_info> _input_columns;
 
   // Buffers for generating output columns
-  std::vector<column_buffer> _output_buffers;
+  std::vector<cudf::io::detail::inline_column_buffer> _output_buffers;
 
   // Buffers copied from `_output_buffers` after construction for reuse
-  std::vector<column_buffer> _output_buffers_template;
+  std::vector<cudf::io::detail::inline_column_buffer> _output_buffers_template;
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
@@ -252,16 +367,29 @@ class reader::impl {
   std::unique_ptr<table_metadata> _output_metadata;
 
   bool _strings_to_categorical = false;
+
+  // are there usable page indexes available
+  bool _has_page_index = false;
+
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
   data_type _timestamp_type{type_id::EMPTY};
 
-  // Variables used for chunked reading:
-  cudf::io::parquet::gpu::file_intermediate_data _file_itm_data;
-  cudf::io::parquet::gpu::chunk_intermediate_data _chunk_itm_data;
-  std::vector<cudf::io::parquet::gpu::chunk_read_info> _chunk_read_info;
-  std::size_t _chunk_read_limit{0};
-  std::size_t _current_read_chunk{0};
+  // chunked reading happens in 2 parts:
+  //
+  // At the top level, the entire file is divided up into "passes" omn which we try and limit the
+  // total amount of temporary memory (compressed data, decompressed data) in use
+  // via _input_pass_read_limit.
+  //
+  // Within a pass, we produce one or more chunks of output, whose maximum total
+  // byte size is controlled by _output_chunk_read_limit.
+
+  file_intermediate_data _file_itm_data;
   bool _file_preprocessed{false};
+
+  std::unique_ptr<pass_intermediate_data> _pass_itm_data;
+
+  std::size_t _output_chunk_read_limit{0};  // output chunk size limit in bytes
+  std::size_t _input_pass_read_limit{0};    // input pass memory usage limit in bytes
 };
 
-}  // namespace cudf::io::detail::parquet
+}  // namespace cudf::io::parquet::detail

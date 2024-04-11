@@ -1,6 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
-
-# cython: boundscheck = False
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import io
 
@@ -18,12 +16,7 @@ import numpy as np
 
 from cython.operator cimport dereference
 
-from cudf.api.types import (
-    is_decimal_dtype,
-    is_list_dtype,
-    is_list_like,
-    is_struct_dtype,
-)
+from cudf.api.types import is_list_like
 
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -38,22 +31,25 @@ from libcpp.unordered_map cimport unordered_map
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
+cimport cudf._lib.cpp.io.data_sink as cudf_io_data_sink
 cimport cudf._lib.cpp.io.types as cudf_io_types
 cimport cudf._lib.cpp.types as cudf_types
 from cudf._lib.column cimport Column
+from cudf._lib.cpp.expressions cimport expression
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
+    parquet_reader_options_builder,
     parquet_writer_options,
     read_parquet as parquet_reader,
     write_parquet as parquet_writer,
 )
 from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
-from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
+from cudf._lib.expressions cimport Expression
 from cudf._lib.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sinks_info,
@@ -110,6 +106,7 @@ cdef class BufferArrayFromVector:
 def _parse_metadata(meta):
     file_is_range_index = False
     file_index_cols = None
+    file_column_dtype = None
 
     if 'index_columns' in meta and len(meta['index_columns']) > 0:
         file_index_cols = meta['index_columns']
@@ -117,14 +114,19 @@ def _parse_metadata(meta):
         if isinstance(file_index_cols[0], dict) and \
                 file_index_cols[0]['kind'] == 'range':
             file_is_range_index = True
-    return file_is_range_index, file_index_cols
+    if 'column_indexes' in meta and len(meta['column_indexes']) == 1:
+        file_column_dtype = meta['column_indexes'][0]["numpy_type"]
+    return file_is_range_index, file_index_cols, file_column_dtype
 
 
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
-                   strings_to_categorical=False,
-                   use_pandas_metadata=True):
+                   use_pandas_metadata=True,
+                   Expression filters=None):
     """
     Cython function to call into libcudf API, see `read_parquet`.
+
+    filters, if not None, should be an Expression that evaluates to a
+    boolean predicate as a function of columns being read.
 
     See Also
     --------
@@ -145,27 +147,28 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
-    cdef bool cpp_strings_to_categorical = strings_to_categorical
     cdef bool cpp_use_pandas_metadata = use_pandas_metadata
 
     cdef vector[vector[size_type]] cpp_row_groups
     cdef data_type cpp_timestamp_type = cudf_types.data_type(
         cudf_types.type_id.EMPTY
     )
-
     if row_groups is not None:
         cpp_row_groups = row_groups
 
-    cdef parquet_reader_options args
     # Setup parquet reader arguments
-    args = move(
+    cdef parquet_reader_options args
+    cdef parquet_reader_options_builder builder
+    builder = (
         parquet_reader_options.builder(source)
         .row_groups(cpp_row_groups)
-        .convert_strings_to_categories(cpp_strings_to_categorical)
         .use_pandas_metadata(cpp_use_pandas_metadata)
         .timestamp_type(cpp_timestamp_type)
-        .build()
     )
+    if filters is not None:
+        builder = builder.filter(<expression &>dereference(filters.c_obj.get()))
+
+    args = move(builder.build())
     cdef vector[string] cpp_columns
     allow_range_index = True
     if columns is not None:
@@ -174,6 +177,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         for col in columns:
             cpp_columns.push_back(str(col).encode())
         args.set_columns(cpp_columns)
+    # Filters don't handle the range index correctly
+    allow_range_index &= filters is None
 
     # Read Parquet
     cdef cudf_io_types.table_with_metadata c_result
@@ -188,6 +193,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cdef vector[unordered_map[string, string]] per_file_user_data = \
         c_result.metadata.per_file_user_data
 
+    column_index_type = None
     index_col_names = None
     is_range_index = True
     for single_file in per_file_user_data:
@@ -195,7 +201,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
         meta = None
         if json_str != "":
             meta = json.loads(json_str)
-            file_is_range_index, index_col = _parse_metadata(meta)
+            file_is_range_index, index_col, column_index_type = _parse_metadata(meta)
             is_range_index &= file_is_range_index
 
             if not file_is_range_index and index_col is not None \
@@ -223,7 +229,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
         # update the decimal precision of each column
         for col in names:
-            if is_decimal_dtype(df._data[col].dtype):
+            if isinstance(df._data[col].dtype, cudf.core.dtypes.DecimalDtype):
                 df._data[col].dtype.precision = (
                     meta_data_per_column[col]["metadata"]["precision"]
                 )
@@ -305,6 +311,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if use_pandas_metadata:
                 df.index.names = index_col
 
+    # Set column dtype for empty types.
+    if len(df._data.names) == 0 and column_index_type is not None:
+        df._data.label_dtype = cudf.dtype(column_index_type)
     return df
 
 
@@ -323,6 +332,8 @@ def write_parquet(
     object max_page_size_rows=None,
     object partitions_info=None,
     object force_nullable_schema=False,
+    header_version="1.0",
+    use_dictionary=True,
 ):
     """
     Cython function to call into libcudf API, see `write_parquet`.
@@ -333,11 +344,11 @@ def write_parquet(
     """
 
     # Create the write options
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sinks
     cdef cudf_io_types.sink_info sink = make_sinks_info(
         filepaths_or_buffers, _data_sinks
     )
@@ -346,9 +357,9 @@ def write_parquet(
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
         tv = table_view_from_table(table)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         for level, idx_name in enumerate(table._index.names):
-            tbl_meta.get().column_metadata[level].set_name(
+            tbl_meta.column_metadata[level].set_name(
                 str.encode(
                     _index_level_name(idx_name, level, table._column_names)
                 )
@@ -356,17 +367,23 @@ def write_parquet(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table_view_from_table(table, ignore_index=True)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = table_input_metadata(tv)
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
         if not isinstance(name, str):
-            raise ValueError("parquet must have string column names")
+            if cudf.get_option("mode.pandas_compatible"):
+                tbl_meta.column_metadata[i].set_name(str(name).encode())
+            else:
+                raise ValueError(
+                    "Writing a Parquet file requires string column names"
+                )
+        else:
+            tbl_meta.column_metadata[i].set_name(name.encode())
 
-        tbl_meta.get().column_metadata[i].set_name(name.encode())
         _set_col_metadata(
             table[name]._column,
-            tbl_meta.get().column_metadata[i],
+            tbl_meta.column_metadata[i],
             force_nullable_schema
         )
 
@@ -385,6 +402,18 @@ def write_parquet(
         tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
         user_data.push_back(tmp_user_data)
 
+    if header_version not in ("1.0", "2.0"):
+        raise ValueError(
+            f"Invalid parquet header version: {header_version}. "
+            "Valid values are '1.0' and '2.0'"
+        )
+
+    dict_policy = (
+        cudf_io_types.dictionary_policy.ALWAYS
+        if use_dictionary
+        else cudf_io_types.dictionary_policy.NEVER
+    )
+
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
 
@@ -396,11 +425,14 @@ def write_parquet(
     # Perform write
     cdef parquet_writer_options args = move(
         parquet_writer_options.builder(sink, tv)
-        .metadata(tbl_meta.get())
+        .metadata(tbl_meta)
         .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
         .int96_timestamps(_int96_timestamps)
+        .write_v2_headers(header_version == "2.0")
+        .dictionary_policy(dict_policy)
+        .utc_timestamps(False)
         .build()
     )
     if partitions_info is not None:
@@ -477,9 +509,9 @@ cdef class ParquetWriter:
     """
     cdef bool initialized
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
-    cdef unique_ptr[table_input_metadata] tbl_meta
+    cdef table_input_metadata tbl_meta
     cdef cudf_io_types.sink_info sink
-    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
+    cdef vector[unique_ptr[cudf_io_data_sink.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
@@ -577,31 +609,31 @@ cdef class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](
+        self.tbl_meta = table_input_metadata(
             table_view_from_table(table, ignore_index=True))
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
-                self.tbl_meta = make_unique[table_input_metadata](tv)
+                self.tbl_meta = table_input_metadata(tv)
                 for level, idx_name in enumerate(table._index.names):
-                    self.tbl_meta.get().column_metadata[level].set_name(
+                    self.tbl_meta.column_metadata[level].set_name(
                         (str.encode(idx_name))
                     )
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
                     tv = table_view_from_table(table)
-                    self.tbl_meta = make_unique[table_input_metadata](tv)
-                    self.tbl_meta.get().column_metadata[0].set_name(
+                    self.tbl_meta = table_input_metadata(tv)
+                    self.tbl_meta.column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )
                     num_index_cols_meta = 1
 
         for i, name in enumerate(table._column_names, num_index_cols_meta):
-            self.tbl_meta.get().column_metadata[i].set_name(name.encode())
+            self.tbl_meta.column_metadata[i].set_name(name.encode())
             _set_col_metadata(
                 table[name]._column,
-                self.tbl_meta.get().column_metadata[i],
+                self.tbl_meta.column_metadata[i],
             )
 
         index = (
@@ -617,7 +649,7 @@ cdef class ParquetWriter:
         with nogil:
             args = move(
                 chunked_parquet_writer_options.builder(self.sink)
-                .metadata(self.tbl_meta.get())
+                .metadata(self.tbl_meta)
                 .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
@@ -645,7 +677,7 @@ cpdef merge_filemetadata(object filemetadata_list):
 
     for blob_py in filemetadata_list:
         blob_c = blob_py
-        list_c.push_back(make_unique[vector[uint8_t]](blob_c))
+        list_c.push_back(move(make_unique[vector[uint8_t]](blob_c)))
 
     with nogil:
         output_c = move(parquet_merge_metadata(list_c))
@@ -671,10 +703,14 @@ cdef cudf_io_types.statistics_freq _get_stat_freq(object statistics):
 cdef cudf_io_types.compression_type _get_comp_type(object compression):
     if compression is None:
         return cudf_io_types.compression_type.NONE
-    elif compression == "snappy":
+
+    compression = str(compression).upper()
+    if compression == "SNAPPY":
         return cudf_io_types.compression_type.SNAPPY
     elif compression == "ZSTD":
         return cudf_io_types.compression_type.ZSTD
+    elif compression == "LZ4":
+        return cudf_io_types.compression_type.LZ4
     else:
         raise ValueError("Unsupported `compression` type")
 
@@ -689,7 +725,7 @@ cdef _set_col_metadata(
         # is true.
         col_meta.set_nullability(True)
 
-    if is_struct_dtype(col):
+    if isinstance(col.dtype, cudf.StructDtype):
         for i, (child_col, name) in enumerate(
             zip(col.children, list(col.dtype.fields))
         ):
@@ -699,13 +735,11 @@ cdef _set_col_metadata(
                 col_meta.child(i),
                 force_nullable_schema
             )
-    elif is_list_dtype(col):
+    elif isinstance(col.dtype, cudf.ListDtype):
         _set_col_metadata(
             col.children[1],
             col_meta.child(1),
             force_nullable_schema
         )
-    else:
-        if is_decimal_dtype(col):
-            col_meta.set_decimal_precision(col.dtype.precision)
-        return
+    elif isinstance(col.dtype, cudf.core.dtypes.DecimalDtype):
+        col_meta.set_decimal_precision(col.dtype.precision)

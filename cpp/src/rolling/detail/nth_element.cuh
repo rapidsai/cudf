@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2023, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -157,7 +157,7 @@ std::unique_ptr<column> nth_element(size_type n,
     gather_index_calculator<null_handling, PrecedingIter, FollowingIter>{
       n, input, preceding, following, min_periods, stream});
 
-  auto gather_map = rmm::device_uvector<offset_type>(input.size(), stream);
+  auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
   thrust::copy(
     rmm::exec_policy(stream), gather_iter, gather_iter + input.size(), gather_map.begin());
 

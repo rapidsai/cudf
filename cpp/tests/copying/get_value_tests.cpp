@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,6 +32,8 @@
 #include <cudf/types.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
+
+#include <stdexcept>
 
 using namespace cudf::test::iterators;
 
@@ -77,8 +79,8 @@ TYPED_TEST(FixedWidthGetValueTest, IndexOutOfBounds)
   cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({9, 8, 7, 6}, {0, 1, 0, 1});
 
   // Test for out of bounds indexes in both directions.
-  EXPECT_THROW(cudf::get_element(col, -1), cudf::logic_error);
-  EXPECT_THROW(cudf::get_element(col, 4), cudf::logic_error);
+  EXPECT_THROW(cudf::get_element(col, -1), std::out_of_range);
+  EXPECT_THROW(cudf::get_element(col, 4), std::out_of_range);
 }
 
 struct StringGetValueTest : public cudf::test::BaseFixture {};
@@ -311,7 +313,7 @@ TYPED_TEST(ListGetFixedWidthValueTest, NestedGetNull)
 {
   using LCW      = cudf::test::lists_column_wrapper<TypeParam, int32_t>;
   using FCW      = cudf::test::fixed_width_column_wrapper<TypeParam>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   std::vector<cudf::valid_type> valid{1, 0, 1, 0};
   // clang-format off
@@ -466,7 +468,7 @@ TEST_F(ListGetStringValueTest, NestedGetNonNullEmpty)
 TEST_F(ListGetStringValueTest, NestedGetNull)
 {
   using LCW      = cudf::test::lists_column_wrapper<cudf::string_view>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
   using StringCW = cudf::test::strings_column_wrapper;
 
   std::vector<cudf::valid_type> valid{0, 0, 1, 1};
@@ -508,7 +510,7 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
    */
   std::unique_ptr<cudf::column> make_test_lists_column(
     cudf::size_type num_lists,
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type> offsets,
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets,
     std::unique_ptr<cudf::column> child,
     std::initializer_list<cudf::valid_type> null_mask)
   {
@@ -756,7 +758,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNonNullEmpty)
     this->make_test_lists_column(3, {0, 1, 1, 2}, std::move(list_column), {1, 1, 1});
 
   auto expected_data =
-    this->make_test_lists_column(0, {0}, this->zero_length_struct().release(), {1});
+    this->make_test_lists_column(0, {0}, this->zero_length_struct().release(), {});
 
   cudf::size_type index = 1;
   auto s                = cudf::get_element(list_column_nested->view(), index);
@@ -776,7 +778,7 @@ TYPED_TEST(ListGetStructValueTest, NestedGetNull)
   // NULL                      <- cudf::get_element(2)
 
   using valid_t  = std::vector<cudf::valid_type>;
-  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::offset_type>;
+  using offset_t = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 
   auto list_column = this->make_test_lists_column(2, {0, 2, 3}, this->leaf_data(), {1, 1});
   auto list_column_nested =
@@ -900,12 +902,12 @@ TEST_F(StructGetValueTest, multi_level_nested)
   // col fields
   LCW l3({LCW{1, 1, 1}, LCW{2, 2}, LCW{3}}, validity_mask_t{false, true, true}.begin());
   cudf::test::structs_column_wrapper l2{l3};
-  auto l1 = cudf::make_lists_column(
-    1,
-    cudf::test::fixed_width_column_wrapper<cudf::offset_type>{0, 3}.release(),
-    l2.release(),
-    0,
-    cudf::create_null_mask(1, cudf::mask_state::UNALLOCATED));
+  auto l1 =
+    cudf::make_lists_column(1,
+                            cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 3}.release(),
+                            l2.release(),
+                            0,
+                            cudf::create_null_mask(1, cudf::mask_state::UNALLOCATED));
   std::vector<std::unique_ptr<cudf::column>> l0_fields;
   l0_fields.emplace_back(std::move(l1));
   cudf::test::structs_column_wrapper l0(std::move(l0_fields));

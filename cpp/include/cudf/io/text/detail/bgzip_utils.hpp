@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <zlib.h>
-
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <zlib.h>
 
 #include <algorithm>
 #include <array>

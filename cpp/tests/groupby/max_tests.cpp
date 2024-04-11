@@ -428,6 +428,77 @@ TEST_F(groupby_max_struct_test, values_with_null_child)
   }
 }
 
+struct groupby_max_list_test : public cudf::test::BaseFixture {};
+
+TEST_F(groupby_max_list_test, basic)
+{
+  using lists = cudf::test::lists_column_wrapper<int32_t>;
+
+  auto const keys        = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 1, 2};
+  auto const vals        = lists{{1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}};
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+  auto const expect_vals = lists{{1, 2}, {9, 10}, {5, 6, 7}};
+
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_max_aggregation<cudf::groupby_aggregation>());
+}
+
+TEST_F(groupby_max_list_test, slice_input)
+{
+  using lists = cudf::test::lists_column_wrapper<int32_t>;
+  constexpr int32_t dont_care{1};
+
+  auto const keys_original =
+    cudf::test::fixed_width_column_wrapper<int32_t>{dont_care, 1, 2, 3, 1, 2, dont_care};
+  auto const vals_original =
+    lists{{1, 2, 3, 4, 5} /*dont care*/, {1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}};
+  auto const keys = cudf::slice(keys_original, {1, 6})[0];
+  auto const vals = cudf::slice(vals_original, {1, 6})[0];
+
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+  auto const expect_vals = lists{{1, 2}, {9, 10}, {5, 6, 7}};
+
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_max_aggregation<cudf::groupby_aggregation>());
+}
+
+TEST_F(groupby_max_list_test, null_keys_and_values)
+{
+  using lists = cudf::test::lists_column_wrapper<int32_t>;
+  constexpr int32_t null{0};
+
+  auto const keys =
+    cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, null, 1, 2}, null_at(3)};
+  auto const expect_keys = cudf::test::fixed_width_column_wrapper<int>{{1, 2, 3}, no_nulls()};
+
+  // Null list element.
+  {
+    auto const vals = lists{{{} /*null*/, {1, 2}, {3, 4}, {5, 6, 7}, {0, 8}, {9, 10}}, null_at(0)};
+    auto const expect_vals = lists{{0, 8}, {9, 10}, {3, 4}};
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    expect_vals,
+                    cudf::make_max_aggregation<cudf::groupby_aggregation>());
+  }
+
+  // Null child element.
+  {
+    auto const vals        = lists{lists{{0, null}, null_at(1)},
+                            lists{1, 2},
+                            lists{3, 4},
+                            lists{5, 6, 7},
+                            lists{0, 8},
+                            lists{9, 10}};
+    auto const expect_vals = lists{{0, 8}, {9, 10}, {3, 4}};
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    expect_vals,
+                    cudf::make_max_aggregation<cudf::groupby_aggregation>());
+  }
+}
+
 template <typename V>
 struct groupby_max_floating_point_test : public cudf::test::BaseFixture {};
 

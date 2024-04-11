@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.hpp>
-#include <strings/regex/utilities.cuh>
+#include "strings/count_matches.hpp"
+#include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -41,12 +41,14 @@ struct count_fn {
     auto const nchars = d_str.length();
     int32_t count     = 0;
 
-    size_type begin = 0;
-    size_type end   = -1;
-    while ((begin <= nchars) && (prog.find(thread_idx, d_str, begin, end) > 0)) {
+    auto itr = d_str.begin();
+    while (itr.position() <= nchars) {
+      auto result = prog.find(thread_idx, d_str, itr);
+      if (!result) { break; }
       ++count;
-      begin = end + (begin == end);
-      end   = -1;
+      // increment the iterator is faster than creating a new one
+      // +1 if the match was on a virtual position (e.g. word boundary)
+      itr += (result->second - itr.position()) + (result->first == result->second);
     }
     return count;
   }

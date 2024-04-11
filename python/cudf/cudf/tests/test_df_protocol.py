@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from typing import Any, Tuple
 
@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_GE_150
 from cudf.core.buffer import as_buffer
 from cudf.core.column import as_column, build_column
 from cudf.core.df_protocol import (
@@ -112,7 +111,8 @@ def assert_column_equal(col: _CuDFColumn, cudfcol):
         assert col.get_buffers()["offsets"] is None
 
     elif col.dtype[0] == _DtypeKind.STRING:
-        assert_buffer_equal(col.get_buffers()["data"], cudfcol.children[1])
+        chars_col = build_column(data=cudfcol.data, dtype="int8")
+        assert_buffer_equal(col.get_buffers()["data"], chars_col)
         assert_buffer_equal(col.get_buffers()["offsets"], cudfcol.children[0])
 
     else:
@@ -277,9 +277,5 @@ def test_NA_mixed_dtype():
     assert_df_unique_dtype_cols(data_mixed)
 
 
-@pytest.mark.skipif(
-    not PANDAS_GE_150,
-    reason="Pandas versions < 1.5.0 do not support interchange protocol",
-)
 def test_from_cpu_df(pandas_df):
     cudf.from_dataframe(pandas_df, allow_copy=True)

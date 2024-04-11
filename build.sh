@@ -17,7 +17,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
+VALIDARGS="clean libcudf cudf cudfjar dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats"
 HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
@@ -32,7 +32,8 @@ HELP="$0 [clean] [libcudf] [cudf] [cudfjar] [dask_cudf] [benchmarks] [tests] [li
    custreamz                     - build the custreamz Python package
    -v                            - verbose build mode
    -g                            - build for debug
-   -n                            - no install step
+   -n                            - no install step (does not affect Python)
+   --pydevelop                   - Install Python packages in editable mode
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --opensource_nvcomp           - disable use of proprietary nvcomp extensions
@@ -69,6 +70,7 @@ BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
 USE_PROPRIETARY_NVCOMP=ON
+PYTHON_ARGS_FOR_INSTALL="-m pip install --no-build-isolation --no-deps"
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -228,6 +230,9 @@ fi
 if hasArg --incl_cache_stats; then
     BUILD_REPORT_INCL_CACHE_STATS=ON
 fi
+if hasArg --pydevelop; then
+    PYTHON_ARGS_FOR_INSTALL="${PYTHON_ARGS_FOR_INSTALL} -e"
+fi
 
 # Append `-DFIND_CUDF_CPP=ON` to EXTRA_CMAKE_ARGS unless a user specified the option.
 if [[ "${EXTRA_CMAKE_ARGS}" != *"DFIND_CUDF_CPP"* ]]; then
@@ -332,10 +337,8 @@ fi
 if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
-    python setup.py build_ext --inplace -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} -DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        python setup.py install --single-version-externally-managed --record=record.txt  -- -DCMAKE_PREFIX_PATH=${INSTALL_PREFIX} -DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR} ${EXTRA_CMAKE_ARGS} -- -j${PARALLEL_LEVEL:-1}
-    fi
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};-DCMAKE_CUDA_ARCHITECTURES=${CUDF_CMAKE_CUDA_ARCHITECTURES};${EXTRA_CMAKE_ARGS}" \
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 
@@ -343,12 +346,7 @@ fi
 if buildAll || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-    fi
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 if hasArg cudfjar; then
@@ -375,21 +373,12 @@ fi
 # build cudf_kafka Python package
 if hasArg cudf_kafka; then
     cd ${REPODIR}/python/cudf_kafka
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
-    fi
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${LIBCUDF_BUILD_DIR};${EXTRA_CMAKE_ARGS}"
+        python ${PYTHON_ARGS_FOR_INSTALL} .
 fi
 
 # build custreamz Python package
 if hasArg custreamz; then
     cd ${REPODIR}/python/custreamz
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
-    else
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
-    fi
+    python ${PYTHON_ARGS_FOR_INSTALL} .
 fi

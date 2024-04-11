@@ -160,10 +160,10 @@ bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_strea
 
 }  // namespace detail
 
-bool contains(column_view const& haystack, scalar const& needle)
+bool contains(column_view const& haystack, scalar const& needle, rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains(haystack, needle, cudf::get_default_stream());
+  return detail::contains(haystack, needle, stream);
 }
 
 }  // namespace cudf

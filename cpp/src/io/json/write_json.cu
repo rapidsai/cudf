@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,17 +19,18 @@
  * @brief cuDF-IO JSON writer implementation
  */
 
-#include <io/csv/durations.hpp>
-#include <lists/utilities.hpp>
+#include "io/csv/durations.hpp"
+#include "io/utilities/parsing_utils.cuh"
+#include "lists/utilities.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/data_sink.hpp>
-#include <cudf/io/detail/data_casting.cuh>
 #include <cudf/io/detail/json.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -47,6 +48,7 @@
 #include <rmm/exec_policy.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 
+#include <cuda/functional>
 #include <thrust/for_each.h>
 #include <thrust/gather.h>
 #include <thrust/host_vector.h>
@@ -75,15 +77,46 @@ namespace {
 struct escape_strings_fn {
   column_device_view const d_column;
   bool const append_colon{false};
-  offset_type* d_offsets{};
+  size_type* d_offsets{};
   char* d_chars{};
 
-  __device__ void write_char(char_utf8 chr, char*& d_buffer, offset_type& bytes)
+  __device__ void write_char(char_utf8 chr, char*& d_buffer, size_type& bytes)
   {
     if (d_buffer)
       d_buffer += cudf::strings::detail::from_char_utf8(chr, d_buffer);
     else
       bytes += cudf::strings::detail::bytes_in_char_utf8(chr);
+  }
+
+  __device__ inline char nibble_to_hex(uint8_t nibble) const
+  {
+    return nibble < 10 ? '0' + nibble : 'a' + nibble - 10;
+  }
+
+  __device__ void write_utf8_codepoint(uint16_t codepoint, char*& d_buffer, size_type& bytes)
+  {
+    if (d_buffer) {
+      d_buffer[0] = '\\';
+      d_buffer[1] = 'u';
+      d_buffer[2] = nibble_to_hex((codepoint >> 12) & 0x0F);
+      d_buffer[3] = nibble_to_hex((codepoint >> 8) & 0x0F);
+      d_buffer[4] = nibble_to_hex((codepoint >> 4) & 0x0F);
+      d_buffer[5] = nibble_to_hex((codepoint)&0x0F);
+      d_buffer += 6;
+    } else {
+      bytes += 6;
+    }
+  }
+
+  __device__ void write_utf16_codepoint(uint32_t codepoint, char*& d_buffer, size_type& bytes)
+  {
+    constexpr uint16_t UTF16_HIGH_SURROGATE_BEGIN = 0xD800;
+    constexpr uint16_t UTF16_LOW_SURROGATE_BEGIN  = 0xDC00;
+    codepoint -= 0x1'0000;
+    uint16_t hex_high = ((codepoint >> 10) & 0x3FF) + UTF16_HIGH_SURROGATE_BEGIN;
+    uint16_t hex_low  = (codepoint & 0x3FF) + UTF16_LOW_SURROGATE_BEGIN;
+    write_utf8_codepoint(hex_high, d_buffer, bytes);
+    write_utf8_codepoint(hex_low, d_buffer, bytes);
   }
 
   __device__ void operator()(size_type idx)
@@ -99,12 +132,25 @@ struct escape_strings_fn {
     constexpr char_utf8 const quote = '\"';  // wrap quotes
     bool constexpr quote_row        = true;
 
-    char* d_buffer    = d_chars ? d_chars + d_offsets[idx] : nullptr;
-    offset_type bytes = 0;
+    char* d_buffer  = d_chars ? d_chars + d_offsets[idx] : nullptr;
+    size_type bytes = 0;
 
     if (quote_row) write_char(quote, d_buffer, bytes);
-    for (auto chr : d_str) {
-      auto escaped_chars = cudf::io::json::experimental::detail::get_escaped_char(chr);
+    for (auto utf8_char : d_str) {
+      if (utf8_char > 0x0000'00FF) {
+        // multi-byte char
+        uint32_t codepoint = cudf::strings::detail::utf8_to_codepoint(utf8_char);
+        if (codepoint <= 0x0000'FFFF) {
+          // write \uXXXX utf-8 codepoint
+          write_utf8_codepoint(codepoint, d_buffer, bytes);
+        } else {
+          // write \uXXXX\uXXXX utf-16 surrogate pair
+          // codepoint > 0xFFFF && codepoint <= 0x10FFFF
+          write_utf16_codepoint(codepoint, d_buffer, bytes);
+        }
+        continue;
+      }
+      auto escaped_chars = get_escaped_char(utf8_char);
       if (escaped_chars.first == '\0') {
         write_char(escaped_chars.second, d_buffer, bytes);
       } else {
@@ -123,12 +169,12 @@ struct escape_strings_fn {
                                               rmm::cuda_stream_view stream,
                                               rmm::mr::device_memory_resource* mr)
   {
-    auto children =
+    auto [offsets_column, chars] =
       cudf::strings::detail::make_strings_children(*this, column_v.size(), stream, mr);
 
     return make_strings_column(column_v.size(),
-                               std::move(children.first),
-                               std::move(children.second),
+                               std::move(offsets_column),
+                               chars.release(),
                                column_v.null_count(),
                                cudf::detail::copy_bitmask(column_v, stream, mr));
   }
@@ -159,18 +205,12 @@ struct struct_scatter_strings_fn {
     auto const d_str_null = tbl.column(col).is_null(row);
     auto const this_index = row * num_strviews_per_row + col * strviews_per_column + 1;
     // prefix
-    if (col == 0) { d_strviews[this_index - 1] = row_prefix; }
+    if (col == 0) d_strviews[this_index - 1] = row_prefix;
+    if (col != 0) d_strviews[this_index - 1] = include_nulls ? value_separator : string_view{};
     if (!include_nulls && d_str_null) {
-      if (col != 0) d_strviews[this_index - 1] = string_view{};
       d_strviews[this_index]     = string_view{};
       d_strviews[this_index + 1] = string_view{};
     } else {
-      // if previous column was null, then we skip the value separator
-      if (col != 0)
-        if (tbl.column(col - 1).is_null(row) && !include_nulls)
-          d_strviews[this_index - 1] = string_view{};
-        else
-          d_strviews[this_index - 1] = value_separator;
       auto const d_col_name = col_names.element<string_view>(col);
       auto const d_str = d_str_null ? narep : tbl.column(col).template element<string_view>(row);
       // column_name: value
@@ -179,6 +219,16 @@ struct struct_scatter_strings_fn {
     }
     // suffix
     if (col == tbl.num_columns() - 1) { d_strviews[this_index + 2] = row_suffix; }
+  }
+};
+
+struct validity_fn {
+  table_device_view const tbl;
+  __device__ bool operator()(size_type idx) const
+  {
+    auto const row = idx / tbl.num_columns();
+    auto const col = idx % tbl.num_columns();
+    return tbl.column(col).is_valid(row);
   }
 };
 
@@ -247,22 +297,60 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
                    thrust::make_counting_iterator<size_type>(0),
                    thrust::make_counting_iterator<size_type>(total_rows),
                    scatter_fn);
+  if (!include_nulls) {
+    // if previous column was null, then we skip the value separator
+    rmm::device_uvector<bool> d_str_separator(total_rows, stream);
+    auto row_num = cudf::detail::make_counting_transform_iterator(
+      0,
+      cuda::proclaim_return_type<size_type>([tbl = *tbl_device_view] __device__(auto idx)
+                                              -> size_type { return idx / tbl.num_columns(); }));
+    auto validity_iterator =
+      cudf::detail::make_counting_transform_iterator(0, validity_fn{*tbl_device_view});
+    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
+                                  row_num,
+                                  row_num + total_rows,
+                                  validity_iterator,
+                                  d_str_separator.begin(),
+                                  false,
+                                  thrust::equal_to<size_type>{},
+                                  thrust::logical_or<bool>{});
+    thrust::for_each(rmm::exec_policy(stream),
+                     thrust::make_counting_iterator<size_type>(0),
+                     thrust::make_counting_iterator<size_type>(total_rows),
+                     [write_separator = d_str_separator.begin(),
+                      d_strviews      = d_strviews.begin(),
+                      value_separator,
+                      tbl = *tbl_device_view,
+                      strviews_per_column,
+                      num_strviews_per_row] __device__(auto idx) {
+                       auto const row = idx / tbl.num_columns();
+                       auto const col = idx % tbl.num_columns();
+                       auto const this_index =
+                         row * num_strviews_per_row + col * strviews_per_column + 1;
+                       if (write_separator[idx] && tbl.column(col).is_valid(row)) {
+                         d_strviews[this_index - 1] = value_separator;
+                       }
+                     });
+  }
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
   // gather from offset and create a new string column
   auto old_offsets = strings_column_view(joined_col->view()).offsets();
   rmm::device_uvector<size_type> row_string_offsets(strings_columns.num_rows() + 1, stream, mr);
   auto const d_strview_offsets = cudf::detail::make_counting_transform_iterator(
-    0, [num_strviews_per_row] __device__(size_type const i) { return i * num_strviews_per_row; });
+    0, cuda::proclaim_return_type<size_type>([num_strviews_per_row] __device__(size_type const i) {
+      return i * num_strviews_per_row;
+    }));
   thrust::gather(rmm::exec_policy(stream),
                  d_strview_offsets,
                  d_strview_offsets + row_string_offsets.size(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
+  auto chars_data = joined_col->release().data;
   return make_strings_column(
     strings_columns.num_rows(),
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
+    std::move(chars_data.release()[0]),
     0,
     {});
 }
@@ -311,11 +399,13 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
 
   rmm::device_uvector<size_type> d_strview_offsets(num_offsets, stream);
   auto num_strings_per_list = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
-      if (idx + 1 >= num_offsets) return 0;
-      auto const length = offsets[idx + 1] - offsets[idx];
-      return length == 0 ? 2 : (2 + length + length - 1);
-    });
+    0,
+    cuda::proclaim_return_type<size_type>(
+      [offsets = offsets.begin<size_type>(), num_offsets] __device__(size_type idx) {
+        if (idx + 1 >= num_offsets) return 0;
+        auto const length = offsets[idx + 1] - offsets[idx];
+        return length == 0 ? 2 : (2 + length + length - 1);
+      }));
   thrust::exclusive_scan(rmm::exec_policy(stream),
                          num_strings_per_list,
                          num_strings_per_list + num_offsets,
@@ -379,10 +469,11 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
                  d_strview_offsets.end(),
                  old_offsets.begin<size_type>(),
                  row_string_offsets.begin());
+  auto chars_data = joined_col->release().data;
   return make_strings_column(
     num_lists,
     std::make_unique<cudf::column>(std::move(row_string_offsets), rmm::device_buffer{}, 0),
-    std::move(joined_col->release().children[strings_column_view::chars_column_index]),
+    std::move(chars_data.release()[0]),
     lists_strings.null_count(),
     cudf::detail::copy_bitmask(lists_strings.parent(), stream, mr));
 }
@@ -416,9 +507,17 @@ struct column_to_strings_fn {
       struct_row_end_wrap("}", true, stream),
       list_value_separator(",", true, stream),
       list_row_begin_wrap("[", true, stream),
-      list_row_end_wrap("]", true, stream)
+      list_row_end_wrap("]", true, stream),
+      true_value(options_.get_true_value(), true, stream),
+      false_value(options_.get_false_value(), true, stream)
   {
   }
+
+  ~column_to_strings_fn()                                      = default;
+  column_to_strings_fn(column_to_strings_fn const&)            = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn const&) = delete;
+  column_to_strings_fn(column_to_strings_fn&&)                 = delete;
+  column_to_strings_fn& operator=(column_to_strings_fn&&)      = delete;
 
   // unsupported type of column:
   template <typename column_type>
@@ -436,8 +535,7 @@ struct column_to_strings_fn {
   std::enable_if_t<std::is_same_v<column_type, bool>, std::unique_ptr<column>> operator()(
     column_view const& column) const
   {
-    return cudf::strings::detail::from_booleans(
-      column, options_.get_true_value(), options_.get_false_value(), stream_, mr_);
+    return cudf::strings::detail::from_booleans(column, true_value, false_value, stream_, mr_);
   }
 
   // strings:
@@ -499,7 +597,7 @@ struct column_to_strings_fn {
     return cudf::strings::detail::from_timestamps(
       column,
       format,
-      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr, nullptr, 0}),
+      strings_column_view(make_empty_column(type_id::STRING)->view()),
       stream_,
       mr_);
   }
@@ -530,17 +628,18 @@ struct column_to_strings_fn {
 
     auto child_string_with_null = [&]() {
       if (child_view.type().id() == type_id::STRUCT) {
-        return (*this).template operator()<cudf::struct_view>(
-          child_view,
-          children_names.size() > child_index ? children_names[child_index].children
-                                              : std::vector<column_name_info>{});
-      } else if (child_view.type().id() == type_id::LIST) {
-        return (*this).template operator()<cudf::list_view>(child_view,
+        return this->template operator()<cudf::struct_view>(child_view,
                                                             children_names.size() > child_index
                                                               ? children_names[child_index].children
                                                               : std::vector<column_name_info>{});
+      } else if (child_view.type().id() == type_id::LIST) {
+        return this->template operator()<cudf::list_view>(child_view,
+                                                          children_names.size() > child_index
+                                                            ? children_names[child_index].children
+                                                            : std::vector<column_name_info>{});
       } else {
-        return cudf::type_dispatcher(child_view.type(), *this, child_view);
+        return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+          child_view.type(), *this, child_view);
       }
     };
     auto new_offsets = cudf::lists::detail::get_normalized_offsets(
@@ -595,27 +694,29 @@ struct column_to_strings_fn {
     //
     auto i_col_begin =
       thrust::make_zip_iterator(thrust::counting_iterator<size_t>(0), column_begin);
-    std::transform(i_col_begin,
-                   i_col_begin + num_columns,
-                   std::back_inserter(str_column_vec),
-                   [this, &children_names](auto const& i_current_col) {
-                     auto const i            = thrust::get<0>(i_current_col);
-                     auto const& current_col = thrust::get<1>(i_current_col);
-                     // Struct needs children's column names
-                     if (current_col.type().id() == type_id::STRUCT) {
-                       return (*this).template operator()<cudf::struct_view>(
-                         current_col,
-                         children_names.size() > i ? children_names[i].children
-                                                   : std::vector<column_name_info>{});
-                     } else if (current_col.type().id() == type_id::LIST) {
-                       return (*this).template operator()<cudf::list_view>(
-                         current_col,
-                         children_names.size() > i ? children_names[i].children
-                                                   : std::vector<column_name_info>{});
-                     } else {
-                       return cudf::type_dispatcher(current_col.type(), *this, current_col);
-                     }
-                   });
+    std::transform(
+      i_col_begin,
+      i_col_begin + num_columns,
+      std::back_inserter(str_column_vec),
+      [this, &children_names](auto const& i_current_col) {
+        auto const i            = thrust::get<0>(i_current_col);
+        auto const& current_col = thrust::get<1>(i_current_col);
+        // Struct needs children's column names
+        if (current_col.type().id() == type_id::STRUCT) {
+          return this->template operator()<cudf::struct_view>(current_col,
+                                                              children_names.size() > i
+                                                                ? children_names[i].children
+                                                                : std::vector<column_name_info>{});
+        } else if (current_col.type().id() == type_id::LIST) {
+          return this->template operator()<cudf::list_view>(current_col,
+                                                            children_names.size() > i
+                                                              ? children_names[i].children
+                                                              : std::vector<column_name_info>{});
+        } else {
+          return cudf::type_dispatcher<cudf::id_to_type_impl, column_to_strings_fn const&>(
+            current_col.type(), *this, current_col);
+        }
+      });
 
     // create string table view from str_column_vec:
     //
@@ -649,6 +750,9 @@ struct column_to_strings_fn {
   string_scalar const list_value_separator;  // ","
   string_scalar const list_row_begin_wrap;   // "["
   string_scalar const list_row_end_wrap;     // "]"
+  // bool converter constants
+  string_scalar const true_value;
+  string_scalar const false_value;
 };
 
 }  // namespace
@@ -666,10 +770,12 @@ std::unique_ptr<column> make_strings_column_from_host(host_span<std::string cons
                                 offsets.begin() + 1,
                                 std::plus<cudf::size_type>{},
                                 [](auto& str) { return str.size(); });
-  auto d_offsets =
-    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource());
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(offsets, stream, rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   return cudf::make_strings_column(
-    host_strings.size(), std::move(d_offsets), std::move(d_chars), {}, 0);
+    host_strings.size(), std::move(d_offsets), d_chars.release(), 0, {});
 }
 
 std::unique_ptr<column> make_column_names_column(host_span<column_name_info const> column_names,
@@ -703,8 +809,8 @@ void write_chunked(data_sink* out_sink,
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  auto const total_num_bytes = str_column_view.chars_size() - skip_last_chars;
-  char const* ptr_all_bytes  = str_column_view.chars_begin();
+  auto const total_num_bytes = str_column_view.chars_size(stream) - skip_last_chars;
+  char const* ptr_all_bytes  = str_column_view.chars_begin(stream);
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory

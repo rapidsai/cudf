@@ -560,7 +560,7 @@ TEST_F(SetUnionTest, InputListsOfNestedStructsHaveNull)
       auto grandchild2 =
         strings_col{{
                       "" /*NULL*/, "Apple",     "Banana", "Cherry", "Kiwi",  "Banana",    "Cherry",
-                      "Kiwi",                                       // end list1
+                      "Kiwi",  // end list1
                       "" /*NULL*/, "Bear",      "Cat",    "Dog",    "Duck",  "Panda",     "Bear",
                       "Cat",       "Dog",       "Duck",   "Panda",  // end list2
 
@@ -597,7 +597,7 @@ TEST_F(SetUnionTest, InputListsOfNestedStructsHaveNull)
         {
           "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "Apple",
           "Apple",     "Banana",    "Cherry",    "Kiwi",      "Banana",    "Cherry",
-          "Kiwi",                                                       // end list1
+          "Kiwi",  // end list1
           "" /*NULL*/, "" /*NULL*/, "Bear",      "Cat",       "Dog",       "Duck",      "Panda",
           "Bear",      "Cat",       "Dog",       "Duck",      "Panda",  // end list2
           "ÁÁÁ",       "ÁÁÁ",       "ÉÉÉÉÉ",     "ÉÉÉÉÉ",     "ÁBC",       "ÁÁÁ",       "ÍÍÍÍÍ",

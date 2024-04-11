@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,13 +32,6 @@
 #include <unordered_map>
 #include <vector>
 
-// Forward declarations
-namespace arrow {
-namespace io {
-class RandomAccessFile;
-}
-}  // namespace arrow
-
 namespace cudf {
 //! IO interfaces
 namespace io {
@@ -51,6 +44,12 @@ class datasource;
 namespace cudf {
 //! IO interfaces
 namespace io {
+/**
+ * @addtogroup io_types
+ * @{
+ * @file
+ */
+
 /**
  * @brief Compression algorithms
  */
@@ -101,6 +100,26 @@ enum statistics_freq {
 };
 
 /**
+ * @brief Valid encodings for use with `column_in_metadata::set_encoding()`
+ */
+enum class column_encoding {
+  // Common encodings:
+  USE_DEFAULT = -1,  ///< No encoding has been requested, use default encoding
+  DICTIONARY,        ///< Use dictionary encoding
+  // Parquet encodings:
+  PLAIN,                    ///< Use plain encoding
+  DELTA_BINARY_PACKED,      ///< Use DELTA_BINARY_PACKED encoding (only valid for integer columns)
+  DELTA_LENGTH_BYTE_ARRAY,  ///< Use DELTA_LENGTH_BYTE_ARRAY encoding (only
+                            ///< valid for BYTE_ARRAY columns)
+  DELTA_BYTE_ARRAY,         ///< Use DELTA_BYTE_ARRAY encoding (only valid for
+                            ///< BYTE_ARRAY and FIXED_LEN_BYTE_ARRAY columns)
+  // ORC encodings:
+  DIRECT,         ///< Use DIRECT encoding
+  DIRECT_V2,      ///< Use DIRECT_V2 encoding
+  DICTIONARY_V2,  ///< Use DICTIONARY_V2 encoding
+};
+
+/**
  * @brief Statistics about compression performed by a writer.
  */
 class writer_compression_statistics {
@@ -135,7 +154,7 @@ class writer_compression_statistics {
    * @param other The other writer_compression_statistics object
    * @return writer_compression_statistics& Reference to this object
    */
-  writer_compression_statistics& operator+=(const writer_compression_statistics& other) noexcept
+  writer_compression_statistics& operator+=(writer_compression_statistics const& other) noexcept
   {
     _num_compressed_bytes += other._num_compressed_bytes;
     _num_failed_bytes += other._num_failed_bytes;
@@ -202,26 +221,33 @@ class writer_compression_statistics {
  * @brief Control use of dictionary encoding for parquet writer
  */
 enum dictionary_policy {
-  NEVER,     ///< Never use dictionary encoding
-  ADAPTIVE,  ///< Use dictionary when it will not impact compression
-  ALWAYS     ///< Use dictionary reqardless of impact on compression
+  NEVER    = 0,  ///< Never use dictionary encoding
+  ADAPTIVE = 1,  ///< Use dictionary when it will not impact compression
+  ALWAYS   = 2   ///< Use dictionary regardless of impact on compression
 };
 
 /**
- * @brief Detailed name information for output columns.
+ * @brief Detailed name (and optionally nullability) information for output columns.
  *
  * The hierarchy of children matches the hierarchy of children in the output
  * cudf columns.
  */
 struct column_name_info {
   std::string name;                        ///< Column name
+  std::optional<bool> is_nullable;         ///< Column nullability
   std::vector<column_name_info> children;  ///< Child column names
+
   /**
-   * @brief Construct a column name info with a name and no children
+   * @brief Construct a column name info with a name, optional nullabilty, and no children
    *
    * @param _name Column name
+   * @param _is_nullable True if column is nullable
    */
-  column_name_info(std::string const& _name) : name(_name) {}
+  column_name_info(std::string const& _name, std::optional<bool> _is_nullable = std::nullopt)
+    : name(_name), is_nullable(_is_nullable)
+  {
+  }
+
   column_name_info() = default;
 };
 
@@ -263,7 +289,7 @@ struct host_buffer {
    * @param data Pointer to the buffer
    * @param size Size of the buffer
    */
-  host_buffer(const char* data, size_t size) : data(data), size(size) {}
+  host_buffer(char const* data, size_t size) : data(data), size(size) {}
 };
 
 /**
@@ -286,8 +312,6 @@ constexpr inline auto is_byte_like_type()
  * @brief Source information for read interfaces
  */
 struct source_info {
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;  //!< Input files
-
   source_info() = default;
 
   /**
@@ -295,14 +319,20 @@ struct source_info {
    *
    * @param file_paths Input files paths
    */
-  explicit source_info(std::vector<std::string> const& file_paths) : _filepaths(file_paths) {}
+  explicit source_info(std::vector<std::string> const& file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
+  {
+  }
 
   /**
    * @brief Construct a new source info object for a single file
    *
    * @param file_path Single input file
    */
-  explicit source_info(std::string const& file_path) : _filepaths({file_path}) {}
+  explicit source_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
+  {
+  }
 
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
@@ -331,7 +361,7 @@ struct source_info {
    * @param host_data Input buffer in host memory
    * @param size Size of the buffer
    */
-  explicit source_info(const char* host_data, size_t size)
+  explicit source_info(char const* host_data, size_t size)
     : _type(io_type::HOST_BUFFER),
       _host_buffers(
         {cudf::host_span<std::byte const>(reinterpret_cast<std::byte const*>(host_data), size)})
@@ -439,12 +469,6 @@ struct source_info {
    */
   [[nodiscard]] auto const& device_buffers() const { return _device_buffers; }
   /**
-   * @brief Get the input files
-   *
-   * @return The input files
-   */
-  [[nodiscard]] auto const& files() const { return _files; }
-  /**
    * @brief Get the user sources of the input
    *
    * @return The user sources of the input
@@ -452,7 +476,7 @@ struct source_info {
   [[nodiscard]] auto const& user_sources() const { return _user_sources; }
 
  private:
-  io_type _type = io_type::FILEPATH;
+  io_type _type = io_type::VOID;
   std::vector<std::string> _filepaths;
   std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;
@@ -581,6 +605,7 @@ class column_in_metadata {
   std::optional<uint8_t> _decimal_precision;
   std::optional<int32_t> _parquet_field_id;
   std::vector<column_in_metadata> children;
+  column_encoding _encoding = column_encoding::USE_DEFAULT;
 
  public:
   column_in_metadata() = default;
@@ -689,6 +714,27 @@ class column_in_metadata {
   column_in_metadata& set_output_as_binary(bool binary) noexcept
   {
     _output_as_binary = binary;
+    if (_output_as_binary and children.size() == 1) {
+      children.emplace_back();
+    } else if (!_output_as_binary and children.size() == 2) {
+      children.pop_back();
+    }
+    return *this;
+  }
+
+  /**
+   * @brief Sets the encoding to use for this column.
+   *
+   * This is just a request, and the encoder may still choose to use a different encoding
+   * depending on resource constraints. Use the constants defined in the `parquet_encoding`
+   * struct.
+   *
+   * @param encoding The encoding to use
+   * @return this for chaining
+   */
+  column_in_metadata& set_encoding(column_encoding encoding) noexcept
+  {
+    _encoding = encoding;
     return *this;
   }
 
@@ -725,8 +771,8 @@ class column_in_metadata {
   /**
    * @brief Gets the explicitly set nullability for this column.
    *
-   * @throws If nullability is not explicitly defined for this column.
-   *         Check using `is_nullability_defined()` first.
+   * @throws std::bad_optional_access If nullability is not explicitly defined
+   *         for this column. Check using `is_nullability_defined()` first.
    * @return Boolean indicating whether this column is nullable
    */
   [[nodiscard]] bool nullable() const { return _nullable.value(); }
@@ -759,8 +805,8 @@ class column_in_metadata {
   /**
    * @brief Get the decimal precision that was set for this column.
    *
-   * @throws If decimal precision was not set for this column.
-   *         Check using `is_decimal_precision_set()` first.
+   * @throws std::bad_optional_access If decimal precision was not set for this
+   *         column. Check using `is_decimal_precision_set()` first.
    * @return The decimal precision that was set for this column
    */
   [[nodiscard]] uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
@@ -778,8 +824,8 @@ class column_in_metadata {
   /**
    * @brief Get the parquet field id that was set for this column.
    *
-   * @throws If parquet field id was not set for this column.
-   *         Check using `is_parquet_field_id_set()` first.
+   * @throws std::bad_optional_access If parquet field id was not set for this
+   *         column. Check using `is_parquet_field_id_set()` first.
    * @return The parquet field id that was set for this column
    */
   [[nodiscard]] int32_t get_parquet_field_id() const { return _parquet_field_id.value(); }
@@ -797,6 +843,13 @@ class column_in_metadata {
    * @return Boolean indicating whether to encode this column as binary data
    */
   [[nodiscard]] bool is_enabled_output_as_binary() const noexcept { return _output_as_binary; }
+
+  /**
+   * @brief Get the encoding that was set for this column.
+   *
+   * @return The encoding that was set for this column
+   */
+  [[nodiscard]] column_encoding get_encoding() const { return _encoding; }
 };
 
 /**
@@ -813,7 +866,17 @@ class table_input_metadata {
    *
    * @param table The table_view to construct metadata for
    */
-  table_input_metadata(table_view const& table);
+  explicit table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_metadata object.
+   *
+   * The constructed table_input_metadata has the same structure, column names and nullability as
+   * the passed table_metadata.
+   *
+   * @param metadata The table_metadata to construct table_intput_metadata for
+   */
+  explicit table_input_metadata(table_metadata const& metadata);
 
   std::vector<column_in_metadata> column_metadata;  //!< List of column metadata
 };
@@ -930,5 +993,6 @@ class reader_column_schema {
   [[nodiscard]] size_t get_num_children() const { return children.size(); }
 };
 
+/** @} */  // end of group
 }  // namespace io
 }  // namespace cudf

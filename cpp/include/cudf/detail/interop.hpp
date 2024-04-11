@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,10 @@
 #include <cudf/interop.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
-#include <string>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <string>
 
 namespace cudf {
 namespace detail {
@@ -108,9 +109,8 @@ std::shared_ptr<arrow::Array> to_arrow_array(cudf::type_id id, Ts&&... args)
 data_type arrow_to_cudf_type(arrow::DataType const& arrow_type);
 
 /**
- * @copydoc cudf::to_arrow
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @copydoc cudf::to_arrow(table_view input, std::vector<column_metadata> const& metadata,
+ * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
  */
 std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        std::vector<column_metadata> const& metadata,
@@ -118,13 +118,40 @@ std::shared_ptr<arrow::Table> to_arrow(table_view input,
                                        arrow::MemoryPool* ar_mr);
 
 /**
- * @copydoc cudf::arrow_to_cudf
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @copydoc cudf::to_arrow(cudf::scalar const& input, column_metadata const& metadata,
+ * rmm::cuda_stream_view stream, arrow::MemoryPool* ar_mr)
+ */
+std::shared_ptr<arrow::Scalar> to_arrow(cudf::scalar const& input,
+                                        column_metadata const& metadata,
+                                        rmm::cuda_stream_view stream,
+                                        arrow::MemoryPool* ar_mr);
+/**
+ * @copydoc cudf::from_arrow(arrow::Table const& input_table, rmm::cuda_stream_view stream,
+ * rmm::mr::device_memory_resource* mr)
  */
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc cudf::from_arrow(arrow::Scalar const& input, rmm::cuda_stream_view stream,
+ * rmm::mr::device_memory_resource* mr)
+ */
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
+
+/**
+ * @brief Return a maximum precision for a given type.
+ *
+ * @tparam T the type to get the maximum precision for
+ */
+template <typename T>
+constexpr std::size_t max_precision()
+{
+  auto constexpr num_bits = sizeof(T) * 8;
+  return std::floor(num_bits * std::log(2) / std::log(10));
+}
 
 }  // namespace detail
 }  // namespace cudf

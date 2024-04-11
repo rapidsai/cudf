@@ -127,8 +127,12 @@ and we try to follow his rules: "No raw loops. No raw pointers. No raw synchroni
    does use raw synchronization primitives. So we should revisit Parent's third rule and improve
    here.
 
-Additional style guidelines for libcudf code include:
+Additional style guidelines for libcudf code:
 
+ * Prefer "east const", placing `const` after the type. This is not
+   automatically enforced by `clang-format` because the option
+   `QualifierAlignment: Right` has been observed to produce false negatives and
+   false positives.
  * [NL.11: Make Literals
    Readable](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#nl11-make-literals-readable):
    Decimal values should use integer separators every thousands place, like
@@ -148,15 +152,20 @@ The following guidelines apply to organizing `#include` lines.
    from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then
    includes from dependencies installed with cuDF, and then standard headers (for example
    `<string>`, `<iostream>`).
- * Use `<>` instead of `""` unless the header is in the same directory as the source file.
+ * We use clang-format for grouping and sorting headers automatically. See the
+   `cudf/cpp/.clang-format` file for specifics.
+ * Use `<>` for all includes except for internal headers that are not in the `include`
+   directory. In other words, if it is a cuDF internal header (e.g. in the `src` or `test`
+   directory), the path will not start with `cudf` (e.g. `#include <cudf/some_header.hpp>`) so it
+   should use quotes. Example: `#include "io/utilities/hostdevice_vector.hpp"`.
+ * `cudf_test` and `nvtext` are separate libraries within the `libcudf` repo. As such, they have
+   public headers in `include` that should be included with `<>`.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
-   and brackets wrong.
+   and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
+   the grouping.
  * Always check that includes are only necessary for the file in which they are included.
    Try to avoid excessive including especially in header files. Double check this when you remove
    code.
- * Use quotes `"` to include local headers from the same relative source directory. This should only
-   occur in source files and non-public header files. Otherwise use angle brackets `<>` around
-   included header filenames.
  * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
    (internal) headers from source paths not in the same directory as the including file,
    because source paths are not passed with `-I`.
@@ -440,17 +449,18 @@ libcudf throws under different circumstances, see the [section on error handling
 
 ## Streams
 
-CUDA streams are not yet exposed in external libcudf APIs. However, in order to ease the transition
-to future use of streams, all libcudf APIs that allocate device memory or execute a kernel should be
-implemented using asynchronous APIs on the default stream (e.g., stream 0).
-
-The recommended pattern for doing this is to make the definition of the external API invoke an
-internal API in the `detail` namespace. The internal `detail` API has the same parameters as the
-public API, plus a `rmm::cuda_stream_view` parameter at the end with no default value. If the
-detail API also accepts a memory resource parameter, the stream parameter should be ideally placed
-just *before* the memory resource. The public API will call the detail API and provide
-`cudf::get_default_stream()`. The implementation should be wholly contained in the `detail` API
-definition and use only asynchronous versions of CUDA APIs with the stream parameter.
+libcudf is in the process of adding support for asynchronous execution using
+CUDA streams. In order to facilitate the usage of streams, all new libcudf APIs
+that allocate device memory or execute a kernel should accept an
+`rmm::cuda_stream_view` parameter at the end with a default value of
+`cudf::get_default_stream()`.  There is one exception to this rule: if the API
+also accepts a memory resource parameter, the stream parameter should be placed
+just *before* the memory resource. This API should then forward the call to a
+corresponding `detail` API with an identical signature, except that the
+`detail` API should not have a default parameter for the stream ([detail APIs
+should always avoid default parameters](#default-parameters)). The
+implementation should be wholly contained in the `detail` API definition and
+use only asynchronous versions of CUDA APIs with the stream parameter.
 
 In order to make the `detail` API callable from other libcudf functions, it should be exposed in a
 header placed in the `cudf/cpp/include/detail/` directory.
@@ -488,7 +498,7 @@ void external_function(...){
 when a non-pointer value is returned from the API that is the result of an asynchronous
 device-to-host copy, the stream used for the copy should be synchronized before returning. However,
 when a column is returned, the stream should not be synchronized because doing so will break
-asynchrony if and when we add an asynchronous API to libcudf.
+asynchrony.
 
 **Note:** `cudaDeviceSynchronize()` should *never* be used.
 This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
@@ -654,10 +664,14 @@ defaults.
 ## NVTX Ranges
 
 In order to aid in performance optimization and debugging, all compute intensive libcudf functions
-should have a corresponding NVTX range. libcudf has a convenience macro `CUDF_FUNC_RANGE()` that
-automatically annotates the lifetime of the enclosing function and uses the function's name as
-the name of the NVTX range. For more information about NVTX, see
-[here](https://github.com/NVIDIA/NVTX/tree/dev/c).
+should have a corresponding NVTX range. Choose between `CUDF_FUNC_RANGE` or `cudf::scoped_range`
+for declaring NVTX ranges in the current scope:
+- Use the `CUDF_FUNC_RANGE()` macro if you want to use the name of the function as the name of the
+NVTX range
+- Use `cudf::scoped_range rng{"custom_name"};` to provide a custom name for the current scope's
+NVTX range
+
+For more information about NVTX, see [here](https://github.com/NVIDIA/NVTX/tree/dev/c).
 
 ## Input/Output Style
 
@@ -1196,17 +1210,15 @@ This is related to [Arrow's "Variable-Size List" memory layout](https://arrow.ap
 
 ## Strings columns
 
-Strings are represented in much the same way as lists, except that the data child column is always
-a non-nullable column of `INT8` data. The parent column's type is `STRING` and contains no data,
+Strings are represented as a column with a data device buffer and a child offsets column.
+The parent column's type is `STRING` and its data holds all the characters across all the strings packed together
 but its size represents the number of strings in the column, and its null mask represents the
 validity of each string. To summarize, the strings column children are:
 
 1. A non-nullable column of [`size_type`](#cudfsize_type) elements that indicates the offset to the beginning of each
-   string in a dense column of all characters.
-2. A non-nullable column of `INT8` elements of all the characters across all the strings packed
-   together.
+   string in a dense data buffer of all characters.
 
-With this representation, `characters[offsets[i]]` is the first character of string `i`, and the
+With this representation, `data[offsets[i]]` is the first character of string `i`, and the
 size of string `i` is given by `offsets[i+1] - offsets[i]`. The following image shows an example of
 this compound column representation of strings.
 
@@ -1372,3 +1384,25 @@ cuIO is a component of libcudf that provides GPU-accelerated reading and writing
 formats commonly used in data analytics, including CSV, Parquet, ORC, Avro, and JSON_Lines.
 
 // TODO: add more detail and move to a separate file.
+
+# Debugging Tips
+
+Here are some tools that can help with debugging libcudf (besides printf of course):
+1. `cuda-gdb`\
+   Follow the instructions in the [Contributor to cuDF guide](../../../CONTRIBUTING.md#debugging-cudf) to build
+   and run libcudf with debug symbols.
+2. `compute-sanitizer`\
+   The [CUDA Compute Sanitizer](https://docs.nvidia.com/compute-sanitizer/ComputeSanitizer/index.html)
+   tool can be used to locate many CUDA reported errors by providing a call stack
+   close to where the error occurs even with a non-debug build. The sanitizer includes various
+   tools including `memcheck`, `racecheck`, and `initcheck` as well as others.
+   The `racecheck` and `initcheck` have been known to produce false positives.
+3. `cudf::test::print()`\
+   The `print()` utility can be called within a gtest to output the data in a `cudf::column_view`.
+   More information is available in the [Testing Guide](TESTING.md#printing-and-accessing-column-data)
+4. GCC Address Sanitizer\
+   The GCC ASAN can also be used by adding the `-fsanitize=address` compiler flag.
+   There is a compatibility issue with the CUDA runtime that can be worked around by setting
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0` before running the executable.
+   Note that the CUDA `compute-sanitizer` can also be used with GCC ASAN by setting the
+   environment variable `ASAN_OPTIONS=protect_shadow_gap=0,alloc_dealloc_mismatch=0`.

@@ -1,14 +1,27 @@
-# Copyright (c) 2023, NVIDIA CORPORATION.
+# Copyright (c) 2023-2024, NVIDIA CORPORATION.
 
 import glob
 import os
-import warnings
+import sys
+from functools import lru_cache
 
-from numba import config
+from numba import config as numba_config
 
-CC_60_PTX_FILE = os.path.join(
-    os.path.dirname(__file__), "../core/udf/shim_60.ptx"
-)
+
+# Use an lru_cache with a single value to allow a delayed import of
+# strings_udf. This is the easiest way to break an otherwise circular import
+# loop of _lib.*->cudautils->_numba->_lib.strings_udf
+@lru_cache
+def _get_cc_60_ptx_file():
+    from cudf._lib import strings_udf
+
+    return os.path.join(
+        os.path.dirname(strings_udf.__file__),
+        "..",
+        "core",
+        "udf",
+        "shim_60.ptx",
+    )
 
 
 def _get_best_ptx_file(archs, max_compute_capability):
@@ -64,6 +77,25 @@ def _get_ptx_file(path, prefix):
         return regular_result[1]
 
 
+def patch_numba_linker_cuda_11():
+    # Enable the config option for minor version compatibility
+    numba_config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+
+    if "numba.cuda" in sys.modules:
+        # Patch numba for version 0.57.0 MVC support, which must know the
+        # config value at import time. We cannot guarantee the order of imports
+        # between cudf and numba.cuda so we patch numba to ensure it has these
+        # names available.
+        # See https://github.com/numba/numba/issues/8977 for details.
+        import numba.cuda
+        from cubinlinker import CubinLinker, CubinLinkerError
+        from ptxcompiler import compile_ptx
+
+        numba.cuda.cudadrv.driver.compile_ptx = compile_ptx
+        numba.cuda.cudadrv.driver.CubinLinker = CubinLinker
+        numba.cuda.cudadrv.driver.CubinLinkerError = CubinLinkerError
+
+
 def _setup_numba():
     """
     Configure the numba linker for use with cuDF. This consists of
@@ -72,11 +104,13 @@ def _setup_numba():
     version of the CUDA Toolkit used to build the PTX files shipped
     with the user cuDF package.
     """
-    # ptxcompiler is a requirement for cuda 11.x packages but not
-    # cuda 12.x packages. However its version checking machinery
-    # is still necessary. If a user happens to have ptxcompiler
-    # in a cuda 12 environment, it's use for the purposes of
-    # checking the driver and runtime versions is harmless
+
+    # Either ptxcompiler, or our vendored version (_ptxcompiler.py)
+    # is needed to determine the driver and runtime CUDA versions in
+    # the environment. In a CUDA 11.x environment, ptxcompiler is used
+    # to provide MVC directly, whereas for CUDA 12.x this is provided
+    # through pynvjitlink. The presence of either package does not
+    # perturb cuDF's operation in situations where they aren't used.
     try:
         from ptxcompiler.patch import NO_DRIVER, safe_get_versions
     except ModuleNotFoundError:
@@ -86,29 +120,23 @@ def _setup_numba():
     versions = safe_get_versions()
     if versions != NO_DRIVER:
         driver_version, runtime_version = versions
-        if driver_version >= (12, 0) and runtime_version > driver_version:
-            warnings.warn(
-                f"Using CUDA toolkit version {runtime_version} with CUDA "
-                f"driver version {driver_version} requires minor version "
-                "compatibility, which is not yet supported for CUDA "
-                "driver versions 12.0 and above. It is likely that many "
-                "cuDF operations will not work in this state. Please "
-                f"install CUDA toolkit version {driver_version} to "
-                "continue using cuDF."
-            )
-        else:
-            # Support MVC for all CUDA versions in the 11.x range
-            ptx_toolkit_version = _get_cuda_version_from_ptx_file(
-                CC_60_PTX_FILE
-            )
-            # Numba thinks cubinlinker is only needed if the driver is older
-            # than the CUDA runtime, but when PTX files are present, it might
-            # also need to patch because those PTX files may be compiled by
-            # a CUDA version that is newer than the driver as well
-            if (driver_version < ptx_toolkit_version) or (
-                driver_version < runtime_version
-            ):
-                config.CUDA_ENABLE_MINOR_VERSION_COMPATIBILITY = 1
+        ptx_toolkit_version = _get_cuda_version_from_ptx_file(
+            _get_cc_60_ptx_file()
+        )
+
+        # MVC is required whenever any PTX is newer than the driver
+        # This could be the shipped PTX file or the PTX emitted by
+        # the version of NVVM on the user system, the latter aligning
+        # with the runtime version
+        if (driver_version < ptx_toolkit_version) or (
+            driver_version < runtime_version
+        ):
+            if driver_version < (12, 0):
+                patch_numba_linker_cuda_11()
+            else:
+                from pynvjitlink.patch import patch_numba_linker
+
+                patch_numba_linker()
 
 
 def _get_cuda_version_from_ptx_file(path):
@@ -151,6 +179,9 @@ def _get_cuda_version_from_ptx_file(path):
         "7.8": (11, 8),
         "8.0": (12, 0),
         "8.1": (12, 1),
+        "8.2": (12, 2),
+        "8.3": (12, 3),
+        "8.4": (12, 4),
     }
 
     cuda_ver = ver_map.get(version)
@@ -164,8 +195,16 @@ def _get_cuda_version_from_ptx_file(path):
 
 class _CUDFNumbaConfig:
     def __enter__(self):
-        self.enter_val = config.CUDA_LOW_OCCUPANCY_WARNINGS
-        config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+        self.CUDA_LOW_OCCUPANCY_WARNINGS = (
+            numba_config.CUDA_LOW_OCCUPANCY_WARNINGS
+        )
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+
+        self.CAPTURED_ERRORS = numba_config.CAPTURED_ERRORS
+        numba_config.CAPTURED_ERRORS = "new_style"
 
     def __exit__(self, exc_type, exc_value, traceback):
-        config.CUDA_LOW_OCCUPANCY_WARNINGS = self.enter_val
+        numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = (
+            self.CUDA_LOW_OCCUPANCY_WARNINGS
+        )
+        numba_config.CAPTURED_ERRORS = self.CAPTURED_ERRORS

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+
 #include <cudf/copying.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/dictionary/update_keys.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -39,7 +40,7 @@ TEST_F(DictionaryRemoveKeysTest, StringsColumn)
   {
     auto const result =
       cudf::dictionary::remove_keys(cudf::dictionary_column_view(dictionary->view()), del_keys);
-    std::vector<const char*> h_expected{
+    std::vector<char const*> h_expected{
       "eee", "aaa", nullptr, nullptr, "ccc", "ccc", "ccc", "eee", "aaa"};
     cudf::test::strings_column_wrapper expected(
       h_expected.begin(),

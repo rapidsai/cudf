@@ -66,6 +66,10 @@ string_scalar::string_scalar(std::string const& string,
   : scalar(data_type(type_id::STRING), is_valid, stream, mr),
     _data(string.data(), string.size(), stream, mr)
 {
+  CUDF_EXPECTS(
+    string.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+    "Data exceeds the string size limit",
+    std::overflow_error);
 }
 
 string_scalar::string_scalar(string_scalar const& other,
@@ -107,7 +111,7 @@ string_scalar::value_type string_scalar::value(rmm::cuda_stream_view stream) con
 
 size_type string_scalar::size() const { return _data.size(); }
 
-const char* string_scalar::data() const { return static_cast<const char*>(_data.data()); }
+char const* string_scalar::data() const { return static_cast<char const*>(_data.data()); }
 
 string_scalar::operator std::string() const { return this->to_string(cudf::get_default_stream()); }
 
@@ -415,9 +419,9 @@ duration_scalar<T>::duration_scalar(duration_scalar<T> const& other,
 }
 
 template <typename T>
-typename duration_scalar<T>::rep_type duration_scalar<T>::count()
+typename duration_scalar<T>::rep_type duration_scalar<T>::count(rmm::cuda_stream_view stream)
 {
-  return this->value().count();
+  return this->value(stream).count();
 }
 
 /**
@@ -435,9 +439,10 @@ template class duration_scalar<duration_us>;
 template class duration_scalar<duration_ns>;
 
 template <typename T>
-typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch()
+typename timestamp_scalar<T>::rep_type timestamp_scalar<T>::ticks_since_epoch(
+  rmm::cuda_stream_view stream)
 {
-  return this->value().time_since_epoch().count();
+  return this->value(stream).time_since_epoch().count();
 }
 
 /**
@@ -537,7 +542,7 @@ struct_scalar::struct_scalar(table_view const& data,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
-    _data{init_data(table{data}, is_valid, stream, mr)}
+    _data{init_data(table{data, stream, mr}, is_valid, stream, mr)}
 {
   assert_valid_size();
 }
@@ -547,8 +552,11 @@ struct_scalar::struct_scalar(host_span<column_view const> data,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
   : scalar(data_type(type_id::STRUCT), is_valid, stream, mr),
-    _data{init_data(
-      table{table_view{std::vector<column_view>{data.begin(), data.end()}}}, is_valid, stream, mr)}
+    _data{
+      init_data(table{table_view{std::vector<column_view>{data.begin(), data.end()}}, stream, mr},
+                is_valid,
+                stream,
+                mr)}
 {
   assert_valid_size();
 }

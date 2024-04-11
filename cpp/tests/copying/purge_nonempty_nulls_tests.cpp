@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/gather.hpp>
@@ -22,12 +28,6 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
-
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/cudf_gtest.hpp>
-#include <cudf_test/iterator_utilities.hpp>
 
 using cudf::test::iterators::no_nulls;
 using cudf::test::iterators::null_at;
@@ -40,28 +40,9 @@ using gather_map_t  = cudf::test::fixed_width_column_wrapper<cudf::size_type>;
 template <typename T>
 using LCW = cudf::test::lists_column_wrapper<T, int32_t>;
 
-struct PurgeNonEmptyNullsTest : public cudf::test::BaseFixture {
-  /// Helper to run gather() on a single column, and extract the single column from the result.
-  std::unique_ptr<cudf::column> gather(cudf::column_view const& input,
-                                       gather_map_t const& gather_map)
-  {
-    auto gathered =
-      cudf::gather(cudf::table_view{{input}}, gather_map, cudf::out_of_bounds_policy::NULLIFY);
-    return std::move(gathered->release()[0]);
-  }
+struct HasNonEmptyNullsTest : public cudf::test::BaseFixture {};
 
-  /// Verify that the result of `sanitize()` is equivalent to the unsanitized input,
-  /// except that the null rows are also empty.
-  void test_purge(cudf::column_view const& unpurged)
-  {
-    auto const purged = cudf::purge_nonempty_nulls(unpurged);
-    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(unpurged, *purged);
-    EXPECT_FALSE(cudf::has_nonempty_nulls(*purged));
-  }
-};
-
-// List<T>.
-TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
+TEST_F(HasNonEmptyNullsTest, TrivialTest)
 {
   auto const input = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},
                              {5},
@@ -78,6 +59,55 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
+}
+
+TEST_F(HasNonEmptyNullsTest, SlicedInputTest)
+{
+  auto const input = cudf::test::strings_column_wrapper{
+    {"" /*NULL*/, "111", "222", "333", "444", "" /*NULL*/, "", "777", "888", "" /*NULL*/, "101010"},
+    cudf::test::iterators::nulls_at({0, 5, 9})};
+
+  // Split into 2 columns from rows [0, 2) and [2, 10).
+  auto const result = cudf::split(input, {2});
+  for (auto const& col : result) {
+    EXPECT_TRUE(cudf::may_have_nonempty_nulls(col));
+    EXPECT_FALSE(cudf::has_nonempty_nulls(col));
+  }
+}
+
+struct PurgeNonEmptyNullsTest : public cudf::test::BaseFixture {
+  /// Helper to run gather() on a single column, and extract the single column from the result.
+  std::unique_ptr<cudf::column> gather(cudf::column_view const& input,
+                                       gather_map_t const& gather_map)
+  {
+    auto gathered =
+      cudf::gather(cudf::table_view{{input}}, gather_map, cudf::out_of_bounds_policy::NULLIFY);
+    return std::move(gathered->release()[0]);
+  }
+
+  /// Verify that the result of `sanitize()` is equivalent to the unsanitized input,
+  /// except that the null rows are also empty.
+  void test_purge(cudf::column_view const& unpurged)
+  {
+    auto const purged = cudf::purge_nonempty_nulls(unpurged);
+    EXPECT_FALSE(cudf::has_nonempty_nulls(*purged));
+  }
+};
+
+// List<T>.
+TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
+{
+  auto const input = LCW<T>{{{{1, 2, 3, 4}, null_at(2)},
+                             {5},
+                             {6, 7},  // <--- Will be set to NULL. Unsanitized row.
+                             {8, 9, 10}},
+                            no_nulls()}
+                       .release();
+
+  // Set nullmask, post construction.
+  cudf::detail::set_null_mask(
+    input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  input->set_null_count(1);
 
   test_purge(*input);
 

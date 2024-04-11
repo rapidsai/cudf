@@ -78,7 +78,7 @@ TEST_F(GatherTestStr, GatherSlicedStringsColumn)
 
 TEST_F(GatherTestStr, Gather)
 {
-  std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::table_view source_table({strings});
 
@@ -91,7 +91,7 @@ TEST_F(GatherTestStr, Gather)
                                       cudf::get_default_stream(),
                                       rmm::mr::get_current_device_resource());
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   std::vector<int32_t> expected_validity;
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
     auto index = *itr;
@@ -110,7 +110,7 @@ TEST_F(GatherTestStr, Gather)
 
 TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
 {
-  std::vector<const char*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
+  std::vector<char const*> h_strings{"eee", "bb", "", "aa", "bbb", "ééé"};
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   cudf::table_view source_table({strings});
 
@@ -123,7 +123,7 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
                                       cudf::get_default_stream(),
                                       rmm::mr::get_current_device_resource());
 
-  std::vector<const char*> h_expected;
+  std::vector<char const*> h_expected;
   for (auto itr = h_map.begin(); itr != h_map.end(); ++itr) {
     h_expected.push_back(h_strings[*itr]);
   }
@@ -133,10 +133,9 @@ TEST_F(GatherTestStr, GatherDontCheckOutOfBounds)
 
 TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING);
   cudf::test::fixed_width_column_wrapper<cudf::size_type> gather_map;
-  auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
+  auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column->view()}),
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,
@@ -147,11 +146,10 @@ TEST_F(GatherTestStr, GatherEmptyMapStringsColumn)
 
 TEST_F(GatherTestStr, GatherZeroSizeStringsColumn)
 {
-  cudf::column_view zero_size_strings_column(
-    cudf::data_type{cudf::type_id::STRING}, 0, nullptr, nullptr, 0);
+  auto const zero_size_strings_column = cudf::make_empty_column(cudf::type_id::STRING);
   cudf::test::fixed_width_column_wrapper<int32_t> gather_map({0});
   cudf::test::strings_column_wrapper expected{std::pair<std::string, bool>{"", false}};
-  auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column}),
+  auto results = cudf::detail::gather(cudf::table_view({zero_size_strings_column->view()}),
                                       gather_map,
                                       cudf::out_of_bounds_policy::NULLIFY,
                                       cudf::detail::negative_index_policy::NOT_ALLOWED,

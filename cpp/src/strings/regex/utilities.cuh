@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <strings/regex/regex.cuh>
+#include "strings/regex/regex.cuh"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
@@ -37,7 +37,7 @@ namespace detail {
 constexpr auto regex_launch_kernel_block_size = 256;
 
 template <typename ForEachFunction>
-__global__ void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
+CUDF_KERNEL void for_each_kernel(ForEachFunction fn, reprog_device const d_prog, size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
@@ -71,10 +71,10 @@ void launch_for_each_kernel(ForEachFunction fn,
 }
 
 template <typename TransformFunction, typename OutputType>
-__global__ void transform_kernel(TransformFunction fn,
-                                 reprog_device const d_prog,
-                                 OutputType* d_output,
-                                 size_type size)
+CUDF_KERNEL void transform_kernel(TransformFunction fn,
+                                  reprog_device const d_prog,
+                                  OutputType* d_output,
+                                  size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
@@ -135,15 +135,14 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   auto const char_bytes =
     cudf::detail::sizes_to_offsets(d_offsets, d_offsets + strings_count + 1, d_offsets, stream);
-  CUDF_EXPECTS(char_bytes <= static_cast<int64_t>(std::numeric_limits<size_type>::max()),
-               "Size of output exceeds column size limit",
+  CUDF_EXPECTS(char_bytes <= std::numeric_limits<size_type>::max(),
+               "Size of output exceeds the column size limit",
                std::overflow_error);
 
   // Now build the chars column
-  std::unique_ptr<column> chars =
-    create_chars_child_column(static_cast<size_type>(char_bytes), stream, mr);
+  rmm::device_uvector<char> chars(char_bytes, stream, mr);
   if (char_bytes > 0) {
-    size_and_exec_fn.d_chars = chars->mutable_view().template data<char>();
+    size_and_exec_fn.d_chars = chars.data();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       size_and_exec_fn, d_prog, strings_count);
   }

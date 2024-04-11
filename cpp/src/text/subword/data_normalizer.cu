@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include <text/subword/detail/data_normalizer.hpp>
-#include <text/subword/detail/tokenizer_utils.cuh>
+#include "text/subword/detail/data_normalizer.hpp"
+#include "text/subword/detail/tokenizer_utils.cuh"
 
+#include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/detail/utilities.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -124,9 +126,10 @@ __device__ bool is_head_byte(unsigned char utf8_byte) { return (utf8_byte >> 6) 
  * @param start_byte_for_thread Which byte to start analyzing
  * @return New code point value for this byte.
  */
-__device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
-                                                  size_t const total_bytes,
-                                                  uint32_t const start_byte_for_thread)
+__device__ uint32_t
+extract_code_points_from_utf8(unsigned char const* strings,
+                              size_t const total_bytes,
+                              cudf::thread_index_type const start_byte_for_thread)
 {
   constexpr uint8_t max_utf8_blocks_for_char    = 4;
   uint8_t utf8_blocks[max_utf8_blocks_for_char] = {0};
@@ -137,7 +140,7 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
     utf8_blocks[i] = strings[start_byte_for_thread + i];
   }
 
-  const uint8_t length_encoding_bits = utf8_blocks[0] >> 3;
+  uint8_t const length_encoding_bits = utf8_blocks[0] >> 3;
   // UTF-8 format is variable-width character encoding using up to 4 bytes.
   // If the first byte is:
   // - [x00-x7F] -- beginning of a 1-byte character (ASCII)
@@ -203,19 +206,20 @@ __device__ uint32_t extract_code_points_from_utf8(unsigned char const* strings,
  * @param[out] code_points The resulting code point values from normalization.
  * @param[out] chars_per_thread Output number of code point values per string.
  */
-__global__ void kernel_data_normalizer(unsigned char const* strings,
-                                       size_t const total_bytes,
-                                       uint32_t const* cp_metadata,
-                                       uint64_t const* aux_table,
-                                       bool const do_lower_case,
-                                       uint32_t* code_points,
-                                       uint32_t* chars_per_thread)
+CUDF_KERNEL void kernel_data_normalizer(unsigned char const* strings,
+                                        size_t const total_bytes,
+                                        uint32_t const* cp_metadata,
+                                        uint64_t const* aux_table,
+                                        bool const do_lower_case,
+                                        uint32_t* code_points,
+                                        uint32_t* chars_per_thread)
 {
   constexpr uint32_t init_val                     = (1 << FILTER_BIT);
   uint32_t replacement_code_points[MAX_NEW_CHARS] = {init_val, init_val, init_val};
 
-  uint32_t const char_for_thread = blockDim.x * blockIdx.x + threadIdx.x;
-  uint32_t num_new_chars         = 0;
+  cudf::thread_index_type const char_for_thread =
+    threadIdx.x + cudf::thread_index_type(blockIdx.x) * cudf::thread_index_type(blockDim.x);
+  uint32_t num_new_chars = 0;
 
   if (char_for_thread < total_bytes) {
     auto const code_point = extract_code_points_from_utf8(strings, total_bytes, char_for_thread);
@@ -272,40 +276,44 @@ data_normalizer::data_normalizer(codepoint_metadata_type const* cp_metadata,
 {
 }
 
-uvector_pair data_normalizer::normalize(char const* d_strings,
-                                        uint32_t const* d_offsets,
-                                        uint32_t num_strings,
+uvector_pair data_normalizer::normalize(cudf::strings_column_view const& input,
                                         rmm::cuda_stream_view stream) const
 {
-  if (num_strings == 0)
-    return std::pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                     std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
+  if (input.is_empty()) {
+    return uvector_pair{std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                        std::make_unique<rmm::device_uvector<int64_t>>(0, stream)};
+  }
 
   // copy offsets to working memory
-  size_t const num_offsets = num_strings + 1;
-  auto d_strings_offsets   = std::make_unique<rmm::device_uvector<uint32_t>>(num_offsets, stream);
+  auto const num_offsets = input.size() + 1;
+  auto d_strings_offsets = std::make_unique<rmm::device_uvector<int64_t>>(num_offsets, stream);
+  auto const d_offsets =
+    cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
   thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<uint32_t>(0),
-                    thrust::make_counting_iterator<uint32_t>(num_offsets),
+                    thrust::counting_iterator<cudf::size_type>(0),
+                    thrust::counting_iterator<cudf::size_type>(num_offsets),
                     d_strings_offsets->begin(),
                     [d_offsets] __device__(auto idx) {
                       auto const offset = d_offsets[0];  // adjust for any offset to the offsets
                       return d_offsets[idx] - offset;
                     });
-  uint32_t const bytes_count = d_strings_offsets->element(num_strings, stream);
-  if (bytes_count == 0)  // if no bytes, nothing to do
-    return std::pair(std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
-                     std::make_unique<rmm::device_uvector<uint32_t>>(0, stream));
+  auto const bytes_count = d_strings_offsets->element(input.size(), stream);
+  if (bytes_count == 0) {  // if no bytes, nothing to do
+    return uvector_pair{std::make_unique<rmm::device_uvector<uint32_t>>(0, stream),
+                        std::make_unique<rmm::device_uvector<int64_t>>(0, stream)};
+  }
 
-  cudf::detail::grid_1d const grid{static_cast<cudf::size_type>(bytes_count), THREADS_PER_BLOCK, 1};
-  size_t const threads_on_device  = grid.num_threads_per_block * grid.num_blocks;
+  int64_t const threads_per_block = THREADS_PER_BLOCK;
+  size_t const num_blocks        = cudf::util::div_rounding_up_safe(bytes_count, threads_per_block);
+  size_t const threads_on_device = threads_per_block * num_blocks;
   size_t const max_new_char_total = MAX_NEW_CHARS * threads_on_device;
 
   auto d_code_points = std::make_unique<rmm::device_uvector<uint32_t>>(max_new_char_total, stream);
   rmm::device_uvector<uint32_t> d_chars_per_thread(threads_on_device, stream);
-
-  kernel_data_normalizer<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-    reinterpret_cast<const unsigned char*>(d_strings),
+  auto const d_strings = input.chars_begin(stream) + cudf::strings::detail::get_offset_value(
+                                                       input.offsets(), input.offset(), stream);
+  kernel_data_normalizer<<<num_blocks, threads_per_block, 0, stream.value()>>>(
+    reinterpret_cast<unsigned char const*>(d_strings),
     bytes_count,
     d_cp_metadata,
     d_aux_table,
@@ -330,10 +338,10 @@ uvector_pair data_normalizer::normalize(char const* d_strings,
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator<uint32_t>(1),
-    num_strings,
+    input.size(),
     update_strings_lengths_fn{d_chars_per_thread.data(), d_strings_offsets->data()});
 
-  uint32_t const num_chars = d_strings_offsets->element(num_strings, stream);
+  auto const num_chars = d_strings_offsets->element(input.size(), stream);
   d_code_points->resize(num_chars, stream);  // should be smaller than original allocated size
 
   // return the normalized code points and the new offsets

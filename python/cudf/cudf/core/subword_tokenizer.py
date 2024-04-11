@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 from __future__ import annotations
 
@@ -50,7 +50,6 @@ class SubwordTokenizer:
     """
 
     def __init__(self, hash_file: str, do_lower_case: bool = True):
-
         self.do_lower_case = do_lower_case
         self.vocab_file = cpp_hashed_vocabulary(hash_file)
 
@@ -216,7 +215,6 @@ class SubwordTokenizer:
             stride=stride,
             do_lower=self.do_lower_case,
             do_truncate=truncation,
-            max_rows_tensor=max_num_rows,
         )
 
         tokenizer_output = {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,9 @@
 
 #include <cudf/fixed_point/temporary.hpp>
 
+#include <cuda/std/type_traits>
 #include <thrust/optional.h>
 #include <thrust/pair.h>
-
-#include <cuda/std/type_traits>
 
 namespace cudf {
 namespace strings {
@@ -42,7 +41,7 @@ namespace detail {
  */
 template <typename UnsignedDecimalType>
 __device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
-  char const*& iter, char const* iter_end, const char decimal_pt_char = '.')
+  char const*& iter, char const* iter_end, char const decimal_pt_char = '.')
 {
   // highest value where another decimal digit cannot be appended without an overflow;
   // this preserves the most digits when scaling the final result for this type

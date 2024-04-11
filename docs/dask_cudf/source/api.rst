@@ -19,20 +19,13 @@ data reading facilities, followed by calling
    :members:
       from_cudf,
       from_dask_dataframe,
+      from_delayed,
       read_csv,
       read_json,
       read_orc,
       to_orc,
       read_text,
       read_parquet
-
-.. warning::
-
-   FIXME: where should the following live?
-
-   .. autofunction:: dask_cudf.concat
-
-   .. autofunction:: dask_cudf.from_delayed
 
 Grouping
 ========
@@ -77,3 +70,7 @@ identical. The full API is provided below.
    :members:
    :inherited-members:
    :show-inheritance:
+
+.. automodule:: dask_cudf
+   :members:
+      concat

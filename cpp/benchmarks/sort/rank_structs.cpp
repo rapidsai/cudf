@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-#include "nested_types_common.hpp"
 #include "rank_types_common.hpp"
+
+#include <benchmarks/common/generate_nested_types.hpp>
 
 #include <cudf/sorting.hpp>
 
@@ -26,7 +27,7 @@ void nvbench_rank_structs(nvbench::state& state, nvbench::type_list<nvbench::enu
 {
   auto const table = create_structs_data(state);
 
-  const bool nulls{static_cast<bool>(state.get_int64("Nulls"))};
+  bool const nulls{static_cast<bool>(state.get_int64("Nulls"))};
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     cudf::rank(table->view().column(0),

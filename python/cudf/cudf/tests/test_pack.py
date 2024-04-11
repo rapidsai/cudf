@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2023, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import sys
 import numpy as np
 import pandas as pd
 
-from cudf import DataFrame, GenericIndex, Series
+from cudf import DataFrame, Index, Series
 from cudf._lib.copying import pack, unpack
 from cudf.testing._utils import assert_eq
 
@@ -52,7 +52,7 @@ def check_packed_equality(df):
     assert_packed_frame_equality(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, Index)
     assert_packed_frame_equality(sortvaldf)
 
 
@@ -120,7 +120,7 @@ def check_packed_unique_pointers(df):
     assert_packed_frame_unique_pointers(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, Index)
     assert_packed_frame_unique_pointers(sortvaldf)
 
 
@@ -188,7 +188,7 @@ def check_packed_pickled_equality(df):
     assert_packed_frame_picklable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, Index)
     assert_packed_frame_picklable(sortvaldf)
     # out-of-band
     buffers = []
@@ -261,7 +261,7 @@ def check_packed_serialized_equality(df):
     assert_packed_frame_serializable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, Index)
     assert_packed_frame_serializable(sortvaldf)
 
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,6 @@
 #pragma once
 
 #include <cudf/column/column_view.hpp>
-
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -89,7 +88,8 @@ class column {
       _size{[&]() {
         CUDF_EXPECTS(
           other.size() <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
-          "The device_uvector size exceeds the maximum size_type.");
+          "The device_uvector size exceeds the column size limit",
+          std::overflow_error);
         return static_cast<size_type>(other.size());
       }()},
       _data{other.release()},

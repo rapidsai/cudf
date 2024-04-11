@@ -1,5 +1,5 @@
 # =============================================================================
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License. You may obtain a copy of the License at
@@ -25,7 +25,7 @@ target_compile_options(
 target_link_libraries(
   cudf_datagen
   PUBLIC GTest::gmock GTest::gtest benchmark::benchmark nvbench::nvbench Threads::Threads cudf
-         cudftestutil
+         cudftestutil nvtx3-cpp
   PRIVATE $<TARGET_NAME_IF_EXISTS:conda_env>
 )
 
@@ -164,7 +164,7 @@ ConfigureNVBench(
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/left_join.cu join/conditional_join.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu)
+ConfigureNVBench(JOIN_NVBENCH join/join.cu join/mixed_join.cu join/distinct_join.cu)
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -173,7 +173,7 @@ ConfigureBench(ITERATOR_BENCH iterator/iterator.cu)
 # ##################################################################################################
 # * search benchmark ------------------------------------------------------------------------------
 ConfigureBench(SEARCH_BENCH search/search.cpp)
-ConfigureNVBench(SEARCH_NVBENCH search/contains.cpp)
+ConfigureNVBench(SEARCH_NVBENCH search/contains_scalar.cpp search/contains_table.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
@@ -182,6 +182,11 @@ ConfigureNVBench(
   SORT_NVBENCH sort/rank_lists.cpp sort/rank_structs.cpp sort/segmented_sort.cpp
   sort/sort_lists.cpp sort/sort_structs.cpp
 )
+
+# ##################################################################################################
+# * structs benchmark
+# --------------------------------------------------------------------------------
+ConfigureNVBench(STRUCT_CREATION_NVBENCH structs/create_structs.cpp)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -203,8 +208,9 @@ ConfigureNVBench(
 )
 
 # ##################################################################################################
-# * reduction benchmark ---------------------------------------------------------------------------
+# * replace benchmark ---------------------------------------------------------------------------
 ConfigureBench(REPLACE_BENCH replace/clamp.cpp replace/nans.cpp)
+ConfigureNVBench(REPLACE_NVBENCH replace/nulls.cpp)
 
 # ##################################################################################################
 # * filling benchmark -----------------------------------------------------------------------------
@@ -224,11 +230,13 @@ ConfigureNVBench(
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
-ConfigureBench(HASHING_BENCH hashing/hash.cpp hashing/partition.cpp)
+ConfigureBench(HASHING_BENCH hashing/partition.cpp)
+ConfigureNVBench(HASHING_NVBENCH hashing/hash.cpp)
 
 # ##################################################################################################
 # * merge benchmark -------------------------------------------------------------------------------
 ConfigureBench(MERGE_BENCH merge/merge.cpp)
+ConfigureNVBench(MERGE_NVBENCH merge/merge_structs.cpp merge/merge_lists.cpp)
 
 # ##################################################################################################
 # * null_mask benchmark ---------------------------------------------------------------------------
@@ -275,7 +283,8 @@ ConfigureBench(BINARYOP_BENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.c
 ConfigureBench(TEXT_BENCH text/ngrams.cpp text/subword.cpp)
 
 ConfigureNVBench(
-  TEXT_NVBENCH text/minhash.cpp text/normalize.cpp text/replace.cpp text/tokenize.cpp
+  TEXT_NVBENCH text/edit_distance.cpp text/hash_ngrams.cpp text/jaccard.cpp text/minhash.cpp
+  text/normalize.cpp text/replace.cpp text/tokenize.cpp text/vocab.cpp
 )
 
 # ##################################################################################################
@@ -283,35 +292,46 @@ ConfigureNVBench(
 ConfigureBench(
   STRINGS_BENCH
   string/combine.cpp
-  string/contains.cpp
   string/convert_datetime.cpp
   string/convert_durations.cpp
   string/convert_fixed_point.cpp
   string/convert_numerics.cpp
   string/copy.cu
-  string/extract.cpp
   string/factory.cu
   string/filter.cpp
   string/find.cpp
   string/repeat_strings.cpp
   string/replace.cpp
-  string/replace_re.cpp
   string/slice.cpp
-  string/split.cpp
   string/translate.cpp
   string/url_decode.cu
 )
 
 ConfigureNVBench(
-  STRINGS_NVBENCH string/case.cpp string/char_types.cpp string/join_strings.cpp string/lengths.cpp
-  string/like.cpp string/reverse.cpp
+  STRINGS_NVBENCH
+  string/case.cpp
+  string/char_types.cpp
+  string/contains.cpp
+  string/copy_if_else.cpp
+  string/copy_range.cpp
+  string/count.cpp
+  string/extract.cpp
+  string/gather.cpp
+  string/join_strings.cpp
+  string/lengths.cpp
+  string/like.cpp
+  string/replace_re.cpp
+  string/reverse.cpp
+  string/split.cpp
+  string/split_re.cpp
 )
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
-ConfigureBench(JSON_BENCH string/json.cu)
+ConfigureBench(JSON_BENCH json/json.cu)
 ConfigureNVBench(FST_NVBENCH io/fst.cu)
 ConfigureNVBench(JSON_READER_NVBENCH io/json/nested_json.cpp io/json/json_reader_input.cpp)
+ConfigureNVBench(JSON_READER_OPTION io/json/json_reader_option.cpp)
 ConfigureNVBench(JSON_WRITER_NVBENCH io/json/json_writer.cpp)
 
 # ##################################################################################################

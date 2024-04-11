@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,8 +41,8 @@ std::unique_ptr<column> transform(column_view const& input,
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> compute_column(table_view const table,
-                                       ast::operation const& expr,
+std::unique_ptr<column> compute_column(table_view const& table,
+                                       ast::expression const& expr,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr);
 
@@ -99,6 +99,16 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* null_mask,
 std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
+
+/**
+ * @copydoc cudf::segmented_row_bit_count
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
+                                                size_type segment_length,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

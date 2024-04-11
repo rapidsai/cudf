@@ -15,8 +15,6 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/rmm_pool_raii.hpp>
-#include <nvbench/nvbench.cuh>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
@@ -27,6 +25,8 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <nvbench/nvbench.cuh>
 
 #include <memory>
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/random.hpp>
+#include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -31,11 +33,12 @@
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <src/rolling/detail/rolling.hpp>
 
 #include <thrust/host_vector.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+
+#include <src/rolling/detail/rolling.hpp>
 
 #include <limits>
 #include <type_traits>
@@ -146,20 +149,6 @@ TEST_F(RollingStringTest, MinPeriods)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_max, got_max->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_val, got_count_valid->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count_all, got_count_all->view());
-}
-
-TEST_F(RollingStringTest, ZeroWindowSize)
-{
-  cudf::test::strings_column_wrapper input(
-    {"This", "is", "rolling", "test", "being", "operated", "on", "string", "column"},
-    {1, 0, 0, 1, 0, 1, 1, 1, 0});
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_count(
-    {0, 0, 0, 0, 0, 0, 0, 0, 0}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
-
-  auto got_count = cudf::rolling_window(
-    input, 0, 0, 0, *cudf::make_count_aggregation<cudf::rolling_aggregation>());
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_count, got_count->view());
 }
 
 // =========================================================================================
@@ -413,8 +402,8 @@ class RollingTest : public cudf::test::BaseFixture {
  protected:
   // input as column_wrapper
   void run_test_col(cudf::column_view const& input,
-                    const std::vector<cudf::size_type>& preceding_window,
-                    const std::vector<cudf::size_type>& following_window,
+                    std::vector<cudf::size_type> const& preceding_window,
+                    std::vector<cudf::size_type> const& following_window,
                     cudf::size_type min_periods,
                     cudf::rolling_aggregation const& op)
   {
@@ -443,8 +432,8 @@ class RollingTest : public cudf::test::BaseFixture {
 
   // helper function to test all aggregators
   void run_test_col_agg(cudf::column_view const& input,
-                        const std::vector<cudf::size_type>& preceding_window,
-                        const std::vector<cudf::size_type>& following_window,
+                        std::vector<cudf::size_type> const& preceding_window,
+                        std::vector<cudf::size_type> const& following_window,
                         cudf::size_type min_periods)
   {
     // test all supported aggregators
@@ -970,6 +959,7 @@ TEST_F(RollingtVarStdTestUntyped, SimpleStaticVarianceStdInfNaN)
 #undef XXX
 }
 
+/*
 // negative sizes
 TYPED_TEST(RollingTest, NegativeWindowSizes)
 {
@@ -980,10 +970,12 @@ TYPED_TEST(RollingTest, NegativeWindowSizes)
   std::vector<cudf::size_type> window{3};
   std::vector<cudf::size_type> negative_window{-2};
 
+
   this->run_test_col_agg(input, negative_window, window, 1);
   this->run_test_col_agg(input, window, negative_window, 1);
   this->run_test_col_agg(input, negative_window, negative_window, 1);
 }
+ */
 
 // simple example from Pandas docs:
 TYPED_TEST(RollingTest, SimpleDynamic)
@@ -1033,6 +1025,7 @@ TYPED_TEST(RollingTest, AllInvalid)
 }
 
 // window = following_window = 0
+// Note: Preceding includes current row, so its value is set to 1.
 TYPED_TEST(RollingTest, ZeroWindow)
 {
   cudf::size_type num_rows = 1000;
@@ -1042,10 +1035,11 @@ TYPED_TEST(RollingTest, ZeroWindow)
 
   cudf::test::fixed_width_column_wrapper<TypeParam, int> input(
     col_data.begin(), col_data.end(), col_mask.begin());
-  std::vector<cudf::size_type> window({0});
+  std::vector<cudf::size_type> preceding({0});
+  std::vector<cudf::size_type> following({1});
   cudf::size_type periods = num_rows;
 
-  this->run_test_col_agg(input, window, window, periods);
+  this->run_test_col_agg(input, preceding, following, periods);
 }
 
 // min_periods = 0

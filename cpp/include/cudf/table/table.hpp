@@ -48,10 +48,16 @@ class table {
   /**
    * @brief Construct a new table by copying the contents of another table.
    *
+   * Uses the specified `stream` and device_memory_resource for all allocations
+   * and copies.
+   *
    * @param other The table to copy
+   * @param stream CUDA stream used for device memory operations.
+   * @param mr Device memory resource to use for all device memory allocations
    */
-  table(table const& other);
-
+  explicit table(table const& other,
+                 rmm::cuda_stream_view stream        = cudf::get_default_stream(),
+                 rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
   /**
    * @brief Moves the contents from a vector of `unique_ptr`s to columns to
    * construct a new table.

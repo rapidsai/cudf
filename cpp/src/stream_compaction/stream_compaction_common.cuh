@@ -29,28 +29,6 @@
 namespace cudf {
 namespace detail {
 
-namespace experimental {
-
-/**
- * @brief Device callable to hash a given row.
- */
-template <typename RowHash>
-class compaction_hash {
- public:
-  compaction_hash(RowHash row_hasher) : _hash{row_hasher} {}
-
-  __device__ inline auto operator()(size_type i) const noexcept
-  {
-    auto hash = _hash(i);
-    return (hash == COMPACTION_EMPTY_KEY_SENTINEL) ? (hash - 1) : hash;
-  }
-
- private:
-  RowHash _hash;
-};
-
-}  // namespace experimental
-
 /**
 ￼ * @brief Device functor to determine if a row is valid.
 ￼ */
@@ -58,7 +36,7 @@ class row_validity {
  public:
   row_validity(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
-  __device__ inline bool operator()(const size_type& i) const noexcept
+  __device__ inline bool operator()(size_type const& i) const noexcept
   {
     return cudf::bit_is_set(_row_bitmask, i);
   }

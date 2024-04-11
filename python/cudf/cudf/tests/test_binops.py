@@ -1,8 +1,9 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 import decimal
 import operator
 import random
+import warnings
 from itertools import combinations_with_replacement, product
 
 import cupy as cp
@@ -12,7 +13,7 @@ import pytest
 
 import cudf
 from cudf import Series
-from cudf.core._compat import PANDAS_GE_150
+from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.core.buffer.spill_manager import get_global_manager
 from cudf.core.index import as_index
 from cudf.testing import _utils as utils
@@ -148,6 +149,7 @@ _cudf_scalar_reflected_ops = [
     lambda x: cudf.Scalar(0) // x,
     lambda x: cudf.Scalar(0) / x,
 ]
+
 
 pytest_xfail = pytest.mark.xfail
 pytestmark = pytest.mark.spilling
@@ -603,7 +605,6 @@ def test_series_reflected_ops_cudf_scalar(funcs, dtype, obj_class):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns(binop):
-
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
@@ -637,7 +638,6 @@ def test_different_shapes_and_columns(binop):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_same_columns(binop):
-
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
@@ -656,7 +656,6 @@ def test_different_shapes_and_same_columns(binop):
 
 @pytest.mark.parametrize("binop", _binops)
 def test_different_shapes_and_columns_with_unaligned_indices(binop):
-
     # TODO: support `pow()` on NaN values. Particularly, the cases:
     #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
@@ -664,11 +663,11 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
 
     # Test with a RangeIndex
     pdf1 = pd.DataFrame({"x": [4, 3, 2, 1], "y": [7, 3, 8, 6]})
-    # Test with a GenericIndex
+    # Test with an Index
     pdf2 = pd.DataFrame(
         {"x": [1, 2, 3, 7], "y": [4, 5, 6, 7]}, index=[0, 1, 3, 4]
     )
-    # Test with a GenericIndex in a different order
+    # Test with an Index in a different order
     pdf3 = pd.DataFrame(
         {"x": [4, 5, 6, 7], "y": [1, 2, 3, 7], "z": [0, 5, 3, 7]},
         index=[0, 3, 5, 3],
@@ -789,7 +788,6 @@ _permu_values = [0, 1, None, np.nan]
 def test_operator_func_between_series_logical(
     dtype, func, scalar_a, scalar_b, fill_value
 ):
-
     gdf_series_a = Series([scalar_a], nan_as_null=False).astype(dtype)
     gdf_series_b = Series([scalar_b], nan_as_null=False).astype(dtype)
 
@@ -827,11 +825,21 @@ def test_operator_func_between_series_logical(
 @pytest.mark.parametrize("fill_value", [None, 1.0])
 @pytest.mark.parametrize("use_cudf_scalar", [False, True])
 def test_operator_func_series_and_scalar_logical(
-    dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
+    request, dtype, func, has_nulls, scalar, fill_value, use_cudf_scalar
 ):
-    gdf_series = utils.gen_rand_series(
-        dtype, 1000, has_nulls=has_nulls, stride=10000
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and fill_value == 1.0
+            and scalar is np.nan
+            and (has_nulls or (not has_nulls and func not in {"eq", "ne"})),
+            reason="https://github.com/pandas-dev/pandas/issues/57447",
+        )
     )
+    if has_nulls:
+        gdf_series = cudf.Series([-1.0, 0, cudf.NA, 1.1], dtype=dtype)
+    else:
+        gdf_series = cudf.Series([-1.0, 0, 10.5, 1.1], dtype=dtype)
     pdf_series = gdf_series.to_pandas(nullable=True)
     gdf_series_result = getattr(gdf_series, func)(
         cudf.Scalar(scalar) if use_cudf_scalar else scalar,
@@ -1672,7 +1680,12 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     rhs = cudf.Scalar(cudf.NA, dtype=dtype_r)
 
     result = op(lhs, rhs)
-    assert result.value is cudf.NA
+    assert result.value is (
+        cudf.NaT
+        if cudf.api.types.is_datetime64_dtype(result.dtype)
+        or cudf.api.types.is_timedelta64_dtype(result.dtype)
+        else cudf.NA
+    )
 
     # make sure dtype is the same as had there been a valid scalar
     valid_lhs = cudf.Scalar(1, dtype=dtype_l)
@@ -1682,16 +1695,6 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
     assert result.dtype == valid_result.dtype
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1703,13 +1706,7 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
         "minutes",
         "seconds",
         "microseconds",
-        pytest.param(
-            "nanoseconds",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/36589",
-            ),
-        ),
+        "nanoseconds",
     ],
 )
 @pytest.mark.parametrize(
@@ -1718,10 +1715,25 @@ def test_scalar_null_binops(op, dtype_l, dtype_r):
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop(
-    date_col, n_periods, frequency, dtype, op
+    request, n_periods, frequency, dtype, op
 ):
+    request.applymarker(
+        pytest.mark.xfail(
+            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
+            and dtype in {"datetime64[ms]", "datetime64[s]"}
+            and frequency == "microseconds"
+            and n_periods == 0,
+            reason="https://github.com/pandas-dev/pandas/issues/57448",
+        )
+    )
+
+    date_col = [
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ]
     gsr = cudf.Series(date_col, dtype=dtype)
-    psr = gsr.to_pandas()  # converts to nanos
+    psr = gsr.to_pandas()
 
     kwargs = {frequency: n_periods}
 
@@ -1755,32 +1767,19 @@ def test_datetime_dateoffset_binaryop(
         {"months": 2, "years": 5},
         {"microseconds": 1, "seconds": 1},
         {"months": 2, "years": 5, "seconds": 923, "microseconds": 481},
-        pytest.param(
-            {"milliseconds": 4},
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="Pandas gets the wrong answer for milliseconds",
-            ),
-        ),
-        pytest.param(
-            {"milliseconds": 4, "years": 2},
-            marks=pytest_xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49897"
-            ),
-        ),
-        pytest.param(
-            {"nanoseconds": 12},
-            marks=pytest.mark.xfail(
-                condition=not PANDAS_GE_150,
-                reason="Pandas gets the wrong answer for nanoseconds",
-            ),
-        ),
+        {"milliseconds": 4},
+        {"milliseconds": 4, "years": 2},
         {"nanoseconds": 12},
     ],
 )
+@pytest.mark.filterwarnings(
+    "ignore:Non-vectorized DateOffset:pandas.errors.PerformanceWarning"
+)
+@pytest.mark.filterwarnings(
+    "ignore:Discarding nonzero nanoseconds:UserWarning"
+)
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
-
     gsr = cudf.Series(date_col, dtype="datetime64[ns]")
     psr = gsr.to_pandas()
 
@@ -1793,16 +1792,6 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "date_col",
-    [
-        [
-            "2000-01-01 00:00:00.012345678",
-            "2000-01-31 00:00:00.012345678",
-            "2000-02-29 00:00:00.012345678",
-        ]
-    ],
-)
 @pytest.mark.parametrize("n_periods", [0, 1, -1, 12, -12])
 @pytest.mark.parametrize(
     "frequency",
@@ -1814,22 +1803,19 @@ def test_datetime_dateoffset_binaryop_multiple(date_col, kwargs, op):
         "minutes",
         "seconds",
         "microseconds",
-        pytest.param(
-            "nanoseconds",
-            marks=pytest_xfail(
-                condition=not PANDAS_GE_150,
-                reason="https://github.com/pandas-dev/pandas/issues/36589",
-            ),
-        ),
+        "nanoseconds",
     ],
 )
 @pytest.mark.parametrize(
     "dtype",
     ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
 )
-def test_datetime_dateoffset_binaryop_reflected(
-    date_col, n_periods, frequency, dtype
-):
+def test_datetime_dateoffset_binaryop_reflected(n_periods, frequency, dtype):
+    date_col = [
+        "2000-01-01 00:00:00.012345678",
+        "2000-01-31 00:00:00.012345678",
+        "2000-02-29 00:00:00.012345678",
+    ]
     gsr = cudf.Series(date_col, dtype=dtype)
     psr = gsr.to_pandas()  # converts to nanos
 
@@ -1841,7 +1827,9 @@ def test_datetime_dateoffset_binaryop_reflected(
     expect = poffset + psr
     got = goffset + gsr
 
-    utils.assert_eq(expect, got)
+    # TODO: Remove check_dtype once we get some clarity on:
+    # https://github.com/pandas-dev/pandas/issues/57448
+    utils.assert_eq(expect, got, check_dtype=False)
 
     with pytest.raises(TypeError):
         poffset - psr
@@ -2287,7 +2275,6 @@ def test_binops_with_NA_consistent(dtype, op):
     ],
 )
 def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
-
     if isinstance(lhs, (int, float)):
         a = cudf.Scalar(lhs, l_dtype)
     else:
@@ -2351,7 +2338,6 @@ def test_binops_decimal(op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype):
 def test_binops_reflect_decimal(
     op, lhs, l_dtype, rhs, r_dtype, expect, expect_dtype
 ):
-
     a = utils._decimal_series(lhs, l_dtype)
     b = utils._decimal_series(rhs, r_dtype)
     expect = utils._decimal_series(expect, expect_dtype)
@@ -2361,10 +2347,25 @@ def test_binops_reflect_decimal(
     utils.assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("powers", [0, 1, 2, 3])
+def test_binops_decimal_pow(powers):
+    s = cudf.Series(
+        [
+            decimal.Decimal("1.324324"),
+            None,
+            decimal.Decimal("2"),
+            decimal.Decimal("3"),
+            decimal.Decimal("5"),
+        ]
+    )
+    ps = s.to_pandas()
+
+    utils.assert_eq(s**powers, ps**powers, check_dtype=False)
+
+
 def test_binops_raise_error():
     s = cudf.Series([decimal.Decimal("1.324324")])
-    with pytest.raises(TypeError):
-        s**1
+
     with pytest.raises(TypeError):
         s // 1
 
@@ -3126,14 +3127,23 @@ def test_empty_column(binop, data, scalar):
 @pytest.mark.parametrize(
     "df",
     [
-        cudf.DataFrame([[1, 2, 3, 4], [5, 6, 7, 8]]),
+        cudf.DataFrame(
+            [[1, 2, 3, 4], [5, 6, 7, 8], [10, 11, 12, 13], [14, 15, 16, 17]]
+        ),
         pytest.param(
             cudf.DataFrame([[1, None, None, 4], [5, 6, 7, None]]),
             marks=pytest_xfail(
                 reason="Cannot access Frame.values if frame contains nulls"
             ),
         ),
-        cudf.DataFrame([[1.2, 2.3, 3.4, 4.5], [5.6, 6.7, 7.8, 8.9]]),
+        cudf.DataFrame(
+            [
+                [1.2, 2.3, 3.4, 4.5],
+                [5.6, 6.7, 7.8, 8.9],
+                [7.43, 4.2, 23.2, 23.2],
+                [9.1, 2.4, 4.5, 65.34],
+            ]
+        ),
         cudf.Series([14, 15, 16, 17]),
         cudf.Series([14.15, 15.16, 16.17, 17.18]),
     ],
@@ -3147,8 +3157,6 @@ def test_empty_column(binop, data, scalar):
         ),
         cudf.Series([5, 6, 7, 8]),
         cudf.Series([5.6, 6.7, 7.8, 8.9]),
-        pd.DataFrame([[9, 10], [11, 12], [13, 14], [15, 16]]),
-        pd.Series([5, 6, 7, 8]),
         np.array([5, 6, 7, 8]),
         [25.5, 26.6, 27.7, 28.8],
     ],
@@ -3161,6 +3169,14 @@ def test_binops_dot(df, other):
     got = df @ other
 
     utils.assert_eq(expected, got)
+
+
+def test_binop_dot_preserve_index():
+    ser = cudf.Series(range(2), index=["A", "B"])
+    df = cudf.DataFrame(np.eye(2), columns=["A", "B"], index=["A", "B"])
+    result = ser @ df
+    expected = ser.to_pandas() @ df.to_pandas()
+    utils.assert_eq(result, expected)
 
 
 def test_binop_series_with_repeated_index():
@@ -3250,3 +3266,51 @@ def test_binop_integer_power_int_scalar():
     expected = base**exponent.value
     got = base**exponent
     utils.assert_eq(expected, got)
+
+
+def test_numpy_int_scalar_binop():
+    assert (np.float32(1.0) - cudf.Scalar(1)) == 0.0
+
+
+@pytest.mark.parametrize("op", _binops)
+def test_binop_index_series(op):
+    gi = cudf.Index([10, 11, 12])
+    gs = cudf.Series([1, 2, 3])
+
+    actual = op(gi, gs)
+    expected = op(gi.to_pandas(), gs.to_pandas())
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("name1", utils.SERIES_OR_INDEX_NAMES)
+@pytest.mark.parametrize("name2", utils.SERIES_OR_INDEX_NAMES)
+def test_binop_index_dt_td_series_with_names(name1, name2):
+    gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]", name=name1)
+    gs = cudf.Series([10, 11, 12], dtype="timedelta64[ns]", name=name2)
+    with warnings.catch_warnings():
+        # Numpy raises a deprecation warning:
+        # "elementwise comparison failed; this will raise an error "
+        warnings.simplefilter("ignore", (DeprecationWarning,))
+
+        expected = gi.to_pandas() + gs.to_pandas()
+    actual = gi + gs
+
+    utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data1", [[1, 2, 3], [10, 11, None]])
+@pytest.mark.parametrize("data2", [[1, 2, 3], [10, 11, None]])
+def test_binop_eq_ne_index_series(data1, data2):
+    gi = cudf.Index(data1, dtype="datetime64[ns]", name=np.nan)
+    gs = cudf.Series(data2, dtype="timedelta64[ns]", name="abc")
+
+    actual = gi == gs
+    expected = gi.to_pandas() == gs.to_pandas()
+
+    utils.assert_eq(expected, actual)
+
+    actual = gi != gs
+    expected = gi.to_pandas() != gs.to_pandas()
+
+    utils.assert_eq(expected, actual)

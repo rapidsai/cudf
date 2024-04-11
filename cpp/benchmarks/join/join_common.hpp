@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2021-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,13 +31,13 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <nvbench/nvbench.cuh>
-
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/random/linear_congruential_engine.h>
 #include <thrust/random/uniform_int_distribution.h>
+
+#include <nvbench/nvbench.cuh>
 
 #include <vector>
 
@@ -96,8 +96,8 @@ void BM_join(state_type& state, Join JoinFunc)
     }
   }();
 
-  const double selectivity = 0.3;
-  const int multiplicity   = 1;
+  double const selectivity = 0.3;
+  int const multiplicity   = 1;
 
   // Generate build and probe tables
   auto build_random_null_mask = [](int size) {

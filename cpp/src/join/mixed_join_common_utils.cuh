@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <join/join_common_utils.hpp>
+#include "join/join_common_utils.hpp"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -30,7 +30,8 @@ namespace cudf {
 namespace detail {
 
 using row_hash =
-  cudf::experimental::row::hash::device_row_hasher<default_hash, cudf::nullate::DYNAMIC>;
+  cudf::experimental::row::hash::device_row_hasher<cudf::hashing::detail::default_hash,
+                                                   cudf::nullate::DYNAMIC>;
 
 // // This alias is used by mixed_joins, which support only non-nested types
 using row_equality = cudf::experimental::row::equality::strong_index_comparator_adapter<

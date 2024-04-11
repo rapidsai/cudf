@@ -1,6 +1,6 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ['RAPIDS_PACKAGE_VERSION'].lstrip('v') %}
 {% set minor_version = version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version = environ['CONDA_PY'] %}
 {% set cuda_version = '.'.join(environ['RAPIDS_CUDA_VERSION'].split('.')[:2]) %}
@@ -12,7 +12,7 @@ package:
   version: {{ version }}
 
 source:
-  git_url: ../../..
+  path: ../../..
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
@@ -37,50 +37,83 @@ build:
     # libcudf's run_exports pinning is looser than we would like
     - libcudf
   ignore_run_exports_from:
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }}
+    {% else %}
     - {{ compiler('cuda') }}
+    - cuda-cudart-dev
+    - libcufile-dev  # [linux64]
+    {% endif %}
 
 requirements:
   build:
     - cmake {{ cmake_version }}
+    - ninja
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
-    - {{ compiler('cuda') }} {{ cuda_version }}
-    - ninja
+    {% if cuda_major == "11" %}
+    - {{ compiler('cuda11') }} ={{ cuda_version }}
+    {% else %}
+    - {{ compiler('cuda') }}
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
     - sysroot_{{ target_platform }} {{ sysroot_version }}
   host:
-    - protobuf >=4.21.6,<4.22
+    - protobuf ==4.24.*
     - python
-    - cython >=0.29,<0.30
-    - scikit-build >=0.13.1
+    - cython >=3.0.3
+    - scikit-build-core >=0.7.0
     - setuptools
-    - dlpack >=0.5,<0.6.0a0
-    - pyarrow =11
+    - dlpack >=0.8,<1.0
+    - numpy 1.23
+    - pyarrow ==14.0.2.*
     - libcudf ={{ version }}
     - rmm ={{ minor_version }}
-    - cudatoolkit ={{ cuda_version }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    {% else %}
+    - cuda-cudart-dev
+    - cuda-nvrtc
+    - libcufile-dev  # [linux64]
+    {% endif %}
+    - cuda-version ={{ cuda_version }}
   run:
-    - protobuf >=4.21.6,<4.22
+    - {{ pin_compatible('protobuf', min_pin='x.x', max_pin='x') }}
     - python
-    - typing_extensions
-    - pandas >=1.3,<1.6.0dev0
+    - typing_extensions >=4.0.0
+    - pandas >=2.0,<2.2.2dev0
     - cupy >=12.0.0
     - numba >=0.57
-    - numpy >=1.21,<1.24  # Temporarily upper bound numpy to avoid overflow deprecations
-    - {{ pin_compatible('pyarrow', max_pin='x.x.x') }}
-    - libcudf {{ version }}
+    - {{ pin_compatible('numpy', max_pin='x') }}
+    - {{ pin_compatible('pyarrow', max_pin='x') }}
+    - libcudf ={{ version }}
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec >=0.6.0
-    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
+    {% if cuda_major == "11" %}
+    - cudatoolkit
+    - ptxcompiler >=0.7.0
+    - cubinlinker  # CUDA enhanced compatibility.
+    - cuda-python >=11.7.1,<12.0a0
+    {% else %}
+    - cuda-cudart
+    - libcufile  # [linux64]
+    # Needed by Numba for CUDA support
+    - cuda-nvcc-impl
+    # TODO: Add nvjitlink here
+    # xref: https://github.com/rapidsai/cudf/issues/12822
+    - cuda-nvrtc
+    - cuda-python >=12.0,<13.0a0
+    - pynvjitlink
+    {% endif %}
+    - {{ pin_compatible('cuda-version', max_pin='x', min_pin='x') }}
     - nvtx >=0.2.1
     - packaging
-    - ptxcompiler >=0.7.0
     - cachetools
-    - cubinlinker  # CUDA enhanced compatibility.
-    - cuda-python >=11.7.1,<12.0
+    - rich
 
 test:
   requires:
-    - cudatoolkit ={{ cuda_version }}
+    - cuda-version ={{ cuda_version }}
   imports:
     - cudf
 

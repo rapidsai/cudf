@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,8 @@
  * the License.
  */
 #include <tests/iterator/pair_iterator_test.cuh>
+
+#include <cudf_test/random.hpp>
 
 #include <rmm/exec_policy.hpp>
 
@@ -53,8 +55,8 @@ struct transformer_pair_meanvar {
 
 struct sum_if_not_null {
   template <typename T>
-  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
-                                                           const thrust::pair<T, bool>& rhs)
+  CUDF_HOST_DEVICE inline thrust::pair<T, bool> operator()(thrust::pair<T, bool> const& lhs,
+                                                           thrust::pair<T, bool> const& rhs)
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};
@@ -77,7 +79,7 @@ TYPED_TEST(NumericPairIteratorTest, mean_var_output)
   using T_output = cudf::meanvar<T>;
   transformer_pair_meanvar<T> transformer{};
 
-  const int column_size{5000};
+  int const column_size{5000};
   const T init{0};
 
   // data and valid arrays

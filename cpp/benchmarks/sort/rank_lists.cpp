@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, NVIDIA CORPORATION.
+ * Copyright (c) 2023-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
-#include "nested_types_common.hpp"
 #include "rank_types_common.hpp"
 
-#include <cudf/sorting.hpp>
+#include <benchmarks/common/generate_nested_types.hpp>
 
 #include <cudf_test/column_utilities.hpp>
+
+#include <cudf/sorting.hpp>
 
 #include <nvbench/nvbench.cuh>
 

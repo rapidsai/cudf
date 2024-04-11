@@ -45,7 +45,7 @@ class lists_column_view : private column_view {
    */
   lists_column_view(column_view const& lists_column);
   lists_column_view(lists_column_view&&)      = default;  ///< Move constructor
-  lists_column_view(const lists_column_view&) = default;  ///< Copy constructor
+  lists_column_view(lists_column_view const&) = default;  ///< Copy constructor
   ~lists_column_view()                        = default;
   /**
    * @brief Copy assignment operator
@@ -71,9 +71,7 @@ class lists_column_view : private column_view {
   using column_view::null_mask;
   using column_view::offset;
   using column_view::size;
-  static_assert(std::is_same_v<offset_type, size_type>,
-                "offset_type is expected to be the same as size_type.");
-  using offset_iterator = offset_type const*;  ///< Iterator type for offsets
+  using offset_iterator = size_type const*;  ///< Iterator type for offsets
 
   /**
    * @brief Returns the parent column.
@@ -85,7 +83,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the internal column of offsets
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The internal column of offsets
    */
   [[nodiscard]] column_view offsets() const;
@@ -93,7 +91,7 @@ class lists_column_view : private column_view {
   /**
    * @brief Returns the internal child column
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @return The internal child column
    */
   [[nodiscard]] column_view child() const;
@@ -106,7 +104,7 @@ class lists_column_view : private column_view {
    * the child columns when recursing.  Most functions operating in a recursive manner
    * on lists columns should be using `get_sliced_child()` instead of `child()`.
    *
-   * @throw cudf::logic error if this is an empty column
+   * @throw cudf::logic_error if this is an empty column
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return A sliced child column view
    */
@@ -119,7 +117,7 @@ class lists_column_view : private column_view {
    */
   [[nodiscard]] offset_iterator offsets_begin() const noexcept
   {
-    return offsets().begin<offset_type>() + offset();
+    return offsets().begin<size_type>() + offset();
   }
 
   /**

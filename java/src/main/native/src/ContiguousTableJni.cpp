@@ -55,10 +55,7 @@ bool cache_contiguous_table_jni(JNIEnv *env) {
 }
 
 void release_contiguous_table_jni(JNIEnv *env) {
-  if (Contiguous_table_jclass != nullptr) {
-    env->DeleteGlobalRef(Contiguous_table_jclass);
-    Contiguous_table_jclass = nullptr;
-  }
+  Contiguous_table_jclass = cudf::jni::del_global_ref(env, Contiguous_table_jclass);
 }
 
 bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
@@ -87,10 +84,7 @@ bool cache_contig_split_group_by_result_jni(JNIEnv *env) {
 }
 
 void release_contig_split_group_by_result_jni(JNIEnv *env) {
-  if (Contig_split_group_by_result_jclass != nullptr) {
-    env->DeleteGlobalRef(Contig_split_group_by_result_jclass);
-    Contig_split_group_by_result_jclass = nullptr;
-  }
+  Contig_split_group_by_result_jclass = del_global_ref(env, Contig_split_group_by_result_jclass);
 }
 
 jobject contig_split_group_by_result_from(JNIEnv *env, jobjectArray &groups) {

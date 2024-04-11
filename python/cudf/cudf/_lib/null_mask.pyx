@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2022, NVIDIA CORPORATION.
+# Copyright (c) 2020-2023, NVIDIA CORPORATION.
 
 from enum import Enum
 
@@ -50,7 +50,7 @@ def copy_bitmask(Column col):
 
     with nogil:
         db = move(cpp_copy_bitmask(col_view))
-        up_db = make_unique[device_buffer](move(db))
+        up_db = move(make_unique[device_buffer](move(db)))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = as_buffer(rmm_db)
@@ -96,7 +96,7 @@ def create_null_mask(size_type size, state=MaskState.UNINITIALIZED):
 
     with nogil:
         db = move(cpp_create_null_mask(size, c_mask_state))
-        up_db = make_unique[device_buffer](move(db))
+        up_db = move(make_unique[device_buffer](move(db)))
 
     rmm_db = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = as_buffer(rmm_db)
@@ -110,7 +110,7 @@ def bitmask_and(columns: list):
     cdef unique_ptr[device_buffer] up_db
     with nogil:
         c_result = move(cpp_bitmask_and(c_view))
-        up_db = make_unique[device_buffer](move(c_result.first))
+        up_db = move(make_unique[device_buffer](move(c_result.first)))
     dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = as_buffer(dbuf)
     return buf, c_result.second
@@ -123,7 +123,7 @@ def bitmask_or(columns: list):
     cdef unique_ptr[device_buffer] up_db
     with nogil:
         c_result = move(cpp_bitmask_or(c_view))
-        up_db = make_unique[device_buffer](move(c_result.first))
+        up_db = move(make_unique[device_buffer](move(c_result.first)))
     dbuf = DeviceBuffer.c_from_unique_ptr(move(up_db))
     buf = as_buffer(dbuf)
     return buf, c_result.second

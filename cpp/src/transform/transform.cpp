@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+#include "jit/cache.hpp"
+#include "jit/parser.hpp"
+#include "jit/util.hpp"
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -23,13 +27,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
-
-#include <jit/cache.hpp>
-#include <jit/parser.hpp>
-#include <jit/util.hpp>
-
 #include <rmm/cuda_stream_view.hpp>
+
+#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 namespace cudf {
 namespace transformation {
@@ -37,7 +37,7 @@ namespace jit {
 
 void unary_operation(mutable_column_view output,
                      column_view input,
-                     const std::string& udf,
+                     std::string const& udf,
                      data_type output_type,
                      bool is_ptx,
                      rmm::cuda_stream_view stream)
@@ -78,7 +78,7 @@ std::unique_ptr<column> transform(column_view const& input,
   CUDF_EXPECTS(is_fixed_width(input.type()), "Unexpected non-fixed-width type.");
 
   std::unique_ptr<column> output = make_fixed_width_column(
-    output_type, input.size(), copy_bitmask(input), input.null_count(), stream, mr);
+    output_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   if (input.is_empty()) { return output; }
 

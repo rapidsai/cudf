@@ -6,3 +6,12 @@ cxx_compiler_version:
 
 sysroot_version:
   - "2.17"
+
+cmake_version:
+  - ">=3.26.4"
+
+cuda_compiler:
+  - cuda-nvcc
+
+cuda11_compiler:
+  - nvcc

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,8 @@
 
 #pragma once
 
-#include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/time_utils.cuh>
+#include "io/utilities/parsing_utils.cuh"
+#include "io/utilities/time_utils.cuh"
 
 #include <cudf/fixed_point/fixed_point.hpp>
 
@@ -167,7 +167,7 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
   end = last + 1;
 
   // Find hour-minute separator
-  const auto hm_sep = thrust::find(thrust::seq, begin, end, sep);
+  auto const hm_sep = thrust::find(thrust::seq, begin, end, sep);
   // Extract hours
   d_h += cudf::duration_h{to_non_negative_integer<int>(begin, hm_sep)};
 
@@ -176,14 +176,14 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
   duration_ms d_ms{0};
 
   // Find minute-second separator (if present)
-  const auto ms_sep = thrust::find(thrust::seq, hm_sep + 1, end, sep);
+  auto const ms_sep = thrust::find(thrust::seq, hm_sep + 1, end, sep);
   if (ms_sep == end) {
     d_m = duration_m{to_non_negative_integer<int32_t>(hm_sep + 1, end)};
   } else {
     d_m = duration_m{to_non_negative_integer<int32_t>(hm_sep + 1, ms_sep)};
 
     // Find second-millisecond separator (if present)
-    const auto sms_sep = thrust::find(thrust::seq, ms_sep + 1, end, '.');
+    auto const sms_sep = thrust::find(thrust::seq, ms_sep + 1, end, '.');
     if (sms_sep == end) {
       d_s = duration_s{to_non_negative_integer<int64_t>(ms_sep + 1, end)};
     } else {
@@ -329,7 +329,7 @@ __inline__ __device__ auto skip_spaces(char const* begin, char const* end)
 template <int N>
 __inline__ __device__ auto skip_if_starts_with(char const* begin,
                                                char const* end,
-                                               const char (&prefix)[N])
+                                               char const (&prefix)[N])
 {
   static constexpr size_t prefix_len = N - 1;
   if (end - begin < prefix_len) return begin;

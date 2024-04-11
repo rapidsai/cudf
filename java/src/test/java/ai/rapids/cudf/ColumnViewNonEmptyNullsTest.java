@@ -34,6 +34,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
 
+  private static final HostMemoryAllocator hostMemoryAllocator = DefaultHostMemoryAllocator.get();
+
   @Test
   void testAndNullReconfigureNulls() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(0, 100, null, null, Integer.MIN_VALUE, null);
@@ -84,7 +86,7 @@ public class ColumnViewNonEmptyNullsTest extends CudfTestBase {
     ColumnVector input = ColumnVectorTest.makeListsColumn(DType.INT32, list0, list1, list2, list3);
     // Modify the validity buffer
     BaseDeviceMemoryBuffer dmb = input.getDeviceBufferFor(BufferType.VALIDITY);
-    try (HostMemoryBuffer newValidity = HostMemoryBuffer.allocate(64)) {
+    try (HostMemoryBuffer newValidity = hostMemoryAllocator.allocate(64)) {
       newValidity.copyFromDeviceBuffer(dmb);
       BitVectorHelper.setNullAt(newValidity, 1);
       dmb.copyFromHostBuffer(newValidity);

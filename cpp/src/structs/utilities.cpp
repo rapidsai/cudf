@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/structs/structs_column_view.hpp>
@@ -112,7 +113,6 @@ struct table_flattener {
       mr{mr}
   {
     superimpose_nulls(input);
-    fail_if_unsupported_types(input);
   }
 
   /**
@@ -124,12 +124,6 @@ struct table_flattener {
     auto [table, tmp_nullable_data] = push_down_nulls(input_table, stream, mr);
     this->input                     = std::move(table);
     this->nullable_data             = std::move(tmp_nullable_data);
-  }
-
-  void fail_if_unsupported_types(table_view const& input) const
-  {
-    auto const has_lists = std::any_of(input.begin(), input.end(), is_or_has_nested_lists);
-    CUDF_EXPECTS(not has_lists, "Flattening LIST columns is not supported.");
   }
 
   // Convert null_mask to BOOL8 columns and flatten the struct children in order.
@@ -236,6 +230,7 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
                                                       rmm::cuda_stream_view stream,
                                                       rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   if (input->type().id() == cudf::type_id::EMPTY) {
     // EMPTY columns should not have a null mask,
     // so don't superimpose null mask on empty columns.
@@ -265,19 +260,11 @@ std::unique_ptr<column> superimpose_nulls_no_sanitize(bitmask_type const* null_m
   // If the input is also a struct, repeat for all its children. Otherwise just return.
   if (input->type().id() != cudf::type_id::STRUCT) { return std::move(input); }
 
-  auto const current_mask   = input->view().null_mask();
   auto const new_null_count = input->null_count();  // this was just computed in the step above
   auto content              = input->release();
 
-  // Build new children columns.
-  std::for_each(content.children.begin(),
-                content.children.end(),
-                [current_mask, new_null_count, stream, mr](auto& child) {
-                  child = superimpose_nulls_no_sanitize(
-                    current_mask, new_null_count, std::move(child), stream, mr);
-                });
-
   // Replace the children columns.
+  // make_structs_column recursively calls superimpose_nulls
   return cudf::make_structs_column(num_rows,
                                    std::move(content.children),
                                    new_null_count,
@@ -388,7 +375,7 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
 {
   input = superimpose_nulls_no_sanitize(null_mask, null_count, std::move(input), stream, mr);
 
-  if (auto const input_view = input->view(); has_nonempty_nulls(input_view, stream)) {
+  if (auto const input_view = input->view(); cudf::detail::has_nonempty_nulls(input_view, stream)) {
     // We can't call `purge_nonempty_nulls` for individual child column(s) that need to be
     // sanitized. Instead, we have to call it from the top level column.
     // This is to make sure all the columns (top level + all children) have consistent offsets.
@@ -406,7 +393,8 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls(column_view cons
 {
   auto output = push_down_nulls_no_sanitize(input, stream, mr);
 
-  if (auto const output_view = output.first; has_nonempty_nulls(output_view, stream)) {
+  if (auto const output_view = output.first;
+      cudf::detail::has_nonempty_nulls(output_view, stream)) {
     output.second.new_columns.emplace_back(
       cudf::detail::purge_nonempty_nulls(output_view, stream, mr));
     output.first = output.second.new_columns.back()->view();

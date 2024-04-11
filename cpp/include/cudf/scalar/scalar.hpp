@@ -457,6 +457,8 @@ class string_scalar : public scalar {
   /**
    * @brief Construct a new string scalar object.
    *
+   * @throws std::overflow_error If the size of the input string exceeds cudf::size_type
+   *
    * @param string The value of the string.
    * @param is_valid Whether the value held by the scalar is valid.
    * @param stream CUDA stream used for device memory operations.
@@ -545,7 +547,7 @@ class string_scalar : public scalar {
    * @brief Returns a raw pointer to the string in device memory.
    * @return a raw pointer to the string in device memory
    */
-  [[nodiscard]] const char* data() const;
+  [[nodiscard]] char const* data() const;
 
  protected:
   rmm::device_buffer _data{};  ///< device memory containing the string
@@ -662,9 +664,10 @@ class timestamp_scalar : public chrono_scalar<T> {
 
   /**
    * @brief Returns the duration in number of ticks since the UNIX epoch.
+   * @param stream CUDA stream used for device memory operations.
    * @return The duration in number of ticks since the UNIX epoch
    */
-  rep_type ticks_since_epoch();
+  rep_type ticks_since_epoch(rmm::cuda_stream_view stream);
 };
 
 /**
@@ -714,9 +717,10 @@ class duration_scalar : public chrono_scalar<T> {
 
   /**
    * @brief Returns the duration in number of ticks.
+   * @param stream CUDA stream used for device memory operations.
    * @return The duration in number of ticks
    */
-  rep_type count();
+  rep_type count(rmm::cuda_stream_view stream);
 };
 
 /**

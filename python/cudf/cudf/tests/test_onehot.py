@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2023, NVIDIA CORPORATION.
+# Copyright (c) 2018-2024, NVIDIA CORPORATION.
 
 from string import ascii_lowercase
 
@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf import DataFrame
 from cudf.testing._utils import assert_eq
 
 pytestmark = pytest.mark.spilling
@@ -23,20 +22,13 @@ pytestmark = pytest.mark.spilling
         (range(10), [1, 2, 3, 4, 5] * 2),
     ],
 )
-def test_get_dummies(data, index):
-    gdf = DataFrame({"x": data}, index=index)
+@pytest.mark.parametrize("dtype", ["bool", "uint8"])
+def test_get_dummies(data, index, dtype):
     pdf = pd.DataFrame({"x": data}, index=index)
+    gdf = cudf.from_pandas(pdf)
 
-    encoded_expected = pd.get_dummies(pdf, prefix="test")
-    with pytest.warns(FutureWarning):
-        encoded_actual = cudf.get_dummies(gdf, prefix="test")
-
-    assert_eq(
-        encoded_expected,
-        encoded_actual,
-        check_dtype=len(data) != 0,
-    )
-    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
+    encoded_expected = pd.get_dummies(pdf, prefix="test", dtype=dtype)
+    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=dtype)
 
     assert_eq(
         encoded_expected,
@@ -56,8 +48,7 @@ def test_onehot_get_dummies_multicol(n_cols):
     pdf = pd.DataFrame(data)
 
     encoded_expected = pd.get_dummies(pdf, prefix="test")
-    with pytest.warns(FutureWarning):
-        encoded_actual = cudf.get_dummies(gdf, prefix="test")
+    encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
     assert_eq(encoded_expected, encoded_actual)
 
@@ -65,17 +56,13 @@ def test_onehot_get_dummies_multicol(n_cols):
 @pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize("dummy_na", [True, False])
 def test_onehost_get_dummies_dummy_na(nan_as_null, dummy_na):
-    pdf = pd.DataFrame({"a": [0, 1, np.nan]})
-    df = DataFrame.from_pandas(pdf, nan_as_null=nan_as_null)
+    df = cudf.DataFrame({"a": [0, 1, np.nan]}, nan_as_null=nan_as_null)
+    pdf = df.to_pandas(nullable=nan_as_null)
 
     expected = pd.get_dummies(pdf, dummy_na=dummy_na, columns=["a"])
-    with pytest.warns(FutureWarning):
-        got = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
+    got = cudf.get_dummies(df, dummy_na=dummy_na, columns=["a"])
 
-    if dummy_na and nan_as_null:
-        got = got.rename(columns={"a_null": "a_nan"})[expected.columns]
-
-    assert_eq(expected, got)
+    assert_eq(expected, got, check_like=True)
 
 
 @pytest.mark.parametrize(
@@ -104,16 +91,15 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
         "third": ["ji", "ji", "ji"],
     }
 
-    gdf = DataFrame(data)
+    gdf = cudf.DataFrame(data)
     pdf = pd.DataFrame(data)
 
     encoded_expected = pd.get_dummies(
         pdf, prefix=prefix, prefix_sep=prefix_sep
     )
-    with pytest.warns(FutureWarning):
-        encoded_actual = cudf.get_dummies(
-            gdf, prefix=prefix, prefix_sep=prefix_sep
-        )
+    encoded_actual = cudf.get_dummies(
+        gdf, prefix=prefix, prefix_sep=prefix_sep
+    )
 
     assert_eq(encoded_expected, encoded_actual)
 
@@ -122,17 +108,12 @@ def test_get_dummies_with_nan():
     df = cudf.DataFrame(
         {"a": cudf.Series([1, 2, np.nan, None], nan_as_null=False)}
     )
-    expected = cudf.DataFrame(
-        {
-            "a_1.0": [1, 0, 0, 0],
-            "a_2.0": [0, 1, 0, 0],
-            "a_nan": [0, 0, 1, 0],
-            "a_null": [0, 0, 0, 1],
-        },
-        dtype="uint8",
+
+    expected = pd.get_dummies(
+        df.to_pandas(nullable=True), dummy_na=True, columns=["a"]
     )
-    with pytest.warns(FutureWarning):
-        actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
+
+    actual = cudf.get_dummies(df, dummy_na=True, columns=["a"])
 
     assert_eq(expected, actual)
 
@@ -166,19 +147,11 @@ def test_get_dummies_array_like(data, prefix_sep, prefix, dtype):
 
 def test_get_dummies_array_like_with_nan():
     ser = cudf.Series([0.1, 2, 3, None, np.nan], nan_as_null=False)
-    expected = cudf.DataFrame(
-        {
-            "a_0.1": [1, 0, 0, 0, 0],
-            "a_2.0": [0, 1, 0, 0, 0],
-            "a_3.0": [0, 0, 1, 0, 0],
-            "a_nan": [0, 0, 0, 0, 1],
-            "a_null": [0, 0, 0, 1, 0],
-        },
-        dtype="uint8",
+
+    expected = pd.get_dummies(
+        ser.to_pandas(nullable=True), dummy_na=True, prefix="a", prefix_sep="_"
     )
-    with pytest.warns(FutureWarning):
-        actual = cudf.get_dummies(
-            ser, dummy_na=True, prefix="a", prefix_sep="_"
-        )
+
+    actual = cudf.get_dummies(ser, dummy_na=True, prefix="a", prefix_sep="_")
 
     assert_eq(expected, actual)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2022, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,9 @@
 
 #pragma once
 
-#include <io/csv/datetime.cuh>
-#include <io/utilities/trie.cuh>
+#include "column_type_histogram.hpp"
+#include "io/csv/datetime.cuh"
+#include "io/utilities/trie.cuh"
 
 #include <cudf/io/types.hpp>
 #include <cudf/lists/list_view.hpp>
@@ -26,8 +27,6 @@
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-
-#include "column_type_histogram.hpp"
 
 #include <rmm/device_uvector.hpp>
 
@@ -115,6 +114,28 @@ struct parse_options {
             multi_delimiter};
   }
 };
+
+/**
+ * @brief Returns the escaped characters for a given character.
+ *
+ * @param escaped_char The character to escape.
+ * @return The escaped characters for a given character.
+ */
+__device__ __forceinline__ thrust::pair<char, char> get_escaped_char(char escaped_char)
+{
+  switch (escaped_char) {
+    case '"': return {'\\', '"'};
+    case '\\': return {'\\', '\\'};
+    case '/': return {'\\', '/'};
+    case '\b': return {'\\', 'b'};
+    case '\f': return {'\\', 'f'};
+    case '\n': return {'\\', 'n'};
+    case '\r': return {'\\', 'r'};
+    case '\t': return {'\\', 't'};
+    // case 'u': return UNICODE_SEQ;
+    default: return {'\0', escaped_char};
+  }
+}
 
 /**
  * @brief Returns the numeric value of an ASCII/UTF-8 character.

@@ -1,4 +1,4 @@
-# Copyright (c) 2019-2023, NVIDIA CORPORATION.
+# Copyright (c) 2019-2024, NVIDIA CORPORATION.
 
 import warnings
 from collections import abc
@@ -25,6 +25,7 @@ def read_json(
     byte_range=None,
     keep_quotes=False,
     storage_options=None,
+    mixed_types_as_string=False,
     *args,
     **kwargs,
 ):
@@ -102,6 +103,8 @@ def read_json(
                 iotypes=(BytesIO, StringIO),
                 allow_raw_text_input=True,
                 storage_options=storage_options,
+                warn_on_raw_text_input=True,
+                warn_meta=("json", "read_json"),
             )
             if isinstance(tmp_source, list):
                 filepaths_or_buffers.extend(tmp_source)
@@ -116,6 +119,7 @@ def read_json(
             byte_range,
             engine == "cudf_legacy",
             keep_quotes,
+            mixed_types_as_string,
         )
     else:
         warnings.warn(
@@ -158,11 +162,12 @@ def read_json(
     if dtype is True or isinstance(dtype, abc.Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
-        dtype = {} if dtype is True else dtype
+        specified_dtypes = {} if dtype is True else dtype
+        df_dtypes = df._dtypes
         unspecified_dtypes = {
-            name: df._dtypes[name]
+            name: df_dtypes[name]
             for name in df._column_names
-            if name not in dtype
+            if name not in specified_dtypes
         }
         default_dtypes = {}
 
@@ -176,6 +181,13 @@ def read_json(
         df = df.astype(default_dtypes)
 
     return df
+
+
+def maybe_return_nullable_pd_obj(cudf_obj):
+    try:
+        return cudf_obj.to_pandas(nullable=True)
+    except NotImplementedError:
+        return cudf_obj.to_pandas(nullable=False)
 
 
 @ioutils.doc_to_json()
@@ -227,10 +239,16 @@ def to_json(
             return path_or_buf.read()
     elif engine == "pandas":
         warnings.warn("Using CPU via Pandas to write JSON dataset")
-        pd_value = cudf_val.to_pandas(nullable=True)
-        return pd.io.json.to_json(
+        if isinstance(cudf_val, cudf.DataFrame):
+            pd_data = {
+                col: maybe_return_nullable_pd_obj(series)
+                for col, series in cudf_val.items()
+            }
+            pd_value = pd.DataFrame(pd_data)
+        else:
+            pd_value = maybe_return_nullable_pd_obj(cudf_val)
+        return pd_value.to_json(
             path_or_buf,
-            pd_value,
             orient=orient,
             storage_options=storage_options,
             *args,

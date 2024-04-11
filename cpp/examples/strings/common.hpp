@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, NVIDIA CORPORATION.
+ * Copyright (c) 2022-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,9 +19,11 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/cuda_device.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/device_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -36,7 +38,7 @@
  * @brief Main example function returns redacted strings column.
  *
  * This function returns a redacted version of the input `names` column
- * using the the `visibilities` column as in the following example
+ * using the `visibilities` column as in the following example
  * ```
  * names        visibility  --> redacted
  * John Doe     public          D John
@@ -60,7 +62,8 @@ auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); 
  */
 auto make_pool_mr()
 {
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda_mr());
+  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
+    make_cuda_mr(), rmm::percent_of_free_device_memory(50));
 }
 
 /**
@@ -108,7 +111,8 @@ int main(int argc, char const** argv)
 
   std::chrono::duration<double> elapsed = std::chrono::steady_clock::now() - st;
   std::cout << "Wall time: " << elapsed.count() << " seconds\n";
-  std::cout << "Output size " << result->view().child(1).size() << " bytes\n";
+  auto const scv = cudf::strings_column_view(result->view());
+  std::cout << "Output size " << scv.chars_size(rmm::cuda_stream_default) << " bytes\n";
 
   return 0;
 }

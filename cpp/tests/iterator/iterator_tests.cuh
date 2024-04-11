@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_reduce.cuh>
 #include <thrust/distance.h>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -33,8 +34,6 @@
 #include <thrust/host_vector.h>
 #include <thrust/logical.h>
 #include <thrust/transform.h>
-
-#include <cub/device/device_reduce.cuh>
 
 #include <bitset>
 #include <cstdint>
@@ -109,7 +108,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
   template <typename T_output>
   void evaluate(T_output expected,
                 rmm::device_uvector<T_output> const& dev_result,
-                const char* msg = nullptr)
+                char const* msg = nullptr)
   {
     auto host_result = cudf::detail::make_host_vector_sync(dev_result, cudf::get_default_stream());
 
@@ -118,7 +117,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
 
   template <typename T_output>
   void values_equal_test(thrust::host_vector<T_output> const& expected,
-                         const cudf::column_device_view& col)
+                         cudf::column_device_view const& col)
   {
     if (col.nullable()) {
       auto it_dev = cudf::detail::make_null_replacement_iterator(

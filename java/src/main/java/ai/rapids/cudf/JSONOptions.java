@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -29,11 +29,21 @@ public final class JSONOptions extends ColumnFilterOptions {
 
   private final boolean dayFirst;
   private final boolean lines;
+  private final boolean recoverWithNull;
+  private final boolean normalizeSingleQuotes;
+  private final boolean normalizeWhitespace;
+  private final boolean mixedTypesAsStrings;
+  private final boolean keepStringQuotes;
 
   private JSONOptions(Builder builder) {
     super(builder);
     dayFirst = builder.dayFirst;
     lines = builder.lines;
+    recoverWithNull = builder.recoverWithNull;
+    normalizeSingleQuotes = builder.normalizeSingleQuotes;
+    normalizeWhitespace = builder.normalizeWhitespace;
+    mixedTypesAsStrings = builder.mixedTypesAsStrings;
+    keepStringQuotes = builder.keepQuotes;
   }
 
   public boolean isDayFirst() {
@@ -42,6 +52,27 @@ public final class JSONOptions extends ColumnFilterOptions {
 
   public boolean isLines() {
     return lines;
+  }
+
+  /** Return the value of the recoverWithNull option */
+  public boolean isRecoverWithNull() {
+    return recoverWithNull;
+  }
+
+  public boolean isNormalizeSingleQuotes() {
+    return normalizeSingleQuotes;
+  }
+
+  public boolean isNormalizeWhitespace() {
+    return normalizeWhitespace;
+  }
+
+  public boolean isMixedTypesAsStrings() {
+    return mixedTypesAsStrings;
+  }
+
+  public boolean keepStringQuotes() {
+    return keepStringQuotes;
   }
 
   @Override
@@ -56,6 +87,13 @@ public final class JSONOptions extends ColumnFilterOptions {
   public static final class Builder  extends ColumnFilterOptions.Builder<JSONOptions.Builder> {
     private boolean dayFirst = false;
     private boolean lines = true;
+
+    private boolean recoverWithNull = false;
+    private boolean normalizeSingleQuotes = false;
+    private boolean normalizeWhitespace = false;
+
+    private boolean mixedTypesAsStrings = false;
+    private boolean keepQuotes = false;
 
     /**
      * Whether to parse dates as DD/MM versus MM/DD
@@ -75,6 +113,57 @@ public final class JSONOptions extends ColumnFilterOptions {
     public Builder withLines(boolean perLine) {
       assert perLine == true : "Cudf does not support multi-line";
       this.lines = perLine;
+      return this;
+    }
+
+    /**
+     * Specify how to handle invalid lines when parsing json. Setting
+     * recoverWithNull to true will cause null values to be returned
+     * for invalid lines. Setting recoverWithNull to false will cause
+     * the parsing to fail with an exception.
+     *
+     * @param recoverWithNull true: return nulls, false: throw exception
+     * @return builder for chaining
+     */
+    public Builder withRecoverWithNull(boolean recoverWithNull) {
+      this.recoverWithNull = recoverWithNull;
+      return this;
+    }
+
+    /**
+     * Should the single quotes be normalized.
+     */
+    public Builder withNormalizeSingleQuotes(boolean normalizeSingleQuotes) {
+      this.normalizeSingleQuotes = normalizeSingleQuotes;
+      return this;
+    }
+
+    /**
+     * Should the unquoted whitespace be removed.
+     */
+    public Builder withNormalizeWhitespace(boolean normalizeWhitespace) {
+      this.normalizeWhitespace = normalizeWhitespace;
+      return this;
+    }
+
+    /**
+     * Specify how to handle columns that contain mixed types.
+     *
+     * @param mixedTypesAsStrings true: return unparsed JSON, false: throw exception
+     * @return builder for chaining
+     */
+    public Builder withMixedTypesAsStrings(boolean mixedTypesAsStrings) {
+      this.mixedTypesAsStrings = mixedTypesAsStrings;
+      return this;
+    }
+
+    /**
+     * Set whether the reader should keep quotes of string values.
+     * @param keepQuotes true to keep them, else false.
+     * @return this for chaining.
+     */
+    public Builder withKeepQuotes(boolean keepQuotes) {
+      this.keepQuotes = keepQuotes;
       return this;
     }
 

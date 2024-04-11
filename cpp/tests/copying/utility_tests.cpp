@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/table_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
+#include <cudf_test/type_lists.hpp>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
-#include <cudf_test/type_lists.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
@@ -60,7 +62,7 @@ void check_empty_string_columns(cudf::column_view lhs, cudf::column_view rhs)
 
 TEST_F(EmptyLikeStringTest, ColumnStringTest)
 {
-  std::vector<const char*> h_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
                                      "thé result does not include the value in the sum in",
                                      "",
                                      nullptr,

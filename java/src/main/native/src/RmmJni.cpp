@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@
 #include <limits>
 #include <mutex>
 
+#include <cudf/io/memory_resource.hpp>
 #include <rmm/mr/device/aligned_resource_adaptor.hpp>
 #include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/cuda_async_memory_resource.hpp>
@@ -31,11 +32,13 @@
 #include <rmm/mr/device/owning_wrapper.hpp>
 #include <rmm/mr/device/per_device_resource.hpp>
 #include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/pinned_host_memory_resource.hpp>
 
 #include "cudf_jni_apis.hpp"
 
 using rmm::mr::device_memory_resource;
 using rmm::mr::logging_resource_adaptor;
+using rmm_pinned_pool_t = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
 
 namespace {
 
@@ -96,10 +99,6 @@ public:
     return scoped_max_total_allocated;
   }
 
-  bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
-
-  bool supports_streams() const noexcept override { return resource->supports_streams(); }
-
 private:
   Upstream *const resource;
   std::size_t const size_align;
@@ -143,10 +142,6 @@ private:
       total_allocated -= size;
       scoped_allocated -= size;
     }
-  }
-
-  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
-    return resource->get_mem_info(stream);
   }
 };
 
@@ -197,10 +192,7 @@ public:
     update_thresholds(env, alloc_thresholds, jalloc_thresholds);
     update_thresholds(env, dealloc_thresholds, jdealloc_thresholds);
 
-    handler_obj = env->NewGlobalRef(jhandler);
-    if (handler_obj == nullptr) {
-      throw cudf::jni::jni_exception("global ref");
-    }
+    handler_obj = cudf::jni::add_global_ref(env, jhandler);
   }
 
   virtual ~java_event_handler_memory_resource() {
@@ -209,16 +201,12 @@ public:
     // already be destroyed and this thread should not try to attach to get an environment.
     JNIEnv *env = nullptr;
     if (jvm->GetEnv(reinterpret_cast<void **>(&env), cudf::jni::MINIMUM_JNI_VERSION) == JNI_OK) {
-      env->DeleteGlobalRef(handler_obj);
+      handler_obj = cudf::jni::del_global_ref(env, handler_obj);
     }
     handler_obj = nullptr;
   }
 
   device_memory_resource *get_wrapped_resource() { return resource; }
-
-  bool supports_get_mem_info() const noexcept override { return resource->supports_get_mem_info(); }
-
-  bool supports_streams() const noexcept override { return resource->supports_streams(); }
 
 private:
   device_memory_resource *const resource;
@@ -278,10 +266,6 @@ private:
         }
       }
     }
-  }
-
-  std::pair<size_t, size_t> do_get_mem_info(rmm::cuda_stream_view stream) const override {
-    return resource->get_mem_info(stream);
   }
 
 protected:
@@ -382,6 +366,187 @@ private:
     on_deallocated_callback(p, size, stream);
   }
 };
+
+inline auto &prior_cuio_host_mr() {
+  static rmm::host_async_resource_ref _prior_cuio_host_mr = cudf::io::get_host_memory_resource();
+  return _prior_cuio_host_mr;
+}
+
+/**
+ * This is a pinned fallback memory resource that will try to allocate `pool`
+ * and if that fails, attempt to allocate from the prior resource used by cuIO `prior_cuio_host_mr`.
+ *
+ * We detect whether a pointer to free is inside of the pool by checking its address (see
+ * constructor)
+ *
+ * Most of this comes directly from `pinned_host_memory_resource` in RMM.
+ */
+class pinned_fallback_host_memory_resource {
+private:
+  rmm_pinned_pool_t *_pool;
+  void *pool_begin_;
+  void *pool_end_;
+
+public:
+  pinned_fallback_host_memory_resource(rmm_pinned_pool_t *pool) : _pool(pool) {
+    // allocate from the pinned pool the full size to figure out
+    // our beginning and end address.
+    auto pool_size = pool->pool_size();
+    pool_begin_ = pool->allocate(pool_size);
+    pool_end_ = static_cast<void *>(static_cast<uint8_t *>(pool_begin_) + pool_size);
+    pool->deallocate(pool_begin_, pool_size);
+  }
+
+  // Disable clang-tidy complaining about the easily swappable size and alignment parameters
+  // of allocate and deallocate
+  // NOLINTBEGIN(bugprone-easily-swappable-parameters)
+
+  /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes from either the
+   *        _pool argument provided, or prior_cuio_host_mr.
+   *
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * reason.
+   *
+   * @param bytes The size, in bytes, of the allocation.
+   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
+   *
+   * @return Pointer to the newly allocated memory.
+   */
+  void *allocate(std::size_t bytes,
+                 [[maybe_unused]] std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) {
+    try {
+      return _pool->allocate(bytes, alignment);
+    } catch (const std::exception &unused) {
+      // try to allocate using the underlying pinned resource
+      return prior_cuio_host_mr().allocate(bytes, alignment);
+    }
+    // we should not reached here
+    return nullptr;
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes. We attempt
+   *        to deallocate from _pool, if ptr is detected to be in the pool address range,
+   *        otherwise we deallocate from `prior_cuio_host_mr`.
+   *
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
+   */
+  void deallocate(void *ptr, std::size_t bytes,
+                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept {
+    if (ptr >= pool_begin_ && ptr <= pool_end_) {
+      _pool->deallocate(ptr, bytes, alignment);
+    } else {
+      prior_cuio_host_mr().deallocate(ptr, bytes, alignment);
+    }
+  }
+
+  /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes.
+   *
+   * @note Stream argument is ignored and behavior is identical to allocate.
+   *
+   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
+   * CUDA out of memory error.
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * error.
+   *
+   * @param bytes The size, in bytes, of the allocation.
+   * @param stream CUDA stream on which to perform the allocation (ignored).
+   * @return Pointer to the newly allocated memory.
+   */
+  void *allocate_async(std::size_t bytes, [[maybe_unused]] cuda::stream_ref stream) {
+    return allocate(bytes);
+  }
+
+  /**
+   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
+   *
+   * @note Stream argument is ignored and behavior is identical to allocate.
+   *
+   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
+   * CUDA out of memory error.
+   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
+   * error.
+   *
+   * @param bytes The size, in bytes, of the allocation.
+   * @param alignment Alignment in bytes.
+   * @param stream CUDA stream on which to perform the allocation (ignored).
+   * @return Pointer to the newly allocated memory.
+   */
+  void *allocate_async(std::size_t bytes, std::size_t alignment,
+                       [[maybe_unused]] cuda::stream_ref stream) {
+    return allocate(bytes, alignment);
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes.
+   *
+   * @note Stream argument is ignored and behavior is identical to deallocate.
+   *
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param stream CUDA stream on which to perform the deallocation (ignored).
+   */
+  void deallocate_async(void *ptr, std::size_t bytes,
+                        [[maybe_unused]] cuda::stream_ref stream) noexcept {
+    return deallocate(ptr, bytes);
+  }
+
+  /**
+   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
+   * alignment bytes.
+   *
+   * @note Stream argument is ignored and behavior is identical to deallocate.
+   *
+   * @param ptr Pointer to be deallocated.
+   * @param bytes Size of the allocation.
+   * @param alignment Alignment in bytes.
+   * @param stream CUDA stream on which to perform the deallocation (ignored).
+   */
+  void deallocate_async(void *ptr, std::size_t bytes, std::size_t alignment,
+                        [[maybe_unused]] cuda::stream_ref stream) noexcept {
+    return deallocate(ptr, bytes, alignment);
+  }
+  // NOLINTEND(bugprone-easily-swappable-parameters)
+
+  /**
+   * @briefreturn{true if the specified resource is the same type as this resource.}
+   */
+  bool operator==(const pinned_fallback_host_memory_resource &) const { return true; }
+
+  /**
+   * @briefreturn{true if the specified resource is not the same type as this resource, otherwise
+   * false.}
+   */
+  bool operator!=(const pinned_fallback_host_memory_resource &) const { return false; }
+
+  /**
+   * @brief Enables the `cuda::mr::device_accessible` property
+   *
+   * This property declares that a `pinned_host_memory_resource` provides device accessible memory
+   */
+  friend void get_property(pinned_fallback_host_memory_resource const &,
+                           cuda::mr::device_accessible) noexcept {}
+
+  /**
+   * @brief Enables the `cuda::mr::host_accessible` property
+   *
+   * This property declares that a `pinned_host_memory_resource` provides host accessible memory
+   */
+  friend void get_property(pinned_fallback_host_memory_resource const &,
+                           cuda::mr::host_accessible) noexcept {}
+};
+
+// carryover from RMM pinned_host_memory_resource
+static_assert(
+    cuda::mr::async_resource_with<pinned_fallback_host_memory_resource, cuda::mr::device_accessible,
+                                  cuda::mr::host_accessible>);
+
+// we set this to our fallback resource if we have set it.
+std::unique_ptr<pinned_fallback_host_memory_resource> pinned_fallback_mr;
 
 } // anonymous namespace
 
@@ -762,6 +927,88 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
     cudf::jni::auto_set_device(env);
     auto mr = reinterpret_cast<rmm::mr::device_memory_resource *>(new_handle);
     rmm::mr::set_current_device_resource(mr);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIEnv *env,
+                                                                            jclass clazz,
+                                                                            jlong init, jlong max) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto pool = new rmm_pinned_pool_t(new rmm::mr::pinned_host_memory_resource(), init, max);
+    return reinterpret_cast<jlong>(pool);
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCuioPinnedPoolMemoryResource(JNIEnv *env,
+                                                                               jclass clazz,
+                                                                               jlong pool_ptr) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto pool = reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
+    // create a pinned fallback pool that will allocate pinned memory
+    // if the regular pinned pool is exhausted
+    pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
+    // set the cuio host mr and store the prior resource in our static variable
+    prior_cuio_host_mr() = cudf::io::set_host_memory_resource(*pinned_fallback_mr);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(JNIEnv *env,
+                                                                               jclass clazz,
+                                                                               jlong pool_ptr) {
+  try {
+    cudf::jni::auto_set_device(env);
+    // set the cuio host memory resource to what it was before, or the same
+    // if we didn't overwrite it with setCuioPinnedPoolMemoryResource
+    cudf::io::set_host_memory_resource(prior_cuio_host_mr());
+    pinned_fallback_mr.reset();
+    delete reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
+  }
+  CATCH_STD(env, )
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv *env, jclass clazz,
+                                                                    jlong pool_ptr, jlong size) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto pool = reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
+    void *ret = pool->allocate(size);
+    return reinterpret_cast<jlong>(ret);
+  } catch (const std::exception &unused) { return -1; }
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(JNIEnv *env, jclass clazz,
+                                                                  jlong pool_ptr, jlong ptr,
+                                                                  jlong size) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto pool = reinterpret_cast<rmm_pinned_pool_t *>(pool_ptr);
+    void *cptr = reinterpret_cast<void *>(ptr);
+    pool->deallocate(cptr, size);
+  }
+  CATCH_STD(env, )
+}
+
+// only for tests
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromFallbackPinnedPool(JNIEnv *env,
+                                                                            jclass clazz,
+                                                                            jlong size) {
+  cudf::jni::auto_set_device(env);
+  void *ret = cudf::io::get_host_memory_resource().allocate(size);
+  return reinterpret_cast<jlong>(ret);
+}
+
+// only for tests
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv *env, jclass clazz,
+                                                                          jlong ptr, jlong size) {
+  try {
+    cudf::jni::auto_set_device(env);
+    void *cptr = reinterpret_cast<void *>(ptr);
+    cudf::io::get_host_memory_resource().deallocate(cptr, size);
   }
   CATCH_STD(env, )
 }

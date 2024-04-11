@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -111,7 +111,7 @@ struct dispatch_to_cudf_column {
     auto mask        = std::make_unique<rmm::device_buffer>(allocation_size, stream, mr);
     auto mask_buffer = array.null_bitmap();
     CUDF_CUDA_TRY(cudaMemcpyAsync(mask->data(),
-                                  reinterpret_cast<const uint8_t*>(mask_buffer->address()),
+                                  reinterpret_cast<uint8_t const*>(mask_buffer->address()),
                                   null_bitmap_size,
                                   cudaMemcpyDefault,
                                   stream.value()));
@@ -145,7 +145,7 @@ struct dispatch_to_cudf_column {
     auto mutable_column_view = col->mutable_view();
     CUDF_CUDA_TRY(cudaMemcpyAsync(
       mutable_column_view.data<T>(),
-      reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(T),
+      reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(T),
       sizeof(T) * num_rows,
       cudaMemcpyDefault,
       stream.value()));
@@ -205,7 +205,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>
 
   CUDF_CUDA_TRY(cudaMemcpyAsync(
     mutable_column_view.data<DeviceType>(),
-    reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
+    reinterpret_cast<uint8_t const*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
     sizeof(DeviceType) * num_rows,
     cudaMemcpyDefault,
     stream.value()));
@@ -238,9 +238,11 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<bool>(
   rmm::mr::device_memory_resource* mr)
 {
   auto data_buffer = array.data()->buffers[1];
-  auto data        = rmm::device_buffer(data_buffer->size(), stream, mr);
+  // mask-to-bools expects the mask to be bitmask_type aligned/padded
+  auto data = rmm::device_buffer(
+    cudf::bitmask_allocation_size_bytes(data_buffer->size() * CHAR_BIT), stream, mr);
   CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                reinterpret_cast<const uint8_t*>(data_buffer->address()),
+                                reinterpret_cast<uint8_t const*>(data_buffer->address()),
                                 data_buffer->size(),
                                 cudaMemcpyDefault,
                                 stream.value()));
@@ -288,7 +290,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   auto const num_rows = offsets_column->size() - 1;
   auto out_col        = make_strings_column(num_rows,
                                      std::move(offsets_column),
-                                     std::move(chars_column),
+                                     std::move(chars_column->release().data.release()[0]),
                                      array.null_count(),
                                      std::move(*get_mask_buffer(array, stream, mr)));
 
@@ -460,14 +462,41 @@ std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
   return std::make_unique<table>(std::move(columns));
 }
 
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  auto maybe_array = arrow::MakeArrayFromScalar(input, 1);
+  if (!maybe_array.ok()) { CUDF_FAIL("Failed to create array"); }
+  auto array = *maybe_array;
+
+  auto field = arrow::field("", input.type);
+
+  auto table = arrow::Table::Make(arrow::schema({field}), {array});
+
+  auto cudf_table = detail::from_arrow(*table, stream, mr);
+
+  auto cv = cudf_table->view().column(0);
+  return get_element(cv, 0, stream);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> from_arrow(arrow::Table const& input_table,
+                                  rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
 
-  return detail::from_arrow(input_table, cudf::get_default_stream(), mr);
+  return detail::from_arrow(input_table, stream, mr);
 }
 
+std::unique_ptr<cudf::scalar> from_arrow(arrow::Scalar const& input,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  return detail::from_arrow(input, stream, mr);
+}
 }  // namespace cudf

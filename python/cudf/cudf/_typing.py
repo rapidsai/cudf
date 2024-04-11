@@ -1,4 +1,4 @@
-# Copyright (c) 2021-2022, NVIDIA CORPORATION.
+# Copyright (c) 2021-2024, NVIDIA CORPORATION.
 
 import sys
 from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, TypeVar, Union
@@ -37,9 +37,7 @@ ColumnBinaryOperand = Union["cudf.Scalar", "cudf.core.column.ColumnBase"]
 
 DataFrameOrSeries = Union["cudf.Series", "cudf.DataFrame"]
 SeriesOrIndex = Union["cudf.Series", "cudf.core.index.BaseIndex"]
-SeriesOrSingleColumnIndex = Union[
-    "cudf.Series", "cudf.core.index.GenericIndex"
-]
+SeriesOrSingleColumnIndex = Union["cudf.Series", "cudf.core.index.Index"]
 
 # Groupby aggregation
 AggType = Union[str, Callable]

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2023, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ struct StringsFactoriesTest : public cudf::test::BaseFixture {};
 
 TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 {
-  std::vector<const char*> h_test_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",
                                           "a slow moving turtlé cannot catch the bird",
                                           "which can be composéd together to form a more complete",
@@ -59,20 +59,20 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
   cudf::size_type count = (cudf::size_type)h_test_strings.size();
   thrust::host_vector<char> h_buffer(memsize);
   rmm::device_uvector<char> d_buffer(memsize, cudf::get_default_stream());
-  thrust::host_vector<thrust::pair<const char*, cudf::size_type>> strings(count);
+  thrust::host_vector<thrust::pair<char const*, cudf::size_type>> strings(count);
   thrust::host_vector<cudf::size_type> h_offsets(count + 1);
   cudf::size_type offset = 0;
   cudf::size_type nulls  = 0;
   h_offsets[0]           = 0;
   for (cudf::size_type idx = 0; idx < count; ++idx) {
-    const char* str = h_test_strings[idx];
+    char const* str = h_test_strings[idx];
     if (!str) {
-      strings[idx] = thrust::pair<const char*, cudf::size_type>{nullptr, 0};
+      strings[idx] = thrust::pair<char const*, cudf::size_type>{nullptr, 0};
       nulls++;
     } else {
       auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
-      strings[idx] = thrust::pair<const char*, cudf::size_type>{d_buffer.data() + offset, length};
+      strings[idx] = thrust::pair<char const*, cudf::size_type>{d_buffer.data() + offset, length};
       offset += length;
     }
     h_offsets[idx + 1] = offset;
@@ -87,20 +87,22 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     EXPECT_TRUE(column->nullable());
     EXPECT_TRUE(column->has_nulls());
   }
-  EXPECT_EQ(2, column->num_children());
+  EXPECT_EQ(1, column->num_children());
+  EXPECT_NE(nullptr, column->view().head());
 
   cudf::strings_column_view strings_view(column->view());
   EXPECT_EQ(strings_view.size(), count);
   EXPECT_EQ(strings_view.offsets().size(), count + 1);
-  EXPECT_EQ(strings_view.chars().size(), memsize);
+  EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
+    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
+                                  strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<cudf::offset_type const>(
-      strings_view.offsets().data<cudf::offset_type>() + strings_view.offset(),
+    cudf::device_span<cudf::size_type const>(
+      strings_view.offsets().data<cudf::size_type>() + strings_view.offset(),
       strings_view.size() + 1),
     cudf::get_default_stream());
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
@@ -110,7 +112,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 
 TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
 {
-  std::vector<const char*> h_test_strings{"the quick brown fox jumps over the lazy dog",
+  std::vector<char const*> h_test_strings{"the quick brown fox jumps over the lazy dog",
                                           "the fat cat lays next to the other accénted cat",
                                           "a slow moving turtlé cannot catch the bird",
                                           "which can be composéd together to form a more complete",
@@ -131,7 +133,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   cudf::size_type null_count     = 0;
   for (cudf::size_type idx = 0; idx < count; ++idx) {
     h_null_mask     = (h_null_mask << 1);
-    const char* str = h_test_strings[idx];
+    char const* str = h_test_strings[idx];
     if (str) {
       auto length = (cudf::size_type)strlen(str);
       memcpy(h_buffer.data() + offset, str, length);
@@ -145,27 +147,33 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
   auto d_buffer = cudf::detail::make_device_uvector_sync(
     h_buffer, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto d_offsets = cudf::detail::make_device_uvector_sync(
-    h_offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_device_uvector_sync(
+      h_offsets, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   auto d_nulls = cudf::detail::make_device_uvector_sync(
     h_nulls, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
-  auto column = cudf::make_strings_column(d_buffer, d_offsets, d_nulls, null_count);
+  auto column = cudf::make_strings_column(
+    count, std::move(d_offsets), d_buffer.release(), null_count, d_nulls.release());
   EXPECT_EQ(column->type(), cudf::data_type{cudf::type_id::STRING});
   EXPECT_EQ(column->null_count(), null_count);
-  EXPECT_EQ(2, column->num_children());
+  EXPECT_EQ(1, column->num_children());
+  EXPECT_NE(nullptr, column->view().head());
 
   cudf::strings_column_view strings_view(column->view());
   EXPECT_EQ(strings_view.size(), count);
   EXPECT_EQ(strings_view.offsets().size(), count + 1);
-  EXPECT_EQ(strings_view.chars().size(), memsize);
+  EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
   auto h_chars_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<char const>(strings_view.chars().data<char>(), strings_view.chars().size()),
+    cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
+                                  strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
   auto h_offsets_data = cudf::detail::make_std_vector_sync(
-    cudf::device_span<cudf::offset_type const>(
-      strings_view.offsets().data<cudf::offset_type>() + strings_view.offset(),
+    cudf::device_span<cudf::size_type const>(
+      strings_view.offsets().data<cudf::size_type>() + strings_view.offset(),
       strings_view.size() + 1),
     cudf::get_default_stream());
   EXPECT_EQ(memcmp(h_buffer.data(), h_chars_data.data(), h_buffer.size()), 0);
@@ -186,15 +194,19 @@ TEST_F(StringsFactoriesTest, CreateScalar)
 
 TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 {
-  rmm::device_uvector<char> d_chars{0, cudf::get_default_stream()};
-  auto d_offsets = cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(
-    1, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  auto d_chars   = rmm::device_uvector<char>(0, cudf::get_default_stream());
+  auto d_offsets = std::make_unique<cudf::column>(
+    cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(
+      1, cudf::get_default_stream(), rmm::mr::get_current_device_resource()),
+    rmm::device_buffer{},
+    0);
   rmm::device_uvector<cudf::bitmask_type> d_nulls{0, cudf::get_default_stream()};
 
-  auto results = cudf::make_strings_column(d_chars, d_offsets, d_nulls, 0);
+  auto results =
+    cudf::make_strings_column(0, std::move(d_offsets), d_chars.release(), 0, d_nulls.release());
   cudf::test::expect_column_empty(results->view());
 
-  rmm::device_uvector<thrust::pair<const char*, cudf::size_type>> d_strings{
+  rmm::device_uvector<thrust::pair<char const*, cudf::size_type>> d_strings{
     0, cudf::get_default_stream()};
   results = cudf::make_strings_column(d_strings);
   cudf::test::expect_column_empty(results->view());

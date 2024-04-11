@@ -422,8 +422,9 @@ class column_view : public detail::column_view_base {
         cudf::data_type{cudf::type_to_id<T>()}, data.size(), data.data(), nullptr, 0, 0, {})
   {
     CUDF_EXPECTS(
-      data.size() < static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
-      "Data exceeds the maximum size of a column view.");
+      data.size() <= static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max()),
+      "Data exceeds the column size limit",
+      std::overflow_error);
   }
 
   /**
@@ -477,7 +478,10 @@ class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
 
-  ~mutable_column_view() = default;
+  ~mutable_column_view(){
+    // Needed so that the first instance of the implicit destructor for any TU isn't 'constructed'
+    // from a host+device function marking the implicit version also as host+device
+  };
 
   mutable_column_view(mutable_column_view const&) = default;  ///< Copy constructor
   mutable_column_view(mutable_column_view&&)      = default;  ///< Move constructor

@@ -77,16 +77,16 @@ constexpr int32_t NCCLASS_D{1 << 5};  // not CCLASS_D or '\n'
  * @brief Structure of an encoded regex instruction
  */
 struct reinst {
-  int32_t type;       /* operator type or instruction type */
+  int32_t type; /* operator type or instruction type */
   union {
     int32_t cls_id;   /* class pointer */
     char32_t c;       /* character */
     int32_t subid;    /* sub-expression id for RBRA and LBRA */
     int32_t right_id; /* right child of OR */
   } u1;
-  union {             /* regexec relies on these two being in the same union */
-    int32_t left_id;  /* left child of OR */
-    int32_t next_id;  /* next instruction for CAT & LBRA */
+  union {            /* regexec relies on these two being in the same union */
+    int32_t left_id; /* left child of OR */
+    int32_t next_id; /* next instruction for CAT & LBRA */
   } u2;
   int32_t reserved4;
 };
@@ -97,10 +97,10 @@ struct reinst {
  */
 class reprog {
  public:
-  reprog(const reprog&)            = default;
+  reprog(reprog const&)            = default;
   reprog(reprog&&)                 = default;
   ~reprog()                        = default;
-  reprog& operator=(const reprog&) = default;
+  reprog& operator=(reprog const&) = default;
   reprog& operator=(reprog&&)      = default;
 
   /**
@@ -131,7 +131,7 @@ class reprog {
   [[nodiscard]] reclass const& class_at(int32_t id) const;
   [[nodiscard]] reclass const* classes_data() const;
 
-  [[nodiscard]] const int32_t* starts_data() const;
+  [[nodiscard]] int32_t const* starts_data() const;
   [[nodiscard]] int32_t starts_count() const;
 
   void set_start_inst(int32_t id);

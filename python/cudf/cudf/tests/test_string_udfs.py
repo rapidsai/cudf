@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2023, NVIDIA CORPORATION.
+# Copyright (c) 2022-2024, NVIDIA CORPORATION.
 
 import numba
 import numpy as np
@@ -20,9 +20,11 @@ from cudf.core.udf.strings_typing import (
     string_view,
     udf_string,
 )
-from cudf.core.udf.utils import _PTX_FILE, _get_extensionty_size
+from cudf.core.udf.utils import _get_extensionty_size, _ptx_file
 from cudf.testing._utils import assert_eq, sv_to_udf_str
 from cudf.utils._numba import _CUDFNumbaConfig
+
+_PTX_FILE = _ptx_file()
 
 
 def get_kernels(func, dtype, size):
