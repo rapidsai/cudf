@@ -91,4 +91,4 @@ find .devcontainer/ -type f -name devcontainer.json -print0 | while IFS= read -r
 done
 
 # Update ci/cudf_pandas_scripts/pandas-tests/run.sh
-sed -i "s/SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-.*-results.json/SUMMARY_FILE_NAME=${PANDAS_TESTS_BRANCH}-${NEXT_SHORT_TAG}-results.json/g" ci/cudf_pandas_scripts/pandas-tests/run.sh
+sed -i "s/SUMMARY_FILE_NAME=\${PANDAS_TESTS_BRANCH}-.*-results.json/SUMMARY_FILE_NAME=\${PANDAS_TESTS_BRANCH}-${NEXT_SHORT_TAG}-results.json/g" ci/cudf_pandas_scripts/pandas-tests/run.sh
