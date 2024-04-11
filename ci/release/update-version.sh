@@ -89,3 +89,6 @@ find .devcontainer/ -type f -name devcontainer.json -print0 | while IFS= read -r
     sed_runner "s@rapidsai/devcontainers:[0-9.]*@rapidsai/devcontainers:${NEXT_SHORT_TAG}@g" "${filename}"
     sed_runner "s@rapidsai/devcontainers/features/rapids-build-utils:[0-9.]*@rapidsai/devcontainers/features/rapids-build-utils:${NEXT_SHORT_TAG_PEP440}@" "${filename}"
 done
+
+# Update ci/cudf_pandas_scripts/pandas-tests/run.sh
+sed -i "s/${CURRENT_SHORT_TAG}-results.json/${NEXT_SHORT_TAG}-results.json/g" ci/cudf_pandas_scripts/pandas-tests/run.sh
