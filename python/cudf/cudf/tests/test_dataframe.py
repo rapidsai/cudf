@@ -10964,6 +10964,8 @@ def test_squeeze(axis, data):
     [
         lambda df: df.where(df < 2, 2),
         lambda df: df.nans_to_nulls(),
+        lambda df: df.isna(),
+        lambda df: df.notna(),
         lambda df: abs(df),
         lambda df: -df,
         lambda df: ~df,

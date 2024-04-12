@@ -1120,7 +1120,9 @@ class Frame(BinaryOperand, Scannable):
         array([False, False,  True,  True, False, False])
         """
         data_columns = (col.isnull() for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     # Alias for isna
     isnull = isna
@@ -1199,7 +1201,9 @@ class Frame(BinaryOperand, Scannable):
         array([ True,  True, False, False,  True,  True])
         """
         data_columns = (col.notnull() for col in self._columns)
-        return self._from_data_like_self(zip(self._column_names, data_columns))
+        return self._from_data_like_self(
+            self._data._from_columns_like_self(data_columns)
+        )
 
     # Alias for notna
     notnull = notna
